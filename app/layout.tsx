@@ -20,6 +20,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <meta name="theme-color" content="#0f1117" />
+      </head>
       <body className={`${inter.variable} antialiased`}>
         {children}
         <Toaster position="bottom-right" richColors />

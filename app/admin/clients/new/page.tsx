@@ -91,19 +91,19 @@ export default function AdminNewClientPage() {
   return (
     <div className="p-6 space-y-6 max-w-2xl">
       <div className="flex items-center gap-3">
-        <Link href="/admin/clients" className="text-gray-400 hover:text-gray-600 transition-colors">
+        <Link href="/admin/clients" className="text-text-muted hover:text-text-secondary transition-colors">
           <ArrowLeft size={20} />
         </Link>
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Add client</h1>
-          <p className="text-sm text-gray-500">Create a new client to run searches for</p>
+          <h1 className="text-xl font-semibold text-text-primary">Add client</h1>
+          <p className="text-sm text-text-muted">Create a new client to run searches for</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic info */}
         <Card>
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Basic info</h2>
+          <h2 className="text-base font-semibold text-text-primary mb-4">Basic info</h2>
           <div className="space-y-4">
             <Input
               id="name"
@@ -140,7 +140,7 @@ export default function AdminNewClientPage() {
 
         {/* Details */}
         <Card>
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Details (optional)</h2>
+          <h2 className="text-base font-semibold text-text-primary mb-4">Details (optional)</h2>
           <div className="space-y-4">
             <Textarea
               id="target_audience"
@@ -168,7 +168,7 @@ export default function AdminNewClientPage() {
           </div>
         </Card>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-400">{error}</p>}
 
         <Button
           type="submit"

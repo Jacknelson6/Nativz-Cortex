@@ -4,13 +4,17 @@ export const NATIVZ_BRAND = {
   tagline: 'Social Intelligence, Powered by AI',
 
   colors: {
-    primary: '#000000',
-    secondary: '#FFFFFF',
-    accent: '#6366F1',
-    background: '#F9FAFB',
-    surface: '#FFFFFF',
-    text: '#111827',
-    textSecondary: '#6B7280',
+    primary: '#046bd2',
+    primaryHover: '#0580f0',
+    background: '#0f1117',
+    surface: '#1a1d2e',
+    surfaceHover: '#222640',
+    border: '#2a2f45',
+    text: '#f1f5f9',
+    textSecondary: '#94a3b8',
+    textMuted: '#64748b',
+    accent: '#046bd2',
+    accentSurface: 'rgba(4, 107, 210, 0.12)',
     success: '#10B981',
     warning: '#F59E0B',
     danger: '#EF4444',
@@ -22,8 +26,8 @@ export const NATIVZ_BRAND = {
   },
 
   logos: {
-    full: '/brand/nativz-logo-full.svg',
-    mark: '/brand/nativz-logo-mark.svg',
-    white: '/brand/nativz-logo-white.svg',
+    full: '/nativz-logo.svg',
+    mark: '/nativz-logo.svg',
+    white: '/nativz-logo.svg',
   },
 } as const;

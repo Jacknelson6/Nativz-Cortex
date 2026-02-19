@@ -4,16 +4,20 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Loader2, Clock, CheckCircle, XCircle, Building2 } from 'lucide-react';
+import { ArrowLeft, Clock, CheckCircle, XCircle, Building2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ScrollToTop } from '@/components/ui/scroll-to-top';
 import { ExecutiveSummary } from '@/components/reports/executive-summary';
 import { MetricsRow } from '@/components/results/metrics-row';
-import { ActivityChart } from '@/components/charts/activity-chart';
 import { EmotionsBreakdown } from '@/components/results/emotions-breakdown';
 import { ContentBreakdown } from '@/components/results/content-breakdown';
 import { TrendingTopicsTable } from '@/components/results/trending-topics-table';
+import { SourcesPanel } from '@/components/results/sources-panel';
+import { ActivityChart } from '@/components/charts/activity-chart';
+import { SearchProgress } from '@/components/search/search-progress';
 import { formatRelativeTime } from '@/lib/utils/format';
+import { hasSerp } from '@/lib/types/search';
 import type { TopicSearch } from '@/lib/types/search';
 
 interface AdminResultsClientProps {
@@ -46,10 +50,12 @@ export function AdminResultsClient({ search, clientInfo }: AdminResultsClientPro
 
   if (search.status === 'processing' || search.status === 'pending') {
     return (
-      <div className="flex min-h-full flex-col items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-indigo-600 mb-4" />
-        <p className="text-sm text-gray-600">Researching &ldquo;{search.query}&rdquo;...</p>
-        <p className="mt-1 text-xs text-gray-400">This usually takes 30-60 seconds</p>
+      <div className="flex min-h-full flex-col items-center justify-center px-4">
+        <p className="text-lg font-semibold text-text-primary mb-2">
+          Researching &ldquo;{search.query}&rdquo;
+        </p>
+        <p className="text-sm text-text-muted mb-8">This usually takes 1-2 minutes</p>
+        <SearchProgress />
       </div>
     );
   }
@@ -57,7 +63,7 @@ export function AdminResultsClient({ search, clientInfo }: AdminResultsClientPro
   if (search.status === 'failed') {
     return (
       <div className="flex min-h-full flex-col items-center justify-center px-4">
-        <p className="text-sm text-red-600 mb-4">{search.summary || 'Search failed. Try again.'}</p>
+        <p className="text-sm text-red-400 mb-4">{search.summary || 'Search failed. Try again.'}</p>
         <Link href="/admin/search/new">
           <Button variant="outline">New search</Button>
         </Link>
@@ -72,21 +78,21 @@ export function AdminResultsClient({ search, clientInfo }: AdminResultsClientPro
   return (
     <div className="min-h-full">
       {/* Header */}
-      <div className="sticky top-0 z-10 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
+      <div className="sticky top-0 z-10 border-b border-nativz-border bg-surface/80 backdrop-blur-sm">
         <div className="flex h-14 items-center gap-4 px-6">
-          <Link href="/admin/search/history" className="text-gray-400 hover:text-gray-600 transition-colors">
+          <Link href="/admin/search/history" className="text-text-muted hover:text-text-secondary transition-colors">
             <ArrowLeft size={20} />
           </Link>
           <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium text-gray-900">{search.query}</span>
-            <span className="text-gray-300">/</span>
-            <span className="text-gray-500">Results</span>
+            <span className="font-medium text-text-primary">{search.query}</span>
+            <span className="text-text-muted">/</span>
+            <span className="text-text-muted">Results</span>
             {clientInfo && (
               <>
-                <span className="text-gray-300">/</span>
+                <span className="text-text-muted">/</span>
                 <Link
                   href={`/admin/clients/${clientInfo.slug}`}
-                  className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 transition-colors"
+                  className="flex items-center gap-1 text-accent-text hover:text-accent-hover transition-colors"
                 >
                   <Building2 size={12} />
                   {clientInfo.name}
@@ -95,14 +101,14 @@ export function AdminResultsClient({ search, clientInfo }: AdminResultsClientPro
             )}
             {!clientInfo && search.client_id === null && (
               <>
-                <span className="text-gray-300">/</span>
-                <span className="text-xs text-gray-400">No client attached</span>
+                <span className="text-text-muted">/</span>
+                <span className="text-xs text-text-muted">No client attached</span>
               </>
             )}
           </div>
           <div className="ml-auto flex items-center gap-3">
             {search.completed_at && (
-              <span className="hidden sm:flex items-center gap-1 text-xs text-gray-400">
+              <span className="hidden sm:flex items-center gap-1 text-xs text-text-muted">
                 <Clock size={12} />
                 {formatRelativeTime(search.completed_at)}
               </span>
@@ -138,9 +144,12 @@ export function AdminResultsClient({ search, clientInfo }: AdminResultsClientPro
       <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
         {search.summary && <ExecutiveSummary summary={search.summary} />}
         {search.metrics && <MetricsRow metrics={search.metrics} />}
+
+        {/* Legacy activity chart — only rendered for old searches */}
         {search.activity_data && search.activity_data.length > 0 && (
           <ActivityChart data={search.activity_data} />
         )}
+
         {(search.emotions || search.content_breakdown) && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {search.emotions && search.emotions.length > 0 && (
@@ -154,7 +163,14 @@ export function AdminResultsClient({ search, clientInfo }: AdminResultsClientPro
         {search.trending_topics && search.trending_topics.length > 0 && (
           <TrendingTopicsTable topics={search.trending_topics} />
         )}
+
+        {/* Sources panel — only for new searches with SERP data */}
+        {hasSerp(search) && search.serp_data && (
+          <SourcesPanel serpData={search.serp_data} />
+        )}
       </div>
+
+      <ScrollToTop />
     </div>
   );
 }

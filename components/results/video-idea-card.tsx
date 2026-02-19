@@ -15,13 +15,19 @@ const VIRALITY_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'dang
   viral_potential: 'purple',
 };
 
+const VIRALITY_BORDER: Record<string, string> = {
+  viral_potential: 'border-l-purple-500',
+  high: 'border-l-blue-500',
+};
+
 export function VideoIdeaCard({ idea }: VideoIdeaCardProps) {
+  const borderClass = VIRALITY_BORDER[idea.virality] || 'border-l-transparent';
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 transition-all duration-200 hover:shadow-sm hover:border-indigo-200">
+    <div className={`rounded-lg border border-nativz-border border-l-[3px] ${borderClass} bg-surface p-4 transition-all duration-200 hover:shadow-card-hover hover:border-accent/40`}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-start gap-2">
-          <Lightbulb size={14} className="mt-0.5 text-amber-500 shrink-0" />
-          <h5 className="text-sm font-medium text-gray-900 leading-snug">{idea.title}</h5>
+          <Lightbulb size={14} className="mt-0.5 text-amber-400 shrink-0" />
+          <h5 className="text-sm font-medium text-text-primary leading-snug">{idea.title}</h5>
         </div>
         <Badge variant={VIRALITY_VARIANT[idea.virality] || 'default'} className="shrink-0">
           {idea.virality.replace('_', ' ')}
@@ -30,13 +36,13 @@ export function VideoIdeaCard({ idea }: VideoIdeaCardProps) {
 
       <div className="ml-6">
         <div className="flex items-start gap-1.5 mb-2">
-          <Zap size={11} className="mt-0.5 text-indigo-400 shrink-0" />
-          <p className="text-xs text-indigo-600 font-medium">{idea.hook}</p>
+          <Zap size={11} className="mt-0.5 text-accent-text shrink-0" />
+          <p className="text-xs text-accent-text font-medium">{idea.hook}</p>
         </div>
 
-        <p className="text-xs text-gray-500 leading-relaxed mb-2">{idea.why_it_works}</p>
+        <p className="text-xs text-text-muted leading-relaxed mb-2">{idea.why_it_works}</p>
 
-        <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+        <span className="inline-flex items-center rounded-md bg-surface-hover px-2 py-0.5 text-xs text-text-muted">
           {idea.format.replace(/_/g, ' ')}
         </span>
       </div>

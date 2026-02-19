@@ -6,7 +6,9 @@ import { buildTopicResearchPrompt } from '@/lib/prompts/topic-research';
 import { gatherSerpData } from '@/lib/brave/client';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
+import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
 import type { TopicSearchAIResponse } from '@/lib/types/search';
+import type { BraveSerpData } from '@/lib/brave/types';
 
 const searchSchema = z.object({
   query: z.string().min(1, 'Search query is required').max(500),
@@ -16,6 +18,33 @@ const searchSchema = z.object({
   country: z.string().default('us'),
   client_id: z.string().uuid().nullable().optional(),
 });
+
+/**
+ * Build a set of all URLs present in the SERP data for validation.
+ */
+function buildSerpUrlSet(serpData: BraveSerpData): Set<string> {
+  const urls = new Set<string>();
+  for (const r of serpData.webResults) urls.add(r.url);
+  for (const d of serpData.discussions) urls.add(d.url);
+  for (const v of serpData.videos) urls.add(v.url);
+  return urls;
+}
+
+/**
+ * Strip any AI-cited URLs that don't exist in the original SERP data.
+ */
+function validateTopicSources(
+  aiResponse: TopicSearchAIResponse,
+  serpUrls: Set<string>
+): TopicSearchAIResponse {
+  return {
+    ...aiResponse,
+    trending_topics: aiResponse.trending_topics.map(topic => ({
+      ...topic,
+      sources: (topic.sources || []).filter(source => serpUrls.has(source.url)),
+    })),
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -110,19 +139,30 @@ export async function POST(request: NextRequest) {
         maxTokens: 16000,
       });
 
-      const aiResponse = parseAIResponseJSON<TopicSearchAIResponse>(aiResult.text);
+      const rawAiResponse = parseAIResponseJSON<TopicSearchAIResponse>(aiResult.text);
 
-      // Step 4: Update with results
+      // Step 4: Validate AI-cited URLs against actual SERP data
+      const serpUrls = buildSerpUrlSet(serpData);
+      const aiResponse = validateTopicSources(rawAiResponse, serpUrls);
+
+      // Step 5: Compute real metrics from SERP data + AI sentiment
+      const metrics = computeMetricsFromSerp(
+        serpData,
+        aiResponse.overall_sentiment,
+        aiResponse.conversation_intensity
+      );
+
+      // Step 6: Update with results
       const { error: updateError } = await adminClient
         .from('topic_searches')
         .update({
           status: 'completed',
           summary: aiResponse.summary,
-          metrics: aiResponse.metrics,
-          activity_data: aiResponse.activity_data,
+          metrics,
           emotions: aiResponse.emotions,
           content_breakdown: aiResponse.content_breakdown,
           trending_topics: aiResponse.trending_topics,
+          serp_data: serpData,
           raw_ai_response: aiResponse,
           tokens_used: aiResult.usage.totalTokens,
           estimated_cost: aiResult.estimatedCost,

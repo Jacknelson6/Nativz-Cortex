@@ -2,17 +2,19 @@ import { ButtonHTMLAttributes, forwardRef } from 'react';
 
 type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
+type Shape = 'default' | 'pill';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
+  shape?: Shape;
 }
 
 const variantStyles: Record<Variant, string> = {
-  primary: 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm',
-  secondary: 'bg-gray-100 text-gray-900 hover:bg-gray-200',
-  outline: 'border border-gray-300 text-gray-700 hover:bg-gray-50',
-  ghost: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+  primary: 'bg-gradient-to-br from-accent to-[#0580f0] text-white shadow-md hover:shadow-lg',
+  secondary: 'bg-surface-hover text-text-primary hover:bg-nativz-border',
+  outline: 'border border-nativz-border text-text-secondary hover:bg-surface-hover',
+  ghost: 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
   danger: 'bg-red-600 text-white hover:bg-red-700',
 };
 
@@ -22,12 +24,17 @@ const sizeStyles: Record<Size, string> = {
   lg: 'px-6 py-3 text-base',
 };
 
+const shapeStyles: Record<Shape, string> = {
+  default: 'rounded-lg',
+  pill: 'rounded-full',
+};
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'primary', size = 'md', className = '', disabled, children, ...props }, ref) => {
+  ({ variant = 'primary', size = 'md', shape = 'default', className = '', disabled, children, ...props }, ref) => {
     return (
       <button
         ref={ref}
-        className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-150 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
+        className={`inline-flex items-center justify-center gap-2 font-medium transition-all duration-150 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:pointer-events-none ${shapeStyles[shape]} ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
         disabled={disabled}
         {...props}
       >

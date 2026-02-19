@@ -39,13 +39,13 @@ export function ClientSelector({ value, onChange }: ClientSelectorProps) {
   return (
     <div className="relative">
       {value && selected ? (
-        <div className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700">
+        <div className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent-surface px-3 py-1.5 text-xs font-medium text-accent-text">
           <Building2 size={12} />
           {selected.name}
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="ml-0.5 rounded-full p-0.5 hover:bg-indigo-100 transition-colors"
+            className="ml-0.5 rounded-full p-0.5 hover:bg-accent/20 transition-colors"
           >
             <X size={10} />
           </button>
@@ -54,7 +54,7 @@ export function ClientSelector({ value, onChange }: ClientSelectorProps) {
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-gray-300 px-3 py-1.5 text-xs text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-nativz-border px-3 py-1.5 text-xs text-text-muted hover:border-text-muted hover:text-text-secondary transition-colors"
         >
           <Building2 size={12} />
           Attach to client
@@ -62,7 +62,7 @@ export function ClientSelector({ value, onChange }: ClientSelectorProps) {
       )}
 
       {open && !value && (
-        <div className="absolute left-0 top-full z-20 mt-1 min-w-[200px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg animate-fade-in">
+        <div className="absolute left-0 top-full z-20 mt-1 min-w-[200px] rounded-lg border border-nativz-border bg-surface py-1 shadow-dropdown animate-fade-in">
           {clients.map((client) => (
             <button
               key={client.id}
@@ -71,7 +71,7 @@ export function ClientSelector({ value, onChange }: ClientSelectorProps) {
                 onChange(client.id);
                 setOpen(false);
               }}
-              className="block w-full px-3 py-1.5 text-left text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+              className="block w-full px-3 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-hover transition-colors"
             >
               {client.name}
             </button>

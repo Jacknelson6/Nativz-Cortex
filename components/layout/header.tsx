@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { LogOut, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,11 +23,11 @@ export function Header({ userName, portalMode = false }: HeaderProps) {
   }
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 md:px-6">
+    <header className="flex h-16 items-center justify-between border-b border-nativz-border bg-surface px-4 md:px-6">
       <div className="flex items-center gap-3">
         <button
           onClick={toggle}
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all md:hidden"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-all md:hidden"
           aria-label={isOpen ? 'Close menu' : 'Open menu'}
         >
           <div className="relative h-5 w-5">
@@ -44,21 +45,26 @@ export function Header({ userName, portalMode = false }: HeaderProps) {
             />
           </div>
         </button>
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-black text-white text-sm font-bold">
-          N
-        </div>
-        <span className="text-sm font-semibold text-gray-900">
-          Nativz Cortex
+        <Image
+          src="/nativz-logo.svg"
+          alt="Nativz"
+          width={93}
+          height={36}
+          className="h-7 w-auto"
+          priority
+        />
+        <span className="text-xs font-medium text-text-secondary tracking-wide uppercase">
+          Cortex
         </span>
         {portalMode && (
-          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600">
+          <span className="rounded-full bg-accent-surface px-2 py-0.5 text-xs font-medium text-accent-text">
             Portal
           </span>
         )}
       </div>
       <div className="flex items-center gap-3">
         {userName && (
-          <span className="hidden sm:inline text-sm text-gray-500">{userName}</span>
+          <span className="hidden sm:inline text-sm text-text-muted">{userName}</span>
         )}
         <Button variant="ghost" size="sm" onClick={handleLogout}>
           <LogOut size={16} />

@@ -31,7 +31,7 @@ export default async function AdminDashboardPage() {
     return (
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
+          <h1 className="text-2xl font-semibold text-text-primary">Dashboard</h1>
           <Link href="/admin/search/new">
             <Button>
               <Search size={16} />
@@ -62,23 +62,23 @@ export default async function AdminDashboardPage() {
         {/* Recent searches */}
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-gray-900">Recent searches</h2>
-            <Link href="/admin/search/history" className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+            <h2 className="text-base font-semibold text-text-primary">Recent searches</h2>
+            <Link href="/admin/search/history" className="text-sm text-accent-text hover:text-accent-hover flex items-center gap-1">
               View all <ArrowRight size={14} />
             </Link>
           </div>
           {recentSearches.length === 0 ? (
-            <p className="text-sm text-gray-500 py-4 text-center">No searches yet. Run your first search to get started.</p>
+            <p className="text-sm text-text-muted py-4 text-center">No searches yet. Run your first search to get started.</p>
           ) : (
             <div className="space-y-2">
-              {recentSearches.map((search) => (
+              {recentSearches.map((search, index) => (
                 <Link key={search.id} href={`/admin/search/${search.id}`}>
-                  <div className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors">
+                  <div className="animate-stagger-in flex items-center justify-between rounded-lg border border-nativz-border-light px-4 py-3 hover:bg-surface-hover transition-colors" style={{ animationDelay: `${index * 40}ms` }}>
                     <div className="flex items-center gap-3">
-                      <Search size={14} className="text-gray-400" />
+                      <Search size={14} className="text-text-muted" />
                       <div>
-                        <p className="text-sm font-medium text-gray-900">{search.query}</p>
-                        <span className="text-xs text-gray-400 flex items-center gap-1">
+                        <p className="text-sm font-medium text-text-primary">{search.query}</p>
+                        <span className="text-xs text-text-muted flex items-center gap-1">
                           <Clock size={10} />
                           {formatRelativeTime(search.created_at)}
                         </span>

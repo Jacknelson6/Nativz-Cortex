@@ -53,7 +53,7 @@ export default async function PortalReportsPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">Reports</h1>
+        <h1 className="text-2xl font-semibold text-text-primary">Reports</h1>
         {result.client.feature_flags.can_search && (
           <Link href="/portal/search/new">
             <Button>
@@ -72,20 +72,20 @@ export default async function PortalReportsPage() {
         />
       ) : (
         <div className="space-y-2">
-          {items.map((item) => (
+          {items.map((item, i) => (
             <Link key={item.id} href={`/portal/search/${item.id}`}>
-              <Card interactive className="flex items-center justify-between">
+              <Card interactive className="animate-stagger-in flex items-center justify-between" style={{ animationDelay: `${i * 30}ms` }}>
                 <div className="flex items-center gap-3">
-                  <FileText size={16} className="text-gray-400 shrink-0" />
+                  <FileText size={16} className="text-text-muted shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{item.query}</p>
+                    <p className="text-sm font-medium text-text-primary">{item.query}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-gray-400 flex items-center gap-1">
+                      <span className="text-xs text-text-muted flex items-center gap-1">
                         <Clock size={10} />
                         {formatRelativeTime(item.created_at)}
                       </span>
                       {item.source !== 'all' && (
-                        <span className="text-xs text-gray-400">{item.source}</span>
+                        <span className="text-xs text-text-muted">{item.source}</span>
                       )}
                     </div>
                   </div>

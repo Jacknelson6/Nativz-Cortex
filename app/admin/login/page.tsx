@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -35,17 +36,23 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+    <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-black text-white text-lg font-bold">
-            N
+          <div className="mx-auto mb-4 flex items-center justify-center">
+            <Image
+              src="/nativz-logo.svg"
+              alt="Nativz"
+              width={140}
+              height={53}
+              className="h-12 w-auto"
+              priority
+            />
           </div>
-          <h1 className="text-2xl font-semibold text-gray-900">Nativz Cortex</h1>
-          <p className="mt-1 text-sm text-gray-500">Admin sign in</p>
+          <p className="mt-2 text-sm text-text-muted">Admin sign in</p>
         </div>
 
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+        <div className="rounded-xl bg-surface p-6 shadow-sm border border-nativz-border">
           <form onSubmit={handleLogin} className="space-y-4">
             <Input
               id="email"
@@ -67,7 +74,7 @@ export default function AdminLoginPage() {
             />
 
             {error && (
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-red-400">{error}</p>
             )}
 
             <Button type="submit" className="w-full" disabled={loading}>

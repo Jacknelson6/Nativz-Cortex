@@ -1,6 +1,8 @@
 'use client';
 
 import { Card, CardTitle } from '@/components/ui/card';
+import { TooltipCard } from '@/components/ui/tooltip-card';
+import { TOOLTIPS } from '@/lib/tooltips';
 import type { EmotionBreakdown } from '@/lib/types/search';
 
 interface EmotionsBreakdownProps {
@@ -14,18 +16,30 @@ export function EmotionsBreakdown({ emotions }: EmotionsBreakdownProps) {
     <Card>
       <CardTitle>Emotions</CardTitle>
       <div className="mt-4 space-y-3">
-        {emotions.map((e) => (
-          <div key={e.emotion} className="flex items-center gap-3">
-            <span className="w-24 shrink-0 text-sm text-gray-600">{e.emotion}</span>
-            <div className="flex-1 h-6 rounded-full bg-gray-100 overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-700 ease-out"
-                style={{ width: `${e.percentage}%`, backgroundColor: e.color }}
-              />
+        {emotions.map((e) => {
+          const key = e.emotion.toLowerCase();
+          const tooltip = TOOLTIPS[key];
+          return (
+            <div key={e.emotion} className="flex items-center gap-3">
+              <span className="w-24 shrink-0 text-sm text-text-secondary">
+                {tooltip ? (
+                  <TooltipCard title={tooltip.title} description={tooltip.description}>
+                    {e.emotion}
+                  </TooltipCard>
+                ) : (
+                  e.emotion
+                )}
+              </span>
+              <div className="flex-1 h-6 rounded-full bg-surface-hover overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700 ease-out"
+                  style={{ width: `${e.percentage}%`, backgroundColor: e.color }}
+                />
+              </div>
+              <span className="w-12 text-right text-sm font-medium text-text-secondary">{e.percentage}%</span>
             </div>
-            <span className="w-12 text-right text-sm font-medium text-gray-700">{e.percentage}%</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </Card>
   );

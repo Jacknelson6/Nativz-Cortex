@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import Image from 'next/image';
 import { X } from 'lucide-react';
 import { useSidebar } from './sidebar-provider';
 
@@ -38,7 +39,7 @@ export function MobileSidebar({ children }: MobileSidebarProps) {
     <div className="md:hidden">
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-200 ${
+        className={`fixed inset-0 z-40 bg-black/60 transition-opacity duration-200 ${
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
         onClick={close}
@@ -47,26 +48,30 @@ export function MobileSidebar({ children }: MobileSidebarProps) {
 
       {/* Drawer */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-xl transition-transform duration-200 ease-out ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-surface shadow-elevated border-r border-nativz-border transition-transform duration-200 ease-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex h-14 items-center justify-between border-b border-gray-200 px-4">
+        <div className="flex h-16 items-center justify-between border-b border-nativz-border px-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-black text-white text-xs font-bold">
-              N
-            </div>
-            <span className="text-sm font-semibold text-gray-900">Nativz Cortex</span>
+            <Image
+              src="/nativz-logo.svg"
+              alt="Nativz"
+              width={80}
+              height={30}
+              className="h-6 w-auto"
+            />
+            <span className="text-xs font-medium text-text-secondary tracking-wide uppercase">Cortex</span>
           </div>
           <button
             onClick={close}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
             aria-label="Close menu"
           >
             <X size={18} />
           </button>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 p-3">
+        <nav className="flex flex-1 flex-col gap-0.5 p-3" onClick={close}>
           {children}
         </nav>
       </div>

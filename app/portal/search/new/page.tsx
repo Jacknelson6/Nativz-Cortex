@@ -1,5 +1,6 @@
 import { SearchX } from 'lucide-react';
 import { SearchForm } from '@/components/search/search-form';
+import { SearchHero } from '@/components/search/search-hero';
 import { EmptyState } from '@/components/shared/empty-state';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 
@@ -23,12 +24,7 @@ export default async function PortalNewSearchPage() {
   return (
     <div className="flex flex-col items-center justify-center p-6 pt-16">
       <div className="w-full max-w-2xl text-center">
-        <h1 className="text-2xl font-semibold text-gray-900">
-          Search a topic
-        </h1>
-        <p className="mt-2 text-gray-500">
-          Enter a topic to get AI-powered research, trending insights, and video ideas
-        </p>
+        <SearchHero />
 
         <div className="mt-8">
           <SearchForm
@@ -38,7 +34,7 @@ export default async function PortalNewSearchPage() {
           />
         </div>
 
-        <p className="mt-6 text-xs text-gray-400">
+        <p className="mt-6 text-xs text-text-muted">
           Powered by Brave Search + Claude AI
         </p>
       </div>

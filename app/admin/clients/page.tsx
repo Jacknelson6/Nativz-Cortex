@@ -24,7 +24,7 @@ export default async function AdminClientsPage() {
     return (
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-gray-900">Clients</h1>
+          <h1 className="text-2xl font-semibold text-text-primary">Clients</h1>
           <Link href="/admin/clients/new">
             <Button>
               <Plus size={16} />
@@ -46,19 +46,19 @@ export default async function AdminClientsPage() {
           />
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((client) => (
+            {items.map((client, i) => (
               <Link key={client.id} href={`/admin/clients/${client.slug}`}>
-                <Card interactive className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                <Card interactive className="animate-stagger-in flex items-start gap-3" style={{ animationDelay: `${i * 50}ms` }}>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-surface text-accent-text">
                     <Building2 size={20} />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-gray-900 truncate">{client.name}</p>
+                      <p className="text-sm font-medium text-text-primary truncate">{client.name}</p>
                       {!client.is_active && <Badge variant="warning">Inactive</Badge>}
                     </div>
-                    <p className="text-xs text-gray-500">{client.industry}</p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-text-muted">{client.industry}</p>
+                    <p className="text-xs text-text-muted mt-1">
                       Added {formatRelativeTime(client.created_at)}
                     </p>
                   </div>

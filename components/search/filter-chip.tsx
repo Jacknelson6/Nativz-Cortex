@@ -34,8 +34,8 @@ export function FilterChip({ label, value, options, onChange }: FilterChipProps)
         onClick={() => setOpen(!open)}
         className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
           isDefault
-            ? 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-            : 'border-indigo-200 bg-indigo-50 text-indigo-700'
+            ? 'border-nativz-border bg-surface text-text-secondary hover:border-text-muted'
+            : 'border-accent/40 bg-accent-surface text-accent-text'
         }`}
       >
         {isDefault ? label : selectedLabel}
@@ -43,8 +43,8 @@ export function FilterChip({ label, value, options, onChange }: FilterChipProps)
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 min-w-[160px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg animate-fade-in">
-          {options.map((opt) => (
+        <div className="absolute left-0 top-full z-20 mt-1 min-w-[160px] rounded-lg border border-nativz-border bg-surface py-1 shadow-dropdown animate-fade-in">
+          {options.map((opt, i) => (
             <button
               key={opt.value}
               type="button"
@@ -52,11 +52,12 @@ export function FilterChip({ label, value, options, onChange }: FilterChipProps)
                 onChange(opt.value);
                 setOpen(false);
               }}
-              className={`block w-full px-3 py-1.5 text-left text-xs transition-colors ${
+              className={`animate-stagger-in block w-full px-3 py-1.5 text-left text-xs transition-colors ${
                 opt.value === value
-                  ? 'bg-indigo-50 text-indigo-700 font-medium'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? 'bg-accent-surface text-accent-text font-medium'
+                  : 'text-text-secondary hover:bg-surface-hover'
               }`}
+              style={{ animationDelay: `${i * 20}ms` }}
             >
               {opt.label}
             </button>

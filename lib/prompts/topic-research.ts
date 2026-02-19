@@ -104,36 +104,22 @@ ${serpBlock}
 
 ## WHAT TO ANALYZE
 Based on the search data above:
-1. **Volume and engagement** — How much are people talking about this? What engagement levels are posts getting?
-2. **Sentiment and emotions** — What do people feel about this topic? Map the full emotional spectrum.
-3. **Content that works** — What formats, angles, and hooks get the most engagement?
-4. **Trending sub-topics** — What specific angles or sub-topics within this broader topic are trending?
-5. **Video opportunities** — For each trending sub-topic, what specific video ideas would perform well?
+1. **Overall sentiment** — What is the overall sentiment of the conversation? Rate it from -1.0 (very negative) to 1.0 (very positive).
+2. **Conversation intensity** — How much are people talking about this? Rate as low, moderate, high, or very_high.
+3. **Emotions** — What do people feel about this topic? Map the full emotional spectrum.
+4. **Content that works** — What formats, angles, and hooks get the most engagement?
+5. **Trending sub-topics** — What specific angles or sub-topics within this broader topic are trending? For each, cite 2-5 real sources from the search data above.
+6. **Video opportunities** — For each trending sub-topic, what specific video ideas would perform well?
 
 ## OUTPUT FORMAT
 Respond ONLY in valid JSON matching this exact schema. No text outside the JSON object.
 
-Generate realistic estimated numbers based on the search data provided. Activity data should span the ${timeLabel} period with weekly data points.
-
 {
-  "summary": "3-5 sentence overview of the topic landscape. What's the conversation about? What are the key takeaways? What opportunities exist for content creators?",
+  "summary": "3-5 sentence overview of the topic landscape. Reference specific sources from the search data. What's the conversation about? What are the key takeaways? What opportunities exist for content creators?",
 
-  "metrics": {
-    "total_engagements": 0,
-    "engagement_rate": 0.0,
-    "estimated_views": 0,
-    "estimated_reach": 0,
-    "total_mentions": 0
-  },
+  "overall_sentiment": 0.0,
 
-  "activity_data": [
-    {
-      "date": "Mon DD",
-      "views": 0,
-      "mentions": 0,
-      "sentiment": 0.0
-    }
-  ],
+  "conversation_intensity": "moderate",
 
   "emotions": [
     {
@@ -158,12 +144,18 @@ Generate realistic estimated numbers based on the search data provided. Activity
   "trending_topics": [
     {
       "name": "Specific sub-topic or angle",
-      "estimated_views": 0,
       "resonance": "high",
       "sentiment": 0.0,
-      "date": "YYYY-MM-DD",
       "posts_overview": "2-3 sentences summarizing the types of posts about this sub-topic, with specific examples or quotes from real posts found in the search data",
       "comments_overview": "2-3 sentences summarizing the discussion and reactions in comments, with specific examples of what people are saying",
+      "sources": [
+        {
+          "url": "EXACT_URL_FROM_SEARCH_DATA",
+          "title": "Title of the source",
+          "type": "web | discussion | video",
+          "relevance": "Brief note on why this source is relevant to this sub-topic"
+        }
+      ],
       "video_ideas": [
         {
           "title": "Compelling video title that would work as a TikTok/Reel caption",
@@ -178,15 +170,17 @@ Generate realistic estimated numbers based on the search data provided. Activity
 }
 
 ## IMPORTANT GUIDELINES
-- Generate 6-10 activity_data points spread across the time range
 - Include 5-8 emotions that sum to approximately 100%
 - Include 3-5 items each for intentions, categories, and formats
 - Generate 5-8 trending_topics, each with 2-4 video_ideas
-- Use realistic numbers based on the actual search data — don't inflate
+- Each trending_topic MUST have 2-5 items in its "sources" array
+- **Do NOT invent URLs.** Every URL in sources must be copied exactly from the search data above. If you cannot find a relevant URL, do not include a source entry for it.
 - Reference specific articles, posts, or discussions from the search data in your posts_overview and comments_overview
 - Emotion colors should be distinct hex values (use: #6366F1 indigo, #10B981 emerald, #F59E0B amber, #EF4444 red, #8B5CF6 purple, #3B82F6 blue, #EC4899 pink, #14B8A6 teal)
 - Resonance values: "low", "medium", "high", or "viral"
 - Sentiment scores range from -1.0 (very negative) to 1.0 (very positive)
+- overall_sentiment: a single number from -1.0 to 1.0 representing the overall sentiment across all search data
+- conversation_intensity: "low", "moderate", "high", or "very_high" based on volume and engagement in the search data
 - All video ideas should be specific and actionable — ready to produce
 - engagement_rate should be a decimal between 0 and 1 (e.g., 0.045 for 4.5%)`;
 }

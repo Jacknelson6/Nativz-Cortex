@@ -1,5 +1,41 @@
 // Types for the topic search / ideation MVP flow
 
+import type { BraveSerpData } from '@/lib/brave/types';
+
+// Source citation attached to a trending topic
+export interface TopicSource {
+  url: string;
+  title: string;
+  type: 'web' | 'discussion' | 'video';
+  relevance: string;
+}
+
+// NEW metrics shape — derived from real SERP data, not AI fabrication
+export interface SearchMetrics {
+  web_results_found: number;
+  discussions_found: number;
+  videos_found: number;
+  total_sources: number;
+  total_video_views: number | null;
+  total_discussion_replies: number | null;
+  overall_sentiment: number;
+  conversation_intensity: 'low' | 'moderate' | 'high' | 'very_high';
+}
+
+// Legacy metrics shape for backward compatibility with old searches
+export interface LegacySearchMetrics {
+  total_engagements: number;
+  engagement_rate: number;
+  estimated_views: number;
+  estimated_reach: number;
+  total_mentions: number;
+}
+
+// Type guard: new metrics vs legacy
+export function isNewMetrics(m: SearchMetrics | LegacySearchMetrics): m is SearchMetrics {
+  return 'web_results_found' in m;
+}
+
 export interface TopicSearch {
   id: string;
   query: string;
@@ -10,11 +46,12 @@ export interface TopicSearch {
   client_id: string | null;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   summary: string | null;
-  metrics: SearchMetrics | null;
-  activity_data: ActivityDataPoint[] | null;
+  metrics: SearchMetrics | LegacySearchMetrics | null;
+  activity_data: ActivityDataPoint[] | null; // legacy, kept for old searches
   emotions: EmotionBreakdown[] | null;
   content_breakdown: ContentBreakdown | null;
-  trending_topics: TrendingTopic[] | null;
+  trending_topics: (TrendingTopic | LegacyTrendingTopic)[] | null;
+  serp_data: BraveSerpData | null;
   raw_ai_response: TopicSearchAIResponse | null;
   tokens_used: number | null;
   estimated_cost: number | null;
@@ -28,21 +65,24 @@ export interface TopicSearch {
 // AI response — single call returns everything
 export interface TopicSearchAIResponse {
   summary: string;
-  metrics: SearchMetrics;
-  activity_data: ActivityDataPoint[];
+  overall_sentiment: number;
+  conversation_intensity: 'low' | 'moderate' | 'high' | 'very_high';
   emotions: EmotionBreakdown[];
   content_breakdown: ContentBreakdown;
   trending_topics: TrendingTopic[];
 }
 
-export interface SearchMetrics {
-  total_engagements: number;
-  engagement_rate: number;
-  estimated_views: number;
-  estimated_reach: number;
-  total_mentions: number;
+// Legacy AI response for old searches
+export interface LegacyTopicSearchAIResponse {
+  summary: string;
+  metrics: LegacySearchMetrics;
+  activity_data: ActivityDataPoint[];
+  emotions: EmotionBreakdown[];
+  content_breakdown: ContentBreakdown;
+  trending_topics: LegacyTrendingTopic[];
 }
 
+// Kept for backward compat with old data
 export interface ActivityDataPoint {
   date: string;
   views: number;
@@ -70,6 +110,17 @@ export interface ContentBreakdownItem {
 
 export interface TrendingTopic {
   name: string;
+  resonance: 'low' | 'medium' | 'high' | 'viral';
+  sentiment: number;
+  posts_overview: string;
+  comments_overview: string;
+  sources: TopicSource[];
+  video_ideas: VideoIdea[];
+}
+
+// Legacy trending topic for old searches
+export interface LegacyTrendingTopic {
+  name: string;
   estimated_views: number;
   resonance: 'low' | 'medium' | 'high' | 'viral';
   sentiment: number;
@@ -77,6 +128,16 @@ export interface TrendingTopic {
   posts_overview: string;
   comments_overview: string;
   video_ideas: VideoIdea[];
+}
+
+// Type guard: new trending topic vs legacy
+export function hasSources(topic: TrendingTopic | LegacyTrendingTopic): topic is TrendingTopic {
+  return 'sources' in topic && Array.isArray((topic as TrendingTopic).sources);
+}
+
+// Type guard: check if search has serp_data
+export function hasSerp(search: TopicSearch): boolean {
+  return search.serp_data !== null && search.serp_data !== undefined;
 }
 
 export interface VideoIdea {

@@ -66,6 +66,7 @@ CREATE TABLE topic_searches (
   emotions JSONB,
   content_breakdown JSONB,
   trending_topics JSONB,
+  serp_data JSONB,
   raw_ai_response JSONB,
   tokens_used INTEGER,
   estimated_cost DECIMAL(10,4),

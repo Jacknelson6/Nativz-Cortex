@@ -70,10 +70,10 @@ export default async function PortalDashboardPage() {
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">
+            <h1 className="text-2xl font-semibold text-text-primary">
               Welcome back{fullName ? `, ${fullName.split(' ')[0]}` : ''}
             </h1>
-            <p className="text-sm text-gray-500">{clientName}</p>
+            <p className="text-sm text-text-muted">{clientName}</p>
           </div>
           {canSearch && (
             <Link href="/portal/search/new">
@@ -105,23 +105,23 @@ export default async function PortalDashboardPage() {
         {canViewReports && (
           <Card>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-gray-900">Recent reports</h2>
-              <Link href="/portal/reports" className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+              <h2 className="text-base font-semibold text-text-primary">Recent reports</h2>
+              <Link href="/portal/reports" className="text-sm text-accent-text hover:text-accent-hover flex items-center gap-1">
                 View all <ArrowRight size={14} />
               </Link>
             </div>
             {recentReports.length === 0 ? (
-              <p className="text-sm text-gray-500 py-4 text-center">
+              <p className="text-sm text-text-muted py-4 text-center">
                 No approved reports yet. Your team will share them here when ready.
               </p>
             ) : (
               <div className="space-y-2">
                 {recentReports.map((report) => (
                   <Link key={report.id} href={`/portal/search/${report.id}`}>
-                    <div className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center justify-between rounded-lg border border-nativz-border-light px-4 py-3 hover:bg-surface-hover transition-colors">
                       <div>
-                        <p className="text-sm font-medium text-gray-900">{report.query}</p>
-                        <span className="text-xs text-gray-400 flex items-center gap-1">
+                        <p className="text-sm font-medium text-text-primary">{report.query}</p>
+                        <span className="text-xs text-text-muted flex items-center gap-1">
                           <Clock size={10} />
                           {formatRelativeTime(report.created_at)}
                         </span>

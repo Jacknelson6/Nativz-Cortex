@@ -101,29 +101,29 @@ export default function AdminClientSettingsPage() {
   }
 
   if (loading) {
-    return <div className="p-6 text-sm text-gray-500">Loading...</div>;
+    return <div className="p-6 text-sm text-text-muted">Loading...</div>;
   }
 
   if (!client) {
-    return <div className="p-6 text-sm text-red-600">Client not found.</div>;
+    return <div className="p-6 text-sm text-red-400">Client not found.</div>;
   }
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">
       <div className="flex items-center gap-3">
-        <Link href={`/admin/clients/${params.slug}`} className="text-gray-400 hover:text-gray-600 transition-colors">
+        <Link href={`/admin/clients/${params.slug}`} className="text-text-muted hover:text-text-secondary transition-colors">
           <ArrowLeft size={20} />
         </Link>
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">{client.name}</h1>
-          <p className="text-sm text-gray-500">Settings</p>
+          <h1 className="text-2xl font-semibold text-text-primary">{client.name}</h1>
+          <p className="text-sm text-text-muted">Settings</p>
         </div>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* Business info */}
         <Card>
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Business info</h2>
+          <h2 className="text-base font-semibold text-text-primary mb-4">Business info</h2>
           <div className="space-y-4">
             <Input
               id="industry"
@@ -160,34 +160,34 @@ export default function AdminClientSettingsPage() {
 
         {/* Feature flags */}
         <Card>
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Portal access</h2>
+          <h2 className="text-base font-semibold text-text-primary mb-4">Portal access</h2>
           <div className="space-y-3">
             <label className="flex items-center gap-3">
               <input
                 type="checkbox"
                 checked={canSearch}
                 onChange={(e) => setCanSearch(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                className="h-4 w-4 rounded border-nativz-border text-accent focus:ring-accent"
               />
-              <span className="text-sm text-gray-700">Can run topic searches</span>
+              <span className="text-sm text-text-secondary">Can run topic searches</span>
             </label>
             <label className="flex items-center gap-3">
               <input
                 type="checkbox"
                 checked={canViewReports}
                 onChange={(e) => setCanViewReports(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                className="h-4 w-4 rounded border-nativz-border text-accent focus:ring-accent"
               />
-              <span className="text-sm text-gray-700">Can view approved reports</span>
+              <span className="text-sm text-text-secondary">Can view approved reports</span>
             </label>
             <label className="flex items-center gap-3">
               <input
                 type="checkbox"
                 checked={isActive}
                 onChange={(e) => setIsActive(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                className="h-4 w-4 rounded border-nativz-border text-accent focus:ring-accent"
               />
-              <span className="text-sm text-gray-700">Client is active</span>
+              <span className="text-sm text-text-secondary">Client is active</span>
             </label>
           </div>
         </Card>

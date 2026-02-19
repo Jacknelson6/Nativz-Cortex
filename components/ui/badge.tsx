@@ -3,12 +3,12 @@ import { HTMLAttributes } from 'react';
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple';
 
 const variantStyles: Record<BadgeVariant, string> = {
-  default: 'bg-gray-100 text-gray-700',
-  success: 'bg-emerald-50 text-emerald-700',
-  warning: 'bg-amber-50 text-amber-700',
-  danger: 'bg-red-50 text-red-700',
-  info: 'bg-blue-50 text-blue-700',
-  purple: 'bg-purple-50 text-purple-700',
+  default: 'bg-surface-hover text-text-secondary ring-1 ring-inset ring-white/10',
+  success: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-inset ring-emerald-500/20',
+  warning: 'bg-amber-500/15 text-amber-400 ring-1 ring-inset ring-amber-500/20',
+  danger: 'bg-red-500/15 text-red-400 ring-1 ring-inset ring-red-500/20',
+  info: 'bg-blue-500/15 text-blue-400 ring-1 ring-inset ring-blue-500/20',
+  purple: 'bg-purple-500/15 text-purple-400 ring-1 ring-inset ring-purple-500/20',
 };
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {

@@ -44,12 +44,12 @@ export default async function AdminClientDetailPage({
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/admin/clients" className="text-gray-400 hover:text-gray-600 transition-colors">
+            <Link href="/admin/clients" className="text-text-muted hover:text-text-secondary transition-colors">
               <ArrowLeft size={20} />
             </Link>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">{client.name}</h1>
-              <p className="text-sm text-gray-500">{client.industry}</p>
+              <h1 className="text-2xl font-semibold text-text-primary">{client.name}</h1>
+              <p className="text-sm text-text-muted">{client.industry}</p>
             </div>
             {!client.is_active && <Badge variant="warning">Inactive</Badge>}
           </div>
@@ -64,23 +64,23 @@ export default async function AdminClientDetailPage({
         {/* Client info */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Card>
-            <p className="text-sm text-gray-500">Industry</p>
-            <p className="mt-1 text-sm font-medium text-gray-900">{client.industry}</p>
+            <p className="text-sm text-text-muted">Industry</p>
+            <p className="mt-1 text-sm font-medium text-text-primary">{client.industry}</p>
           </Card>
           <Card>
-            <p className="text-sm text-gray-500">Target audience</p>
-            <p className="mt-1 text-sm font-medium text-gray-900">{client.target_audience || 'Not set'}</p>
+            <p className="text-sm text-text-muted">Target audience</p>
+            <p className="mt-1 text-sm font-medium text-text-primary">{client.target_audience || 'Not set'}</p>
           </Card>
           <Card>
-            <p className="text-sm text-gray-500">Brand voice</p>
-            <p className="mt-1 text-sm font-medium text-gray-900">{client.brand_voice || 'Not set'}</p>
+            <p className="text-sm text-text-muted">Brand voice</p>
+            <p className="mt-1 text-sm font-medium text-text-primary">{client.brand_voice || 'Not set'}</p>
           </Card>
         </div>
 
         {/* Recent searches */}
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-gray-900">Recent searches</h2>
+            <h2 className="text-base font-semibold text-text-primary">Recent searches</h2>
             <Link href={`/admin/search/new?client=${client.id}`}>
               <Button size="sm">
                 <Search size={14} />
@@ -99,10 +99,10 @@ export default async function AdminClientDetailPage({
             <div className="space-y-2">
               {items.map((search) => (
                 <Link key={search.id} href={`/admin/search/${search.id}`}>
-                  <div className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center justify-between rounded-lg border border-nativz-border-light px-4 py-3 hover:bg-surface-hover transition-colors">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{search.query}</p>
-                      <span className="text-xs text-gray-400 flex items-center gap-1">
+                      <p className="text-sm font-medium text-text-primary">{search.query}</p>
+                      <span className="text-xs text-text-muted flex items-center gap-1">
                         <Clock size={10} />
                         {formatRelativeTime(search.created_at)}
                       </span>

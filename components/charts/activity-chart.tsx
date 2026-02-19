@@ -12,6 +12,7 @@ import {
   ComposedChart,
 } from 'recharts';
 import { Card, CardTitle } from '@/components/ui/card';
+import { formatNumber } from '@/lib/utils/format';
 import type { ActivityDataPoint } from '@/lib/types/search';
 
 interface ActivityChartProps {
@@ -27,7 +28,7 @@ export function ActivityChart({ data }: ActivityChartProps) {
     return (
       <Card>
         <CardTitle>Activity</CardTitle>
-        <div className="flex h-64 items-center justify-center text-sm text-gray-400">
+        <div className="flex h-64 items-center justify-center text-sm text-text-muted">
           No activity data available
         </div>
       </Card>
@@ -38,13 +39,13 @@ export function ActivityChart({ data }: ActivityChartProps) {
     <Card>
       <div className="flex items-center justify-between mb-4">
         <CardTitle>Activity</CardTitle>
-        <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
+        <div className="flex gap-1 rounded-lg bg-surface-hover p-1">
           <button
             onClick={() => setMode('volume')}
             className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
               mode === 'volume'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-surface text-text-primary shadow-sm'
+                : 'text-text-muted hover:text-text-secondary'
             }`}
           >
             Volume
@@ -53,8 +54,8 @@ export function ActivityChart({ data }: ActivityChartProps) {
             onClick={() => setMode('sentiment')}
             className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
               mode === 'sentiment'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-surface text-text-primary shadow-sm'
+                : 'text-text-muted hover:text-text-secondary'
             }`}
           >
             Sentiment
@@ -68,24 +69,24 @@ export function ActivityChart({ data }: ActivityChartProps) {
             <ComposedChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="views-gradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#6366F1" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#6366F1" stopOpacity={0.02} />
+                  <stop offset="0%" stopColor="#046bd2" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#046bd2" stopOpacity={0.02} />
                 </linearGradient>
                 <linearGradient id="mentions-gradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10B981" stopOpacity={0.15} />
+                  <stop offset="0%" stopColor="#10B981" stopOpacity={0.2} />
                   <stop offset="95%" stopColor="#10B981" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2f45" vertical={false} />
               <XAxis
                 dataKey="date"
-                tick={{ fill: '#9CA3AF', fontSize: 11 }}
+                tick={{ fill: '#64748b', fontSize: 11 }}
                 tickLine={false}
-                axisLine={{ stroke: '#E5E7EB' }}
+                axisLine={{ stroke: '#2a2f45' }}
                 dy={8}
               />
               <YAxis
-                tick={{ fill: '#9CA3AF', fontSize: 11 }}
+                tick={{ fill: '#64748b', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
                 width={48}
@@ -93,23 +94,29 @@ export function ActivityChart({ data }: ActivityChartProps) {
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#fff',
-                  border: '1px solid #E5E7EB',
+                  backgroundColor: '#1a1d2e',
+                  border: '1px solid #2a2f45',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.3)',
+                  color: '#f1f5f9',
                 }}
-                labelStyle={{ color: '#374151', fontWeight: 600, marginBottom: 4 }}
+                labelStyle={{ color: '#f1f5f9', fontWeight: 600, marginBottom: 4 }}
+                itemStyle={{ color: '#94a3b8' }}
+                formatter={((value: number | undefined, name: string | undefined) => [
+                  value !== undefined ? formatNumber(value) : '0',
+                  name ?? '',
+                ]) as never}
               />
               <Area type="monotone" dataKey="views" stroke="none" fill="url(#views-gradient)" />
               <Area type="monotone" dataKey="mentions" stroke="none" fill="url(#mentions-gradient)" />
               <Line
                 type="monotone"
                 dataKey="views"
-                stroke="#6366F1"
+                stroke="#046bd2"
                 strokeWidth={2.5}
                 dot={false}
-                activeDot={{ r: 5, fill: '#6366F1', stroke: '#fff', strokeWidth: 2 }}
+                activeDot={{ r: 5, fill: '#046bd2', stroke: '#1a1d2e', strokeWidth: 2 }}
                 name="Views"
               />
               <Line
@@ -118,7 +125,7 @@ export function ActivityChart({ data }: ActivityChartProps) {
                 stroke="#10B981"
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, fill: '#10B981', stroke: '#fff', strokeWidth: 2 }}
+                activeDot={{ r: 4, fill: '#10B981', stroke: '#1a1d2e', strokeWidth: 2 }}
                 name="Mentions"
               />
             </ComposedChart>
@@ -126,21 +133,21 @@ export function ActivityChart({ data }: ActivityChartProps) {
             <ComposedChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="sentiment-gradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.15} />
+                  <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.2} />
                   <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2f45" vertical={false} />
               <XAxis
                 dataKey="date"
-                tick={{ fill: '#9CA3AF', fontSize: 11 }}
+                tick={{ fill: '#64748b', fontSize: 11 }}
                 tickLine={false}
-                axisLine={{ stroke: '#E5E7EB' }}
+                axisLine={{ stroke: '#2a2f45' }}
                 dy={8}
               />
               <YAxis
                 domain={[-1, 1]}
-                tick={{ fill: '#9CA3AF', fontSize: 11 }}
+                tick={{ fill: '#64748b', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
                 width={48}
@@ -148,13 +155,15 @@ export function ActivityChart({ data }: ActivityChartProps) {
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#fff',
-                  border: '1px solid #E5E7EB',
+                  backgroundColor: '#1a1d2e',
+                  border: '1px solid #2a2f45',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.3)',
+                  color: '#f1f5f9',
                 }}
-                labelStyle={{ color: '#374151', fontWeight: 600, marginBottom: 4 }}
+                labelStyle={{ color: '#f1f5f9', fontWeight: 600, marginBottom: 4 }}
+                itemStyle={{ color: '#94a3b8' }}
                 formatter={(value: number | undefined) => [
                   value !== undefined ? value.toFixed(2) : '0',
                   'Sentiment',
@@ -167,7 +176,7 @@ export function ActivityChart({ data }: ActivityChartProps) {
                 stroke="#F59E0B"
                 strokeWidth={2.5}
                 dot={false}
-                activeDot={{ r: 5, fill: '#F59E0B', stroke: '#fff', strokeWidth: 2 }}
+                activeDot={{ r: 5, fill: '#F59E0B', stroke: '#1a1d2e', strokeWidth: 2 }}
                 name="Sentiment"
               />
             </ComposedChart>

@@ -57,7 +57,7 @@ export default async function AdminSearchHistoryPage({
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">Search history</h1>
+        <h1 className="text-2xl font-semibold text-text-primary">Search history</h1>
         <Link href="/admin/search/new">
           <Button>
             <Search size={16} />
@@ -87,23 +87,23 @@ export default async function AdminSearchHistoryPage({
             <Link key={item.id} href={`/admin/search/${item.id}`}>
               <Card
                 interactive
-                className="flex items-center justify-between"
+                className="animate-stagger-in flex items-center justify-between"
                 style={{ animationDelay: `${index * 30}ms` }}
               >
                 <div className="flex items-center gap-3">
-                  <Search size={16} className="text-gray-400 shrink-0" />
+                  <Search size={16} className="text-text-muted shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{item.query}</p>
+                    <p className="text-sm font-medium text-text-primary">{item.query}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-gray-400 flex items-center gap-1">
+                      <span className="text-xs text-text-muted flex items-center gap-1">
                         <Clock size={10} />
                         {formatRelativeTime(item.created_at)}
                       </span>
                       {item.source !== 'all' && (
-                        <span className="text-xs text-gray-400">{item.source}</span>
+                        <span className="text-xs text-text-muted">{item.source}</span>
                       )}
                       {item.client_id && clientMap.has(item.client_id) && (
-                        <span className="text-xs text-gray-400 flex items-center gap-1">
+                        <span className="text-xs text-text-muted flex items-center gap-1">
                           <Building2 size={10} />
                           {clientMap.get(item.client_id)}
                         </span>
