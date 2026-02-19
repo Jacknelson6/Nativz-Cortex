@@ -1,8 +1,7 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import { useEffect } from 'react';
 
 interface SidebarContextValue {
   isOpen: boolean;

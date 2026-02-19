@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Eye, TrendingUp } from 'lucide-react';
+import { ChevronDown, ChevronRight, Eye } from 'lucide-react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatNumber } from '@/lib/utils/format';

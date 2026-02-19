@@ -35,7 +35,6 @@ export async function updateSession(request: NextRequest) {
   if (pathname === '/admin/login' || pathname === '/portal/login') {
     if (user) {
       // Already logged in — redirect to appropriate dashboard
-      const role = await getUserRole(supabase, user.id);
       if (pathname === '/admin/login') {
         return NextResponse.redirect(new URL('/admin/dashboard', request.url));
       }

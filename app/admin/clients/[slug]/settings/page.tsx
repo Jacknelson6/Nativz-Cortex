@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, Save } from 'lucide-react';
 import Link from 'next/link';
@@ -27,7 +27,6 @@ interface ClientData {
 
 export default function AdminClientSettingsPage() {
   const params = useParams<{ slug: string }>();
-  const router = useRouter();
   const [client, setClient] = useState<ClientData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
