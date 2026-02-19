@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Plus, Building2 } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/card';
@@ -49,9 +50,15 @@ export default async function AdminClientsPage() {
             {items.map((client, i) => (
               <Link key={client.id} href={`/admin/clients/${client.slug}`}>
                 <Card interactive className="animate-stagger-in flex items-start gap-3" style={{ animationDelay: `${i * 50}ms` }}>
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-surface text-accent-text">
-                    <Building2 size={20} />
-                  </div>
+                  {client.logo_url ? (
+                    <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg">
+                      <Image src={client.logo_url} alt={client.name} fill className="object-cover" />
+                    </div>
+                  ) : (
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-surface text-accent-text">
+                      <Building2 size={20} />
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-text-primary truncate">{client.name}</p>

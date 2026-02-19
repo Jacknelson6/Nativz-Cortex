@@ -53,7 +53,7 @@ export function MobileSidebar({ children }: MobileSidebarProps) {
         }`}
       >
         <div className="flex h-16 items-center justify-between border-b border-nativz-border px-4">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-start -space-y-0.5">
             <Image
               src="/nativz-logo.svg"
               alt="Nativz"
@@ -61,7 +61,9 @@ export function MobileSidebar({ children }: MobileSidebarProps) {
               height={30}
               className="h-6 w-auto"
             />
-            <span className="text-xs font-medium text-text-secondary tracking-wide uppercase">Cortex</span>
+            <span className="text-[11px] font-semibold text-text-secondary tracking-[0.25em] uppercase pl-0.5">
+              Cortex
+            </span>
           </div>
           <button
             onClick={close}

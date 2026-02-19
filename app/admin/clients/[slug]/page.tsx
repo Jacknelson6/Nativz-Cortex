@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Settings, Search, Clock } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -47,6 +48,11 @@ export default async function AdminClientDetailPage({
             <Link href="/admin/clients" className="text-text-muted hover:text-text-secondary transition-colors">
               <ArrowLeft size={20} />
             </Link>
+            {client.logo_url ? (
+              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg">
+                <Image src={client.logo_url} alt={client.name} fill className="object-cover" />
+              </div>
+            ) : null}
             <div>
               <h1 className="text-2xl font-semibold text-text-primary">{client.name}</h1>
               <p className="text-sm text-text-muted">{client.industry}</p>

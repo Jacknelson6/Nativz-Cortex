@@ -45,17 +45,19 @@ export function Header({ userName, portalMode = false }: HeaderProps) {
             />
           </div>
         </button>
-        <Image
-          src="/nativz-logo.svg"
-          alt="Nativz"
-          width={93}
-          height={36}
-          className="h-7 w-auto"
-          priority
-        />
-        <span className="text-xs font-medium text-text-secondary tracking-wide uppercase">
-          Cortex
-        </span>
+        <div className="flex flex-col items-start -space-y-0.5">
+          <Image
+            src="/nativz-logo.svg"
+            alt="Nativz"
+            width={93}
+            height={36}
+            className="h-6 w-auto"
+            priority
+          />
+          <span className="text-[11px] font-semibold text-text-secondary tracking-[0.25em] uppercase pl-0.5">
+            Cortex
+          </span>
+        </div>
         {portalMode && (
           <span className="rounded-full bg-accent-surface px-2 py-0.5 text-xs font-medium text-accent-text">
             Portal

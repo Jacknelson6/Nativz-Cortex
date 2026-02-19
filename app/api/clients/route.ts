@@ -11,6 +11,8 @@ const createClientSchema = z.object({
   target_audience: z.string().nullable().optional(),
   brand_voice: z.string().nullable().optional(),
   topic_keywords: z.array(z.string()).optional(),
+  logo_url: z.string().url().nullable().optional(),
+  website_url: z.string().url().nullable().optional(),
 });
 
 export async function GET() {

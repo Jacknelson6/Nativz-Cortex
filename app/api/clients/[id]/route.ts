@@ -39,6 +39,8 @@ export async function PATCH(
       'is_active',
       'description',
       'category',
+      'logo_url',
+      'website_url',
     ];
 
     const updates: Record<string, unknown> = {};

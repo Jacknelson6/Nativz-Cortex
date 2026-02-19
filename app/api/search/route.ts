@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildTopicResearchPrompt } from '@/lib/prompts/topic-research';
+import { buildClientStrategyPrompt } from '@/lib/prompts/client-strategy';
 import { gatherSerpData } from '@/lib/brave/client';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
@@ -17,6 +18,7 @@ const searchSchema = z.object({
   language: z.string().default('all'),
   country: z.string().default('us'),
   client_id: z.string().uuid().nullable().optional(),
+  search_mode: z.enum(['general', 'client_strategy']).default('general'),
 });
 
 /**
@@ -65,7 +67,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { query, source, time_range, language, country, client_id } = parsed.data;
+    const { query, source, time_range, language, country, client_id, search_mode } = parsed.data;
 
     // Use admin client for DB operations (bypasses RLS)
     const adminClient = createAdminClient();
@@ -75,7 +77,7 @@ export async function POST(request: NextRequest) {
     if (client_id) {
       const { data: client } = await adminClient
         .from('clients')
-        .select('name, industry, target_audience, brand_voice')
+        .select('name, industry, target_audience, brand_voice, topic_keywords, website_url')
         .eq('id', client_id)
         .single();
 
@@ -85,6 +87,8 @@ export async function POST(request: NextRequest) {
           industry: client.industry,
           targetAudience: client.target_audience,
           brandVoice: client.brand_voice,
+          topicKeywords: client.topic_keywords,
+          websiteUrl: client.website_url,
         };
       }
     }
@@ -99,6 +103,7 @@ export async function POST(request: NextRequest) {
         language,
         country,
         client_id: client_id || null,
+        search_mode,
         status: 'processing',
         created_by: user.id,
       })
@@ -123,15 +128,28 @@ export async function POST(request: NextRequest) {
       });
 
       // Step 2: Build prompt with Brave results as context
-      const prompt = buildTopicResearchPrompt({
-        query,
-        source,
-        timeRange: time_range,
-        language,
-        country,
-        serpData,
-        clientContext,
-      });
+      let prompt: string;
+      if (search_mode === 'client_strategy' && clientContext) {
+        prompt = buildClientStrategyPrompt({
+          query,
+          source,
+          timeRange: time_range,
+          language,
+          country,
+          serpData,
+          clientContext,
+        });
+      } else {
+        prompt = buildTopicResearchPrompt({
+          query,
+          source,
+          timeRange: time_range,
+          language,
+          country,
+          serpData,
+          clientContext,
+        });
+      }
 
       // Step 3: Call Claude via OpenRouter (no webSearch — Brave replaces it)
       const aiResult = await createCompletion({

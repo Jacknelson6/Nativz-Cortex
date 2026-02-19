@@ -72,6 +72,7 @@ CREATE TABLE topic_searches (
   estimated_cost DECIMAL(10,4),
   approved_at TIMESTAMPTZ,
   approved_by UUID REFERENCES auth.users(id),
+  search_mode TEXT DEFAULT 'general',
   created_by UUID REFERENCES auth.users(id),
   created_at TIMESTAMPTZ DEFAULT now(),
   completed_at TIMESTAMPTZ

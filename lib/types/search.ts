@@ -2,6 +2,8 @@
 
 import type { BraveSerpData } from '@/lib/brave/types';
 
+export type SearchMode = 'general' | 'client_strategy';
+
 // Source citation attached to a trending topic
 export interface TopicSource {
   url: string;
@@ -62,6 +64,22 @@ export interface TopicSearch {
   completed_at: string | null;
 }
 
+// Content pillar for client strategy mode
+export interface ContentPillar {
+  pillar: string;
+  description: string;
+  example_series: string;
+  frequency: string;
+}
+
+// Niche performance insights for client strategy mode
+export interface NicheInsights {
+  top_performing_formats: string[];
+  best_posting_times: string;
+  audience_hooks: string[];
+  competitor_gaps: string;
+}
+
 // AI response — single call returns everything
 export interface TopicSearchAIResponse {
   summary: string;
@@ -70,6 +88,9 @@ export interface TopicSearchAIResponse {
   emotions: EmotionBreakdown[];
   content_breakdown: ContentBreakdown;
   trending_topics: TrendingTopic[];
+  content_pillars?: ContentPillar[];
+  niche_performance_insights?: NicheInsights;
+  brand_alignment_notes?: string;
 }
 
 // Legacy AI response for old searches

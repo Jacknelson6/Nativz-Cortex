@@ -12,6 +12,7 @@ import {
   LANGUAGE_OPTIONS,
   COUNTRY_OPTIONS,
 } from '@/lib/types/search';
+import type { SearchMode } from '@/lib/types/search';
 
 interface SearchFormProps {
   redirectPrefix?: string;
@@ -35,6 +36,7 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
   const [language, setLanguage] = useState('all');
   const [country, setCountry] = useState('us');
   const [clientId, setClientId] = useState<string | null>(fixedClientId ?? null);
+  const [searchMode, setSearchMode] = useState<SearchMode>(fixedClientId ? 'client_strategy' : 'general');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -68,6 +70,7 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
           language,
           country,
           client_id: clientId,
+          search_mode: clientId ? searchMode : 'general',
         }),
       });
 
@@ -158,10 +161,44 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
         {!hideClientSelector && (
           <>
             <div className="h-4 w-px bg-nativz-border" />
-            <ClientSelector value={clientId} onChange={setClientId} />
+            <ClientSelector
+              value={clientId}
+              onChange={(id) => {
+                setClientId(id);
+                setSearchMode(id ? 'client_strategy' : 'general');
+              }}
+            />
           </>
         )}
       </div>
+
+      {/* Search mode toggle — only when a client is selected */}
+      {clientId && (
+        <div className="mt-4 flex items-center gap-1 rounded-lg bg-surface-hover p-1 w-fit">
+          <button
+            type="button"
+            onClick={() => setSearchMode('general')}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              searchMode === 'general'
+                ? 'bg-surface text-text-primary shadow-sm'
+                : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            General research
+          </button>
+          <button
+            type="button"
+            onClick={() => setSearchMode('client_strategy')}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              searchMode === 'client_strategy'
+                ? 'bg-surface text-text-primary shadow-sm'
+                : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            Client strategy
+          </button>
+        </div>
+      )}
 
       {loading && (
         <p className="mt-3 text-sm text-text-muted">

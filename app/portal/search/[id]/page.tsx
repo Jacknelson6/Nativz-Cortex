@@ -10,13 +10,15 @@ import { MetricsRow } from '@/components/results/metrics-row';
 import { EmotionsBreakdown } from '@/components/results/emotions-breakdown';
 import { ContentBreakdown } from '@/components/results/content-breakdown';
 import { TrendingTopicsTable } from '@/components/results/trending-topics-table';
+import { ContentPillars } from '@/components/results/content-pillars';
+import { NicheInsights } from '@/components/results/niche-insights';
 import { SourcesPanel } from '@/components/results/sources-panel';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 import { hasSerp } from '@/lib/types/search';
-import type { TopicSearch } from '@/lib/types/search';
+import type { TopicSearch, TopicSearchAIResponse } from '@/lib/types/search';
 
 export default async function PortalSearchResultsPage({
   params,
@@ -100,6 +102,7 @@ export default async function PortalSearchResultsPage({
   }
 
   const s = search as TopicSearch;
+  const aiResponse = s.raw_ai_response as TopicSearchAIResponse | null;
 
   return (
     <div className="min-h-full">
@@ -128,6 +131,14 @@ export default async function PortalSearchResultsPage({
 
       {/* Content */}
       <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+        {/* Brand alignment note — shown for client strategy searches */}
+        {aiResponse?.brand_alignment_notes && (
+          <div className="rounded-xl border border-accent/20 bg-accent-surface/30 px-5 py-4">
+            <p className="text-sm font-medium text-accent-text mb-1">Brand alignment</p>
+            <p className="text-sm text-text-secondary">{aiResponse.brand_alignment_notes}</p>
+          </div>
+        )}
+
         {s.summary && <ExecutiveSummary summary={s.summary} />}
         {s.metrics && <MetricsRow metrics={s.metrics} />}
 
@@ -148,6 +159,18 @@ export default async function PortalSearchResultsPage({
         )}
         {s.trending_topics && s.trending_topics.length > 0 && (
           <TrendingTopicsTable topics={s.trending_topics} />
+        )}
+
+        {/* Client strategy sections */}
+        {(aiResponse?.content_pillars || aiResponse?.niche_performance_insights) && (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {aiResponse.content_pillars && aiResponse.content_pillars.length > 0 && (
+              <ContentPillars pillars={aiResponse.content_pillars} />
+            )}
+            {aiResponse.niche_performance_insights && (
+              <NicheInsights insights={aiResponse.niche_performance_insights} />
+            )}
+          </div>
         )}
 
         {/* Sources panel — only for new searches with SERP data */}

@@ -3,11 +3,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Sparkles, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Input, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { ImageUpload } from '@/components/ui/image-upload';
 
 function slugify(name: string): string {
   return name
@@ -30,11 +31,46 @@ export default function AdminNewClientPage() {
   const [targetAudience, setTargetAudience] = useState('');
   const [brandVoice, setBrandVoice] = useState('');
   const [topicKeywords, setTopicKeywords] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
 
   function handleNameChange(value: string) {
     setName(value);
     if (!slugEdited) {
       setSlug(slugify(value));
+    }
+  }
+
+  async function handleAutoFill() {
+    if (!websiteUrl.trim()) return;
+    setAnalyzing(true);
+    try {
+      const res = await fetch('/api/clients/analyze-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: websiteUrl.trim() }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || 'Could not analyze website.');
+        return;
+      }
+
+      const data = await res.json();
+      // Only fill empty fields
+      if (!industry) setIndustry(data.industry || '');
+      if (!targetAudience) setTargetAudience(data.target_audience || '');
+      if (!brandVoice) setBrandVoice(data.brand_voice || '');
+      if (!topicKeywords && data.topic_keywords?.length > 0) {
+        setTopicKeywords(data.topic_keywords.join(', '));
+      }
+      toast.success('Fields auto-filled from website');
+    } catch {
+      toast.error('Failed to analyze website. Try again.');
+    } finally {
+      setAnalyzing(false);
     }
   }
 
@@ -64,6 +100,8 @@ export default function AdminNewClientPage() {
             .split(',')
             .map((k) => k.trim())
             .filter(Boolean),
+          logo_url: logoUrl || null,
+          website_url: websiteUrl.trim() || null,
         }),
       });
 
@@ -105,6 +143,7 @@ export default function AdminNewClientPage() {
         <Card>
           <h2 className="text-base font-semibold text-text-primary mb-4">Basic info</h2>
           <div className="space-y-4">
+            <ImageUpload value={logoUrl} onChange={setLogoUrl} />
             <Input
               id="name"
               label="Client name"
@@ -142,6 +181,35 @@ export default function AdminNewClientPage() {
         <Card>
           <h2 className="text-base font-semibold text-text-primary mb-4">Details (optional)</h2>
           <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Input
+                id="website_url"
+                label="Website URL"
+                type="url"
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                placeholder="https://example.com"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAutoFill}
+                disabled={analyzing || !websiteUrl.trim()}
+              >
+                {analyzing ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} />
+                    Auto-fill with AI
+                  </>
+                )}
+              </Button>
+            </div>
             <Textarea
               id="target_audience"
               label="Target audience"

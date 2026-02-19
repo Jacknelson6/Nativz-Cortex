@@ -9,6 +9,8 @@ import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Input, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Toggle } from '@/components/ui/toggle';
+import { ImageUpload } from '@/components/ui/image-upload';
 
 interface ClientData {
   id: string;
@@ -18,6 +20,8 @@ interface ClientData {
   target_audience: string | null;
   brand_voice: string | null;
   topic_keywords: string[] | null;
+  logo_url: string | null;
+  website_url: string | null;
   feature_flags: {
     can_search: boolean;
     can_view_reports: boolean;
@@ -36,6 +40,8 @@ export default function AdminClientSettingsPage() {
   const [targetAudience, setTargetAudience] = useState('');
   const [brandVoice, setBrandVoice] = useState('');
   const [topicKeywords, setTopicKeywords] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [websiteUrl, setWebsiteUrl] = useState('');
   const [canSearch, setCanSearch] = useState(true);
   const [canViewReports, setCanViewReports] = useState(true);
   const [isActive, setIsActive] = useState(true);
@@ -45,7 +51,7 @@ export default function AdminClientSettingsPage() {
       const supabase = createClient();
       const { data } = await supabase
         .from('clients')
-        .select('id, name, slug, industry, target_audience, brand_voice, topic_keywords, feature_flags, is_active')
+        .select('id, name, slug, industry, target_audience, brand_voice, topic_keywords, feature_flags, is_active, logo_url, website_url')
         .eq('slug', params.slug)
         .single();
 
@@ -55,6 +61,8 @@ export default function AdminClientSettingsPage() {
         setTargetAudience(data.target_audience || '');
         setBrandVoice(data.brand_voice || '');
         setTopicKeywords((data.topic_keywords || []).join(', '));
+        setLogoUrl(data.logo_url || null);
+        setWebsiteUrl(data.website_url || '');
         const flags = data.feature_flags as ClientData['feature_flags'];
         setCanSearch(flags?.can_search ?? true);
         setCanViewReports(flags?.can_view_reports ?? true);
@@ -82,6 +90,8 @@ export default function AdminClientSettingsPage() {
             .split(',')
             .map((k) => k.trim())
             .filter(Boolean),
+          logo_url: logoUrl || null,
+          website_url: websiteUrl.trim() || null,
           feature_flags: { can_search: canSearch, can_view_reports: canViewReports },
           is_active: isActive,
         }),
@@ -121,10 +131,24 @@ export default function AdminClientSettingsPage() {
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
+        {/* Profile image */}
+        <Card>
+          <h2 className="text-base font-semibold text-text-primary mb-4">Logo</h2>
+          <ImageUpload value={logoUrl} onChange={setLogoUrl} size="lg" />
+        </Card>
+
         {/* Business info */}
         <Card>
           <h2 className="text-base font-semibold text-text-primary mb-4">Business info</h2>
           <div className="space-y-4">
+            <Input
+              id="website_url"
+              label="Website URL"
+              type="url"
+              value={websiteUrl}
+              onChange={(e) => setWebsiteUrl(e.target.value)}
+              placeholder="https://example.com"
+            />
             <Input
               id="industry"
               label="Industry"
@@ -161,34 +185,25 @@ export default function AdminClientSettingsPage() {
         {/* Feature flags */}
         <Card>
           <h2 className="text-base font-semibold text-text-primary mb-4">Portal access</h2>
-          <div className="space-y-3">
-            <label className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={canSearch}
-                onChange={(e) => setCanSearch(e.target.checked)}
-                className="h-4 w-4 rounded border-nativz-border text-accent focus:ring-accent"
-              />
-              <span className="text-sm text-text-secondary">Can run topic searches</span>
-            </label>
-            <label className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={canViewReports}
-                onChange={(e) => setCanViewReports(e.target.checked)}
-                className="h-4 w-4 rounded border-nativz-border text-accent focus:ring-accent"
-              />
-              <span className="text-sm text-text-secondary">Can view approved reports</span>
-            </label>
-            <label className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-                className="h-4 w-4 rounded border-nativz-border text-accent focus:ring-accent"
-              />
-              <span className="text-sm text-text-secondary">Client is active</span>
-            </label>
+          <div className="space-y-4">
+            <Toggle
+              checked={canSearch}
+              onChange={setCanSearch}
+              label="Can run topic searches"
+              description="Allow this client's portal users to run new searches"
+            />
+            <Toggle
+              checked={canViewReports}
+              onChange={setCanViewReports}
+              label="Can view approved reports"
+              description="Show approved reports in the client portal"
+            />
+            <Toggle
+              checked={isActive}
+              onChange={setIsActive}
+              label="Client is active"
+              description="Inactive clients are hidden from the portal"
+            />
           </div>
         </Card>
 
