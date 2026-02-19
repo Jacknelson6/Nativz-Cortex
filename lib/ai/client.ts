@@ -58,12 +58,23 @@ export async function createCompletion(options: CompletionOptions): Promise<AICo
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(`OpenRouter API error (${response.status}): ${errorBody}`);
+    console.error('OpenRouter API error:', response.status, errorBody.substring(0, 500));
+    throw new Error(`OpenRouter API error (${response.status}): ${errorBody.substring(0, 300)}`);
   }
 
   const data = await response.json();
 
-  const content = data.choices?.[0]?.message?.content || '';
+  if (!data.choices || data.choices.length === 0) {
+    console.error('OpenRouter returned no choices:', JSON.stringify(data).substring(0, 500));
+    throw new Error('AI model returned no response. It may be overloaded. Try again.');
+  }
+
+  const content = data.choices[0]?.message?.content || '';
+
+  if (!content) {
+    console.error('OpenRouter returned empty content:', JSON.stringify(data.choices[0]).substring(0, 500));
+    throw new Error('AI model returned an empty response. Try again.');
+  }
   const promptTokens = data.usage?.prompt_tokens || 0;
   const completionTokens = data.usage?.completion_tokens || 0;
 
