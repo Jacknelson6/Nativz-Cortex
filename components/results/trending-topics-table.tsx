@@ -55,7 +55,7 @@ export function TrendingTopicsTable({ topics }: TrendingTopicsTableProps) {
             </span>
           </div>
         ) : (
-          <div className="grid grid-cols-[1fr_100px_90px_110px_90px] gap-2 border-b border-nativz-border px-6 py-2 text-xs font-medium text-text-muted uppercase tracking-wide">
+          <div className="grid grid-cols-[1fr_100px_90px_110px] gap-2 border-b border-nativz-border px-6 py-2 text-xs font-medium text-text-muted uppercase tracking-wide">
             <span>Topic</span>
             <span className="text-right">Est. views</span>
             <span className="text-center">
@@ -68,7 +68,6 @@ export function TrendingTopicsTable({ topics }: TrendingTopicsTableProps) {
                 Sentiment
               </TooltipCard>
             </span>
-            <span className="text-right">Date</span>
           </div>
         )}
 
@@ -81,7 +80,7 @@ export function TrendingTopicsTable({ topics }: TrendingTopicsTableProps) {
           >
             <button
               onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
-              className={`table-row-guideline grid w-full ${isNewShape ? 'grid-cols-[1fr_80px_90px_110px]' : 'grid-cols-[1fr_100px_90px_110px_90px]'} gap-2 items-center px-6 py-3 text-left hover:bg-surface-hover transition-colors`}
+              className={`table-row-guideline grid w-full ${isNewShape ? 'grid-cols-[1fr_80px_90px_110px]' : 'grid-cols-[1fr_100px_90px_110px]'} gap-2 items-center px-6 py-3 text-left hover:bg-surface-hover transition-colors`}
             >
               <div className="flex items-center gap-2">
                 {expandedIndex === i ? (
@@ -115,9 +114,7 @@ export function TrendingTopicsTable({ topics }: TrendingTopicsTableProps) {
                 </Badge>
               </span>
 
-              {!isNewShape && 'date' in topic && (
-                <span className="text-right text-xs text-text-muted">{(topic as LegacyTrendingTopic).date}</span>
-              )}
+
             </button>
 
             {/* Expanded content */}
