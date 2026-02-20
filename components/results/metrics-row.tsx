@@ -1,7 +1,8 @@
 'use client';
 
+import { useState, useRef, useCallback, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { StatCard } from '@/components/shared/stat-card';
-import { TooltipCard } from '@/components/ui/tooltip-card';
 import { Zap, Lightbulb, TrendingUp, Activity, Heart, Eye, Users, MessageCircle } from 'lucide-react';
 import { formatNumber } from '@/lib/utils/format';
 import { getSentimentLabel } from '@/lib/utils/sentiment';
@@ -29,44 +30,35 @@ export function MetricsRow({ metrics }: MetricsRowProps) {
             tooltipKey: 'topic_score',
             title: 'Topic score',
             value: String(metrics.topic_score ?? 0),
-            subtitle: `${metrics.sources_analyzed ?? metrics.total_sources} sources analyzed`,
             icon: <Zap size={18} />,
           },
           {
             tooltipKey: 'sentiment',
             title: 'Audience sentiment',
             value: getSentimentLabel(metrics.overall_sentiment),
-            subtitle: INTENSITY_LABELS[metrics.conversation_intensity] ? `${INTENSITY_LABELS[metrics.conversation_intensity]} intensity` : undefined,
             icon: <Activity size={18} />,
           },
           {
             tooltipKey: 'content_opportunities',
             title: 'Video ideas',
             value: String(metrics.content_opportunities ?? 0),
-            subtitle: 'Ready-to-film concepts',
             icon: <Lightbulb size={18} />,
           },
           {
             tooltipKey: 'trending_topics',
             title: 'Trending angles',
             value: String(metrics.trending_topics_count ?? 0),
-            subtitle: metrics.total_video_views ? `${formatNumber(metrics.total_video_views)} video views` : undefined,
             icon: <TrendingUp size={18} />,
           },
         ].map((card, i) => (
           <div key={card.tooltipKey} className="animate-stagger-in" style={{ animationDelay: `${i * 50}ms` }}>
-            <StatCard
-              title={
-                TOOLTIPS[card.tooltipKey] ? (
-                  <TooltipCard title={TOOLTIPS[card.tooltipKey].title} description={TOOLTIPS[card.tooltipKey].description}>
-                    {card.title}
-                  </TooltipCard>
-                ) : card.title
-              }
-              value={card.value}
-              subtitle={card.subtitle}
-              icon={card.icon}
-            />
+            <MetricTooltipWrapper tooltip={TOOLTIPS[card.tooltipKey]}>
+              <StatCard
+                title={card.title}
+                value={card.value}
+                icon={card.icon}
+              />
+            </MetricTooltipWrapper>
           </div>
         ))}
       </div>
@@ -87,6 +79,63 @@ export function MetricsRow({ metrics }: MetricsRowProps) {
           <StatCard title={card.title} value={card.value} icon={card.icon} />
         </div>
       ))}
+    </div>
+  );
+}
+
+// ─── Whole-card tooltip wrapper ──────────────────────────────────────────────
+
+function MetricTooltipWrapper({
+  tooltip,
+  children,
+}: {
+  tooltip?: { title: string; description: string };
+  children: ReactNode;
+}) {
+  const [visible, setVisible] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0, above: false });
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  const show = useCallback((e: React.MouseEvent) => {
+    if (!tooltip) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = rect.left + rect.width / 2 - 128; // center the 256px tooltip
+    const clampedX = Math.max(8, Math.min(x, window.innerWidth - 272));
+    const below = rect.bottom + 8;
+    const above = below + 100 > window.innerHeight;
+    setPosition({ x: clampedX, y: above ? rect.top - 8 : below, above });
+    timeoutRef.current = setTimeout(() => setVisible(true), 300);
+  }, [tooltip]);
+
+  const hide = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setVisible(false);
+  }, []);
+
+  if (!tooltip) return <>{children}</>;
+
+  return (
+    <div
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      className="h-full"
+    >
+      {children}
+      {visible && typeof document !== 'undefined' && createPortal(
+        <div
+          className="animate-tooltip-in pointer-events-none fixed z-50 w-64 rounded-lg border border-nativz-border bg-surface p-3 shadow-elevated"
+          style={{
+            left: position.x,
+            ...(position.above
+              ? { bottom: window.innerHeight - position.y }
+              : { top: position.y }),
+          }}
+        >
+          <p className="text-xs font-semibold text-text-primary mb-1">{tooltip.title}</p>
+          <p className="text-xs text-text-muted leading-relaxed">{tooltip.description}</p>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

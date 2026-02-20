@@ -150,15 +150,12 @@ export function AdminResultsClient({ search, clientInfo }: AdminResultsClientPro
 
       {/* Content */}
       <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
-        {/* Brand alignment note — shown for client strategy searches */}
-        {aiResponse?.brand_alignment_notes && (
-          <div className="rounded-xl border border-accent/20 bg-accent-surface/30 px-5 py-4">
-            <p className="text-sm font-medium text-accent-text mb-1">Brand alignment</p>
-            <p className="text-sm text-text-secondary">{aiResponse.brand_alignment_notes}</p>
-          </div>
+        {/* Brand alignment replaces executive summary for brand searches */}
+        {aiResponse?.brand_alignment_notes ? (
+          <ExecutiveSummary summary={aiResponse.brand_alignment_notes} variant="brand" />
+        ) : (
+          search.summary && <ExecutiveSummary summary={search.summary} />
         )}
-
-        {search.summary && <ExecutiveSummary summary={search.summary} />}
         {search.metrics && <MetricsRow metrics={search.metrics} />}
 
         {/* Legacy activity chart — only rendered for old searches */}

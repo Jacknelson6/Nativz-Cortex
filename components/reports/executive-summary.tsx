@@ -1,14 +1,20 @@
 'use client';
 
 import { Card } from '@/components/ui/card';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Building2 } from 'lucide-react';
 
 interface ExecutiveSummaryProps {
   summary: string;
+  title?: string;
+  variant?: 'default' | 'brand';
 }
 
-export function ExecutiveSummary({ summary }: ExecutiveSummaryProps) {
+export function ExecutiveSummary({ summary, title, variant = 'default' }: ExecutiveSummaryProps) {
   if (!summary) return null;
+
+  const isBrand = variant === 'brand';
+  const Icon = isBrand ? Building2 : Sparkles;
+  const heading = title || (isBrand ? 'Brand alignment' : 'Executive summary');
 
   return (
     <Card elevated className="relative overflow-hidden border-accent/30 bg-gradient-to-br from-accent/10 via-surface to-purple-500/5">
@@ -18,10 +24,10 @@ export function ExecutiveSummary({ summary }: ExecutiveSummaryProps) {
       <div className="pl-4">
         <div className="mb-3 flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-surface">
-            <Sparkles size={16} className="text-accent-text" />
+            <Icon size={16} className="text-accent-text" />
           </div>
           <h3 className="text-base font-semibold text-text-primary">
-            Executive summary
+            {heading}
           </h3>
         </div>
 

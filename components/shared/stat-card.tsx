@@ -12,8 +12,8 @@ interface StatCardProps {
 
 export function StatCard({ title, value, subtitle, change, icon }: StatCardProps) {
   return (
-    <Card className="hover:shadow-card-hover transition-all duration-200">
-      <div className="flex items-start justify-between">
+    <Card className="h-full hover:shadow-card-hover transition-all duration-200">
+      <div className="flex h-full items-start justify-between">
         <div>
           <p className="text-sm text-text-muted">{title}</p>
           <div className="mt-1 flex items-baseline gap-2">
