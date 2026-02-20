@@ -14,14 +14,16 @@ export default async function AdminLayout({
   const { data: { user } } = await supabase.auth.getUser();
 
   let userName = '';
+  let avatarUrl: string | null = null;
   if (user) {
     const adminClient = createAdminClient();
     const { data: userData } = await adminClient
       .from('users')
-      .select('full_name')
+      .select('full_name, avatar_url')
       .eq('id', user.id)
       .single();
     userName = userData?.full_name || user.email || '';
+    avatarUrl = userData?.avatar_url || null;
   }
 
   return (
@@ -29,7 +31,7 @@ export default async function AdminLayout({
       <div className="flex h-screen flex-col">
         <Header />
         <div className="flex flex-1 overflow-hidden">
-          <AdminSidebar userName={userName} />
+          <AdminSidebar userName={userName} avatarUrl={avatarUrl} />
           <MobileSidebar>
             <AdminNavItems />
           </MobileSidebar>
