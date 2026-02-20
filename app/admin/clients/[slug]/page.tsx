@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Settings, Search, Clock, Lightbulb } from 'lucide-react';
+import { ArrowLeft, Settings, Search, Clock, Lightbulb, User2, Mail } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -29,8 +29,8 @@ export default async function AdminClientDetailPage({
       notFound();
     }
 
-    // Fetch recent searches, ideas, and idea count in parallel
-    const [{ data: searches }, { data: recentIdeas }, { count: ideaCount }] = await Promise.all([
+    // Fetch searches, ideas, idea count, and contacts in parallel
+    const [{ data: searches }, { data: recentIdeas }, { count: ideaCount }, { data: contacts }] = await Promise.all([
       adminClient
         .from('topic_searches')
         .select('id, query, status, created_at, approved_at')
@@ -48,10 +48,20 @@ export default async function AdminClientDetailPage({
         .select('*', { count: 'exact', head: true })
         .eq('client_id', client.id)
         .in('status', ['new', 'reviewed']),
+      // Fetch portal users linked to this client's organization
+      client.organization_id
+        ? adminClient
+            .from('users')
+            .select('id, full_name, email, avatar_url, job_title, last_login')
+            .eq('organization_id', client.organization_id)
+            .eq('role', 'viewer')
+            .order('full_name')
+        : Promise.resolve({ data: [] as Array<{ id: string; full_name: string; email: string; avatar_url: string | null; job_title: string | null; last_login: string | null }> }),
     ]);
 
     const items = searches || [];
     const ideas = recentIdeas || [];
+    const clientContacts = contacts || [];
 
     return (
       <div className="p-6 space-y-6">
@@ -64,7 +74,7 @@ export default async function AdminClientDetailPage({
             {client.logo_url && (
               <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-nativz-border">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={client.logo_url} alt={client.name} className="h-full w-full object-contain" />
+                <img src={client.logo_url} alt={client.name} className="h-full w-full object-cover" />
               </div>
             )}
             <div className="min-w-0">
@@ -77,8 +87,8 @@ export default async function AdminClientDetailPage({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link href={`/admin/clients/${slug}/ideas`}>
-              <Button variant="outline">
-                <Lightbulb size={16} />
+              <Button variant="outline" size="sm">
+                <Lightbulb size={14} />
                 Ideas
                 {(ideaCount ?? 0) > 0 && (
                   <Badge variant="info" className="ml-1">{ideaCount}</Badge>
@@ -86,36 +96,86 @@ export default async function AdminClientDetailPage({
               </Button>
             </Link>
             <Link href={`/admin/clients/${slug}/settings`}>
-              <Button variant="outline">
-                <Settings size={16} />
+              <Button variant="outline" size="sm">
+                <Settings size={14} />
                 Settings
               </Button>
             </Link>
           </div>
         </div>
 
-        {/* Client info */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {/* Brand profile + Point of contact — side by side */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Brand profile (merged) */}
           <Card>
-            <p className="text-sm text-text-muted">Industry</p>
-            <p className="mt-1 text-sm font-medium text-text-primary">{client.industry}</p>
+            <h2 className="text-base font-semibold text-text-primary mb-4">Brand profile</h2>
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Industry</p>
+                <p className="mt-1 text-sm text-text-primary">{client.industry}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Target audience</p>
+                <p className="mt-1 text-sm text-text-primary">{client.target_audience || 'Not set'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Brand voice</p>
+                <p className="mt-1 text-sm text-text-primary">{client.brand_voice || 'Not set'}</p>
+              </div>
+            </div>
           </Card>
+
+          {/* Point of contact */}
           <Card>
-            <p className="text-sm text-text-muted">Target audience</p>
-            <p className="mt-1 text-sm font-medium text-text-primary">{client.target_audience || 'Not set'}</p>
-          </Card>
-          <Card>
-            <p className="text-sm text-text-muted">Brand voice</p>
-            <p className="mt-1 text-sm font-medium text-text-primary">{client.brand_voice || 'Not set'}</p>
+            <h2 className="text-base font-semibold text-text-primary mb-4">Point of contact</h2>
+            {clientContacts.length === 0 ? (
+              <EmptyState
+                icon={<User2 size={24} />}
+                title="No accounts yet"
+                description={`When ${client.name} creates a portal account, they'll appear here.`}
+              />
+            ) : (
+              <div className="space-y-3">
+                {clientContacts.map((contact) => (
+                  <div key={contact.id} className="flex items-center gap-3 rounded-lg border border-nativz-border-light px-4 py-3">
+                    {contact.avatar_url ? (
+                      <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={contact.avatar_url} alt={contact.full_name} className="h-full w-full object-cover scale-125" />
+                      </div>
+                    ) : (
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface text-accent-text">
+                        <User2 size={16} />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-text-primary truncate">{contact.full_name}</p>
+                      {contact.job_title && (
+                        <p className="text-xs text-text-muted truncate">{contact.job_title}</p>
+                      )}
+                      <p className="text-xs text-text-muted flex items-center gap-1 truncate">
+                        <Mail size={10} className="shrink-0" />
+                        {contact.email}
+                      </p>
+                    </div>
+                    {contact.last_login && (
+                      <span className="text-xs text-text-muted shrink-0">
+                        Active {formatRelativeTime(contact.last_login)}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         </div>
 
-        {/* Recent ideas */}
+        {/* Saved ideas */}
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-text-primary">Recent ideas</h2>
+            <h2 className="text-base font-semibold text-text-primary">Saved ideas</h2>
             <Link href={`/admin/clients/${slug}/ideas`}>
-              <Button variant="outline" size="sm">
+              <Button size="sm">
                 <Lightbulb size={14} />
                 View all
                 {(ideaCount ?? 0) > 0 && (

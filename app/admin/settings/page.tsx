@@ -13,6 +13,7 @@ interface UserData {
   full_name: string;
   email: string;
   avatar_url: string | null;
+  job_title: string | null;
 }
 
 export default function AdminSettingsPage() {
@@ -24,6 +25,7 @@ export default function AdminSettingsPage() {
   // Form state
   const [fullName, setFullName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [jobTitle, setJobTitle] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -35,7 +37,7 @@ export default function AdminSettingsPage() {
 
       const { data } = await supabase
         .from('users')
-        .select('full_name, email, avatar_url')
+        .select('full_name, email, avatar_url, job_title')
         .eq('id', authUser.id)
         .single();
 
@@ -43,6 +45,7 @@ export default function AdminSettingsPage() {
         setUser(data);
         setFullName(data.full_name);
         setAvatarUrl(data.avatar_url);
+        setJobTitle(data.job_title || '');
       }
       setLoading(false);
     }
@@ -63,6 +66,7 @@ export default function AdminSettingsPage() {
         body: JSON.stringify({
           full_name: fullName.trim(),
           avatar_url: avatarUrl,
+          job_title: jobTitle.trim() || null,
         }),
       });
       if (!res.ok) {
@@ -120,10 +124,16 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-semibold text-text-primary">Account settings</h1>
-
-      {/* Profile */}
+      {/* Profile form */}
       <form onSubmit={handleSaveProfile} className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold text-text-primary">Account settings</h1>
+          <Button type="submit" disabled={saving} size="sm">
+            <Save size={14} />
+            {saving ? 'Saving...' : 'Save profile'}
+          </Button>
+        </div>
+
         <Card>
           <h2 className="text-base font-semibold text-text-primary mb-4">Profile</h2>
           <div className="space-y-4">
@@ -138,6 +148,13 @@ export default function AdminSettingsPage() {
               required
             />
             <Input
+              id="job_title"
+              label="Role"
+              value={jobTitle}
+              onChange={(e) => setJobTitle(e.target.value)}
+              placeholder="e.g. Chief Editing Officer"
+            />
+            <Input
               id="email"
               label="Email"
               type="email"
@@ -147,11 +164,6 @@ export default function AdminSettingsPage() {
             <p className="text-xs text-text-muted">Email cannot be changed. Contact support if needed.</p>
           </div>
         </Card>
-
-        <Button type="submit" disabled={saving}>
-          <Save size={16} />
-          {saving ? 'Saving...' : 'Save profile'}
-        </Button>
       </form>
 
       {/* Password */}

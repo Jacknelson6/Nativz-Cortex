@@ -1,4 +1,4 @@
-import { Lock, Lightbulb } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { IdeaSubmissionList } from '@/components/ideas/idea-submission-list';

@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import { Plus, Building2 } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/card';
@@ -52,7 +51,8 @@ export default async function AdminClientsPage() {
                 <Card interactive className="animate-stagger-in flex items-start gap-3" style={{ animationDelay: `${i * 50}ms` }}>
                   {client.logo_url ? (
                     <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg">
-                      <Image src={client.logo_url} alt={client.name} fill className="object-cover" />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={client.logo_url} alt={client.name} className="h-full w-full object-cover" />
                     </div>
                   ) : (
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-surface text-accent-text">

@@ -11,7 +11,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantStyles: Record<Variant, string> = {
-  primary: 'bg-gradient-to-br from-accent to-[#0580f0] text-white shadow-md hover:shadow-lg',
+  primary: 'btn-shimmer bg-gradient-to-br from-accent to-[#0580f0] text-white shadow-md',
   secondary: 'bg-surface-hover text-text-primary hover:bg-nativz-border',
   outline: 'border border-nativz-border text-text-secondary hover:bg-surface-hover',
   ghost: 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',

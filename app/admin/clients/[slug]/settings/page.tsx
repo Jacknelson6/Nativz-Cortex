@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import { ImageUpload } from '@/components/ui/image-upload';
 import { TagInput } from '@/components/ui/tag-input';
+import { GlowButton } from '@/components/ui/glow-button';
 import type { ClientPreferences } from '@/lib/types/database';
 
 interface ClientData {
@@ -189,8 +190,9 @@ export default function AdminClientSettingsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl mx-auto">
+    <div className="p-6 space-y-6 max-w-5xl mx-auto">
       <form onSubmit={handleSave} className="space-y-6">
+        {/* Header */}
         <div className="flex items-center gap-3">
           <Link href={`/admin/clients/${params.slug}`} className="text-text-muted hover:text-text-secondary transition-colors">
             <ArrowLeft size={20} />
@@ -199,153 +201,162 @@ export default function AdminClientSettingsPage() {
             <h1 className="text-2xl font-semibold text-text-primary">{client.name}</h1>
             <p className="text-sm text-text-muted">Settings</p>
           </div>
+          {websiteUrl.trim() && (
+            <GlowButton
+              onClick={handleGenerateAI}
+              disabled={analyzing}
+              loading={analyzing}
+            >
+              {!analyzing && <Sparkles size={14} />}
+              {analyzing ? 'Analyzing...' : 'Generate with AI'}
+            </GlowButton>
+          )}
           <Button type="submit" disabled={saving} size="sm">
             <Save size={14} />
             {saving ? 'Saving...' : 'Save settings'}
           </Button>
         </div>
-        {/* Profile image */}
-        <Card>
-          <h2 className="text-base font-semibold text-text-primary mb-4">Logo</h2>
-          <ImageUpload value={logoUrl} onChange={setLogoUrl} size="lg" />
-        </Card>
 
-        {/* Business info */}
-        <Card>
-          <h2 className="text-base font-semibold text-text-primary mb-4">Business info</h2>
-          <div className="space-y-4">
-            <Input
-              id="website_url"
-              label="Website URL"
-              type="url"
-              value={websiteUrl}
-              onChange={(e) => setWebsiteUrl(e.target.value)}
-              placeholder="https://example.com"
-            />
-            {websiteUrl.trim() && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={handleGenerateAI}
-                disabled={analyzing}
-              >
-                <Sparkles size={14} />
-                {analyzing ? 'Analyzing website...' : 'Generate fields with AI'}
-              </Button>
-            )}
-            <Input
-              id="industry"
-              label="Industry"
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
-              required
-            />
-            <Textarea
-              id="target_audience"
-              label="Target audience"
-              value={targetAudience}
-              onChange={(e) => setTargetAudience(e.target.value)}
-              placeholder="Describe the target audience..."
-              rows={3}
-            />
-            <Textarea
-              id="brand_voice"
-              label="Brand voice"
-              value={brandVoice}
-              onChange={(e) => setBrandVoice(e.target.value)}
-              placeholder="Describe the brand voice and tone..."
-              rows={3}
-            />
-            <Input
-              id="topic_keywords"
-              label="Topic keywords (comma-separated)"
-              value={topicKeywords}
-              onChange={(e) => setTopicKeywords(e.target.value)}
-              placeholder="fitness, nutrition, wellness"
-            />
-          </div>
-        </Card>
+        {/* Row 1: Logo + Business info */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[auto_1fr]">
+          {/* Logo — compact */}
+          <Card className="lg:w-56">
+            <h2 className="text-base font-semibold text-text-primary mb-4">Logo</h2>
+            <ImageUpload value={logoUrl} onChange={setLogoUrl} size="lg" />
+          </Card>
 
-        {/* Brand preferences */}
-        <Card>
-          <h2 className="text-base font-semibold text-text-primary mb-1">Brand preferences</h2>
-          <p className="text-sm text-text-muted mb-4">These preferences guide AI-generated content recommendations.</p>
-          <div className="space-y-4">
-            <TagInput
-              id="tone_keywords"
-              label="Tone keywords"
-              value={toneKeywords}
-              onChange={setToneKeywords}
-              placeholder="e.g., bold, playful, authoritative"
-            />
-            <TagInput
-              id="topics_lean_into"
-              label="Topics to lean into"
-              value={topicsLeanInto}
-              onChange={setTopicsLeanInto}
-              placeholder="e.g., sustainable fashion, behind the scenes"
-            />
-            <TagInput
-              id="topics_avoid"
-              label="Topics to avoid"
-              value={topicsAvoid}
-              onChange={setTopicsAvoid}
-              placeholder="e.g., politics, competitor drama"
-            />
-            <TagInput
-              id="competitor_accounts"
-              label="Competitors they admire"
-              value={competitorAccounts}
-              onChange={setCompetitorAccounts}
-              placeholder="e.g., @nike, @glossier"
-            />
-            <TagInput
-              id="seasonal_priorities"
-              label="Seasonal priorities"
-              value={seasonalPriorities}
-              onChange={setSeasonalPriorities}
-              placeholder="e.g., Summer 2026 launch"
-            />
-          </div>
-        </Card>
+          {/* Business info */}
+          <Card>
+            <h2 className="text-base font-semibold text-text-primary mb-4">Business info</h2>
+            <div className="space-y-4">
+              <Input
+                id="website_url"
+                label="Website URL"
+                type="url"
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                placeholder="https://example.com"
+              />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Input
+                  id="industry"
+                  label="Industry"
+                  value={industry}
+                  onChange={(e) => setIndustry(e.target.value)}
+                  required
+                />
+                <Input
+                  id="topic_keywords"
+                  label="Topic keywords (comma-separated)"
+                  value={topicKeywords}
+                  onChange={(e) => setTopicKeywords(e.target.value)}
+                  placeholder="fitness, nutrition, wellness"
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Textarea
+                  id="target_audience"
+                  label="Target audience"
+                  value={targetAudience}
+                  onChange={(e) => setTargetAudience(e.target.value)}
+                  placeholder="Describe the target audience..."
+                  rows={3}
+                />
+                <Textarea
+                  id="brand_voice"
+                  label="Brand voice"
+                  value={brandVoice}
+                  onChange={(e) => setBrandVoice(e.target.value)}
+                  placeholder="Describe the brand voice and tone..."
+                  rows={3}
+                />
+              </div>
+            </div>
+          </Card>
+        </div>
 
-        {/* Feature flags */}
-        <Card>
-          <h2 className="text-base font-semibold text-text-primary mb-4">Portal access</h2>
-          <div className="space-y-4">
-            <Toggle
-              checked={canSearch}
-              onChange={setCanSearch}
-              label="Can run topic searches"
-              description="Allow this client's portal users to run new searches"
-            />
-            <Toggle
-              checked={canViewReports}
-              onChange={setCanViewReports}
-              label="Can view approved reports"
-              description="Show approved reports in the client portal"
-            />
-            <Toggle
-              checked={canEditPreferences}
-              onChange={setCanEditPreferences}
-              label="Can edit brand preferences"
-              description="Allow portal users to update tone, topics, and seasonal priorities"
-            />
-            <Toggle
-              checked={canSubmitIdeas}
-              onChange={setCanSubmitIdeas}
-              label="Can submit ideas"
-              description="Allow portal users to submit content ideas and requests"
-            />
-            <Toggle
-              checked={isActive}
-              onChange={setIsActive}
-              label="Client is active"
-              description="Inactive clients are hidden from the portal"
-            />
-          </div>
-        </Card>
+        {/* Row 2: Brand preferences + Portal access */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Brand preferences */}
+          <Card>
+            <h2 className="text-base font-semibold text-text-primary mb-1">Brand preferences</h2>
+            <p className="text-sm text-text-muted mb-4">These guide AI content recommendations.</p>
+            <div className="space-y-4">
+              <TagInput
+                id="tone_keywords"
+                label="Tone keywords"
+                value={toneKeywords}
+                onChange={setToneKeywords}
+                placeholder="e.g., bold, playful, authoritative"
+              />
+              <TagInput
+                id="topics_lean_into"
+                label="Topics to lean into"
+                value={topicsLeanInto}
+                onChange={setTopicsLeanInto}
+                placeholder="e.g., sustainable fashion, behind the scenes"
+              />
+              <TagInput
+                id="topics_avoid"
+                label="Topics to avoid"
+                value={topicsAvoid}
+                onChange={setTopicsAvoid}
+                placeholder="e.g., politics, competitor drama"
+              />
+              <TagInput
+                id="competitor_accounts"
+                label="Competitors they admire"
+                value={competitorAccounts}
+                onChange={setCompetitorAccounts}
+                placeholder="e.g., @nike, @glossier"
+              />
+              <TagInput
+                id="seasonal_priorities"
+                label="Seasonal priorities"
+                value={seasonalPriorities}
+                onChange={setSeasonalPriorities}
+                placeholder="e.g., Summer 2026 launch"
+              />
+            </div>
+          </Card>
+
+          {/* Portal access */}
+          <Card>
+            <h2 className="text-base font-semibold text-text-primary mb-4">Portal access</h2>
+            <div className="space-y-4">
+              <Toggle
+                checked={canSearch}
+                onChange={setCanSearch}
+                label="Can run topic searches"
+                description="Allow this client's portal users to run new searches"
+              />
+              <Toggle
+                checked={canViewReports}
+                onChange={setCanViewReports}
+                label="Can view approved reports"
+                description="Show approved reports in the client portal"
+              />
+              <Toggle
+                checked={canEditPreferences}
+                onChange={setCanEditPreferences}
+                label="Can edit brand preferences"
+                description="Allow portal users to update tone, topics, and seasonal priorities"
+              />
+              <Toggle
+                checked={canSubmitIdeas}
+                onChange={setCanSubmitIdeas}
+                label="Can submit ideas"
+                description="Allow portal users to submit content ideas and requests"
+              />
+              <Toggle
+                checked={isActive}
+                onChange={setIsActive}
+                label="Client is active"
+                description="Inactive clients are hidden from the portal"
+              />
+            </div>
+          </Card>
+        </div>
 
       </form>
     </div>

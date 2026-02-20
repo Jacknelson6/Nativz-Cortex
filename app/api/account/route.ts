@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 const updateSchema = z.object({
   full_name: z.string().min(1).optional(),
   avatar_url: z.string().nullable().optional(),
+  job_title: z.string().nullable().optional(),
   password: z.string().min(6, 'Password must be at least 6 characters').optional(),
 });
 
@@ -28,7 +29,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const { full_name, avatar_url, password } = parsed.data;
+    const { full_name, avatar_url, job_title, password } = parsed.data;
 
     // Update password via Supabase Auth if provided
     if (password) {
@@ -42,6 +43,7 @@ export async function PATCH(request: NextRequest) {
     const updates: Record<string, string | null> = {};
     if (full_name !== undefined) updates.full_name = full_name;
     if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+    if (job_title !== undefined) updates.job_title = job_title;
 
     if (Object.keys(updates).length > 0) {
       const adminClient = createAdminClient();

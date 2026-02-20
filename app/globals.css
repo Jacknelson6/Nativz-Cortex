@@ -218,6 +218,116 @@ dialog:not([open]) {
   border-bottom-color: transparent;
 }
 
+/* Glowing button effect (Aceternity-inspired) */
+@property --glow-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes glowRotate {
+  from { --glow-angle: 0deg; }
+  to { --glow-angle: 360deg; }
+}
+
+.glow-btn {
+  position: relative;
+  isolation: isolate;
+}
+
+.glow-btn::before,
+.glow-btn::after {
+  content: '';
+  position: absolute;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--glow-angle),
+    rgba(4, 107, 210, 0.9),
+    rgba(139, 92, 246, 0.7),
+    rgba(16, 185, 129, 0.6),
+    rgba(4, 107, 210, 0.9)
+  );
+  animation: glowRotate 3s linear infinite;
+}
+
+.glow-btn::before {
+  inset: 0;
+  z-index: -1;
+}
+
+.glow-btn::after {
+  inset: -3px;
+  z-index: -2;
+  filter: blur(10px);
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+
+.glow-btn:hover::after {
+  opacity: 0.8;
+}
+
+.glow-btn:active {
+  transform: scale(0.97);
+}
+
+.glow-btn:disabled::after {
+  opacity: 0.15;
+}
+
+.glow-btn-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: inherit;
+  background: var(--surface);
+  padding: 0.5rem 1rem;
+}
+
+/* Shimmer sweep hover effect for CTA buttons */
+@keyframes shimmerSweep {
+  0% { transform: translateX(-100%) skewX(-15deg); }
+  100% { transform: translateX(200%) skewX(-15deg); }
+}
+
+.btn-shimmer {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.3s ease;
+}
+
+.btn-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.12) 45%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.12) 55%,
+    transparent 100%
+  );
+  transform: translateX(-100%) skewX(-15deg);
+  pointer-events: none;
+}
+
+.btn-shimmer:hover::after {
+  animation: shimmerSweep 0.8s ease forwards;
+}
+
+.btn-shimmer:hover {
+  box-shadow: 0 0 20px rgba(4, 107, 210, 0.4), 0 0 40px rgba(4, 107, 210, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-shimmer:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 0 10px rgba(4, 107, 210, 0.3);
+}
+
 /* Reduced motion (Pattern #9) */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

@@ -16,6 +16,7 @@ export interface User {
   role: 'admin' | 'viewer';
   organization_id: string | null;
   avatar_url: string | null;
+  job_title: string | null;
   created_at: string;
   last_login: string | null;
 }
