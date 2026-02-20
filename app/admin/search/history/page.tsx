@@ -90,10 +90,23 @@ export default async function AdminSearchHistoryPage({
                 className="animate-stagger-in flex items-center justify-between"
                 style={{ animationDelay: `${index * 30}ms` }}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   <Search size={16} className="text-text-muted shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-text-primary">{item.query}</p>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-text-primary truncate">{item.query}</p>
+                      {item.search_mode === 'client_strategy' ? (
+                        <Badge className="gap-1 shrink-0">
+                          <Building2 size={10} />
+                          Brand
+                        </Badge>
+                      ) : (
+                        <Badge className="gap-1 shrink-0">
+                          <TrendingUp size={10} />
+                          Topic
+                        </Badge>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-text-muted flex items-center gap-1">
                         <Clock size={10} />
@@ -111,18 +124,7 @@ export default async function AdminSearchHistoryPage({
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {item.search_mode === 'client_strategy' ? (
-                    <Badge className="gap-1">
-                      <Building2 size={10} />
-                      Brand
-                    </Badge>
-                  ) : (
-                    <Badge className="gap-1">
-                      <TrendingUp size={10} />
-                      Topic
-                    </Badge>
-                  )}
+                <div className="flex items-center gap-2 shrink-0">
                   {item.approved_at ? (
                     <Badge variant="success">Sent</Badge>
                   ) : item.status === 'failed' ? (

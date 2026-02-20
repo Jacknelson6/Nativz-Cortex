@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     const adminClient = createAdminClient();
     const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
-    const filename = `avatars/${user.id}-${Date.now()}.${ext}`;
+    const filename = `avatar-${user.id}-${Date.now()}.${ext}`;
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     if (uploadError) {
       console.error('Avatar upload error:', uploadError);
-      return NextResponse.json({ error: 'Upload failed. Try again.' }, { status: 500 });
+      return NextResponse.json({ error: `Upload failed: ${uploadError.message}` }, { status: 500 });
     }
 
     const { data: publicUrl } = adminClient.storage

@@ -87,7 +87,7 @@ export function AvatarEditor({ value, onChange, size = 'lg' }: AvatarEditorProps
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="flex flex-col items-center gap-1.5">
       <input
         ref={fileRef}
         type="file"
@@ -123,8 +123,8 @@ export function AvatarEditor({ value, onChange, size = 'lg' }: AvatarEditorProps
           </div>
         )}
       </button>
-      <p className="text-xs text-text-muted text-center">Click to upload</p>
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      <p className="text-xs text-text-muted">Click to upload</p>
+      {error && <p className="text-xs text-red-400 text-center max-w-[200px]">{error}</p>}
 
       {editorOpen && imageSrc && (
         <CropModal

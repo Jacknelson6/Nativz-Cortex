@@ -5,9 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Building2, Search, Sparkles, TrendingUp } from 'lucide-react';
 import { GlassButton } from '@/components/ui/glass-button';
 import { TextFlip } from '@/components/ui/text-flip';
-import { FilterChip } from './filter-chip';
 import { createClient } from '@/lib/supabase/client';
-import { TIME_RANGE_OPTIONS } from '@/lib/types/search';
 
 const INDUSTRIES = [
   'Software Development',
@@ -141,12 +139,10 @@ export function SearchModeSelector({
 }: SearchModeSelectorProps) {
   // Brand card state
   const [brandClientId, setBrandClientId] = useState<string | null>(fixedClientId ?? null);
-  const [brandTimeRange, setBrandTimeRange] = useState('last_3_months');
   const [brandLoading, setBrandLoading] = useState(false);
 
   // Topic card state
   const [topicQuery, setTopicQuery] = useState('');
-  const [topicTimeRange, setTopicTimeRange] = useState('last_3_months');
   const [topicClientId, setTopicClientId] = useState<string | null>(null);
   const [topicLoading, setTopicLoading] = useState(false);
 
@@ -196,7 +192,7 @@ export function SearchModeSelector({
         body: JSON.stringify({
           query: brandClientName,
           source: 'all',
-          time_range: brandTimeRange,
+          time_range: 'last_3_months',
           language: 'all',
           country: 'us',
           client_id: brandClientId,
@@ -231,7 +227,7 @@ export function SearchModeSelector({
         body: JSON.stringify({
           query: topicQuery.trim(),
           source: 'all',
-          time_range: topicTimeRange,
+          time_range: 'last_3_months',
           language: 'all',
           country: 'us',
           client_id: clientForTopic,
@@ -301,16 +297,6 @@ export function SearchModeSelector({
               />
             )}
 
-            {/* Time range */}
-            <div className="flex items-center">
-              <FilterChip
-                label="Time range"
-                value={brandTimeRange}
-                options={TIME_RANGE_OPTIONS}
-                onChange={setBrandTimeRange}
-              />
-            </div>
-
             {/* Submit */}
             <GlassButton
               onClick={handleBrandSearch}
@@ -373,25 +359,14 @@ export function SearchModeSelector({
               />
             </div>
 
-            {/* Time range + optional client */}
-            <div className="flex flex-wrap items-center gap-2">
-              <FilterChip
-                label="Time range"
-                value={topicTimeRange}
-                options={TIME_RANGE_OPTIONS}
-                onChange={setTopicTimeRange}
+            {/* Optional client */}
+            {!portalMode && (
+              <TopicClientAttach
+                clients={clients}
+                value={topicClientId}
+                onChange={setTopicClientId}
               />
-              {!portalMode && (
-                <>
-                  <div className="h-4 w-px bg-nativz-border" />
-                  <TopicClientAttach
-                    clients={clients}
-                    value={topicClientId}
-                    onChange={setTopicClientId}
-                  />
-                </>
-              )}
-            </div>
+            )}
 
             {/* Submit */}
             <GlassButton
@@ -548,7 +523,7 @@ function TopicClientAttach({
           className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-nativz-border px-3 py-1.5 text-xs text-text-muted hover:border-text-muted hover:text-text-secondary transition-colors"
         >
           <Building2 size={12} />
-          Attach to client
+          Client
         </button>
       )}
 
