@@ -12,7 +12,7 @@ const BASE = 'https://api.github.com';
 function getConfig() {
   const token = process.env.GITHUB_VAULT_TOKEN;
   const repo = process.env.GITHUB_VAULT_REPO;
-  const branch = process.env.GITHUB_VAULT_BRANCH || 'main';
+  const branch = (process.env.GITHUB_VAULT_BRANCH || 'main').trim();
 
   if (!token || !repo) {
     throw new Error('Vault not configured: set GITHUB_VAULT_TOKEN and GITHUB_VAULT_REPO');
