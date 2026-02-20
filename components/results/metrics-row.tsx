@@ -3,29 +3,35 @@
 import { useState, useRef, useCallback, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { StatCard } from '@/components/shared/stat-card';
-import { Zap, Lightbulb, TrendingUp, Activity, Heart, Eye, Users, MessageCircle } from 'lucide-react';
+import { Zap, Lightbulb, TrendingUp, Heart, Eye, Users, MessageCircle, Building2, Globe } from 'lucide-react';
 import { formatNumber } from '@/lib/utils/format';
-import { getSentimentLabel } from '@/lib/utils/sentiment';
 import { TOOLTIPS } from '@/lib/tooltips';
 import type { SearchMetrics, LegacySearchMetrics } from '@/lib/types/search';
 import { isNewMetrics } from '@/lib/types/search';
 
 interface MetricsRowProps {
   metrics: SearchMetrics | LegacySearchMetrics;
+  isBrandSearch?: boolean;
 }
 
-const INTENSITY_LABELS: Record<string, string> = {
-  low: 'Low',
-  moderate: 'Moderate',
-  high: 'High',
-  very_high: 'Very high',
-};
-
-export function MetricsRow({ metrics }: MetricsRowProps) {
+export function MetricsRow({ metrics, isBrandSearch = false }: MetricsRowProps) {
   if (isNewMetrics(metrics)) {
-    return (
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {[
+    const cards = isBrandSearch
+      ? [
+          {
+            tooltipKey: 'brand_references',
+            title: 'Brand references',
+            value: String(metrics.total_sources ?? 0),
+            icon: <Building2 size={18} />,
+          },
+          {
+            tooltipKey: 'discussions',
+            title: 'Conversations',
+            value: String(metrics.discussions_found ?? 0),
+            icon: <MessageCircle size={18} />,
+          },
+        ]
+      : [
           {
             tooltipKey: 'topic_score',
             title: 'Topic score',
@@ -33,11 +39,17 @@ export function MetricsRow({ metrics }: MetricsRowProps) {
             icon: <Zap size={18} />,
           },
           {
-            tooltipKey: 'sentiment',
-            title: 'Audience sentiment',
-            value: getSentimentLabel(metrics.overall_sentiment),
-            icon: <Activity size={18} />,
+            tooltipKey: 'sources_analyzed',
+            title: 'Sources analyzed',
+            value: String(metrics.sources_analyzed ?? metrics.total_sources),
+            icon: <Globe size={18} />,
           },
+        ];
+
+    return (
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {[
+          ...cards,
           {
             tooltipKey: 'content_opportunities',
             title: 'Video ideas',

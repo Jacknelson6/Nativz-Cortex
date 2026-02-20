@@ -156,7 +156,7 @@ export function AdminResultsClient({ search, clientInfo }: AdminResultsClientPro
         ) : (
           search.summary && <ExecutiveSummary summary={search.summary} />
         )}
-        {search.metrics && <MetricsRow metrics={search.metrics} />}
+        {search.metrics && <MetricsRow metrics={search.metrics} isBrandSearch={!!aiResponse?.brand_alignment_notes} />}
 
         {/* Legacy activity chart — only rendered for old searches */}
         {search.activity_data && search.activity_data.length > 0 && (

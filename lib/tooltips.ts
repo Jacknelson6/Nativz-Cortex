@@ -16,6 +16,10 @@ export const TOOLTIPS: Record<string, TooltipDef> = {
     title: 'Conversation intensity',
     description: 'How actively people are discussing this topic — measured by reply depth and discussion frequency.',
   },
+  brand_references: {
+    title: 'Brand references',
+    description: 'Total sources found across the web, discussions, and videos that directly reference this brand.',
+  },
   topic_score: {
     title: 'Topic score',
     description: 'Overall strength of this topic based on how many trending angles were found and how strongly they resonate with audiences.',

@@ -137,7 +137,7 @@ export default async function PortalSearchResultsPage({
         ) : (
           s.summary && <ExecutiveSummary summary={s.summary} />
         )}
-        {s.metrics && <MetricsRow metrics={s.metrics} />}
+        {s.metrics && <MetricsRow metrics={s.metrics} isBrandSearch={!!aiResponse?.brand_alignment_notes} />}
 
         {/* Legacy activity chart — only rendered for old searches */}
         {s.activity_data && s.activity_data.length > 0 && (
