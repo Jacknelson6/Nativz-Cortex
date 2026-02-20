@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Search, Clock, Building2 } from 'lucide-react';
+import { Search, Clock, Building2, TrendingUp } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,7 +31,7 @@ export default async function AdminSearchHistoryPage({
   // Build filtered query
   let query = adminClient
     .from('topic_searches')
-    .select('id, query, source, time_range, status, created_at, completed_at, approved_at, client_id')
+    .select('id, query, source, time_range, status, created_at, completed_at, approved_at, client_id, search_mode')
     .order('created_at', { ascending: false })
     .limit(100);
 
@@ -112,13 +112,22 @@ export default async function AdminSearchHistoryPage({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {item.search_mode === 'client_strategy' ? (
+                    <Badge className="gap-1">
+                      <Building2 size={10} />
+                      Brand
+                    </Badge>
+                  ) : (
+                    <Badge className="gap-1">
+                      <TrendingUp size={10} />
+                      Topic
+                    </Badge>
+                  )}
                   {item.approved_at ? (
                     <Badge variant="success">Sent</Badge>
-                  ) : item.status === 'completed' ? (
-                    <Badge variant="warning">Not sent</Badge>
-                  ) : (
-                    <StatusBadge status={item.status} />
-                  )}
+                  ) : item.status === 'failed' ? (
+                    <Badge variant="danger">Failed</Badge>
+                  ) : null}
                 </div>
               </Card>
             </Link>
@@ -133,15 +142,3 @@ export default async function AdminSearchHistoryPage({
   }
 }
 
-function StatusBadge({ status }: { status: string }) {
-  switch (status) {
-    case 'completed':
-      return <Badge variant="success">Completed</Badge>;
-    case 'processing':
-      return <Badge variant="info">Processing</Badge>;
-    case 'failed':
-      return <Badge variant="danger">Failed</Badge>;
-    default:
-      return <Badge>Pending</Badge>;
-  }
-}
