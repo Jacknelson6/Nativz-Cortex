@@ -20,6 +20,14 @@ export interface User {
   last_login: string | null;
 }
 
+export interface ClientPreferences {
+  tone_keywords: string[];
+  topics_lean_into: string[];
+  topics_avoid: string[];
+  competitor_accounts: string[];
+  seasonal_priorities: string[];
+}
+
 export interface Client {
   id: string;
   organization_id: string | null;
@@ -34,12 +42,29 @@ export interface Client {
   brand_voice: string | null;
   topic_keywords: string[];
   social_sources: string[];
+  preferences: ClientPreferences | null;
   meta_page_id: string | null;
   instagram_business_id: string | null;
   meta_access_token_encrypted: string | null;
   created_at: string;
   updated_at: string;
   is_active: boolean;
+}
+
+export interface IdeaSubmission {
+  id: string;
+  client_id: string;
+  submitted_by: string;
+  title: string;
+  description: string | null;
+  source_url: string | null;
+  category: 'trending' | 'content_idea' | 'request' | 'other';
+  status: 'new' | 'reviewed' | 'accepted' | 'archived';
+  admin_notes: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Competitor {

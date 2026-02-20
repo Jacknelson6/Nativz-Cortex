@@ -44,7 +44,8 @@ CREATE TABLE clients (
   meta_page_id TEXT,
   instagram_business_id TEXT,
   meta_access_token_encrypted TEXT,
-  feature_flags JSONB DEFAULT '{"can_search": true, "can_view_reports": true}'::jsonb,
+  preferences JSONB DEFAULT '{}'::jsonb,
+  feature_flags JSONB DEFAULT '{"can_search": true, "can_view_reports": true, "can_edit_preferences": false, "can_submit_ideas": false}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
   is_active BOOLEAN DEFAULT true

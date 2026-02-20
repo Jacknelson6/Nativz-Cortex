@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Search, FileText, Settings } from 'lucide-react';
+import { LayoutDashboard, Search, FileText, Settings, Palette, Lightbulb } from 'lucide-react';
 import { FloatingDock } from '@/components/ui/floating-dock';
 import { Button } from '@/components/ui/button';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
@@ -10,6 +10,8 @@ import { SidebarAccount } from '@/components/layout/sidebar-account';
 const NAV_ITEMS = [
   { href: '/portal/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/portal/reports', label: 'Reports', icon: FileText },
+  { href: '/portal/preferences', label: 'Preferences', icon: Palette },
+  { href: '/portal/ideas', label: 'Ideas', icon: Lightbulb },
   { href: '/portal/settings', label: 'Settings', icon: Settings },
 ];
 

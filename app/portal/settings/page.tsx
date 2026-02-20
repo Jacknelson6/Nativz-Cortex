@@ -29,7 +29,7 @@ export default async function PortalSettingsPage() {
     target_audience: string | null;
     brand_voice: string | null;
     topic_keywords: string[] | null;
-    feature_flags: { can_search: boolean; can_view_reports: boolean } | null;
+    feature_flags: { can_search: boolean; can_view_reports: boolean; can_edit_preferences: boolean; can_submit_ideas: boolean } | null;
   } | undefined;
 
   return (
@@ -101,6 +101,18 @@ export default async function PortalSettingsPage() {
               <span className="text-sm text-text-secondary">View reports</span>
               <Badge variant={client.feature_flags.can_view_reports ? 'success' : 'default'}>
                 {client.feature_flags.can_view_reports ? 'Enabled' : 'Disabled'}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-text-secondary">Edit preferences</span>
+              <Badge variant={client.feature_flags.can_edit_preferences ? 'success' : 'default'}>
+                {client.feature_flags.can_edit_preferences ? 'Enabled' : 'Disabled'}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-text-secondary">Submit ideas</span>
+              <Badge variant={client.feature_flags.can_submit_ideas ? 'success' : 'default'}>
+                {client.feature_flags.can_submit_ideas ? 'Enabled' : 'Disabled'}
               </Badge>
             </div>
           </div>

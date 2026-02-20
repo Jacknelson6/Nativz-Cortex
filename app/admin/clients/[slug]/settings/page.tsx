@@ -11,6 +11,8 @@ import { Input, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import { ImageUpload } from '@/components/ui/image-upload';
+import { TagInput } from '@/components/ui/tag-input';
+import type { ClientPreferences } from '@/lib/types/database';
 
 interface ClientData {
   id: string;
@@ -22,9 +24,12 @@ interface ClientData {
   topic_keywords: string[] | null;
   logo_url: string | null;
   website_url: string | null;
+  preferences: ClientPreferences | null;
   feature_flags: {
     can_search: boolean;
     can_view_reports: boolean;
+    can_edit_preferences: boolean;
+    can_submit_ideas: boolean;
   } | null;
   is_active: boolean;
 }
@@ -45,14 +50,23 @@ export default function AdminClientSettingsPage() {
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [canSearch, setCanSearch] = useState(true);
   const [canViewReports, setCanViewReports] = useState(true);
+  const [canEditPreferences, setCanEditPreferences] = useState(false);
+  const [canSubmitIdeas, setCanSubmitIdeas] = useState(false);
   const [isActive, setIsActive] = useState(true);
+
+  // Preferences
+  const [toneKeywords, setToneKeywords] = useState<string[]>([]);
+  const [topicsLeanInto, setTopicsLeanInto] = useState<string[]>([]);
+  const [topicsAvoid, setTopicsAvoid] = useState<string[]>([]);
+  const [competitorAccounts, setCompetitorAccounts] = useState<string[]>([]);
+  const [seasonalPriorities, setSeasonalPriorities] = useState<string[]>([]);
 
   useEffect(() => {
     async function fetchClient() {
       const supabase = createClient();
       const { data } = await supabase
         .from('clients')
-        .select('id, name, slug, industry, target_audience, brand_voice, topic_keywords, feature_flags, is_active, logo_url, website_url')
+        .select('id, name, slug, industry, target_audience, brand_voice, topic_keywords, feature_flags, is_active, logo_url, website_url, preferences')
         .eq('slug', params.slug)
         .single();
 
@@ -67,7 +81,18 @@ export default function AdminClientSettingsPage() {
         const flags = data.feature_flags as ClientData['feature_flags'];
         setCanSearch(flags?.can_search ?? true);
         setCanViewReports(flags?.can_view_reports ?? true);
+        setCanEditPreferences(flags?.can_edit_preferences ?? false);
+        setCanSubmitIdeas(flags?.can_submit_ideas ?? false);
         setIsActive(data.is_active);
+        // Preferences
+        const p = data.preferences as ClientPreferences | null;
+        if (p) {
+          setToneKeywords(p.tone_keywords || []);
+          setTopicsLeanInto(p.topics_lean_into || []);
+          setTopicsAvoid(p.topics_avoid || []);
+          setCompetitorAccounts(p.competitor_accounts || []);
+          setSeasonalPriorities(p.seasonal_priorities || []);
+        }
       }
       setLoading(false);
     }
@@ -125,7 +150,19 @@ export default function AdminClientSettingsPage() {
             .filter(Boolean),
           logo_url: logoUrl || null,
           website_url: websiteUrl.trim() || null,
-          feature_flags: { can_search: canSearch, can_view_reports: canViewReports },
+          feature_flags: {
+            can_search: canSearch,
+            can_view_reports: canViewReports,
+            can_edit_preferences: canEditPreferences,
+            can_submit_ideas: canSubmitIdeas,
+          },
+          preferences: {
+            tone_keywords: toneKeywords,
+            topics_lean_into: topicsLeanInto,
+            topics_avoid: topicsAvoid,
+            competitor_accounts: competitorAccounts,
+            seasonal_priorities: seasonalPriorities,
+          },
           is_active: isActive,
         }),
       });
@@ -227,6 +264,49 @@ export default function AdminClientSettingsPage() {
           </div>
         </Card>
 
+        {/* Brand preferences */}
+        <Card>
+          <h2 className="text-base font-semibold text-text-primary mb-1">Brand preferences</h2>
+          <p className="text-sm text-text-muted mb-4">These preferences guide AI-generated content recommendations.</p>
+          <div className="space-y-4">
+            <TagInput
+              id="tone_keywords"
+              label="Tone keywords"
+              value={toneKeywords}
+              onChange={setToneKeywords}
+              placeholder="e.g., bold, playful, authoritative"
+            />
+            <TagInput
+              id="topics_lean_into"
+              label="Topics to lean into"
+              value={topicsLeanInto}
+              onChange={setTopicsLeanInto}
+              placeholder="e.g., sustainable fashion, behind the scenes"
+            />
+            <TagInput
+              id="topics_avoid"
+              label="Topics to avoid"
+              value={topicsAvoid}
+              onChange={setTopicsAvoid}
+              placeholder="e.g., politics, competitor drama"
+            />
+            <TagInput
+              id="competitor_accounts"
+              label="Competitors they admire"
+              value={competitorAccounts}
+              onChange={setCompetitorAccounts}
+              placeholder="e.g., @nike, @glossier"
+            />
+            <TagInput
+              id="seasonal_priorities"
+              label="Seasonal priorities"
+              value={seasonalPriorities}
+              onChange={setSeasonalPriorities}
+              placeholder="e.g., Summer 2026 launch"
+            />
+          </div>
+        </Card>
+
         {/* Feature flags */}
         <Card>
           <h2 className="text-base font-semibold text-text-primary mb-4">Portal access</h2>
@@ -242,6 +322,18 @@ export default function AdminClientSettingsPage() {
               onChange={setCanViewReports}
               label="Can view approved reports"
               description="Show approved reports in the client portal"
+            />
+            <Toggle
+              checked={canEditPreferences}
+              onChange={setCanEditPreferences}
+              label="Can edit brand preferences"
+              description="Allow portal users to update tone, topics, and seasonal priorities"
+            />
+            <Toggle
+              checked={canSubmitIdeas}
+              onChange={setCanSubmitIdeas}
+              label="Can submit ideas"
+              description="Allow portal users to submit content ideas and requests"
             />
             <Toggle
               checked={isActive}

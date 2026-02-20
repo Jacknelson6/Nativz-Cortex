@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Settings, Search, Clock } from 'lucide-react';
+import { ArrowLeft, Settings, Search, Clock, Lightbulb } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,13 +30,20 @@ export default async function AdminClientDetailPage({
       notFound();
     }
 
-    // Fetch recent searches for this client
-    const { data: searches } = await adminClient
-      .from('topic_searches')
-      .select('id, query, status, created_at, approved_at')
-      .eq('client_id', client.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
+    // Fetch recent searches and idea count in parallel
+    const [{ data: searches }, { count: ideaCount }] = await Promise.all([
+      adminClient
+        .from('topic_searches')
+        .select('id, query, status, created_at, approved_at')
+        .eq('client_id', client.id)
+        .order('created_at', { ascending: false })
+        .limit(20),
+      adminClient
+        .from('idea_submissions')
+        .select('*', { count: 'exact', head: true })
+        .eq('client_id', client.id)
+        .in('status', ['new', 'reviewed']),
+    ]);
 
     const items = searches || [];
 
@@ -61,12 +68,23 @@ export default async function AdminClientDetailPage({
               <p className="truncate text-sm text-text-muted">{client.industry}</p>
             </div>
           </div>
-          <Link href={`/admin/clients/${slug}/settings`} className="shrink-0">
-            <Button variant="outline">
-              <Settings size={16} />
-              Settings
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link href={`/admin/clients/${slug}/ideas`}>
+              <Button variant="outline">
+                <Lightbulb size={16} />
+                Ideas
+                {(ideaCount ?? 0) > 0 && (
+                  <Badge variant="info" className="ml-1">{ideaCount}</Badge>
+                )}
+              </Button>
+            </Link>
+            <Link href={`/admin/clients/${slug}/settings`}>
+              <Button variant="outline">
+                <Settings size={16} />
+                Settings
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Client info */}
