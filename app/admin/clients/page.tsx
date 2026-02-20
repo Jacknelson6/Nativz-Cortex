@@ -1,11 +1,10 @@
 import Link from 'next/link';
 import { Plus, Building2 } from 'lucide-react';
 import { getVaultClients } from '@/lib/vault/reader';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
+import { ClientSearchGrid } from '@/components/clients/client-search-grid';
 
 export default async function AdminClientsPage() {
   try {
@@ -35,31 +34,7 @@ export default async function AdminClientsPage() {
             }
           />
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {vaultClients.map((client, i) => (
-              <Link key={client.slug} href={`/admin/clients/${client.slug}`}>
-                <Card interactive className="animate-stagger-in flex items-start gap-3" style={{ animationDelay: `${i * 50}ms` }}>
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-surface text-accent-text">
-                    <Building2 size={20} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-text-primary truncate">{client.name}</p>
-                      {client.abbreviation && (
-                        <Badge variant="default">{client.abbreviation}</Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-text-muted">{client.industry || 'General'}</p>
-                    {client.services.length > 0 && (
-                      <p className="text-xs text-text-muted mt-1">
-                        {client.services.join(' · ')}
-                      </p>
-                    )}
-                  </div>
-                </Card>
-              </Link>
-            ))}
-          </div>
+          <ClientSearchGrid clients={vaultClients} />
         )}
       </div>
     );

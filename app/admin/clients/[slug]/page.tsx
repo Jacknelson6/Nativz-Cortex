@@ -97,15 +97,6 @@ export default async function AdminClientDetailPage({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Link href={`/admin/clients/${slug}/ideas`}>
-              <Button variant="outline" size="sm">
-                <Lightbulb size={14} />
-                Ideas
-                {(ideaCount ?? 0) > 0 && (
-                  <Badge variant="info" className="ml-1">{ideaCount}</Badge>
-                )}
-              </Button>
-            </Link>
             <Link href={`/admin/clients/${slug}/settings`}>
               <Button variant="outline" size="sm">
                 <Settings size={14} />
@@ -173,7 +164,12 @@ export default async function AdminClientDetailPage({
                     {vaultProfile.point_of_contact.email}
                   </p>
                 </div>
-                <Badge variant="default">Monday</Badge>
+                <a href={`mailto:${vaultProfile.point_of_contact.email}`}>
+                  <Badge variant="default" className="cursor-pointer hover:bg-accent-surface/80 transition-colors">
+                    <Mail size={10} />
+                    Email
+                  </Badge>
+                </a>
               </div>
             )}
             {/* Portal users from Supabase */}
