@@ -1,9 +1,24 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { unstable_cache } from 'next/cache';
 import { PortalSidebar, PortalNavItems } from '@/components/layout/portal-sidebar';
 import { Header } from '@/components/layout/header';
 import { SidebarProvider } from '@/components/layout/sidebar-provider';
 import { MobileSidebar } from '@/components/layout/mobile-sidebar';
+
+const getCachedUser = unstable_cache(
+  async (userId: string) => {
+    const adminClient = createAdminClient();
+    const { data } = await adminClient
+      .from('users')
+      .select('full_name, avatar_url')
+      .eq('id', userId)
+      .single();
+    return data;
+  },
+  ['portal-layout-user'],
+  { revalidate: 300 }, // 5 minutes
+);
 
 export default async function PortalLayout({
   children,
@@ -16,12 +31,7 @@ export default async function PortalLayout({
   let userName = '';
   let avatarUrl: string | null = null;
   if (user) {
-    const adminClient = createAdminClient();
-    const { data: userData } = await adminClient
-      .from('users')
-      .select('full_name, avatar_url')
-      .eq('id', user.id)
-      .single();
+    const userData = await getCachedUser(user.id);
     userName = userData?.full_name || user.email || '';
     avatarUrl = userData?.avatar_url || null;
   }

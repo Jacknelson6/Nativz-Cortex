@@ -42,7 +42,7 @@ export async function readFile(path: string): Promise<{ content: string; sha: st
 
   const res = await fetch(`${BASE}/repos/${repo}/contents/${encodeURIPath(path)}?ref=${branch}`, {
     headers: headers(token),
-    cache: 'no-store',
+    next: { revalidate: 300 }, // Cache for 5 minutes
   });
 
   if (res.status === 404) return null;
@@ -102,7 +102,7 @@ export async function listFiles(
 
   const res = await fetch(
     `${BASE}/repos/${repo}/contents/${encodeURIPath(dirPath)}?ref=${branch}`,
-    { headers: headers(token), cache: 'no-store' },
+    { headers: headers(token), next: { revalidate: 300 } },
   );
 
   if (res.status === 404) return [];
@@ -152,7 +152,7 @@ export async function fileExists(path: string): Promise<boolean> {
   const res = await fetch(`${BASE}/repos/${repo}/contents/${encodeURIPath(path)}?ref=${branch}`, {
     method: 'HEAD',
     headers: headers(token),
-    cache: 'no-store',
+    next: { revalidate: 300 },
   });
 
   return res.ok;

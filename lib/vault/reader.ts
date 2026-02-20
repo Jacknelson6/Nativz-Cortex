@@ -67,12 +67,37 @@ export async function getVaultClient(clientName: string): Promise<ParsedClientPr
 }
 
 /**
- * Get a single client profile by slug (searches all client directories).
+ * Get a single client profile by slug.
+ * First tries a direct directory lookup by slug, then falls back
+ * to scanning all directories (for clients whose directory name
+ * differs from their slug).
  */
 export async function getVaultClientBySlug(slug: string): Promise<ParsedClientProfile | null> {
   if (!isVaultConfigured()) return null;
 
   try {
+    // Try direct lookup: list Clients dir and find matching directory
+    const dirs = await listFiles('Clients');
+    const clientDirs = dirs.filter((d) => d.type === 'dir');
+
+    // Try to find by matching the slug against directory names
+    for (const dir of clientDirs) {
+      // Quick slug check: slugify the dir name and compare
+      const dirSlug = dir.name
+        .toLowerCase()
+        .replace(/['']/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+
+      if (dirSlug === slug) {
+        const file = await readFile(`Clients/${dir.name}/_profile.md`);
+        if (!file) continue;
+        const profile = parseClientProfile(file.content);
+        if (profile && profile.slug === slug) return profile;
+      }
+    }
+
+    // Fallback: read all profiles (handles edge cases where dir name != slug)
     const clients = await getVaultClients();
     return clients.find((c) => c.slug === slug) || null;
   } catch (error) {

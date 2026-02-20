@@ -33,6 +33,7 @@ export async function getPortalClient(): Promise<PortalClientResult | null> {
 
   const adminClient = createAdminClient();
 
+  // Single query: join users + clients to avoid waterfall
   const { data: userData } = await adminClient
     .from('users')
     .select('organization_id')

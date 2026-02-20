@@ -25,14 +25,16 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const pathname = request.nextUrl.pathname;
+
+  // Public routes — no auth needed
+  if (pathname.startsWith('/portal/join/')) {
+    return supabaseResponse;
+  }
 
   // Login pages don't require auth
   if (pathname === '/admin/login' || pathname === '/portal/login') {
+    const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       if (pathname === '/admin/login') {
         return NextResponse.redirect(new URL('/admin/dashboard', request.url));
@@ -48,6 +50,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // All other routes require auth
+  const { data: { user } } = await supabase.auth.getUser();
+
   if (!user) {
     if (pathname.startsWith('/admin')) {
       return NextResponse.redirect(new URL('/admin/login', request.url));
@@ -58,14 +62,29 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/admin/login', request.url));
   }
 
-  // Role-based access control
-  const { data: userData } = await supabase
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
+  // Role-based access: use cached role from cookie if available
+  let role: string | null = request.cookies.get('x-user-role')?.value || null;
 
-  const role = userData?.role || null;
+  if (!role) {
+    const { data: userData } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    role = userData?.role || null;
+
+    // Cache role in a cookie (expires in 10 minutes) to avoid DB lookups
+    if (role) {
+      supabaseResponse.cookies.set('x-user-role', role, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 600, // 10 minutes
+        path: '/',
+      });
+    }
+  }
 
   // Admin routes — only admins
   if (pathname.startsWith('/admin') && role !== 'admin') {
