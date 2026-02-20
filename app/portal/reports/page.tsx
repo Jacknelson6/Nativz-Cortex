@@ -68,7 +68,7 @@ export default async function PortalReportsPage() {
         <EmptyState
           icon={<FileText size={32} />}
           title="No reports yet"
-          description="Approved topic research reports will appear here."
+          description="Topic research reports from your Nativz team will appear here."
         />
       ) : (
         <div className="space-y-2">
@@ -90,7 +90,7 @@ export default async function PortalReportsPage() {
                     </div>
                   </div>
                 </div>
-                <Badge variant="success">Approved</Badge>
+                <Badge variant="success">Ready</Badge>
               </Card>
             </Link>
           ))}

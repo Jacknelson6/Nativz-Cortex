@@ -45,16 +45,16 @@ export function Header({ userName, portalMode = false }: HeaderProps) {
             />
           </div>
         </button>
-        <div className="flex flex-col items-start -space-y-0.5">
+        <div className="flex flex-col items-start -space-y-1">
           <Image
             src="/nativz-logo.svg"
             alt="Nativz"
-            width={93}
-            height={36}
-            className="h-6 w-auto"
+            width={140}
+            height={54}
+            className="h-9 w-auto"
             priority
           />
-          <span className="text-[11px] font-semibold text-text-secondary tracking-[0.25em] uppercase pl-0.5">
+          <span className="text-xs font-semibold text-text-secondary tracking-[0.25em] uppercase pl-0.5">
             Cortex
           </span>
         </div>

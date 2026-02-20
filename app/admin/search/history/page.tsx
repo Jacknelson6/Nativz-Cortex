@@ -113,9 +113,9 @@ export default async function AdminSearchHistoryPage({
                 </div>
                 <div className="flex items-center gap-2">
                   {item.approved_at ? (
-                    <Badge variant="success">Approved</Badge>
+                    <Badge variant="success">Sent</Badge>
                   ) : item.status === 'completed' ? (
-                    <Badge variant="warning">Pending review</Badge>
+                    <Badge variant="warning">Not sent</Badge>
                   ) : (
                     <StatusBadge status={item.status} />
                   )}

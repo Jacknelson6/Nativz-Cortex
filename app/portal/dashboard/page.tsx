@@ -89,7 +89,7 @@ export default async function PortalDashboardPage() {
         {canViewReports && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <StatCard
-              title="Approved reports"
+              title="Reports"
               value={String(totalReports)}
               icon={<FileText size={20} />}
             />
@@ -112,7 +112,7 @@ export default async function PortalDashboardPage() {
             </div>
             {recentReports.length === 0 ? (
               <p className="text-sm text-text-muted py-4 text-center">
-                No approved reports yet. Your team will share them here when ready.
+                No reports yet. Your Nativz team will share them here when ready.
               </p>
             ) : (
               <div className="space-y-2">
@@ -126,7 +126,7 @@ export default async function PortalDashboardPage() {
                           {formatRelativeTime(report.created_at)}
                         </span>
                       </div>
-                      <Badge variant="success">Approved</Badge>
+                      <Badge variant="success">Ready</Badge>
                     </div>
                   </Link>
                 ))}

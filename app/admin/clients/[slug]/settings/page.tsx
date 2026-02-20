@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
@@ -34,6 +34,7 @@ export default function AdminClientSettingsPage() {
   const [client, setClient] = useState<ClientData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
   // Form state
   const [industry, setIndustry] = useState('');
@@ -72,6 +73,37 @@ export default function AdminClientSettingsPage() {
     }
     fetchClient();
   }, [params.slug]);
+
+  async function handleGenerateAI() {
+    const url = websiteUrl.trim();
+    if (!url) {
+      toast.error('Enter a website URL first.');
+      return;
+    }
+    setAnalyzing(true);
+    try {
+      const res = await fetch('/api/clients/analyze-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to analyze website.');
+        return;
+      }
+      const data = await res.json();
+      if (data.industry) setIndustry(data.industry);
+      if (data.target_audience) setTargetAudience(data.target_audience);
+      if (data.brand_voice) setBrandVoice(data.brand_voice);
+      if (data.topic_keywords) setTopicKeywords(data.topic_keywords.join(', '));
+      toast.success('Fields generated from website.');
+    } catch {
+      toast.error('Something went wrong. Try again.');
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -149,6 +181,18 @@ export default function AdminClientSettingsPage() {
               onChange={(e) => setWebsiteUrl(e.target.value)}
               placeholder="https://example.com"
             />
+            {websiteUrl.trim() && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleGenerateAI}
+                disabled={analyzing}
+              >
+                <Sparkles size={14} />
+                {analyzing ? 'Analyzing website...' : 'Generate fields with AI'}
+              </Button>
+            )}
             <Input
               id="industry"
               label="Industry"

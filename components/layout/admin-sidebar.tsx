@@ -6,23 +6,11 @@ import { LayoutDashboard, Users, Search, History } from 'lucide-react';
 import { FloatingDock } from '@/components/ui/floating-dock';
 import { Button } from '@/components/ui/button';
 
-const DASHBOARD_ITEM = { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard };
-
-const RESEARCH_ITEMS = [
+const NAV_ITEMS = [
+  { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/search/history', label: 'Search history', icon: History },
-];
-
-const MANAGE_ITEMS = [
   { href: '/admin/clients', label: 'Clients', icon: Users },
 ];
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="px-3 pt-5 pb-1.5 text-[11px] font-semibold text-text-muted tracking-widest uppercase">
-      {children}
-    </p>
-  );
-}
 
 export function AdminNavItems() {
   const pathname = usePathname();
@@ -31,21 +19,7 @@ export function AdminNavItems() {
     return pathname === href || pathname.startsWith(href + '/');
   }
 
-  const dashboardDock = [{
-    title: DASHBOARD_ITEM.label,
-    icon: <DASHBOARD_ITEM.icon size={18} />,
-    href: DASHBOARD_ITEM.href,
-    isActive: isActive(DASHBOARD_ITEM.href),
-  }];
-
-  const researchDock = RESEARCH_ITEMS.map((item) => ({
-    title: item.label,
-    icon: <item.icon size={18} />,
-    href: item.href,
-    isActive: isActive(item.href),
-  }));
-
-  const manageDock = MANAGE_ITEMS.map((item) => ({
+  const dockItems = NAV_ITEMS.map((item) => ({
     title: item.label,
     icon: <item.icon size={18} />,
     href: item.href,
@@ -62,16 +36,8 @@ export function AdminNavItems() {
         </Button>
       </Link>
 
-      {/* Dashboard */}
-      <FloatingDock items={dashboardDock} />
-
-      {/* Research section */}
-      <SectionLabel>Research</SectionLabel>
-      <FloatingDock items={researchDock} />
-
-      {/* Manage section */}
-      <SectionLabel>Manage</SectionLabel>
-      <FloatingDock items={manageDock} />
+      {/* Navigation */}
+      <FloatingDock items={dockItems} />
     </>
   );
 }

@@ -114,9 +114,9 @@ export default async function AdminClientDetailPage({
                       </span>
                     </div>
                     {search.approved_at ? (
-                      <Badge variant="success">Approved</Badge>
+                      <Badge variant="success">Sent</Badge>
                     ) : search.status === 'completed' ? (
-                      <Badge variant="warning">Pending review</Badge>
+                      <Badge variant="warning">Not sent</Badge>
                     ) : (
                       <Badge>{search.status}</Badge>
                     )}

@@ -73,7 +73,7 @@ export default async function PortalSearchResultsPage({
               <span className="text-text-muted">Report</span>
             </div>
             <div className="ml-auto">
-              <Badge variant="warning">Pending review</Badge>
+              <Badge variant="warning">Coming soon</Badge>
             </div>
           </div>
         </div>
@@ -83,9 +83,9 @@ export default async function PortalSearchResultsPage({
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15">
               <ClockIcon size={24} className="text-amber-400" />
             </div>
-            <h2 className="text-base font-semibold text-text-primary">Pending approval</h2>
+            <h2 className="text-base font-semibold text-text-primary">Report coming soon</h2>
             <p className="mt-2 text-sm text-text-muted">
-              This report is being reviewed by your Nativz team. You&apos;ll be able to view it once approved.
+              Your Nativz team is preparing this report. You&apos;ll be able to view it once it&apos;s ready.
             </p>
             <div className="mt-6">
               <Link href="/portal/reports">
@@ -124,7 +124,7 @@ export default async function PortalSearchResultsPage({
                 {formatRelativeTime(s.completed_at)}
               </span>
             )}
-            <Badge variant="success">Approved</Badge>
+            <Badge variant="success">Report ready</Badge>
           </div>
         </div>
       </div>

@@ -12,16 +12,22 @@ export interface TopicSource {
   relevance: string;
 }
 
-// NEW metrics shape — derived from real SERP data, not AI fabrication
+// NEW metrics shape — derived from SERP data + AI analysis
 export interface SearchMetrics {
+  // Source counts (kept for data, no longer displayed prominently)
   web_results_found: number;
   discussions_found: number;
   videos_found: number;
   total_sources: number;
   total_video_views: number | null;
   total_discussion_replies: number | null;
+  // AI-derived display metrics
   overall_sentiment: number;
   conversation_intensity: 'low' | 'moderate' | 'high' | 'very_high';
+  topic_score: number;             // 0–100, derived from topic count × resonance
+  content_opportunities: number;   // total video ideas across all topics
+  trending_topics_count: number;   // count of trending topics
+  sources_analyzed: number;        // total sources analyzed (always > 0)
 }
 
 // Legacy metrics shape for backward compatibility with old searches

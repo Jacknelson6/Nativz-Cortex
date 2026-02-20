@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Clock, CheckCircle, XCircle, Building2 } from 'lucide-react';
+import { ArrowLeft, Clock, Send, Undo2, Building2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
@@ -29,11 +29,11 @@ interface AdminResultsClientProps {
 
 export function AdminResultsClient({ search, clientInfo }: AdminResultsClientProps) {
   const router = useRouter();
-  const [approving, setApproving] = useState(false);
+  const [sending, setSending] = useState(false);
   const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
 
-  async function handleApproval(action: 'approve' | 'reject') {
-    setApproving(true);
+  async function handleSend(action: 'approve' | 'reject') {
+    setSending(true);
     try {
       const res = await fetch(`/api/search/${search.id}`, {
         method: 'PATCH',
@@ -41,13 +41,18 @@ export function AdminResultsClient({ search, clientInfo }: AdminResultsClientPro
         body: JSON.stringify({ action }),
       });
       if (res.ok) {
-        toast.success(action === 'approve' ? 'Search approved' : 'Approval revoked');
+        const name = clientInfo?.name;
+        toast.success(
+          action === 'approve'
+            ? `Report sent to ${name || 'client'}`
+            : 'Report unsent'
+        );
         router.refresh();
       } else {
-        toast.error(`Failed to ${action} search. Try again.`);
+        toast.error('Something went wrong. Try again.');
       }
     } finally {
-      setApproving(false);
+      setSending(false);
     }
   }
 
@@ -74,9 +79,9 @@ export function AdminResultsClient({ search, clientInfo }: AdminResultsClientPro
     );
   }
 
-  const approveLabel = clientInfo
-    ? `Approve for ${clientInfo.name}`
-    : 'Approve';
+  const sendLabel = clientInfo
+    ? `Send to ${clientInfo.name}`
+    : 'Send to client';
 
   return (
     <div className="min-h-full">
@@ -118,25 +123,25 @@ export function AdminResultsClient({ search, clientInfo }: AdminResultsClientPro
             )}
             {search.approved_at ? (
               <>
-                <Badge variant="success">Approved</Badge>
+                <Badge variant="success">Sent</Badge>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleApproval('reject')}
-                  disabled={approving}
+                  onClick={() => handleSend('reject')}
+                  disabled={sending}
                 >
-                  <XCircle size={14} />
-                  Revoke
+                  <Undo2 size={14} />
+                  Unsend
                 </Button>
               </>
             ) : (
               <Button
                 size="sm"
-                onClick={() => handleApproval('approve')}
-                disabled={approving}
+                onClick={() => handleSend('approve')}
+                disabled={sending}
               >
-                <CheckCircle size={14} />
-                {approving ? 'Approving...' : approveLabel}
+                <Send size={14} />
+                {sending ? 'Sending...' : sendLabel}
               </Button>
             )}
           </div>

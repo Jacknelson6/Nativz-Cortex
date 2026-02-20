@@ -36,8 +36,8 @@ export function HistoryFilters({ clients }: HistoryFiltersProps) {
 
   const approvalOptions = [
     { value: 'all', label: 'All' },
-    { value: 'approved', label: 'Approved' },
-    { value: 'pending', label: 'Pending review' },
+    { value: 'approved', label: 'Sent' },
+    { value: 'pending', label: 'Not sent' },
   ];
 
   return (

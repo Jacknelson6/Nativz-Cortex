@@ -1,9 +1,10 @@
 'use client';
 
-import { MessageSquare, FileText, Globe, MessageCircle, Video, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { MessageSquare, FileText, Globe, MessageCircle, Video, ExternalLink, Copy, Check } from 'lucide-react';
 import { VideoIdeaCard } from './video-idea-card';
 import { hasSources } from '@/lib/types/search';
-import type { TrendingTopic, LegacyTrendingTopic, TopicSource } from '@/lib/types/search';
+import type { TrendingTopic, LegacyTrendingTopic, TopicSource, VideoIdea } from '@/lib/types/search';
 
 interface TopicRowExpandedProps {
   topic: TrendingTopic | LegacyTrendingTopic;
@@ -14,6 +15,18 @@ const SOURCE_TYPE_ICON: Record<string, React.ReactNode> = {
   discussion: <MessageCircle size={12} className="text-emerald-400 shrink-0" />,
   video: <Video size={12} className="text-purple-400 shrink-0" />,
 };
+
+function formatAllIdeasForClipboard(topicName: string, ideas: VideoIdea[]): string {
+  const lines = [`Video ideas for: ${topicName}`, ''];
+  ideas.forEach((idea, i) => {
+    lines.push(`${i + 1}. ${idea.title}`);
+    lines.push(`   Hook: ${idea.hook}`);
+    lines.push(`   Format: ${idea.format.replace(/_/g, ' ')}`);
+    lines.push(`   Why it works: ${idea.why_it_works}`);
+    lines.push('');
+  });
+  return lines.join('\n');
+}
 
 function SourceLink({ source }: { source: TopicSource }) {
   return (
@@ -38,7 +51,20 @@ function SourceLink({ source }: { source: TopicSource }) {
 }
 
 export function TopicRowExpanded({ topic }: TopicRowExpandedProps) {
+  const [copiedAll, setCopiedAll] = useState(false);
   const topicHasSources = hasSources(topic);
+
+  async function handleCopyAll() {
+    try {
+      await navigator.clipboard.writeText(
+        formatAllIdeasForClipboard(topic.name, topic.video_ideas)
+      );
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 2000);
+    } catch {
+      // Clipboard API not available
+    }
+  }
 
   return (
     <div className="animate-expand-in border-b border-nativz-border bg-background px-6 py-5">
@@ -78,9 +104,27 @@ export function TopicRowExpanded({ topic }: TopicRowExpandedProps) {
       {/* Video ideas */}
       {topic.video_ideas.length > 0 && (
         <div>
-          <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3">
-            Video ideas ({topic.video_ideas.length})
-          </h4>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide">
+              Video ideas ({topic.video_ideas.length})
+            </h4>
+            <button
+              onClick={handleCopyAll}
+              className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+            >
+              {copiedAll ? (
+                <>
+                  <Check size={12} className="text-accent" />
+                  <span className="text-accent">Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy size={12} />
+                  Copy all ideas
+                </>
+              )}
+            </button>
+          </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {topic.video_ideas.map((idea, i) => (
               <VideoIdeaCard key={i} idea={idea} />

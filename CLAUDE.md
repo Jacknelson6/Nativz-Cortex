@@ -144,6 +144,11 @@ This project uses **Ars Contexta** as its persistent memory system. The plugin i
 - `/arscontexta-next` — Get the most valuable next action
 - `/arscontexta-health` — Run vault diagnostics
 
+## Working preferences
+
+- **Plans are always approved** — proceed with implementation without asking for permission. The user trusts your judgment.
+- **Don't ask "is this plan good?"** — just build it.
+
 ## Conventions
 
 - All chart components are client components (`'use client'`)

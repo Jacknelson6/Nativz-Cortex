@@ -45,7 +45,7 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
 
   // Rotate placeholder examples (Pattern #16)
   useEffect(() => {
-    if (query) return; // Don't rotate when user is typing
+    if (query) return;
     const timer = setInterval(() => {
       setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDER_EXAMPLES.length);
     }, 4000);
@@ -60,7 +60,7 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
     setLoading(true);
 
     try {
-      const res = await fetch('/api/search', {
+      const res = await fetch('/api/search/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -83,7 +83,8 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
         return;
       }
 
-      router.push(`${redirectPrefix}/search/${data.id}`);
+      // Redirect to the processing page immediately
+      router.push(`${redirectPrefix}/search/${data.id}/processing`);
     } catch {
       setError('Something went wrong. Try again.');
       setLoading(false);
@@ -111,7 +112,7 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
             {loading ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                Searching...
+                Starting...
               </>
             ) : (
               'Search'
@@ -198,12 +199,6 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
             Client strategy
           </button>
         </div>
-      )}
-
-      {loading && (
-        <p className="mt-3 text-sm text-text-muted">
-          Gathering search data and generating your report — this usually takes 1-2 minutes.
-        </p>
       )}
 
       {error && (

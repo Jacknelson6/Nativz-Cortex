@@ -57,7 +57,7 @@ export function ContentBreakdown({ data }: ContentBreakdownProps) {
       <div className="mt-4 space-y-3">
         {items.map((item: ContentBreakdownItem) => (
           <div key={item.name} className="flex items-center gap-3">
-            <span className="w-28 shrink-0 text-sm text-text-secondary">{item.name}</span>
+            <span className="w-40 shrink-0 text-sm text-text-secondary">{item.name}</span>
             <div className="flex-1 h-5 rounded-full bg-surface-hover overflow-hidden">
               <div
                 className="h-full rounded-full bg-accent transition-all duration-500"

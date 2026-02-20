@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildTopicResearchPrompt } from '@/lib/prompts/topic-research';
@@ -12,16 +11,6 @@ import type { TopicSearchAIResponse } from '@/lib/types/search';
 import type { BraveSerpData } from '@/lib/brave/types';
 
 export const maxDuration = 300;
-
-const searchSchema = z.object({
-  query: z.string().min(1, 'Search query is required').max(500),
-  source: z.string().default('all'),
-  time_range: z.string().default('last_3_months'),
-  language: z.string().default('all'),
-  country: z.string().default('us'),
-  client_id: z.string().uuid().nullable().optional(),
-  search_mode: z.enum(['general', 'client_strategy']).default('general'),
-});
 
 /**
  * Build a set of all URLs present in the SERP data for validation.
@@ -50,8 +39,12 @@ function validateTopicSources(
   };
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
+    const { id } = await params;
     const supabase = await createServerSupabaseClient();
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -59,28 +52,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const parsed = searchSchema.safeParse(body);
+    const adminClient = createAdminClient();
 
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
-        { status: 400 }
-      );
+    // Fetch the search record
+    const { data: search, error: fetchError } = await adminClient
+      .from('topic_searches')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !search) {
+      return NextResponse.json({ error: 'Search not found' }, { status: 404 });
     }
 
-    const { query, source, time_range, language, country, client_id, search_mode } = parsed.data;
+    if (search.status === 'completed') {
+      return NextResponse.json({ status: 'completed' });
+    }
 
-    // Use admin client for DB operations (bypasses RLS)
-    const adminClient = createAdminClient();
+    if (search.status !== 'processing') {
+      return NextResponse.json({ error: 'Search is not in processing state' }, { status: 400 });
+    }
 
     // Fetch optional client context
     let clientContext = null;
-    if (client_id) {
+    if (search.client_id) {
       const { data: client } = await adminClient
         .from('clients')
         .select('name, industry, target_audience, brand_voice, topic_keywords, website_url')
-        .eq('id', client_id)
+        .eq('id', search.client_id)
         .single();
 
       if (client) {
@@ -95,65 +94,40 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Insert pending row
-    const { data: search, error: insertError } = await adminClient
-      .from('topic_searches')
-      .insert({
-        query,
-        source,
-        time_range,
-        language,
-        country,
-        client_id: client_id || null,
-        search_mode,
-        status: 'processing',
-        created_by: user.id,
-      })
-      .select()
-      .single();
-
-    if (insertError || !search) {
-      console.error('Error creating search record:', insertError);
-      return NextResponse.json(
-        { error: 'Failed to create search', details: insertError?.message || 'No data returned' },
-        { status: 500 }
-      );
-    }
-
     try {
       // Step 1: Gather SERP data from Brave Search API
-      const serpData = await gatherSerpData(query, {
-        timeRange: time_range,
-        country,
-        language,
-        source,
+      const serpData = await gatherSerpData(search.query, {
+        timeRange: search.time_range,
+        country: search.country,
+        language: search.language,
+        source: search.source,
       });
 
       // Step 2: Build prompt with Brave results as context
       let prompt: string;
-      if (search_mode === 'client_strategy' && clientContext) {
+      if (search.search_mode === 'client_strategy' && clientContext) {
         prompt = buildClientStrategyPrompt({
-          query,
-          source,
-          timeRange: time_range,
-          language,
-          country,
+          query: search.query,
+          source: search.source,
+          timeRange: search.time_range,
+          language: search.language,
+          country: search.country,
           serpData,
           clientContext,
         });
       } else {
         prompt = buildTopicResearchPrompt({
-          query,
-          source,
-          timeRange: time_range,
-          language,
-          country,
+          query: search.query,
+          source: search.source,
+          timeRange: search.time_range,
+          language: search.language,
+          country: search.country,
           serpData,
           clientContext,
         });
       }
 
-      // Step 3: Call Claude via OpenRouter (no webSearch — Brave replaces it)
+      // Step 3: Call Claude via OpenRouter
       const aiResult = await createCompletion({
         messages: [{ role: 'user', content: prompt }],
         maxTokens: 16000,
@@ -189,13 +163,13 @@ export async function POST(request: NextRequest) {
           estimated_cost: aiResult.estimatedCost,
           completed_at: new Date().toISOString(),
         })
-        .eq('id', search.id);
+        .eq('id', id);
 
       if (updateError) {
         console.error('Error updating search with results:', updateError);
       }
 
-      return NextResponse.json({ id: search.id, status: 'completed' });
+      return NextResponse.json({ status: 'completed' });
     } catch (aiError) {
       console.error('AI processing error:', aiError);
 
@@ -207,19 +181,18 @@ export async function POST(request: NextRequest) {
             ? `Search failed: ${aiError.message}`
             : 'Search failed due to an unknown error',
         })
-        .eq('id', search.id);
+        .eq('id', id);
 
       return NextResponse.json(
         {
           error: 'Search failed',
-          id: search.id,
           details: aiError instanceof Error ? aiError.message : 'Unknown error',
         },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('POST /api/search error:', error);
+    console.error('POST /api/search/[id]/process error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -2,7 +2,7 @@
 
 import { StatCard } from '@/components/shared/stat-card';
 import { TooltipCard } from '@/components/ui/tooltip-card';
-import { Globe, MessageCircle, Video, Activity, Heart, Eye, Users, TrendingUp } from 'lucide-react';
+import { Zap, Lightbulb, TrendingUp, Activity, Heart, Eye, Users, MessageCircle } from 'lucide-react';
 import { formatNumber } from '@/lib/utils/format';
 import { getSentimentLabel } from '@/lib/utils/sentiment';
 import { TOOLTIPS } from '@/lib/tooltips';
@@ -26,39 +26,42 @@ export function MetricsRow({ metrics }: MetricsRowProps) {
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
           {
-            tooltipKey: 'web_sources',
-            title: 'Web sources',
-            value: String(metrics.web_results_found),
-            icon: <Globe size={18} />,
-          },
-          {
-            tooltipKey: 'discussions',
-            title: 'Discussions',
-            value: String(metrics.discussions_found),
-            subtitle: metrics.total_discussion_replies !== null ? `${formatNumber(metrics.total_discussion_replies)} replies` : undefined,
-            icon: <MessageCircle size={18} />,
-          },
-          {
-            tooltipKey: 'videos',
-            title: 'Videos',
-            value: String(metrics.videos_found),
-            subtitle: metrics.total_video_views !== null ? `${formatNumber(metrics.total_video_views)} views` : undefined,
-            icon: <Video size={18} />,
+            tooltipKey: 'topic_score',
+            title: 'Topic score',
+            value: String(metrics.topic_score ?? 0),
+            subtitle: `${metrics.sources_analyzed ?? metrics.total_sources} sources analyzed`,
+            icon: <Zap size={18} />,
           },
           {
             tooltipKey: 'sentiment',
-            title: 'Sentiment',
+            title: 'Audience sentiment',
             value: getSentimentLabel(metrics.overall_sentiment),
             subtitle: INTENSITY_LABELS[metrics.conversation_intensity] ? `${INTENSITY_LABELS[metrics.conversation_intensity]} intensity` : undefined,
             icon: <Activity size={18} />,
+          },
+          {
+            tooltipKey: 'content_opportunities',
+            title: 'Video ideas',
+            value: String(metrics.content_opportunities ?? 0),
+            subtitle: 'Ready-to-film concepts',
+            icon: <Lightbulb size={18} />,
+          },
+          {
+            tooltipKey: 'trending_topics',
+            title: 'Trending angles',
+            value: String(metrics.trending_topics_count ?? 0),
+            subtitle: metrics.total_video_views ? `${formatNumber(metrics.total_video_views)} video views` : undefined,
+            icon: <TrendingUp size={18} />,
           },
         ].map((card, i) => (
           <div key={card.tooltipKey} className="animate-stagger-in" style={{ animationDelay: `${i * 50}ms` }}>
             <StatCard
               title={
-                <TooltipCard title={TOOLTIPS[card.tooltipKey].title} description={TOOLTIPS[card.tooltipKey].description}>
-                  {card.title}
-                </TooltipCard>
+                TOOLTIPS[card.tooltipKey] ? (
+                  <TooltipCard title={TOOLTIPS[card.tooltipKey].title} description={TOOLTIPS[card.tooltipKey].description}>
+                    {card.title}
+                  </TooltipCard>
+                ) : card.title
               }
               value={card.value}
               subtitle={card.subtitle}

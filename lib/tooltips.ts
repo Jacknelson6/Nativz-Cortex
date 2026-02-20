@@ -16,6 +16,22 @@ export const TOOLTIPS: Record<string, TooltipDef> = {
     title: 'Conversation intensity',
     description: 'How actively people are discussing this topic — measured by reply depth and discussion frequency.',
   },
+  topic_score: {
+    title: 'Topic score',
+    description: 'Overall strength of this topic based on how many trending angles were found and how strongly they resonate with audiences.',
+  },
+  content_opportunities: {
+    title: 'Content opportunities',
+    description: 'Number of specific video ideas generated from the analysis — ready-to-use concepts your team can film.',
+  },
+  trending_topics: {
+    title: 'Trending topics',
+    description: 'Distinct trending angles found within this topic — each with its own audience sentiment, discussion patterns, and video ideas.',
+  },
+  sources_analyzed: {
+    title: 'Sources analyzed',
+    description: 'Total web pages, discussions, and videos analyzed by AI to generate these insights.',
+  },
   web_sources: {
     title: 'Web sources',
     description: 'Number of relevant web pages found by searching this topic across news, blogs, and articles.',
