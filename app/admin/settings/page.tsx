@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ImageUpload } from '@/components/ui/image-upload';
+import { AvatarEditor } from '@/components/ui/avatar-editor';
 
 interface UserData {
   full_name: string;
@@ -128,7 +128,7 @@ export default function AdminSettingsPage() {
           <h2 className="text-base font-semibold text-text-primary mb-4">Profile</h2>
           <div className="space-y-4">
             <div className="flex justify-center">
-              <ImageUpload value={avatarUrl} onChange={setAvatarUrl} size="lg" />
+              <AvatarEditor value={avatarUrl} onChange={setAvatarUrl} size="lg" />
             </div>
             <Input
               id="full_name"
