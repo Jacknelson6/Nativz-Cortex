@@ -167,7 +167,7 @@ export default async function AdminClientDetailPage({
                 <a href={`mailto:${vaultProfile.point_of_contact.email}`}>
                   <Badge variant="default" className="cursor-pointer hover:bg-accent-surface/80 transition-colors">
                     <Mail size={10} />
-                    Email
+                    Contact
                   </Badge>
                 </a>
               </div>

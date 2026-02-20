@@ -135,9 +135,9 @@ export function SearchModeSelector({
       </div>
 
       {/* Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-0 items-stretch">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-0 items-stretch max-w-3xl mx-auto">
         {/* Brand intel card */}
-        <div className="rounded-2xl border border-nativz-border bg-surface p-6 transition-colors hover:border-[rgba(4,107,210,0.3)]">
+        <div className="flex flex-col rounded-2xl border border-nativz-border bg-surface p-6 transition-colors hover:border-[rgba(4,107,210,0.3)]">
           <div className="flex items-center gap-2.5 mb-1">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-surface">
               <Building2 size={16} className="text-accent-text" />
@@ -148,7 +148,7 @@ export function SearchModeSelector({
             What are people saying about your brand?
           </p>
 
-          <div className="space-y-4">
+          <div className="flex flex-col flex-1 space-y-4">
             {/* Client selector */}
             {portalMode ? (
               <div className="flex items-center gap-2 rounded-xl border border-nativz-border bg-surface-hover px-3.5 py-3">
@@ -164,6 +164,9 @@ export function SearchModeSelector({
                 placeholder="Select a client"
               />
             )}
+
+            {/* Spacer pushes button to bottom */}
+            <div className="flex-1" />
 
             {/* Submit */}
             <GlassButton

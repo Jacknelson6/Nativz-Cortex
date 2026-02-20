@@ -257,7 +257,8 @@ dialog:not([open]) {
     from var(--glow-angle),
     rgba(4, 107, 210, 0.9),
     rgba(139, 92, 246, 0.7),
-    rgba(16, 185, 129, 0.6),
+    rgba(4, 107, 210, 0.9),
+    rgba(139, 92, 246, 0.7),
     rgba(4, 107, 210, 0.9)
   );
   animation: glowRotate 3s linear infinite;

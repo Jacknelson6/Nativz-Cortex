@@ -82,7 +82,7 @@ export function ImageUpload({ value, onChange, size = 'md', label }: ImageUpload
         type="button"
         onClick={() => fileRef.current?.click()}
         disabled={uploading}
-        className={`group relative ${sizeMap[size]} rounded-full border-2 border-dashed border-nativz-border bg-surface-hover overflow-hidden transition-colors hover:border-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50`}
+        className={`group relative ${sizeMap[size]} rounded-2xl border-2 border-dashed border-nativz-border bg-surface-hover overflow-hidden transition-colors hover:border-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50`}
       >
         {value ? (
           <>

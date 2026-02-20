@@ -4,7 +4,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { StatCard } from '@/components/shared/stat-card';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import { formatRelativeTime } from '@/lib/utils/format';
@@ -63,17 +62,9 @@ export default async function AdminDashboardPage() {
     return (
       <div className="p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-text-primary">Dashboard</h1>
-            <p className="text-sm text-text-muted mt-0.5">Your creative workshop</p>
-          </div>
-          <Link href="/admin/search/new">
-            <Button>
-              <Search size={16} />
-              New research
-            </Button>
-          </Link>
+        <div>
+          <h1 className="text-2xl font-semibold text-text-primary">Dashboard</h1>
+          <p className="text-sm text-text-muted mt-0.5">Your creative workshop</p>
         </div>
 
         {/* Stats */}

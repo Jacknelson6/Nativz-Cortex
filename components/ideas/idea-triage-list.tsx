@@ -14,7 +14,6 @@ interface IdeaTriageListProps {
 const FILTER_OPTIONS = [
   { value: 'all', label: 'All' },
   { value: 'new', label: 'New' },
-  { value: 'reviewed', label: 'Reviewed' },
   { value: 'accepted', label: 'Accepted' },
   { value: 'archived', label: 'Archived' },
 ];
@@ -27,7 +26,6 @@ export function IdeaTriageList({ submissions: initial, clientName }: IdeaTriageL
   const counts = {
     all: submissions.length,
     new: submissions.filter((s) => s.status === 'new').length,
-    reviewed: submissions.filter((s) => s.status === 'reviewed').length,
     accepted: submissions.filter((s) => s.status === 'accepted').length,
     archived: submissions.filter((s) => s.status === 'archived').length,
   };
@@ -39,8 +37,7 @@ export function IdeaTriageList({ submissions: initial, clientName }: IdeaTriageL
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-text-primary flex items-center gap-2.5">
-          <Lightbulb size={20} className="text-yellow-400" />
+        <h1 className="text-2xl font-semibold text-text-primary">
           Ideas from {clientName}
         </h1>
         <p className="mt-1 text-sm text-text-muted">Review and triage ideas submitted by the client.</p>

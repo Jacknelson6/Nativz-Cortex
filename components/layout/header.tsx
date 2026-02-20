@@ -35,7 +35,20 @@ export function Header({ portalMode = false }: HeaderProps) {
             />
           </div>
         </button>
-        <div className="flex flex-col items-center">
+        <div className="hidden md:flex flex-col items-center w-56 -ml-6">
+          <Image
+            src="/nativz-logo.svg"
+            alt="Nativz"
+            width={140}
+            height={54}
+            className="h-10 w-auto"
+            priority
+          />
+          <span className="text-[11px] font-bold text-text-secondary tracking-[0.35em] uppercase -mt-1">
+            Cortex
+          </span>
+        </div>
+        <div className="flex md:hidden flex-col items-center">
           <Image
             src="/nativz-logo.svg"
             alt="Nativz"
