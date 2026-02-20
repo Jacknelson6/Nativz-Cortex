@@ -190,17 +190,20 @@ export default function AdminClientSettingsPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-2xl mx-auto">
-      <div className="flex items-center gap-3">
-        <Link href={`/admin/clients/${params.slug}`} className="text-text-muted hover:text-text-secondary transition-colors">
-          <ArrowLeft size={20} />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">{client.name}</h1>
-          <p className="text-sm text-text-muted">Settings</p>
-        </div>
-      </div>
-
       <form onSubmit={handleSave} className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Link href={`/admin/clients/${params.slug}`} className="text-text-muted hover:text-text-secondary transition-colors">
+            <ArrowLeft size={20} />
+          </Link>
+          <div className="flex-1">
+            <h1 className="text-2xl font-semibold text-text-primary">{client.name}</h1>
+            <p className="text-sm text-text-muted">Settings</p>
+          </div>
+          <Button type="submit" disabled={saving} size="sm">
+            <Save size={14} />
+            {saving ? 'Saving...' : 'Save settings'}
+          </Button>
+        </div>
         {/* Profile image */}
         <Card>
           <h2 className="text-base font-semibold text-text-primary mb-4">Logo</h2>
@@ -344,10 +347,6 @@ export default function AdminClientSettingsPage() {
           </div>
         </Card>
 
-        <Button type="submit" disabled={saving}>
-          <Save size={16} />
-          {saving ? 'Saving...' : 'Save settings'}
-        </Button>
       </form>
     </div>
   );

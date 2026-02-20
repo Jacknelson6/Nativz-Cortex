@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Settings, Search, Clock, Lightbulb } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -30,8 +29,8 @@ export default async function AdminClientDetailPage({
       notFound();
     }
 
-    // Fetch recent searches and idea count in parallel
-    const [{ data: searches }, { count: ideaCount }] = await Promise.all([
+    // Fetch recent searches, ideas, and idea count in parallel
+    const [{ data: searches }, { data: recentIdeas }, { count: ideaCount }] = await Promise.all([
       adminClient
         .from('topic_searches')
         .select('id, query, status, created_at, approved_at')
@@ -40,12 +39,19 @@ export default async function AdminClientDetailPage({
         .limit(20),
       adminClient
         .from('idea_submissions')
+        .select('id, title, category, status, created_at, submitted_by')
+        .eq('client_id', client.id)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      adminClient
+        .from('idea_submissions')
         .select('*', { count: 'exact', head: true })
         .eq('client_id', client.id)
         .in('status', ['new', 'reviewed']),
     ]);
 
     const items = searches || [];
+    const ideas = recentIdeas || [];
 
     return (
       <div className="p-6 space-y-6">
@@ -57,7 +63,8 @@ export default async function AdminClientDetailPage({
             </Link>
             {client.logo_url && (
               <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-nativz-border">
-                <Image src={client.logo_url} alt={client.name} fill className="object-contain" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={client.logo_url} alt={client.name} className="h-full w-full object-contain" />
               </div>
             )}
             <div className="min-w-0">
@@ -102,6 +109,49 @@ export default async function AdminClientDetailPage({
             <p className="mt-1 text-sm font-medium text-text-primary">{client.brand_voice || 'Not set'}</p>
           </Card>
         </div>
+
+        {/* Recent ideas */}
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-text-primary">Recent ideas</h2>
+            <Link href={`/admin/clients/${slug}/ideas`}>
+              <Button variant="outline" size="sm">
+                <Lightbulb size={14} />
+                View all
+                {(ideaCount ?? 0) > 0 && (
+                  <Badge variant="info" className="ml-1">{ideaCount}</Badge>
+                )}
+              </Button>
+            </Link>
+          </div>
+
+          {ideas.length === 0 ? (
+            <EmptyState
+              icon={<Lightbulb size={24} />}
+              title="No ideas yet"
+              description={`Ideas submitted by ${client.name} or your team will appear here.`}
+            />
+          ) : (
+            <div className="space-y-2">
+              {ideas.map((idea) => (
+                <Link key={idea.id} href={`/admin/clients/${slug}/ideas`}>
+                  <div className="flex items-center justify-between rounded-lg border border-nativz-border-light px-4 py-3 hover:bg-surface-hover transition-colors">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-text-primary truncate">{idea.title}</p>
+                      <span className="text-xs text-text-muted flex items-center gap-1">
+                        <Clock size={10} />
+                        {formatRelativeTime(idea.created_at)}
+                      </span>
+                    </div>
+                    <Badge variant={idea.status === 'new' ? 'info' : idea.status === 'accepted' ? 'success' : 'default'}>
+                      {idea.status}
+                    </Badge>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </Card>
 
         {/* Recent searches */}
         <Card>

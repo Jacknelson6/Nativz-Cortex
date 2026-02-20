@@ -9,7 +9,6 @@ import { TooltipCard } from '@/components/ui/tooltip-card';
 import { getSentimentBadgeVariant, getSentimentLabel } from '@/lib/utils/sentiment';
 import { TOOLTIPS } from '@/lib/tooltips';
 import { TopicRowExpanded } from './topic-row-expanded';
-import { hasSources } from '@/lib/types/search';
 import type { TrendingTopic, LegacyTrendingTopic } from '@/lib/types/search';
 
 interface TrendingTopicsTableProps {

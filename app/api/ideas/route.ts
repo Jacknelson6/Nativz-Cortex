@@ -142,6 +142,71 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to submit idea' }, { status: 500 });
     }
 
+    // Create notifications for the other side
+    try {
+      const isAdmin = userData.role === 'admin';
+
+      if (isAdmin && client_id) {
+        // Admin submitted idea → notify all portal users in the client's org
+        const { data: clientData } = await adminClient
+          .from('clients')
+          .select('name, organization_id')
+          .eq('id', client_id)
+          .single();
+
+        if (clientData?.organization_id) {
+          const { data: portalUsers } = await adminClient
+            .from('users')
+            .select('id')
+            .eq('organization_id', clientData.organization_id)
+            .eq('role', 'viewer');
+
+          const notifications = (portalUsers || []).map((u) => ({
+            recipient_user_id: u.id,
+            organization_id: clientData.organization_id,
+            type: 'idea_submitted' as const,
+            title: 'New idea from your Nativz team',
+            body: title,
+            link_path: '/portal/ideas',
+          }));
+
+          if (notifications.length > 0) {
+            await adminClient.from('notifications').insert(notifications);
+          }
+        }
+      } else if (!isAdmin && client_id) {
+        // Portal user submitted idea → notify all admins
+        const { data: clientData } = await adminClient
+          .from('clients')
+          .select('name, slug')
+          .eq('id', client_id)
+          .single();
+
+        const { data: admins } = await adminClient
+          .from('users')
+          .select('id')
+          .eq('role', 'admin');
+
+        const notifications = (admins || []).map((u) => ({
+          recipient_user_id: u.id,
+          organization_id: userData.organization_id,
+          type: 'idea_submitted' as const,
+          title: `New idea from ${clientData?.name || 'a client'}`,
+          body: title,
+          link_path: clientData?.slug
+            ? `/admin/clients/${clientData.slug}/ideas`
+            : '/admin/clients',
+        }));
+
+        if (notifications.length > 0) {
+          await adminClient.from('notifications').insert(notifications);
+        }
+      }
+    } catch (notifError) {
+      // Don't fail the idea submission if notifications fail
+      console.error('Error creating notifications:', notifError);
+    }
+
     return NextResponse.json(idea, { status: 201 });
   } catch (error) {
     console.error('POST /api/ideas error:', error);

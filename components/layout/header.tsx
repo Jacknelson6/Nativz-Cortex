@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { Menu, X } from 'lucide-react';
 import { useSidebar } from './sidebar-provider';
+import { NotificationBell } from './notification-bell';
 
 interface HeaderProps {
   portalMode?: boolean;
@@ -12,7 +13,7 @@ export function Header({ portalMode = false }: HeaderProps) {
   const { isOpen, toggle } = useSidebar();
 
   return (
-    <header className="flex h-16 items-center border-b border-nativz-border bg-surface px-4 md:px-6">
+    <header className="flex h-16 items-center justify-between border-b border-nativz-border bg-surface px-4 md:px-6">
       <div className="flex items-center gap-3">
         <button
           onClick={toggle}
@@ -53,6 +54,7 @@ export function Header({ portalMode = false }: HeaderProps) {
           </span>
         )}
       </div>
+      <NotificationBell />
     </header>
   );
 }

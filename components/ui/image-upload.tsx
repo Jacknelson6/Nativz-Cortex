@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Camera, Loader2, X } from 'lucide-react';
-import Image from 'next/image';
+import { Camera, Loader2, Trash2 } from 'lucide-react';
 
 interface ImageUploadProps {
   value: string | null;
@@ -71,7 +70,7 @@ export function ImageUpload({ value, onChange, size = 'md', label }: ImageUpload
   }
 
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className="flex flex-col items-center gap-2">
       <input
         ref={fileRef}
         type="file"
@@ -79,47 +78,45 @@ export function ImageUpload({ value, onChange, size = 'md', label }: ImageUpload
         onChange={handleFileChange}
         className="hidden"
       />
-      <div className="relative">
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        className={`group relative ${sizeMap[size]} rounded-full border-2 border-dashed border-nativz-border bg-surface-hover overflow-hidden transition-colors hover:border-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50`}
+      >
+        {value ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={value}
+              alt={label || 'Logo'}
+              className="absolute inset-0 h-full w-full object-contain p-1"
+            />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="text-xs font-medium text-white">Change</span>
+            </div>
+          </>
+        ) : uploading ? (
+          <div className="flex h-full w-full items-center justify-center">
+            <Loader2 size={iconSizeMap[size]} className="animate-spin text-text-muted" />
+          </div>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-text-muted">
+            <Camera size={iconSizeMap[size]} />
+          </div>
+        )}
+      </button>
+      <p className="text-xs text-text-muted">{label || 'Client logo'}</p>
+      {value && !uploading && (
         <button
           type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          className={`group relative ${sizeMap[size]} rounded-full border-2 border-dashed border-nativz-border bg-surface-hover overflow-hidden transition-colors hover:border-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50`}
+          onClick={() => onChange(null)}
+          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-500/10"
         >
-          {value ? (
-            <>
-              <Image
-                src={value}
-                alt={label || 'Logo'}
-                fill
-                className="object-contain p-1"
-              />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="text-xs font-medium text-white">Change</span>
-              </div>
-            </>
-          ) : uploading ? (
-            <div className="flex h-full w-full items-center justify-center">
-              <Loader2 size={iconSizeMap[size]} className="animate-spin text-text-muted" />
-            </div>
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-text-muted">
-              <Camera size={iconSizeMap[size]} />
-            </div>
-          )}
+          <Trash2 size={12} />
+          Remove logo
         </button>
-        {value && !uploading && (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-surface border border-nativz-border text-text-muted hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/40 transition-colors"
-            title="Remove"
-          >
-            <X size={10} />
-          </button>
-        )}
-      </div>
-      <p className="text-xs text-text-muted">{label || 'Client logo'}</p>
+      )}
       {error && <p className="text-xs text-red-400 text-center max-w-[200px]">{error}</p>}
     </div>
   );

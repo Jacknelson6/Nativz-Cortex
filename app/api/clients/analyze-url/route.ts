@@ -69,35 +69,45 @@ export async function POST(request: NextRequest) {
     try {
       const baseUrl = new URL(url);
 
-      // Priority list of logo sources
+      function makeAbsolute(found: string): string {
+        if (found.startsWith('//')) return `${baseUrl.protocol}${found}`;
+        if (found.startsWith('/')) return `${baseUrl.origin}${found}`;
+        if (!found.startsWith('http')) return `${baseUrl.origin}/${found}`;
+        return found;
+      }
+
+      // Priority list of logo sources from HTML
       const patterns: Array<{ regex: RegExp; group: number }> = [
+        // Apple touch icon (high-res square logo — best for profile pics)
+        { regex: /<link[^>]+rel=["']apple-touch-icon["'][^>]+href=["']([^"']+)["']/i, group: 1 },
         // Open Graph image (usually a good brand image)
         { regex: /<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i, group: 1 },
         { regex: /<meta\s+content=["']([^"']+)["']\s+property=["']og:image["']/i, group: 1 },
-        // Apple touch icon (high-res square logo)
-        { regex: /<link[^>]+rel=["']apple-touch-icon["'][^>]+href=["']([^"']+)["']/i, group: 1 },
-        // Shortcut icon / favicon (last resort from HTML)
+        // Twitter card image
+        { regex: /<meta\s+(?:name|property)=["']twitter:image["']\s+content=["']([^"']+)["']/i, group: 1 },
+        { regex: /<meta\s+content=["']([^"']+)["']\s+(?:name|property)=["']twitter:image["']/i, group: 1 },
+        // Shortcut icon / favicon from HTML
         { regex: /<link[^>]+rel=["'](?:shortcut )?icon["'][^>]+href=["']([^"']+)["']/i, group: 1 },
       ];
 
       for (const { regex, group } of patterns) {
         const match = html.match(regex);
         if (match?.[group]) {
-          let found = match[group];
-          // Make relative URLs absolute
-          if (found.startsWith('//')) {
-            found = `${baseUrl.protocol}${found}`;
-          } else if (found.startsWith('/')) {
-            found = `${baseUrl.origin}${found}`;
-          } else if (!found.startsWith('http')) {
-            found = `${baseUrl.origin}/${found}`;
-          }
-          logoUrl = found;
+          logoUrl = makeAbsolute(match[group]);
           break;
         }
       }
 
-      // Fallback to Google's favicon service
+      // Fallback: try Clearbit logo API (returns proper company logos)
+      if (!logoUrl) {
+        const clearbitUrl = `https://logo.clearbit.com/${baseUrl.hostname}`;
+        try {
+          const check = await fetch(clearbitUrl, { method: 'HEAD' });
+          if (check.ok) logoUrl = clearbitUrl;
+        } catch { /* ignore */ }
+      }
+
+      // Final fallback: Google's favicon service
       if (!logoUrl) {
         logoUrl = `https://www.google.com/s2/favicons?domain=${baseUrl.hostname}&sz=128`;
       }
