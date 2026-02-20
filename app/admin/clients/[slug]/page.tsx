@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import { formatRelativeTime } from '@/lib/utils/format';
+import { InviteButton } from '@/components/clients/invite-button';
 
 export default async function AdminClientDetailPage({
   params,
@@ -210,6 +211,13 @@ export default async function AdminClientDetailPage({
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Invite button */}
+            {clientId && (
+              <div className="mt-4">
+                <InviteButton clientId={clientId} clientName={vaultProfile.name} />
               </div>
             )}
           </Card>

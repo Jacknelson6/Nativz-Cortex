@@ -31,6 +31,11 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
+  // Public pages don't require auth
+  if (pathname.startsWith('/portal/join/')) {
+    return supabaseResponse;
+  }
+
   // Login pages don't require auth
   if (pathname === '/admin/login' || pathname === '/portal/login') {
     if (user) {
