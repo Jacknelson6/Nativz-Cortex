@@ -4,111 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, Search, Sparkles, TrendingUp } from 'lucide-react';
 import { GlassButton } from '@/components/ui/glass-button';
-import { TextFlip } from '@/components/ui/text-flip';
 import { createClient } from '@/lib/supabase/client';
-
-const INDUSTRIES = [
-  'Software Development',
-  'Mobile App Development',
-  'Cybersecurity',
-  'Cloud Computing Services',
-  'Artificial Intelligence & Machine Learning',
-  'Data Analytics & Business Intelligence',
-  'IT Consulting',
-  'Web Development',
-  'E-commerce Platforms',
-  'Digital Marketing Agency',
-  'Search Engine Optimization (SEO)',
-  'Social Media Marketing',
-  'Pay-Per-Click (PPC) Advertising',
-  'Content Marketing',
-  'Influencer Marketing',
-  'Public Relations (PR)',
-  'Branding & Identity Design',
-  'Graphic Design',
-  'Web Design',
-  'UX/UI Design',
-  'Interior Design',
-  'Architecture',
-  'Construction',
-  'Residential Real Estate',
-  'Commercial Real Estate',
-  'Property Management',
-  'Real Estate Investment (REITs)',
-  'Real Estate Development',
-  'Commercial Banking',
-  'Investment Banking',
-  'Wealth Management',
-  'Insurance (Life, Health, Property)',
-  'Fintech',
-  'Payment Processing',
-  'Cryptocurrency & Blockchain Services',
-  'Venture Capital',
-  'Private Equity',
-  'Accounting & Tax Services',
-  'Legal Services',
-  'Human Resources & Recruitment',
-  'Executive Search',
-  'Payroll Services',
-  'Temporary Staffing',
-  'Logistics & Freight Forwarding',
-  'Trucking & Transportation',
-  'Warehousing & Storage',
-  'Last-Mile Delivery',
-  'Courier Services',
-  'Supply Chain Management',
-  'Manufacturing (General)',
-  'Food & Beverage Manufacturing',
-  'Pharmaceutical Manufacturing',
-  'Medical Device Manufacturing',
-  'Automotive Manufacturing',
-  'Aerospace Manufacturing',
-  'Electronics Manufacturing',
-  'Furniture Manufacturing',
-  'Textile & Apparel Manufacturing',
-  'Retail (Brick-and-Mortar)',
-  'Online Retail / E-commerce',
-  'Wholesale Distribution',
-  'Grocery & Supermarkets',
-  'Specialty Retail',
-  'Fast Food & Quick Service Restaurants',
-  'Full-Service Restaurants',
-  'Food Trucks & Street Vendors',
-  'Catering Services',
-  'Coffee Shops & Cafés',
-  'Breweries & Craft Beer',
-  'Wineries & Vineyards',
-  'Distilleries',
-  'Hotels & Resorts',
-  'Short-Term Vacation Rentals',
-  'Event Planning & Management',
-  'Wedding Services',
-  'Photography & Videography',
-  'Film & Television Production',
-  'Music Production & Recording',
-  'Live Events & Concerts',
-  'Fitness Centers & Gyms',
-  'Personal Training',
-  'Yoga & Pilates Studios',
-  'Physical Therapy',
-  'Dental Practices',
-  'Veterinary Clinics',
-  'Medical Clinics & Urgent Care',
-  'Hospitals & Healthcare Systems',
-  'Telemedicine',
-  'Biotechnology',
-  'Medical Research',
-  'Renewable Energy (Solar / Wind)',
-  'Oil & Gas Exploration',
-  'Electric Utilities',
-  'Waste Management & Recycling',
-  'Environmental Consulting',
-  'Agriculture & Farming',
-  'Aquaculture',
-  'Floriculture & Horticulture',
-  'Education & Tutoring Services',
-  'Online Education & e-Learning',
-];
 
 interface ClientOption {
   id: string;
@@ -121,15 +17,6 @@ interface SearchModeSelectorProps {
   fixedClientName?: string | null;
   portalMode?: boolean;
 }
-
-const PLACEHOLDER_EXAMPLES = [
-  'sustainable fashion trends',
-  'AI video editing tools 2026',
-  'coffee shop marketing ideas',
-  'plant-based protein market',
-  'luxury real estate content',
-  'pet wellness brand strategy',
-];
 
 export function SearchModeSelector({
   redirectPrefix,
@@ -149,7 +36,6 @@ export function SearchModeSelector({
   // Shared state
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [error, setError] = useState('');
-  const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const router = useRouter();
   const topicInputRef = useRef<HTMLInputElement>(null);
 
@@ -167,15 +53,6 @@ export function SearchModeSelector({
     }
     fetchClients();
   }, [portalMode]);
-
-  // Rotate placeholder examples
-  useEffect(() => {
-    if (topicQuery) return;
-    const timer = setInterval(() => {
-      setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDER_EXAMPLES.length);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [topicQuery]);
 
   const selectedBrandClient = clients.find((c) => c.id === brandClientId);
   const brandClientName = fixedClientName || selectedBrandClient?.name;
@@ -255,13 +132,6 @@ export function SearchModeSelector({
       {/* Header */}
       <div className="text-center mb-10">
         <h1 className="text-3xl font-bold text-text-primary">Research</h1>
-        <div className="mt-1 h-[1.4em] text-xl font-semibold">
-          <TextFlip
-            words={INDUSTRIES}
-            interval={3000}
-            className="text-accent-text"
-          />
-        </div>
         <p className="mt-3 text-text-muted">
           What would you like to research today?
         </p>
@@ -353,7 +223,7 @@ export function SearchModeSelector({
                 type="text"
                 value={topicQuery}
                 onChange={(e) => setTopicQuery(e.target.value)}
-                placeholder={PLACEHOLDER_EXAMPLES[placeholderIndex]}
+                placeholder="Search a topic..."
                 className="w-full rounded-xl border border-nativz-border bg-surface-hover py-3 pl-10 pr-4 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)]"
                 disabled={anyLoading}
               />
