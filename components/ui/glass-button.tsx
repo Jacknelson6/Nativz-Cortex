@@ -45,7 +45,7 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
           hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_0_20px_rgba(4,107,210,0.15)]
           active:scale-[0.97] active:bg-[rgba(4,107,210,0.25)]
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background
-          ${disabled || loading ? 'opacity-40 cursor-not-allowed' : ''}
+          ${disabled || loading ? 'opacity-40' : ''}
           ${shaking ? 'animate-shake' : ''}
           ${className}
         `}
