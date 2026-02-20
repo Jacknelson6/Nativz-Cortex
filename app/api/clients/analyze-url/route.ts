@@ -64,33 +64,12 @@ export async function POST(request: NextRequest) {
       clearTimeout(timeout);
     }
 
-    // Extract logo URL from HTML meta tags / link tags
+    // Get logo via Google's favicon service (reliable, always returns an image)
     let logoUrl: string | null = null;
-    const logoPatterns = [
-      // Open Graph image
-      /<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i,
-      // Apple touch icon (usually high-res logo)
-      /<link[^>]*rel=["']apple-touch-icon["'][^>]*href=["']([^"']+)["']/i,
-      // Standard favicon (larger sizes first)
-      /<link[^>]*rel=["']icon["'][^>]*href=["']([^"']+)["']/i,
-      // Shortcut icon
-      /<link[^>]*rel=["']shortcut icon["'][^>]*href=["']([^"']+)["']/i,
-    ];
-    for (const pattern of logoPatterns) {
-      const match = html.match(pattern);
-      if (match?.[1]) {
-        let candidate = match[1];
-        // Resolve relative URLs
-        if (candidate.startsWith('/')) {
-          try {
-            const base = new URL(url);
-            candidate = `${base.origin}${candidate}`;
-          } catch { /* ignore */ }
-        }
-        logoUrl = candidate;
-        break;
-      }
-    }
+    try {
+      const domain = new URL(url).hostname;
+      logoUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+    } catch { /* ignore */ }
 
     // Strip HTML to plain text (first ~5000 chars)
     const text = html

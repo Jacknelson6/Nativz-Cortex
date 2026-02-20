@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, Search, History, LogOut, User } from 'lucide-react';
+import { LayoutDashboard, Users, Search, History, LogOut, Settings, User } from 'lucide-react';
 import { FloatingDock } from '@/components/ui/floating-dock';
 import { Button } from '@/components/ui/button';
 
@@ -70,14 +70,21 @@ function SidebarAccount({ userName }: { userName?: string }) {
   return (
     <div className="border-t border-nativz-border p-3">
       <div className="flex items-center gap-2.5">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-surface">
-          <User size={14} className="text-accent-text" />
-        </div>
-        <div className="flex-1 min-w-0">
-          {userName && (
-            <p className="truncate text-sm font-medium text-text-primary">{userName}</p>
-          )}
-        </div>
+        <Link
+          href="/admin/settings"
+          className="flex flex-1 items-center gap-2.5 min-w-0 rounded-lg p-1 -m-1 hover:bg-surface-hover transition-colors"
+        >
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-surface">
+            <User size={14} className="text-accent-text" />
+          </div>
+          <div className="flex-1 min-w-0">
+            {userName && (
+              <p className="truncate text-sm font-medium text-text-primary">{userName}</p>
+            )}
+            <p className="text-xs text-text-muted">Account settings</p>
+          </div>
+          <Settings size={14} className="shrink-0 text-text-muted" />
+        </Link>
         <button
           onClick={handleLogout}
           className="shrink-0 rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"

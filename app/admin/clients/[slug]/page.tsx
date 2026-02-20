@@ -43,23 +43,25 @@ export default async function AdminClientDetailPage({
     return (
       <div className="p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/admin/clients" className="text-text-muted hover:text-text-secondary transition-colors">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <Link href="/admin/clients" className="shrink-0 text-text-muted hover:text-text-secondary transition-colors">
               <ArrowLeft size={20} />
             </Link>
-            {client.logo_url ? (
-              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg">
-                <Image src={client.logo_url} alt={client.name} fill className="object-cover" />
+            {client.logo_url && (
+              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-nativz-border">
+                <Image src={client.logo_url} alt={client.name} fill className="object-contain" />
               </div>
-            ) : null}
-            <div>
-              <h1 className="text-2xl font-semibold text-text-primary">{client.name}</h1>
-              <p className="text-sm text-text-muted">{client.industry}</p>
+            )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="truncate text-2xl font-semibold text-text-primary">{client.name}</h1>
+                {!client.is_active && <Badge variant="warning" className="shrink-0">Inactive</Badge>}
+              </div>
+              <p className="truncate text-sm text-text-muted">{client.industry}</p>
             </div>
-            {!client.is_active && <Badge variant="warning">Inactive</Badge>}
           </div>
-          <Link href={`/admin/clients/${slug}/settings`}>
+          <Link href={`/admin/clients/${slug}/settings`} className="shrink-0">
             <Button variant="outline">
               <Settings size={16} />
               Settings
