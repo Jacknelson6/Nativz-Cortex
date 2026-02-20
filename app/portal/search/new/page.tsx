@@ -1,6 +1,5 @@
 import { SearchX } from 'lucide-react';
-import { SearchForm } from '@/components/search/search-form';
-import { SearchHero } from '@/components/search/search-hero';
+import { SearchModeSelector } from '@/components/search/search-mode-selector';
 import { EmptyState } from '@/components/shared/empty-state';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 
@@ -23,20 +22,13 @@ export default async function PortalNewSearchPage() {
 
   return (
     <div className="flex flex-col items-center justify-center p-6 pt-16">
-      <div className="w-full max-w-2xl text-center">
-        <SearchHero />
-
-        <div className="mt-8">
-          <SearchForm
-            redirectPrefix="/portal"
-            fixedClientId={result.client.id}
-            hideClientSelector
-          />
-        </div>
-
-        <p className="mt-6 text-xs text-text-muted">
-          Powered by Brave Search + Claude AI
-        </p>
+      <div className="w-full max-w-4xl">
+        <SearchModeSelector
+          redirectPrefix="/portal"
+          fixedClientId={result.client.id}
+          fixedClientName={result.client.name}
+          portalMode
+        />
       </div>
     </div>
   );

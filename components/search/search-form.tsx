@@ -7,10 +7,7 @@ import { Button } from '@/components/ui/button';
 import { FilterChip } from './filter-chip';
 import { ClientSelector } from './client-selector';
 import {
-  SOURCE_OPTIONS,
   TIME_RANGE_OPTIONS,
-  LANGUAGE_OPTIONS,
-  COUNTRY_OPTIONS,
 } from '@/lib/types/search';
 import type { SearchMode } from '@/lib/types/search';
 
@@ -31,10 +28,10 @@ const PLACEHOLDER_EXAMPLES = [
 
 export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelector = false }: SearchFormProps) {
   const [query, setQuery] = useState('');
-  const [source, setSource] = useState('all');
+  const source = 'all';
   const [timeRange, setTimeRange] = useState('last_3_months');
-  const [language, setLanguage] = useState('all');
-  const [country, setCountry] = useState('us');
+  const language = 'all';
+  const country = 'us';
   const [clientId, setClientId] = useState<string | null>(fixedClientId ?? null);
   const [searchMode, setSearchMode] = useState<SearchMode>(fixedClientId ? 'client_strategy' : 'general');
   const [loading, setLoading] = useState(false);
@@ -136,28 +133,10 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
       {/* Filters */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <FilterChip
-          label="Source"
-          value={source}
-          options={SOURCE_OPTIONS}
-          onChange={setSource}
-        />
-        <FilterChip
           label="Time range"
           value={timeRange}
           options={TIME_RANGE_OPTIONS}
           onChange={setTimeRange}
-        />
-        <FilterChip
-          label="Language"
-          value={language}
-          options={LANGUAGE_OPTIONS}
-          onChange={setLanguage}
-        />
-        <FilterChip
-          label="Country"
-          value={country}
-          options={COUNTRY_OPTIONS}
-          onChange={setCountry}
         />
         {!hideClientSelector && (
           <>
