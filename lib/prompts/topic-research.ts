@@ -1,4 +1,6 @@
 import type { BraveSerpData } from '@/lib/brave/types';
+import type { ClientPreferences } from '@/lib/types/database';
+import { formatBrandPreferencesBlock, hasPreferences } from './brand-context';
 
 interface TopicResearchConfig {
   query: string;
@@ -15,6 +17,7 @@ interface TopicResearchConfig {
     topicKeywords?: string[] | null;
     websiteUrl?: string | null;
   } | null;
+  brandPreferences?: ClientPreferences | null;
 }
 
 const TIME_RANGE_LABELS: Record<string, string> = {
@@ -82,6 +85,15 @@ export function buildTopicResearchPrompt(config: TopicResearchConfig): string {
 - Brand voice: ${config.clientContext.brandVoice || 'Not specified'}${config.clientContext.websiteUrl ? `\n- Website: ${config.clientContext.websiteUrl}` : ''}${config.clientContext.topicKeywords && config.clientContext.topicKeywords.length > 0 ? `\n- Core topics: ${config.clientContext.topicKeywords.join(', ')}` : ''}`
     : '';
 
+  // Build brand preferences block if available
+  const prefsBlock = hasPreferences(config.brandPreferences) && config.clientContext
+    ? '\n' + formatBrandPreferencesBlock(
+        config.brandPreferences,
+        config.clientContext.name,
+        config.clientContext.industry
+      ) + '\n'
+    : '';
+
   const serpBlock = formatSerpDataBlock(config.serpData);
 
   return `# TOPIC RESEARCH & CONTENT IDEATION
@@ -98,7 +110,7 @@ You are an expert social media researcher and content strategist. You have been 
 ${langFilter ? `- ${langFilter}` : ''}
 ${countryFilter ? `- ${countryFilter}` : ''}
 ${clientBlock}
-
+${prefsBlock}
 ## REAL SEARCH DATA
 The following data was gathered from live web searches. Use it as the basis for your analysis. Do NOT make up information — base all insights on this data.
 
@@ -184,5 +196,6 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 - overall_sentiment: a single number from -1.0 to 1.0 representing the overall sentiment across all search data
 - conversation_intensity: "low", "moderate", "high", or "very_high" based on volume and engagement in the search data
 - All video ideas should be specific and actionable — ready to produce
-- engagement_rate should be a decimal between 0 and 1 (e.g., 0.045 for 4.5%)`;
+- engagement_rate should be a decimal between 0 and 1 (e.g., 0.045 for 4.5%)${config.brandPreferences ? `
+- BRAND PREFERENCES ARE HARD CONSTRAINTS: If <brand_context> is present above, you MUST follow it. Topics listed under "avoid" must NOT appear in any trending topic or video idea. Topics listed under "lean into" should be prioritized. Tone keywords must influence the style of all video titles and hooks. Seasonal priorities should be weighted if relevant to the current date.` : ''}`;
 }

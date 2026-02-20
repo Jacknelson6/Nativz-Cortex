@@ -9,6 +9,7 @@ import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
 import type { TopicSearchAIResponse } from '@/lib/types/search';
 import type { BraveSerpData } from '@/lib/brave/types';
+import type { ClientPreferences } from '@/lib/types/database';
 
 export const maxDuration = 300;
 
@@ -73,12 +74,13 @@ export async function POST(
       return NextResponse.json({ error: 'Search is not in processing state' }, { status: 400 });
     }
 
-    // Fetch optional client context
+    // Fetch optional client context + brand preferences
     let clientContext = null;
+    let brandPreferences: ClientPreferences | null = null;
     if (search.client_id) {
       const { data: client } = await adminClient
         .from('clients')
-        .select('name, industry, target_audience, brand_voice, topic_keywords, website_url')
+        .select('name, industry, target_audience, brand_voice, topic_keywords, website_url, preferences')
         .eq('id', search.client_id)
         .single();
 
@@ -91,6 +93,7 @@ export async function POST(
           topicKeywords: client.topic_keywords,
           websiteUrl: client.website_url,
         };
+        brandPreferences = (client.preferences as ClientPreferences) || null;
       }
     }
 
@@ -114,6 +117,7 @@ export async function POST(
           country: search.country,
           serpData,
           clientContext,
+          brandPreferences,
         });
       } else {
         prompt = buildTopicResearchPrompt({
@@ -124,6 +128,7 @@ export async function POST(
           country: search.country,
           serpData,
           clientContext,
+          brandPreferences,
         });
       }
 

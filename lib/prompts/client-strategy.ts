@@ -1,4 +1,6 @@
 import type { BraveSerpData } from '@/lib/brave/types';
+import type { ClientPreferences } from '@/lib/types/database';
+import { formatBrandPreferencesBlock, hasPreferences } from './brand-context';
 
 interface ClientStrategyConfig {
   query: string;
@@ -15,6 +17,7 @@ interface ClientStrategyConfig {
     topicKeywords?: string[] | null;
     websiteUrl?: string | null;
   };
+  brandPreferences?: ClientPreferences | null;
 }
 
 const TIME_RANGE_LABELS: Record<string, string> = {
@@ -78,6 +81,15 @@ export function buildClientStrategyPrompt(config: ClientStrategyConfig): string 
     ? `- Core topics: ${ctx.topicKeywords.join(', ')}`
     : '- Core topics: Not specified';
 
+  // Build brand preferences block if available
+  const prefsBlock = hasPreferences(config.brandPreferences)
+    ? '\n' + formatBrandPreferencesBlock(
+        config.brandPreferences,
+        ctx.name,
+        ctx.industry
+      ) + '\n'
+    : '';
+
   const serpBlock = formatSerpDataBlock(config.serpData);
 
   return `# CLIENT STRATEGY — BRAND-SPECIFIC CONTENT RESEARCH
@@ -101,7 +113,7 @@ ${countryFilter ? `- ${countryFilter}` : ''}
 - Target audience: ${ctx.targetAudience || 'General'}
 - Brand voice: ${ctx.brandVoice || 'Not specified'}
 ${keywordsLine}
-
+${prefsBlock}
 ## REAL SEARCH DATA
 The following data was gathered from live web searches. Use it as the basis for your analysis. Do NOT make up information — base all insights on this data.
 
@@ -208,5 +220,6 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 - Emotion colors: #6366F1 indigo, #10B981 emerald, #F59E0B amber, #EF4444 red, #8B5CF6 purple, #3B82F6 blue, #EC4899 pink, #14B8A6 teal
 - Resonance values: "low", "medium", "high", or "viral"
 - Sentiment scores range from -1.0 (very negative) to 1.0 (very positive). IMPORTANT: Be realistic — NOT every topic is positive. Use the FULL range: negative topics (complaints, frustrations, risks) should be -0.3 to -1.0, neutral/mixed topics should be -0.2 to 0.2, and only genuinely positive topics should be above 0.3. A typical set of 6-8 topics should have a mix of positive, neutral, and negative sentiments.
-- engagement_rate should be a decimal between 0 and 1 (e.g., 0.045 for 4.5%)`;
+- engagement_rate should be a decimal between 0 and 1 (e.g., 0.045 for 4.5%)${hasPreferences(config.brandPreferences) ? `
+- BRAND PREFERENCES ARE HARD CONSTRAINTS: The <brand_context> block above MUST be followed. Topics listed under "avoid" must NOT appear in any trending topic, content pillar, or video idea. Topics listed under "lean into" should be prioritized. Tone keywords must influence the style of all video titles, hooks, and content pillar descriptions. Seasonal priorities should be weighted if relevant to the current date. Content pillars should align with the brand's stated priorities.` : ''}`;
 }
