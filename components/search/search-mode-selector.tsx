@@ -373,27 +373,28 @@ function TopicClientAttach({
   return (
     <div ref={ref} className="relative">
       {value && selected ? (
-        <div className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent-surface px-3 py-1.5 text-xs font-medium text-accent-text">
-          <Building2 size={12} />
-          {selected.name}
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="ml-0.5 rounded-full p-0.5 hover:bg-accent/20 transition-colors"
-          >
-            <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className="flex w-full items-center gap-2.5 rounded-xl border border-accent/40 bg-accent-surface/50 px-4 py-3 text-sm font-medium text-accent-text hover:bg-accent-surface/70 transition-colors"
+        >
+          <Building2 size={16} />
+          <span className="flex-1 text-left">{selected.name}</span>
+          <svg className="h-3.5 w-3.5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       ) : (
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-nativz-border px-3 py-1.5 text-xs text-text-muted hover:border-text-muted hover:text-text-secondary transition-colors"
+          className="flex w-full items-center gap-2.5 rounded-xl border border-nativz-border bg-surface-hover px-4 py-3 text-sm text-text-muted hover:border-accent-border hover:text-text-secondary transition-colors"
         >
-          <Building2 size={12} />
-          Client
+          <Building2 size={16} />
+          <span className="flex-1 text-left">Attach to a client (optional)</span>
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
         </button>
       )}
 
