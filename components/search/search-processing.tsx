@@ -141,28 +141,31 @@ export function SearchProcessing({ searchId, query, redirectPrefix }: SearchProc
           {Math.round(progress)}%
         </p>
 
-        {/* Stage steps */}
+        {/* Stage steps — only show completed + current, animate in */}
         <div className="mt-4 space-y-2">
           {PROGRESS_STAGES.map((stage, i) => {
             const isComplete = i < stageIndex || done;
             const isCurrent = i === stageIndex && !done && !error;
+            const isVisible = isComplete || isCurrent;
+
+            if (!isVisible) return null;
+
             return (
-              <div key={stage.label} className="flex items-center gap-2.5">
+              <div
+                key={stage.label}
+                className="flex items-center gap-2.5 animate-fade-slide-in"
+              >
                 {isComplete ? (
                   <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent/15">
                     <Check size={12} className="text-accent" />
                   </div>
-                ) : isCurrent ? (
+                ) : (
                   <div className="flex h-5 w-5 items-center justify-center">
                     <Loader2 size={14} className="animate-spin text-accent" />
                   </div>
-                ) : (
-                  <div className="flex h-5 w-5 items-center justify-center">
-                    <div className="h-1.5 w-1.5 rounded-full bg-text-muted/30" />
-                  </div>
                 )}
                 <span className={`text-sm transition-colors ${
-                  isComplete ? 'text-text-muted' : isCurrent ? 'text-text-primary font-medium' : 'text-text-muted/40'
+                  isComplete ? 'text-text-muted' : 'text-text-primary font-medium'
                 }`}>
                   {isCurrent ? (
                     <EncryptedText text={stage.label} revealDelayMs={40} className="text-sm !font-medium" />
@@ -174,7 +177,7 @@ export function SearchProcessing({ searchId, query, redirectPrefix }: SearchProc
             );
           })}
           {done && (
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 animate-fade-slide-in">
               <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent/15">
                 <Check size={12} className="text-accent" />
               </div>

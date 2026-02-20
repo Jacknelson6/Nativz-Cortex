@@ -93,6 +93,15 @@ body {
   animation: fadeIn 0.4s ease-out forwards;
 }
 
+/* Fade + slide in from below for progressive reveal */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-slide-in {
+  animation: fadeSlideIn 0.4s var(--ease-out-expo) forwards;
+}
+
 /* Stagger fade-in for list items (Pattern #4) */
 @keyframes staggerFadeIn {
   from { opacity: 0; transform: translateY(8px); }
@@ -218,6 +227,7 @@ dialog:not([open]) {
   }
   .animate-stagger-in,
   .animate-fade-in,
+  .animate-fade-slide-in,
   .animate-expand-in,
   .animate-tooltip-in {
     opacity: 1;
