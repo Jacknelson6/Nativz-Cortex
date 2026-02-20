@@ -1,12 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { Lightbulb, Zap, Copy, Check } from 'lucide-react';
+import { Lightbulb, Zap, Copy, Check, ThumbsUp, Star, MessageSquareWarning } from 'lucide-react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import type { VideoIdea } from '@/lib/types/search';
 
+type Reaction = 'approved' | 'starred' | 'revision_requested' | null;
+
 interface VideoIdeaCardProps {
   idea: VideoIdea;
+  topicName?: string;
+  clientId?: string | null;
+  searchId?: string;
+  initialReaction?: Reaction;
 }
 
 const VIRALITY_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple'> = {
@@ -33,8 +40,28 @@ function formatIdeaForClipboard(idea: VideoIdea): string {
   ].join('\n');
 }
 
-export function VideoIdeaCard({ idea }: VideoIdeaCardProps) {
+const REACTION_CONFIG = {
+  approved: {
+    icon: ThumbsUp,
+    label: 'Approve',
+    activeClass: 'text-emerald-400 bg-emerald-400/10',
+  },
+  starred: {
+    icon: Star,
+    label: 'Star',
+    activeClass: 'text-amber-400 bg-amber-400/10',
+  },
+  revision_requested: {
+    icon: MessageSquareWarning,
+    label: 'Revision',
+    activeClass: 'text-orange-400 bg-orange-400/10',
+  },
+} as const;
+
+export function VideoIdeaCard({ idea, topicName, clientId, searchId, initialReaction }: VideoIdeaCardProps) {
   const [copied, setCopied] = useState(false);
+  const [reaction, setReaction] = useState<Reaction>(initialReaction ?? null);
+  const [saving, setSaving] = useState(false);
   const borderClass = VIRALITY_BORDER[idea.virality] || 'border-l-transparent';
 
   async function handleCopy(e: React.MouseEvent) {
@@ -45,6 +72,43 @@ export function VideoIdeaCard({ idea }: VideoIdeaCardProps) {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard API not available
+    }
+  }
+
+  async function handleReaction(newReaction: Reaction) {
+    if (saving) return;
+    // Toggle off if already selected
+    const target = reaction === newReaction ? null : newReaction;
+    setSaving(true);
+    const prev = reaction;
+    setReaction(target);
+
+    try {
+      const res = await fetch('/api/concepts/react', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: idea.title,
+          hook: idea.hook,
+          format: idea.format,
+          virality: idea.virality,
+          why_it_works: idea.why_it_works,
+          topic_name: topicName,
+          client_id: clientId || null,
+          search_id: searchId,
+          reaction: target,
+        }),
+      });
+
+      if (!res.ok) {
+        setReaction(prev);
+        toast.error('Failed to save reaction');
+      }
+    } catch {
+      setReaction(prev);
+      toast.error('Failed to save reaction');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -78,12 +142,42 @@ export function VideoIdeaCard({ idea }: VideoIdeaCardProps) {
         </div>
 
         {/* Why it works */}
-        <p className="text-xs text-text-secondary leading-relaxed mb-2">{idea.why_it_works}</p>
+        <p className="text-xs text-text-secondary leading-relaxed mb-3">{idea.why_it_works}</p>
 
-        {/* Format tag */}
-        <span className="inline-flex items-center rounded-md bg-surface-hover px-2 py-0.5 text-xs text-text-muted">
-          {idea.format.replace(/_/g, ' ')}
-        </span>
+        {/* Format tag + reaction buttons */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="inline-flex items-center rounded-md bg-surface-hover px-2 py-0.5 text-xs text-text-muted">
+            {idea.format.replace(/_/g, ' ')}
+          </span>
+
+          <div className="flex items-center gap-1">
+            {(Object.keys(REACTION_CONFIG) as Array<keyof typeof REACTION_CONFIG>).map((key) => {
+              const config = REACTION_CONFIG[key];
+              const Icon = config.icon;
+              const isActive = reaction === key;
+
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleReaction(key);
+                  }}
+                  disabled={saving}
+                  title={config.label}
+                  className={`flex h-7 w-7 items-center justify-center rounded-md transition-all ${
+                    isActive
+                      ? config.activeClass
+                      : 'text-text-muted/50 hover:text-text-secondary hover:bg-surface-hover opacity-0 group-hover:opacity-100'
+                  } ${isActive ? 'opacity-100' : ''} disabled:pointer-events-none`}
+                >
+                  <Icon size={14} fill={isActive ? 'currentColor' : 'none'} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );

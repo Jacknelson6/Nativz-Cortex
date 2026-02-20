@@ -15,6 +15,7 @@ import type { TrendingTopic, LegacyTrendingTopic } from '@/lib/types/search';
 interface TrendingTopicsTableProps {
   topics: (TrendingTopic | LegacyTrendingTopic)[];
   clientId?: string | null;
+  searchId?: string;
 }
 
 const RESONANCE_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple'> = {
@@ -72,7 +73,7 @@ function SortHeader({
   );
 }
 
-export function TrendingTopicsTable({ topics, clientId }: TrendingTopicsTableProps) {
+export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopicsTableProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -229,7 +230,7 @@ export function TrendingTopicsTable({ topics, clientId }: TrendingTopicsTablePro
             </div>
 
             {expandedIndex === i && (
-              <TopicRowExpanded topic={topic} />
+              <TopicRowExpanded topic={topic} clientId={clientId} searchId={searchId} />
             )}
           </div>
         ))}

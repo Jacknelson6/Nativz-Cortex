@@ -174,7 +174,7 @@ export function AdminResultsClient({ search, clientInfo }: AdminResultsClientPro
           </div>
         )}
         {search.trending_topics && search.trending_topics.length > 0 && (
-          <TrendingTopicsTable topics={search.trending_topics} clientId={clientInfo?.id} />
+          <TrendingTopicsTable topics={search.trending_topics} clientId={clientInfo?.id} searchId={search.id} />
         )}
 
         {/* Client strategy sections — only for client_strategy searches */}

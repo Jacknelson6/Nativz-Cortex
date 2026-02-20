@@ -8,6 +8,8 @@ import type { TrendingTopic, LegacyTrendingTopic, TopicSource, VideoIdea } from 
 
 interface TopicRowExpandedProps {
   topic: TrendingTopic | LegacyTrendingTopic;
+  clientId?: string | null;
+  searchId?: string;
 }
 
 const SOURCE_TYPE_ICON: Record<string, React.ReactNode> = {
@@ -50,7 +52,7 @@ function SourceLink({ source }: { source: TopicSource }) {
   );
 }
 
-export function TopicRowExpanded({ topic }: TopicRowExpandedProps) {
+export function TopicRowExpanded({ topic, clientId, searchId }: TopicRowExpandedProps) {
   const [copiedAll, setCopiedAll] = useState(false);
   const topicHasSources = hasSources(topic);
 
@@ -127,7 +129,13 @@ export function TopicRowExpanded({ topic }: TopicRowExpandedProps) {
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {topic.video_ideas.map((idea, i) => (
-              <VideoIdeaCard key={i} idea={idea} />
+              <VideoIdeaCard
+                key={i}
+                idea={idea}
+                topicName={topic.name}
+                clientId={clientId}
+                searchId={searchId}
+              />
             ))}
           </div>
         </div>

@@ -155,7 +155,7 @@ export default async function PortalSearchResultsPage({
           </div>
         )}
         {s.trending_topics && s.trending_topics.length > 0 && (
-          <TrendingTopicsTable topics={s.trending_topics} clientId={search.client_id} />
+          <TrendingTopicsTable topics={s.trending_topics} clientId={search.client_id} searchId={s.id} />
         )}
 
         {/* Client strategy sections */}

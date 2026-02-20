@@ -58,7 +58,7 @@ export interface IdeaSubmission {
   title: string;
   description: string | null;
   source_url: string | null;
-  category: 'trending' | 'content_idea' | 'request' | 'other';
+  category: 'trending' | 'content_idea' | 'request' | 'trending_topic' | 'other';
   status: 'new' | 'reviewed' | 'accepted' | 'archived';
   admin_notes: string | null;
   reviewed_by: string | null;
@@ -177,6 +177,54 @@ export interface ContentIdea {
   priority: 'low' | 'medium' | 'high' | 'urgent';
   status: 'idea' | 'approved' | 'in_production' | 'published' | 'archived';
   assigned_to: string | null;
+  scheduled_date: string | null;
+  content_pillar: string | null;
+  client_visible_notes: string | null;
+  internal_notes: string | null;
+  calendar_status: 'backlog' | 'scheduled' | 'in_production' | 'published';
+  source: 'ai' | 'client' | 'team';
+  client_reaction: 'approved' | 'starred' | 'revision_requested' | null;
+  client_feedback: string | null;
+  urgency: 'normal' | 'timely' | 'urgent';
+  reference_urls: string[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConceptComment {
+  id: string;
+  content_idea_id: string;
+  user_id: string;
+  comment: string;
+  is_internal: boolean;
+  created_at: string;
+}
+
+export interface Notification {
+  id: string;
+  recipient_user_id: string;
+  organization_id: string;
+  type: 'report_published' | 'concepts_ready' | 'idea_submitted' | 'feedback_received' | 'preferences_updated' | 'weekly_digest';
+  title: string;
+  body: string | null;
+  link_path: string | null;
+  is_read: boolean;
+  email_sent: boolean;
+  email_sent_at: string | null;
+  created_at: string;
+}
+
+export interface SearchSchedule {
+  id: string;
+  organization_id: string;
+  search_type: 'brand_intel' | 'topic_research' | 'both';
+  frequency: 'weekly' | 'biweekly' | 'monthly';
+  day_of_week: number | null;
+  time_utc: string;
+  additional_keywords: string[] | null;
+  is_active: boolean;
+  last_run_at: string | null;
+  next_run_at: string | null;
   created_at: string;
   updated_at: string;
 }
