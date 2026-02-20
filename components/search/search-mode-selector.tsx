@@ -375,7 +375,7 @@ function ClientPickerModal({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg rounded-2xl border border-nativz-border bg-surface shadow-2xl animate-fade-in">
+      <div className="relative w-full max-w-lg rounded-2xl border border-nativz-border bg-surface shadow-2xl animate-modal-pop-in">
         {/* Header */}
         <div className="p-5 pb-0">
           <div className="flex items-center justify-between mb-4">
