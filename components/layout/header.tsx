@@ -1,29 +1,18 @@
 'use client';
 
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { LogOut, Menu, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Menu, X } from 'lucide-react';
 import { useSidebar } from './sidebar-provider';
 
 interface HeaderProps {
-  userName?: string;
   portalMode?: boolean;
 }
 
-export function Header({ userName, portalMode = false }: HeaderProps) {
-  const router = useRouter();
+export function Header({ portalMode = false }: HeaderProps) {
   const { isOpen, toggle } = useSidebar();
 
-  async function handleLogout() {
-    const res = await fetch('/api/auth/logout', { method: 'POST' });
-    const data = await res.json().catch(() => ({}));
-    router.push(data.redirectTo || (portalMode ? '/portal/login' : '/admin/login'));
-    router.refresh();
-  }
-
   return (
-    <header className="flex h-16 items-center justify-between border-b border-nativz-border bg-surface px-4 md:px-6">
+    <header className="flex h-16 items-center border-b border-nativz-border bg-surface px-4 md:px-6">
       <div className="flex items-center gap-3">
         <button
           onClick={toggle}
@@ -45,7 +34,7 @@ export function Header({ userName, portalMode = false }: HeaderProps) {
             />
           </div>
         </button>
-        <div className="flex flex-col items-start -space-y-1">
+        <div className="flex flex-col items-center -space-y-1">
           <Image
             src="/nativz-logo.svg"
             alt="Nativz"
@@ -54,7 +43,7 @@ export function Header({ userName, portalMode = false }: HeaderProps) {
             className="h-9 w-auto"
             priority
           />
-          <span className="text-xs font-semibold text-text-secondary tracking-[0.25em] uppercase pl-0.5">
+          <span className="text-xs font-semibold text-text-secondary tracking-[0.25em] uppercase">
             Cortex
           </span>
         </div>
@@ -63,15 +52,6 @@ export function Header({ userName, portalMode = false }: HeaderProps) {
             Portal
           </span>
         )}
-      </div>
-      <div className="flex items-center gap-3">
-        {userName && (
-          <span className="hidden sm:inline text-sm text-text-muted">{userName}</span>
-        )}
-        <Button variant="ghost" size="sm" onClick={handleLogout}>
-          <LogOut size={16} />
-          <span className="hidden sm:inline">Sign out</span>
-        </Button>
       </div>
     </header>
   );

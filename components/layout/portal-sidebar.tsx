@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Search, FileText, Settings } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { LayoutDashboard, Search, FileText, Settings, LogOut, User } from 'lucide-react';
 import { FloatingDock } from '@/components/ui/floating-dock';
 import { Button } from '@/components/ui/button';
 
@@ -42,12 +42,50 @@ export function PortalNavItems() {
   );
 }
 
-export function PortalSidebar() {
+interface PortalSidebarProps {
+  userName?: string;
+}
+
+export function PortalSidebar({ userName }: PortalSidebarProps) {
   return (
     <nav className="hidden md:flex w-56 flex-col border-r border-nativz-border bg-surface">
       <div className="flex flex-1 flex-col gap-0.5 p-3">
         <PortalNavItems />
       </div>
+      <SidebarAccount userName={userName} />
     </nav>
+  );
+}
+
+function SidebarAccount({ userName }: { userName?: string }) {
+  const router = useRouter();
+
+  async function handleLogout() {
+    const res = await fetch('/api/auth/logout', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    router.push(data.redirectTo || '/portal/login');
+    router.refresh();
+  }
+
+  return (
+    <div className="border-t border-nativz-border p-3">
+      <div className="flex items-center gap-2.5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-surface">
+          <User size={14} className="text-accent-text" />
+        </div>
+        <div className="flex-1 min-w-0">
+          {userName && (
+            <p className="truncate text-sm font-medium text-text-primary">{userName}</p>
+          )}
+        </div>
+        <button
+          onClick={handleLogout}
+          className="shrink-0 rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
+          title="Sign out"
+        >
+          <LogOut size={16} />
+        </button>
+      </div>
+    </div>
   );
 }

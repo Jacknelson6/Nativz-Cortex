@@ -97,6 +97,7 @@ export default function AdminClientSettingsPage() {
       if (data.target_audience) setTargetAudience(data.target_audience);
       if (data.brand_voice) setBrandVoice(data.brand_voice);
       if (data.topic_keywords) setTopicKeywords(data.topic_keywords.join(', '));
+      if (data.logo_url && !logoUrl) setLogoUrl(data.logo_url);
       toast.success('Fields generated from website.');
     } catch {
       toast.error('Something went wrong. Try again.');
@@ -151,7 +152,7 @@ export default function AdminClientSettingsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl">
+    <div className="p-6 space-y-6 max-w-2xl mx-auto">
       <div className="flex items-center gap-3">
         <Link href={`/admin/clients/${params.slug}`} className="text-text-muted hover:text-text-secondary transition-colors">
           <ArrowLeft size={20} />

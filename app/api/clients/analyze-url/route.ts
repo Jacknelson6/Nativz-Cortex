@@ -64,6 +64,34 @@ export async function POST(request: NextRequest) {
       clearTimeout(timeout);
     }
 
+    // Extract logo URL from HTML meta tags / link tags
+    let logoUrl: string | null = null;
+    const logoPatterns = [
+      // Open Graph image
+      /<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i,
+      // Apple touch icon (usually high-res logo)
+      /<link[^>]*rel=["']apple-touch-icon["'][^>]*href=["']([^"']+)["']/i,
+      // Standard favicon (larger sizes first)
+      /<link[^>]*rel=["']icon["'][^>]*href=["']([^"']+)["']/i,
+      // Shortcut icon
+      /<link[^>]*rel=["']shortcut icon["'][^>]*href=["']([^"']+)["']/i,
+    ];
+    for (const pattern of logoPatterns) {
+      const match = html.match(pattern);
+      if (match?.[1]) {
+        let candidate = match[1];
+        // Resolve relative URLs
+        if (candidate.startsWith('/')) {
+          try {
+            const base = new URL(url);
+            candidate = `${base.origin}${candidate}`;
+          } catch { /* ignore */ }
+        }
+        logoUrl = candidate;
+        break;
+      }
+    }
+
     // Strip HTML to plain text (first ~5000 chars)
     const text = html
       .replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -113,7 +141,7 @@ Guidelines:
       topic_keywords: string[];
     }>(aiResult.text);
 
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, logo_url: logoUrl });
   } catch (error) {
     console.error('POST /api/clients/analyze-url error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -27,9 +27,9 @@ export default async function AdminLayout({
   return (
     <SidebarProvider>
       <div className="flex h-screen flex-col">
-        <Header userName={userName} />
+        <Header />
         <div className="flex flex-1 overflow-hidden">
-          <AdminSidebar />
+          <AdminSidebar userName={userName} />
           <MobileSidebar>
             <AdminNavItems />
           </MobileSidebar>
