@@ -27,7 +27,7 @@ function SourceTypeSection({
           {title} ({items.length})
         </h4>
       </div>
-      <div className={`space-y-2 ${items.length > 6 ? 'fade-edge-bottom' : ''}`}>
+      <div className="space-y-2">
         {items.map((item, i) => (
           <a
             key={i}

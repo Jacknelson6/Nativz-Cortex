@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { ChevronDown, ChevronRight, ChevronUp, Eye, Link2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Bookmark, Check } from 'lucide-react';
+import { toast } from 'sonner';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TooltipCard } from '@/components/ui/tooltip-card';
-import { formatNumber } from '@/lib/utils/format';
 import { getSentimentBadgeVariant, getSentimentLabel } from '@/lib/utils/sentiment';
 import { TOOLTIPS } from '@/lib/tooltips';
 import { TopicRowExpanded } from './topic-row-expanded';
@@ -14,6 +14,7 @@ import type { TrendingTopic, LegacyTrendingTopic } from '@/lib/types/search';
 
 interface TrendingTopicsTableProps {
   topics: (TrendingTopic | LegacyTrendingTopic)[];
+  clientId?: string | null;
 }
 
 const RESONANCE_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple'> = {
@@ -30,7 +31,7 @@ const RESONANCE_ORDER: Record<string, number> = {
   viral: 3,
 };
 
-type SortKey = 'views' | 'resonance' | 'sentiment';
+type SortKey = 'resonance' | 'sentiment';
 type SortDir = 'asc' | 'desc';
 
 function SortHeader({
@@ -40,7 +41,6 @@ function SortHeader({
   activeDir,
   onSort,
   tooltip,
-  align = 'center',
 }: {
   label: string;
   sortKey: SortKey;
@@ -48,16 +48,14 @@ function SortHeader({
   activeDir: SortDir;
   onSort: (key: SortKey) => void;
   tooltip?: { title: string; description: string };
-  align?: 'center' | 'right';
 }) {
   const isActive = activeKey === sortKey;
-  const alignClass = align === 'right' ? 'justify-end' : 'justify-center';
 
   return (
     <button
       type="button"
       onClick={() => onSort(sortKey)}
-      className={`flex items-center gap-1 ${alignClass} transition-colors hover:text-text-secondary ${isActive ? 'text-text-secondary' : ''}`}
+      className={`flex items-center gap-1 justify-center transition-colors hover:text-text-secondary ${isActive ? 'text-text-secondary' : ''}`}
     >
       {tooltip ? (
         <TooltipCard title={tooltip.title} description={tooltip.description}>
@@ -74,12 +72,12 @@ function SortHeader({
   );
 }
 
-export function TrendingTopicsTable({ topics }: TrendingTopicsTableProps) {
+export function TrendingTopicsTable({ topics, clientId }: TrendingTopicsTableProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('desc');
-
-  const isNewShape = topics.length > 0 && hasSources(topics[0]);
+  const [savedTopics, setSavedTopics] = useState<Set<string>>(new Set());
+  const [savingTopic, setSavingTopic] = useState<string | null>(null);
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -91,10 +89,39 @@ export function TrendingTopicsTable({ topics }: TrendingTopicsTableProps) {
     setExpandedIndex(null);
   }
 
-  function getViewsValue(topic: TrendingTopic | LegacyTrendingTopic): number {
-    if (hasSources(topic)) return topic.sources.length;
-    if ('estimated_views' in topic) return (topic as LegacyTrendingTopic).estimated_views;
-    return 0;
+  async function handleSave(topic: TrendingTopic | LegacyTrendingTopic) {
+    if (savedTopics.has(topic.name)) return;
+    setSavingTopic(topic.name);
+
+    try {
+      const description = [
+        'posts_overview' in topic ? topic.posts_overview : '',
+        'comments_overview' in topic ? topic.comments_overview : '',
+      ].filter(Boolean).join('\n\n');
+
+      const res = await fetch('/api/ideas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: topic.name,
+          description: description || `Trending topic with ${topic.resonance} resonance`,
+          category: 'trending_topic',
+          client_id: clientId || undefined,
+        }),
+      });
+
+      if (res.ok) {
+        setSavedTopics((prev) => new Set(prev).add(topic.name));
+        toast.success('Saved to ideas');
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to save');
+      }
+    } catch {
+      toast.error('Failed to save. Try again.');
+    } finally {
+      setSavingTopic(null);
+    }
   }
 
   const sortedTopics = useMemo(() => {
@@ -102,9 +129,6 @@ export function TrendingTopicsTable({ topics }: TrendingTopicsTableProps) {
     const sorted = [...topics].sort((a, b) => {
       let diff = 0;
       switch (sortKey) {
-        case 'views':
-          diff = getViewsValue(a) - getViewsValue(b);
-          break;
         case 'resonance':
           diff = (RESONANCE_ORDER[a.resonance] ?? 0) - (RESONANCE_ORDER[b.resonance] ?? 0);
           break;
@@ -119,9 +143,7 @@ export function TrendingTopicsTable({ topics }: TrendingTopicsTableProps) {
 
   if (!topics.length) return null;
 
-  const gridCols = isNewShape
-    ? 'grid-cols-[1fr_100px_120px_120px]'
-    : 'grid-cols-[1fr_120px_120px_130px]';
+  const gridCols = 'grid-cols-[1fr_120px_120px_60px]';
 
   return (
     <Card padding="none">
@@ -133,14 +155,6 @@ export function TrendingTopicsTable({ topics }: TrendingTopicsTableProps) {
         {/* Table header */}
         <div className={`grid ${gridCols} gap-4 border-b border-nativz-border px-6 py-2.5 text-xs font-medium text-text-muted uppercase tracking-wide`}>
           <span>Topic</span>
-          <SortHeader
-            label={isNewShape ? 'Sources' : 'Est. views'}
-            sortKey="views"
-            activeKey={sortKey}
-            activeDir={sortDir}
-            onSort={handleSort}
-            align={isNewShape ? 'center' : 'right'}
-          />
           <SortHeader
             label="Resonance"
             sortKey="resonance"
@@ -157,6 +171,7 @@ export function TrendingTopicsTable({ topics }: TrendingTopicsTableProps) {
             onSort={handleSort}
             tooltip={TOOLTIPS.sentiment}
           />
+          <span className="text-center">Save</span>
         </div>
 
         {/* Rows */}
@@ -166,30 +181,18 @@ export function TrendingTopicsTable({ topics }: TrendingTopicsTableProps) {
             className="animate-stagger-in"
             style={{ animationDelay: `${i * 40}ms` }}
           >
-            <button
-              onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
-              className={`table-row-guideline grid w-full ${gridCols} gap-4 items-center px-6 py-3.5 text-left hover:bg-surface-hover transition-colors`}
-            >
-              <div className="flex items-center gap-2">
+            <div className={`grid w-full ${gridCols} gap-4 items-center px-6 py-3.5 transition-colors hover:bg-surface-hover`}>
+              <button
+                onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
+                className="flex items-center gap-2 text-left min-w-0"
+              >
                 {expandedIndex === i ? (
                   <ChevronDown size={14} className="text-text-muted shrink-0" />
                 ) : (
                   <ChevronRight size={14} className="text-text-muted shrink-0" />
                 )}
                 <span className="text-sm font-medium text-text-primary truncate">{topic.name}</span>
-              </div>
-
-              {isNewShape && hasSources(topic) ? (
-                <span className="text-center text-sm text-text-secondary flex items-center justify-center gap-1">
-                  <Link2 size={12} className="text-text-muted" />
-                  {topic.sources.length}
-                </span>
-              ) : !isNewShape && 'estimated_views' in topic ? (
-                <span className="text-right text-sm text-text-secondary flex items-center justify-end gap-1">
-                  <Eye size={12} className="text-text-muted" />
-                  {formatNumber((topic as LegacyTrendingTopic).estimated_views)}
-                </span>
-              ) : null}
+              </button>
 
               <span className="text-center">
                 <Badge variant={RESONANCE_VARIANT[topic.resonance] || 'default'}>
@@ -201,7 +204,29 @@ export function TrendingTopicsTable({ topics }: TrendingTopicsTableProps) {
                   {getSentimentLabel(topic.sentiment)}
                 </Badge>
               </span>
-            </button>
+              <span className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSave(topic);
+                  }}
+                  disabled={savedTopics.has(topic.name) || savingTopic === topic.name}
+                  className={`rounded-lg p-1.5 transition-colors ${
+                    savedTopics.has(topic.name)
+                      ? 'text-emerald-400'
+                      : 'text-text-muted hover:text-accent-text hover:bg-accent-surface'
+                  } disabled:pointer-events-none`}
+                  title={savedTopics.has(topic.name) ? 'Saved' : 'Save to ideas'}
+                >
+                  {savedTopics.has(topic.name) ? (
+                    <Check size={16} />
+                  ) : (
+                    <Bookmark size={16} className={savingTopic === topic.name ? 'animate-pulse' : ''} />
+                  )}
+                </button>
+              </span>
+            </div>
 
             {expandedIndex === i && (
               <TopicRowExpanded topic={topic} />

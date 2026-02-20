@@ -180,7 +180,7 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 - Reference specific articles, posts, or discussions from the search data in your posts_overview and comments_overview
 - Emotion colors should be distinct hex values (use: #6366F1 indigo, #10B981 emerald, #F59E0B amber, #EF4444 red, #8B5CF6 purple, #3B82F6 blue, #EC4899 pink, #14B8A6 teal)
 - Resonance values: "low", "medium", "high", or "viral"
-- Sentiment scores range from -1.0 (very negative) to 1.0 (very positive)
+- Sentiment scores range from -1.0 (very negative) to 1.0 (very positive). IMPORTANT: Be realistic — NOT every topic is positive. Use the FULL range: negative topics (complaints, frustrations, risks) should be -0.3 to -1.0, neutral/mixed topics should be -0.2 to 0.2, and only genuinely positive topics should be above 0.3. A typical set of 6-8 topics should have a mix of positive, neutral, and negative sentiments.
 - overall_sentiment: a single number from -1.0 to 1.0 representing the overall sentiment across all search data
 - conversation_intensity: "low", "moderate", "high", or "very_high" based on volume and engagement in the search data
 - All video ideas should be specific and actionable — ready to produce

@@ -207,6 +207,6 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 - All video ideas should match ${ctx.name}'s brand voice: ${ctx.brandVoice || 'professional and approachable'}
 - Emotion colors: #6366F1 indigo, #10B981 emerald, #F59E0B amber, #EF4444 red, #8B5CF6 purple, #3B82F6 blue, #EC4899 pink, #14B8A6 teal
 - Resonance values: "low", "medium", "high", or "viral"
-- Sentiment scores range from -1.0 to 1.0
+- Sentiment scores range from -1.0 (very negative) to 1.0 (very positive). IMPORTANT: Be realistic — NOT every topic is positive. Use the FULL range: negative topics (complaints, frustrations, risks) should be -0.3 to -1.0, neutral/mixed topics should be -0.2 to 0.2, and only genuinely positive topics should be above 0.3. A typical set of 6-8 topics should have a mix of positive, neutral, and negative sentiments.
 - engagement_rate should be a decimal between 0 and 1 (e.g., 0.045 for 4.5%)`;
 }

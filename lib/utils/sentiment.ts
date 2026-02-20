@@ -5,8 +5,8 @@ export function getSentimentColorClass(score: number): string {
 }
 
 export function getSentimentBadgeVariant(score: number): 'success' | 'warning' | 'danger' {
-  if (score > 0.3) return 'success';
-  if (score > -0.3) return 'warning';
+  if (score >= 0.2) return 'success';
+  if (score >= -0.2) return 'warning';
   return 'danger';
 }
 

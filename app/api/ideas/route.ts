@@ -4,11 +4,11 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const ideaSubmissionSchema = z.object({
-  client_id: z.string().uuid(),
+  client_id: z.string().uuid().optional().nullable(),
   title: z.string().min(1, 'Title is required').max(300),
   description: z.string().max(2000).optional().nullable(),
   source_url: z.string().url().max(2000).optional().nullable().or(z.literal('')),
-  category: z.enum(['trending', 'content_idea', 'request', 'other']).default('other'),
+  category: z.enum(['trending', 'content_idea', 'request', 'trending_topic', 'other']).default('other'),
 });
 
 export async function GET(request: NextRequest) {
@@ -105,6 +105,9 @@ export async function POST(request: NextRequest) {
 
     // If viewer, verify org scope and feature flag
     if (userData.role !== 'admin') {
+      if (!client_id) {
+        return NextResponse.json({ error: 'Client is required' }, { status: 400 });
+      }
       const { data: client } = await adminClient
         .from('clients')
         .select('organization_id, feature_flags')
