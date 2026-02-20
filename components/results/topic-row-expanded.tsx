@@ -104,11 +104,11 @@ export function TopicRowExpanded({ topic, clientId, searchId }: TopicRowExpanded
       )}
 
       {/* Video ideas */}
-      {topic.video_ideas.length > 0 && (
+      {(topic.video_ideas?.length ?? 0) > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide">
-              Video ideas ({topic.video_ideas.length})
+              Video ideas ({topic.video_ideas?.length ?? 0})
             </h4>
             <button
               onClick={handleCopyAll}
@@ -128,7 +128,7 @@ export function TopicRowExpanded({ topic, clientId, searchId }: TopicRowExpanded
             </button>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {topic.video_ideas.map((idea, i) => (
+            {(topic.video_ideas ?? []).map((idea, i) => (
               <VideoIdeaCard
                 key={i}
                 idea={idea}

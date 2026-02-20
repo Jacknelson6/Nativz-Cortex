@@ -34,9 +34,10 @@ function validateTopicSources(
 ): TopicSearchAIResponse {
   return {
     ...aiResponse,
-    trending_topics: aiResponse.trending_topics.map(topic => ({
+    trending_topics: (aiResponse.trending_topics ?? []).map(topic => ({
       ...topic,
-      sources: (topic.sources || []).filter(source => serpUrls.has(source.url)),
+      sources: (topic.sources ?? []).filter(source => serpUrls.has(source.url)),
+      video_ideas: topic.video_ideas ?? [],
     })),
   };
 }
@@ -148,9 +149,9 @@ export async function POST(
       // Step 5: Compute real metrics from SERP data + AI sentiment + topics
       const metrics = computeMetricsFromSerp(
         serpData,
-        aiResponse.overall_sentiment,
-        aiResponse.conversation_intensity,
-        aiResponse.trending_topics
+        aiResponse.overall_sentiment ?? 0,
+        aiResponse.conversation_intensity ?? 'moderate',
+        aiResponse.trending_topics ?? []
       );
 
       // Step 6: Update with results
@@ -158,11 +159,11 @@ export async function POST(
         .from('topic_searches')
         .update({
           status: 'completed',
-          summary: aiResponse.summary,
+          summary: aiResponse.summary ?? '',
           metrics,
-          emotions: aiResponse.emotions,
-          content_breakdown: aiResponse.content_breakdown,
-          trending_topics: aiResponse.trending_topics,
+          emotions: aiResponse.emotions ?? [],
+          content_breakdown: aiResponse.content_breakdown ?? null,
+          trending_topics: aiResponse.trending_topics ?? [],
           serp_data: serpData,
           raw_ai_response: aiResponse,
           tokens_used: aiResult.usage.totalTokens,
@@ -180,11 +181,11 @@ export async function POST(
         {
           ...search,
           status: 'completed',
-          summary: aiResponse.summary,
+          summary: aiResponse.summary ?? '',
           metrics,
-          emotions: aiResponse.emotions,
-          content_breakdown: aiResponse.content_breakdown,
-          trending_topics: aiResponse.trending_topics,
+          emotions: aiResponse.emotions ?? [],
+          content_breakdown: aiResponse.content_breakdown ?? null,
+          trending_topics: aiResponse.trending_topics ?? [],
           raw_ai_response: aiResponse,
           serp_data: serpData,
           tokens_used: aiResult.usage.totalTokens,
