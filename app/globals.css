@@ -320,12 +320,10 @@ dialog:not([open]) {
 
 .btn-shimmer:hover {
   box-shadow: 0 0 20px rgba(4, 107, 210, 0.4), 0 0 40px rgba(4, 107, 210, 0.15);
-  transform: translateY(-1px);
 }
 
 .btn-shimmer:active {
-  transform: translateY(0) scale(0.98);
-  box-shadow: 0 0 10px rgba(4, 107, 210, 0.3);
+  box-shadow: 0 0 24px rgba(4, 107, 210, 0.5), 0 0 48px rgba(4, 107, 210, 0.2);
 }
 
 /* Reduced motion (Pattern #9) */
