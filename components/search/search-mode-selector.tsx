@@ -131,10 +131,7 @@ export function SearchModeSelector({
     <div className="w-full">
       {/* Header */}
       <div className="text-center mb-10">
-        <h1 className="text-3xl font-bold text-text-primary">Research</h1>
-        <p className="mt-3 text-text-muted">
-          What would you like to research today?
-        </p>
+        <h1 className="text-3xl font-bold text-text-primary">What would you like to research today?</h1>
       </div>
 
       {/* Cards */}
