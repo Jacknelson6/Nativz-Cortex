@@ -10,6 +10,7 @@ import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
 import type { TopicSearchAIResponse } from '@/lib/types/search';
 import type { BraveSerpData } from '@/lib/brave/types';
 import type { ClientPreferences } from '@/lib/types/database';
+import { syncSearchToVault } from '@/lib/vault/sync';
 
 export const maxDuration = 300;
 
@@ -173,6 +174,25 @@ export async function POST(
       if (updateError) {
         console.error('Error updating search with results:', updateError);
       }
+
+      // Sync to Obsidian vault (non-blocking)
+      syncSearchToVault(
+        {
+          ...search,
+          status: 'completed',
+          summary: aiResponse.summary,
+          metrics,
+          emotions: aiResponse.emotions,
+          content_breakdown: aiResponse.content_breakdown,
+          trending_topics: aiResponse.trending_topics,
+          raw_ai_response: aiResponse,
+          serp_data: serpData,
+          tokens_used: aiResult.usage.totalTokens,
+          estimated_cost: aiResult.estimatedCost,
+          completed_at: new Date().toISOString(),
+        },
+        clientContext?.name,
+      ).catch(() => {}); // Never fail the response
 
       return NextResponse.json({ status: 'completed' });
     } catch (aiError) {

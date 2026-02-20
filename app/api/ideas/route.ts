@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { syncIdeaToVault } from '@/lib/vault/sync';
 
 const ideaSubmissionSchema = z.object({
   client_id: z.string().uuid().optional().nullable(),
@@ -140,6 +141,21 @@ export async function POST(request: NextRequest) {
     if (insertError) {
       console.error('Error inserting idea:', insertError);
       return NextResponse.json({ error: 'Failed to submit idea' }, { status: 500 });
+    }
+
+    // Sync idea to Obsidian vault (non-blocking)
+    if (idea) {
+      // Get client name for vault path
+      let vaultClientName: string | undefined;
+      if (client_id) {
+        const { data: cn } = await adminClient
+          .from('clients')
+          .select('name')
+          .eq('id', client_id)
+          .single();
+        vaultClientName = cn?.name;
+      }
+      syncIdeaToVault(idea, vaultClientName).catch(() => {});
     }
 
     // Create notifications for the other side

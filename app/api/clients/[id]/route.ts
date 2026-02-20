@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { syncClientProfileToVault } from '@/lib/vault/sync';
 
 export async function PATCH(
   request: NextRequest,
@@ -67,6 +68,11 @@ export async function PATCH(
     if (updateError) {
       console.error('Error updating client:', updateError);
       return NextResponse.json({ error: 'Failed to update client' }, { status: 500 });
+    }
+
+    // Sync client profile to Obsidian vault (non-blocking)
+    if (client) {
+      syncClientProfileToVault(client).catch(() => {});
     }
 
     return NextResponse.json(client);
