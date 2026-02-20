@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Settings, Search, Clock, Lightbulb, User2, Mail } from 'lucide-react';
+import { ArrowLeft, Settings, Search, Clock, Lightbulb, User2, Mail, Globe } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getVaultClientBySlug } from '@/lib/vault/reader';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,43 +18,53 @@ export default async function AdminClientDetailPage({
   const { slug } = await params;
 
   try {
-    const adminClient = createAdminClient();
-
-    const { data: client, error } = await adminClient
-      .from('clients')
-      .select('*')
-      .eq('slug', slug)
-      .single();
-
-    if (error || !client) {
+    // Read brand data from the vault (source of truth)
+    const vaultProfile = await getVaultClientBySlug(slug);
+    if (!vaultProfile) {
       notFound();
     }
 
-    // Fetch searches, ideas, idea count, and contacts in parallel
+    const adminClient = createAdminClient();
+
+    // Check if this client has a Supabase record (for operational data)
+    const { data: dbClient } = await adminClient
+      .from('clients')
+      .select('id, organization_id, logo_url, is_active, feature_flags')
+      .eq('slug', slug)
+      .maybeSingle();
+
+    // Fetch searches, ideas, and contacts if we have a DB record
+    const clientId = dbClient?.id;
+
     const [{ data: searches }, { data: recentIdeas }, { count: ideaCount }, { data: contacts }] = await Promise.all([
-      adminClient
-        .from('topic_searches')
-        .select('id, query, status, created_at, approved_at')
-        .eq('client_id', client.id)
-        .order('created_at', { ascending: false })
-        .limit(20),
-      adminClient
-        .from('idea_submissions')
-        .select('id, title, category, status, created_at, submitted_by')
-        .eq('client_id', client.id)
-        .order('created_at', { ascending: false })
-        .limit(5),
-      adminClient
-        .from('idea_submissions')
-        .select('*', { count: 'exact', head: true })
-        .eq('client_id', client.id)
-        .in('status', ['new', 'reviewed']),
-      // Fetch portal users linked to this client's organization
-      client.organization_id
+      clientId
+        ? adminClient
+            .from('topic_searches')
+            .select('id, query, status, created_at, approved_at')
+            .eq('client_id', clientId)
+            .order('created_at', { ascending: false })
+            .limit(20)
+        : Promise.resolve({ data: [] as Array<{ id: string; query: string; status: string; created_at: string; approved_at: string | null }> }),
+      clientId
+        ? adminClient
+            .from('idea_submissions')
+            .select('id, title, category, status, created_at, submitted_by')
+            .eq('client_id', clientId)
+            .order('created_at', { ascending: false })
+            .limit(5)
+        : Promise.resolve({ data: [] as Array<{ id: string; title: string; category: string; status: string; created_at: string; submitted_by: string | null }> }),
+      clientId
+        ? adminClient
+            .from('idea_submissions')
+            .select('*', { count: 'exact', head: true })
+            .eq('client_id', clientId)
+            .in('status', ['new', 'reviewed'])
+        : Promise.resolve({ count: 0 }),
+      dbClient?.organization_id
         ? adminClient
             .from('users')
             .select('id, full_name, email, avatar_url, job_title, last_login')
-            .eq('organization_id', client.organization_id)
+            .eq('organization_id', dbClient.organization_id)
             .eq('role', 'viewer')
             .order('full_name')
         : Promise.resolve({ data: [] as Array<{ id: string; full_name: string; email: string; avatar_url: string | null; job_title: string | null; last_login: string | null }> }),
@@ -71,18 +82,18 @@ export default async function AdminClientDetailPage({
             <Link href="/admin/clients" className="shrink-0 text-text-muted hover:text-text-secondary transition-colors">
               <ArrowLeft size={20} />
             </Link>
-            {client.logo_url && (
+            {dbClient?.logo_url && (
               <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-nativz-border">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={client.logo_url} alt={client.name} className="h-full w-full object-cover" />
+                <img src={dbClient.logo_url} alt={vaultProfile.name} className="h-full w-full object-cover" />
               </div>
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="truncate text-2xl font-semibold text-text-primary">{client.name}</h1>
-                {!client.is_active && <Badge variant="warning" className="shrink-0">Inactive</Badge>}
+                <h1 className="truncate text-2xl font-semibold text-text-primary">{vaultProfile.name}</h1>
+                {vaultProfile.abbreviation && <Badge className="shrink-0">{vaultProfile.abbreviation}</Badge>}
               </div>
-              <p className="truncate text-sm text-text-muted">{client.industry}</p>
+              <p className="truncate text-sm text-text-muted">{vaultProfile.industry || 'General'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -106,33 +117,71 @@ export default async function AdminClientDetailPage({
 
         {/* Brand profile + Point of contact — side by side */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {/* Brand profile (merged) */}
+          {/* Brand profile — from vault */}
           <Card>
             <h2 className="text-base font-semibold text-text-primary mb-4">Brand profile</h2>
             <div className="space-y-4">
-              <div>
-                <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Industry</p>
-                <p className="mt-1 text-sm text-text-primary">{client.industry}</p>
-              </div>
+              {vaultProfile.website_url && (
+                <div>
+                  <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Website</p>
+                  <a href={vaultProfile.website_url} target="_blank" rel="noopener noreferrer" className="mt-1 text-sm text-accent-text hover:underline flex items-center gap-1">
+                    <Globe size={12} />
+                    {vaultProfile.website_url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                  </a>
+                </div>
+              )}
               <div>
                 <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Target audience</p>
-                <p className="mt-1 text-sm text-text-primary">{client.target_audience || 'Not set'}</p>
+                <p className="mt-1 text-sm text-text-primary">{vaultProfile.target_audience || 'Not set'}</p>
               </div>
               <div>
                 <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Brand voice</p>
-                <p className="mt-1 text-sm text-text-primary">{client.brand_voice || 'Not set'}</p>
+                <p className="mt-1 text-sm text-text-primary">{vaultProfile.brand_voice || 'Not set'}</p>
               </div>
+              {vaultProfile.topic_keywords.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Topic keywords</p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {vaultProfile.topic_keywords.map((kw) => (
+                      <Badge key={kw} variant="default">{kw}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {vaultProfile.services.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Services</p>
+                  <p className="mt-1 text-sm text-text-primary">{vaultProfile.services.join(' · ')}</p>
+                </div>
+              )}
             </div>
           </Card>
 
-          {/* Point of contact */}
+          {/* Point of contact — vault POC + portal users */}
           <Card>
             <h2 className="text-base font-semibold text-text-primary mb-4">Point of contact</h2>
-            {clientContacts.length === 0 ? (
+            {/* Vault POC (from Monday.com) */}
+            {vaultProfile.point_of_contact && (
+              <div className="flex items-center gap-3 rounded-lg border border-nativz-border-light px-4 py-3 mb-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface text-accent-text">
+                  <User2 size={16} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-text-primary truncate">{vaultProfile.point_of_contact.name}</p>
+                  <p className="text-xs text-text-muted flex items-center gap-1 truncate">
+                    <Mail size={10} className="shrink-0" />
+                    {vaultProfile.point_of_contact.email}
+                  </p>
+                </div>
+                <Badge variant="default">Monday</Badge>
+              </div>
+            )}
+            {/* Portal users from Supabase */}
+            {clientContacts.length === 0 && !vaultProfile.point_of_contact ? (
               <EmptyState
                 icon={<User2 size={24} />}
-                title="No accounts yet"
-                description={`When ${client.name} creates a portal account, they'll appear here.`}
+                title="No contacts yet"
+                description={`When ${vaultProfile.name} creates a portal account, they'll appear here.`}
               />
             ) : (
               <div className="space-y-3">
@@ -189,7 +238,7 @@ export default async function AdminClientDetailPage({
             <EmptyState
               icon={<Lightbulb size={24} />}
               title="No ideas yet"
-              description={`Ideas submitted by ${client.name} or your team will appear here.`}
+              description={`Ideas submitted by ${vaultProfile.name} or your team will appear here.`}
             />
           ) : (
             <div className="space-y-2">
@@ -217,7 +266,7 @@ export default async function AdminClientDetailPage({
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-text-primary">Recent searches</h2>
-            <Link href={`/admin/search/new?client=${client.id}`}>
+            <Link href={`/admin/search/new?client=${clientId || slug}`}>
               <Button size="sm">
                 <Search size={14} />
                 New search
@@ -229,7 +278,7 @@ export default async function AdminClientDetailPage({
             <EmptyState
               icon={<Search size={24} />}
               title="No searches yet"
-              description={`Run a search for ${client.name} to get started.`}
+              description={`Run a search for ${vaultProfile.name} to get started.`}
             />
           ) : (
             <div className="space-y-2">
