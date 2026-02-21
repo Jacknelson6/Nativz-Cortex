@@ -34,6 +34,10 @@ export function IdeaTriageList({ submissions: initial, clientName }: IdeaTriageL
     setSubmissions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
   }
 
+  function handleDelete(id: string) {
+    setSubmissions((prev) => prev.filter((s) => s.id !== id));
+  }
+
   return (
     <div>
       <div className="mb-6">
@@ -73,7 +77,7 @@ export function IdeaTriageList({ submissions: initial, clientName }: IdeaTriageL
       ) : (
         <div className="space-y-3">
           {filtered.map((idea) => (
-            <IdeaTriageCard key={idea.id} idea={idea} onUpdate={handleUpdate} />
+            <IdeaTriageCard key={idea.id} idea={idea} onUpdate={handleUpdate} onDelete={handleDelete} />
           ))}
         </div>
       )}

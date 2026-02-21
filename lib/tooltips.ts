@@ -41,7 +41,7 @@ export const TOOLTIPS: Record<string, TooltipDef> = {
     description: 'Number of relevant web pages found by searching this topic across news, blogs, and articles.',
   },
   discussions: {
-    title: 'Discussions',
+    title: 'Conversations',
     description: 'Forum threads, Reddit posts, and community discussions where this topic is actively debated.',
   },
   videos: {

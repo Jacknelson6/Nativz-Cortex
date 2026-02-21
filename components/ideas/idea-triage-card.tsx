@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Archive, MessageSquare, ChevronDown, ExternalLink, Clock, Save } from 'lucide-react';
+import { Check, Archive, MessageSquare, ChevronDown, ExternalLink, Clock, Save, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,7 @@ import type { IdeaSubmission } from '@/lib/types/database';
 interface IdeaTriageCardProps {
   idea: IdeaSubmission;
   onUpdate: (updated: IdeaSubmission) => void;
+  onDelete: (id: string) => void;
 }
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'info' | 'success' | 'warning' }> = {
@@ -30,7 +31,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   other: 'Other',
 };
 
-export function IdeaTriageCard({ idea, onUpdate }: IdeaTriageCardProps) {
+export function IdeaTriageCard({ idea, onUpdate, onDelete }: IdeaTriageCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [notes, setNotes] = useState(idea.admin_notes || '');
   const [saving, setSaving] = useState(false);
@@ -203,6 +204,32 @@ export function IdeaTriageCard({ idea, onUpdate }: IdeaTriageCardProps) {
                     Archive
                   </Button>
                 )}
+                <div className="flex-1" />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    setSaving(true);
+                    try {
+                      const res = await fetch(`/api/ideas/${idea.id}`, { method: 'DELETE' });
+                      if (res.ok) {
+                        toast.success('Idea removed.');
+                        onDelete(idea.id);
+                      } else {
+                        toast.error('Failed to remove idea.');
+                      }
+                    } catch {
+                      toast.error('Something went wrong.');
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  disabled={saving}
+                  className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                >
+                  <Trash2 size={14} />
+                  Remove
+                </Button>
               </div>
             </div>
           </motion.div>
