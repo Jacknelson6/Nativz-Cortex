@@ -12,37 +12,43 @@ export function formatBrandPreferencesBlock(
 ): string {
   const sections: string[] = [];
 
+  const toneKeywords = prefs.tone_keywords ?? [];
+  const topicsLeanInto = prefs.topics_lean_into ?? [];
+  const topicsAvoid = prefs.topics_avoid ?? [];
+  const competitorAccounts = prefs.competitor_accounts ?? [];
+  const seasonalPriorities = prefs.seasonal_priorities ?? [];
+
   sections.push(`<brand_context>
 You are generating content ideas for ${clientName}, a ${industry} brand.`);
 
-  if (prefs.tone_keywords.length > 0) {
+  if (toneKeywords.length > 0) {
     sections.push(`<tone_and_voice>
-The brand's tone should reflect these keywords: ${prefs.tone_keywords.join(', ')}
+The brand's tone should reflect these keywords: ${toneKeywords.join(', ')}
 </tone_and_voice>`);
   }
 
-  if (prefs.topics_lean_into.length > 0 || prefs.topics_avoid.length > 0) {
+  if (topicsLeanInto.length > 0 || topicsAvoid.length > 0) {
     sections.push(`<content_priorities>${
-      prefs.topics_lean_into.length > 0
-        ? `\nTopics to lean into and prioritize: ${prefs.topics_lean_into.join(', ')}`
+      topicsLeanInto.length > 0
+        ? `\nTopics to lean into and prioritize: ${topicsLeanInto.join(', ')}`
         : ''
     }${
-      prefs.topics_avoid.length > 0
-        ? `\nTopics to EXPLICITLY AVOID (do NOT generate ideas about these): ${prefs.topics_avoid.join(', ')}`
+      topicsAvoid.length > 0
+        ? `\nTopics to EXPLICITLY AVOID (do NOT generate ideas about these): ${topicsAvoid.join(', ')}`
         : ''
     }
 </content_priorities>`);
   }
 
-  if (prefs.competitor_accounts.length > 0) {
+  if (competitorAccounts.length > 0) {
     sections.push(`<competitive_landscape>
-The brand watches these competitor accounts for differentiation (do NOT copy their content — use them as context for what the market is doing): ${prefs.competitor_accounts.join(', ')}
+The brand watches these competitor accounts for differentiation (do NOT copy their content — use them as context for what the market is doing): ${competitorAccounts.join(', ')}
 </competitive_landscape>`);
   }
 
-  if (prefs.seasonal_priorities.length > 0) {
+  if (seasonalPriorities.length > 0) {
     sections.push(`<seasonal_context>
-Current seasonal priorities: ${prefs.seasonal_priorities.join(', ')}
+Current seasonal priorities: ${seasonalPriorities.join(', ')}
 Today's date: ${new Date().toISOString().split('T')[0]}
 </seasonal_context>`);
   }
@@ -57,10 +63,10 @@ Today's date: ${new Date().toISOString().split('T')[0]}
 export function hasPreferences(prefs: ClientPreferences | null | undefined): prefs is ClientPreferences {
   if (!prefs) return false;
   return (
-    prefs.tone_keywords.length > 0 ||
-    prefs.topics_lean_into.length > 0 ||
-    prefs.topics_avoid.length > 0 ||
-    prefs.competitor_accounts.length > 0 ||
-    prefs.seasonal_priorities.length > 0
+    (prefs.tone_keywords?.length ?? 0) > 0 ||
+    (prefs.topics_lean_into?.length ?? 0) > 0 ||
+    (prefs.topics_avoid?.length ?? 0) > 0 ||
+    (prefs.competitor_accounts?.length ?? 0) > 0 ||
+    (prefs.seasonal_priorities?.length ?? 0) > 0
   );
 }

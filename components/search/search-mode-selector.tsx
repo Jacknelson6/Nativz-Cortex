@@ -225,7 +225,7 @@ export function SearchModeSelector({
                 value={topicQuery}
                 onChange={(e) => setTopicQuery(e.target.value)}
                 placeholder="Search a topic..."
-                className="w-full rounded-xl border border-nativz-border bg-surface-hover py-3 pl-10 pr-4 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)]"
+                className="w-full rounded-xl border border-nativz-border bg-surface-hover py-3 pl-10 pr-4 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none"
                 disabled={anyLoading}
               />
             </div>
