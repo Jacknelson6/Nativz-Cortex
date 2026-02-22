@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Loader2, AlertCircle, RotateCcw } from 'lucide-react';
+import { Check, Loader2, AlertCircle, RotateCcw, Brain, Search, MessageSquare, Sparkles, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EncryptedText } from '@/components/ui/encrypted-text';
 
@@ -13,11 +13,11 @@ interface SearchProcessingProps {
 }
 
 const PROGRESS_STAGES = [
-  { label: 'Searching the web', target: 20, duration: 3000 },
-  { label: 'Gathering discussions & videos', target: 40, duration: 5000 },
-  { label: 'Analyzing with AI', target: 65, duration: 15000 },
-  { label: 'Structuring your report', target: 85, duration: 20000 },
-  { label: 'Finalizing results', target: 92, duration: 30000 },
+  { label: 'Searching the web', icon: <Search size={14} />, target: 20, duration: 3000 },
+  { label: 'Gathering discussions & videos', icon: <MessageSquare size={14} />, target: 40, duration: 5000 },
+  { label: 'Analyzing with AI', icon: <Brain size={14} />, target: 65, duration: 15000 },
+  { label: 'Structuring your report', icon: <Sparkles size={14} />, target: 85, duration: 20000 },
+  { label: 'Finalizing results', icon: <FileText size={14} />, target: 92, duration: 30000 },
 ];
 
 export function SearchProcessing({ searchId, query, redirectPrefix }: SearchProcessingProps) {
@@ -118,21 +118,30 @@ export function SearchProcessing({ searchId, query, redirectPrefix }: SearchProc
   }
 
   return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center px-4">
+    <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 animate-fade-slide-in">
       <div className="w-full max-w-md">
         {/* Heading */}
         <div className="text-center mb-8">
-          <p className="text-lg font-semibold text-text-primary mb-1">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[rgba(139,92,246,0.1)] text-[#8B5CF6] text-xs font-medium mb-4">
+            <Brain size={12} />
+            AI research engine
+          </div>
+          <h2 className="text-xl font-semibold text-text-primary">
             Researching &ldquo;{query}&rdquo;
+          </h2>
+          <p className="text-sm text-text-muted mt-1">
+            This takes 1–2 minutes — building your full report
           </p>
-          <p className="text-sm text-text-muted">This usually takes 1–2 minutes</p>
         </div>
 
         {/* Progress bar */}
         <div className="h-2 rounded-full bg-surface-hover overflow-hidden">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-accent to-[#0580f0] transition-all duration-300 ease-out"
-            style={{ width: `${progress}%` }}
+            className="h-full rounded-full transition-all duration-300 ease-out"
+            style={{
+              width: `${progress}%`,
+              background: 'linear-gradient(90deg, #046BD2, #8B5CF6)',
+            }}
           />
         </div>
 
@@ -161,14 +170,14 @@ export function SearchProcessing({ searchId, query, redirectPrefix }: SearchProc
                   </div>
                 ) : (
                   <div className="flex h-5 w-5 items-center justify-center">
-                    <Loader2 size={14} className="animate-spin text-accent" />
+                    <Loader2 size={14} className="animate-spin text-[#8B5CF6]" />
                   </div>
                 )}
                 <span className={`text-sm transition-colors ${
                   isComplete ? 'text-text-muted' : 'text-text-primary font-medium'
                 }`}>
                   {isCurrent ? (
-                    <EncryptedText text={stage.label} revealDelayMs={40} className="text-sm !font-medium" />
+                    <EncryptedText text={stage.label} revealDelayMs={35} className="text-sm !font-medium" />
                   ) : (
                     stage.label
                   )}
@@ -178,10 +187,12 @@ export function SearchProcessing({ searchId, query, redirectPrefix }: SearchProc
           })}
           {done && (
             <div className="flex items-center gap-2.5 animate-fade-slide-in">
-              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent/15">
-                <Check size={12} className="text-accent" />
+              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/15">
+                <Check size={12} className="text-emerald-400" />
               </div>
-              <span className="text-sm text-accent font-medium">Done — opening your report</span>
+              <span className="text-sm text-emerald-400 font-medium">
+                Research complete — opening your report
+              </span>
             </div>
           )}
         </div>
