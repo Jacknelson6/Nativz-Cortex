@@ -89,6 +89,40 @@ export async function fetchMondayClients(): Promise<MondayItem[]> {
   return data.boards[0]?.items_page.items || [];
 }
 
+// ---------------------------------------------------------------------------
+// Create a new client item on the Monday.com board
+// ---------------------------------------------------------------------------
+
+export async function createMondayItem(
+  clientName: string,
+  columnValues?: Record<string, unknown>,
+): Promise<{ id: string } | null> {
+  if (!isMondayConfigured()) return null;
+
+  try {
+    const values = columnValues ? JSON.stringify(JSON.stringify(columnValues)) : '"{}"';
+
+    const data = await mondayQuery<{
+      create_item: { id: string };
+    }>(`
+      mutation {
+        create_item(
+          board_id: ${CLIENTS_BOARD_ID},
+          item_name: "${clientName.replace(/"/g, '\\"')}",
+          column_values: ${values}
+        ) {
+          id
+        }
+      }
+    `);
+
+    return { id: data.create_item.id };
+  } catch (error) {
+    console.error('Monday.com createMondayItem failed:', error);
+    return null;
+  }
+}
+
 /**
  * Parse a Monday.com client item into structured data.
  */

@@ -10,6 +10,8 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { InviteButton } from '@/components/clients/invite-button';
+import { ClientStrategyCard } from '@/components/clients/client-strategy-card';
+import type { ClientStrategy } from '@/lib/types/strategy';
 
 export default async function AdminClientDetailPage({
   params,
@@ -37,7 +39,7 @@ export default async function AdminClientDetailPage({
     // Fetch searches, ideas, and contacts if we have a DB record
     const clientId = dbClient?.id;
 
-    const [{ data: searches }, { data: recentIdeas }, { count: ideaCount }, { data: contacts }] = await Promise.all([
+    const [{ data: searches }, { data: recentIdeas }, { count: ideaCount }, { data: contacts }, { data: strategyData }] = await Promise.all([
       clientId
         ? adminClient
             .from('topic_searches')
@@ -69,11 +71,22 @@ export default async function AdminClientDetailPage({
             .eq('role', 'viewer')
             .order('full_name')
         : Promise.resolve({ data: [] as Array<{ id: string; full_name: string; email: string; avatar_url: string | null; job_title: string | null; last_login: string | null }> }),
+      clientId
+        ? adminClient
+            .from('client_strategies')
+            .select('*')
+            .eq('client_id', clientId)
+            .eq('status', 'completed')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null as ClientStrategy | null }),
     ]);
 
     const items = searches || [];
     const ideas = recentIdeas || [];
     const clientContacts = contacts || [];
+    const existingStrategy = (strategyData as ClientStrategy) ?? null;
 
     return (
       <div className="p-6 space-y-6">
@@ -222,6 +235,15 @@ export default async function AdminClientDetailPage({
             )}
           </Card>
         </div>
+
+        {/* Content strategy */}
+        {clientId && (
+          <ClientStrategyCard
+            clientId={clientId}
+            clientName={vaultProfile.name}
+            initialStrategy={existingStrategy}
+          />
+        )}
 
         {/* Saved ideas */}
         <Card>

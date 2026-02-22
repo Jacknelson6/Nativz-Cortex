@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { PageError } from '@/components/shared/page-error';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
+import { PortalStrategyCard } from '@/components/portal/portal-strategy-card';
 
 export default async function PortalDashboardPage() {
   try {
@@ -100,6 +101,9 @@ export default async function PortalDashboardPage() {
             />
           </div>
         )}
+
+        {/* Content strategy */}
+        <PortalStrategyCard clientId={client.id} clientName={client.name} />
 
         {/* Recent reports */}
         {canViewReports && (

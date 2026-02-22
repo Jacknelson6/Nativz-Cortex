@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
-import { Save, KeyRound } from 'lucide-react';
+import { Save, KeyRound, Calendar, ChevronRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -165,6 +166,24 @@ export default function AdminSettingsPage() {
           </div>
         </Card>
       </form>
+
+      {/* Integrations */}
+      <Card>
+        <h2 className="text-base font-semibold text-text-primary mb-4">Integrations</h2>
+        <Link
+          href="/admin/settings/calendar"
+          className="flex items-center gap-3 p-3 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group"
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10 text-accent">
+            <Calendar size={16} />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-text-primary">Calendar & shoots</p>
+            <p className="text-xs text-text-muted">Connect Google Calendar, manage shoot plans</p>
+          </div>
+          <ChevronRight size={14} className="text-text-muted group-hover:text-text-secondary transition-colors" />
+        </Link>
+      </Card>
 
       {/* Password */}
       <form onSubmit={handleChangePassword} className="space-y-6">

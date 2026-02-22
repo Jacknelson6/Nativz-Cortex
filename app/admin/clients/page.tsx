@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { Plus, Building2 } from 'lucide-react';
+import { Plus, Building2, Sparkles } from 'lucide-react';
 import { getVaultClients } from '@/lib/vault/reader';
 import { Button } from '@/components/ui/button';
+import { GlowButton } from '@/components/ui/glow-button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import { ClientSearchGrid } from '@/components/clients/client-search-grid';
@@ -14,12 +15,20 @@ export default async function AdminClientsPage() {
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-text-primary">Clients</h1>
-          <Link href="/admin/clients/new">
-            <Button>
-              <Plus size={16} />
-              Add client
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/admin/clients/onboard">
+              <GlowButton>
+                <Sparkles size={14} />
+                Onboard
+              </GlowButton>
+            </Link>
+            <Link href="/admin/clients/new">
+              <Button>
+                <Plus size={16} />
+                Add client
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {vaultClients.length === 0 ? (
