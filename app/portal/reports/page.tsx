@@ -9,6 +9,8 @@ import { PageError } from '@/components/shared/page-error';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 
+export const dynamic = 'force-dynamic';
+
 export default async function PortalReportsPage() {
   try {
   const result = await getPortalClient();

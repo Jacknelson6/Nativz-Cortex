@@ -78,6 +78,11 @@ export async function syncClientProfileToVault(
       competitor_accounts?: string[];
       seasonal_priorities?: string[];
     } | null;
+    // Monday.com fields — included in vault profile when provided
+    poc_name?: string;
+    poc_email?: string;
+    services?: string[];
+    agency?: string;
   },
 ): Promise<void> {
   if (!isVaultConfigured()) return;

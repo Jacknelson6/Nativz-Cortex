@@ -5,6 +5,8 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import type { ClientPreferences } from '@/lib/types/database';
 
+export const dynamic = 'force-dynamic';
+
 export default async function PortalPreferencesPage() {
   try {
     const result = await getPortalClient();

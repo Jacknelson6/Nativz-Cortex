@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Search, History } from 'lucide-react';
+import { LayoutDashboard, Users, Search, History, Calendar } from 'lucide-react';
 import { FloatingDock } from '@/components/ui/floating-dock';
 import { Button } from '@/components/ui/button';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
@@ -10,6 +10,7 @@ import { SidebarAccount } from '@/components/layout/sidebar-account';
 const NAV_ITEMS = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/search/history', label: 'Search history', icon: History },
+  { href: '/admin/shoots', label: 'Shoots', icon: Calendar },
   { href: '/admin/clients', label: 'Clients', icon: Users },
 ];
 

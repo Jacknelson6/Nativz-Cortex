@@ -3,6 +3,8 @@ import { SearchModeSelector } from '@/components/search/search-mode-selector';
 import { EmptyState } from '@/components/shared/empty-state';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 
+export const dynamic = 'force-dynamic';
+
 export default async function PortalNewSearchPage() {
   const result = await getPortalClient();
 

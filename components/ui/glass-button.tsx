@@ -33,7 +33,7 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
         type={props.type}
         className={`
           group relative inline-flex w-full items-center justify-center gap-2.5
-          rounded-xl px-6 py-3 text-sm font-semibold
+          rounded-xl px-6 py-3 text-sm font-semibold cursor-pointer
           text-accent-text
           backdrop-blur-[20px]
           bg-[rgba(4,107,210,0.12)]

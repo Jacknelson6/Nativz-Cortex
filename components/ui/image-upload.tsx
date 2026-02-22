@@ -82,7 +82,7 @@ export function ImageUpload({ value, onChange, size = 'md', label }: ImageUpload
         type="button"
         onClick={() => fileRef.current?.click()}
         disabled={uploading}
-        className={`group relative ${sizeMap[size]} rounded-2xl border-2 border-dashed border-nativz-border bg-surface-hover overflow-hidden transition-colors hover:border-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50`}
+        className={`group relative cursor-pointer ${sizeMap[size]} rounded-2xl border-2 border-dashed border-nativz-border bg-surface-hover overflow-hidden transition-colors hover:border-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         {value ? (
           <>
@@ -111,7 +111,7 @@ export function ImageUpload({ value, onChange, size = 'md', label }: ImageUpload
         <button
           type="button"
           onClick={() => onChange(null)}
-          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-500/10"
+          className="cursor-pointer flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-500/10"
         >
           <Trash2 size={12} />
           Remove logo

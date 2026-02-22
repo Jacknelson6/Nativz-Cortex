@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, ExternalLink, CheckCircle2, Users, Target, Lightbulb, TrendingUp, Video, Trophy, ListChecks } from 'lucide-react';
+import { ExternalLink, CheckCircle2, Users, Target, Lightbulb, TrendingUp, Video, Trophy, ListChecks } from 'lucide-react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { GlowButton } from '@/components/ui/glow-button';
 import type { ClientStrategy } from '@/lib/types/strategy';
 import { PdfDownloadButton } from './pdf-download-button';
+import { InviteButton } from '@/components/clients/invite-button';
 
 interface OnboardReviewProps {
   clientId: string;
@@ -167,6 +168,13 @@ export function OnboardReview({ clientId, clientName }: OnboardReviewProps) {
           </GlowButton>
         </Link>
       </div>
+
+      {/* Portal invite */}
+      <Card className="max-w-md mx-auto mb-6">
+        <h3 className="text-sm font-semibold text-text-primary mb-2">Invite to portal</h3>
+        <p className="text-xs text-text-muted mb-3">Send a portal invite so {clientName} can self-serve.</p>
+        <InviteButton clientId={clientId} clientName={clientName} />
+      </Card>
 
       {/* Section tabs */}
       <div className="flex gap-1 overflow-x-auto pb-2 mb-4 scrollbar-none">

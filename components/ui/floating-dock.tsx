@@ -57,7 +57,7 @@ function DockItem({
       <motion.div
         ref={ref}
         style={{ scale }}
-        className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-colors min-h-[44px] ${
+        className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-colors min-h-[44px] cursor-pointer ${
           isActive
             ? 'border-l-[3px] border-accent bg-surface-hover text-text-primary font-semibold'
             : 'border-l-[3px] border-transparent text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium'

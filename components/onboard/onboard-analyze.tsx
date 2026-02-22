@@ -26,6 +26,10 @@ export function OnboardAnalyze({ name, websiteUrl, onNext, onBack }: OnboardAnal
     brand_voice: '',
     topic_keywords: [],
     logo_url: null,
+    poc_name: '',
+    poc_email: '',
+    services: [],
+    agency: '',
   });
   const [newKeyword, setNewKeyword] = useState('');
   const [fieldsEdited, setFieldsEdited] = useState(false);
@@ -228,6 +232,80 @@ export function OnboardAnalyze({ name, websiteUrl, onNext, onBack }: OnboardAnal
               <Button type="button" variant="outline" size="sm" onClick={addKeyword}>
                 Add
               </Button>
+            </div>
+          </div>
+
+          {/* Divider — Monday.com fields */}
+          <div className="border-t border-nativz-border pt-4 mt-2">
+            <p className="text-xs font-medium text-text-muted mb-3">Account details</p>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Input
+                id="poc_name"
+                label="Point of contact name"
+                value={formData.poc_name}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, poc_name: e.target.value }));
+                  setFieldsEdited(true);
+                }}
+                placeholder="e.g. Jane Smith"
+              />
+              <Input
+                id="poc_email"
+                label="Point of contact email"
+                type="email"
+                value={formData.poc_email}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, poc_email: e.target.value }));
+                  setFieldsEdited(true);
+                }}
+                placeholder="e.g. jane@company.com"
+              />
+            </div>
+
+            {/* Services checkboxes */}
+            <div className="mt-4">
+              <label className="block text-xs font-medium text-text-muted mb-2">Services</label>
+              <div className="flex flex-wrap gap-3">
+                {['SMM', 'Paid Media', 'Affiliates', 'Editing'].map((service) => (
+                  <label key={service} className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.services.includes(service)}
+                      onChange={(e) => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          services: e.target.checked
+                            ? [...prev.services, service]
+                            : prev.services.filter((s) => s !== service),
+                        }));
+                        setFieldsEdited(true);
+                      }}
+                      className="accent-accent"
+                    />
+                    {service}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Agency select */}
+            <div className="mt-4">
+              <label htmlFor="agency" className="block text-xs font-medium text-text-muted mb-1.5">Agency</label>
+              <select
+                id="agency"
+                value={formData.agency}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, agency: e.target.value }));
+                  setFieldsEdited(true);
+                }}
+                className="w-full cursor-pointer rounded-xl border border-nativz-border bg-surface-hover px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-colors"
+              >
+                <option value="">Select agency...</option>
+                <option value="Anderson Collaborative">Anderson Collaborative</option>
+                <option value="Nativz">Nativz</option>
+                <option value="Other">Other</option>
+              </select>
             </div>
           </div>
 

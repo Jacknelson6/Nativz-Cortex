@@ -13,6 +13,10 @@ const onboardSchema = z.object({
   brand_voice: z.string().optional().default(''),
   topic_keywords: z.array(z.string()).optional().default([]),
   logo_url: z.string().nullable().optional().default(null),
+  poc_name: z.string().optional().default(''),
+  poc_email: z.string().optional().default(''),
+  services: z.array(z.string()).optional().default([]),
+  agency: z.string().optional().default(''),
 });
 
 export async function POST(request: NextRequest) {
@@ -44,10 +48,21 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsed.data;
-    const slug = data.name
+    let slug = data.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
+
+    // Check for slug collision and append suffix if needed
+    const { data: existing } = await adminClient
+      .from('clients')
+      .select('slug')
+      .eq('slug', slug)
+      .maybeSingle();
+
+    if (existing) {
+      slug = `${slug}-${Date.now().toString(36)}`;
+    }
 
     // Provision across all three systems in parallel
     const [cortexResult, vaultResult, mondayResult] = await Promise.allSettled([
@@ -98,13 +113,40 @@ export async function POST(request: NextRequest) {
           brand_voice: data.brand_voice,
           topic_keywords: data.topic_keywords,
           logo_url: data.logo_url,
+          poc_name: data.poc_name,
+          poc_email: data.poc_email,
+          services: data.services,
+          agency: data.agency,
         });
         return { synced: true };
       })(),
 
-      // 3. Create in Monday.com
+      // 3. Create in Monday.com with column values
       (async () => {
-        const result = await createMondayItem(data.name);
+        // Build Monday.com column values for services, agency, POC
+        const columnValues: Record<string, unknown> = {};
+
+        // Service columns (status columns: "Yes" to enable)
+        if (data.services.includes('SMM')) columnValues.color_mktsd6y7 = { label: 'Yes' };
+        if (data.services.includes('Paid Media')) columnValues.color_mkwz9cwd = { label: 'Yes' };
+        if (data.services.includes('Affiliates')) columnValues.color_mktsmz4y = { label: 'Yes' };
+        if (data.services.includes('Editing')) columnValues.color_mkwqhwx = { label: 'Yes' };
+
+        // Agency column (status column)
+        if (data.agency) columnValues.color_mkrw743r = { label: data.agency };
+
+        // POC column (long text: "Name <email>")
+        if (data.poc_name || data.poc_email) {
+          const pocText = data.poc_email
+            ? `${data.poc_name} <${data.poc_email}>`
+            : data.poc_name;
+          columnValues.long_text_mkxm4whr = { text: pocText };
+        }
+
+        const result = await createMondayItem(
+          data.name,
+          Object.keys(columnValues).length > 0 ? columnValues : undefined,
+        );
         return result ? { mondayId: result.id } : { mondayId: null };
       })(),
     ]);

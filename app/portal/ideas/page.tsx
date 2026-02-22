@@ -6,6 +6,8 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import type { IdeaSubmission } from '@/lib/types/database';
 
+export const dynamic = 'force-dynamic';
+
 export default async function PortalIdeasPage() {
   try {
     const result = await getPortalClient();

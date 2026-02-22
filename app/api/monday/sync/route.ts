@@ -6,12 +6,64 @@
  * while updating Monday.com-owned fields (services, POC, abbreviation).
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { isVaultConfigured } from '@/lib/vault/github';
-import { isMondayConfigured } from '@/lib/monday/client';
+import { isMondayConfigured, fetchMondayClients, parseMondayClient } from '@/lib/monday/client';
 import { syncAllMondayClients } from '@/lib/monday/sync';
 
 export const maxDuration = 60;
+
+/**
+ * GET /api/monday/sync?client_name=...
+ *
+ * Fetch a single client's Monday.com data by matching on name.
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const adminClient = createAdminClient();
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || userData.role !== 'admin') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
+    const clientName = request.nextUrl.searchParams.get('client_name');
+    if (!clientName) {
+      return NextResponse.json({ error: 'client_name is required' }, { status: 400 });
+    }
+
+    if (!isMondayConfigured()) {
+      return NextResponse.json({ error: 'Monday.com not configured' }, { status: 503 });
+    }
+
+    const items = await fetchMondayClients();
+    const match = items.find(
+      (item) => item.name.toLowerCase() === clientName.toLowerCase(),
+    );
+
+    if (!match) {
+      return NextResponse.json({ error: 'Not found in Monday.com' }, { status: 404 });
+    }
+
+    const parsed = parseMondayClient(match);
+    return NextResponse.json(parsed);
+  } catch (error) {
+    console.error('GET /api/monday/sync error:', error);
+    return NextResponse.json({ error: 'Failed to fetch Monday.com data' }, { status: 500 });
+  }
+}
 
 export async function POST() {
   try {

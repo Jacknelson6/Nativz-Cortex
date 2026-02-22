@@ -11,6 +11,8 @@ import { formatRelativeTime } from '@/lib/utils/format';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 import { PortalStrategyCard } from '@/components/portal/portal-strategy-card';
 
+export const dynamic = 'force-dynamic';
+
 export default async function PortalDashboardPage() {
   try {
     const result = await getPortalClient();

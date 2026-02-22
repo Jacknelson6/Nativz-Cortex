@@ -50,7 +50,7 @@ export function Dialog({ open, onClose, title, children, maxWidth = 'md' }: Dial
           <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
+            className="cursor-pointer rounded-lg p-1 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
             aria-label="Close dialog"
           >
             <X size={20} />

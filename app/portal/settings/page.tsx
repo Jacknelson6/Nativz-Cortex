@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
+export const dynamic = 'force-dynamic';
+
 export default async function PortalSettingsPage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();

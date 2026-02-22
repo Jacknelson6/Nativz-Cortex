@@ -59,7 +59,7 @@ export function InviteButton({ clientId, clientName }: InviteButtonProps) {
           <button
             type="button"
             onClick={handleCopy}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-nativz-border bg-surface-hover text-text-muted hover:bg-accent-surface hover:text-accent-text hover:border-accent/30 transition-colors"
+            className="cursor-pointer flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-nativz-border bg-surface-hover text-text-muted hover:bg-accent-surface hover:text-accent-text hover:border-accent/30 transition-colors"
           >
             {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
           </button>
@@ -67,7 +67,7 @@ export function InviteButton({ clientId, clientName }: InviteButtonProps) {
         <button
           type="button"
           onClick={() => { setInviteUrl(null); setCopied(false); }}
-          className="text-xs text-text-muted hover:text-text-secondary transition-colors"
+          className="cursor-pointer text-xs text-text-muted hover:text-text-secondary transition-colors"
         >
           Generate new link
         </button>
@@ -81,7 +81,7 @@ export function InviteButton({ clientId, clientName }: InviteButtonProps) {
         type="button"
         onClick={handleCreateInvite}
         disabled={loading}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-nativz-border bg-surface-hover px-4 py-3 text-sm text-text-muted hover:border-accent/30 hover:text-accent-text hover:bg-accent-surface/30 transition-colors disabled:opacity-50"
+        className="cursor-pointer flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-nativz-border bg-surface-hover px-4 py-3 text-sm text-text-muted hover:border-accent/30 hover:text-accent-text hover:bg-accent-surface/30 transition-colors disabled:opacity-50"
       >
         {loading ? (
           <>

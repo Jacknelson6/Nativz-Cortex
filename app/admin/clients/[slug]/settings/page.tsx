@@ -56,6 +56,14 @@ export default function AdminClientSettingsPage() {
   const [canSubmitIdeas, setCanSubmitIdeas] = useState(false);
   const [isActive, setIsActive] = useState(true);
 
+  // Monday.com fields
+  const [services, setServices] = useState<string[]>([]);
+  const [agency, setAgency] = useState('');
+  const [pocName, setPocName] = useState('');
+  const [pocEmail, setPocEmail] = useState('');
+  const [abbreviation, setAbbreviation] = useState('');
+  const [mondayItemId, setMondayItemId] = useState<string | null>(null);
+
   // Preferences
   const [toneKeywords, setToneKeywords] = useState<string[]>([]);
   const [topicsLeanInto, setTopicsLeanInto] = useState<string[]>([]);
@@ -96,6 +104,24 @@ export default function AdminClientSettingsPage() {
           setTopicsAvoid(p.topics_avoid || []);
           setCompetitorAccounts(p.competitor_accounts || []);
           setSeasonalPriorities(p.seasonal_priorities || []);
+        }
+
+        // Fetch Monday.com fields for this client
+        try {
+          const mondayRes = await fetch(`/api/monday/sync?client_name=${encodeURIComponent(data.name)}`);
+          if (mondayRes.ok) {
+            const mondayData = await mondayRes.json();
+            if (mondayData.mondayId) setMondayItemId(mondayData.mondayId);
+            if (mondayData.services) setServices(mondayData.services);
+            if (mondayData.agency) setAgency(mondayData.agency);
+            if (mondayData.abbreviation) setAbbreviation(mondayData.abbreviation);
+            if (mondayData.contacts?.length > 0) {
+              setPocName(mondayData.contacts[0].name || '');
+              setPocEmail(mondayData.contacts[0].email || '');
+            }
+          }
+        } catch {
+          // Monday.com fetch is non-critical
         }
       } else {
         // Fallback: try vault data via API
@@ -232,6 +258,22 @@ export default function AdminClientSettingsPage() {
           toast.success('Settings saved.');
         }
       }
+
+      // Sync Monday.com fields (non-blocking)
+      if (mondayItemId) {
+        fetch('/api/monday/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            monday_item_id: mondayItemId,
+            services,
+            agency,
+            poc_name: pocName,
+            poc_email: pocEmail,
+            abbreviation,
+          }),
+        }).catch(() => {});
+      }
     } catch {
       toast.error('Something went wrong. Try again.');
     } finally {
@@ -337,6 +379,79 @@ export default function AdminClientSettingsPage() {
             </div>
           </Card>
         </div>
+
+        {/* Monday.com fields */}
+        <Card>
+          <h2 className="text-base font-semibold text-text-primary mb-1">Monday.com fields</h2>
+          <p className="text-sm text-text-muted mb-4">
+            These sync to the Monday.com clients board.
+            {!mondayItemId && <span className="text-amber-400 ml-1">No Monday.com item linked.</span>}
+          </p>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Input
+                id="poc_name"
+                label="Point of contact name"
+                value={pocName}
+                onChange={(e) => setPocName(e.target.value)}
+                placeholder="e.g. Jane Smith"
+              />
+              <Input
+                id="poc_email"
+                label="Point of contact email"
+                type="email"
+                value={pocEmail}
+                onChange={(e) => setPocEmail(e.target.value)}
+                placeholder="e.g. jane@company.com"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-text-muted mb-2">Services</label>
+              <div className="flex flex-wrap gap-3">
+                {['SMM', 'Paid Media', 'Affiliates', 'Editing'].map((svc) => (
+                  <label key={svc} className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={services.includes(svc)}
+                      onChange={(e) => {
+                        setServices((prev) =>
+                          e.target.checked ? [...prev, svc] : prev.filter((s) => s !== svc),
+                        );
+                      }}
+                      className="accent-accent"
+                    />
+                    {svc}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="agency" className="block text-xs font-medium text-text-muted mb-1.5">Agency</label>
+                <select
+                  id="agency"
+                  value={agency}
+                  onChange={(e) => setAgency(e.target.value)}
+                  className="w-full cursor-pointer rounded-xl border border-nativz-border bg-surface-hover px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-colors"
+                >
+                  <option value="">Select agency...</option>
+                  <option value="Anderson Collaborative">Anderson Collaborative</option>
+                  <option value="Nativz">Nativz</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <Input
+                id="abbreviation"
+                label="Abbreviation"
+                value={abbreviation}
+                onChange={(e) => setAbbreviation(e.target.value)}
+                placeholder="e.g. ABC"
+              />
+            </div>
+          </div>
+        </Card>
 
         {/* Row 2: Brand preferences + Portal access */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

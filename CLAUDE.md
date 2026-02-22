@@ -19,6 +19,7 @@ The core problem: videographers show up on set without knowing what to film. Thi
 - **Charts:** Recharts
 - **Icons:** lucide-react
 - **Validation:** Zod
+- **Vault:** Obsidian-style markdown notes synced via GitHub API
 
 ## Common Commands
 
@@ -38,54 +39,79 @@ npx tsc --noEmit     # Type-check without emitting
 - `/admin/login` — Admin login
 - `/admin/dashboard` — Overview stats, recent searches, quick actions
 - `/admin/clients` — Client list
-- `/admin/clients/[slug]` — Client detail (info, recent searches)
-- `/admin/clients/[slug]/settings` — Client feature toggles, industry, brand info
-- `/admin/search/new` — Run a new topic search (with client selector)
+- `/admin/clients/[slug]` — Client detail (vault-powered profile, recent searches, invite button)
+- `/admin/clients/[slug]/settings` — Client feature toggles, industry, brand info, logo upload
+- `/admin/search/new` — Dual-mode search: Brand intel + Topic research cards
 - `/admin/search/[id]` — View search results + approve/reject
+- `/admin/search/[id]/processing` — Animated progress while AI processes
 - `/admin/search/history` — All searches across clients
+- `/admin/settings` — Admin account settings
 
 **Portal** (`/portal/*`):
 - `/portal/login` — Client login
+- `/portal/join/[token]` — Invite signup (public, no auth required)
 - `/portal/dashboard` — Welcome, recent approved reports, quick search
-- `/portal/search/new` — Run a topic search (scoped to client's org)
+- `/portal/search/new` — Dual-mode search (brand card pre-filled with client)
 - `/portal/search/[id]` — View search results (read-only)
 - `/portal/reports` — Approved reports list
-- `/portal/settings` — View profile, industry terms, brand info
+- `/portal/settings` — View profile
+- `/portal/preferences` — Edit brand preferences
+- `/portal/ideas` — Idea submissions
 
 **API routes:**
-- `POST /api/search` — Execute topic search (Brave Search → Claude → store)
+- `POST /api/search/start` — Kick off topic search (creates record, returns ID)
+- `POST /api/search/[id]/process` — Execute search (Brave → Claude → store results)
 - `GET /api/search/[id]` — Retrieve stored search result
 - `PATCH /api/search/[id]` — Approve/reject search (admin only)
 - `GET /api/clients` — List clients (admin) or get own org's clients (portal)
 - `POST /api/clients` — Create client (admin)
 - `PATCH /api/clients/[id]` — Update client settings (admin)
+- `POST /api/clients/upload-logo` — Upload client logo image
+- `POST /api/clients/analyze-url` — Analyze client website URL to auto-fill profile
+- `GET/PATCH /api/clients/preferences` — Client brand preferences
+- `POST /api/invites` — Generate portal invite token (admin)
+- `GET /api/invites/validate` — Check if invite token is valid
+- `POST /api/invites/accept` — Accept invite and create portal user account
+- `GET/POST /api/ideas` — Idea submissions CRUD
+- `PATCH /api/ideas/[id]` — Update idea status (approve/reject)
 - `POST /api/auth/logout` — Sign out
+- `/api/vault/*` — Vault provisioning, sync, search, indexing
+- `/api/monday/*` — Monday.com webhook + sync
 
 ### Key Directories
 
 - `lib/brave/` — Brave Search API client (`client.ts`) and response types (`types.ts`)
 - `lib/ai/` — OpenRouter API client (`client.ts`) and JSON parser (`parse.ts`)
 - `lib/supabase/` — Supabase clients: `client.ts` (browser), `server.ts` (server), `admin.ts` (service role), `middleware.ts` (auth + role routing)
-- `lib/prompts/topic-research.ts` — AI prompt template (accepts Brave SERP data)
+- `lib/prompts/` — AI prompt templates: `topic-research.ts` (general), `client-strategy.ts` (brand-aware), `brand-context.ts` (shared brand context builder)
 - `lib/types/search.ts` — TypeScript interfaces for topic search flow
 - `lib/types/database.ts` — Database table interfaces (clients, reports, etc.)
-- `lib/utils/` — Formatting helpers, sentiment utilities
+- `lib/utils/` — Formatting helpers, sentiment utilities, metrics computation
+- `lib/vault/` — Obsidian vault integration: `github.ts` (GitHub API), `reader.ts` (read client profiles), `sync.ts` (write search results), `formatter.ts` (markdown formatting), `parser.ts` (parse vault notes), `indexer.ts` (search indexing)
+- `lib/monday/` — Monday.com integration: `client.ts` (API), `sync.ts` (data sync)
+- `lib/portal/get-portal-client.ts` — Resolve current portal user's client + org
 - `lib/brand.ts` — Nativz branding constants
-- `components/layout/` — Admin sidebar, portal sidebar, shared header
-- `components/ui/` — Base UI components (Button, Card, Input, Badge, Select, Dialog)
+- `lib/tooltips.ts` — Tooltip content strings
+- `components/layout/` — Admin sidebar, portal sidebar, shared header, mobile sidebar, notification bell, sidebar account
+- `components/ui/` — Base UI components (Button, Card, Input, Badge, Select, Dialog, GlassButton, GlowButton, Toggle, ImageUpload, TagInput, etc.)
 - `components/charts/` — Recharts chart components (activity-chart, trend-line)
-- `components/results/` — Result page sections (metrics-row, emotions-breakdown, content-breakdown, trending-topics-table, topic-row-expanded, video-idea-card)
-- `components/search/` — Search form components (search-form, filter-chip, client-selector)
+- `components/results/` — Result page sections (metrics-row, emotions-breakdown, content-breakdown, content-pillars, niche-insights, sources-panel, trending-topics-table, topic-row-expanded, video-idea-card)
+- `components/search/` — Search components: `search-mode-selector.tsx` (dual-card selector), `search-processing.tsx` (progress animation), `filter-chip.tsx`, `client-selector.tsx`, `history-filters.tsx`
+- `components/ideas/` — Idea triage list, idea cards, idea submit dialog
+- `components/clients/` — Client search grid, invite button
 - `components/reports/executive-summary.tsx` — AI summary card
-- `components/shared/` — Stat cards, loading skeletons, empty-state
-- `supabase/schema.sql` — Full database schema
+- `components/shared/` — Stat cards, loading skeletons, empty-state, page-error
+- `components/preferences/` — Brand preferences form
 
 ### Data Flow
 
-1. User enters a topic on the search page with optional filters (source, time range, language, country, client)
-2. `POST /api/search` → calls Brave Search API (3 parallel calls: web, discussions, videos) → builds prompt with SERP data → calls Claude via OpenRouter → parses structured JSON → stores in `topic_searches` → returns ID
-3. User is redirected to the results page where the server component fetches results and renders all sections
-4. Admin can approve a completed search → sets `approved_at` → client portal users can now see it
+1. User picks "Brand intel" or "Topic research" on the search page (dual-card UI)
+2. `POST /api/search/start` creates a `topic_searches` record with `status: 'processing'` and `search_mode` field
+3. Client is redirected to the processing page which calls `POST /api/search/[id]/process`
+4. Process route: Brave Search API (3 parallel calls) → builds prompt (with optional client context) → Claude via OpenRouter → parses JSON → validates source URLs against SERP → computes metrics → stores results
+5. Processing page polls for completion, then redirects to results page
+6. Admin can approve a completed search → sets `approved_at` → client portal users can now see it
+7. Completed searches are auto-synced to Obsidian vault via GitHub (non-blocking)
 
 ### Auth & Roles
 
@@ -93,22 +119,43 @@ npx tsc --noEmit     # Type-check without emitting
 - Two roles in `users` table: `admin` (Nativz team) and `viewer` (client users)
 - `middleware.ts` protects all `/admin/*` and `/portal/*` routes
 - Admins can only access `/admin/*`; viewers redirected to `/portal/*`
-- Login pages (`/admin/login`, `/portal/login`) are public
+- Public routes: `/admin/login`, `/portal/login`, `/portal/join/*` (invite signup)
 - Legacy routes (`/`, `/login`, `/search/*`, `/history`) redirect to admin login
+- Role cached in httpOnly cookie (`x-user-role`, 10 min) to avoid DB query per request
 
 ### Database Tables
 
 **`topic_searches`** — Core table for search queries and AI-generated results:
 - `query`, `source`, `time_range`, `language`, `country` — Search parameters
 - `client_id` — Optional client attachment
+- `search_mode` — `'general'` or `'client_strategy'`
 - `status` — pending, processing, completed, failed
-- `summary`, `metrics`, `activity_data`, `emotions`, `content_breakdown`, `trending_topics` — Parsed AI response sections
+- `summary`, `metrics`, `emotions`, `content_breakdown`, `trending_topics` — Parsed AI response sections
+- `serp_data` — Raw Brave SERP data for reference
 - `approved_at`, `approved_by` — Admin approval tracking
 - `raw_ai_response` — Full AI response for debugging
 - `tokens_used`, `estimated_cost` — Usage tracking
 
-**`clients`** — Client records with `feature_flags` JSONB column:
-- `feature_flags`: `{ "can_search": true, "can_view_reports": true }`
+**`clients`** — Client records:
+- `name`, `slug`, `industry`, `target_audience`, `brand_voice`, `topic_keywords`, `website_url`
+- `organization_id` — Links to an organization for portal access
+- `feature_flags` JSONB: `{ "can_search", "can_view_reports", "can_edit_preferences", "can_submit_ideas" }`
+- `preferences` JSONB — Brand preferences (content types, posting frequency, etc.)
+- `is_active` — Soft delete flag
+
+**`users`** — App users:
+- `role` — `'admin'` or `'viewer'`
+- `organization_id` — Links viewer to their client org
+- `full_name`, `avatar_url`
+
+**`invite_tokens`** — Portal invite links:
+- `token` — Unique hex string (auto-generated)
+- `client_id`, `organization_id` — Links invite to a client
+- `expires_at` — 7-day default expiry
+- `used_at`, `used_by` — One-time use tracking
+- `created_by` — Admin who generated the invite
+
+**`ideas`** — Video idea submissions with status tracking
 
 ## Credentials Needed
 
@@ -126,6 +173,11 @@ npx tsc --noEmit     # Type-check without emitting
 
 4. **Vercel:**
    - `NEXT_PUBLIC_APP_URL`
+
+5. **Vault (GitHub):**
+   - `VAULT_GITHUB_TOKEN`
+   - `VAULT_GITHUB_OWNER`
+   - `VAULT_GITHUB_REPO`
 
 ## Session startup
 
@@ -155,7 +207,7 @@ This project uses **Ars Contexta** as its persistent memory system. The plugin i
 - API routes validate input with Zod schemas and check auth before processing
 - Dynamic route params in Next.js 15 use `params: Promise<{ id: string }>` pattern (must `await params`)
 - Search data gathered via Brave Search API (`lib/brave/client.ts`), then structured by Claude via OpenRouter (`lib/ai/client.ts`)
-- UI follows a card-based pattern: white cards on `bg-gray-50`, indigo accent for active states and CTAs
+- UI uses dark theme with card-based layout: `bg-surface` cards on `bg-background`, blue accent (`accent-text`) for active states and CTAs
 - All UI copy uses **sentence case** (only capitalize first word + proper nouns)
 - Use `getSentimentColorClass(score)` and `getSentimentBadgeVariant(score)` from `lib/utils/sentiment.ts`
 - Use the `interactive` prop on `<Card>` for any card wrapped in a `<Link>`
@@ -164,4 +216,7 @@ This project uses **Ars Contexta** as its persistent memory system. The plugin i
 - Button labels start with a verb and name the specific action
 - Admin pages use `createAdminClient()` (service role) for unrestricted data access
 - Portal pages scope data to the user's organization via `organization_id`
-- `SearchForm` accepts `redirectPrefix` prop (`"/admin"` or `"/portal"`) for routing
+- AI response fields must always use null safety (`?? []`, `?? ''`, `?? 0`) — Claude sometimes returns incomplete JSON
+- Performance: vault GitHub fetches use `next: { revalidate: 300 }` (5 min cache), layout user data uses `unstable_cache()`, middleware role uses httpOnly cookie
+- Glass buttons (`components/ui/glass-button.tsx`) for primary search actions; glow buttons (`components/ui/glow-button.tsx`) for settings CTAs
+- Brand colors: blue (`#046BD2` / `rgba(4, 107, 210, ...)`) and purple (`#8B5CF6` / `rgba(139, 92, 246, ...)`)
