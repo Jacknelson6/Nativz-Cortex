@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, ExternalLink, CheckCircle2, Users, Target, Lightbulb, TrendingUp, Video, Trophy, ListChecks, BarChart3 } from 'lucide-react';
+import { Loader2, ExternalLink, CheckCircle2, Users, Target, Lightbulb, TrendingUp, Video, Trophy, ListChecks } from 'lucide-react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,6 @@ interface OnboardReviewProps {
 const SECTION_ICONS: Record<string, React.ReactNode> = {
   audience: <Users size={14} />,
   pillars: <Target size={14} />,
-  platforms: <BarChart3 size={14} />,
   trends: <TrendingUp size={14} />,
   videos: <Video size={14} />,
   competitive: <Trophy size={14} />,
@@ -99,7 +98,6 @@ export function OnboardReview({ clientId, clientName }: OnboardReviewProps) {
     { key: 'summary', label: 'Summary', icon: <Lightbulb size={14} /> },
     { key: 'audience', label: 'Audience', icon: SECTION_ICONS.audience },
     { key: 'pillars', label: 'Pillars', icon: SECTION_ICONS.pillars },
-    { key: 'platforms', label: 'Platforms', icon: SECTION_ICONS.platforms },
     { key: 'trends', label: 'Trends', icon: SECTION_ICONS.trends },
     { key: 'videos', label: 'Videos', icon: SECTION_ICONS.videos },
     { key: 'competitive', label: 'Competitive', icon: SECTION_ICONS.competitive },
@@ -275,29 +273,6 @@ export function OnboardReview({ clientId, clientName }: OnboardReviewProps) {
                     )}
                   </div>
                 </div>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {activeSection === 'platforms' && (strategy.platform_strategy ?? []).length > 0 && (
-          <div className="grid gap-3">
-            {(strategy.platform_strategy ?? []).map((p, i) => (
-              <Card key={i}>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-semibold text-text-primary">{p.platform}</h4>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                    p.priority === 'primary' ? 'bg-accent/15 text-accent'
-                    : p.priority === 'secondary' ? 'bg-amber-500/15 text-amber-400'
-                    : 'bg-surface-hover text-text-muted'
-                  }`}>
-                    {p.priority}
-                  </span>
-                </div>
-                <p className="text-xs text-text-secondary">{p.rationale}</p>
-                <p className="text-[10px] text-text-muted mt-2">
-                  {p.posting_cadence} • {(p.content_types ?? []).join(', ')}
-                </p>
               </Card>
             ))}
           </div>
