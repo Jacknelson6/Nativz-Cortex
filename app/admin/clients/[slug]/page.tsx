@@ -96,7 +96,7 @@ export default async function AdminClientDetailPage({
             <Link href="/admin/clients" className="shrink-0 text-text-muted hover:text-text-secondary transition-colors">
               <ArrowLeft size={20} />
             </Link>
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.08] text-sm font-bold text-white/70">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-surface text-sm font-bold text-accent-text">
               {vaultProfile.abbreviation || <Building2 size={20} />}
             </div>
             <div className="min-w-0">

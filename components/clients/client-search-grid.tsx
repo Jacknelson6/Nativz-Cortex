@@ -49,7 +49,7 @@ function ClientCard({
   return (
     <Link key={client.slug} href={`/admin/clients/${client.slug}`}>
       <Card interactive className={`animate-stagger-in flex items-start gap-3 ${dimmed ? 'opacity-50 hover:opacity-80' : ''}`} style={{ animationDelay: `${i * 50}ms` }}>
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${dimmed ? 'bg-white/[0.06] text-white/40' : 'bg-white/[0.08] text-white/70'}`}>
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
           {client.abbreviation || <Building2 size={20} />}
         </div>
         <div className="min-w-0 flex-1">

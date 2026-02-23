@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Plus_Jakarta_Sans } from 'next/font/google';
 import { Toaster } from 'sonner';
 import './globals.css';
 
-const inter = Inter({
+const jakarta = Plus_Jakarta_Sans({
   variable: '--font-geist-sans',
   subsets: ['latin'],
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -23,7 +24,7 @@ export default function RootLayout({
       <head>
         <meta name="theme-color" content="#0f1117" />
       </head>
-      <body className={`${inter.variable} antialiased`}>
+      <body className={`${jakarta.variable} antialiased`}>
         {children}
         <Toaster position="bottom-right" richColors />
       </body>

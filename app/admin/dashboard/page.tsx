@@ -16,6 +16,7 @@ import {
   Minus,
 } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getVaultClients } from '@/lib/vault/reader';
 import { StatCard } from '@/components/shared/stat-card';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -170,6 +171,21 @@ export default async function AdminDashboardPage() {
     // --- Active clients list ---
     const activeClients = activeClientsResult.data || [];
 
+    // --- Vault profiles for services data ---
+    const vaultClients = await getVaultClients();
+    const vaultServicesBySlug = new Map<string, string[]>();
+    for (const vc of vaultClients) {
+      vaultServicesBySlug.set(vc.slug, vc.services);
+    }
+
+    // SMM clients = active clients whose vault profile includes SMM
+    const smmClients = activeClients.filter((c) => {
+      const services = vaultServicesBySlug.get(c.slug) ?? [];
+      return services.some((s) =>
+        s === 'SMM' || s.toLowerCase().includes('social media') || s.toLowerCase() === 'smm'
+      );
+    });
+
     // --- Build suggestions from real data ---
     const suggestions: Suggestion[] = [];
 
@@ -307,12 +323,12 @@ export default async function AdminDashboardPage() {
     // Cap at 6 suggestions
     const topSuggestions = suggestions.slice(0, 6);
 
-    // --- Shoot coverage tracker ---
+    // --- Shoot coverage tracker (SMM clients only) ---
     const monthShoots = monthShootsResult.data || [];
     const clientIdsWithShoot = new Set(monthShoots.map((s) => s.client_id).filter(Boolean));
     const monthName = now.toLocaleDateString('en-US', { month: 'long' });
-    const coveredCount = activeClients.filter((c) => clientIdsWithShoot.has(c.id)).length;
-    const uncoveredCount = activeClients.length - coveredCount;
+    const coveredCount = smmClients.filter((c) => clientIdsWithShoot.has(c.id)).length;
+    const uncoveredCount = smmClients.length - coveredCount;
 
     return (
       <div className="p-6 space-y-6">
@@ -354,14 +370,14 @@ export default async function AdminDashboardPage() {
         {/* AI-suggested next actions */}
         <Suggestions suggestions={topSuggestions} />
 
-        {/* Monthly shoot coverage tracker */}
-        {activeClients.length > 0 && (
+        {/* Monthly shoot coverage tracker (SMM clients only) */}
+        {smmClients.length > 0 && (
           <Card>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-semibold text-text-primary">{monthName} shoot coverage</h2>
                 <Badge variant={uncoveredCount === 0 ? 'success' : uncoveredCount >= 3 ? 'warning' : 'default'}>
-                  {coveredCount}/{activeClients.length} covered
+                  {coveredCount}/{smmClients.length} covered
                 </Badge>
               </div>
               <Link href="/admin/shoots" className="text-sm text-accent-text hover:text-accent-hover flex items-center gap-1">
@@ -369,7 +385,7 @@ export default async function AdminDashboardPage() {
               </Link>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-              {activeClients.map((client, i) => {
+              {smmClients.map((client, i) => {
                 const hasShoot = clientIdsWithShoot.has(client.id);
                 return (
                   <div

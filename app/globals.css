@@ -55,7 +55,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-geist-sans), 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
 }
 
 /* Scrollbar styling */
