@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import { HistoryFilters } from '@/components/search/history-filters';
+import { DeleteSearchButton } from '@/components/search/delete-search-button';
 import { formatRelativeTime } from '@/lib/utils/format';
 
 export default async function AdminSearchHistoryPage({
@@ -128,7 +129,10 @@ export default async function AdminSearchHistoryPage({
                   {item.approved_at ? (
                     <Badge variant="success">Sent</Badge>
                   ) : item.status === 'failed' ? (
-                    <Badge variant="danger">Failed</Badge>
+                    <>
+                      <Badge variant="danger">Failed</Badge>
+                      <DeleteSearchButton searchId={item.id} />
+                    </>
                   ) : null}
                 </div>
               </Card>

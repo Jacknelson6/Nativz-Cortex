@@ -95,7 +95,7 @@ export function OnboardInput({ onNext }: OnboardInputProps) {
             )}
           </div>
 
-          <GlassButton type="submit" disabled={!canProceed}>
+          <GlassButton type="submit" disabled={!canProceed} className="w-full">
             <Sparkles size={14} />
             Analyze with AI
           </GlassButton>

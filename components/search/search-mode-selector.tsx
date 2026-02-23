@@ -108,7 +108,7 @@ export function SearchModeSelector({
           language: 'all',
           country: 'us',
           client_id: clientForTopic,
-          search_mode: clientForTopic ? 'client_strategy' : 'general',
+          search_mode: 'general',
         }),
       });
 
@@ -170,6 +170,7 @@ export function SearchModeSelector({
 
             {/* Submit */}
             <GlassButton
+              className="w-full"
               onClick={handleBrandSearch}
               loading={brandLoading}
               disabled={anyLoading || !brandClientId}
@@ -242,6 +243,7 @@ export function SearchModeSelector({
 
             {/* Submit */}
             <GlassButton
+              className="w-full"
               type="submit"
               loading={topicLoading}
               disabled={anyLoading || !topicQuery.trim()}

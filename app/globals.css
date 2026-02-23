@@ -340,6 +340,27 @@ dialog:not([open]) {
   box-shadow: 0 0 24px rgba(4, 107, 210, 0.5), 0 0 48px rgba(4, 107, 210, 0.2);
 }
 
+/* Easter egg animations */
+@keyframes confetti {
+  0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+
+@keyframes bounceIn {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.05); }
+  70% { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-confetti {
+  animation: confetti 3s ease-out forwards;
+}
+
+.animate-bounce-in {
+  animation: bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55) forwards;
+}
+
 /* Reduced motion (Pattern #9) */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Building2, Search, UserX, Trash2, Loader2 } from 'lucide-react';
+import { Building2, Search, UserX, Trash2, Loader2, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ interface ClientItem {
   abbreviation?: string;
   industry: string;
   services: string[];
+  isActive?: boolean;
 }
 
 const STANDARD_SERVICES = ['SMM', 'Paid Media', 'Affiliates', 'Editing'] as const;
@@ -55,60 +56,80 @@ function ClientCard({
   i,
   dimmed,
   onRemove,
+  onReactivate,
 }: {
   client: ClientItem;
   i: number;
   dimmed?: boolean;
   onRemove: (slug: string) => void;
+  onReactivate: (slug: string) => void;
 }) {
-  const [removing, setRemoving] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function lookupClientId(): Promise<string | null> {
+    const lookupRes = await fetch(`/api/clients?slug=${encodeURIComponent(client.slug)}`);
+    if (!lookupRes.ok) return null;
+    const clients = await lookupRes.json();
+    const dbClient = Array.isArray(clients)
+      ? clients.find((c: { slug: string }) => c.slug === client.slug)
+      : null;
+    return dbClient?.id ?? null;
+  }
 
   async function handleRemove(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
     if (!confirm(`Remove ${client.name} from the clients board?`)) return;
 
-    setRemoving(true);
+    setBusy(true);
     try {
-      // Look up the DB client ID by slug
-      const lookupRes = await fetch(`/api/clients?slug=${encodeURIComponent(client.slug)}`);
-      if (!lookupRes.ok) {
-        toast.error('Could not find client in database');
-        return;
-      }
-      const clients = await lookupRes.json();
-      const dbClient = Array.isArray(clients)
-        ? clients.find((c: { slug: string }) => c.slug === client.slug)
-        : null;
+      const clientId = await lookupClientId();
+      if (!clientId) { toast.error('Client not found in database'); return; }
 
-      if (!dbClient) {
-        toast.error('Client not found in database');
-        return;
-      }
-
-      const res = await fetch(`/api/clients/${dbClient.id}`, {
+      const res = await fetch(`/api/clients/${clientId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_active: false }),
       });
 
-      if (!res.ok) {
-        toast.error('Failed to remove client');
-        return;
-      }
-
+      if (!res.ok) { toast.error('Failed to remove client'); return; }
       toast.success(`${client.name} removed`);
       onRemove(client.slug);
     } catch {
       toast.error('Something went wrong');
     } finally {
-      setRemoving(false);
+      setBusy(false);
+    }
+  }
+
+  async function handleReactivate(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    setBusy(true);
+    try {
+      const clientId = await lookupClientId();
+      if (!clientId) { toast.error('Client not found in database'); return; }
+
+      const res = await fetch(`/api/clients/${clientId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: true }),
+      });
+
+      if (!res.ok) { toast.error('Failed to reactivate client'); return; }
+      toast.success(`${client.name} reactivated`);
+      onReactivate(client.slug);
+    } catch {
+      toast.error('Something went wrong');
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
     <Link key={client.slug} href={`/admin/clients/${client.slug}`}>
-      <Card interactive className={`animate-stagger-in flex items-start gap-3 group/card ${dimmed ? 'opacity-50' : ''}`} style={{ animationDelay: `${i * 50}ms` }}>
+      <Card interactive className={`animate-stagger-in flex items-start gap-3 group/card ${dimmed ? 'opacity-50 hover:opacity-80' : ''}`} style={{ animationDelay: `${i * 50}ms` }}>
         <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
           {client.abbreviation || <Building2 size={20} />}
         </div>
@@ -125,15 +146,27 @@ function ClientCard({
             </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={handleRemove}
-          disabled={removing}
-          className="cursor-pointer shrink-0 p-1.5 rounded-md opacity-0 group-hover/card:opacity-100 transition-opacity text-text-muted hover:text-red-400 hover:bg-red-400/10"
-          title={`Remove ${client.name}`}
-        >
-          {removing ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-        </button>
+        {dimmed ? (
+          <button
+            type="button"
+            onClick={handleReactivate}
+            disabled={busy}
+            className="cursor-pointer shrink-0 p-1.5 rounded-md opacity-0 group-hover/card:opacity-100 transition-opacity text-text-muted hover:text-emerald-400 hover:bg-emerald-400/10"
+            title={`Reactivate ${client.name}`}
+          >
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleRemove}
+            disabled={busy}
+            className="cursor-pointer shrink-0 p-1.5 rounded-md opacity-0 group-hover/card:opacity-100 transition-opacity text-text-muted hover:text-red-400 hover:bg-red-400/10"
+            title={`Remove ${client.name}`}
+          >
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+          </button>
+        )}
       </Card>
     </Link>
   );
@@ -147,9 +180,12 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
   }));
 
   const [query, setQuery] = useState('');
-  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const [statusOverrides, setStatusOverrides] = useState<Map<string, boolean>>(new Map());
 
-  const visible = clients.filter((c) => !removed.has(c.slug));
+  const visible = clients.map((c) => ({
+    ...c,
+    isActive: statusOverrides.has(c.slug) ? statusOverrides.get(c.slug) : c.isActive,
+  }));
 
   const filtered = query.trim()
     ? visible.filter((c) => {
@@ -163,11 +199,15 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
       })
     : visible;
 
-  const active = filtered.filter((c) => c.services.length > 0);
-  const inactive = filtered.filter((c) => c.services.length === 0);
+  const active = filtered.filter((c) => c.isActive !== false);
+  const inactive = filtered.filter((c) => c.isActive === false);
 
   function handleRemove(slug: string) {
-    setRemoved((prev) => new Set(prev).add(slug));
+    setStatusOverrides((prev) => new Map(prev).set(slug, false));
+  }
+
+  function handleReactivate(slug: string) {
+    setStatusOverrides((prev) => new Map(prev).set(slug, true));
   }
 
   return (
@@ -193,7 +233,7 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
           {active.length > 0 && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {active.map((client, i) => (
-                <ClientCard key={client.slug} client={client} i={i} onRemove={handleRemove} />
+                <ClientCard key={client.slug} client={client} i={i} onRemove={handleRemove} onReactivate={handleReactivate} />
               ))}
             </div>
           )}
@@ -206,7 +246,7 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {inactive.map((client, i) => (
-                  <ClientCard key={client.slug} client={client} i={i} dimmed onRemove={handleRemove} />
+                  <ClientCard key={client.slug} client={client} i={i} dimmed onRemove={handleRemove} onReactivate={handleReactivate} />
                 ))}
               </div>
             </div>

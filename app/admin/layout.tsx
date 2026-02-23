@@ -5,6 +5,7 @@ import { AdminSidebar, AdminNavItems } from '@/components/layout/admin-sidebar';
 import { Header } from '@/components/layout/header';
 import { SidebarProvider } from '@/components/layout/sidebar-provider';
 import { MobileSidebar } from '@/components/layout/mobile-sidebar';
+import { EasterEgg } from '@/components/easter-egg';
 
 const getCachedUser = unstable_cache(
   async (userId: string) => {
@@ -38,6 +39,7 @@ export default async function AdminLayout({
 
   return (
     <SidebarProvider>
+      <EasterEgg />
       <div className="flex h-screen flex-col">
         <Header />
         <div className="flex flex-1 overflow-hidden">

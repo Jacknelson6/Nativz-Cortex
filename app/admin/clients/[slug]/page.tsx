@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { InviteButton } from '@/components/clients/invite-button';
+import { RemoveClientButton } from '@/components/clients/remove-client-button';
 import { ClientStrategyCard } from '@/components/clients/client-strategy-card';
 import type { ClientStrategy } from '@/lib/types/strategy';
 
@@ -111,6 +112,9 @@ export default async function AdminClientDetailPage({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {clientId && (
+              <RemoveClientButton clientId={clientId} clientName={vaultProfile.name} />
+            )}
             <Link href={`/admin/clients/${slug}/settings`}>
               <Button variant="outline" size="sm">
                 <Settings size={14} />

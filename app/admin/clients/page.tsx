@@ -9,29 +9,33 @@ import { ClientSearchGrid } from '@/components/clients/client-search-grid';
 
 export default async function AdminClientsPage() {
   try {
-    const [vaultClients, dbIndustries] = await Promise.all([
+    const [vaultClients, dbClients] = await Promise.all([
       getVaultClients(),
-      // Fetch industry from DB (backfilled from website analysis)
+      // Fetch industry + is_active from DB
       createAdminClient()
         .from('clients')
-        .select('slug, industry')
-        .eq('is_active', true)
+        .select('slug, industry, is_active')
         .then(({ data }) => {
-          const map = new Map<string, string>();
+          const map = new Map<string, { industry: string; isActive: boolean }>();
           for (const c of data ?? []) {
-            if (c.industry && c.industry !== 'General') {
-              map.set(c.slug, c.industry);
-            }
+            map.set(c.slug, {
+              industry: c.industry && c.industry !== 'General' ? c.industry : '',
+              isActive: c.is_active ?? true,
+            });
           }
           return map;
         }),
     ]);
 
-    // Merge DB industry into vault profiles (DB wins over vault "General")
-    const mergedClients = vaultClients.map((c) => ({
-      ...c,
-      industry: dbIndustries.get(c.slug) || c.industry,
-    }));
+    // Merge DB fields into vault profiles
+    const mergedClients = vaultClients.map((c) => {
+      const db = dbClients.get(c.slug);
+      return {
+        ...c,
+        industry: db?.industry || c.industry,
+        isActive: db?.isActive ?? true,
+      };
+    });
 
     return (
       <div className="p-6 space-y-6">

@@ -8,7 +8,7 @@ interface GlassButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
-  ({ loading, disabled, children, className = '', onClick, ...props }, ref) => {
+  ({ loading, disabled, children, className = '', onClick, type = 'button', ...props }, ref) => {
     const [shaking, setShaking] = useState(false);
     const shakeTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -30,9 +30,9 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
     return (
       <button
         ref={ref}
-        type={props.type}
+        type={type}
         className={`
-          group relative inline-flex w-full items-center justify-center gap-2.5
+          group relative inline-flex items-center justify-center gap-2.5
           rounded-xl px-6 py-3 text-sm font-semibold cursor-pointer
           text-accent-text
           backdrop-blur-[20px]

@@ -150,7 +150,7 @@ export function ClientStrategyCard({ clientId, clientName, initialStrategy }: Cl
                 ? 'Something went wrong. Try generating again.'
                 : `Generate an AI content strategy based on ${clientName}'s brand profile and market trends.`}
             </p>
-            <GlassButton onClick={handleGenerate} disabled={generating} className="w-auto">
+            <GlassButton onClick={handleGenerate} disabled={generating}>
               {generating ? (
                 <Loader2 size={14} className="animate-spin" />
               ) : (
