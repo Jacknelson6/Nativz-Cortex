@@ -128,7 +128,10 @@ export default function AdminSettingsPage() {
       {/* Profile form */}
       <form onSubmit={handleSaveProfile} className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-text-primary">Account settings</h1>
+          <div>
+            <h1 className="text-2xl font-semibold text-text-primary">Account settings</h1>
+            <p className="text-sm text-text-muted mt-0.5">Your profile, integrations, and security</p>
+          </div>
           <Button type="submit" disabled={saving} size="sm">
             <Save size={14} />
             {saving ? 'Saving...' : 'Save profile'}

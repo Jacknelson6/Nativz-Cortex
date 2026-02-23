@@ -18,10 +18,24 @@ export function ConnectCalendar() {
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
 
   useEffect(() => {
     checkStatus();
+    prefetchSessionToken();
   }, []);
+
+  async function prefetchSessionToken() {
+    try {
+      const res = await fetch('/api/calendar/connect');
+      if (res.ok) {
+        const { token } = await res.json();
+        setSessionToken(token);
+      }
+    } catch {
+      // Will retry in handleConnect if needed
+    }
+  }
 
   async function checkStatus() {
     try {
@@ -41,17 +55,21 @@ export function ConnectCalendar() {
   async function handleConnect() {
     setConnecting(true);
     try {
-      // Get a connect session token from our backend
-      const res = await fetch('/api/calendar/connect');
-      if (!res.ok) {
+      // Use pre-fetched token, or fetch one if not available
+      let token = sessionToken;
+      if (!token) {
+        const res = await fetch('/api/calendar/connect');
+        if (!res.ok) {
+          const data = await res.json();
+          toast.error(data.error || 'Could not start calendar auth');
+          return;
+        }
         const data = await res.json();
-        toast.error(data.error || 'Could not start calendar auth');
-        return;
+        token = data.token;
       }
-      const { token } = await res.json();
 
-      // Open Nango OAuth popup
-      const nango = new Nango({ connectSessionToken: token });
+      // Open Nango OAuth popup (must happen in the synchronous part of the click handler)
+      const nango = new Nango({ connectSessionToken: token! });
       const result = await nango.auth('google-calendar');
 
       // Store the connectionId in our DB immediately (no webhook dependency)
@@ -67,6 +85,7 @@ export function ConnectCalendar() {
       }
 
       toast.success('Google Calendar connected — syncing events...');
+      setSessionToken(null); // Token is consumed, clear it
       await handleSync();
       setStatus({ connected: true, lastSynced: new Date().toISOString() });
     } catch (err) {
@@ -78,6 +97,8 @@ export function ConnectCalendar() {
       }
     } finally {
       setConnecting(false);
+      // Pre-fetch a fresh token for next connection attempt
+      prefetchSessionToken();
     }
   }
 

@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Building2, Search, UserX, Trash2, Loader2, RotateCcw } from 'lucide-react';
-import { toast } from 'sonner';
+import { Building2, Search, UserX } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
@@ -17,17 +16,6 @@ interface ClientItem {
 }
 
 const STANDARD_SERVICES = ['SMM', 'Paid Media', 'Affiliates', 'Editing'] as const;
-
-const serviceColors: Record<string, 'info' | 'purple' | 'success' | 'warning' | 'danger'> = {
-  SMM: 'info',
-  'Paid Media': 'purple',
-  Editing: 'success',
-  Affiliates: 'warning',
-};
-
-function getServiceVariant(service: string) {
-  return serviceColors[service] || 'default' as const;
-}
 
 /** Map verbose/non-standard service names to the standard Monday set. */
 function normalizeServices(raw: string[]): string[] {
@@ -45,9 +33,7 @@ function normalizeServices(raw: string[]): string[] {
     } else if (lower.includes('affiliate')) {
       result.add('Affiliates');
     }
-    // Drop non-standard services like "SEO / Blog Content" that don't map
   }
-  // Return in standard order
   return STANDARD_SERVICES.filter((s) => result.has(s));
 }
 
@@ -55,82 +41,15 @@ function ClientCard({
   client,
   i,
   dimmed,
-  onRemove,
-  onReactivate,
 }: {
   client: ClientItem;
   i: number;
   dimmed?: boolean;
-  onRemove: (slug: string) => void;
-  onReactivate: (slug: string) => void;
 }) {
-  const [busy, setBusy] = useState(false);
-
-  async function lookupClientId(): Promise<string | null> {
-    const lookupRes = await fetch(`/api/clients?slug=${encodeURIComponent(client.slug)}`);
-    if (!lookupRes.ok) return null;
-    const clients = await lookupRes.json();
-    const dbClient = Array.isArray(clients)
-      ? clients.find((c: { slug: string }) => c.slug === client.slug)
-      : null;
-    return dbClient?.id ?? null;
-  }
-
-  async function handleRemove(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!confirm(`Remove ${client.name} from the clients board?`)) return;
-
-    setBusy(true);
-    try {
-      const clientId = await lookupClientId();
-      if (!clientId) { toast.error('Client not found in database'); return; }
-
-      const res = await fetch(`/api/clients/${clientId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: false }),
-      });
-
-      if (!res.ok) { toast.error('Failed to remove client'); return; }
-      toast.success(`${client.name} removed`);
-      onRemove(client.slug);
-    } catch {
-      toast.error('Something went wrong');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleReactivate(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    setBusy(true);
-    try {
-      const clientId = await lookupClientId();
-      if (!clientId) { toast.error('Client not found in database'); return; }
-
-      const res = await fetch(`/api/clients/${clientId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: true }),
-      });
-
-      if (!res.ok) { toast.error('Failed to reactivate client'); return; }
-      toast.success(`${client.name} reactivated`);
-      onReactivate(client.slug);
-    } catch {
-      toast.error('Something went wrong');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <Link key={client.slug} href={`/admin/clients/${client.slug}`}>
-      <Card interactive className={`animate-stagger-in flex items-start gap-3 group/card ${dimmed ? 'opacity-50 hover:opacity-80' : ''}`} style={{ animationDelay: `${i * 50}ms` }}>
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
+      <Card interactive className={`animate-stagger-in flex items-start gap-3 ${dimmed ? 'opacity-50 hover:opacity-80' : ''}`} style={{ animationDelay: `${i * 50}ms` }}>
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${dimmed ? 'bg-white/[0.06] text-white/40' : 'bg-white/[0.08] text-white/70'}`}>
           {client.abbreviation || <Building2 size={20} />}
         </div>
         <div className="min-w-0 flex-1">
@@ -139,56 +58,28 @@ function ClientCard({
           {client.services.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
               {client.services.map((service) => (
-                <Badge key={service} variant={getServiceVariant(service)} className="text-[10px] px-1.5 py-0">
+                <Badge key={service} className="text-[10px] px-1.5 py-0">
                   {service}
                 </Badge>
               ))}
             </div>
           )}
         </div>
-        {dimmed ? (
-          <button
-            type="button"
-            onClick={handleReactivate}
-            disabled={busy}
-            className="cursor-pointer shrink-0 p-1.5 rounded-md opacity-0 group-hover/card:opacity-100 transition-opacity text-text-muted hover:text-emerald-400 hover:bg-emerald-400/10"
-            title={`Reactivate ${client.name}`}
-          >
-            {busy ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleRemove}
-            disabled={busy}
-            className="cursor-pointer shrink-0 p-1.5 rounded-md opacity-0 group-hover/card:opacity-100 transition-opacity text-text-muted hover:text-red-400 hover:bg-red-400/10"
-            title={`Remove ${client.name}`}
-          >
-            {busy ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-          </button>
-        )}
       </Card>
     </Link>
   );
 }
 
 export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[] }) {
-  // Normalize services once on mount (memoized via stable reference)
   const clients = rawClients.map((c) => ({
     ...c,
     services: normalizeServices(c.services),
   }));
 
   const [query, setQuery] = useState('');
-  const [statusOverrides, setStatusOverrides] = useState<Map<string, boolean>>(new Map());
-
-  const visible = clients.map((c) => ({
-    ...c,
-    isActive: statusOverrides.has(c.slug) ? statusOverrides.get(c.slug) : c.isActive,
-  }));
 
   const filtered = query.trim()
-    ? visible.filter((c) => {
+    ? clients.filter((c) => {
         const q = query.toLowerCase();
         return (
           c.name.toLowerCase().includes(q) ||
@@ -197,18 +88,10 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
           c.services.some((s) => s.toLowerCase().includes(q))
         );
       })
-    : visible;
+    : clients;
 
   const active = filtered.filter((c) => c.isActive !== false);
   const inactive = filtered.filter((c) => c.isActive === false);
-
-  function handleRemove(slug: string) {
-    setStatusOverrides((prev) => new Map(prev).set(slug, false));
-  }
-
-  function handleReactivate(slug: string) {
-    setStatusOverrides((prev) => new Map(prev).set(slug, true));
-  }
 
   return (
     <>
@@ -233,7 +116,7 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
           {active.length > 0 && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {active.map((client, i) => (
-                <ClientCard key={client.slug} client={client} i={i} onRemove={handleRemove} onReactivate={handleReactivate} />
+                <ClientCard key={client.slug} client={client} i={i} />
               ))}
             </div>
           )}
@@ -246,7 +129,7 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {inactive.map((client, i) => (
-                  <ClientCard key={client.slug} client={client} i={i} dimmed onRemove={handleRemove} onReactivate={handleReactivate} />
+                  <ClientCard key={client.slug} client={client} i={i} dimmed />
                 ))}
               </div>
             </div>

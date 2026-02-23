@@ -131,29 +131,29 @@ export function SearchModeSelector({
     <div className="w-full">
       {/* Header */}
       <div className="text-center mb-10">
-        <h1 className="text-3xl font-bold text-text-primary">What would you like to research today?</h1>
+        <h1 className="text-3xl font-bold text-white">What would you like to research today?</h1>
       </div>
 
       {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-0 items-stretch max-w-3xl mx-auto">
         {/* Brand intel card */}
-        <div className="flex flex-col rounded-2xl border border-nativz-border bg-surface p-6 transition-colors hover:border-[rgba(4,107,210,0.3)]">
+        <div className="flex flex-col rounded-xl border border-white/[0.06] bg-white/[0.03] p-7 transition-colors hover:border-white/[0.12]">
           <div className="flex items-center gap-2.5 mb-1">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-surface">
               <Building2 size={16} className="text-accent-text" />
             </div>
-            <h2 className="text-base font-semibold text-text-primary">Brand intel</h2>
+            <h2 className="text-base font-semibold text-white">Brand intel</h2>
           </div>
-          <p className="text-sm text-text-muted mb-6 ml-[42px]">
+          <p className="text-sm text-white/50 mb-6 ml-[42px]">
             What are people saying about your brand?
           </p>
 
           <div className="flex flex-col flex-1 space-y-4">
             {/* Client selector */}
             {portalMode ? (
-              <div className="flex items-center gap-2 rounded-xl border border-nativz-border bg-surface-hover px-3.5 py-3">
-                <Building2 size={16} className="text-text-muted" />
-                <span className="text-sm text-text-primary">{fixedClientName}</span>
+              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-3">
+                <Building2 size={16} className="text-white/40" />
+                <span className="text-sm text-white">{fixedClientName}</span>
               </div>
             ) : (
               <ClientPickerTrigger
@@ -185,48 +185,48 @@ export function SearchModeSelector({
         <div className="flex items-center justify-center">
           {/* Vertical (desktop) */}
           <div className="hidden md:flex flex-col items-center gap-3 px-6">
-            <div className="w-px flex-1 min-h-[40px] bg-nativz-border" />
-            <span className="text-xs font-medium text-text-muted uppercase tracking-widest bg-background px-2 py-1 rounded-full border border-nativz-border">
+            <div className="w-px flex-1 min-h-[40px] bg-white/10" />
+            <span className="text-xs font-medium text-white/40 uppercase tracking-widest">
               or
             </span>
-            <div className="w-px flex-1 min-h-[40px] bg-nativz-border" />
+            <div className="w-px flex-1 min-h-[40px] bg-white/10" />
           </div>
           {/* Horizontal (mobile) */}
           <div className="flex md:hidden items-center gap-3 w-full py-6">
-            <div className="h-px flex-1 bg-nativz-border" />
-            <span className="text-xs font-medium text-text-muted uppercase tracking-widest bg-background px-2 py-1 rounded-full border border-nativz-border">
+            <div className="h-px flex-1 bg-white/10" />
+            <span className="text-xs font-medium text-white/40 uppercase tracking-widest">
               or
             </span>
-            <div className="h-px flex-1 bg-nativz-border" />
+            <div className="h-px flex-1 bg-white/10" />
           </div>
         </div>
 
         {/* Topic research card */}
         <form
           onSubmit={handleTopicSearch}
-          className="rounded-2xl border border-nativz-border bg-surface p-6 transition-colors hover:border-[rgba(4,107,210,0.3)]"
+          className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-7 transition-colors hover:border-white/[0.12]"
         >
           <div className="flex items-center gap-2.5 mb-1">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-surface">
               <TrendingUp size={16} className="text-accent-text" />
             </div>
-            <h2 className="text-base font-semibold text-text-primary">Topic research</h2>
+            <h2 className="text-base font-semibold text-white">Topic research</h2>
           </div>
-          <p className="text-sm text-text-muted mb-6 ml-[42px]">
+          <p className="text-sm text-white/50 mb-6 ml-[42px]">
             What are people saying about a topic?
           </p>
 
           <div className="space-y-4">
             {/* Topic input */}
             <div className="relative">
-              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
               <input
                 ref={topicInputRef}
                 type="text"
                 value={topicQuery}
                 onChange={(e) => setTopicQuery(e.target.value)}
                 placeholder="Search a topic..."
-                className="w-full rounded-xl border border-nativz-border bg-surface-hover py-3 pl-10 pr-4 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none"
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder-white/40 transition-colors focus:border-accent focus:outline-none"
                 disabled={anyLoading}
               />
             </div>
@@ -261,7 +261,7 @@ export function SearchModeSelector({
       )}
 
       {/* Footer */}
-      <p className="mt-8 text-center text-xs text-text-muted">
+      <p className="mt-8 text-center text-xs text-white/30">
         Powered by Brave Search + Claude AI
       </p>
     </div>
@@ -296,7 +296,7 @@ function ClientPickerTrigger({
         >
           <Building2 size={16} />
           <span className="flex-1 text-left">{selected.name}</span>
-          <svg className="h-3.5 w-3.5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <svg className="h-3.5 w-3.5 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
@@ -304,7 +304,7 @@ function ClientPickerTrigger({
         <button
           type="button"
           onClick={() => !disabled && setOpen(true)}
-          className={`flex w-full items-center gap-2.5 rounded-xl border border-nativz-border bg-surface-hover px-4 py-3 text-sm text-text-muted hover:border-accent-border hover:text-text-secondary transition-colors ${disabled ? 'opacity-50 pointer-events-none' : ''}`}
+          className={`flex w-full items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/40 hover:border-white/[0.12] hover:text-white/60 transition-colors ${disabled ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <Building2 size={16} />
           <span className="flex-1 text-left">{placeholder}</span>
@@ -377,15 +377,15 @@ function ClientPickerModal({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg rounded-2xl border border-nativz-border bg-surface shadow-2xl animate-modal-pop-in">
+      <div className="relative w-full max-w-lg rounded-xl border border-white/[0.06] bg-surface shadow-2xl animate-modal-pop-in">
         {/* Header */}
         <div className="p-5 pb-0">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-text-primary">Select a client</h3>
+            <h3 className="text-lg font-semibold text-white">Select a client</h3>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
+              className="rounded-lg p-1.5 text-white/40 hover:bg-white/[0.06] hover:text-white/60 transition-colors"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -395,14 +395,14 @@ function ClientPickerModal({
 
           {/* Search */}
           <div className="relative mb-4">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
             <input
               ref={searchRef}
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search clients..."
-              className="w-full rounded-lg border border-nativz-border bg-surface-hover pl-9 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-border focus:outline-none focus:ring-1 focus:ring-accent-border transition-colors"
+              className="w-full rounded-lg border border-white/10 bg-white/[0.04] pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
             />
           </div>
         </div>
@@ -411,8 +411,8 @@ function ClientPickerModal({
         <div className="px-5 pb-5 max-h-[50vh] overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
-              <Search size={20} className="text-text-muted mb-2" />
-              <p className="text-sm text-text-muted">No clients match &ldquo;{search}&rdquo;</p>
+              <Search size={20} className="text-white/30 mb-2" />
+              <p className="text-sm text-white/40">No clients match &ldquo;{search}&rdquo;</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
@@ -424,13 +424,13 @@ function ClientPickerModal({
                   className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-3 text-left text-sm transition-all hover:scale-[1.02] active:scale-[0.98] ${
                     client.id === value
                       ? 'border-accent/50 bg-accent-surface text-accent-text font-medium shadow-[0_0_12px_rgba(4,107,210,0.15)]'
-                      : 'border-nativz-border-light bg-surface-hover text-text-secondary hover:border-accent/30 hover:bg-accent-surface/30'
+                      : 'border-white/[0.06] bg-white/[0.03] text-white/70 hover:border-white/[0.12] hover:bg-white/[0.06]'
                   }`}
                 >
                   <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                    client.id === value ? 'bg-accent/20' : 'bg-surface'
+                    client.id === value ? 'bg-accent/20' : 'bg-white/[0.04]'
                   }`}>
-                    <Building2 size={14} className={client.id === value ? 'text-accent-text' : 'text-text-muted'} />
+                    <Building2 size={14} className={client.id === value ? 'text-accent-text' : 'text-white/40'} />
                   </div>
                   <span className="truncate">{client.name}</span>
                 </button>

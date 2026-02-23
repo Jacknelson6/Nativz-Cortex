@@ -40,7 +40,10 @@ export default async function AdminClientsPage() {
     return (
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-text-primary">Clients</h1>
+          <div>
+            <h1 className="text-2xl font-semibold text-text-primary">Clients</h1>
+            <p className="text-sm text-text-muted mt-0.5">Manage your client roster and brand profiles</p>
+          </div>
           <Link href="/admin/clients/onboard">
             <GlowButton>
               <Sparkles size={14} />

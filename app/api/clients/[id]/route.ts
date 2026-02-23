@@ -81,3 +81,52 @@ export async function PATCH(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createServerSupabaseClient();
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const adminClient = createAdminClient();
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || userData.role !== 'admin') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
+    // Delete related records first, then the client
+    await Promise.all([
+      adminClient.from('topic_searches').delete().eq('client_id', id),
+      adminClient.from('idea_submissions').delete().eq('client_id', id),
+      adminClient.from('client_strategies').delete().eq('client_id', id),
+      adminClient.from('invite_tokens').delete().eq('client_id', id),
+    ]);
+
+    const { error: deleteError } = await adminClient
+      .from('clients')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      console.error('Error deleting client:', deleteError);
+      return NextResponse.json({ error: 'Failed to delete client' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('DELETE /api/clients/[id] error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

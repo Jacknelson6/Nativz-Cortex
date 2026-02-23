@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Save, Sparkles } from 'lucide-react';
+import { ArrowLeft, Save, Sparkles, AlertTriangle, Trash2, Power } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
@@ -38,10 +38,15 @@ interface ClientData {
 
 export default function AdminClientSettingsPage() {
   const params = useParams<{ slug: string }>();
+  const router = useRouter();
   const [client, setClient] = useState<ClientData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   // Form state
   const [industry, setIndustry] = useState('');
@@ -524,17 +529,162 @@ export default function AdminClientSettingsPage() {
                 label="Can submit ideas"
                 description="Allow portal users to submit content ideas and requests"
               />
-              <Toggle
-                checked={isActive}
-                onChange={setIsActive}
-                label="Client is active"
-                description="Inactive clients are hidden from the portal"
-              />
             </div>
           </Card>
         </div>
 
       </form>
+
+      {/* Danger zone */}
+      {client.id && (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/[0.04] p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <AlertTriangle size={16} className="text-red-400" />
+            <h2 className="text-base font-semibold text-red-400">Danger zone</h2>
+          </div>
+          <p className="text-sm text-text-muted mb-5">
+            These actions affect the client&apos;s visibility and data.
+          </p>
+
+          <div className="space-y-4">
+            {isActive ? (
+              <>
+                {/* Deactivate */}
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-text-primary">Deactivate client</p>
+                    <p className="text-xs text-text-muted">Hide from the portal and client list. Can be reactivated later.</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      setDeactivating(true);
+                      try {
+                        const res = await fetch(`/api/clients/${client.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ is_active: false }),
+                        });
+                        if (!res.ok) { toast.error('Failed to deactivate'); return; }
+                        setIsActive(false);
+                        toast.success(`${client.name} deactivated`);
+                      } catch { toast.error('Something went wrong'); }
+                      finally { setDeactivating(false); }
+                    }}
+                    disabled={deactivating}
+                    className="shrink-0 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                  >
+                    <Power size={14} />
+                    {deactivating ? 'Deactivating...' : 'Deactivate'}
+                  </Button>
+                </div>
+
+                {/* Hard delete */}
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-red-500/20 bg-red-500/[0.04] px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-red-400">Permanently delete client</p>
+                    <p className="text-xs text-text-muted">Remove all data including searches, ideas, and settings. This cannot be undone.</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="shrink-0 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                  >
+                    <Trash2 size={14} />
+                    Delete
+                  </Button>
+                </div>
+              </>
+            ) : (
+              /* Activate */
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-text-primary">Reactivate client</p>
+                  <p className="text-xs text-text-muted">Make this client visible in the portal and client list again.</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    setDeactivating(true);
+                    try {
+                      const res = await fetch(`/api/clients/${client.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ is_active: true }),
+                      });
+                      if (!res.ok) { toast.error('Failed to reactivate'); return; }
+                      setIsActive(true);
+                      toast.success(`${client.name} reactivated`);
+                    } catch { toast.error('Something went wrong'); }
+                    finally { setDeactivating(false); }
+                  }}
+                  disabled={deactivating}
+                  className="shrink-0"
+                >
+                  <Power size={14} />
+                  {deactivating ? 'Activating...' : 'Activate'}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)} />
+          <div className="relative w-full max-w-md rounded-xl border border-red-500/20 bg-surface p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-text-primary mb-2">Delete {client.name}?</h3>
+            <p className="text-sm text-text-muted mb-4">
+              This will permanently delete all data associated with this client including searches, ideas, strategies, and settings. This action cannot be undone.
+            </p>
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-text-muted mb-1.5">
+                Type <span className="font-mono text-red-400">{client.name}</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className="w-full rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/20"
+                placeholder={client.name}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}>
+                Cancel
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={deleteConfirmText !== client.name || deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    const res = await fetch(`/api/clients/${client.id}`, { method: 'DELETE' });
+                    if (!res.ok) {
+                      const data = await res.json();
+                      toast.error(data.error || 'Failed to delete client');
+                      return;
+                    }
+                    toast.success(`${client.name} deleted permanently`);
+                    router.push('/admin/clients');
+                  } catch { toast.error('Something went wrong'); }
+                  finally { setDeleting(false); }
+                }}
+                className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+              >
+                <Trash2 size={14} />
+                {deleting ? 'Deleting...' : 'Delete permanently'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

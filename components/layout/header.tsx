@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import Image from 'next/image';
 import { Menu, X } from 'lucide-react';
 import { useSidebar } from './sidebar-provider';
@@ -35,7 +36,7 @@ export function Header({ portalMode = false }: HeaderProps) {
             />
           </div>
         </button>
-        <div className="hidden md:flex flex-col items-center w-56 -ml-6">
+        <Link href="/" aria-label="Go to home" className="hidden md:flex flex-col items-center w-56 -ml-6 hover:opacity-80 transition-opacity duration-150">
           <Image
             src="/nativz-logo.svg"
             alt="Nativz"
@@ -47,8 +48,8 @@ export function Header({ portalMode = false }: HeaderProps) {
           <span className="text-[11px] font-bold text-text-secondary tracking-[0.35em] uppercase -mt-1">
             Cortex
           </span>
-        </div>
-        <div className="flex md:hidden flex-col items-center">
+        </Link>
+        <Link href="/" aria-label="Go to home" className="flex md:hidden flex-col items-center hover:opacity-80 transition-opacity duration-150">
           <Image
             src="/nativz-logo.svg"
             alt="Nativz"
@@ -60,7 +61,7 @@ export function Header({ portalMode = false }: HeaderProps) {
           <span className="text-[11px] font-bold text-text-secondary tracking-[0.35em] uppercase -mt-1">
             Cortex
           </span>
-        </div>
+        </Link>
         {portalMode && (
           <span className="rounded-full bg-accent-surface px-2 py-0.5 text-xs font-medium text-accent-text">
             Portal

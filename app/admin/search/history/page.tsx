@@ -58,7 +58,10 @@ export default async function AdminSearchHistoryPage({
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-text-primary">Search history</h1>
+        <div>
+          <h1 className="text-2xl font-semibold text-text-primary">Search history</h1>
+          <p className="text-sm text-text-muted mt-0.5">All searches across clients and topics</p>
+        </div>
         <Link href="/admin/search/new">
           <Button>
             <Search size={16} />

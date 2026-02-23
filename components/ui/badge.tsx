@@ -1,9 +1,10 @@
 import { HTMLAttributes } from 'react';
 
-type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple';
+type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple' | 'mono';
 
 const variantStyles: Record<BadgeVariant, string> = {
-  default: 'bg-surface-hover text-text-secondary ring-1 ring-inset ring-white/10',
+  default: 'bg-white/[0.08] text-white/50 ring-1 ring-inset ring-white/10',
+  mono: 'bg-white/[0.08] text-white/50 ring-1 ring-inset ring-white/10',
   success: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-inset ring-emerald-500/20',
   warning: 'bg-amber-500/15 text-amber-400 ring-1 ring-inset ring-amber-500/20',
   danger: 'bg-red-500/15 text-red-400 ring-1 ring-inset ring-red-500/20',

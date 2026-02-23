@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Settings, Search, Clock, Lightbulb, User2, Mail, Globe } from 'lucide-react';
+import { ArrowLeft, Building2, Settings, Search, Clock, Lightbulb, User2, Mail, Globe } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getVaultClientBySlug } from '@/lib/vault/reader';
 import { Card } from '@/components/ui/card';
@@ -10,7 +10,6 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { InviteButton } from '@/components/clients/invite-button';
-import { RemoveClientButton } from '@/components/clients/remove-client-button';
 import { ClientStrategyCard } from '@/components/clients/client-strategy-card';
 import type { ClientStrategy } from '@/lib/types/strategy';
 
@@ -97,24 +96,15 @@ export default async function AdminClientDetailPage({
             <Link href="/admin/clients" className="shrink-0 text-text-muted hover:text-text-secondary transition-colors">
               <ArrowLeft size={20} />
             </Link>
-            {dbClient?.logo_url && (
-              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-nativz-border">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={dbClient.logo_url} alt={vaultProfile.name} className="h-full w-full object-cover" />
-              </div>
-            )}
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.08] text-sm font-bold text-white/70">
+              {vaultProfile.abbreviation || <Building2 size={20} />}
+            </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="truncate text-2xl font-semibold text-text-primary">{vaultProfile.name}</h1>
-                {vaultProfile.abbreviation && <Badge className="shrink-0">{vaultProfile.abbreviation}</Badge>}
-              </div>
+              <h1 className="truncate text-2xl font-semibold text-text-primary">{vaultProfile.name}</h1>
               <p className="truncate text-sm text-text-muted">{vaultProfile.industry || 'General'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {clientId && (
-              <RemoveClientButton clientId={clientId} clientName={vaultProfile.name} />
-            )}
             <Link href={`/admin/clients/${slug}/settings`}>
               <Button variant="outline" size="sm">
                 <Settings size={14} />
