@@ -23,12 +23,6 @@ export function MetricsRow({ metrics, isBrandSearch = false }: MetricsRowProps) 
             value: String(metrics.total_sources ?? 0),
             icon: <Building2 size={18} />,
           },
-          {
-            tooltipKey: 'discussions',
-            title: 'Conversations',
-            value: String(metrics.discussions_found ?? 0),
-            icon: <MessageCircle size={18} />,
-          },
         ]
       : [
           {
@@ -46,7 +40,7 @@ export function MetricsRow({ metrics, isBrandSearch = false }: MetricsRowProps) 
         ];
 
     return (
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className={`grid grid-cols-2 gap-4 ${isBrandSearch ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`}>
         {[
           ...cards,
           {

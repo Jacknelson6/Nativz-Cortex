@@ -15,6 +15,8 @@ interface ClientItem {
   services: string[];
 }
 
+const STANDARD_SERVICES = ['SMM', 'Paid Media', 'Affiliates', 'Editing'] as const;
+
 const serviceColors: Record<string, 'info' | 'purple' | 'success' | 'warning' | 'danger'> = {
   SMM: 'info',
   'Paid Media': 'purple',
@@ -24,6 +26,28 @@ const serviceColors: Record<string, 'info' | 'purple' | 'success' | 'warning' | 
 
 function getServiceVariant(service: string) {
   return serviceColors[service] || 'default' as const;
+}
+
+/** Map verbose/non-standard service names to the standard Monday set. */
+function normalizeServices(raw: string[]): string[] {
+  const result = new Set<string>();
+  for (const s of raw) {
+    const lower = s.toLowerCase();
+    if (STANDARD_SERVICES.includes(s as typeof STANDARD_SERVICES[number])) {
+      result.add(s);
+    } else if (lower.includes('social media') || lower === 'smm') {
+      result.add('SMM');
+    } else if (lower.includes('paid media') || lower.includes('paid ads') || lower.includes('ppc')) {
+      result.add('Paid Media');
+    } else if (lower.includes('editing') || lower.includes('videography') || lower.includes('content creation') || lower.includes('video')) {
+      result.add('Editing');
+    } else if (lower.includes('affiliate')) {
+      result.add('Affiliates');
+    }
+    // Drop non-standard services like "SEO / Blog Content" that don't map
+  }
+  // Return in standard order
+  return STANDARD_SERVICES.filter((s) => result.has(s));
 }
 
 function ClientCard({
@@ -115,7 +139,13 @@ function ClientCard({
   );
 }
 
-export function ClientSearchGrid({ clients }: { clients: ClientItem[] }) {
+export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[] }) {
+  // Normalize services once on mount (memoized via stable reference)
+  const clients = rawClients.map((c) => ({
+    ...c,
+    services: normalizeServices(c.services),
+  }));
+
   const [query, setQuery] = useState('');
   const [removed, setRemoved] = useState<Set<string>>(new Set());
 

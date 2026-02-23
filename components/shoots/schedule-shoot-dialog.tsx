@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Loader2, Building2, X, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
 import { Input, Textarea } from '@/components/ui/input';
@@ -26,9 +26,10 @@ export function ScheduleShootDialog({ open, onClose, onCreated }: ScheduleShootD
   const [shootDate, setShootDate] = useState('');
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
-  const [clientMode, setClientMode] = useState<'all' | 'select'>('all');
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -44,13 +45,26 @@ export function ScheduleShootDialog({ open, onClose, onCreated }: ScheduleShootD
     fetchClients();
   }, [open]);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [dropdownOpen]);
+
   function resetForm() {
     setTitle('');
     setShootDate('');
     setLocation('');
     setNotes('');
-    setClientMode('all');
     setSelectedClientIds([]);
+    setDropdownOpen(false);
   }
 
   function toggleClient(id: string) {
@@ -59,12 +73,23 @@ export function ScheduleShootDialog({ open, onClose, onCreated }: ScheduleShootD
     );
   }
 
+  function removeClient(id: string) {
+    setSelectedClientIds((prev) => prev.filter((c) => c !== id));
+  }
+
+  function selectAll() {
+    setSelectedClientIds(clients.map((c) => c.id));
+    setDropdownOpen(false);
+  }
+
+  const selectedClients = clients.filter((c) => selectedClientIds.includes(c.id));
+  const unselectedClients = clients.filter((c) => !selectedClientIds.includes(c.id));
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !shootDate) return;
 
-    const clientIds = clientMode === 'all' ? clients.map((c) => c.id) : selectedClientIds;
-    if (clientIds.length === 0) {
+    if (selectedClientIds.length === 0) {
       toast.error('Select at least one client.');
       return;
     }
@@ -79,7 +104,7 @@ export function ScheduleShootDialog({ open, onClose, onCreated }: ScheduleShootD
           shoot_date: shootDate,
           location: location.trim() || null,
           notes: notes.trim() || null,
-          client_ids: clientIds,
+          client_ids: selectedClientIds,
         }),
       });
 
@@ -102,7 +127,7 @@ export function ScheduleShootDialog({ open, onClose, onCreated }: ScheduleShootD
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Schedule shoot" maxWidth="md">
+    <Dialog open={open} onClose={() => { resetForm(); onClose(); }} title="Schedule shoot" maxWidth="md">
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
           id="shoot-title"
@@ -130,54 +155,76 @@ export function ScheduleShootDialog({ open, onClose, onCreated }: ScheduleShootD
           placeholder="Optional"
         />
 
-        {/* Client selection */}
+        {/* Client selection — dropdown with pills */}
         <div>
           <label className="block text-xs font-medium text-text-muted mb-2">Clients</label>
-          <div className="flex gap-3 mb-3">
-            <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
-              <input
-                type="radio"
-                name="client-mode"
-                checked={clientMode === 'all'}
-                onChange={() => setClientMode('all')}
-                className="accent-accent"
-              />
-              All active clients
-            </label>
-            <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
-              <input
-                type="radio"
-                name="client-mode"
-                checked={clientMode === 'select'}
-                onChange={() => setClientMode('select')}
-                className="accent-accent"
-              />
-              Select specific
-            </label>
-          </div>
 
-          {clientMode === 'select' && (
-            <div className="max-h-40 overflow-y-auto space-y-1 rounded-lg border border-nativz-border bg-surface-hover p-2">
-              {clients.length === 0 ? (
-                <p className="text-xs text-text-muted px-2 py-1">No active clients</p>
-              ) : (
-                clients.map((client) => (
-                  <label
-                    key={client.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface transition-colors cursor-pointer text-sm text-text-secondary"
+          {/* Selected client pills */}
+          {selectedClients.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {selectedClients.map((client) => (
+                <span
+                  key={client.id}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent-surface px-3 py-1.5 text-xs font-medium text-accent-text"
+                >
+                  <Building2 size={12} />
+                  {client.name}
+                  <button
+                    type="button"
+                    onClick={() => removeClient(client.id)}
+                    className="cursor-pointer ml-0.5 rounded-full p-0.5 hover:bg-accent/20 transition-colors"
                   >
-                    <input
-                      type="checkbox"
-                      checked={selectedClientIds.includes(client.id)}
-                      onChange={() => toggleClient(client.id)}
-                      className="accent-accent"
-                    />
-                    {client.name}
-                  </label>
-                ))
-              )}
+                    <X size={10} />
+                  </button>
+                </span>
+              ))}
             </div>
           )}
+
+          {/* Dropdown trigger + menu */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              type="button"
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-dashed border-nativz-border px-3 py-1.5 text-xs text-text-muted hover:border-text-muted hover:text-text-secondary transition-colors"
+            >
+              <Building2 size={12} />
+              {selectedClients.length === 0 ? 'Select clients' : 'Add more'}
+              <ChevronDown size={10} />
+            </button>
+
+            {dropdownOpen && (
+              <div className="absolute left-0 top-full z-20 mt-1 min-w-[220px] max-h-48 overflow-y-auto rounded-lg border border-nativz-border bg-surface py-1 shadow-dropdown animate-fade-in">
+                {/* Select all option */}
+                {unselectedClients.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={selectAll}
+                      className="cursor-pointer block w-full px-3 py-1.5 text-left text-xs font-medium text-accent-text hover:bg-surface-hover transition-colors"
+                    >
+                      Select all clients
+                    </button>
+                    <div className="mx-2 my-1 border-t border-nativz-border" />
+                  </>
+                )}
+                {unselectedClients.length === 0 ? (
+                  <p className="px-3 py-1.5 text-xs text-text-muted">All clients selected</p>
+                ) : (
+                  unselectedClients.map((client) => (
+                    <button
+                      key={client.id}
+                      type="button"
+                      onClick={() => toggleClient(client.id)}
+                      className="cursor-pointer block w-full px-3 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-hover transition-colors"
+                    >
+                      {client.name}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <Textarea
@@ -189,14 +236,13 @@ export function ScheduleShootDialog({ open, onClose, onCreated }: ScheduleShootD
           rows={3}
         />
 
-        <div className="flex gap-3 pt-2">
-          <Button type="button" variant="ghost" onClick={() => { resetForm(); onClose(); }} className="flex-1">
+        <div className="flex justify-end gap-3 pt-2">
+          <Button type="button" variant="ghost" onClick={() => { resetForm(); onClose(); }}>
             Cancel
           </Button>
           <GlassButton
             type="submit"
-            disabled={!title.trim() || !shootDate || submitting}
-            className="flex-[2]"
+            disabled={!title.trim() || !shootDate || selectedClientIds.length === 0 || submitting}
           >
             {submitting ? (
               <>

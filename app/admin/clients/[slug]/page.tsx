@@ -43,11 +43,11 @@ export default async function AdminClientDetailPage({
       clientId
         ? adminClient
             .from('topic_searches')
-            .select('id, query, status, created_at, approved_at')
+            .select('id, query, status, search_mode, created_at, approved_at')
             .eq('client_id', clientId)
             .order('created_at', { ascending: false })
             .limit(20)
-        : Promise.resolve({ data: [] as Array<{ id: string; query: string; status: string; created_at: string; approved_at: string | null }> }),
+        : Promise.resolve({ data: [] as Array<{ id: string; query: string; status: string; search_mode: string | null; created_at: string; approved_at: string | null }> }),
       clientId
         ? adminClient
             .from('idea_submissions')
@@ -318,13 +318,18 @@ export default async function AdminClientDetailPage({
                         {formatRelativeTime(search.created_at)}
                       </span>
                     </div>
-                    {search.approved_at ? (
-                      <Badge variant="success">Sent</Badge>
-                    ) : search.status === 'completed' ? (
-                      <Badge variant="warning">Not sent</Badge>
-                    ) : (
-                      <Badge>{search.status}</Badge>
-                    )}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant={search.search_mode === 'client_strategy' ? 'info' : 'default'}>
+                        {search.search_mode === 'client_strategy' ? 'Brand' : 'Topic'}
+                      </Badge>
+                      {search.approved_at ? (
+                        <Badge variant="success">Sent</Badge>
+                      ) : search.status === 'completed' ? (
+                        <Badge variant="warning">Not sent</Badge>
+                      ) : (
+                        <Badge>{search.status}</Badge>
+                      )}
+                    </div>
                   </div>
                 </Link>
               ))}
