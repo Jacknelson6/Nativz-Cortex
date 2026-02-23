@@ -2,7 +2,6 @@
 
 import { Target, Clock, Lightbulb, TrendingUp } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import type { NicheInsights as NicheInsightsType } from '@/lib/types/search';
 
 interface NicheInsightsProps {
@@ -10,6 +9,11 @@ interface NicheInsightsProps {
 }
 
 export function NicheInsights({ insights }: NicheInsightsProps) {
+  // Split competitor gaps into sentences for easier reading
+  const competitorGaps = insights.competitor_gaps
+    .split(/(?<=\.)\s+/)
+    .filter((s) => s.trim().length > 0);
+
   return (
     <Card>
       <CardHeader>
@@ -20,30 +24,33 @@ export function NicheInsights({ insights }: NicheInsightsProps) {
           </span>
         </CardTitle>
       </CardHeader>
-      <div className="space-y-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Top performing formats */}
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp size={14} className="text-text-muted" />
-            <p className="text-sm font-medium text-text-secondary">Top performing formats</p>
+        <div className="rounded-lg border border-nativz-border-light p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp size={14} className="text-emerald-400" />
+            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Top formats</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <ul className="space-y-1.5">
             {insights.top_performing_formats.map((format, i) => (
-              <Badge key={i}>{format}</Badge>
+              <li key={i} className="flex items-start gap-2 text-sm text-text-muted">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                {format}
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
 
         {/* Audience hooks */}
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Lightbulb size={14} className="text-text-muted" />
-            <p className="text-sm font-medium text-text-secondary">Audience hooks</p>
+        <div className="rounded-lg border border-nativz-border-light p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Lightbulb size={14} className="text-amber-400" />
+            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Audience hooks</p>
           </div>
           <ul className="space-y-1.5">
             {insights.audience_hooks.map((hook, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-text-muted">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
                 {hook}
               </li>
             ))}
@@ -51,20 +58,28 @@ export function NicheInsights({ insights }: NicheInsightsProps) {
         </div>
 
         {/* Competitor gaps */}
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Target size={14} className="text-text-muted" />
-            <p className="text-sm font-medium text-text-secondary">Competitor gaps</p>
+        <div className="rounded-lg border border-nativz-border-light p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Target size={14} className="text-purple-400" />
+            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Competitor gaps</p>
           </div>
-          <p className="text-sm text-text-muted rounded-lg bg-accent-surface/50 px-3 py-2">
-            {insights.competitor_gaps}
-          </p>
+          <ul className="space-y-1.5">
+            {competitorGaps.map((gap, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-text-muted">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-purple-400" />
+                {gap}
+              </li>
+            ))}
+          </ul>
         </div>
 
         {/* Best posting times */}
-        <div className="flex items-start gap-2 text-sm text-text-muted">
-          <Clock size={14} className="mt-0.5 shrink-0" />
-          <p>{insights.best_posting_times}</p>
+        <div className="rounded-lg border border-nativz-border-light p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock size={14} className="text-blue-400" />
+            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Best posting times</p>
+          </div>
+          <p className="text-sm text-text-muted">{insights.best_posting_times}</p>
         </div>
       </div>
     </Card>

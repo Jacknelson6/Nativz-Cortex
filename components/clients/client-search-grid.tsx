@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Building2, Search, UserX } from 'lucide-react';
+import { Building2, Search, UserX, Trash2, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
@@ -25,20 +26,70 @@ function getServiceVariant(service: string) {
   return serviceColors[service] || 'default' as const;
 }
 
-function ClientCard({ client, i, dimmed }: { client: ClientItem; i: number; dimmed?: boolean }) {
+function ClientCard({
+  client,
+  i,
+  dimmed,
+  onRemove,
+}: {
+  client: ClientItem;
+  i: number;
+  dimmed?: boolean;
+  onRemove: (slug: string) => void;
+}) {
+  const [removing, setRemoving] = useState(false);
+
+  async function handleRemove(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`Remove ${client.name} from the clients board?`)) return;
+
+    setRemoving(true);
+    try {
+      // Look up the DB client ID by slug
+      const lookupRes = await fetch(`/api/clients?slug=${encodeURIComponent(client.slug)}`);
+      if (!lookupRes.ok) {
+        toast.error('Could not find client in database');
+        return;
+      }
+      const clients = await lookupRes.json();
+      const dbClient = Array.isArray(clients)
+        ? clients.find((c: { slug: string }) => c.slug === client.slug)
+        : null;
+
+      if (!dbClient) {
+        toast.error('Client not found in database');
+        return;
+      }
+
+      const res = await fetch(`/api/clients/${dbClient.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: false }),
+      });
+
+      if (!res.ok) {
+        toast.error('Failed to remove client');
+        return;
+      }
+
+      toast.success(`${client.name} removed`);
+      onRemove(client.slug);
+    } catch {
+      toast.error('Something went wrong');
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   return (
     <Link key={client.slug} href={`/admin/clients/${client.slug}`}>
-      <Card interactive className={`animate-stagger-in flex items-start gap-3 ${dimmed ? 'opacity-50' : ''}`} style={{ animationDelay: `${i * 50}ms` }}>
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
-          <Building2 size={20} />
+      <Card interactive className={`animate-stagger-in flex items-start gap-3 group/card ${dimmed ? 'opacity-50' : ''}`} style={{ animationDelay: `${i * 50}ms` }}>
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
+          {client.abbreviation || <Building2 size={20} />}
         </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium text-text-primary truncate">{client.name}</p>
-            {client.abbreviation && (
-              <Badge variant="default">{client.abbreviation}</Badge>
-            )}
-          </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-text-primary truncate">{client.name}</p>
           <p className="text-xs text-text-muted">{client.industry || 'General'}</p>
           {client.services.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
@@ -50,6 +101,15 @@ function ClientCard({ client, i, dimmed }: { client: ClientItem; i: number; dimm
             </div>
           )}
         </div>
+        <button
+          type="button"
+          onClick={handleRemove}
+          disabled={removing}
+          className="cursor-pointer shrink-0 p-1.5 rounded-md opacity-0 group-hover/card:opacity-100 transition-opacity text-text-muted hover:text-red-400 hover:bg-red-400/10"
+          title={`Remove ${client.name}`}
+        >
+          {removing ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+        </button>
       </Card>
     </Link>
   );
@@ -57,9 +117,12 @@ function ClientCard({ client, i, dimmed }: { client: ClientItem; i: number; dimm
 
 export function ClientSearchGrid({ clients }: { clients: ClientItem[] }) {
   const [query, setQuery] = useState('');
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+
+  const visible = clients.filter((c) => !removed.has(c.slug));
 
   const filtered = query.trim()
-    ? clients.filter((c) => {
+    ? visible.filter((c) => {
         const q = query.toLowerCase();
         return (
           c.name.toLowerCase().includes(q) ||
@@ -68,10 +131,14 @@ export function ClientSearchGrid({ clients }: { clients: ClientItem[] }) {
           c.services.some((s) => s.toLowerCase().includes(q))
         );
       })
-    : clients;
+    : visible;
 
   const active = filtered.filter((c) => c.services.length > 0);
   const inactive = filtered.filter((c) => c.services.length === 0);
+
+  function handleRemove(slug: string) {
+    setRemoved((prev) => new Set(prev).add(slug));
+  }
 
   return (
     <>
@@ -96,7 +163,7 @@ export function ClientSearchGrid({ clients }: { clients: ClientItem[] }) {
           {active.length > 0 && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {active.map((client, i) => (
-                <ClientCard key={client.slug} client={client} i={i} />
+                <ClientCard key={client.slug} client={client} i={i} onRemove={handleRemove} />
               ))}
             </div>
           )}
@@ -109,7 +176,7 @@ export function ClientSearchGrid({ clients }: { clients: ClientItem[] }) {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {inactive.map((client, i) => (
-                  <ClientCard key={client.slug} client={client} i={i} dimmed />
+                  <ClientCard key={client.slug} client={client} i={i} dimmed onRemove={handleRemove} />
                 ))}
               </div>
             </div>

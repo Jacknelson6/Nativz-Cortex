@@ -1,6 +1,6 @@
 'use client';
 
-import { Globe, MessageCircle, Video, ExternalLink } from 'lucide-react';
+import { Globe, Video, ExternalLink } from 'lucide-react';
 import { Card, CardTitle } from '@/components/ui/card';
 import type { BraveSerpData } from '@/lib/brave/types';
 
@@ -61,19 +61,13 @@ export function SourcesPanel({ serpData }: SourcesPanelProps) {
     detail: r.description.slice(0, 120) + (r.description.length > 120 ? '...' : ''),
   }));
 
-  const discussionItems = serpData.discussions.map(d => ({
-    url: d.url,
-    title: d.title,
-    detail: [d.forum, d.answers ? `${d.answers} replies` : null].filter(Boolean).join(' · '),
-  }));
-
   const videoItems = serpData.videos.map(v => ({
     url: v.url,
     title: v.title,
     detail: [v.platform, v.views ? `${v.views} views` : null, v.creator ? `by ${v.creator}` : null].filter(Boolean).join(' · '),
   }));
 
-  const totalSources = webItems.length + discussionItems.length + videoItems.length;
+  const totalSources = webItems.length + videoItems.length;
 
   if (totalSources === 0) return null;
 
@@ -91,11 +85,6 @@ export function SourcesPanel({ serpData }: SourcesPanelProps) {
           title="Web"
           icon={<Globe size={14} className="text-blue-400" />}
           items={webItems}
-        />
-        <SourceTypeSection
-          title="Discussions"
-          icon={<MessageCircle size={14} className="text-emerald-400" />}
-          items={discussionItems}
         />
         <SourceTypeSection
           title="Videos"

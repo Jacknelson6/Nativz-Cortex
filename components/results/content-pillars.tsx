@@ -27,10 +27,6 @@ export function ContentPillars({ pillars }: ContentPillarsProps) {
           >
             <p className="text-sm font-medium text-text-primary">{pillar.pillar}</p>
             <p className="text-sm text-text-muted">{pillar.description}</p>
-            <div className="flex items-center gap-2 text-xs text-text-muted">
-              <span className="font-medium text-text-secondary">Series idea:</span>
-              <span>{pillar.example_series}</span>
-            </div>
           </div>
         ))}
       </div>

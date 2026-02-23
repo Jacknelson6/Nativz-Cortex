@@ -43,7 +43,7 @@ export function Dialog({ open, onClose, title, children, maxWidth = 'md' }: Dial
       ref={dialogRef}
       onClose={onClose}
       onClick={handleBackdropClick}
-      className={`${maxWidthStyles[maxWidth]} w-full rounded-xl border border-nativz-border bg-surface p-0 shadow-elevated backdrop:bg-black/60`}
+      className={`${maxWidthStyles[maxWidth]} w-full m-auto rounded-xl border border-nativz-border bg-surface p-0 shadow-elevated backdrop:bg-black/60`}
     >
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
