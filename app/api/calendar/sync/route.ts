@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { fetchCalendarEvents, identifyShootEvents, matchShootToClient } from '@/lib/google/calendar';
+import { fetchCalendarEventsViaNango } from '@/lib/nango/client';
+import { identifyShootEvents, matchShootToClient } from '@/lib/google/calendar';
 
 export async function POST() {
   try {
@@ -37,8 +38,15 @@ export async function POST() {
       );
     }
 
-    // Fetch upcoming calendar events (next 60 days)
-    const events = await fetchCalendarEvents(connection.id, connection.calendar_id, 60);
+    if (!connection.nango_connection_id) {
+      return NextResponse.json(
+        { error: 'Calendar connection needs to be re-authorized via Nango.' },
+        { status: 400 },
+      );
+    }
+
+    // Fetch upcoming calendar events via Nango proxy (next 60 days)
+    const events = await fetchCalendarEventsViaNango(connection.nango_connection_id, 60);
     const shootEvents = identifyShootEvents(events);
 
     // Get all clients for matching

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
+import { Calendar, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import Nango from '@nangohq/frontend';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { GlassButton } from '@/components/ui/glass-button';
@@ -10,7 +11,6 @@ import { GlassButton } from '@/components/ui/glass-button';
 interface ConnectionStatus {
   connected: boolean;
   lastSynced: string | null;
-  calendarId: string | null;
 }
 
 export function ConnectCalendar() {
@@ -21,41 +21,18 @@ export function ConnectCalendar() {
 
   useEffect(() => {
     checkStatus();
-
-    // Check URL params for callback result
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('success') === 'connected') {
-      toast.success('Google Calendar connected successfully');
-      // Clean URL
-      window.history.replaceState({}, '', window.location.pathname);
-    } else if (params.get('error')) {
-      const err = params.get('error');
-      const messages: Record<string, string> = {
-        denied: 'Calendar access was denied',
-        missing_params: 'Missing parameters from Google',
-        no_refresh_token: 'Could not get offline access. Try again.',
-        exchange_failed: 'Token exchange failed. Try again.',
-      };
-      toast.error(messages[err ?? ''] ?? 'Calendar connection failed');
-      window.history.replaceState({}, '', window.location.pathname);
-    }
   }, []);
 
   async function checkStatus() {
     try {
-      const res = await fetch('/api/calendar/events');
+      const res = await fetch('/api/calendar/sync', { method: 'POST' });
       if (res.ok) {
-        await res.json();
-        setStatus({
-          connected: true,
-          lastSynced: null, // Would need separate endpoint
-          calendarId: 'primary',
-        });
-      } else if (res.status === 404) {
-        setStatus({ connected: false, lastSynced: null, calendarId: null });
+        setStatus({ connected: true, lastSynced: new Date().toISOString() });
+      } else {
+        setStatus({ connected: false, lastSynced: null });
       }
     } catch {
-      setStatus({ connected: false, lastSynced: null, calendarId: null });
+      setStatus({ connected: false, lastSynced: null });
     } finally {
       setLoading(false);
     }
@@ -64,17 +41,41 @@ export function ConnectCalendar() {
   async function handleConnect() {
     setConnecting(true);
     try {
+      // Get a connect session token from our backend
       const res = await fetch('/api/calendar/connect');
       if (!res.ok) {
         const data = await res.json();
-        toast.error(data.error || 'Could not start Google auth');
+        toast.error(data.error || 'Could not start calendar auth');
         return;
       }
-      const data = await res.json();
-      // Redirect to Google OAuth
-      window.location.href = data.url;
-    } catch {
-      toast.error('Failed to connect. Try again.');
+      const { token } = await res.json();
+
+      // Open Nango OAuth popup
+      const nango = new Nango({ connectSessionToken: token });
+      const result = await nango.auth('google-calendar');
+
+      // Store the connectionId in our DB immediately (no webhook dependency)
+      const confirmRes = await fetch('/api/calendar/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connectionId: result.connectionId }),
+      });
+
+      if (!confirmRes.ok) {
+        toast.error('Connected to Google but failed to save. Try reconnecting.');
+        return;
+      }
+
+      toast.success('Google Calendar connected — syncing events...');
+      await handleSync();
+      setStatus({ connected: true, lastSynced: new Date().toISOString() });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Connection failed';
+      if (message.includes('closed') || message.includes('cancelled')) {
+        toast.error('Calendar connection was cancelled');
+      } else {
+        toast.error('Failed to connect calendar. Try again.');
+      }
     } finally {
       setConnecting(false);
     }
@@ -93,6 +94,7 @@ export function ConnectCalendar() {
       toast.success(
         `Synced! Found ${data.shootsFound} shoots (${data.created} new, ${data.matched} matched to clients)`
       );
+      setStatus({ connected: true, lastSynced: new Date().toISOString() });
     } catch {
       toast.error('Sync failed. Try again.');
     } finally {
@@ -113,53 +115,45 @@ export function ConnectCalendar() {
 
   return (
     <Card>
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3">
         <div className={`
-          flex h-10 w-10 items-center justify-center rounded-xl
+          flex h-10 w-10 shrink-0 items-center justify-center rounded-xl
           ${status?.connected ? 'bg-emerald-500/15 text-emerald-400' : 'bg-surface-hover text-text-muted'}
         `}>
           <Calendar size={18} />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-text-primary">Google Calendar</h3>
           <p className="text-xs text-text-muted">
             {status?.connected
               ? 'Connected — syncs shoot events automatically'
-              : 'Connect to detect upcoming shoots'}
+              : 'Connect to detect upcoming shoots from your calendar'}
           </p>
         </div>
-        {status?.connected && (
-          <div className="ml-auto flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs text-emerald-400 font-medium">Connected</span>
+
+        {status?.connected ? (
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSync}
+              disabled={syncing}
+            >
+              {syncing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+              {syncing ? 'Syncing...' : 'Sync now'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleConnect} disabled={connecting}>
+              <Calendar size={12} />
+              Reconnect
+            </Button>
           </div>
+        ) : (
+          <GlassButton onClick={handleConnect} disabled={connecting} className="shrink-0">
+            {connecting ? <Loader2 size={14} className="animate-spin" /> : <Calendar size={14} />}
+            {connecting ? 'Connecting...' : 'Connect'}
+          </GlassButton>
         )}
       </div>
-
-      {status?.connected ? (
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={syncing}
-          >
-            {syncing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-            {syncing ? 'Syncing...' : 'Sync now'}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={handleConnect}>
-            <ExternalLink size={12} />
-            Reconnect
-          </Button>
-        </div>
-      ) : (
-        <GlassButton onClick={handleConnect} loading={connecting}>
-          <Calendar size={14} />
-          Connect Google Calendar
-        </GlassButton>
-      )}
-
-      {/* Easter egg: the calendar icon subtly rotates on hover */}
     </Card>
   );
 }

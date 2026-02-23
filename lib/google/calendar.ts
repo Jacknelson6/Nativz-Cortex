@@ -1,26 +1,7 @@
 /**
- * Google Calendar API client.
- * Reads events from a connected calendar and identifies shoot events.
+ * Shoot event identification and client matching logic.
+ * Calendar event fetching is handled by Nango (see lib/nango/client.ts).
  */
-
-import { getValidAccessToken } from './auth';
-
-const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3';
-
-interface GoogleCalendarEvent {
-  id: string;
-  summary: string;
-  description?: string;
-  location?: string;
-  start: { dateTime?: string; date?: string };
-  end: { dateTime?: string; date?: string };
-  status: string;
-}
-
-interface CalendarEventsResponse {
-  items: GoogleCalendarEvent[];
-  nextPageToken?: string;
-}
 
 export interface ParsedShootEvent {
   googleEventId: string;
@@ -38,47 +19,17 @@ const SHOOT_KEYWORDS = [
 ];
 
 /**
- * Fetch upcoming events from a Google Calendar.
- */
-export async function fetchCalendarEvents(
-  connectionId: string,
-  calendarId: string = 'primary',
-  daysAhead: number = 30,
-): Promise<GoogleCalendarEvent[]> {
-  const accessToken = await getValidAccessToken(connectionId);
-
-  const now = new Date().toISOString();
-  const future = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000).toISOString();
-
-  const params = new URLSearchParams({
-    timeMin: now,
-    timeMax: future,
-    maxResults: '100',
-    singleEvents: 'true',
-    orderBy: 'startTime',
-  });
-
-  const res = await fetch(
-    `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
-    {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    },
-  );
-
-  if (!res.ok) {
-    const error = await res.text();
-    throw new Error(`Google Calendar API error (${res.status}): ${error}`);
-  }
-
-  const data: CalendarEventsResponse = await res.json();
-  return data.items.filter((e) => e.status !== 'cancelled');
-}
-
-/**
  * Identify which calendar events are likely shoot events.
  * Uses keyword matching on title, description, and location.
  */
-export function identifyShootEvents(events: GoogleCalendarEvent[]): ParsedShootEvent[] {
+export function identifyShootEvents(events: Array<{
+  id: string;
+  summary: string;
+  description?: string;
+  location?: string;
+  start: { dateTime?: string; date?: string };
+  status: string;
+}>): ParsedShootEvent[] {
   const shoots: ParsedShootEvent[] = [];
 
   for (const event of events) {

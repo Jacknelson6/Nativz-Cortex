@@ -128,6 +128,7 @@ export interface CalendarConnection {
   user_id: string;
   provider: 'google';
   calendar_id: string;
+  nango_connection_id: string | null;
   connected_at: string;
   last_synced_at: string | null;
 }
