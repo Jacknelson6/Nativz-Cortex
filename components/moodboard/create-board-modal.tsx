@@ -78,6 +78,7 @@ export function CreateBoardModal({ open, onClose, onCreated }: CreateBoardModalP
           name: name.trim(),
           description: description.trim() || undefined,
           client_id: clientId || undefined,
+          template_id: templateId || undefined,
         }),
       });
 
