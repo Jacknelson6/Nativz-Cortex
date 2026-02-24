@@ -20,16 +20,24 @@ interface ClientOption {
   name: string;
 }
 
+interface Template {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export function CreateBoardModal({ open, onClose, onCreated }: CreateBoardModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [clientId, setClientId] = useState<string | null>(null);
+  const [templateId, setTemplateId] = useState<string | null>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    async function fetchClients() {
+    async function fetchData() {
       const supabase = createClient();
       const { data } = await supabase
         .from('clients')
@@ -37,14 +45,23 @@ export function CreateBoardModal({ open, onClose, onCreated }: CreateBoardModalP
         .eq('is_active', true)
         .order('name');
       if (data) setClients(data);
+
+      try {
+        const res = await fetch('/api/moodboard/templates');
+        if (res.ok) {
+          const t = await res.json();
+          setTemplates(t);
+        }
+      } catch { /* ignore */ }
     }
-    fetchClients();
+    fetchData();
   }, [open]);
 
   function reset() {
     setName('');
     setDescription('');
     setClientId(null);
+    setTemplateId(null);
     setLoading(false);
   }
 

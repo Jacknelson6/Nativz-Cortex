@@ -7,6 +7,7 @@ const updateBoardSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional().nullable(),
   client_id: z.string().uuid().optional().nullable(),
+  archived: z.boolean().optional(),
 });
 
 export async function GET(
@@ -125,6 +126,9 @@ export async function PATCH(
     }
     if (parsed.data.client_id !== undefined) {
       updates.client_id = parsed.data.client_id;
+    }
+    if (parsed.data.archived !== undefined) {
+      updates.archived_at = parsed.data.archived ? new Date().toISOString() : null;
     }
 
     const { data: board, error: updateError } = await adminClient

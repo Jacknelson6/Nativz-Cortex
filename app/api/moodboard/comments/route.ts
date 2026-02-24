@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 const createCommentSchema = z.object({
   item_id: z.string().uuid('Invalid item ID'),
   content: z.string().min(1, 'Content is required').max(5000),
+  video_timestamp: z.number().int().min(0).optional().nullable(),
 });
 
 export async function GET(request: NextRequest) {
@@ -100,6 +101,7 @@ export async function POST(request: NextRequest) {
         item_id: parsed.data.item_id,
         content: parsed.data.content,
         user_id: user.id,
+        video_timestamp: parsed.data.video_timestamp ?? null,
       })
       .select('*, users(full_name, avatar_url)')
       .single();

@@ -7,9 +7,10 @@ const createBoardSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   description: z.string().max(2000).optional().nullable(),
   client_id: z.string().uuid().optional().nullable(),
+  template_id: z.string().optional(),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
 
@@ -29,10 +30,19 @@ export async function GET() {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const { data: boards, error: fetchError } = await adminClient
+    const { searchParams } = new URL(request.url);
+    const showArchived = searchParams.get('show_archived') === 'true';
+
+    let query = adminClient
       .from('moodboard_boards')
       .select('*, clients(name)')
       .order('updated_at', { ascending: false });
+
+    if (!showArchived) {
+      query = query.is('archived_at', null);
+    }
+
+    const { data: boards, error: fetchError } = await query;
 
     if (fetchError) {
       console.error('Error fetching boards:', fetchError);
@@ -116,6 +126,26 @@ export async function POST(request: NextRequest) {
     if (insertError) {
       console.error('Error creating board:', insertError);
       return NextResponse.json({ error: 'Failed to create board' }, { status: 500 });
+    }
+
+    // If template selected, create template notes
+    if (parsed.data.template_id && board) {
+      const templateRes = await fetch(new URL('/api/moodboard/templates', request.url));
+      if (templateRes.ok) {
+        const templates = await templateRes.json();
+        const template = templates.find((t: { id: string }) => t.id === parsed.data.template_id);
+        if (template?.notes) {
+          for (const note of template.notes) {
+            await adminClient.from('moodboard_notes').insert({
+              board_id: board.id,
+              content: note.content,
+              color: note.color,
+              position_x: note.position_x,
+              position_y: note.position_y,
+            });
+          }
+        }
+      }
     }
 
     return NextResponse.json(board, { status: 201 });

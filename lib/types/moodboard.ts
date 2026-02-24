@@ -16,6 +16,13 @@ export interface TranscriptSegment {
   text: string;
 }
 
+export interface MoodboardTag {
+  id: string;
+  board_id: string;
+  name: string;
+  color: string;
+}
+
 export interface MoodboardBoard {
   id: string;
   name: string;
@@ -24,9 +31,11 @@ export interface MoodboardBoard {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
   // joined fields
   client_name?: string;
   item_count?: number;
+  tags?: MoodboardTag[];
 }
 
 export interface VideoPacing {

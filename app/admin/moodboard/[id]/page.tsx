@@ -30,12 +30,14 @@ import {
   Check,
   X,
   Clipboard,
+  Share2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AddItemModal } from '@/components/moodboard/add-item-modal';
 import { VideoAnalysisPanel } from '@/components/moodboard/video-analysis-panel';
 import { ReplicationBriefModal } from '@/components/moodboard/replication-brief-modal';
+import { ShareBoardModal } from '@/components/moodboard/share-board-modal';
 import { VideoNode } from '@/components/moodboard/nodes/video-node';
 import { ImageNode } from '@/components/moodboard/nodes/image-node';
 import { WebsiteNode } from '@/components/moodboard/nodes/website-node';
@@ -76,6 +78,7 @@ function MoodboardCanvas() {
   const [dbEdges, setDbEdges] = useState<MoodboardEdge[]>([]);
   const [loading, setLoading] = useState(true);
   const [addItemOpen, setAddItemOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
@@ -703,6 +706,10 @@ function MoodboardCanvas() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          <Button variant="ghost" size="sm" onClick={() => setShareOpen(true)}>
+            <Share2 size={14} />
+            Share
+          </Button>
           <Button variant="ghost" size="sm" onClick={handleAddNote}>
             <StickyNote size={14} />
             Note
@@ -802,6 +809,13 @@ function MoodboardCanvas() {
           onReplicate={(item) => { setAnalysisItem(null); setReplicateItem(item); }}
         />
       )}
+
+      {/* Share Board Modal */}
+      <ShareBoardModal
+        boardId={boardId}
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+      />
 
       {/* Replication Brief Modal */}
       {replicateItem && (
