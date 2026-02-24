@@ -52,6 +52,24 @@ async function getInstagramMetadata(url: string) {
   }
 }
 
+// Twitter/X oEmbed
+async function getTwitterMetadata(url: string) {
+  try {
+    const res = await fetch(`https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const text = (data.html || '').replace(/<[^>]*>/g, '').substring(0, 120);
+    return {
+      title: text || 'Twitter Video',
+      thumbnail_url: '' as string,
+      author_name: data.author_name || 'Unknown',
+      author_handle: data.author_url ? data.author_url.split('/').pop() || null : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -126,6 +144,8 @@ export async function POST(
         }
       } else if (platform === 'instagram') {
         metadata = await getInstagramMetadata(item.url);
+      } else if (platform === 'twitter') {
+        metadata = await getTwitterMetadata(item.url);
       }
 
       // Update with metadata immediately
