@@ -52,7 +52,7 @@ interface PortalSidebarProps {
 
 export function PortalSidebar({ userName, avatarUrl }: PortalSidebarProps) {
   return (
-    <nav className="hidden md:flex w-56 flex-col border-r border-nativz-border bg-background">
+    <nav className="hidden md:flex w-56 flex-col border-r border-nativz-border bg-surface">
       <div className="flex flex-1 flex-col gap-0.5 p-3">
         <PortalNavItems />
       </div>

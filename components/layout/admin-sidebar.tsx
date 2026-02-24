@@ -52,7 +52,7 @@ interface AdminSidebarProps {
 
 export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
   return (
-    <nav className="hidden md:flex w-56 flex-col border-r border-nativz-border bg-background">
+    <nav className="hidden md:flex w-56 flex-col border-r border-nativz-border bg-surface">
       <div className="flex flex-1 flex-col gap-0.5 p-3">
         <AdminNavItems />
       </div>

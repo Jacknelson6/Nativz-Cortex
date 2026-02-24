@@ -129,7 +129,7 @@ export function OnboardStrategy({ clientId, clientName, onNext, onBack }: Onboar
             className="h-full rounded-full transition-all duration-300 ease-out"
             style={{
               width: `${progress}%`,
-              background: `linear-gradient(90deg, #2b7de9, #8B5CF6)`,
+              background: `linear-gradient(90deg, #046BD2, #8B5CF6)`,
             }}
           />
         </div>

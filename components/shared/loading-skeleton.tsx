@@ -1,10 +1,10 @@
 export function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`skeleton-shimmer rounded-lg ${className}`} />;
+  return <div className={`animate-pulse rounded-lg bg-surface-hover ${className}`} />;
 }
 
 export function CardSkeleton() {
   return (
-    <div className="bg-surface rounded-xl border border-white/[0.06] p-6 shadow-sm">
+    <div className="bg-surface rounded-xl border border-nativz-border p-6 shadow-sm">
       <Skeleton className="h-4 w-1/3 mb-4" />
       <Skeleton className="h-8 w-1/2 mb-2" />
       <Skeleton className="h-3 w-2/3" />
@@ -32,11 +32,11 @@ export function DashboardSkeleton() {
         ))}
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="bg-surface rounded-xl border border-white/[0.06] p-6 shadow-sm">
+        <div className="bg-surface rounded-xl border border-nativz-border p-6 shadow-sm">
           <Skeleton className="h-4 w-1/4 mb-6" />
           <Skeleton className="h-64 w-full" />
         </div>
-        <div className="bg-surface rounded-xl border border-white/[0.06] p-6 shadow-sm">
+        <div className="bg-surface rounded-xl border border-nativz-border p-6 shadow-sm">
           <Skeleton className="h-4 w-1/4 mb-6" />
           <Skeleton className="h-64 w-full" />
         </div>

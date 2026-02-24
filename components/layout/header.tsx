@@ -14,11 +14,11 @@ export function Header({ portalMode = false }: HeaderProps) {
   const { isOpen, toggle } = useSidebar();
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-nativz-border bg-background px-4 md:px-6">
+    <header className="flex h-16 items-center justify-between border-b border-nativz-border bg-surface px-4 md:px-6">
       <div className="flex items-center gap-3">
         <button
           onClick={toggle}
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-text-muted hover:bg-white/[0.06] hover:text-text-secondary transition-all md:hidden"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-all md:hidden"
           aria-label={isOpen ? 'Close menu' : 'Open menu'}
         >
           <div className="relative h-5 w-5">

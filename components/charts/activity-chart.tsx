@@ -39,12 +39,12 @@ export function ActivityChart({ data }: ActivityChartProps) {
     <Card>
       <div className="flex items-center justify-between mb-4">
         <CardTitle>Activity</CardTitle>
-        <div className="flex gap-1 rounded-lg bg-white/[0.06] p-1">
+        <div className="flex gap-1 rounded-lg bg-surface-hover p-1">
           <button
             onClick={() => setMode('volume')}
             className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
               mode === 'volume'
-                ? 'bg-surface-elevated text-text-primary shadow-sm'
+                ? 'bg-surface text-text-primary shadow-sm'
                 : 'text-text-muted hover:text-text-secondary'
             }`}
           >
@@ -54,7 +54,7 @@ export function ActivityChart({ data }: ActivityChartProps) {
             onClick={() => setMode('sentiment')}
             className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
               mode === 'sentiment'
-                ? 'bg-surface-elevated text-text-primary shadow-sm'
+                ? 'bg-surface text-text-primary shadow-sm'
                 : 'text-text-muted hover:text-text-secondary'
             }`}
           >
@@ -69,24 +69,24 @@ export function ActivityChart({ data }: ActivityChartProps) {
             <ComposedChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="views-gradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#2b7de9" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#2b7de9" stopOpacity={0.02} />
+                  <stop offset="0%" stopColor="#046bd2" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#046bd2" stopOpacity={0.02} />
                 </linearGradient>
                 <linearGradient id="mentions-gradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#10B981" stopOpacity={0.2} />
                   <stop offset="95%" stopColor="#10B981" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2f45" vertical={false} />
               <XAxis
                 dataKey="date"
-                tick={{ fill: '#5b6478', fontSize: 11 }}
+                tick={{ fill: '#64748b', fontSize: 11 }}
                 tickLine={false}
-                axisLine={{ stroke: 'rgba(255,255,255,0.06)' }}
+                axisLine={{ stroke: '#2a2f45' }}
                 dy={8}
               />
               <YAxis
-                tick={{ fill: '#5b6478', fontSize: 11 }}
+                tick={{ fill: '#64748b', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
                 width={48}
@@ -94,8 +94,8 @@ export function ActivityChart({ data }: ActivityChartProps) {
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#181d2e',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  backgroundColor: '#1a1d2e',
+                  border: '1px solid #2a2f45',
                   borderRadius: '8px',
                   fontSize: '13px',
                   boxShadow: '0 4px 6px -1px rgba(0,0,0,0.3)',
@@ -113,10 +113,10 @@ export function ActivityChart({ data }: ActivityChartProps) {
               <Line
                 type="monotone"
                 dataKey="views"
-                stroke="#2b7de9"
+                stroke="#046bd2"
                 strokeWidth={2.5}
                 dot={false}
-                activeDot={{ r: 5, fill: '#2b7de9', stroke: '#111520', strokeWidth: 2 }}
+                activeDot={{ r: 5, fill: '#046bd2', stroke: '#1a1d2e', strokeWidth: 2 }}
                 name="Views"
               />
               <Line
@@ -125,7 +125,7 @@ export function ActivityChart({ data }: ActivityChartProps) {
                 stroke="#10B981"
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, fill: '#10B981', stroke: '#111520', strokeWidth: 2 }}
+                activeDot={{ r: 4, fill: '#10B981', stroke: '#1a1d2e', strokeWidth: 2 }}
                 name="Mentions"
               />
             </ComposedChart>
@@ -137,17 +137,17 @@ export function ActivityChart({ data }: ActivityChartProps) {
                   <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2f45" vertical={false} />
               <XAxis
                 dataKey="date"
-                tick={{ fill: '#5b6478', fontSize: 11 }}
+                tick={{ fill: '#64748b', fontSize: 11 }}
                 tickLine={false}
-                axisLine={{ stroke: 'rgba(255,255,255,0.06)' }}
+                axisLine={{ stroke: '#2a2f45' }}
                 dy={8}
               />
               <YAxis
                 domain={[-1, 1]}
-                tick={{ fill: '#5b6478', fontSize: 11 }}
+                tick={{ fill: '#64748b', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
                 width={48}
@@ -155,8 +155,8 @@ export function ActivityChart({ data }: ActivityChartProps) {
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#181d2e',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  backgroundColor: '#1a1d2e',
+                  border: '1px solid #2a2f45',
                   borderRadius: '8px',
                   fontSize: '13px',
                   boxShadow: '0 4px 6px -1px rgba(0,0,0,0.3)',
@@ -176,7 +176,7 @@ export function ActivityChart({ data }: ActivityChartProps) {
                 stroke="#F59E0B"
                 strokeWidth={2.5}
                 dot={false}
-                activeDot={{ r: 5, fill: '#F59E0B', stroke: '#111520', strokeWidth: 2 }}
+                activeDot={{ r: 5, fill: '#F59E0B', stroke: '#1a1d2e', strokeWidth: 2 }}
                 name="Sentiment"
               />
             </ComposedChart>

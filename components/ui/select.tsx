@@ -22,7 +22,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             id={id}
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${id}-error` : undefined}
-            className={`block w-full appearance-none rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 pr-9 text-sm text-text-primary transition-colors hover:border-white/[0.12] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30 focus:shadow-[0_0_0_3px_rgba(43,125,233,0.12)] ${error ? 'border-red-500' : ''} ${className}`}
+            className={`block w-full appearance-none rounded-lg border border-nativz-border bg-surface px-3 py-2 pr-9 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)] ${error ? 'border-red-500' : ''} ${className}`}
             {...props}
           >
             {options.map((opt) => (

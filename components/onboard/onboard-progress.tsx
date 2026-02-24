@@ -35,10 +35,10 @@ export function OnboardProgress({ currentStep, completedSteps }: OnboardProgress
                   flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold
                   transition-all duration-500 ease-out
                   ${isComplete
-                    ? 'bg-accent text-white shadow-[0_0_12px_rgba(43,125,233,0.35)]'
+                    ? 'bg-accent text-white shadow-[0_0_12px_rgba(4,107,210,0.4)]'
                     : isCurrent
-                      ? 'bg-accent/20 text-accent border-2 border-accent shadow-[0_0_16px_rgba(43,125,233,0.20)]'
-                      : 'bg-white/[0.04] text-text-muted border border-white/[0.08]'
+                      ? 'bg-accent/20 text-accent border-2 border-accent shadow-[0_0_16px_rgba(4,107,210,0.25)]'
+                      : 'bg-surface-hover text-text-muted border border-nativz-border'
                   }
                 `}
               >

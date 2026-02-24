@@ -100,7 +100,7 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={PLACEHOLDER_EXAMPLES[placeholderIndex]}
-            className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-3 pl-10 pr-4 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30 focus:shadow-[0_0_0_3px_rgba(43,125,233,0.12)] hover:border-white/[0.12]"
+            className="w-full rounded-xl border border-nativz-border bg-surface py-3 pl-10 pr-4 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)]"
             disabled={loading}
           />
         </div>
@@ -154,13 +154,13 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
 
       {/* Search mode toggle — only when a client is selected */}
       {clientId && (
-        <div className="mt-4 flex items-center gap-1 rounded-lg bg-white/[0.04] p-1 w-fit">
+        <div className="mt-4 flex items-center gap-1 rounded-lg bg-surface-hover p-1 w-fit">
           <button
             type="button"
             onClick={() => setSearchMode('general')}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               searchMode === 'general'
-                ? 'bg-surface-elevated text-text-primary shadow-xs'
+                ? 'bg-surface text-text-primary shadow-sm'
                 : 'text-text-muted hover:text-text-secondary'
             }`}
           >
@@ -169,9 +169,9 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
           <button
             type="button"
             onClick={() => setSearchMode('client_strategy')}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               searchMode === 'client_strategy'
-                ? 'bg-surface-elevated text-text-primary shadow-xs'
+                ? 'bg-surface text-text-primary shadow-sm'
                 : 'text-text-muted hover:text-text-secondary'
             }`}
           >

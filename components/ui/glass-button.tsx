@@ -36,14 +36,14 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
           rounded-xl px-6 py-3 text-sm font-semibold cursor-pointer
           text-accent-text
           backdrop-blur-[20px]
-          bg-[rgba(43,125,233,0.08)]
-          border border-[rgba(43,125,233,0.20)]
+          bg-[rgba(4,107,210,0.12)]
+          border border-[rgba(4,107,210,0.25)]
           shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08)]
           transition-all duration-200 ease-out
-          hover:bg-[rgba(43,125,233,0.15)]
-          hover:border-[rgba(43,125,233,0.35)]
-          hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_0_20px_rgba(43,125,233,0.15)]
-          active:scale-[0.97] active:bg-[rgba(43,125,233,0.20)]
+          hover:bg-[rgba(4,107,210,0.2)]
+          hover:border-[rgba(4,107,210,0.4)]
+          hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_0_20px_rgba(4,107,210,0.15)]
+          active:scale-[0.97] active:bg-[rgba(4,107,210,0.25)]
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background
           ${disabled || loading ? 'opacity-40' : ''}
           ${shaking ? 'animate-shake' : ''}

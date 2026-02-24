@@ -70,13 +70,13 @@ export function SidebarAccount({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 400, damping: 25, mass: 0.8 }}
-            className="absolute bottom-full left-3 right-3 mb-2 rounded-xl border border-white/[0.08] bg-surface-elevated p-1.5 shadow-elevated"
+            className="absolute bottom-full left-3 right-3 mb-2 rounded-xl border border-nativz-border bg-surface p-1.5 shadow-elevated"
             style={{ backdropFilter: 'blur(16px)' }}
           >
             <Link
               href={settingsHref}
               onClick={() => setOpen(false)}
-              className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-white/[0.06] hover:text-text-primary transition-colors"
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
             >
               <Settings size={15} />
               Account settings
@@ -84,7 +84,7 @@ export function SidebarAccount({
             <button
               onClick={handleLogout}
               disabled={loggingOut}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-white/[0.06] hover:text-red-400 transition-colors disabled:opacity-50"
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-red-400 transition-colors disabled:opacity-50"
             >
               <LogOut size={15} />
               {loggingOut ? 'Signing out...' : 'Sign out'}
@@ -99,8 +99,8 @@ export function SidebarAccount({
         whileTap={{ scale: 0.98 }}
         className={`group flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 transition-all duration-200 ${
           open
-            ? 'border-accent/20 bg-accent-surface'
-            : 'border-transparent hover:border-white/[0.08] hover:bg-white/[0.04]'
+            ? 'border-accent/30 bg-accent-surface shadow-[0_0_12px_rgba(4,107,210,0.15)]'
+            : 'border-transparent hover:border-nativz-border hover:bg-surface-hover'
         }`}
       >
         {/* Avatar */}
@@ -127,8 +127,8 @@ export function SidebarAccount({
           {/* Ring */}
           <div className={`absolute inset-0 rounded-full border-2 transition-all duration-300 ${
             open
-              ? 'border-accent/40'
-              : 'border-transparent group-hover:border-accent/20'
+              ? 'border-accent/50'
+              : 'border-transparent group-hover:border-accent/25'
           }`} />
         </div>
 
