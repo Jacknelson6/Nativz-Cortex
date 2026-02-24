@@ -1,8 +1,8 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
-import { Film, Play, Loader2, Eye, Copy, AlertCircle } from 'lucide-react';
+import { Film, Play, Loader2, Eye, Copy, AlertCircle, RefreshCw, Music, MessageSquare } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { MoodboardItem } from '@/lib/types/moodboard';
 
@@ -10,13 +10,51 @@ interface VideoNodeData {
   item: MoodboardItem;
   onViewAnalysis: (item: MoodboardItem) => void;
   onReplicate: (item: MoodboardItem) => void;
+  commentCount?: number;
+}
+
+function formatCompactNumber(n: number | undefined | null): string {
+  if (!n) return '0';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
+  return n.toString();
+}
+
+function PlatformBadge({ platform }: { platform: string | null }) {
+  if (!platform) return null;
+  const config: Record<string, { label: string; bg: string; text: string }> = {
+    tiktok: { label: 'TikTok', bg: 'bg-black', text: 'text-white' },
+    youtube: { label: 'YT', bg: 'bg-red-600', text: 'text-white' },
+    instagram: { label: 'IG', bg: 'bg-gradient-to-r from-purple-500 to-pink-500', text: 'text-white' },
+    twitter: { label: '𝕏', bg: 'bg-black', text: 'text-white' },
+  };
+  const c = config[platform];
+  if (!c) return null;
+  return (
+    <span className={`absolute top-2 left-2 z-10 rounded px-1.5 py-0.5 text-[10px] font-bold ${c.bg} ${c.text} shadow-md`}>
+      {c.label}
+    </span>
+  );
 }
 
 export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeData>) {
-  const { item, onViewAnalysis, onReplicate } = data;
+  const { item, onViewAnalysis, onReplicate, commentCount } = data;
   const isProcessing = item.status === 'processing';
   const isFailed = item.status === 'failed';
   const isComplete = item.status === 'completed';
+  const [reprocessing, setReprocessing] = useState(false);
+
+  const handleReprocess = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setReprocessing(true);
+    try {
+      await fetch(`/api/moodboard/items/${item.id}/reprocess`, { method: 'POST' });
+    } catch {
+      // ignore — UI will update via realtime
+    } finally {
+      setReprocessing(false);
+    }
+  };
 
   return (
     <div className="bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden min-w-[280px] max-w-[360px] group">
@@ -24,6 +62,16 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
 
       {/* Thumbnail */}
       <div className="relative aspect-video bg-surface-hover flex items-center justify-center overflow-hidden">
+        <PlatformBadge platform={item.platform} />
+
+        {/* Comment count badge */}
+        {(commentCount ?? 0) > 0 && (
+          <span className="absolute top-2 right-2 z-10 flex items-center gap-0.5 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold text-white shadow-md">
+            <MessageSquare size={10} />
+            {commentCount}
+          </span>
+        )}
+
         {item.thumbnail_url ? (
           <a href={item.url} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -69,6 +117,31 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
           </p>
         </div>
 
+        {/* Author */}
+        {(item.author_name || item.author_handle) && (
+          <p className="text-[11px] text-text-muted truncate pl-5">
+            {item.author_name}{item.author_handle ? ` @${item.author_handle.replace(/^@/, '')}` : ''}
+          </p>
+        )}
+
+        {/* Engagement Stats */}
+        {item.stats && (
+          <div className="flex items-center gap-3 text-[10px] text-text-muted pl-5">
+            {item.stats.views != null && <span>👁 {formatCompactNumber(item.stats.views)}</span>}
+            {item.stats.likes != null && <span>❤️ {formatCompactNumber(item.stats.likes)}</span>}
+            {item.stats.comments != null && <span>💬 {formatCompactNumber(item.stats.comments)}</span>}
+            {item.stats.shares != null && <span>🔗 {formatCompactNumber(item.stats.shares)}</span>}
+          </div>
+        )}
+
+        {/* Music */}
+        {item.music && (
+          <div className="flex items-center gap-1 text-[10px] text-text-muted pl-5 truncate">
+            <Music size={10} className="shrink-0" />
+            <span className="truncate">{item.music}</span>
+          </div>
+        )}
+
         {/* Transcript snippet */}
         {isComplete && item.transcript && (
           <div className="bg-surface-hover rounded-md px-2 py-1.5">
@@ -97,16 +170,41 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
         )}
 
         {isFailed && (
-          <div className="flex items-center gap-2 text-xs text-red-400">
-            <AlertCircle size={12} />
-            Processing failed
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 text-xs text-red-400">
+              <AlertCircle size={12} />
+              Processing failed
+            </div>
+            {item.error_message && (
+              <p className="text-[10px] text-red-400/70 line-clamp-2 pl-5">{item.error_message}</p>
+            )}
+            <button
+              onClick={handleReprocess}
+              disabled={reprocessing}
+              className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-amber-400 hover:bg-amber-400/10 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={11} className={reprocessing ? 'animate-spin' : ''} />
+              {reprocessing ? 'Reprocessing...' : 'Reprocess'}
+            </button>
           </div>
         )}
 
         {/* Hook / CTA preview */}
         {isComplete && item.hook && (
           <div className="space-y-1 border-t border-nativz-border pt-2">
-            <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide">Hook</p>
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide">Hook</p>
+              {item.hook_score != null && (
+                <span className={`text-[10px] font-bold px-1 rounded ${
+                  item.hook_score >= 7 ? 'bg-green-500/20 text-green-400' :
+                  item.hook_score >= 4 ? 'bg-yellow-500/20 text-yellow-400' :
+                  'bg-red-500/20 text-red-400'
+                }`}>{item.hook_score}/10</span>
+              )}
+              {item.hook_type && (
+                <span className="text-[9px] text-text-muted bg-surface-hover rounded px-1">{item.hook_type}</span>
+              )}
+            </div>
             <p className="text-xs text-text-secondary line-clamp-2 italic">&ldquo;{item.hook}&rdquo;</p>
             {item.cta && (
               <>

@@ -6,6 +6,16 @@ import { parseAIResponseJSON } from '@/lib/ai/parse';
 import type { VideoAnalysis } from '@/lib/types/moodboard';
 import { getTikTokMetadata, extractTikTokTranscript, extractKeyFrameReferences } from '@/lib/tiktok/scraper';
 
+// Detect platform from URL
+function detectPlatform(url: string): string | null {
+  const lower = url.toLowerCase();
+  if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'youtube';
+  if (lower.includes('tiktok.com')) return 'tiktok';
+  if (lower.includes('instagram.com')) return 'instagram';
+  if (lower.includes('twitter.com') || lower.includes('x.com')) return 'twitter';
+  return null;
+}
+
 // YouTube oEmbed for metadata
 async function getYouTubeMetadata(url: string) {
   try {
@@ -16,6 +26,7 @@ async function getYouTubeMetadata(url: string) {
       title: data.title as string,
       thumbnail_url: data.thumbnail_url as string,
       author_name: data.author_name as string,
+      author_handle: null as string | null,
     };
   } catch {
     return null;
@@ -28,7 +39,12 @@ async function getInstagramMetadata(url: string) {
     const res = await fetch(`https://api.instagram.com/oembed?url=${encodeURIComponent(url)}`);
     if (res.ok) {
       const data = await res.json();
-      return { title: data.title || data.author_name, thumbnail_url: data.thumbnail_url, author_name: data.author_name };
+      return {
+        title: data.title || data.author_name,
+        thumbnail_url: data.thumbnail_url,
+        author_name: data.author_name,
+        author_handle: null as string | null,
+      };
     }
     return null;
   } catch {
@@ -65,29 +81,50 @@ export async function POST(
       return NextResponse.json({ error: 'Only video items can be processed' }, { status: 400 });
     }
 
+    // Detect platform
+    const platform = detectPlatform(item.url);
+
     // Set processing status
     await adminClient
       .from('moodboard_items')
-      .update({ status: 'processing' })
+      .update({ status: 'processing', platform, error_message: null })
       .eq('id', id);
 
     try {
       // Step 1: Get metadata
-      let metadata: { title: string; thumbnail_url: string; author_name: string } | null = null;
+      let metadata: { title: string; thumbnail_url: string; author_name: string; author_handle: string | null } | null = null;
       let tiktokData: Awaited<ReturnType<typeof getTikTokMetadata>> = null;
+      let stats: { views: number; likes: number; comments: number; shares: number } | null = null;
+      let music: string | null = null;
+      let hashtags: string[] = [];
+      let authorHandle: string | null = null;
 
-      if (item.url.includes('youtube.com') || item.url.includes('youtu.be')) {
+      if (platform === 'youtube') {
         metadata = await getYouTubeMetadata(item.url);
-      } else if (item.url.includes('tiktok.com')) {
+      } else if (platform === 'tiktok') {
         tiktokData = await getTikTokMetadata(item.url);
         if (tiktokData) {
           metadata = {
             title: tiktokData.title,
             thumbnail_url: tiktokData.thumbnail_url,
             author_name: tiktokData.author_name || tiktokData.author_handle,
+            author_handle: tiktokData.author_handle || null,
           };
+          authorHandle = tiktokData.author_handle || null;
+          if (tiktokData.stats) {
+            stats = {
+              views: tiktokData.stats.plays || 0,
+              likes: tiktokData.stats.likes || 0,
+              comments: tiktokData.stats.comments || 0,
+              shares: tiktokData.stats.shares || 0,
+            };
+          }
+          music = tiktokData.music || null;
+          // Extract hashtags from title if available
+          const hashtagMatches = (tiktokData.title || '').match(/#\w+/g);
+          hashtags = hashtagMatches ? hashtagMatches.map(h => h.replace('#', '')) : [];
         }
-      } else if (item.url.includes('instagram.com')) {
+      } else if (platform === 'instagram') {
         metadata = await getInstagramMetadata(item.url);
       }
 
@@ -96,6 +133,11 @@ export async function POST(
         const metadataUpdate: Record<string, unknown> = {
           title: metadata.title || item.title,
           thumbnail_url: metadata.thumbnail_url || item.thumbnail_url,
+          author_name: metadata.author_name || null,
+          author_handle: metadata.author_handle || authorHandle || null,
+          stats: stats,
+          music: music,
+          hashtags: hashtags,
         };
         if (tiktokData?.duration) {
           metadataUpdate.duration = tiktokData.duration;
@@ -108,21 +150,16 @@ export async function POST(
 
       // Step 2: Get transcript
       let transcript = '';
-      let platform = 'unknown';
       let frames: Awaited<ReturnType<typeof extractKeyFrameReferences>> = [];
 
-      if (item.url.includes('youtube.com') || item.url.includes('youtu.be')) {
-        platform = 'youtube';
+      if (platform === 'youtube') {
         const videoId = extractYouTubeId(item.url);
         if (videoId) {
           transcript = await fetchYouTubeCaptions(videoId);
         }
-      } else if (item.url.includes('tiktok.com')) {
-        platform = 'tiktok';
-        // Extract transcript from TikTok embedded subtitles (free, no Whisper)
+      } else if (platform === 'tiktok') {
         const tiktokTranscript = await extractTikTokTranscript(item.url, tiktokData?.video_url);
         transcript = tiktokTranscript.text;
-        // Generate key frame references
         if (tiktokData) {
           frames = await extractKeyFrameReferences(
             tiktokData.video_url || '',
@@ -130,33 +167,31 @@ export async function POST(
             tiktokData.thumbnail_url,
           );
         }
-      } else if (item.url.includes('instagram.com')) {
-        platform = 'instagram';
       }
 
-      // Step 3: AI Analysis
-      // Even without transcript, we can analyze based on title and metadata
-      // Build platform-specific context
+      // Step 3: AI Analysis with hook_score and hook_type
       let platformContext = '';
-      if (tiktokData?.stats) {
-        const s = tiktokData.stats;
-        platformContext = `\nTikTok Stats: ${s.plays.toLocaleString()} plays, ${s.likes.toLocaleString()} likes, ${s.comments.toLocaleString()} comments, ${s.shares.toLocaleString()} shares`;
-        if (tiktokData.music) platformContext += `\nMusic/Sound: ${tiktokData.music}`;
-        if (tiktokData.duration) platformContext += `\nDuration: ${tiktokData.duration}s`;
+      if (stats) {
+        platformContext = `\nStats: ${stats.views.toLocaleString()} views, ${stats.likes.toLocaleString()} likes, ${stats.comments.toLocaleString()} comments, ${stats.shares.toLocaleString()} shares`;
       }
+      if (music) platformContext += `\nMusic/Sound: ${music}`;
+      if (hashtags.length > 0) platformContext += `\nHashtags: ${hashtags.join(', ')}`;
+      if (tiktokData?.duration || item.duration) platformContext += `\nDuration: ${tiktokData?.duration || item.duration}s`;
 
       const analysisPrompt = `You are a video content strategist analyzing a video for a marketing agency.
 
 ${transcript ? `Transcript: ${transcript}` : 'No transcript available — analyze based on available metadata only.'}
 Video URL: ${item.url}
-Platform: ${platform}
+Platform: ${platform || 'unknown'}
 Title: ${metadata?.title || item.title || 'Unknown'}
 Author: ${metadata?.author_name || 'Unknown'}${platformContext}
 
 Analyze this video and return a JSON object with:
 {
-  "hook": "The first 1-3 sentences that serve as the hook (estimate from title/transcript if available)",
+  "hook": "The first 1-3 sentences that serve as the hook",
   "hook_analysis": "Why this hook works or doesn't (2-3 sentences)",
+  "hook_score": <1-10 integer rating of hook effectiveness>,
+  "hook_type": "<one of: question, shocking_stat, controversy, visual_pattern_interrupt, relatable_moment, promise, curiosity_gap, other>",
   "cta": "Identified call-to-action, or 'Not identified' if unclear",
   "concept_summary": "2-3 sentence summary of what this video is about",
   "pacing": {
@@ -194,6 +229,8 @@ Return ONLY the JSON, no other text.`;
           frames: frames.length > 0 ? frames : item.frames || [],
           hook: analysis.hook ?? null,
           hook_analysis: analysis.hook_analysis ?? null,
+          hook_score: typeof analysis.hook_score === 'number' ? analysis.hook_score : null,
+          hook_type: analysis.hook_type ?? null,
           cta: analysis.cta ?? null,
           concept_summary: analysis.concept_summary ?? null,
           pacing: analysis.pacing ?? null,
@@ -201,6 +238,7 @@ Return ONLY the JSON, no other text.`;
           content_themes: analysis.content_themes ?? [],
           winning_elements: analysis.winning_elements ?? [],
           improvement_areas: analysis.improvement_areas ?? [],
+          error_message: null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
@@ -217,15 +255,16 @@ Return ONLY the JSON, no other text.`;
 
       return NextResponse.json(updated);
     } catch (processingError) {
-      // Mark as failed
+      const errorMessage = processingError instanceof Error ? processingError.message : 'Unknown error';
+      // Mark as failed with error message
       await adminClient
         .from('moodboard_items')
-        .update({ status: 'failed' })
+        .update({ status: 'failed', error_message: errorMessage })
         .eq('id', id);
 
       console.error('Video processing error:', processingError);
       return NextResponse.json(
-        { error: 'Video processing failed', details: processingError instanceof Error ? processingError.message : 'Unknown error' },
+        { error: 'Video processing failed', details: errorMessage },
         { status: 500 }
       );
     }
@@ -252,7 +291,6 @@ function extractYouTubeId(url: string): string | null {
 
 async function fetchYouTubeCaptions(videoId: string): Promise<string> {
   try {
-    // Try to get captions from YouTube's timedtext API
     const res = await fetch(
       `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
       { headers: { 'User-Agent': 'Mozilla/5.0' } }
@@ -261,7 +299,6 @@ async function fetchYouTubeCaptions(videoId: string): Promise<string> {
     if (!res.ok) return '';
 
     const xml = await res.text();
-    // Parse simple caption XML
     const textMatches = xml.match(/<text[^>]*>([^<]*)<\/text>/g);
     if (!textMatches) return '';
 
