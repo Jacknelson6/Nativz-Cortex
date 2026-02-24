@@ -55,20 +55,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Board not found' }, { status: 404 });
     }
 
-    const { data: item, error: insertError } = await adminClient
-      .from('moodboard_items')
-      .insert({
+    const insertData: Record<string, unknown> = {
         board_id: parsed.data.board_id,
         url: parsed.data.url,
         type: parsed.data.type,
         title: parsed.data.title ?? null,
         position_x: parsed.data.position_x,
         position_y: parsed.data.position_y,
-        width: parsed.data.width ?? null,
-        height: parsed.data.height ?? null,
         created_by: user.id,
         status: parsed.data.type === 'image' ? 'completed' : 'pending',
-      })
+      };
+    if (parsed.data.width !== undefined) insertData.width = parsed.data.width;
+    if (parsed.data.height !== undefined) insertData.height = parsed.data.height;
+
+    const { data: item, error: insertError } = await adminClient
+      .from('moodboard_items')
+      .insert(insertData)
       .select()
       .single();
 

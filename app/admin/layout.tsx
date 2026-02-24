@@ -7,6 +7,8 @@ import { SidebarProvider } from '@/components/layout/sidebar-provider';
 import { MobileSidebar } from '@/components/layout/mobile-sidebar';
 import { EasterEgg } from '@/components/easter-egg';
 
+export const dynamic = 'force-dynamic';
+
 const getCachedUser = unstable_cache(
   async (userId: string) => {
     const adminClient = createAdminClient();

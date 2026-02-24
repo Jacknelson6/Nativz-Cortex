@@ -12,16 +12,15 @@ export async function GET() {
 
     const adminClient = createAdminClient();
 
-    // Fetch upcoming shoot events with client names
+    // Fetch shoot events with client names — upcoming + any with plan data
     const { data: events, error } = await adminClient
       .from('shoot_events')
       .select(`
         *,
         clients(name, slug)
       `)
-      .gte('shoot_date', new Date().toISOString())
       .order('shoot_date', { ascending: true })
-      .limit(50);
+      .limit(100);
 
     if (error) {
       return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });

@@ -4,10 +4,13 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import ReactFlow, {
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
+  ReactFlowProvider,
   type Node,
   type NodeTypes,
   type OnNodesChange,
@@ -22,8 +25,8 @@ import {
   Pencil,
   Check,
   X,
+  Clipboard,
 } from 'lucide-react';
-import { GlassButton } from '@/components/ui/glass-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AddItemModal } from '@/components/moodboard/add-item-modal';
@@ -34,6 +37,7 @@ import { ImageNode } from '@/components/moodboard/nodes/image-node';
 import { WebsiteNode } from '@/components/moodboard/nodes/website-node';
 import { StickyNode } from '@/components/moodboard/nodes/sticky-node';
 import { toast } from 'sonner';
+import { detectLinkType, linkTypeToItemType } from '@/lib/types/moodboard';
 import type { MoodboardBoard, MoodboardItem, MoodboardNote, StickyNoteColor } from '@/lib/types/moodboard';
 
 const nodeTypes: NodeTypes = {
@@ -43,10 +47,11 @@ const nodeTypes: NodeTypes = {
   stickyNode: StickyNode,
 };
 
-export default function MoodboardCanvasPage() {
+function MoodboardCanvas() {
   const params = useParams();
   const router = useRouter();
   const boardId = params.id as string;
+  const reactFlowInstance = useReactFlow();
 
   const [board, setBoard] = useState<MoodboardBoard | null>(null);
   const [items, setItems] = useState<MoodboardItem[]>([]);
@@ -56,6 +61,7 @@ export default function MoodboardCanvasPage() {
   const [showMinimap, setShowMinimap] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
+  const [pasting, setPasting] = useState(false);
 
   // Analysis panel
   const [analysisItem, setAnalysisItem] = useState<MoodboardItem | null>(null);
@@ -124,8 +130,76 @@ export default function MoodboardCanvasPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, notes]);
 
-  // Save positions on drag (debounced)
+  // Paste handler — Ctrl+V / Cmd+V to paste URLs directly on canvas
+  useEffect(() => {
+    function handlePaste(e: ClipboardEvent) {
+      // Don't intercept if user is typing in an input
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if ((e.target as HTMLElement)?.isContentEditable) return;
+
+      const text = e.clipboardData?.getData('text/plain')?.trim();
+      if (!text) return;
+
+      // Check if it's a valid URL
+      try {
+        new URL(text);
+      } catch {
+        return;
+      }
+
+      e.preventDefault();
+      addItemFromPaste(text);
+    }
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardId, pasting]);
+
+  async function addItemFromPaste(url: string) {
+    if (pasting) return;
+    setPasting(true);
+
+    // Get center of current viewport
+    const canvasCenter = reactFlowInstance.screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    });
+
+    const linkType = detectLinkType(url);
+    const itemType = linkTypeToItemType(linkType);
+
+    toast.info(`Adding ${itemType}...`, { duration: 2000 });
+
+    try {
+      const res = await fetch('/api/moodboard/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          board_id: boardId,
+          url,
+          type: itemType,
+          position_x: canvasCenter.x - 160 + (Math.random() * 60 - 30),
+          position_y: canvasCenter.y - 140 + (Math.random() * 60 - 30),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to add item');
+      }
+
+      toast.success('Item added to board');
+      fetchBoard();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add item');
+    } finally {
+      setPasting(false);
+    }
+  }
+
+  // Save positions on drag (debounced)
   const handleNodesChangeWithSave: OnNodesChange = useCallback((changes) => {
     onNodesChange(changes);
 
@@ -194,14 +268,19 @@ export default function MoodboardCanvasPage() {
 
   // Note CRUD
   async function handleAddNote() {
+    const canvasCenter = reactFlowInstance.screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    });
+
     try {
       const res = await fetch('/api/moodboard/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           board_id: boardId,
-          position_x: 200 + Math.random() * 300,
-          position_y: 200 + Math.random() * 200,
+          position_x: canvasCenter.x - 80 + Math.random() * 60,
+          position_y: canvasCenter.y - 60 + Math.random() * 40,
         }),
       });
       if (!res.ok) throw new Error();
@@ -265,6 +344,9 @@ export default function MoodboardCanvasPage() {
     }
   }
 
+  const isEmpty = items.length === 0 && notes.length === 0;
+  const isMac = typeof navigator !== 'undefined' && navigator.platform?.toLowerCase().includes('mac');
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -276,7 +358,7 @@ export default function MoodboardCanvasPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-56px)]">
       {/* Canvas header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-nativz-border bg-surface">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-nativz-border bg-surface/80 backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/admin/moodboard')}
@@ -308,26 +390,26 @@ export default function MoodboardCanvasPage() {
           )}
 
           {board?.client_name && (
-            <span className="rounded-full bg-accent-surface px-2 py-0.5 text-[10px] font-medium text-accent-text">
+            <span className="rounded-full bg-accent-surface px-2.5 py-0.5 text-[10px] font-medium text-accent-text">
               {board.client_name}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <Button variant="ghost" size="sm" onClick={handleAddNote}>
             <StickyNote size={14} />
-            Add note
+            Note
           </Button>
-          <GlassButton onClick={() => setAddItemOpen(true)}>
+          <Button variant="ghost" size="sm" onClick={() => setAddItemOpen(true)}>
             <Plus size={14} />
             Add item
-          </GlassButton>
+          </Button>
         </div>
       </div>
 
       {/* Canvas */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative moodboard-canvas-area">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -335,17 +417,18 @@ export default function MoodboardCanvasPage() {
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
           fitView
-          fitViewOptions={{ padding: 0.2 }}
+          fitViewOptions={{ padding: 0.3 }}
           minZoom={0.1}
           maxZoom={2}
           proOptions={{ hideAttribution: true }}
-          className="bg-background"
         >
-          <Background color="rgba(255,255,255,0.03)" gap={20} />
-          <Controls
-            className="!bg-surface !border-nativz-border !rounded-lg !shadow-card [&>button]:!bg-surface [&>button]:!border-nativz-border [&>button]:!text-text-muted [&>button:hover]:!bg-surface-hover"
-            position="bottom-left"
+          <Background
+            variant={BackgroundVariant.Dots}
+            color="rgba(255,255,255,0.12)"
+            gap={20}
+            size={1}
           />
+          <Controls position="bottom-left" />
           {showMinimap && (
             <MiniMap
               className="!bg-surface !border-nativz-border !rounded-lg"
@@ -355,10 +438,28 @@ export default function MoodboardCanvasPage() {
           )}
         </ReactFlow>
 
+        {/* Empty state overlay */}
+        {isEmpty && !loading && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+            <div className="flex flex-col items-center gap-4 text-center max-w-xs">
+              <div className="rounded-2xl bg-surface/90 backdrop-blur-md border border-nativz-border p-4 shadow-elevated">
+                <Clipboard size={28} className="text-text-muted" />
+              </div>
+              <div className="rounded-xl bg-surface/80 backdrop-blur-sm border border-nativz-border px-5 py-4">
+                <p className="text-sm font-medium text-text-secondary">Paste a link to get started</p>
+                <p className="text-xs text-text-muted mt-1.5">
+                  Copy any URL and press <kbd className="inline-flex items-center rounded bg-surface-hover border border-nativz-border px-1.5 py-0.5 text-[10px] font-mono font-medium text-text-secondary">{isMac ? '⌘' : 'Ctrl'}+V</kbd> to add it
+                </p>
+                <p className="text-[10px] text-text-muted mt-2">YouTube, TikTok, Instagram, images, websites</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Minimap toggle */}
         <button
           onClick={() => setShowMinimap(!showMinimap)}
-          className={`cursor-pointer absolute bottom-4 right-4 rounded-lg p-2 border transition-colors ${
+          className={`cursor-pointer absolute bottom-4 right-4 z-10 rounded-lg p-2 border transition-colors ${
             showMinimap
               ? 'bg-accent-surface border-accent/30 text-accent-text'
               : 'bg-surface border-nativz-border text-text-muted hover:text-text-secondary hover:bg-surface-hover'
@@ -398,5 +499,13 @@ export default function MoodboardCanvasPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function MoodboardCanvasPage() {
+  return (
+    <ReactFlowProvider>
+      <MoodboardCanvas />
+    </ReactFlowProvider>
   );
 }

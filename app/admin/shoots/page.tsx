@@ -13,6 +13,11 @@ import {
   X,
   Sparkles,
   RefreshCw,
+  Video,
+  Lightbulb,
+  Target,
+  ChevronUp,
+  Download,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,10 +26,28 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ScheduleShootModal } from '@/components/shoots/schedule-shoot-modal';
 import { IdeateShootModal } from '@/components/shoots/ideate-shoot-modal';
+import { toast } from 'sonner';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+interface VideoIdea {
+  title: string;
+  hook: string;
+  format: string;
+  talkingPoints: string[];
+  shotList: string[];
+  whyItWorks: string;
+}
+
+interface ShootPlanData {
+  title: string;
+  summary: string;
+  videoIdeas: VideoIdea[];
+  generalTips: string[];
+  equipmentSuggestions: string[];
+}
 
 interface ShootItem {
   mondayItemId: string;
@@ -47,6 +70,9 @@ interface ShootItem {
   clientSlug: string | null;
   clientIndustry: string | null;
   clientLogoUrl: string | null;
+  // Plan data (fetched from DB)
+  planData?: ShootPlanData | null;
+  planStatus?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,6 +155,44 @@ function getRawsBadge(status: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Client-side cache for content calendar data
+// ---------------------------------------------------------------------------
+
+const CLIENT_CACHE_KEY = 'shoots_content_calendar';
+const CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getClientCache(): { groups: unknown; items: unknown } | null {
+  try {
+    const raw = sessionStorage.getItem(CLIENT_CACHE_KEY);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > CLIENT_CACHE_TTL) {
+      sessionStorage.removeItem(CLIENT_CACHE_KEY);
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function setClientCache(data: { groups: unknown; items: unknown }) {
+  try {
+    sessionStorage.setItem(CLIENT_CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+  } catch {
+    // sessionStorage full or unavailable
+  }
+}
+
+function clearClientCache() {
+  try {
+    sessionStorage.removeItem(CLIENT_CACHE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -148,11 +212,46 @@ export default function AdminShootsPage() {
   const [ideateModalOpen, setIdeateModalOpen] = useState(false);
   const [shootToIdeate, setShootToIdeate] = useState<ShootItem | null>(null);
 
+  // Plan data from DB keyed by mondayItemId
+  const [planDataMap, setPlanDataMap] = useState<Record<string, ShootPlanData>>({});
+
+  // Fetch shoot plans from DB
+  const fetchPlans = useCallback(async () => {
+    try {
+      const res = await fetch('/api/calendar/events');
+      if (!res.ok) return;
+      const events = await res.json();
+      const map: Record<string, ShootPlanData> = {};
+      for (const ev of events) {
+        if (ev.monday_item_id && ev.plan_data) {
+          map[ev.monday_item_id] = ev.plan_data;
+        }
+      }
+      setPlanDataMap(map);
+    } catch {
+      // Silent fail — plans just won't show
+    }
+  }, []);
+
   // Fetch from Monday Content Calendars
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (useCache = true) => {
     try {
       setLoading(true);
       setError(null);
+
+      // Check client-side cache first
+      if (useCache) {
+        const cached = getClientCache();
+        if (cached) {
+          setGroups((cached.groups as { id: string; title: string }[]) ?? []);
+          setItems((cached.items as ShootItem[]) ?? []);
+          setLoading(false);
+          // Still fetch plans in background
+          fetchPlans();
+          return;
+        }
+      }
+
       const res = await fetch('/api/shoots/content-calendar');
       if (!res.ok) {
         const data = await res.json();
@@ -162,16 +261,27 @@ export default function AdminShootsPage() {
       const data = await res.json();
       setGroups(data.groups ?? []);
       setItems(data.items ?? []);
+      setClientCache(data);
     } catch {
       setError('Failed to load shoot calendar');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchPlans]);
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    fetchPlans();
+  }, [fetchData, fetchPlans]);
+
+  // Merge plan data into items
+  const enrichedItems = useMemo(() => {
+    return items.map((item) => ({
+      ...item,
+      planData: planDataMap[item.mondayItemId] ?? null,
+      planStatus: planDataMap[item.mondayItemId] ? 'sent' : null,
+    }));
+  }, [items, planDataMap]);
 
   // Navigation
   function prevMonth() {
@@ -183,6 +293,12 @@ export default function AdminShootsPage() {
   function goToday() {
     const now = new Date();
     setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+  }
+
+  function handleRefresh() {
+    clearClientCache();
+    fetchData(false);
+    fetchPlans();
   }
 
   // Build calendar grid for current month
@@ -216,7 +332,7 @@ export default function AdminShootsPage() {
     const month = currentMonth.getMonth();
     const map = new Map<number, ShootItem[]>();
 
-    for (const item of items) {
+    for (const item of enrichedItems) {
       if (!item.date) continue;
       const d = new Date(item.date + 'T00:00:00');
       if (d.getFullYear() === year && d.getMonth() === month) {
@@ -228,13 +344,13 @@ export default function AdminShootsPage() {
     }
 
     return map;
-  }, [items, currentMonth]);
+  }, [enrichedItems, currentMonth]);
 
   // Split into upcoming and past
   const { upcoming, past } = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    const sorted = [...items]
+    const sorted = [...enrichedItems]
       .filter((i) => i.date)
       .sort((a, b) => (a.date! > b.date! ? 1 : -1));
 
@@ -242,13 +358,18 @@ export default function AdminShootsPage() {
       upcoming: sorted.filter((i) => new Date(i.date + 'T00:00:00') >= now),
       past: sorted.filter((i) => new Date(i.date + 'T00:00:00') < now).reverse(),
     };
-  }, [items]);
+  }, [enrichedItems]);
 
   const today = new Date();
 
   function openIdeate(item: ShootItem) {
     setShootToIdeate(item);
     setIdeateModalOpen(true);
+  }
+
+  function handleIdeateGenerated() {
+    // Refresh plan data from DB
+    fetchPlans();
   }
 
   return (
@@ -261,10 +382,15 @@ export default function AdminShootsPage() {
             {getMonthName(currentMonth)} — content shoots and key dates
           </p>
         </div>
-        <GlassButton onClick={() => { setShootToSchedule(null); setScheduleModalOpen(true); }}>
-          <Plus size={14} />
-          Schedule shoot
-        </GlassButton>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={handleRefresh} title="Refresh data">
+            <RefreshCw size={14} />
+          </Button>
+          <GlassButton onClick={() => { setShootToSchedule(null); setScheduleModalOpen(true); }}>
+            <Plus size={14} />
+            Schedule shoot
+          </GlassButton>
+        </div>
       </div>
 
       {/* Loading / error */}
@@ -277,11 +403,11 @@ export default function AdminShootsPage() {
       {error && (
         <Card className="flex flex-col items-center justify-center py-16 gap-3">
           <p className="text-sm text-red-400">{error}</p>
-          <Button size="sm" variant="ghost" onClick={fetchData}>Try again</Button>
+          <Button size="sm" variant="ghost" onClick={() => fetchData(false)}>Try again</Button>
         </Card>
       )}
 
-      {!loading && !error && items.length === 0 && (
+      {!loading && !error && enrichedItems.length === 0 && (
         <EmptyState
           icon={<Camera size={32} />}
           title="No shoots scheduled"
@@ -290,7 +416,7 @@ export default function AdminShootsPage() {
       )}
 
       {/* Calendar + List (always shown together) */}
-      {!loading && !error && items.length > 0 && (
+      {!loading && !error && enrichedItems.length > 0 && (
         <>
           {/* Month navigation */}
           <div className="flex items-center justify-between">
@@ -362,12 +488,15 @@ export default function AdminShootsPage() {
                                 onClick={() => setSelectedShoot(event)}
                                 className={`
                                   cursor-pointer w-full text-left rounded-md px-1.5 py-1 text-[10px] font-medium
-                                  bg-white/[0.08] border border-white/10 text-white/80
+                                  ${event.planData
+                                    ? 'bg-purple-500/15 border border-purple-500/25 text-purple-300'
+                                    : 'bg-white/[0.08] border border-white/10 text-white/80'
+                                  }
                                   hover:bg-white/[0.12] hover:border-white/15 transition-colors
                                   flex items-center gap-1 overflow-hidden
                                   ${isDayPast ? 'opacity-60' : ''}
                                 `}
-                                title={event.clientName}
+                                title={event.clientName + (event.planData ? ' — plan ready' : '')}
                               >
                                 {event.clientLogoUrl ? (
                                   <div className="relative h-3.5 w-3.5 shrink-0 overflow-hidden rounded-sm">
@@ -378,6 +507,9 @@ export default function AdminShootsPage() {
                                   <span className="font-bold shrink-0">{getAbbr(event)}</span>
                                 )}
                                 <span className="truncate">{event.clientName}</span>
+                                {event.planData && (
+                                  <Sparkles size={9} className="shrink-0 text-purple-400 ml-auto" />
+                                )}
                               </button>
                             ))}
                           </div>
@@ -402,80 +534,15 @@ export default function AdminShootsPage() {
               </Card>
             ) : (
               <div className="space-y-2">
-                {upcoming.map((item, i) => {
-                  const date = item.date ? new Date(item.date + 'T00:00:00') : null;
-                  const editing = getEditingBadge(item.editingStatus);
-                  const raws = getRawsBadge(item.rawsStatus);
-
-                  return (
-                    <div
-                      key={item.mondayItemId}
-                      className="animate-stagger-in"
-                      style={{ animationDelay: `${i * 30}ms` }}
-                    >
-                      <Card className="flex items-center gap-3">
-                        {/* Date badge */}
-                        {date && (
-                          <button
-                            onClick={() => setSelectedShoot(item)}
-                            className="cursor-pointer flex flex-col items-center justify-center rounded-lg bg-accent/10 text-accent px-2.5 py-1.5 min-w-[48px] hover:bg-accent/20 transition-colors"
-                          >
-                            <span className="text-base font-bold leading-none">{date.getDate()}</span>
-                            <span className="text-[9px] font-medium uppercase mt-0.5">
-                              {date.toLocaleDateString('en-US', { month: 'short' })}
-                            </span>
-                          </button>
-                        )}
-
-                        {/* Avatar */}
-                        <button
-                          onClick={() => setSelectedShoot(item)}
-                          className="cursor-pointer hover:opacity-80 transition-opacity"
-                        >
-                          <ShootAvatar item={item} />
-                        </button>
-
-                        {/* Content */}
-                        <button
-                          onClick={() => setSelectedShoot(item)}
-                          className="cursor-pointer flex-1 min-w-0 text-left"
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-medium text-text-primary truncate">{item.clientName}</p>
-                            {item.abbreviation && (
-                              <span className="shrink-0 text-[10px] font-medium text-text-muted">{item.abbreviation}</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {item.agency && (
-                              <span className="text-xs text-text-muted">{item.agency}</span>
-                            )}
-                          </div>
-                        </button>
-
-                        {/* Status badges */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {item.rawsStatus && (
-                            <Badge variant={raws.variant}>{raws.label}</Badge>
-                          )}
-                          {item.editingStatus && (
-                            <Badge variant={editing.variant}>{editing.label}</Badge>
-                          )}
-                        </div>
-
-                        {/* Ideate button */}
-                        <button
-                          onClick={() => openIdeate(item)}
-                          className="cursor-pointer shrink-0 flex items-center gap-1.5 rounded-lg border border-purple-500/25 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/40 transition-colors"
-                          title="Generate AI shoot plan"
-                        >
-                          <Sparkles size={13} />
-                          Ideate
-                        </button>
-                      </Card>
-                    </div>
-                  );
-                })}
+                {upcoming.map((item, i) => (
+                  <ShootListItem
+                    key={item.mondayItemId}
+                    item={item}
+                    index={i}
+                    onSelect={() => setSelectedShoot(item)}
+                    onIdeate={() => openIdeate(item)}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -564,7 +631,7 @@ export default function AdminShootsPage() {
       <ScheduleShootModal
         open={scheduleModalOpen}
         onClose={() => { setScheduleModalOpen(false); setShootToSchedule(null); }}
-        onCreated={fetchData}
+        onCreated={handleRefresh}
         shoot={shootToSchedule ? {
           clientName: shootToSchedule.clientName,
           clientId: shootToSchedule.clientId,
@@ -580,13 +647,309 @@ export default function AdminShootsPage() {
       <IdeateShootModal
         open={ideateModalOpen}
         onClose={() => { setIdeateModalOpen(false); setShootToIdeate(null); }}
+        onGenerated={handleIdeateGenerated}
         shoot={shootToIdeate ? {
           clientName: shootToIdeate.clientName,
           clientId: shootToIdeate.clientId,
           shootDate: shootToIdeate.date,
           industry: shootToIdeate.clientIndustry,
+          mondayItemId: shootToIdeate.mondayItemId,
         } : null}
       />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shoot List Item — with expandable plan preview
+// ---------------------------------------------------------------------------
+
+function ShootListItem({
+  item,
+  index,
+  onSelect,
+  onIdeate,
+}: {
+  item: ShootItem;
+  index: number;
+  onSelect: () => void;
+  onIdeate: () => void;
+}) {
+  const [planExpanded, setPlanExpanded] = useState(false);
+  const date = item.date ? new Date(item.date + 'T00:00:00') : null;
+  const plan = item.planData;
+
+  return (
+    <div
+      className="animate-stagger-in"
+      style={{ animationDelay: `${index * 30}ms` }}
+    >
+      <Card className="space-y-0">
+        <div className="flex items-center gap-3">
+          {/* Date badge */}
+          {date && (
+            <button
+              onClick={onSelect}
+              className="cursor-pointer flex flex-col items-center justify-center rounded-lg bg-accent/10 text-accent px-2.5 py-1.5 min-w-[48px] hover:bg-accent/20 transition-colors"
+            >
+              <span className="text-base font-bold leading-none">{date.getDate()}</span>
+              <span className="text-[9px] font-medium uppercase mt-0.5">
+                {date.toLocaleDateString('en-US', { month: 'short' })}
+              </span>
+            </button>
+          )}
+
+          {/* Avatar */}
+          <button onClick={onSelect} className="cursor-pointer hover:opacity-80 transition-opacity">
+            <ShootAvatar item={item} />
+          </button>
+
+          {/* Content */}
+          <button onClick={onSelect} className="cursor-pointer flex-1 min-w-0 text-left">
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm font-medium text-text-primary truncate">{item.clientName}</p>
+              {item.abbreviation && (
+                <span className="shrink-0 text-[10px] font-medium text-text-muted">{item.abbreviation}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              {item.agency && (
+                <span className="text-xs text-text-muted">{item.agency}</span>
+              )}
+            </div>
+          </button>
+
+          {/* Ideate / View plan */}
+          {plan ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPlanExpanded(!planExpanded)}
+            >
+              <Sparkles size={14} />
+              {plan.videoIdeas?.length ?? 0} ideas
+              {planExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onIdeate}
+            >
+              <Sparkles size={14} />
+              Ideate
+            </Button>
+          )}
+        </div>
+
+        {/* Expanded plan preview */}
+        {plan && planExpanded && (
+          <ShootPlanPreview plan={plan} clientName={item.clientName} />
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline Shoot Plan Preview
+// ---------------------------------------------------------------------------
+
+function ShootPlanPreview({ plan, clientName }: { plan: ShootPlanData; clientName: string }) {
+  const [expandedIdea, setExpandedIdea] = useState<number | null>(0);
+
+  function handleDownload() {
+    const lines: string[] = [
+      plan.title || `${clientName} Shoot Plan`,
+      '='.repeat(50),
+      '',
+      plan.summary || '',
+      '',
+    ];
+
+    plan.videoIdeas?.forEach((idea, i) => {
+      lines.push(`--- Video ${i + 1}: ${idea.title} ---`);
+      lines.push(`Format: ${idea.format}`);
+      lines.push(`Hook: ${idea.hook}`);
+      lines.push('');
+      if (idea.talkingPoints?.length) {
+        lines.push('Talking points:');
+        idea.talkingPoints.forEach((p) => lines.push(`  - ${p}`));
+        lines.push('');
+      }
+      if (idea.shotList?.length) {
+        lines.push('Shot list:');
+        idea.shotList.forEach((s) => lines.push(`  - ${s}`));
+        lines.push('');
+      }
+      if (idea.whyItWorks) {
+        lines.push(`Why it works: ${idea.whyItWorks}`);
+        lines.push('');
+      }
+    });
+
+    if (plan.generalTips?.length) {
+      lines.push('--- General tips ---');
+      plan.generalTips.forEach((t) => lines.push(`  - ${t}`));
+      lines.push('');
+    }
+
+    if (plan.equipmentSuggestions?.length) {
+      lines.push('--- Equipment suggestions ---');
+      plan.equipmentSuggestions.forEach((e) => lines.push(`  - ${e}`));
+    }
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${clientName.replace(/\s+/g, '-').toLowerCase()}-shoot-plan.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('Shoot plan downloaded');
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-nativz-border space-y-3 animate-expand-in">
+      {/* Plan header */}
+      <div className="flex items-center justify-between">
+        <div>
+          {plan.title && (
+            <h4 className="text-sm font-semibold text-text-primary">{plan.title}</h4>
+          )}
+          {plan.summary && (
+            <p className="text-xs text-text-secondary mt-0.5 line-clamp-2">{plan.summary}</p>
+          )}
+        </div>
+        <Button variant="ghost" size="sm" onClick={handleDownload}>
+          <Download size={12} />
+          Download
+        </Button>
+      </div>
+
+      {/* Video Ideas */}
+      {(plan.videoIdeas ?? []).length > 0 && (
+        <div className="space-y-1.5">
+          <h5 className="flex items-center gap-1.5 text-[10px] font-medium text-text-muted uppercase tracking-wide">
+            <Video size={11} />
+            Video ideas ({plan.videoIdeas.length})
+          </h5>
+
+          {plan.videoIdeas.map((idea, i) => {
+            const isExpanded = expandedIdea === i;
+
+            return (
+              <div
+                key={i}
+                className="rounded-lg border border-nativz-border bg-surface-hover/30 overflow-hidden"
+              >
+                <button
+                  onClick={() => setExpandedIdea(isExpanded ? null : i)}
+                  className="cursor-pointer w-full flex items-center justify-between gap-3 p-2.5 text-left"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-500/15 text-[9px] font-bold text-purple-400">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-text-primary truncate">{idea.title}</p>
+                      {!isExpanded && idea.format && (
+                        <p className="text-[10px] text-text-muted truncate">{idea.format}</p>
+                      )}
+                    </div>
+                  </div>
+                  {isExpanded ? (
+                    <ChevronUp size={12} className="shrink-0 text-text-muted" />
+                  ) : (
+                    <ChevronDown size={12} className="shrink-0 text-text-muted" />
+                  )}
+                </button>
+
+                {isExpanded && (
+                  <div className="px-2.5 pb-2.5 space-y-2.5 border-t border-nativz-border pt-2.5">
+                    {idea.format && <Badge variant="purple">{idea.format}</Badge>}
+
+                    {idea.hook && (
+                      <div>
+                        <p className="text-[9px] font-medium text-text-muted uppercase tracking-wide mb-0.5">Hook</p>
+                        <p className="text-xs text-text-primary italic">&ldquo;{idea.hook}&rdquo;</p>
+                      </div>
+                    )}
+
+                    {idea.talkingPoints?.length > 0 && (
+                      <div>
+                        <p className="text-[9px] font-medium text-text-muted uppercase tracking-wide mb-1 flex items-center gap-1">
+                          <Lightbulb size={9} /> Talking points
+                        </p>
+                        <ul className="space-y-0.5">
+                          {idea.talkingPoints.map((point, pi) => (
+                            <li key={pi} className="flex items-start gap-1.5 text-xs text-text-secondary">
+                              <span className="text-accent-text mt-0.5">-</span>
+                              {point}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {idea.shotList?.length > 0 && (
+                      <div>
+                        <p className="text-[9px] font-medium text-text-muted uppercase tracking-wide mb-1 flex items-center gap-1">
+                          <Camera size={9} /> Shot list
+                        </p>
+                        <ul className="space-y-0.5">
+                          {idea.shotList.map((shot, si) => (
+                            <li key={si} className="flex items-start gap-1.5 text-xs text-text-secondary">
+                              <span className="text-purple-400 mt-0.5">-</span>
+                              {shot}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {idea.whyItWorks && (
+                      <div className="rounded-md bg-accent/5 border border-accent/10 px-2.5 py-1.5">
+                        <p className="text-[9px] font-medium text-text-muted uppercase tracking-wide mb-0.5 flex items-center gap-1">
+                          <Target size={9} /> Why it works
+                        </p>
+                        <p className="text-[11px] text-text-secondary">{idea.whyItWorks}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Tips & Equipment */}
+      {(plan.generalTips ?? []).length > 0 && (
+        <div>
+          <h5 className="flex items-center gap-1.5 text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1">
+            <Lightbulb size={11} /> Tips
+          </h5>
+          <ul className="space-y-0.5">
+            {plan.generalTips.map((tip, i) => (
+              <li key={i} className="flex items-start gap-1.5 text-xs text-text-secondary">
+                <span className="text-amber-400 mt-0.5">-</span>
+                {tip}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(plan.equipmentSuggestions ?? []).length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {plan.equipmentSuggestions.map((eq, i) => (
+            <Badge key={i} variant="info">{eq}</Badge>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -689,6 +1052,19 @@ function ShootDetailPanel({
             )}
           </div>
 
+          {/* Shoot Plan (inline) */}
+          {shoot.planData && (
+            <div>
+              <h3 className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <Sparkles size={12} className="text-purple-400" />
+                Shoot plan
+              </h3>
+              <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
+                <ShootPlanPreview plan={shoot.planData} clientName={shoot.clientName} />
+              </div>
+            </div>
+          )}
+
           {/* Notes */}
           {shoot.notes && (
             <div>
@@ -744,7 +1120,7 @@ function ShootDetailPanel({
               className="cursor-pointer flex items-center justify-center gap-2 w-full rounded-lg border border-purple-500/25 bg-purple-500/10 px-3 py-2.5 text-sm font-medium text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/40 transition-colors"
             >
               <Sparkles size={14} />
-              Ideate shoot plan
+              {shoot.planData ? 'Regenerate shoot plan' : 'Ideate shoot plan'}
             </button>
 
             {/* Schedule button — context-aware for past vs upcoming */}

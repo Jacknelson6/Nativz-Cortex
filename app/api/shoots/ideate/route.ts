@@ -4,6 +4,9 @@
  * AI-powered shoot ideation: takes shoot context (client, date, notes,
  * videographer details) and generates a full content plan with video ideas,
  * talking points, and shot list.
+ *
+ * When mondayItemId is provided, the plan is saved to shoot_events.plan_data
+ * so it can be displayed in the calendar and shoot list.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -20,6 +23,7 @@ const ideateSchema = z.object({
   shootDate: z.string().optional(),
   industry: z.string().optional(),
   context: z.string().min(1, 'Provide some details about the shoot'),
+  mondayItemId: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -50,7 +54,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { clientName, clientId, shootDate, industry, context } = parsed.data;
+    const { clientName, clientId, shootDate, industry, context, mondayItemId } = parsed.data;
 
     // Optionally fetch client brand context from DB
     let brandContext = '';
@@ -125,18 +129,48 @@ Generate a detailed shoot plan with specific video ideas, hooks, talking points,
       if (!jsonMatch) throw new Error('No JSON found');
       plan = JSON.parse(jsonMatch[0]);
     } catch {
-      return NextResponse.json({
-        plan: {
-          title: `${clientName} Shoot Plan`,
-          summary: result.text.slice(0, 300),
-          videoIdeas: [],
-          generalTips: [],
-          equipmentSuggestions: [],
-          raw: result.text,
-        },
-        usage: result.usage,
-        estimatedCost: result.estimatedCost,
-      });
+      plan = {
+        title: `${clientName} Shoot Plan`,
+        summary: result.text.slice(0, 300),
+        videoIdeas: [],
+        generalTips: [],
+        equipmentSuggestions: [],
+        raw: result.text,
+      };
+    }
+
+    // Save plan to shoot_events if we have a mondayItemId
+    if (mondayItemId) {
+      // Find or create shoot_events record by monday_item_id
+      const { data: existing } = await adminClient
+        .from('shoot_events')
+        .select('id')
+        .eq('monday_item_id', mondayItemId)
+        .maybeSingle();
+
+      if (existing) {
+        await adminClient
+          .from('shoot_events')
+          .update({
+            plan_data: plan,
+            plan_status: 'sent',
+            plan_generated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id);
+      } else {
+        await adminClient
+          .from('shoot_events')
+          .insert({
+            monday_item_id: mondayItemId,
+            title: `${clientName} shoot`,
+            shoot_date: shootDate ? `${shootDate}T00:00:00Z` : new Date().toISOString(),
+            client_id: clientId || null,
+            plan_data: plan,
+            plan_status: 'sent',
+            plan_generated_at: new Date().toISOString(),
+            created_by: user.id,
+          });
+      }
     }
 
     return NextResponse.json({

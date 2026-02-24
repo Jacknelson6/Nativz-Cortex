@@ -24,7 +24,7 @@ export const maxDuration = 30;
 // In-memory cache (3-minute TTL)
 // ---------------------------------------------------------------------------
 
-const CACHE_TTL_MS = 3 * 60 * 1000;
+const CACHE_TTL_MS = 10 * 60 * 1000;
 
 let cachedData: { groups: unknown; items: unknown } | null = null;
 let cachedAt = 0;
