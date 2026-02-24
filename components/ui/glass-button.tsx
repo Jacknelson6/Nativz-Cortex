@@ -45,12 +45,10 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
           hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_0_20px_rgba(43,125,233,0.15)]
           active:scale-[0.97] active:bg-[rgba(43,125,233,0.20)]
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background
-          ${loading ? 'opacity-50 pointer-events-none' : disabled ? 'opacity-50' : ''}
+          ${disabled || loading ? 'opacity-40' : ''}
           ${shaking ? 'animate-shake' : ''}
           ${className}
         `}
-        disabled={loading}
-        aria-disabled={disabled || loading}
         onClick={handleClick}
         {...props}
       >
