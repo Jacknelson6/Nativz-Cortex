@@ -119,10 +119,9 @@ export async function POST(
         }
       } else if (item.url.includes('tiktok.com')) {
         platform = 'tiktok';
-        // Extract transcript via Whisper if we have a video URL
-        if (tiktokData?.video_url) {
-          transcript = await extractTikTokTranscript(tiktokData.video_url);
-        }
+        // Extract transcript from TikTok embedded subtitles (free, no Whisper)
+        const tiktokTranscript = await extractTikTokTranscript(item.url, tiktokData?.video_url);
+        transcript = tiktokTranscript.text;
         // Generate key frame references
         if (tiktokData) {
           frames = await extractKeyFrameReferences(

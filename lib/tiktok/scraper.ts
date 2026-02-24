@@ -208,48 +208,168 @@ export async function getTikTokMetadata(url: string): Promise<TikTokMetadata | n
   return fetchViaOEmbed(url);
 }
 
+export interface SubtitleSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface TranscriptResult {
+  text: string;
+  segments: SubtitleSegment[];
+}
+
 /**
- * Extract transcript from TikTok video using OpenAI Whisper API
- * Downloads video, sends audio to Whisper for transcription
+ * Parse WebVTT/SRT subtitle content into plain text and timestamped segments.
  */
-export async function extractTikTokTranscript(videoUrl: string): Promise<string> {
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey || !videoUrl) return '';
+function parseSubtitles(content: string): TranscriptResult {
+  const segments: SubtitleSegment[] = [];
+  const lines = content.split('\n');
+  let i = 0;
 
-  try {
-    // Download video to memory
-    const videoRes = await fetch(videoUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(30000),
-    });
-    if (!videoRes.ok) return '';
+  // Skip WebVTT header
+  if (lines[0]?.trim().startsWith('WEBVTT')) i = 1;
 
-    const videoBuffer = await videoRes.arrayBuffer();
-    // Limit to 25MB (Whisper API limit)
-    if (videoBuffer.byteLength > 25 * 1024 * 1024) return '';
+  while (i < lines.length) {
+    const line = lines[i]?.trim() ?? '';
+    // Look for timestamp lines: "00:00:00.000 --> 00:00:02.000"
+    const tsMatch = line.match(
+      /(\d{1,2}:)?(\d{2}):(\d{2})[.,](\d{3})\s*-->\s*(\d{1,2}:)?(\d{2}):(\d{2})[.,](\d{3})/,
+    );
+    if (tsMatch) {
+      const parseTime = (h: string | undefined, m: string, s: string, ms: string) => {
+        return (parseInt(h || '0') * 3600) + (parseInt(m) * 60) + parseInt(s) + parseInt(ms) / 1000;
+      };
+      const start = parseTime(tsMatch[1]?.replace(':', ''), tsMatch[2], tsMatch[3], tsMatch[4]);
+      const end = parseTime(tsMatch[5]?.replace(':', ''), tsMatch[6], tsMatch[7], tsMatch[8]);
 
-    const formData = new FormData();
-    formData.append('file', new Blob([videoBuffer], { type: 'video/mp4' }), 'tiktok.mp4');
-    formData.append('model', 'whisper-1');
-    formData.append('response_format', 'text');
-
-    const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${openaiKey}` },
-      body: formData,
-      signal: AbortSignal.timeout(60000),
-    });
-
-    if (!whisperRes.ok) {
-      console.error('Whisper API error:', whisperRes.status, await whisperRes.text());
-      return '';
+      // Collect text lines until blank line or next timestamp
+      const textLines: string[] = [];
+      i++;
+      while (i < lines.length && lines[i]?.trim() !== '') {
+        const tl = lines[i].trim();
+        // Skip SRT sequence numbers and timestamp-only lines
+        if (!tl.match(/^\d+$/) && !tl.match(/-->/) ) {
+          // Strip HTML tags like <c> </c> and WebVTT positioning
+          textLines.push(tl.replace(/<[^>]+>/g, '').replace(/\{[^}]+\}/g, '').trim());
+        }
+        i++;
+      }
+      const text = textLines.filter(Boolean).join(' ');
+      if (text) {
+        segments.push({ start, end, text });
+      }
     }
-
-    return (await whisperRes.text()).trim();
-  } catch (e) {
-    console.error('Transcript extraction error:', e);
-    return '';
+    i++;
   }
+
+  // Deduplicate consecutive identical text (TikTok often has overlapping cues)
+  const deduped: SubtitleSegment[] = [];
+  for (const seg of segments) {
+    if (deduped.length === 0 || deduped[deduped.length - 1].text !== seg.text) {
+      deduped.push(seg);
+    }
+  }
+
+  return {
+    text: deduped.map((s) => s.text).join(' '),
+    segments: deduped,
+  };
+}
+
+/**
+ * Extract subtitles from TikTok's __UNIVERSAL_DATA_FOR_REHYDRATION__ page data.
+ * Falls back to tikwm API subtitle data. No Whisper/OpenAI dependency.
+ */
+export async function extractTikTokTranscript(
+  url: string,
+  _videoUrl?: string | null,
+): Promise<TranscriptResult> {
+  const empty: TranscriptResult = { text: '', segments: [] };
+  const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+  // --- Approach 1: Fetch TikTok page and extract embedded subtitle URLs ---
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': UA,
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (res.ok) {
+      const html = await res.text();
+      const $ = cheerio.load(html);
+      let universalData: Record<string, unknown> | null = null;
+      $('script#__UNIVERSAL_DATA_FOR_REHYDRATION__').each((_i, el) => {
+        try { universalData = JSON.parse($(el).html() || ''); } catch { /* ignore */ }
+      });
+
+      if (universalData) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const scope = (universalData as any)?.['__DEFAULT_SCOPE__'];
+        const itemStruct = scope?.['webapp.video-detail']?.['itemInfo']?.['itemStruct'];
+        const video = itemStruct?.video;
+
+        // Try subtitleInfos (array of subtitle objects with Url/UrlExpire)
+        const subtitleInfos: Array<{ Url?: string; UrlExpire?: string; Format?: string; LanguageCodeName?: string; url?: string }> =
+          video?.subtitleInfos ?? video?.captions ?? video?.subtitleInfo ?? [];
+
+        // Prefer English, otherwise take first available
+        const englishSub = subtitleInfos.find((s) =>
+          (s.LanguageCodeName || '').toLowerCase().startsWith('en'),
+        );
+        const subtitle = englishSub ?? subtitleInfos[0];
+        const subtitleUrl = subtitle?.Url ?? subtitle?.UrlExpire ?? subtitle?.url;
+
+        if (subtitleUrl) {
+          const subRes = await fetch(subtitleUrl, {
+            headers: { 'User-Agent': UA },
+            signal: AbortSignal.timeout(10000),
+          });
+          if (subRes.ok) {
+            const content = await subRes.text();
+            const result = parseSubtitles(content);
+            if (result.text) return result;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('TikTok subtitle extraction (HTML) error:', e);
+  }
+
+  // --- Approach 2: Try tikwm API for subtitle data ---
+  try {
+    const tikwmRes = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`, {
+      headers: { 'User-Agent': UA },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (tikwmRes.ok) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const json = (await tikwmRes.json()) as any;
+      const data = json?.data;
+      // tikwm sometimes includes subtitle_url or subtitles
+      const subUrl = data?.subtitle_url ?? data?.subtitles?.[0]?.url;
+      if (subUrl) {
+        const subRes = await fetch(subUrl, {
+          headers: { 'User-Agent': UA },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (subRes.ok) {
+          const result = parseSubtitles(await subRes.text());
+          if (result.text) return result;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('TikTok subtitle extraction (tikwm) error:', e);
+  }
+
+  return empty;
 }
 
 /**
