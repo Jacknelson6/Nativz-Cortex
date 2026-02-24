@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useRef } from 'react';
-import { type Node, type Edge, useReactFlow } from 'reactflow';
+import { useEffect, useRef } from 'react';
 
 interface ShortcutHandlers {
   onDeleteSelected: () => void;

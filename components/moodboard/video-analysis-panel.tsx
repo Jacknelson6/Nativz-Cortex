@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   X, Play, Copy as CopyIcon, Check, Film, Clock, Scissors, Zap,
   AlertTriangle, ChevronRight, Search, Download, Quote, Gauge,
@@ -9,7 +9,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import type { MoodboardItem, TranscriptSegment, VideoPacingDetail, CaptionOverlayDetail } from '@/lib/types/moodboard';
+import type { MoodboardItem, TranscriptSegment, VideoPacingDetail } from '@/lib/types/moodboard';
 
 interface VideoAnalysisPanelProps {
   item: MoodboardItem;
@@ -460,34 +460,39 @@ function HookTab({ item }: { item: MoodboardItem }) {
 
 // ─── Pacing Tab ─────────────────────────────────────────────
 function PacingTab({ item }: { item: MoodboardItem }) {
-  const pacing = (item.pacing_detail || item.pacing) as (VideoPacingDetail | null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawPacing = (item.pacing_detail || item.pacing) as any;
 
-  if (!pacing) {
+  if (!rawPacing) {
     return <p className="text-sm text-text-muted text-center py-8 animate-fade-in">No pacing data available</p>;
   }
 
-  const scenes = (pacing as VideoPacingDetail).scenes ?? [];
+  const pacingDescription: string = String(rawPacing.description ?? '');
+  const estimatedCuts: number = Number(rawPacing.estimated_cuts ?? 0);
+  const cutsPerMinute: number = Number(rawPacing.cuts_per_minute ?? 0);
+  const pacingScenes: Array<{ timestamp: number; description: string }> = rawPacing.scenes ?? [];
 
   return (
     <div className="space-y-4 animate-fade-in">
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3">
-        <StatCard icon={<Scissors size={16} className="text-accent-text" />} value={pacing.estimated_cuts} label="Total cuts" />
-        <StatCard icon={<Zap size={16} className="text-yellow-400" />} value={pacing.cuts_per_minute} label="Cuts/min" />
+        <StatCard icon={<Scissors size={16} className="text-accent-text" />} value={estimatedCuts} label="Total cuts" />
+        <StatCard icon={<Zap size={16} className="text-yellow-400" />} value={cutsPerMinute} label="Cuts/min" />
       </div>
 
       {/* Pacing description */}
-      <Section title="Pacing style">
-        <p className="text-sm text-text-secondary">{pacing.description}</p>
-      </Section>
+      <div>
+        <h3 className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1.5">Pacing style</h3>
+        <p className="text-sm text-text-secondary">{pacingDescription}</p>
+      </div>
 
       {/* Visual timeline */}
-      {scenes.length > 0 && item.duration && (
+      {pacingScenes.length > 0 && item.duration && (
         <Section title="Scene Timeline">
           <div className="relative">
             {/* Timeline bar */}
             <div className="h-2 rounded-full bg-surface-hover border border-nativz-border relative">
-              {scenes.map((scene, i) => {
+              {pacingScenes.map((scene, i) => {
                 const pct = (scene.timestamp / item.duration!) * 100;
                 return (
                   <div key={i} className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-accent border-2 border-surface"
@@ -499,7 +504,7 @@ function PacingTab({ item }: { item: MoodboardItem }) {
             </div>
             {/* Scene list */}
             <div className="mt-3 space-y-1.5">
-              {scenes.map((scene, i) => (
+              {pacingScenes.map((scene, i) => (
                 <div key={i} className="flex items-start gap-2 text-xs">
                   <span className="text-accent-text font-mono shrink-0 w-10 text-right">{formatTimestamp(scene.timestamp)}</span>
                   <span className="text-text-secondary">{scene.description}</span>
@@ -510,22 +515,15 @@ function PacingTab({ item }: { item: MoodboardItem }) {
         </Section>
       )}
 
-      {/* Music analysis - from item if available */}
-      {(item as Record<string, unknown>).music_analysis && (
-        <Section title="Music" icon={<Music size={12} className="text-purple-400" />}>
-          <div className="text-sm text-text-secondary space-y-1">
-            {(() => {
-              const ma = (item as Record<string, unknown>).music_analysis as { type?: string; mood?: string; name?: string | null };
-              return (
-                <>
-                  {ma.name && <p><span className="text-text-muted">Sound:</span> {ma.name}</p>}
-                  {ma.type && <p><span className="text-text-muted">Type:</span> {ma.type}</p>}
-                  {ma.mood && <p><span className="text-text-muted">Mood:</span> {ma.mood}</p>}
-                </>
-              );
-            })()}
-          </div>
-        </Section>
+      {/* Music info */}
+      {item.music && (
+        <div>
+          <h3 className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1">
+            <Music size={12} className="text-purple-400" />
+            Music
+          </h3>
+          <p className="text-sm text-text-secondary">{item.music}</p>
+        </div>
       )}
     </div>
   );

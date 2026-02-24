@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import ReactFlow, {
   Background,
@@ -11,9 +11,13 @@ import ReactFlow, {
   useEdgesState,
   useReactFlow,
   ReactFlowProvider,
+  SelectionMode,
   type Node,
+  type Edge,
   type NodeTypes,
+  type EdgeTypes,
   type OnNodesChange,
+  type Connection,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import {
@@ -36,9 +40,12 @@ import { VideoNode } from '@/components/moodboard/nodes/video-node';
 import { ImageNode } from '@/components/moodboard/nodes/image-node';
 import { WebsiteNode } from '@/components/moodboard/nodes/website-node';
 import { StickyNode } from '@/components/moodboard/nodes/sticky-node';
+import { LabeledEdge } from '@/components/moodboard/edges/labeled-edge';
+import { SelectionToolbar } from '@/components/moodboard/toolbar/selection-toolbar';
+import { useMoodboardShortcuts } from '@/components/moodboard/hooks/use-moodboard-shortcuts';
 import { toast } from 'sonner';
 import { detectLinkType, linkTypeToItemType } from '@/lib/types/moodboard';
-import type { MoodboardBoard, MoodboardItem, MoodboardNote, StickyNoteColor } from '@/lib/types/moodboard';
+import type { MoodboardBoard, MoodboardItem, MoodboardNote, MoodboardEdge, StickyNoteColor } from '@/lib/types/moodboard';
 
 const nodeTypes: NodeTypes = {
   videoNode: VideoNode,
@@ -46,6 +53,16 @@ const nodeTypes: NodeTypes = {
   websiteNode: WebsiteNode,
   stickyNode: StickyNode,
 };
+
+const edgeTypes: EdgeTypes = {
+  labeled: LabeledEdge,
+};
+
+// Undo history entry
+interface HistoryEntry {
+  nodes: Node[];
+  edges: Edge[];
+}
 
 function MoodboardCanvas() {
   const params = useParams();
@@ -56,9 +73,10 @@ function MoodboardCanvas() {
   const [board, setBoard] = useState<MoodboardBoard | null>(null);
   const [items, setItems] = useState<MoodboardItem[]>([]);
   const [notes, setNotes] = useState<MoodboardNote[]>([]);
+  const [dbEdges, setDbEdges] = useState<MoodboardEdge[]>([]);
   const [loading, setLoading] = useState(true);
   const [addItemOpen, setAddItemOpen] = useState(false);
-  const [showMinimap, setShowMinimap] = useState(false);
+  const [showMinimap, setShowMinimap] = useState(true);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [pasting, setPasting] = useState(false);
@@ -68,24 +86,56 @@ function MoodboardCanvas() {
   const [replicateItem, setReplicateItem] = useState<MoodboardItem | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, , onEdgesChange] = useEdgesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+  // Undo history
+  const historyRef = useRef<HistoryEntry[]>([]);
+  const historyIndexRef = useRef(-1);
 
   const positionSaveTimer = useRef<ReturnType<typeof setTimeout>>(null);
+
+  // Track selected nodes
+  const selectedNodes = useMemo(() => nodes.filter((n) => n.selected), [nodes]);
+
+  // Push to undo history
+  const pushHistory = useCallback(() => {
+    const entry: HistoryEntry = {
+      nodes: JSON.parse(JSON.stringify(nodes)),
+      edges: JSON.parse(JSON.stringify(edges)),
+    };
+    historyIndexRef.current++;
+    historyRef.current = historyRef.current.slice(0, historyIndexRef.current);
+    historyRef.current.push(entry);
+    // Keep max 30 entries
+    if (historyRef.current.length > 30) {
+      historyRef.current.shift();
+      historyIndexRef.current--;
+    }
+  }, [nodes, edges]);
 
   // Fetch board data
   const fetchBoard = useCallback(async () => {
     try {
-      const res = await fetch(`/api/moodboard/boards/${boardId}`);
-      if (!res.ok) {
+      const [boardRes, edgesRes] = await Promise.all([
+        fetch(`/api/moodboard/boards/${boardId}`),
+        fetch(`/api/moodboard/edges?board_id=${boardId}`),
+      ]);
+
+      if (!boardRes.ok) {
         toast.error('Board not found');
         router.push('/admin/moodboard');
         return;
       }
-      const data = await res.json();
+      const data = await boardRes.json();
       setBoard(data);
       setItems(data.items ?? []);
       setNotes(data.notes ?? []);
       setNameInput(data.name);
+
+      if (edgesRes.ok) {
+        const edgesData = await edgesRes.json();
+        setDbEdges(edgesData);
+      }
     } catch {
       toast.error('Failed to load board');
     } finally {
@@ -96,6 +146,37 @@ function MoodboardCanvas() {
   useEffect(() => {
     fetchBoard();
   }, [fetchBoard]);
+
+  // Edge handlers
+  const handleDeleteEdge = useCallback(async (dbId: string) => {
+    try {
+      await fetch(`/api/moodboard/edges/${dbId}`, { method: 'DELETE' });
+      setDbEdges((prev) => prev.filter((e) => e.id !== dbId));
+      setEdges((prev) => prev.filter((e) => e.data?.dbId !== dbId));
+    } catch {
+      toast.error('Failed to delete connection');
+    }
+  }, [setEdges]);
+
+  const handleUpdateEdge = useCallback(async (dbId: string, data: { label?: string | null; style?: string; color?: string }) => {
+    try {
+      const res = await fetch(`/api/moodboard/edges/${dbId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      setDbEdges((prev) => prev.map((e) => (e.id === dbId ? updated : e)));
+      setEdges((prev) => prev.map((e) =>
+        e.data?.dbId === dbId
+          ? { ...e, data: { ...e.data, ...data, dbId } }
+          : e
+      ));
+    } catch {
+      toast.error('Failed to update connection');
+    }
+  }, [setEdges]);
 
   // Convert items + notes to React Flow nodes
   useEffect(() => {
@@ -130,10 +211,53 @@ function MoodboardCanvas() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, notes]);
 
-  // Paste handler — Ctrl+V / Cmd+V to paste URLs directly on canvas
+  // Convert db edges to React Flow edges
+  useEffect(() => {
+    const flowEdges: Edge[] = dbEdges.map((e) => ({
+      id: `edge-${e.id}`,
+      source: e.source_node_id,
+      target: e.target_node_id,
+      type: 'labeled',
+      data: {
+        label: e.label,
+        style: e.style,
+        color: e.color,
+        dbId: e.id,
+        onDelete: handleDeleteEdge,
+        onUpdate: handleUpdateEdge,
+      },
+    }));
+    setEdges(flowEdges);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbEdges, handleDeleteEdge, handleUpdateEdge]);
+
+  // Handle new edge connection
+  const onConnect = useCallback(async (connection: Connection) => {
+    if (!connection.source || !connection.target) return;
+
+    try {
+      const res = await fetch('/api/moodboard/edges', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          board_id: boardId,
+          source_node_id: connection.source,
+          target_node_id: connection.target,
+        }),
+      });
+
+      if (!res.ok) throw new Error();
+      const newEdge = await res.json();
+      setDbEdges((prev) => [...prev, newEdge]);
+      toast.success('Connection created');
+    } catch {
+      toast.error('Failed to create connection');
+    }
+  }, [boardId]);
+
+  // Multi-URL paste handler
   useEffect(() => {
     function handlePaste(e: ClipboardEvent) {
-      // Don't intercept if user is typing in an input
       const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
       if ((e.target as HTMLElement)?.isContentEditable) return;
@@ -141,15 +265,20 @@ function MoodboardCanvas() {
       const text = e.clipboardData?.getData('text/plain')?.trim();
       if (!text) return;
 
-      // Check if it's a valid URL
-      try {
-        new URL(text);
-      } catch {
-        return;
-      }
+      // Check for multiple URLs
+      const urls = text.split(/[\n\s]+/).filter((s) => {
+        try { new URL(s); return true; } catch { return false; }
+      });
+
+      if (urls.length === 0) return;
 
       e.preventDefault();
-      addItemFromPaste(text);
+
+      if (urls.length === 1) {
+        addItemFromPaste(urls[0]);
+      } else {
+        addMultipleItems(urls);
+      }
     }
 
     document.addEventListener('paste', handlePaste);
@@ -161,7 +290,6 @@ function MoodboardCanvas() {
     if (pasting) return;
     setPasting(true);
 
-    // Get center of current viewport
     const canvasCenter = reactFlowInstance.screenToFlowPosition({
       x: window.innerWidth / 2,
       y: window.innerHeight / 2,
@@ -199,17 +327,61 @@ function MoodboardCanvas() {
     }
   }
 
+  async function addMultipleItems(urls: string[]) {
+    if (pasting) return;
+    setPasting(true);
+
+    const canvasCenter = reactFlowInstance.screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    });
+
+    const cols = Math.ceil(Math.sqrt(urls.length));
+    const spacing = 360;
+
+    toast.info(`Adding ${urls.length} items...`, { duration: 3000 });
+
+    let added = 0;
+    for (let i = 0; i < urls.length; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const linkType = detectLinkType(urls[i]);
+      const itemType = linkTypeToItemType(linkType);
+
+      try {
+        const res = await fetch('/api/moodboard/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            board_id: boardId,
+            url: urls[i],
+            type: itemType,
+            position_x: canvasCenter.x + col * spacing - ((cols - 1) * spacing) / 2,
+            position_y: canvasCenter.y + row * spacing - spacing,
+          }),
+        });
+        if (res.ok) added++;
+      } catch {
+        // continue with next
+      }
+    }
+
+    toast.success(`Added ${added} of ${urls.length} items`);
+    fetchBoard();
+    setPasting(false);
+  }
+
   // Save positions on drag (debounced)
   const handleNodesChangeWithSave: OnNodesChange = useCallback((changes) => {
     onNodesChange(changes);
 
-    // Check for position changes
     const hasDrag = changes.some((c) => c.type === 'position' && c.dragging === false);
     if (hasDrag) {
+      pushHistory();
       if (positionSaveTimer.current) clearTimeout(positionSaveTimer.current);
       positionSaveTimer.current = setTimeout(() => savePositions(), 500);
     }
-  }, [onNodesChange]);
+  }, [onNodesChange, pushHistory]);
 
   async function savePositions() {
     const currentNodes = nodes;
@@ -238,7 +410,7 @@ function MoodboardCanvas() {
         body: JSON.stringify({ items: itemPositions, notes: notePositions }),
       });
     } catch {
-      // Silent fail — positions will resync on next load
+      // Silent fail
     }
   }
 
@@ -325,6 +497,131 @@ function MoodboardCanvas() {
     }
   }
 
+  // Alignment toolbar handler
+  const handleAlignmentUpdate = useCallback((updates: Array<{ id: string; x: number; y: number }>) => {
+    pushHistory();
+    setNodes((nds) =>
+      nds.map((n) => {
+        const update = updates.find((u) => u.id === n.id);
+        if (update) {
+          return { ...n, position: { x: update.x, y: update.y } };
+        }
+        return n;
+      })
+    );
+    // Save after alignment
+    if (positionSaveTimer.current) clearTimeout(positionSaveTimer.current);
+    positionSaveTimer.current = setTimeout(() => savePositions(), 500);
+  }, [setNodes, pushHistory]);
+
+  // Keyboard shortcut handlers
+  const handleDeleteSelected = useCallback(() => {
+    const selected = nodes.filter((n) => n.selected);
+    if (selected.length === 0) return;
+
+    const confirmed = window.confirm(`Delete ${selected.length} selected item(s)?`);
+    if (!confirmed) return;
+
+    pushHistory();
+    for (const node of selected) {
+      if (node.id.startsWith('item-')) {
+        handleDeleteItem(node.id.replace('item-', ''));
+      } else if (node.id.startsWith('note-')) {
+        handleDeleteNote(node.id.replace('note-', ''));
+      }
+    }
+
+    // Also delete selected edges
+    const selectedEdges = edges.filter((e) => e.selected);
+    for (const edge of selectedEdges) {
+      if (edge.data?.dbId) {
+        handleDeleteEdge(edge.data.dbId);
+      }
+    }
+  }, [nodes, edges, pushHistory, handleDeleteEdge]);
+
+  const handleSelectAll = useCallback(() => {
+    setNodes((nds) => nds.map((n) => ({ ...n, selected: true })));
+    setEdges((eds) => eds.map((e) => ({ ...e, selected: true })));
+  }, [setNodes, setEdges]);
+
+  const handleDeselectAll = useCallback(() => {
+    setNodes((nds) => nds.map((n) => ({ ...n, selected: false })));
+    setEdges((eds) => eds.map((e) => ({ ...e, selected: false })));
+  }, [setNodes, setEdges]);
+
+  const handleDuplicateSelected = useCallback(async () => {
+    const selected = nodes.filter((n) => n.selected);
+    if (selected.length === 0) return;
+
+    for (const node of selected) {
+      if (node.id.startsWith('item-')) {
+        const item = items.find((i) => `item-${i.id}` === node.id);
+        if (item) {
+          try {
+            await fetch('/api/moodboard/items', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                board_id: boardId,
+                url: item.url,
+                type: item.type,
+                position_x: node.position.x + 40,
+                position_y: node.position.y + 40,
+              }),
+            });
+          } catch { /* continue */ }
+        }
+      } else if (node.id.startsWith('note-')) {
+        const note = notes.find((n) => `note-${n.id}` === node.id);
+        if (note) {
+          try {
+            const res = await fetch('/api/moodboard/notes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                board_id: boardId,
+                content: note.content,
+                color: note.color,
+                position_x: node.position.x + 40,
+                position_y: node.position.y + 40,
+              }),
+            });
+            if (res.ok) {
+              const newNote = await res.json();
+              setNotes((prev) => [...prev, newNote]);
+            }
+          } catch { /* continue */ }
+        }
+      }
+    }
+
+    toast.success(`Duplicated ${selected.length} item(s)`);
+    fetchBoard();
+  }, [nodes, items, notes, boardId, fetchBoard]);
+
+  const handleUndo = useCallback(() => {
+    if (historyIndexRef.current <= 0) {
+      toast.info('Nothing to undo');
+      return;
+    }
+    historyIndexRef.current--;
+    const entry = historyRef.current[historyIndexRef.current];
+    if (entry) {
+      setNodes(entry.nodes);
+      setEdges(entry.edges);
+    }
+  }, [setNodes, setEdges]);
+
+  useMoodboardShortcuts({
+    onDeleteSelected: handleDeleteSelected,
+    onSelectAll: handleSelectAll,
+    onDuplicateSelected: handleDuplicateSelected,
+    onUndo: handleUndo,
+    onAddNote: handleAddNote,
+    onDeselectAll: handleDeselectAll,
+  });
+
   // Board name editing
   async function handleSaveName() {
     if (!nameInput.trim() || nameInput === board?.name) {
@@ -343,6 +640,15 @@ function MoodboardCanvas() {
       toast.error('Failed to rename board');
     }
   }
+
+  // Minimap node color based on type
+  const minimapNodeColor = useCallback((node: Node) => {
+    if (node.type === 'videoNode') return '#3b82f6';      // blue
+    if (node.type === 'imageNode') return '#22c55e';       // green
+    if (node.type === 'websiteNode') return '#a855f7';     // purple
+    if (node.type === 'stickyNode') return '#eab308';      // yellow
+    return '#888888';
+  }, []);
 
   const isEmpty = items.length === 0 && notes.length === 0;
   const isMac = typeof navigator !== 'undefined' && navigator.platform?.toLowerCase().includes('mac');
@@ -405,21 +711,42 @@ function MoodboardCanvas() {
             <Plus size={14} />
             Add item
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowMinimap(!showMinimap)}
+            className={showMinimap ? 'text-accent-text' : ''}
+          >
+            <Map size={14} />
+          </Button>
         </div>
       </div>
 
       {/* Canvas */}
       <div className="flex-1 relative moodboard-canvas-area">
+        {/* Selection/alignment toolbar */}
+        <SelectionToolbar
+          selectedNodes={selectedNodes}
+          onUpdatePositions={handleAlignmentUpdate}
+        />
+
         <ReactFlow
           nodes={nodes}
           edges={edges}
           onNodesChange={handleNodesChangeWithSave}
           onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          defaultEdgeOptions={{ type: 'labeled' }}
           fitView
           fitViewOptions={{ padding: 0.3 }}
           minZoom={0.1}
           maxZoom={2}
+          selectionOnDrag
+          selectionMode={SelectionMode.Partial}
+          multiSelectionKeyCode="Shift"
+          deleteKeyCode={null}
           proOptions={{ hideAttribution: true }}
         >
           <Background
@@ -432,8 +759,10 @@ function MoodboardCanvas() {
           {showMinimap && (
             <MiniMap
               className="!bg-surface !border-nativz-border !rounded-lg"
-              nodeColor="rgba(43, 125, 233, 0.3)"
+              nodeColor={minimapNodeColor}
               maskColor="rgba(0,0,0,0.5)"
+              pannable
+              zoomable
             />
           )}
         </ReactFlow>
@@ -450,23 +779,11 @@ function MoodboardCanvas() {
                 <p className="text-xs text-text-muted mt-1.5">
                   Copy any URL and press <kbd className="inline-flex items-center rounded bg-surface-hover border border-nativz-border px-1.5 py-0.5 text-[10px] font-mono font-medium text-text-secondary">{isMac ? '⌘' : 'Ctrl'}+V</kbd> to add it
                 </p>
-                <p className="text-[10px] text-text-muted mt-2">YouTube, TikTok, Instagram, images, websites</p>
+                <p className="text-[10px] text-text-muted mt-2">YouTube, TikTok, Instagram, Twitter/X, images, websites</p>
               </div>
             </div>
           </div>
         )}
-
-        {/* Minimap toggle */}
-        <button
-          onClick={() => setShowMinimap(!showMinimap)}
-          className={`cursor-pointer absolute bottom-4 right-4 z-10 rounded-lg p-2 border transition-colors ${
-            showMinimap
-              ? 'bg-accent-surface border-accent/30 text-accent-text'
-              : 'bg-surface border-nativz-border text-text-muted hover:text-text-secondary hover:bg-surface-hover'
-          }`}
-        >
-          <Map size={16} />
-        </button>
       </div>
 
       {/* Add Item Modal */}
