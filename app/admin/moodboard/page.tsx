@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Layers, Plus, MoreHorizontal, Clock, FolderOpen, Pencil, Copy, Trash2 } from 'lucide-react';
+import { Layers, Plus, MoreHorizontal, Clock, FolderOpen, Pencil, Copy, Trash2, Archive, ArchiveRestore } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Button } from '@/components/ui/button';
@@ -17,11 +17,12 @@ export default function MoodboardPage() {
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const fetchBoards = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/moodboard/boards');
+      const res = await fetch(`/api/moodboard/boards?show_archived=${showArchived}`);
       if (!res.ok) throw new Error('Failed to load boards');
       const data = await res.json();
       setBoards(data);
@@ -30,7 +31,7 @@ export default function MoodboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showArchived]);
 
   useEffect(() => {
     fetchBoards();
@@ -51,20 +52,29 @@ export default function MoodboardPage() {
 
   async function handleDuplicate(board: MoodboardBoard) {
     try {
-      const res = await fetch('/api/moodboard/boards', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: `${board.name} (copy)`,
-          description: board.description,
-          client_id: board.client_id,
-        }),
-      });
+      const res = await fetch(`/api/moodboard/boards/${board.id}/duplicate`, { method: 'POST' });
       if (!res.ok) throw new Error();
-      toast.success('Board duplicated');
+      toast.success('Board duplicated (with all items, notes, and tags)');
       fetchBoards();
     } catch {
       toast.error('Failed to duplicate board');
+    }
+    setMenuOpenId(null);
+  }
+
+  async function handleArchive(board: MoodboardBoard) {
+    const isArchived = !!board.archived_at;
+    try {
+      const res = await fetch(`/api/moodboard/boards/${board.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: !isArchived }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(isArchived ? 'Board unarchived' : 'Board archived');
+      fetchBoards();
+    } catch {
+      toast.error('Failed to update board');
     }
     setMenuOpenId(null);
   }
@@ -88,10 +98,21 @@ export default function MoodboardPage() {
           <h1 className="text-2xl font-semibold text-text-primary">Moodboard</h1>
           <p className="text-sm text-text-muted mt-0.5">Visual research and content inspiration</p>
         </div>
-        <GlassButton onClick={() => setCreateOpen(true)}>
-          <Plus size={14} />
-          New board
-        </GlassButton>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className={`cursor-pointer flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              showArchived ? 'bg-accent/10 text-accent-text' : 'text-text-muted hover:bg-surface-hover'
+            }`}
+          >
+            <Archive size={14} />
+            {showArchived ? 'Hide archived' : 'Show archived'}
+          </button>
+          <GlassButton onClick={() => setCreateOpen(true)}>
+            <Plus size={14} />
+            New board
+          </GlassButton>
+        </div>
       </div>
 
       {/* Loading */}
@@ -201,6 +222,16 @@ export default function MoodboardPage() {
                       >
                         <Copy size={12} />
                         Duplicate
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleArchive(board);
+                        }}
+                        className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors"
+                      >
+                        {board.archived_at ? <ArchiveRestore size={12} /> : <Archive size={12} />}
+                        {board.archived_at ? 'Unarchive' : 'Archive'}
                       </button>
                       <button
                         onClick={(e) => {

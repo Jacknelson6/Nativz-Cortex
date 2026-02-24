@@ -44,10 +44,11 @@ import { WebsiteNode } from '@/components/moodboard/nodes/website-node';
 import { StickyNode } from '@/components/moodboard/nodes/sticky-node';
 import { LabeledEdge } from '@/components/moodboard/edges/labeled-edge';
 import { SelectionToolbar } from '@/components/moodboard/toolbar/selection-toolbar';
+import { FilterBar, type MoodboardFilters } from '@/components/moodboard/filter-bar';
 import { useMoodboardShortcuts } from '@/components/moodboard/hooks/use-moodboard-shortcuts';
 import { toast } from 'sonner';
 import { detectLinkType, linkTypeToItemType } from '@/lib/types/moodboard';
-import type { MoodboardBoard, MoodboardItem, MoodboardNote, MoodboardEdge, StickyNoteColor } from '@/lib/types/moodboard';
+import type { MoodboardBoard, MoodboardItem, MoodboardNote, MoodboardEdge, MoodboardTag, StickyNoteColor } from '@/lib/types/moodboard';
 
 const nodeTypes: NodeTypes = {
   videoNode: VideoNode,
@@ -87,6 +88,12 @@ function MoodboardCanvas() {
   // Analysis panel
   const [analysisItem, setAnalysisItem] = useState<MoodboardItem | null>(null);
   const [replicateItem, setReplicateItem] = useState<MoodboardItem | null>(null);
+
+  // Tags & filters
+  const [boardTags, setBoardTags] = useState<MoodboardTag[]>([]);
+  const [itemTagsMap, setItemTagsMap] = useState<Record<string, MoodboardTag[]>>({});
+  const [filters, setFilters] = useState<MoodboardFilters>({ platform: 'all', status: 'all', tagIds: [], searchQuery: '' });
+  const [searchMatchIds, setSearchMatchIds] = useState<Set<string> | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -146,9 +153,55 @@ function MoodboardCanvas() {
     }
   }, [boardId, router]);
 
+  // Fetch board tags
+  const fetchBoardTags = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/moodboard/boards/${boardId}/tags`);
+      if (res.ok) setBoardTags(await res.json());
+    } catch { /* ignore */ }
+  }, [boardId]);
+
+  // Fetch item tags for all items
+  const fetchAllItemTags = useCallback(async (itemList: MoodboardItem[]) => {
+    const map: Record<string, MoodboardTag[]> = {};
+    await Promise.all(
+      itemList.map(async (item) => {
+        try {
+          const res = await fetch(`/api/moodboard/items/${item.id}/tags`);
+          if (res.ok) map[item.id] = await res.json();
+        } catch { /* ignore */ }
+      })
+    );
+    setItemTagsMap(map);
+  }, []);
+
   useEffect(() => {
     fetchBoard();
-  }, [fetchBoard]);
+    fetchBoardTags();
+  }, [fetchBoard, fetchBoardTags]);
+
+  // Fetch item tags when items change
+  useEffect(() => {
+    if (items.length > 0) fetchAllItemTags(items);
+  }, [items, fetchAllItemTags]);
+
+  // Search effect
+  useEffect(() => {
+    if (!filters.searchQuery) {
+      setSearchMatchIds(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/moodboard/boards/${boardId}/search?q=${encodeURIComponent(filters.searchQuery)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchMatchIds(new Set(data.item_ids));
+        }
+      } catch { /* ignore */ }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [filters.searchQuery, boardId]);
 
   // Edge handlers
   const handleDeleteEdge = useCallback(async (dbId: string) => {
@@ -181,12 +234,26 @@ function MoodboardCanvas() {
     }
   }, [setEdges]);
 
+  // Determine if an item passes filters
+  const itemPassesFilter = useCallback((item: MoodboardItem): boolean => {
+    if (filters.platform !== 'all' && item.platform !== filters.platform) return false;
+    if (filters.status !== 'all' && item.status !== filters.status) return false;
+    if (filters.tagIds.length > 0) {
+      const tags = itemTagsMap[item.id] || [];
+      const tagIds = new Set(tags.map((t) => t.id));
+      if (!filters.tagIds.some((id) => tagIds.has(id))) return false;
+    }
+    if (searchMatchIds !== null && !searchMatchIds.has(item.id)) return false;
+    return true;
+  }, [filters, itemTagsMap, searchMatchIds]);
+
   // Convert items + notes to React Flow nodes
   useEffect(() => {
     const itemNodes: Node[] = items.map((item) => ({
       id: `item-${item.id}`,
       type: item.type === 'video' ? 'videoNode' : item.type === 'image' ? 'imageNode' : 'websiteNode',
       position: { x: item.position_x, y: item.position_y },
+      hidden: !itemPassesFilter(item),
       data: {
         item,
         onViewAnalysis: (i: MoodboardItem) => setAnalysisItem(i),
@@ -728,6 +795,14 @@ function MoodboardCanvas() {
           </Button>
         </div>
       </div>
+
+      {/* Filter Bar */}
+      <FilterBar
+        boardId={boardId}
+        boardTags={boardTags}
+        filters={filters}
+        onFiltersChange={setFilters}
+      />
 
       {/* Canvas */}
       <div className="flex-1 relative moodboard-canvas-area">
