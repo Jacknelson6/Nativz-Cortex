@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import type { VideoAnalysis } from '@/lib/types/moodboard';
+import { getTikTokMetadata, extractTikTokTranscript, extractKeyFrameReferences } from '@/lib/tiktok/scraper';
 
 // YouTube oEmbed for metadata
 async function getYouTubeMetadata(url: string) {
@@ -21,24 +22,13 @@ async function getYouTubeMetadata(url: string) {
   }
 }
 
-// Generic oEmbed for TikTok/Instagram
-async function getOembedMetadata(url: string) {
+// Instagram oEmbed
+async function getInstagramMetadata(url: string) {
   try {
-    // TikTok
-    if (url.includes('tiktok.com')) {
-      const res = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
-      if (res.ok) {
-        const data = await res.json();
-        return { title: data.title, thumbnail_url: data.thumbnail_url, author_name: data.author_name };
-      }
-    }
-    // Instagram
-    if (url.includes('instagram.com')) {
-      const res = await fetch(`https://api.instagram.com/oembed?url=${encodeURIComponent(url)}`);
-      if (res.ok) {
-        const data = await res.json();
-        return { title: data.title || data.author_name, thumbnail_url: data.thumbnail_url, author_name: data.author_name };
-      }
+    const res = await fetch(`https://api.instagram.com/oembed?url=${encodeURIComponent(url)}`);
+    if (res.ok) {
+      const data = await res.json();
+      return { title: data.title || data.author_name, thumbnail_url: data.thumbnail_url, author_name: data.author_name };
     }
     return null;
   } catch {
@@ -84,51 +74,85 @@ export async function POST(
     try {
       // Step 1: Get metadata
       let metadata: { title: string; thumbnail_url: string; author_name: string } | null = null;
+      let tiktokData: Awaited<ReturnType<typeof getTikTokMetadata>> = null;
 
       if (item.url.includes('youtube.com') || item.url.includes('youtu.be')) {
         metadata = await getYouTubeMetadata(item.url);
-      } else {
-        metadata = await getOembedMetadata(item.url);
+      } else if (item.url.includes('tiktok.com')) {
+        tiktokData = await getTikTokMetadata(item.url);
+        if (tiktokData) {
+          metadata = {
+            title: tiktokData.title,
+            thumbnail_url: tiktokData.thumbnail_url,
+            author_name: tiktokData.author_name || tiktokData.author_handle,
+          };
+        }
+      } else if (item.url.includes('instagram.com')) {
+        metadata = await getInstagramMetadata(item.url);
       }
 
       // Update with metadata immediately
       if (metadata) {
+        const metadataUpdate: Record<string, unknown> = {
+          title: metadata.title || item.title,
+          thumbnail_url: metadata.thumbnail_url || item.thumbnail_url,
+        };
+        if (tiktokData?.duration) {
+          metadataUpdate.duration = tiktokData.duration;
+        }
         await adminClient
           .from('moodboard_items')
-          .update({
-            title: metadata.title || item.title,
-            thumbnail_url: metadata.thumbnail_url || item.thumbnail_url,
-          })
+          .update(metadataUpdate)
           .eq('id', id);
       }
 
-      // Step 2: Get transcript (YouTube captions via a simple approach)
-      // For YouTube, we try to get auto-captions
+      // Step 2: Get transcript
       let transcript = '';
       let platform = 'unknown';
+      let frames: Awaited<ReturnType<typeof extractKeyFrameReferences>> = [];
 
       if (item.url.includes('youtube.com') || item.url.includes('youtu.be')) {
         platform = 'youtube';
-        // Try to extract YouTube video ID and get captions
         const videoId = extractYouTubeId(item.url);
         if (videoId) {
           transcript = await fetchYouTubeCaptions(videoId);
         }
       } else if (item.url.includes('tiktok.com')) {
         platform = 'tiktok';
+        // Extract transcript via Whisper if we have a video URL
+        if (tiktokData?.video_url) {
+          transcript = await extractTikTokTranscript(tiktokData.video_url);
+        }
+        // Generate key frame references
+        if (tiktokData) {
+          frames = await extractKeyFrameReferences(
+            tiktokData.video_url || '',
+            tiktokData.duration,
+            tiktokData.thumbnail_url,
+          );
+        }
       } else if (item.url.includes('instagram.com')) {
         platform = 'instagram';
       }
 
       // Step 3: AI Analysis
       // Even without transcript, we can analyze based on title and metadata
+      // Build platform-specific context
+      let platformContext = '';
+      if (tiktokData?.stats) {
+        const s = tiktokData.stats;
+        platformContext = `\nTikTok Stats: ${s.plays.toLocaleString()} plays, ${s.likes.toLocaleString()} likes, ${s.comments.toLocaleString()} comments, ${s.shares.toLocaleString()} shares`;
+        if (tiktokData.music) platformContext += `\nMusic/Sound: ${tiktokData.music}`;
+        if (tiktokData.duration) platformContext += `\nDuration: ${tiktokData.duration}s`;
+      }
+
       const analysisPrompt = `You are a video content strategist analyzing a video for a marketing agency.
 
 ${transcript ? `Transcript: ${transcript}` : 'No transcript available — analyze based on available metadata only.'}
 Video URL: ${item.url}
 Platform: ${platform}
 Title: ${metadata?.title || item.title || 'Unknown'}
-Author: ${metadata?.author_name || 'Unknown'}
+Author: ${metadata?.author_name || 'Unknown'}${platformContext}
 
 Analyze this video and return a JSON object with:
 {
@@ -167,6 +191,8 @@ Return ONLY the JSON, no other text.`;
           title: metadata?.title || item.title || analysis.concept_summary?.substring(0, 60),
           thumbnail_url: metadata?.thumbnail_url || item.thumbnail_url,
           transcript: transcript || null,
+          duration: tiktokData?.duration || item.duration || null,
+          frames: frames.length > 0 ? frames : item.frames || [],
           hook: analysis.hook ?? null,
           hook_analysis: analysis.hook_analysis ?? null,
           cta: analysis.cta ?? null,

@@ -25,7 +25,7 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
       {/* Thumbnail */}
       <div className="relative aspect-video bg-surface-hover flex items-center justify-center overflow-hidden">
         {item.thumbnail_url ? (
-          <>
+          <a href={item.url} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={item.thumbnail_url} alt={item.title ?? 'Video'} className="w-full h-full object-cover" />
             <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -33,7 +33,7 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
                 <Play size={20} className="text-white" />
               </div>
             </div>
-          </>
+          </a>
         ) : (
           <Film size={32} className="text-text-muted/40" />
         )}
@@ -44,6 +44,21 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
         )}
       </div>
 
+      {/* Key Frames Filmstrip */}
+      {isComplete && (item.frames ?? []).length > 1 && (
+        <div className="flex gap-0.5 overflow-x-auto bg-black/20 px-1 py-1">
+          {(item.frames ?? []).map((frame, i) => (
+            <div key={i} className="relative shrink-0 w-12 h-8 rounded-sm overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={frame.url} alt={frame.label} className="w-full h-full object-cover" />
+              <span className="absolute bottom-0 inset-x-0 text-center text-[7px] text-white bg-black/60 leading-tight">
+                {frame.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Content */}
       <div className="p-3 space-y-2">
         {/* Title */}
@@ -53,6 +68,16 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
             {item.title || 'Untitled video'}
           </p>
         </div>
+
+        {/* Transcript snippet */}
+        {isComplete && item.transcript && (
+          <div className="bg-surface-hover rounded-md px-2 py-1.5">
+            <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-0.5">Transcript</p>
+            <p className="text-[11px] text-text-secondary line-clamp-3 leading-relaxed">
+              {item.transcript.substring(0, 200)}{item.transcript.length > 200 ? '...' : ''}
+            </p>
+          </div>
+        )}
 
         {/* Tags */}
         {isComplete && (item.content_themes ?? []).length > 0 && (
