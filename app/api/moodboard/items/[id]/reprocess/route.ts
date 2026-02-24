@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { processVideoItem } from '@/lib/moodboard/process-video';
 
 export async function POST(
   request: NextRequest,
@@ -55,22 +56,17 @@ export async function POST(
       })
       .eq('id', id);
 
-    // Trigger the process route internally
-    const origin = request.nextUrl.origin;
-    const processRes = await fetch(`${origin}/api/moodboard/items/${id}/process`, {
-      method: 'POST',
-      headers: {
-        cookie: request.headers.get('cookie') || '',
-      },
-    });
+    // Process directly using shared function
+    await processVideoItem(id);
 
-    const result = await processRes.json();
+    // Fetch updated item
+    const { data: updated } = await adminClient
+      .from('moodboard_items')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!processRes.ok) {
-      return NextResponse.json(result, { status: processRes.status });
-    }
-
-    return NextResponse.json(result);
+    return NextResponse.json(updated);
   } catch (error) {
     console.error('POST /api/moodboard/items/[id]/reprocess error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

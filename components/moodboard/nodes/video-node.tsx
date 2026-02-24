@@ -2,7 +2,7 @@
 
 import { memo, useState } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
-import { Film, Play, Loader2, Eye, Copy, AlertCircle, RefreshCw, Music, MessageSquare } from 'lucide-react';
+import { Film, Play, Loader2, Eye, Copy, AlertCircle, RefreshCw, Music, MessageSquare, Trash2, MoreHorizontal } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { MoodboardItem } from '@/lib/types/moodboard';
 
@@ -10,6 +10,7 @@ interface VideoNodeData {
   item: MoodboardItem;
   onViewAnalysis: (item: MoodboardItem) => void;
   onReplicate: (item: MoodboardItem) => void;
+  onDelete: (id: string) => void;
   commentCount?: number;
 }
 
@@ -38,11 +39,12 @@ function PlatformBadge({ platform }: { platform: string | null }) {
 }
 
 export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeData>) {
-  const { item, onViewAnalysis, onReplicate, commentCount } = data;
+  const { item, onViewAnalysis, onReplicate, onDelete, commentCount } = data;
   const isProcessing = item.status === 'processing';
   const isFailed = item.status === 'failed';
   const isComplete = item.status === 'completed';
   const [reprocessing, setReprocessing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleReprocess = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -66,11 +68,33 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
 
         {/* Comment count badge */}
         {(commentCount ?? 0) > 0 && (
-          <span className="absolute top-2 right-2 z-10 flex items-center gap-0.5 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold text-white shadow-md">
+          <span className="absolute top-2 right-10 z-10 flex items-center gap-0.5 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold text-white shadow-md">
             <MessageSquare size={10} />
             {commentCount}
           </span>
         )}
+
+        {/* Hover menu */}
+        <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+            className="cursor-pointer rounded-md bg-black/50 backdrop-blur-sm p-1 text-white hover:bg-black/70 transition-colors"
+          >
+            <MoreHorizontal size={14} />
+          </button>
+
+          {menuOpen && (
+            <div className="absolute right-0 top-full z-20 mt-1 min-w-[140px] rounded-lg border border-nativz-border bg-surface py-1 shadow-dropdown animate-fade-in">
+              <button
+                onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(item.id); }}
+                className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-red-400 hover:bg-surface-hover transition-colors"
+              >
+                <Trash2 size={12} />
+                Remove
+              </button>
+            </div>
+          )}
+        </div>
 
         {item.thumbnail_url ? (
           <a href={item.url} target="_blank" rel="noopener noreferrer" className="block w-full h-full">

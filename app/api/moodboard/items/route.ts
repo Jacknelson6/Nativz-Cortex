@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { processVideoItem } from '@/lib/moodboard/process-video';
 
 const createItemSchema = z.object({
   board_id: z.string().uuid('Invalid board ID'),
@@ -86,11 +87,12 @@ export async function POST(request: NextRequest) {
       .eq('id', parsed.data.board_id);
 
     // Auto-trigger processing for video and website items (non-blocking)
-    if (item && (parsed.data.type === 'video' || parsed.data.type === 'website')) {
-      const processUrl = parsed.data.type === 'video'
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/moodboard/items/${item.id}/process`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/moodboard/items/${item.id}/insights`;
-
+    if (item && parsed.data.type === 'video') {
+      Promise.resolve().then(async () => {
+        await processVideoItem(item.id);
+      }).catch((err) => console.error('Auto-process video failed:', err));
+    } else if (item && parsed.data.type === 'website') {
+      const processUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/moodboard/items/${item.id}/insights`;
       fetch(processUrl, {
         method: 'POST',
         headers: {
