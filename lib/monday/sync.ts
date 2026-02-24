@@ -9,6 +9,7 @@
 
 import { readFile, writeFile } from '@/lib/vault/github';
 import { parseFrontmatter } from '@/lib/vault/parser';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchMondayClients, parseMondayClient, type MondayItem } from './client';
 
 export interface ParsedMondayClient {
@@ -134,6 +135,7 @@ function buildProfileMarkdown(
 
 /**
  * Sync a single Monday.com client item to the vault.
+ * Also updates is_active in the DB — clients with no services are deactivated.
  */
 export async function syncMondayClientToVault(
   item: MondayItem,
@@ -147,6 +149,13 @@ export async function syncMondayClientToVault(
 
   await writeFile(path, content, `monday-sync: ${parsed.name}`, existing?.sha);
 
+  // Auto-deactivate clients with no services, reactivate those with services
+  const adminClient = createAdminClient();
+  await adminClient
+    .from('clients')
+    .update({ is_active: parsed.services.length > 0 })
+    .ilike('name', parsed.name);
+
   return {
     name: parsed.name,
     action: existing ? 'updated' : 'created',
@@ -155,19 +164,29 @@ export async function syncMondayClientToVault(
 
 /**
  * Full sync: fetch all clients from Monday.com and sync to vault.
+ * Clients with zero services are automatically deactivated in the DB.
  */
 export async function syncAllMondayClients(): Promise<{
   results: Array<{ name: string; action: string }>;
 }> {
   const items = await fetchMondayClients();
   const results = [];
+  const adminClient = createAdminClient();
 
   for (const item of items) {
     // Skip "Test Client" type items
     if (item.name.toLowerCase().includes('test client')) continue;
 
     try {
+      const parsed = parseMondayClient(item);
       const result = await syncMondayClientToVault(item);
+
+      // Auto-deactivate clients with no services, reactivate those with services
+      await adminClient
+        .from('clients')
+        .update({ is_active: parsed.services.length > 0 })
+        .ilike('name', parsed.name);
+
       results.push(result);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
