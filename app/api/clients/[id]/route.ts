@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { syncClientProfileToVault } from '@/lib/vault/sync';
+import { syncClientProfileToVault, removeClientFromVault } from '@/lib/vault/sync';
 
 export async function PATCH(
   request: NextRequest,
@@ -106,6 +106,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
+    // Get the client name before deleting (needed for vault cleanup)
+    const { data: client } = await adminClient
+      .from('clients')
+      .select('name')
+      .eq('id', id)
+      .single();
+
     // Delete related records first, then the client
     await Promise.all([
       adminClient.from('topic_searches').delete().eq('client_id', id),
@@ -122,6 +129,11 @@ export async function DELETE(
     if (deleteError) {
       console.error('Error deleting client:', deleteError);
       return NextResponse.json({ error: 'Failed to delete client' }, { status: 500 });
+    }
+
+    // Remove client folder from Obsidian vault (non-blocking)
+    if (client?.name) {
+      removeClientFromVault(client.name).catch(() => {});
     }
 
     return NextResponse.json({ success: true });

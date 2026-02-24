@@ -3,7 +3,7 @@
  * All functions are non-blocking — vault failures never break core flows.
  */
 
-import { isVaultConfigured, writeFile } from './github';
+import { isVaultConfigured, writeFile, listFiles, deleteFile } from './github';
 import {
   formatResearchReport,
   formatIdeaNote,
@@ -16,6 +16,7 @@ import {
   ideaPath,
   genericResearchPath,
   clientProfilePath,
+  clientDir,
   strategyPath,
   shootPlanPath,
   contentLogPath,
@@ -159,5 +160,30 @@ export async function syncDashboardToVault(
     await writeFile('Dashboard.md', markdown, 'update dashboard');
   } catch (error) {
     console.error('Vault sync (dashboard) failed:', error);
+  }
+}
+
+/** Remove a client's entire folder from the vault. */
+export async function removeClientFromVault(clientName: string): Promise<void> {
+  if (!isVaultConfigured()) return;
+
+  try {
+    const dir = clientDir(clientName);
+
+    // Recursively delete all files in the client folder
+    async function deleteDir(path: string) {
+      const entries = await listFiles(path);
+      for (const entry of entries) {
+        if (entry.type === 'dir') {
+          await deleteDir(entry.path);
+        } else {
+          await deleteFile(entry.path, `remove: ${clientName}`);
+        }
+      }
+    }
+
+    await deleteDir(dir);
+  } catch (error) {
+    console.error('Vault removal failed:', error);
   }
 }
