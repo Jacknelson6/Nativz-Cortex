@@ -28,16 +28,18 @@ export default async function AdminClientsPage() {
         }),
     ]);
 
-    // Merge DB fields into vault profiles
-    const mergedClients = vaultClients.map((c) => {
-      const db = dbClients.get(c.slug);
-      return {
-        ...c,
-        industry: db?.industry || c.industry,
-        isActive: db?.isActive ?? true,
-        logoUrl: db?.logoUrl ?? null,
-      };
-    });
+    // Merge DB fields into vault profiles — exclude clients not in DB (deleted)
+    const mergedClients = vaultClients
+      .filter((c) => dbClients.has(c.slug))
+      .map((c) => {
+        const db = dbClients.get(c.slug)!;
+        return {
+          ...c,
+          industry: db.industry || c.industry,
+          isActive: db.isActive,
+          logoUrl: db.logoUrl,
+        };
+      });
 
     return (
       <div className="p-6 space-y-6">
