@@ -264,20 +264,22 @@ export default function AdminClientSettingsPage() {
         }
       }
 
-      // Sync Monday.com fields (non-blocking)
+      // Sync Monday.com fields + vault profile (awaited so vault reflects changes)
       if (mondayItemId) {
-        fetch('/api/monday/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            monday_item_id: mondayItemId,
-            services,
-            agency,
-            poc_name: pocName,
-            poc_email: pocEmail,
-            abbreviation,
-          }),
-        }).catch(() => {});
+        try {
+          await fetch('/api/monday/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              monday_item_id: mondayItemId,
+              services,
+              agency,
+              poc_name: pocName,
+              poc_email: pocEmail,
+              abbreviation,
+            }),
+          });
+        } catch { /* Monday sync is best-effort */ }
       }
     } catch {
       toast.error('Something went wrong. Try again.');

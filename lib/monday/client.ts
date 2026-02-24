@@ -123,6 +123,169 @@ export async function createMondayItem(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Fetch items from the Content Calendars board (shoots)
+// ---------------------------------------------------------------------------
+
+const CONTENT_CALENDARS_BOARD_ID = process.env.MONDAY_CONTENT_CALENDARS_BOARD_ID || '';
+
+export interface MondayGroup {
+  id: string;
+  title: string;
+}
+
+export interface MondayContentCalendarItem {
+  id: string;
+  name: string;
+  group: { id: string; title: string };
+  column_values: MondayColumnValue[];
+}
+
+export interface ParsedShootItem {
+  mondayItemId: string;
+  clientName: string;
+  abbreviation: string; // extracted from parenthetical in item name, e.g. "ASAB"
+  groupTitle: string; // e.g. "February 2026"
+  date: string | null; // ISO date string from Shoot Date column
+  rawsStatus: string; // RAWs column: "Uploaded", "No shoot", etc.
+  editingStatus: string; // Editing Status column
+  assignmentStatus: string; // Assignment Status column
+  clientApproval: string; // Client Approval column
+  agency: string; // Agency column
+  boostingStatus: string; // Boosting Status column
+  notes: string; // Notes long text
+  rawsFolderUrl: string; // RAWs Folder link
+  editedVideosFolderUrl: string; // Edited Videos Folder link
+  laterCalendarUrl: string; // Later Calendar View link
+  columns: Record<string, string>; // all raw column values
+}
+
+export async function fetchContentCalendarItems(): Promise<{
+  groups: MondayGroup[];
+  items: MondayContentCalendarItem[];
+}> {
+  if (!CONTENT_CALENDARS_BOARD_ID) {
+    throw new Error('MONDAY_CONTENT_CALENDARS_BOARD_ID not set');
+  }
+
+  const data = await mondayQuery<{
+    boards: Array<{
+      groups: MondayGroup[];
+      items_page: { items: MondayContentCalendarItem[] };
+    }>;
+  }>(`
+    query {
+      boards(ids: [${CONTENT_CALENDARS_BOARD_ID}]) {
+        groups {
+          id
+          title
+        }
+        items_page(limit: 200) {
+          items {
+            id
+            name
+            group {
+              id
+              title
+            }
+            column_values {
+              id
+              text
+              value
+            }
+          }
+        }
+      }
+    }
+  `);
+
+  const board = data.boards[0];
+  return {
+    groups: board?.groups ?? [],
+    items: board?.items_page.items ?? [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Content Calendars board column IDs (discovered from board 9232769015)
+// ---------------------------------------------------------------------------
+
+const CC_COLS = {
+  shootDate: 'date_mkrv3eyh',           // Shoot Date (date)
+  raws: 'color_mkr74mgy',               // RAWs (status: Uploaded / No shoot)
+  clientApproval: 'color_mksd61fs',      // Client Approval (status)
+  editingStatus: 'status_mkm9vbtf',     // Editing Status (status)
+  assignmentStatus: 'color_mkrv2m31',   // Assignment Status (status)
+  agency: 'color_mkrw743r',             // Agency (status)
+  notes: 'long_text_mktrkpfp',          // Notes (long_text)
+  editedVideosFolder: 'link_mksmpf2r',  // Edited Videos Folder (link)
+  rawsFolder: 'link_mksmzpn8',          // RAWs Folder (link)
+  laterCalendarView: 'link_mkt77tjt',   // Later Calendar View Link (link)
+  boostingStatus: 'color_mkvkfw5',      // Boosting Status (status)
+} as const;
+
+/**
+ * Parse a Content Calendar item into a structured shoot item.
+ * Uses hardcoded column IDs from the Monday.com Content Calendars board.
+ */
+export function parseContentCalendarItem(item: MondayContentCalendarItem): ParsedShootItem {
+  const cols = Object.fromEntries(
+    item.column_values.map((c) => [c.id, c.text]),
+  );
+
+  // Extract abbreviation from item name — e.g. "All Shutters and Blinds (ASAB)" → "ASAB"
+  const abbrMatch = item.name.match(/\(([^)]+)\)\s*$/);
+  const abbreviation = abbrMatch ? abbrMatch[1] : '';
+  const clientName = item.name.replace(/\s*\([^)]+\)\s*$/, '').trim();
+
+  // Parse shoot date
+  let date: string | null = null;
+  const dateCol = item.column_values.find((c) => c.id === CC_COLS.shootDate);
+  if (dateCol?.value) {
+    try {
+      const parsed = JSON.parse(dateCol.value);
+      date = parsed.date || null;
+    } catch {
+      date = dateCol.text || null;
+    }
+  }
+
+  // Parse link columns — Monday stores links as JSON: {"url":"...","text":"..."}
+  function extractLink(colId: string): string {
+    const col = item.column_values.find((c) => c.id === colId);
+    if (!col?.value) return '';
+    try {
+      const parsed = JSON.parse(col.value);
+      return parsed.url || col.text || '';
+    } catch {
+      return col.text || '';
+    }
+  }
+
+  return {
+    mondayItemId: item.id,
+    clientName,
+    abbreviation,
+    groupTitle: item.group.title,
+    date,
+    rawsStatus: cols[CC_COLS.raws] || '',
+    editingStatus: cols[CC_COLS.editingStatus] || '',
+    assignmentStatus: cols[CC_COLS.assignmentStatus] || '',
+    clientApproval: cols[CC_COLS.clientApproval] || '',
+    agency: cols[CC_COLS.agency] || '',
+    boostingStatus: cols[CC_COLS.boostingStatus] || '',
+    notes: cols[CC_COLS.notes] || '',
+    rawsFolderUrl: extractLink(CC_COLS.rawsFolder),
+    editedVideosFolderUrl: extractLink(CC_COLS.editedVideosFolder),
+    laterCalendarUrl: extractLink(CC_COLS.laterCalendarView),
+    columns: cols,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Parse client items
+// ---------------------------------------------------------------------------
+
 /**
  * Parse a Monday.com client item into structured data.
  */

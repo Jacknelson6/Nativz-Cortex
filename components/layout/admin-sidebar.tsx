@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Search, History, Calendar, BarChart3, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, Users, Search, History, Camera, BarChart3 } from 'lucide-react';
 import { FloatingDock } from '@/components/ui/floating-dock';
 import { Button } from '@/components/ui/button';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
@@ -10,8 +10,7 @@ import { SidebarAccount } from '@/components/layout/sidebar-account';
 const NAV_ITEMS = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/search/history', label: 'Search history', icon: History },
-  { href: '/admin/shoots', label: 'Shoots', icon: Calendar },
-  { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays },
+  { href: '/admin/shoots', label: 'Shoots', icon: Camera },
   { href: '/admin/clients', label: 'Clients', icon: Users },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
 ];

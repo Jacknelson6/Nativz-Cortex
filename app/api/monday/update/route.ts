@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { mondayQuery, isMondayConfigured } from '@/lib/monday/client';
+import { mondayQuery, isMondayConfigured, fetchMondayClients } from '@/lib/monday/client';
+import { syncMondayClientToVault } from '@/lib/monday/sync';
+import { isVaultConfigured } from '@/lib/vault/github';
 
 const CLIENTS_BOARD_ID = process.env.MONDAY_CLIENTS_BOARD_ID || '9432491336';
 
@@ -101,6 +104,22 @@ export async function POST(request: NextRequest) {
         }
       }
     `);
+
+    // Re-sync this client's vault profile so client cards reflect the update
+    if (isVaultConfigured()) {
+      try {
+        const items = await fetchMondayClients();
+        const item = items.find((i) => i.id === data.monday_item_id);
+        if (item) {
+          await syncMondayClientToVault(item);
+        }
+      } catch (e) {
+        console.warn('Vault sync after Monday update failed (non-blocking):', e);
+      }
+    }
+
+    // Bust Next.js cache so clients page shows updated data
+    revalidatePath('/admin/clients');
 
     return NextResponse.json({ success: true });
   } catch (error) {
