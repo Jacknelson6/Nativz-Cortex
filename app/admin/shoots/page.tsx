@@ -6,12 +6,13 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarDays,
-  List,
   Plus,
   Film,
   ChevronDown,
   ExternalLink,
   X,
+  Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +20,7 @@ import { GlassButton } from '@/components/ui/glass-button';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ScheduleShootModal } from '@/components/shoots/schedule-shoot-modal';
+import { IdeateShootModal } from '@/components/shoots/ideate-shoot-modal';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +46,7 @@ interface ShootItem {
   clientId: string | null;
   clientSlug: string | null;
   clientIndustry: string | null;
+  clientLogoUrl: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +63,14 @@ function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
+function isShootPast(dateStr: string | null) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d < today;
+}
+
 function isPast(date: Date) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -72,6 +83,27 @@ function getAbbr(item: ShootItem): string {
   const words = item.clientName.split(/\s+/).filter(Boolean);
   if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
   return words.slice(0, 3).map((w) => w[0]).join('').toUpperCase();
+}
+
+/** Client avatar — logo image or abbreviation fallback */
+function ShootAvatar({ item, size = 'md', dimmed }: { item: ShootItem; size?: 'sm' | 'md' | 'lg'; dimmed?: boolean }) {
+  const sizeClass = size === 'sm' ? 'h-6 w-6' : size === 'lg' ? 'h-10 w-10' : 'h-8 w-8';
+  const textSize = size === 'sm' ? 'text-[8px]' : size === 'lg' ? 'text-xs' : 'text-[10px]';
+
+  if (item.clientLogoUrl) {
+    return (
+      <div className={`relative ${sizeClass} shrink-0 overflow-hidden rounded-lg`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={item.clientLogoUrl} alt={item.clientName} className="h-full w-full object-cover" />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex ${sizeClass} shrink-0 items-center justify-center rounded-lg ${textSize} font-bold ${dimmed ? 'bg-white/[0.06] text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
+      {getAbbr(item)}
+    </div>
+  );
 }
 
 function getEditingBadge(status: string) {
@@ -101,7 +133,6 @@ function getRawsBadge(status: string) {
 // ---------------------------------------------------------------------------
 
 export default function AdminShootsPage() {
-  const [view, setView] = useState<'calendar' | 'list'>('calendar');
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -114,6 +145,8 @@ export default function AdminShootsPage() {
   const [pastExpanded, setPastExpanded] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [shootToSchedule, setShootToSchedule] = useState<ShootItem | null>(null);
+  const [ideateModalOpen, setIdeateModalOpen] = useState(false);
+  const [shootToIdeate, setShootToIdeate] = useState<ShootItem | null>(null);
 
   // Fetch from Monday Content Calendars
   const fetchData = useCallback(async () => {
@@ -197,7 +230,7 @@ export default function AdminShootsPage() {
     return map;
   }, [items, currentMonth]);
 
-  // List view: split into upcoming and past
+  // Split into upcoming and past
   const { upcoming, past } = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -213,6 +246,11 @@ export default function AdminShootsPage() {
 
   const today = new Date();
 
+  function openIdeate(item: ShootItem) {
+    setShootToIdeate(item);
+    setIdeateModalOpen(true);
+  }
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -223,38 +261,10 @@ export default function AdminShootsPage() {
             {getMonthName(currentMonth)} — content shoots and key dates
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {/* View toggle */}
-          <div className="flex rounded-lg border border-nativz-border overflow-hidden">
-            <button
-              onClick={() => setView('calendar')}
-              className={`cursor-pointer flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                view === 'calendar'
-                  ? 'bg-accent/15 text-accent-text'
-                  : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
-              }`}
-            >
-              <CalendarDays size={14} />
-              Calendar
-            </button>
-            <button
-              onClick={() => setView('list')}
-              className={`cursor-pointer flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                view === 'list'
-                  ? 'bg-accent/15 text-accent-text'
-                  : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
-              }`}
-            >
-              <List size={14} />
-              List
-            </button>
-          </div>
-
-          <GlassButton onClick={() => { setShootToSchedule(null); setScheduleModalOpen(true); }}>
-            <Plus size={14} />
-            Schedule shoot
-          </GlassButton>
-        </div>
+        <GlassButton onClick={() => { setShootToSchedule(null); setScheduleModalOpen(true); }}>
+          <Plus size={14} />
+          Schedule shoot
+        </GlassButton>
       </div>
 
       {/* Loading / error */}
@@ -279,8 +289,8 @@ export default function AdminShootsPage() {
         />
       )}
 
-      {/* Calendar View */}
-      {!loading && !error && items.length > 0 && view === 'calendar' && (
+      {/* Calendar + List (always shown together) */}
+      {!loading && !error && items.length > 0 && (
         <>
           {/* Month navigation */}
           <div className="flex items-center justify-between">
@@ -351,15 +361,23 @@ export default function AdminShootsPage() {
                                 key={event.mondayItemId}
                                 onClick={() => setSelectedShoot(event)}
                                 className={`
-                                  cursor-pointer w-full text-left rounded-md px-2 py-1 text-[10px] font-medium truncate
+                                  cursor-pointer w-full text-left rounded-md px-1.5 py-1 text-[10px] font-medium
                                   bg-white/[0.08] border border-white/10 text-white/80
                                   hover:bg-white/[0.12] hover:border-white/15 transition-colors
+                                  flex items-center gap-1 overflow-hidden
                                   ${isDayPast ? 'opacity-60' : ''}
                                 `}
                                 title={event.clientName}
                               >
-                                <span className="font-bold">{getAbbr(event)}</span>{' '}
-                                {event.clientName}
+                                {event.clientLogoUrl ? (
+                                  <div className="relative h-3.5 w-3.5 shrink-0 overflow-hidden rounded-sm">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={event.clientLogoUrl} alt="" className="h-full w-full object-cover" />
+                                  </div>
+                                ) : (
+                                  <span className="font-bold shrink-0">{getAbbr(event)}</span>
+                                )}
+                                <span className="truncate">{event.clientName}</span>
                               </button>
                             ))}
                           </div>
@@ -371,13 +389,8 @@ export default function AdminShootsPage() {
               </div>
             ))}
           </Card>
-        </>
-      )}
 
-      {/* List View */}
-      {!loading && !error && items.length > 0 && view === 'list' && (
-        <div className="space-y-6">
-          {/* Upcoming */}
+          {/* Upcoming shoots list */}
           <div>
             <h2 className="text-base font-semibold text-text-primary mb-3">
               Upcoming
@@ -395,37 +408,50 @@ export default function AdminShootsPage() {
                   const raws = getRawsBadge(item.rawsStatus);
 
                   return (
-                    <button
+                    <div
                       key={item.mondayItemId}
-                      onClick={() => setSelectedShoot(item)}
-                      className="cursor-pointer w-full text-left animate-stagger-in"
+                      className="animate-stagger-in"
                       style={{ animationDelay: `${i * 30}ms` }}
                     >
-                      <Card interactive className="flex items-center gap-3">
+                      <Card className="flex items-center gap-3">
                         {/* Date badge */}
                         {date && (
-                          <div className="flex flex-col items-center justify-center rounded-lg bg-accent/10 text-accent px-2.5 py-1.5 min-w-[48px]">
+                          <button
+                            onClick={() => setSelectedShoot(item)}
+                            className="cursor-pointer flex flex-col items-center justify-center rounded-lg bg-accent/10 text-accent px-2.5 py-1.5 min-w-[48px] hover:bg-accent/20 transition-colors"
+                          >
                             <span className="text-base font-bold leading-none">{date.getDate()}</span>
                             <span className="text-[9px] font-medium uppercase mt-0.5">
                               {date.toLocaleDateString('en-US', { month: 'short' })}
                             </span>
-                          </div>
+                          </button>
                         )}
 
                         {/* Avatar */}
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-surface text-[10px] font-bold text-accent-text">
-                          {getAbbr(item)}
-                        </div>
+                        <button
+                          onClick={() => setSelectedShoot(item)}
+                          className="cursor-pointer hover:opacity-80 transition-opacity"
+                        >
+                          <ShootAvatar item={item} />
+                        </button>
 
                         {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-text-primary truncate">{item.clientName}</p>
+                        <button
+                          onClick={() => setSelectedShoot(item)}
+                          className="cursor-pointer flex-1 min-w-0 text-left"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium text-text-primary truncate">{item.clientName}</p>
+                            {item.abbreviation && (
+                              <span className="shrink-0 text-[10px] font-medium text-text-muted">{item.abbreviation}</span>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2 mt-0.5">
                             {item.agency && (
                               <span className="text-xs text-text-muted">{item.agency}</span>
                             )}
                           </div>
-                        </div>
+                        </button>
 
                         {/* Status badges */}
                         <div className="flex items-center gap-1.5 shrink-0">
@@ -436,15 +462,25 @@ export default function AdminShootsPage() {
                             <Badge variant={editing.variant}>{editing.label}</Badge>
                           )}
                         </div>
+
+                        {/* Ideate button */}
+                        <button
+                          onClick={() => openIdeate(item)}
+                          className="cursor-pointer shrink-0 flex items-center gap-1.5 rounded-lg border border-purple-500/25 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/40 transition-colors"
+                          title="Generate AI shoot plan"
+                        >
+                          <Sparkles size={13} />
+                          Ideate
+                        </button>
                       </Card>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
             )}
           </div>
 
-          {/* Past */}
+          {/* Past shoots */}
           {past.length > 0 && (
             <div>
               <button
@@ -465,41 +501,46 @@ export default function AdminShootsPage() {
                     const editing = getEditingBadge(item.editingStatus);
 
                     return (
-                      <button
-                        key={item.mondayItemId}
-                        onClick={() => setSelectedShoot(item)}
-                        className="cursor-pointer w-full text-left"
-                      >
-                        <Card interactive className="flex items-center gap-3">
+                      <div key={item.mondayItemId}>
+                        <Card className="flex items-center gap-3">
                           {date && (
-                            <div className="flex flex-col items-center justify-center rounded-lg bg-surface-hover text-text-muted px-2.5 py-1.5 min-w-[48px]">
+                            <button
+                              onClick={() => setSelectedShoot(item)}
+                              className="cursor-pointer flex flex-col items-center justify-center rounded-lg bg-surface-hover text-text-muted px-2.5 py-1.5 min-w-[48px] hover:bg-surface-hover/80 transition-colors"
+                            >
                               <span className="text-base font-bold leading-none">{date.getDate()}</span>
                               <span className="text-[9px] font-medium uppercase mt-0.5">
                                 {date.toLocaleDateString('en-US', { month: 'short' })}
                               </span>
-                            </div>
+                            </button>
                           )}
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-[10px] font-bold text-text-muted">
-                            {getAbbr(item)}
-                          </div>
-                          <div className="flex-1 min-w-0">
+                          <button
+                            onClick={() => setSelectedShoot(item)}
+                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                          >
+                            <ShootAvatar item={item} dimmed />
+                          </button>
+                          <button
+                            onClick={() => setSelectedShoot(item)}
+                            className="cursor-pointer flex-1 min-w-0 text-left"
+                          >
                             <p className="text-sm font-medium text-text-secondary truncate">{item.clientName}</p>
                             <div className="flex items-center gap-2 mt-0.5">
                               {item.agency && (
                                 <span className="text-xs text-text-muted">{item.agency}</span>
                               )}
                             </div>
-                          </div>
+                          </button>
                           {item.editingStatus && <Badge variant={editing.variant}>{editing.label}</Badge>}
                         </Card>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
               )}
             </div>
           )}
-        </div>
+        </>
       )}
 
       {/* Shoot Detail Panel (slide-over) */}
@@ -512,6 +553,10 @@ export default function AdminShootsPage() {
             setShootToSchedule(s);
             setScheduleModalOpen(true);
           }}
+          onIdeate={(s) => {
+            setSelectedShoot(null);
+            openIdeate(s);
+          }}
         />
       )}
 
@@ -523,11 +568,24 @@ export default function AdminShootsPage() {
         shoot={shootToSchedule ? {
           clientName: shootToSchedule.clientName,
           clientId: shootToSchedule.clientId,
-          mondayItemId: shootToSchedule.mondayItemId,
-          date: shootToSchedule.date,
+          mondayItemId: isShootPast(shootToSchedule.date) ? undefined : shootToSchedule.mondayItemId,
+          date: isShootPast(shootToSchedule.date) ? null : shootToSchedule.date,
           location: '',
-          notes: shootToSchedule.notes,
+          notes: isShootPast(shootToSchedule.date) ? '' : shootToSchedule.notes,
+          agency: shootToSchedule.agency || undefined,
         } : undefined}
+      />
+
+      {/* Ideate Shoot Modal */}
+      <IdeateShootModal
+        open={ideateModalOpen}
+        onClose={() => { setIdeateModalOpen(false); setShootToIdeate(null); }}
+        shoot={shootToIdeate ? {
+          clientName: shootToIdeate.clientName,
+          clientId: shootToIdeate.clientId,
+          shootDate: shootToIdeate.date,
+          industry: shootToIdeate.clientIndustry,
+        } : null}
       />
     </div>
   );
@@ -537,10 +595,21 @@ export default function AdminShootsPage() {
 // Shoot Detail Panel
 // ---------------------------------------------------------------------------
 
-function ShootDetailPanel({ shoot, onClose, onSchedule }: { shoot: ShootItem; onClose: () => void; onSchedule: (s: ShootItem) => void }) {
+function ShootDetailPanel({
+  shoot,
+  onClose,
+  onSchedule,
+  onIdeate,
+}: {
+  shoot: ShootItem;
+  onClose: () => void;
+  onSchedule: (s: ShootItem) => void;
+  onIdeate: (s: ShootItem) => void;
+}) {
   const date = shoot.date ? new Date(shoot.date + 'T00:00:00') : null;
   const raws = getRawsBadge(shoot.rawsStatus);
   const editing = getEditingBadge(shoot.editingStatus);
+  const shootIsPast = isShootPast(shoot.date);
 
   return (
     <>
@@ -553,11 +622,14 @@ function ShootDetailPanel({ shoot, onClose, onSchedule }: { shoot: ShootItem; on
           {/* Header */}
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-surface text-xs font-bold text-accent-text">
-                {getAbbr(shoot)}
-              </div>
+              <ShootAvatar item={shoot} size="lg" />
               <div>
-                <h2 className="text-lg font-semibold text-text-primary">{shoot.clientName}</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold text-text-primary">{shoot.clientName}</h2>
+                  {shoot.abbreviation && (
+                    <span className="text-xs font-medium text-text-muted">{shoot.abbreviation}</span>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-sm text-text-muted">{shoot.groupTitle}</span>
                   {shoot.agency && (
@@ -582,6 +654,7 @@ function ShootDetailPanel({ shoot, onClose, onSchedule }: { shoot: ShootItem; on
                 <span className="text-sm text-text-primary">
                   {date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                 </span>
+                {shootIsPast && <Badge variant="default">Past</Badge>}
               </div>
             )}
           </div>
@@ -665,13 +738,34 @@ function ShootDetailPanel({ shoot, onClose, onSchedule }: { shoot: ShootItem; on
 
           {/* Actions */}
           <div className="space-y-2 pt-2 border-t border-nativz-border">
-            <GlassButton
-              onClick={() => onSchedule(shoot)}
-              className="w-full justify-center"
+            {/* Ideate button — always available */}
+            <button
+              onClick={() => onIdeate(shoot)}
+              className="cursor-pointer flex items-center justify-center gap-2 w-full rounded-lg border border-purple-500/25 bg-purple-500/10 px-3 py-2.5 text-sm font-medium text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/40 transition-colors"
             >
-              <Camera size={14} />
-              Schedule shoot
-            </GlassButton>
+              <Sparkles size={14} />
+              Ideate shoot plan
+            </button>
+
+            {/* Schedule button — context-aware for past vs upcoming */}
+            {shootIsPast ? (
+              <GlassButton
+                onClick={() => onSchedule(shoot)}
+                className="w-full justify-center"
+              >
+                <RefreshCw size={14} />
+                Schedule next shoot
+              </GlassButton>
+            ) : (
+              <GlassButton
+                onClick={() => onSchedule(shoot)}
+                className="w-full justify-center"
+              >
+                <Camera size={14} />
+                Schedule shoot
+              </GlassButton>
+            )}
+
             <a
               href={`https://nativz-team.monday.com/boards/9232769015/pulses/${shoot.mondayItemId}`}
               target="_blank"

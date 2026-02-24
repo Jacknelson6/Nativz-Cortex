@@ -1,7 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { Loader2, ChevronRight, ChevronLeft, Calendar, Mail, Users, X, Check } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import {
+  Loader2,
+  ChevronRight,
+  ChevronLeft,
+  Calendar,
+  Mail,
+  Users,
+  X,
+  Check,
+  AlertTriangle,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
 import { Input, Textarea } from '@/components/ui/input';
@@ -10,15 +20,44 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 // ---------------------------------------------------------------------------
-// Agency presets
+// Team roster per agency
 // ---------------------------------------------------------------------------
 
-const AGENCY_PRESETS: Record<string, string[]> = {
-  'Nativz': ['jack@nativz.io', 'jake@nativz.io', 'cole@nativz.io'],
-  'Anderson Collaborative': ['jack@andersoncollaborative.com', 'jake@andersoncollaborative.com', 'trevor@andersoncollaborative.com'],
+interface TeamMember {
+  name: string;
+  email: string;
+}
+
+const NATIVZ_TEAM: TeamMember[] = [
+  { name: 'Jack', email: 'jack@nativz.io' },
+  { name: 'Jake', email: 'jake@nativz.io' },
+  { name: 'Jaime', email: 'jaime@nativz.io' },
+  { name: 'Cole', email: 'cole@nativz.io' },
+];
+
+const AC_TEAM: TeamMember[] = [
+  { name: 'Jack', email: 'jack@andersoncollaborative.com' },
+  { name: 'Jaime', email: 'jaime@andersoncollaborative.com' },
+  { name: 'Cole', email: 'cole@andersoncollaborative.com' },
+  { name: 'Trevor', email: 'trevor@andersoncollaborative.com' },
+];
+
+const AGENCY_TEAMS: Record<string, TeamMember[]> = {
+  Nativz: NATIVZ_TEAM,
+  'Anderson Collaborative': AC_TEAM,
 };
 
-const VIDEOGRAPHERS = ['jamie@nativz.io', 'jake@nativz.io', 'alyssa@nativz.io'];
+// Cole is excluded from correspondence/scheduling for these clients
+const COLE_EXCLUDED_CLIENTS = ['ctc owings auto', 'equidad homes'];
+
+function isColeExcluded(clientName: string): boolean {
+  const lower = clientName.toLowerCase();
+  return COLE_EXCLUDED_CLIENTS.some((c) => lower.includes(c));
+}
+
+function isColeEmail(email: string): boolean {
+  return email.toLowerCase().startsWith('cole@');
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,6 +71,7 @@ interface ShootData {
   location: string;
   notes: string;
   pocEmails?: string[];
+  agency?: string;
 }
 
 interface ScheduleShootModalProps {
@@ -50,39 +90,100 @@ export function ScheduleShootModal({ open, onClose, onCreated, shoot }: Schedule
   const [submitting, setSubmitting] = useState(false);
 
   // Step 1: Shoot details
-  const [clientName] = useState(shoot?.clientName ?? '');
+  const [clientName, setClientName] = useState(shoot?.clientName ?? '');
   const [shootDate, setShootDate] = useState(shoot?.date ?? '');
   const [shootTime, setShootTime] = useState('09:00');
   const [location, setLocation] = useState(shoot?.location ?? '');
   const [notes, setNotes] = useState(shoot?.notes ?? '');
 
   // Step 2: Team & invites
-  const [agency, setAgency] = useState<string>('Nativz');
+  const [agency, setAgency] = useState<string>(() => {
+    const sa = shoot?.agency?.toLowerCase() ?? '';
+    if (sa.includes('anderson')) return 'Anderson Collaborative';
+    return 'Nativz';
+  });
+  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
   const [clientEmails, setClientEmails] = useState<string[]>(shoot?.pocEmails ?? []);
   const [newClientEmail, setNewClientEmail] = useState('');
   const [additionalEmails, setAdditionalEmails] = useState<string[]>([]);
   const [newAdditionalEmail, setNewAdditionalEmail] = useState('');
+  const [coleWarning, setColeWarning] = useState(false);
 
   // Step 3: Confirm
   const [addToCalendar, setAddToCalendar] = useState(true);
   const [sendInvites, setSendInvites] = useState(true);
 
-  const teamEmails = AGENCY_PRESETS[agency] ?? [];
-  const allInvitees = [...new Set([...teamEmails, ...clientEmails, ...additionalEmails, ...VIDEOGRAPHERS])];
+  const team = AGENCY_TEAMS[agency] ?? NATIVZ_TEAM;
+  const clientColeExcluded = isColeExcluded(clientName);
 
-  function reset() {
-    setStep(1);
-    setShootDate(shoot?.date ?? '');
-    setShootTime('09:00');
-    setLocation(shoot?.location ?? '');
-    setNotes(shoot?.notes ?? '');
-    setAgency('Nativz');
-    setClientEmails(shoot?.pocEmails ?? []);
-    setNewClientEmail('');
-    setAdditionalEmails([]);
-    setNewAdditionalEmail('');
-    setAddToCalendar(true);
-    setSendInvites(true);
+  const selectedTeamEmails = team
+    .filter((m) => selectedEmails.has(m.email))
+    .map((m) => m.email);
+
+  const allInvitees = [
+    ...new Set([...selectedTeamEmails, ...clientEmails, ...additionalEmails]),
+  ];
+
+  // Initialize selected team (all selected by default, except Cole for excluded clients)
+  function initTeamSelection(agencyName: string, client: string) {
+    const t = AGENCY_TEAMS[agencyName] ?? NATIVZ_TEAM;
+    const excluded = isColeExcluded(client);
+    const initial = new Set<string>();
+    for (const m of t) {
+      if (excluded && isColeEmail(m.email)) continue;
+      initial.add(m.email);
+    }
+    setSelectedEmails(initial);
+  }
+
+  // Sync state when shoot prop changes
+  useEffect(() => {
+    if (open) {
+      setStep(1);
+      setClientName(shoot?.clientName ?? '');
+      setShootDate(shoot?.date ?? '');
+      setShootTime('09:00');
+      setLocation(shoot?.location ?? '');
+      setNotes(shoot?.notes ?? '');
+      setClientEmails(shoot?.pocEmails ?? []);
+      setNewClientEmail('');
+      setAdditionalEmails([]);
+      setNewAdditionalEmail('');
+      setColeWarning(false);
+      setAddToCalendar(true);
+      setSendInvites(true);
+
+      const detectedAgency = (() => {
+        const sa = shoot?.agency?.toLowerCase() ?? '';
+        if (sa.includes('anderson')) return 'Anderson Collaborative';
+        return 'Nativz';
+      })();
+      setAgency(detectedAgency);
+      initTeamSelection(detectedAgency, shoot?.clientName ?? '');
+    }
+  }, [open, shoot?.clientName, shoot?.date, shoot?.location, shoot?.notes, shoot?.pocEmails, shoot?.agency]);
+
+  function handleAgencyChange(newAgency: string) {
+    setAgency(newAgency);
+    initTeamSelection(newAgency, clientName);
+  }
+
+  function toggleMember(email: string) {
+    // Cole restriction check
+    if (isColeEmail(email) && clientColeExcluded) {
+      setColeWarning(true);
+      return;
+    }
+
+    setSelectedEmails((prev) => {
+      const next = new Set(prev);
+      if (next.has(email)) {
+        next.delete(email);
+      } else {
+        next.add(email);
+      }
+      return next;
+    });
   }
 
   function addEmail(type: 'client' | 'additional') {
@@ -113,10 +214,9 @@ export function ScheduleShootModal({ open, onClose, onCreated, shoot }: Schedule
           location: location.trim() || undefined,
           notes: notes.trim() || undefined,
           agency,
-          team_emails: teamEmails,
+          team_emails: selectedTeamEmails,
           client_emails: clientEmails,
           additional_emails: additionalEmails,
-          videographer_emails: VIDEOGRAPHERS,
           add_to_calendar: addToCalendar,
           send_invites: sendInvites,
         }),
@@ -132,7 +232,6 @@ export function ScheduleShootModal({ open, onClose, onCreated, shoot }: Schedule
       toast.success(
         `Shoot scheduled${data.googleEventCreated ? ' and calendar event created' : ''}. ${data.inviteeCount} invitees.`,
       );
-      reset();
       onClose();
       onCreated?.();
     } catch {
@@ -143,14 +242,20 @@ export function ScheduleShootModal({ open, onClose, onCreated, shoot }: Schedule
   }
 
   return (
-    <Dialog open={open} onClose={() => { reset(); onClose(); }} title="Schedule shoot" maxWidth="lg">
+    <Dialog open={open} onClose={onClose} title="Schedule shoot" maxWidth="lg">
       {/* Step indicator */}
       <div className="flex items-center gap-2 mb-6">
         {[1, 2, 3].map((s) => (
           <div key={s} className="flex items-center gap-2">
-            <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
-              s === step ? 'bg-accent text-white' : s < step ? 'bg-accent/20 text-accent-text' : 'bg-surface-hover text-text-muted'
-            }`}>
+            <div
+              className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                s === step
+                  ? 'bg-accent text-white'
+                  : s < step
+                    ? 'bg-accent/20 text-accent-text'
+                    : 'bg-surface-hover text-text-muted'
+              }`}
+            >
               {s < step ? <Check size={14} /> : s}
             </div>
             <span className={`text-xs ${s === step ? 'text-text-primary' : 'text-text-muted'}`}>
@@ -215,18 +320,18 @@ export function ScheduleShootModal({ open, onClose, onCreated, shoot }: Schedule
         </div>
       )}
 
-      {/* Step 2: Calendar invite & team */}
+      {/* Step 2: Team selection */}
       {step === 2 && (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {/* Agency selector */}
           <div>
             <label className="block text-xs font-medium text-text-muted mb-2">Agency</label>
             <div className="flex gap-2">
-              {Object.keys(AGENCY_PRESETS).map((a) => (
+              {Object.keys(AGENCY_TEAMS).map((a) => (
                 <button
                   key={a}
                   type="button"
-                  onClick={() => setAgency(a)}
+                  onClick={() => handleAgencyChange(a)}
                   className={`cursor-pointer rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                     agency === a
                       ? 'border-accent/40 bg-accent-surface text-accent-text'
@@ -237,30 +342,96 @@ export function ScheduleShootModal({ open, onClose, onCreated, shoot }: Schedule
                 </button>
               ))}
             </div>
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {teamEmails.map((email) => (
-                <Badge key={email}>{email}</Badge>
-              ))}
-            </div>
           </div>
 
-          {/* Videographers (read-only) */}
+          {/* Team members — toggleable pills */}
           <div>
-            <label className="block text-xs font-medium text-text-muted mb-2">Videographers</label>
-            <div className="flex flex-wrap gap-1.5">
-              {VIDEOGRAPHERS.map((email) => (
-                <Badge key={email} variant="info">{email}</Badge>
-              ))}
+            <label className="block text-xs font-medium text-text-muted mb-2">Team members</label>
+            <div className="flex flex-wrap gap-2">
+              {team.map((member) => {
+                const isSelected = selectedEmails.has(member.email);
+                const isCole = isColeEmail(member.email);
+                const isExcluded = isCole && clientColeExcluded;
+
+                return (
+                  <button
+                    key={member.email}
+                    type="button"
+                    onClick={() => toggleMember(member.email)}
+                    className={`
+                      cursor-pointer relative flex items-center gap-2 rounded-xl border px-4 py-2.5
+                      text-sm font-medium transition-all duration-200
+                      ${
+                        isExcluded
+                          ? 'border-red-500/20 bg-red-500/[0.04] text-red-400/50 cursor-not-allowed'
+                          : isSelected
+                            ? 'border-accent/40 bg-accent/15 text-accent-text shadow-[0_0_12px_rgba(4,107,210,0.15)]'
+                            : 'border-nativz-border bg-surface text-text-muted hover:border-text-muted hover:text-text-secondary'
+                      }
+                    `}
+                  >
+                    {/* Selection indicator */}
+                    <span
+                      className={`
+                        flex h-5 w-5 items-center justify-center rounded-full transition-all duration-200
+                        ${
+                          isExcluded
+                            ? 'bg-red-500/15 text-red-400'
+                            : isSelected
+                              ? 'bg-accent text-white scale-100'
+                              : 'bg-white/[0.06] text-transparent scale-90'
+                        }
+                      `}
+                    >
+                      {isExcluded ? <X size={10} /> : <Check size={10} />}
+                    </span>
+
+                    <div className="text-left">
+                      <p className={`text-sm font-medium leading-none ${isExcluded ? 'line-through' : ''}`}>
+                        {member.name}
+                      </p>
+                      <p className={`text-[10px] mt-0.5 ${isSelected ? 'text-accent-text/60' : 'text-text-muted'}`}>
+                        {member.email.split('@')[0]}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-            <p className="text-[10px] text-text-muted mt-1">Always included</p>
+            <p className="text-[10px] text-text-muted mt-1.5">
+              {selectedTeamEmails.length} of {team.length} selected
+            </p>
           </div>
+
+          {/* Cole warning banner */}
+          {coleWarning && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-red-500/25 bg-red-500/[0.06] px-4 py-3 animate-fade-in">
+              <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-400">Cole cannot be added to this shoot</p>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Cole is excluded from all correspondence and scheduling for {clientName}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setColeWarning(false)}
+                className="cursor-pointer text-text-muted hover:text-text-secondary shrink-0"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
 
           {/* Client contacts */}
           <div>
             <label className="block text-xs font-medium text-text-muted mb-2">Client contacts</label>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {clientEmails.map((email) => (
-                <span key={email} className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-surface px-2.5 py-1 text-xs text-text-secondary">
+                <span
+                  key={email}
+                  className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-surface px-2.5 py-1 text-xs text-text-secondary"
+                >
                   {email}
                   <button
                     type="button"
@@ -281,7 +452,9 @@ export function ScheduleShootModal({ open, onClose, onCreated, shoot }: Schedule
                 placeholder="client@email.com"
                 className="flex-1 rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
               />
-              <Button type="button" size="sm" variant="ghost" onClick={() => addEmail('client')}>Add</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => addEmail('client')}>
+                Add
+              </Button>
             </div>
           </div>
 
@@ -290,7 +463,10 @@ export function ScheduleShootModal({ open, onClose, onCreated, shoot }: Schedule
             <label className="block text-xs font-medium text-text-muted mb-2">Additional invitees</label>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {additionalEmails.map((email) => (
-                <span key={email} className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-surface px-2.5 py-1 text-xs text-text-secondary">
+                <span
+                  key={email}
+                  className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-surface px-2.5 py-1 text-xs text-text-secondary"
+                >
                   {email}
                   <button
                     type="button"
@@ -311,7 +487,9 @@ export function ScheduleShootModal({ open, onClose, onCreated, shoot }: Schedule
                 placeholder="anyone@email.com"
                 className="flex-1 rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
               />
-              <Button type="button" size="sm" variant="ghost" onClick={() => addEmail('additional')}>Add</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => addEmail('additional')}>
+                Add
+              </Button>
             </div>
           </div>
 
@@ -320,7 +498,7 @@ export function ScheduleShootModal({ open, onClose, onCreated, shoot }: Schedule
               <ChevronLeft size={14} />
               Back
             </Button>
-            <GlassButton onClick={() => setStep(3)}>
+            <GlassButton onClick={() => setStep(3)} disabled={selectedTeamEmails.length === 0}>
               Next
               <ChevronRight size={14} />
             </GlassButton>
@@ -340,9 +518,14 @@ export function ScheduleShootModal({ open, onClose, onCreated, shoot }: Schedule
             <div className="flex justify-between text-sm">
               <span className="text-text-muted">Date</span>
               <span className="text-text-primary">
-                {shootDate ? new Date(shootDate + 'T00:00:00').toLocaleDateString('en-US', {
-                  weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-                }) : '—'}{' '}
+                {shootDate
+                  ? new Date(shootDate + 'T00:00:00').toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })
+                  : '\u2014'}{' '}
                 at {shootTime || '9:00 AM'}
               </span>
             </div>

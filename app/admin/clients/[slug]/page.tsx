@@ -96,11 +96,23 @@ export default async function AdminClientDetailPage({
             <Link href="/admin/clients" className="shrink-0 text-text-muted hover:text-text-secondary transition-colors">
               <ArrowLeft size={20} />
             </Link>
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-surface text-sm font-bold text-accent-text">
-              {vaultProfile.abbreviation || <Building2 size={20} />}
-            </div>
+            {dbClient?.logo_url ? (
+              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={dbClient.logo_url} alt={vaultProfile.name} className="h-full w-full object-cover" />
+              </div>
+            ) : (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-surface text-sm font-bold text-accent-text">
+                {vaultProfile.abbreviation || <Building2 size={20} />}
+              </div>
+            )}
             <div className="min-w-0">
-              <h1 className="truncate text-2xl font-semibold text-text-primary">{vaultProfile.name}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="truncate text-2xl font-semibold text-text-primary">{vaultProfile.name}</h1>
+                {vaultProfile.abbreviation && (
+                  <span className="shrink-0 text-xs font-medium text-text-muted">{vaultProfile.abbreviation}</span>
+                )}
+              </div>
               <p className="truncate text-sm text-text-muted">{vaultProfile.industry || 'General'}</p>
             </div>
           </div>

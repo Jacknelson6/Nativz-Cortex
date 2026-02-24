@@ -13,6 +13,7 @@ interface ClientItem {
   industry: string;
   services: string[];
   isActive?: boolean;
+  logoUrl?: string | null;
 }
 
 const STANDARD_SERVICES = ['SMM', 'Paid Media', 'Affiliates', 'Editing'] as const;
@@ -49,11 +50,23 @@ function ClientCard({
   return (
     <Link key={client.slug} href={`/admin/clients/${client.slug}`}>
       <Card interactive className={`animate-stagger-in flex items-start gap-3 ${dimmed ? 'opacity-50 hover:opacity-80' : ''}`} style={{ animationDelay: `${i * 50}ms` }}>
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
-          {client.abbreviation || <Building2 size={20} />}
-        </div>
+        {client.logoUrl ? (
+          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={client.logoUrl} alt={client.name} className="h-full w-full object-cover" />
+          </div>
+        ) : (
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
+            {client.abbreviation || <Building2 size={20} />}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-text-primary truncate">{client.name}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-medium text-text-primary truncate">{client.name}</p>
+            {client.abbreviation && (
+              <span className="shrink-0 text-[10px] font-medium text-text-muted">{client.abbreviation}</span>
+            )}
+          </div>
           <p className="text-xs text-text-muted">{client.industry || 'General'}</p>
           {client.services.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">

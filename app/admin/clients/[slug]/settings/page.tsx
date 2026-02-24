@@ -600,36 +600,55 @@ export default function AdminClientSettingsPage() {
                 </div>
               </>
             ) : (
-              /* Activate */
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-text-primary">Reactivate client</p>
-                  <p className="text-xs text-text-muted">Make this client visible in the portal and client list again.</p>
+              <>
+                {/* Activate */}
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-text-primary">Reactivate client</p>
+                    <p className="text-xs text-text-muted">Make this client visible in the portal and client list again.</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      setDeactivating(true);
+                      try {
+                        const res = await fetch(`/api/clients/${client.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ is_active: true }),
+                        });
+                        if (!res.ok) { toast.error('Failed to reactivate'); return; }
+                        setIsActive(true);
+                        toast.success(`${client.name} reactivated`);
+                      } catch { toast.error('Something went wrong'); }
+                      finally { setDeactivating(false); }
+                    }}
+                    disabled={deactivating}
+                    className="shrink-0"
+                  >
+                    <Power size={14} />
+                    {deactivating ? 'Activating...' : 'Activate'}
+                  </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    setDeactivating(true);
-                    try {
-                      const res = await fetch(`/api/clients/${client.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ is_active: true }),
-                      });
-                      if (!res.ok) { toast.error('Failed to reactivate'); return; }
-                      setIsActive(true);
-                      toast.success(`${client.name} reactivated`);
-                    } catch { toast.error('Something went wrong'); }
-                    finally { setDeactivating(false); }
-                  }}
-                  disabled={deactivating}
-                  className="shrink-0"
-                >
-                  <Power size={14} />
-                  {deactivating ? 'Activating...' : 'Activate'}
-                </Button>
-              </div>
+
+                {/* Hard delete (only shown when deactivated) */}
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-red-500/20 bg-red-500/[0.04] px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-red-400">Permanently delete client</p>
+                    <p className="text-xs text-text-muted">Remove all data including searches, ideas, and settings. This cannot be undone.</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="shrink-0 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                  >
+                    <Trash2 size={14} />
+                    Delete
+                  </Button>
+                </div>
+              </>
             )}
           </div>
         </div>

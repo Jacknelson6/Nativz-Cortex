@@ -11,16 +11,17 @@ export default async function AdminClientsPage() {
   try {
     const [vaultClients, dbClients] = await Promise.all([
       getVaultClients(),
-      // Fetch industry + is_active from DB
+      // Fetch industry, is_active, logo_url from DB
       createAdminClient()
         .from('clients')
-        .select('slug, industry, is_active')
+        .select('slug, industry, is_active, logo_url')
         .then(({ data }) => {
-          const map = new Map<string, { industry: string; isActive: boolean }>();
+          const map = new Map<string, { industry: string; isActive: boolean; logoUrl: string | null }>();
           for (const c of data ?? []) {
             map.set(c.slug, {
               industry: c.industry && c.industry !== 'General' ? c.industry : '',
               isActive: c.is_active ?? true,
+              logoUrl: c.logo_url ?? null,
             });
           }
           return map;
@@ -34,6 +35,7 @@ export default async function AdminClientsPage() {
         ...c,
         industry: db?.industry || c.industry,
         isActive: db?.isActive ?? true,
+        logoUrl: db?.logoUrl ?? null,
       };
     });
 
