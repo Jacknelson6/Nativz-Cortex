@@ -365,8 +365,8 @@ export function ScheduleShootModal({ open, onClose, onCreated, shoot }: Schedule
                         isExcluded
                           ? 'border-red-500/20 bg-red-500/[0.04] text-red-400/50 cursor-not-allowed'
                           : isSelected
-                            ? 'border-accent/40 bg-accent/15 text-accent-text shadow-[0_0_12px_rgba(4,107,210,0.15)]'
-                            : 'border-nativz-border bg-surface text-text-muted hover:border-text-muted hover:text-text-secondary'
+                            ? 'border-accent/40 bg-accent/15 text-accent-text shadow-[0_0_12px_rgba(43,125,233,0.12)]'
+                            : 'border-white/[0.08] bg-surface text-text-muted hover:border-white/[0.12] hover:text-text-secondary'
                       }
                     `}
                   >

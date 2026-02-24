@@ -423,7 +423,7 @@ function ClientPickerModal({
                   onClick={() => onSelect(client.id)}
                   className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-3 text-left text-sm transition-all hover:scale-[1.02] active:scale-[0.98] ${
                     client.id === value
-                      ? 'border-accent/50 bg-accent-surface text-accent-text font-medium shadow-[0_0_12px_rgba(4,107,210,0.15)]'
+                      ? 'border-accent/50 bg-accent-surface text-accent-text font-medium shadow-[0_0_12px_rgba(43,125,233,0.12)]'
                       : 'border-white/[0.06] bg-white/[0.03] text-white/70 hover:border-white/[0.12] hover:bg-white/[0.06]'
                   }`}
                 >

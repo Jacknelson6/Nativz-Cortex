@@ -27,13 +27,13 @@ interface TrendLineProps {
 export function TrendLine({
   data,
   label = 'Value',
-  color = '#6366F1',
+  color = '#2b7de9',
   yAxisDomain,
   formatValue,
 }: TrendLineProps) {
   if (!data || data.length === 0) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-gray-400">
+      <div className="flex h-64 items-center justify-center text-sm text-text-muted">
         No trend data available
       </div>
     );
@@ -54,17 +54,17 @@ export function TrendLine({
               <stop offset="95%" stopColor={color} stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
           <XAxis
             dataKey="date"
-            tick={{ fill: '#9CA3AF', fontSize: 11 }}
+            tick={{ fill: '#5b6478', fontSize: 11 }}
             tickLine={false}
-            axisLine={{ stroke: '#E5E7EB' }}
+            axisLine={{ stroke: 'rgba(255,255,255,0.06)' }}
             dy={8}
           />
           <YAxis
             domain={yAxisDomain}
-            tick={{ fill: '#9CA3AF', fontSize: 11 }}
+            tick={{ fill: '#5b6478', fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             width={48}
@@ -72,13 +72,14 @@ export function TrendLine({
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: '#fff',
-              border: '1px solid #E5E7EB',
+              backgroundColor: '#181d2e',
+              border: '1px solid rgba(255,255,255,0.08)',
               borderRadius: '8px',
               fontSize: '13px',
-              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              color: '#eef1f6',
             }}
-            labelStyle={{ color: '#374151', fontWeight: 600, marginBottom: 4 }}
+            labelStyle={{ color: '#eef1f6', fontWeight: 600, marginBottom: 4 }}
             formatter={(value: number | undefined) => [
               value !== undefined
                 ? (formatValue ? formatValue(value) : value.toLocaleString())
@@ -101,7 +102,7 @@ export function TrendLine({
             activeDot={{
               r: 5,
               fill: color,
-              stroke: '#fff',
+              stroke: '#111520',
               strokeWidth: 2,
             }}
           />

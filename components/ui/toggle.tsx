@@ -18,11 +18,11 @@ export function Toggle({ checked, onChange, label, description, disabled = false
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed ${
-          checked ? 'bg-accent' : 'bg-nativz-border'
+          checked ? 'bg-accent' : 'bg-white/[0.10]'
         }`}
       >
         <span
-          className={`pointer-events-none inline-block h-4.5 w-4.5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+          className={`pointer-events-none inline-block h-4.5 w-4.5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.3)] transition-all duration-200 ${
             checked ? 'translate-x-5.5' : 'translate-x-0.5'
           }`}
         />

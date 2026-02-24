@@ -43,14 +43,14 @@ export function Dialog({ open, onClose, title, children, maxWidth = 'md' }: Dial
       ref={dialogRef}
       onClose={onClose}
       onClick={handleBackdropClick}
-      className={`${maxWidthStyles[maxWidth]} w-full m-auto rounded-xl border border-nativz-border bg-surface p-0 shadow-elevated backdrop:bg-black/60`}
+      className={`${maxWidthStyles[maxWidth]} w-full m-auto rounded-xl border border-white/[0.08] bg-surface-elevated p-0 shadow-elevated backdrop:bg-black/60 backdrop:backdrop-blur-sm`}
     >
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
           <button
             onClick={onClose}
-            className="cursor-pointer rounded-lg p-1 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
+            className="cursor-pointer rounded-md p-1.5 text-text-muted hover:bg-white/[0.06] hover:text-text-secondary transition-colors"
             aria-label="Close dialog"
           >
             <X size={20} />

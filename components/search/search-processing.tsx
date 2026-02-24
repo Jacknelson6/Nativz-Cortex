@@ -135,12 +135,12 @@ export function SearchProcessing({ searchId, query, redirectPrefix }: SearchProc
         </div>
 
         {/* Progress bar */}
-        <div className="h-2 rounded-full bg-surface-hover overflow-hidden">
+        <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-300 ease-out"
             style={{
               width: `${progress}%`,
-              background: 'linear-gradient(90deg, #046BD2, #8B5CF6)',
+              background: 'linear-gradient(90deg, #2b7de9, #8B5CF6)',
             }}
           />
         </div>

@@ -11,11 +11,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantStyles: Record<Variant, string> = {
-  primary: 'btn-shimmer bg-gradient-to-br from-accent to-[#0580f0] text-white shadow-md',
-  secondary: 'bg-surface-hover text-text-primary hover:bg-nativz-border',
-  outline: 'border border-nativz-border text-text-secondary hover:bg-surface-hover',
-  ghost: 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
-  danger: 'bg-red-600 text-white hover:bg-red-700',
+  primary: 'bg-accent text-white shadow-[0_0_0_1px_rgba(43,125,233,0.5)] hover:bg-accent-hover active:scale-[0.98]',
+  secondary: 'bg-white/[0.06] text-text-secondary hover:bg-white/[0.10] hover:text-text-primary',
+  outline: 'border border-white/[0.10] text-text-secondary hover:bg-white/[0.04] hover:text-text-primary hover:border-white/[0.15]',
+  ghost: 'text-text-secondary hover:bg-white/[0.06] hover:text-text-primary',
+  danger: 'bg-red-500/12 text-red-400 border border-red-500/20 hover:bg-red-500/20',
 };
 
 const sizeStyles: Record<Size, string> = {
@@ -34,7 +34,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
-        className={`inline-flex items-center justify-center gap-2 font-medium cursor-pointer transition-all duration-150 hover:scale-[1.02] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:pointer-events-none ${shapeStyles[shape]} ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
+        className={`inline-flex items-center justify-center gap-2 font-medium cursor-pointer transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:pointer-events-none ${shapeStyles[shape]} ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
         disabled={disabled}
         {...props}
       >

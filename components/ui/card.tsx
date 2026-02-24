@@ -16,7 +16,7 @@ const paddingStyles = {
 export function Card({ padding = 'md', interactive = false, elevated = false, className = '', children, ...props }: CardProps) {
   return (
     <div
-      className={`bg-surface rounded-xl border border-nativz-border ${elevated ? 'shadow-elevated' : 'shadow-card'} ${paddingStyles[padding]} ${interactive ? 'cursor-pointer transition-all duration-200 hover:shadow-card-hover hover:border-accent/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.995]' : ''} ${className}`}
+      className={`bg-surface rounded-xl border border-white/[0.06] ${elevated ? 'shadow-card' : 'shadow-xs'} ${paddingStyles[padding]} ${interactive ? 'cursor-pointer transition-all duration-200 hover:bg-white/[0.02] hover:border-white/[0.10] hover:-translate-y-px active:translate-y-0' : ''} ${className}`}
       {...props}
     >
       {children}

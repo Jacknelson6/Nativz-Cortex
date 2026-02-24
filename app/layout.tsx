@@ -22,7 +22,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta name="theme-color" content="#0f1117" />
+        <meta name="theme-color" content="#0a0d14" />
       </head>
       <body className={`${jakarta.variable} antialiased`}>
         {children}

@@ -1,51 +1,99 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0f1117;
-  --foreground: #f1f5f9;
-  --surface: #1a1d2e;
-  --surface-hover: #222640;
-  --border: #2a2f45;
-  --border-light: #1f2337;
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --accent: #046bd2;
-  --accent-hover: #0580f0;
-  --accent-surface: rgba(4, 107, 210, 0.12);
-  --accent-text: #5ba3e6;
+  /* ── Background layers (depth through lightness) ── */
+  --background: #0a0d14;
+  --foreground: #eef1f6;
+  --surface: #111520;
+  --surface-elevated: #181d2e;
+  --surface-hover: rgba(255, 255, 255, 0.04);
+  --surface-active: rgba(255, 255, 255, 0.07);
 
-  /* Shadow depth tokens */
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
-  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0, 0, 0, 0.3);
-  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 1px rgba(0, 0, 0, 0.3);
+  /* ── Borders (white-at-low-opacity — adapts to any surface) ── */
+  --border: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.05);
+  --border-interactive: rgba(255, 255, 255, 0.12);
 
-  /* Timing tokens */
+  /* ── Text hierarchy ── */
+  --text-primary: #eef1f6;
+  --text-secondary: #8b95a9;
+  --text-muted: #5b6478;
+  --text-disabled: #3e4555;
+
+  /* ── Accent ── */
+  --accent: #2b7de9;
+  --accent-hover: #4a94f0;
+  --accent-surface: rgba(43, 125, 233, 0.10);
+  --accent-text: #6aadfa;
+  --accent-border: rgba(43, 125, 233, 0.30);
+
+  /* ── Purple accent ── */
+  --purple: #8b5cf6;
+  --purple-surface: rgba(139, 92, 246, 0.10);
+  --purple-text: #a78bfa;
+
+  /* ── Status colors ── */
+  --success: #34d399;
+  --success-surface: rgba(52, 211, 153, 0.10);
+  --success-text: #6ee7b7;
+  --success-border: rgba(52, 211, 153, 0.20);
+
+  --warning: #fbbf24;
+  --warning-surface: rgba(251, 191, 36, 0.10);
+  --warning-text: #fde68a;
+  --warning-border: rgba(251, 191, 36, 0.20);
+
+  --danger: #f43f5e;
+  --danger-surface: rgba(244, 63, 94, 0.10);
+  --danger-text: #fda4af;
+  --danger-border: rgba(244, 63, 94, 0.20);
+
+  /* ── Shadow depth tokens ── */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-elevated: 0 8px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-dropdown: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-glow-accent: 0 0 20px rgba(43, 125, 233, 0.20);
+  --shadow-glow-accent-strong: 0 0 30px rgba(43, 125, 233, 0.35);
+
+  /* ── Timing tokens ── */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --duration-fast: 150ms;
-  --duration-normal: 250ms;
-  --duration-slow: 400ms;
+  --duration-normal: 200ms;
+  --duration-slow: 350ms;
+
+  /* ── Radii ── */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
   --color-surface-hover: var(--surface-hover);
+  --color-surface-active: var(--surface-active);
   --color-nativz-border: var(--border);
   --color-nativz-border-light: var(--border-light);
+  --color-nativz-border-interactive: var(--border-interactive);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
+  --color-text-disabled: var(--text-disabled);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-surface: var(--accent-surface);
   --color-accent-text: var(--accent-text);
+  --color-accent-border: var(--accent-border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
+  --shadow-xs: var(--shadow-xs);
   --shadow-card: var(--shadow-card);
   --shadow-card-hover: var(--shadow-card-hover);
   --shadow-elevated: var(--shadow-elevated);
@@ -55,56 +103,58 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar styling */
+/* ── Scrollbar ── */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #334155 transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
 }
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: rgba(255, 255, 255, 0.10);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: rgba(255, 255, 255, 0.18);
 }
 
-/* Focus-visible for keyboard navigation */
+/* ── Focus-visible ── */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-/* Smooth chart fade-in */
+/* ── Animations ── */
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-fade-in {
-  animation: fadeIn 0.4s ease-out forwards;
+  animation: fadeIn 0.35s ease-out forwards;
 }
 
-/* Fade + slide in from below for progressive reveal */
 @keyframes fadeSlideIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-fade-slide-in {
-  animation: fadeSlideIn 0.4s var(--ease-out-expo) forwards;
+  animation: fadeSlideIn 0.35s var(--ease-out-expo) forwards;
 }
 
-/* Stagger fade-in for list items (Pattern #4) */
 @keyframes staggerFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-stagger-in {
@@ -112,9 +162,8 @@ body {
   animation: staggerFadeIn var(--duration-slow) var(--ease-out-expo) forwards;
 }
 
-/* Expand-in for topic row expansion (Pattern #10) */
 @keyframes expandIn {
-  from { opacity: 0; max-height: 0; transform: scaleY(0.95); }
+  from { opacity: 0; max-height: 0; transform: scaleY(0.97); }
   to { opacity: 1; max-height: 2000px; transform: scaleY(1); }
 }
 .animate-expand-in {
@@ -123,38 +172,34 @@ body {
   overflow: hidden;
 }
 
-/* Tooltip card entrance */
 @keyframes tooltipIn {
-  from { opacity: 0; transform: translateY(4px) scale(0.96); }
+  from { opacity: 0; transform: translateY(4px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .animate-tooltip-in {
   animation: tooltipIn var(--duration-fast) var(--ease-out-expo) forwards;
 }
 
-/* Pulse glow for processing state */
 @keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 8px rgba(4, 107, 210, 0.3); }
-  50% { box-shadow: 0 0 20px rgba(4, 107, 210, 0.6); }
+  0%, 100% { box-shadow: 0 0 8px rgba(43, 125, 233, 0.25); }
+  50% { box-shadow: 0 0 24px rgba(43, 125, 233, 0.5); }
 }
 .animate-pulse-glow {
   animation: pulseGlow 2s ease-in-out infinite;
 }
 
-/* Text flip vertical rotation */
 @keyframes textFlipUp {
   0% { transform: translateY(0); }
   100% { transform: translateY(-100%); }
 }
 
-/* Encrypt reveal character scramble */
 @keyframes encryptReveal {
   0% { opacity: 0.4; }
   50% { opacity: 0.7; }
   100% { opacity: 1; }
 }
 
-/* Dialog animations */
+/* ── Dialog animations ── */
 dialog[open] {
   animation: dialogIn 0.2s var(--ease-out-expo);
 }
@@ -170,24 +215,21 @@ dialog::backdrop {
   to { opacity: 1; }
 }
 
-/* Modal pop-in: overshoot scale then settle */
 @keyframes modalPopIn {
-  0% { opacity: 0; transform: scale(0.85); }
-  50% { opacity: 1; transform: scale(1.03); }
+  0% { opacity: 0; transform: scale(0.9); }
+  60% { opacity: 1; transform: scale(1.02); }
   100% { opacity: 1; transform: scale(1); }
 }
 .animate-modal-pop-in {
-  animation: modalPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: modalPopIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-/* Dialog close animation */
 dialog:not([open]) {
   opacity: 0;
   transform: scale(0.97);
   transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease, display var(--duration-fast) allow-discrete;
 }
 
-/* Shake animation for invalid form submit */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   20% { transform: translateX(-4px); }
@@ -199,7 +241,7 @@ dialog:not([open]) {
   animation: shake 0.4s ease-in-out;
 }
 
-/* Blurred gradient edge masks (Pattern #29) */
+/* ── Edge masks ── */
 .fade-edge-bottom {
   -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
   mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
@@ -209,7 +251,7 @@ dialog:not([open]) {
   mask-image: linear-gradient(to right, black 70%, transparent 100%);
 }
 
-/* Prevent layout shift from font weight (Pattern #32) */
+/* ── Nav stable width ── */
 .nav-item-stable {
   position: relative;
 }
@@ -222,7 +264,7 @@ dialog:not([open]) {
   overflow: hidden;
 }
 
-/* Dynamic visual guideline for table rows (Pattern #36) */
+/* ── Table row guideline ── */
 .table-row-guideline {
   border-bottom: 1px solid var(--border-light);
   transition: border-color var(--duration-fast) ease;
@@ -231,7 +273,7 @@ dialog:not([open]) {
   border-bottom-color: transparent;
 }
 
-/* Glowing button effect (Aceternity-inspired) */
+/* ── Glowing button (Aceternity conic gradient) ── */
 @property --glow-angle {
   syntax: '<angle>';
   initial-value: 0deg;
@@ -255,11 +297,11 @@ dialog:not([open]) {
   border-radius: inherit;
   background: conic-gradient(
     from var(--glow-angle),
-    rgba(4, 107, 210, 0.9),
+    rgba(43, 125, 233, 0.9),
     rgba(139, 92, 246, 0.7),
-    rgba(4, 107, 210, 0.9),
+    rgba(43, 125, 233, 0.9),
     rgba(139, 92, 246, 0.7),
-    rgba(4, 107, 210, 0.9)
+    rgba(43, 125, 233, 0.9)
   );
   animation: glowRotate 3s linear infinite;
 }
@@ -272,13 +314,13 @@ dialog:not([open]) {
 .glow-btn::after {
   inset: -3px;
   z-index: -2;
-  filter: blur(10px);
-  opacity: 0.5;
+  filter: blur(12px);
+  opacity: 0.4;
   transition: opacity 0.3s ease;
 }
 
 .glow-btn:hover::after {
-  opacity: 0.8;
+  opacity: 0.7;
 }
 
 .glow-btn:active {
@@ -286,7 +328,7 @@ dialog:not([open]) {
 }
 
 .glow-btn:disabled::after {
-  opacity: 0.15;
+  opacity: 0.1;
 }
 
 .glow-btn-inner {
@@ -300,7 +342,7 @@ dialog:not([open]) {
   padding: 0.5rem 1rem;
 }
 
-/* Shimmer sweep hover effect for CTA buttons */
+/* ── Shimmer sweep for CTA buttons ── */
 @keyframes shimmerSweep {
   0% { transform: translateX(-100%) skewX(-15deg); }
   100% { transform: translateX(200%) skewX(-15deg); }
@@ -319,9 +361,9 @@ dialog:not([open]) {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.12) 45%,
-    rgba(255, 255, 255, 0.2) 50%,
-    rgba(255, 255, 255, 0.12) 55%,
+    rgba(255, 255, 255, 0.10) 45%,
+    rgba(255, 255, 255, 0.16) 50%,
+    rgba(255, 255, 255, 0.10) 55%,
     transparent 100%
   );
   transform: translateX(-100%) skewX(-15deg);
@@ -333,35 +375,56 @@ dialog:not([open]) {
 }
 
 .btn-shimmer:hover {
-  box-shadow: 0 0 20px rgba(4, 107, 210, 0.4), 0 0 40px rgba(4, 107, 210, 0.15);
+  box-shadow: var(--shadow-glow-accent);
 }
 
 .btn-shimmer:active {
-  box-shadow: 0 0 24px rgba(4, 107, 210, 0.5), 0 0 48px rgba(4, 107, 210, 0.2);
+  box-shadow: var(--shadow-glow-accent-strong);
 }
 
-/* Easter egg animations */
+/* ── Skeleton shimmer ── */
+@keyframes skeletonShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+}
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.04) 50%,
+    transparent 100%
+  );
+  animation: skeletonShimmer 2s infinite;
+}
+
+/* ── Easter egg animations ── */
 @keyframes confetti {
   0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
   100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
 }
-
 @keyframes bounceIn {
   0% { transform: scale(0.3); opacity: 0; }
   50% { transform: scale(1.05); }
   70% { transform: scale(0.95); }
   100% { transform: scale(1); opacity: 1; }
 }
-
 .animate-confetti {
   animation: confetti 3s ease-out forwards;
 }
-
 .animate-bounce-in {
   animation: bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55) forwards;
 }
 
-/* Reduced motion (Pattern #9) */
+/* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

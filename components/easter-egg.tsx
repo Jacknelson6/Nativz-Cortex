@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
-const COLORS = ['#046BD2', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899'];
+const COLORS = ['#2b7de9', '#8B5CF6', '#34d399', '#fbbf24', '#f43f5e', '#EC4899'];
 
 export function EasterEgg() {
   const index = useRef(0);

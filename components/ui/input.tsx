@@ -19,7 +19,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           id={id}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
-          className={`block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)] disabled:bg-surface-hover disabled:text-text-muted ${error ? 'border-red-500' : ''} ${className}`}
+          className={`block w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-text-primary placeholder-text-muted transition-colors hover:border-white/[0.12] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30 focus:shadow-[0_0_0_3px_rgba(43,125,233,0.12)] disabled:bg-surface-hover disabled:text-text-muted ${error ? 'border-red-500' : ''} ${className}`}
           {...props}
         />
         {error && <p id={`${id}-error`} className="text-sm text-red-400">{error}</p>}
@@ -49,7 +49,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={id}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
-          className={`block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)] disabled:bg-surface-hover ${error ? 'border-red-500' : ''} ${className}`}
+          className={`block w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-text-primary placeholder-text-muted transition-colors hover:border-white/[0.12] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30 focus:shadow-[0_0_0_3px_rgba(43,125,233,0.12)] disabled:bg-surface-hover ${error ? 'border-red-500' : ''} ${className}`}
           {...props}
         />
         {error && <p id={`${id}-error`} className="text-sm text-red-400">{error}</p>}

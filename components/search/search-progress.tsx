@@ -55,9 +55,9 @@ export function SearchProgress({ complete = false }: SearchProgressProps) {
   return (
     <div className="w-full max-w-md mx-auto">
       {/* Progress bar */}
-      <div className="h-1.5 w-full rounded-full bg-surface-hover overflow-hidden animate-pulse-glow">
+      <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden animate-pulse-glow">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-accent to-[#0580f0] transition-all duration-700 ease-out"
+          className="h-full rounded-full bg-gradient-to-r from-accent to-accent-hover transition-all duration-700 ease-out"
           style={{ width: `${complete ? 100 : progress}%` }}
         />
       </div>

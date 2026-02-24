@@ -5,20 +5,20 @@ import type { ClientStrategy } from '@/lib/types/strategy';
 import { NATIVZ_LOGO_PNG } from '@/lib/brand-logo';
 
 const colors = {
-  primary: '#046BD2',
+  primary: '#2b7de9',
   purple: '#8B5CF6',
-  bg: '#0f1117',
-  surface: '#1a1d2e',
-  border: '#2a2f45',
-  text: '#f1f5f9',
-  textSecondary: '#94a3b8',
-  textMuted: '#64748b',
-  accent: '#046BD2',
-  success: '#10B981',
-  warning: '#F59E0B',
-  danger: '#EF4444',
+  bg: '#0a0d14',
+  surface: '#111520',
+  border: 'rgba(255,255,255,0.08)',
+  text: '#eef1f6',
+  textSecondary: '#8b95a9',
+  textMuted: '#5b6478',
+  accent: '#2b7de9',
+  success: '#34d399',
+  warning: '#fbbf24',
+  danger: '#f43f5e',
   white: '#ffffff',
-  darkBg: '#0a0c14',
+  darkBg: '#080a10',
 };
 
 const styles = StyleSheet.create({
