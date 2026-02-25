@@ -26,18 +26,10 @@ export function HistoryFilters({ clients }: HistoryFiltersProps) {
     ...clients.map((c) => ({ value: c.id, label: c.name })),
   ];
 
-  const statusOptions = [
-    { value: 'all', label: 'All statuses' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'processing', label: 'Processing' },
-    { value: 'pending', label: 'Pending' },
-    { value: 'failed', label: 'Failed' },
-  ];
-
-  const approvalOptions = [
-    { value: 'all', label: 'All' },
-    { value: 'approved', label: 'Sent' },
-    { value: 'pending', label: 'Not sent' },
+  const typeOptions = [
+    { value: 'all', label: 'All types' },
+    { value: 'client_strategy', label: 'Brand' },
+    { value: 'general', label: 'Topic' },
   ];
 
   return (
@@ -53,20 +45,11 @@ export function HistoryFilters({ clients }: HistoryFiltersProps) {
       </div>
       <div className="w-40">
         <Select
-          id="filter-status"
-          label="Status"
-          options={statusOptions}
-          value={searchParams.get('status') || 'all'}
-          onChange={(e) => updateParam('status', e.target.value)}
-        />
-      </div>
-      <div className="w-40">
-        <Select
-          id="filter-approval"
-          label="Approval"
-          options={approvalOptions}
-          value={searchParams.get('approval') || 'all'}
-          onChange={(e) => updateParam('approval', e.target.value)}
+          id="filter-type"
+          label="Type"
+          options={typeOptions}
+          value={searchParams.get('type') || 'all'}
+          onChange={(e) => updateParam('type', e.target.value)}
         />
       </div>
     </div>
