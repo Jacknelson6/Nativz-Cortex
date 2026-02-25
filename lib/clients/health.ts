@@ -1,98 +1,151 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 
+export type HealthLabel = 'Healthy' | 'Good' | 'Needs Attention' | 'At Risk' | 'Critical' | 'New';
+
 export interface HealthBreakdown {
-  searchFrequency: number;    // 0-20
-  shootActivity: number;      // 0-15
-  moodboardActivity: number;  // 0-10
-  recency: number;            // -20 to +20 (bonus/penalty)
-  contentOutput: number;      // 0-10
+  shootStatus: number;        // 0-50
+  contentActivity: number;    // 0-30
+  recency: number;            // 0-20
 }
 
 export interface ClientHealth {
   score: number;              // 0-100
-  isNew: boolean;             // true if client has zero data
+  label: HealthLabel;
+  isNew: boolean;
   breakdown: HealthBreakdown;
   lastActivityAt: string | null;
 }
 
+export function getHealthLabel(score: number, isNew: boolean): HealthLabel {
+  if (isNew) return 'New';
+  if (score >= 80) return 'Healthy';
+  if (score >= 60) return 'Good';
+  if (score >= 40) return 'Needs Attention';
+  if (score >= 20) return 'At Risk';
+  return 'Critical';
+}
+
+export function getHealthColor(label: HealthLabel) {
+  switch (label) {
+    case 'Healthy':         return { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30', ring: 'stroke-emerald-400' };
+    case 'Good':            return { bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/30', ring: 'stroke-blue-400' };
+    case 'Needs Attention': return { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/30', ring: 'stroke-amber-400' };
+    case 'At Risk':         return { bg: 'bg-orange-500/15', text: 'text-orange-400', border: 'border-orange-500/30', ring: 'stroke-orange-400' };
+    case 'Critical':        return { bg: 'bg-red-500/15', text: 'text-red-400', border: 'border-red-500/30', ring: 'stroke-red-400' };
+    case 'New':             return { bg: 'bg-zinc-500/15', text: 'text-zinc-400', border: 'border-zinc-500/30', ring: 'stroke-zinc-400' };
+  }
+}
+
 /**
- * Calculate a health score (0-100) for a client based on recent activity.
- * Base score of 50 for all active clients (neutral starting point).
- * If a client has zero data at all, mark as "new".
+ * Calculate a health score (0-100) for a client based on real business indicators.
+ *
+ * Shoot Status (50 pts) — Content Activity (30 pts) — Recency (20 pts)
  */
 export async function calculateClientHealth(clientId: string): Promise<ClientHealth> {
   const supabase = createAdminClient();
   const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
+  const dayOfMonth = now.getDate();
 
-  const [searches, shoots, moodboards, ideas] = await Promise.all([
+  // Date boundaries
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const thisMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+  const nextMonthEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59).toISOString();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [shootsThisMonth, shootsNextMonth, searches, moodboards, ideas] = await Promise.all([
+    supabase
+      .from('shoots')
+      .select('shoot_date, status')
+      .eq('client_id', clientId)
+      .gte('shoot_date', thisMonthStart)
+      .lte('shoot_date', thisMonthEnd),
+    supabase
+      .from('shoots')
+      .select('shoot_date')
+      .eq('client_id', clientId)
+      .gte('shoot_date', nextMonthStart)
+      .lte('shoot_date', nextMonthEnd),
     supabase
       .from('topic_searches')
       .select('created_at')
       .eq('client_id', clientId)
-      .gte('created_at', ninetyDaysAgo)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('shoot_events')
-      .select('shoot_date')
-      .eq('client_id', clientId)
-      .gte('shoot_date', ninetyDaysAgo)
-      .order('shoot_date', { ascending: false }),
+      .gte('created_at', thirtyDaysAgo),
     supabase
       .from('moodboard_boards')
-      .select('created_at, updated_at')
+      .select('updated_at')
       .eq('client_id', clientId)
-      .order('updated_at', { ascending: false }),
+      .gte('updated_at', thirtyDaysAgo),
     supabase
-      .from('idea_submissions')
+      .from('ideas')
       .select('created_at')
       .eq('client_id', clientId)
-      .gte('created_at', ninetyDaysAgo)
-      .order('created_at', { ascending: false }),
+      .gte('created_at', thirtyDaysAgo),
   ]);
 
+  const thisMonthShoots = shootsThisMonth.data ?? [];
+  const nextMonthShoots = shootsNextMonth.data ?? [];
   const searchList = searches.data ?? [];
-  const shootList = shoots.data ?? [];
   const moodboardList = moodboards.data ?? [];
   const ideaList = ideas.data ?? [];
 
   // Check if client has any data at all
-  const totalItems = searchList.length + shootList.length + moodboardList.length + ideaList.length;
+  const totalItems = thisMonthShoots.length + nextMonthShoots.length + searchList.length + moodboardList.length + ideaList.length;
   const isNew = totalItems === 0;
 
   if (isNew) {
-    return {
-      score: 0,
-      isNew: true,
-      breakdown: { searchFrequency: 0, shootActivity: 0, moodboardActivity: 0, recency: 0, contentOutput: 0 },
-      lastActivityAt: null,
-    };
+    // Also check if they have ANY historical data
+    const [historicShoots, historicSearches] = await Promise.all([
+      supabase.from('shoots').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
+      supabase.from('topic_searches').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
+    ]);
+    const hasAnyData = ((historicShoots.count ?? 0) + (historicSearches.count ?? 0)) > 0;
+    if (!hasAnyData) {
+      return {
+        score: 0,
+        label: 'New',
+        isNew: true,
+        breakdown: { shootStatus: 0, contentActivity: 0, recency: 0 },
+        lastActivityAt: null,
+      };
+    }
   }
 
-  // BASE SCORE: 50
-  const BASE = 50;
+  // --- SHOOT STATUS (0-50) ---
+  const hasCompletedShoot = thisMonthShoots.some(
+    (s) => s.status === 'completed' || new Date(s.shoot_date) < now,
+  );
+  const hasUpcomingShootThisMonth = thisMonthShoots.some(
+    (s) => new Date(s.shoot_date) >= now,
+  );
+  const hasShootNextMonth = (nextMonthShoots.length ?? 0) > 0;
 
-  // --- Search frequency (0-20): 4+ searches in 30 days = max ---
-  const recentSearches = searchList.filter(
-    (s) => new Date(s.created_at) >= new Date(thirtyDaysAgo),
-  ).length;
-  const searchFrequency = Math.min(20, Math.round((recentSearches / 4) * 20));
+  let shootStatus = 0;
+  if (hasCompletedShoot) {
+    shootStatus = 50;
+  } else if (hasUpcomingShootThisMonth) {
+    shootStatus = 40;
+  } else if (hasShootNextMonth) {
+    shootStatus = 25;
+  } else if (dayOfMonth <= 15) {
+    shootStatus = 20; // grace period
+  } else if (dayOfMonth <= 20) {
+    shootStatus = 5;
+  } else {
+    shootStatus = 0;
+  }
 
-  // --- Shoot activity (0-15): 3+ shoots in 90 days = max ---
-  const shootActivity = Math.min(15, Math.round((shootList.length / 3) * 15));
+  // --- CONTENT ACTIVITY (0-30) ---
+  let contentActivity = 0;
+  if (searchList.length > 0) contentActivity += 15;
+  if (moodboardList.length > 0) contentActivity += 10;
+  if (ideaList.length > 0) contentActivity += 5;
 
-  // --- Moodboard activity (0-10): any moodboard updated in last 30 days ---
-  const recentMoodboards = moodboardList.filter(
-    (m) => new Date(m.updated_at ?? m.created_at) >= new Date(thirtyDaysAgo),
-  ).length;
-  const moodboardActivity = Math.min(10, Math.round((recentMoodboards / 2) * 10));
-
-  // --- Recency bonus/penalty (-20 to +20) ---
+  // --- RECENCY (0-20) ---
   const allDates = [
+    ...thisMonthShoots.map((s) => s.shoot_date),
     ...searchList.map((s) => s.created_at),
-    ...shootList.map((s) => s.shoot_date),
-    ...moodboardList.map((m) => m.updated_at ?? m.created_at),
+    ...moodboardList.map((m) => m.updated_at),
     ...ideaList.map((i) => i.created_at),
   ].filter(Boolean);
 
@@ -103,30 +156,18 @@ export async function calculateClientHealth(clientId: string): Promise<ClientHea
   let recency = 0;
   if (lastActivityAt) {
     const daysSince = (now.getTime() - new Date(lastActivityAt).getTime()) / (1000 * 60 * 60 * 24);
-    if (daysSince <= 3) recency = 20;
-    else if (daysSince <= 7) recency = 15;
-    else if (daysSince <= 14) recency = 10;
-    else if (daysSince <= 30) recency = 5;
-    else if (daysSince <= 60) recency = -5;
-    else if (daysSince <= 90) recency = -10;
-    else recency = -20;
+    if (daysSince <= 7) recency = 20;
+    else if (daysSince <= 14) recency = 15;
+    else if (daysSince <= 30) recency = 10;
+    else if (daysSince <= 60) recency = 5;
+    else recency = 0;
   }
 
-  // --- Content output (0-10): 5+ ideas in 90 days = max ---
-  const contentOutput = Math.min(10, Math.round((ideaList.length / 5) * 10));
+  const breakdown: HealthBreakdown = { shootStatus, contentActivity, recency };
+  const score = Math.max(0, Math.min(100, shootStatus + contentActivity + recency));
+  const label = getHealthLabel(score, false);
 
-  const breakdown: HealthBreakdown = {
-    searchFrequency,
-    shootActivity,
-    moodboardActivity,
-    recency,
-    contentOutput,
-  };
-
-  const raw = BASE + searchFrequency + shootActivity + moodboardActivity + recency + contentOutput;
-  const score = Math.max(0, Math.min(100, raw));
-
-  return { score, isNew: false, breakdown, lastActivityAt };
+  return { score, label, isNew: false, breakdown, lastActivityAt };
 }
 
 /**
