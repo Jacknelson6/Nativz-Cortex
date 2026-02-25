@@ -2,11 +2,24 @@
 
 interface HealthBadgeProps {
   score: number;
+  isNew?: boolean;
   size?: 'sm' | 'md';
   className?: string;
 }
 
-export function HealthBadge({ score, size = 'sm', className }: HealthBadgeProps) {
+export function HealthBadge({ score, isNew, size = 'sm', className }: HealthBadgeProps) {
+  if (isNew) {
+    return (
+      <span
+        className={`inline-flex items-center justify-center rounded-full border font-semibold border-blue-500/30 bg-blue-500/15 text-blue-400 ${
+          size === 'sm' ? 'text-[10px] px-1.5 py-0' : 'text-xs px-2 py-0.5'
+        } ${className || ''}`}
+      >
+        New
+      </span>
+    );
+  }
+
   const color =
     score >= 80
       ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'

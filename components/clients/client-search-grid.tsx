@@ -6,6 +6,7 @@ import { Building2, Search, UserX, LayoutGrid, List, ArrowUpDown } from 'lucide-
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { HealthBadge } from '@/components/clients/health-badge';
+import { AgencyBadge } from '@/components/clients/agency-badge';
 import { formatRelativeTime } from '@/lib/utils/format';
 
 interface ClientItem {
@@ -18,6 +19,7 @@ interface ClientItem {
   isActive?: boolean;
   logoUrl?: string | null;
   healthScore?: number;
+  healthIsNew?: boolean;
   lastActivityAt?: string | null;
 }
 
@@ -63,7 +65,7 @@ function ClientCard({ client, i, dimmed, listView }: { client: ClientItem; i: nu
             </div>
           </div>
           <span className="text-xs text-text-muted shrink-0 hidden sm:block">{client.industry || 'General'}</span>
-          {client.agency && <Badge className="text-[10px] px-1.5 py-0 shrink-0 hidden md:inline-flex">{client.agency === 'Anderson Collaborative' ? 'AC' : client.agency}</Badge>}
+          <AgencyBadge agency={client.agency} className="shrink-0 hidden md:inline-flex" />
           {client.lastActivityAt && (
             <span className="text-xs text-text-muted shrink-0 hidden lg:block">{formatRelativeTime(client.lastActivityAt)}</span>
           )}
@@ -72,7 +74,7 @@ function ClientCard({ client, i, dimmed, listView }: { client: ClientItem; i: nu
               {client.services.map((s) => <Badge key={s} className="text-[10px] px-1.5 py-0">{s}</Badge>)}
             </div>
           )}
-          {typeof client.healthScore === 'number' && <HealthBadge score={client.healthScore} />}
+          {typeof client.healthScore === 'number' && <HealthBadge score={client.healthScore} isNew={client.healthIsNew} />}
         </div>
       </Link>
     );
@@ -94,11 +96,11 @@ function ClientCard({ client, i, dimmed, listView }: { client: ClientItem; i: nu
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-medium text-text-primary truncate">{client.name}</p>
             {client.abbreviation && <span className="shrink-0 text-[10px] font-medium text-text-muted">{client.abbreviation}</span>}
-            {typeof client.healthScore === 'number' && <HealthBadge score={client.healthScore} className="ml-auto" />}
+            {typeof client.healthScore === 'number' && <HealthBadge score={client.healthScore} isNew={client.healthIsNew} className="ml-auto" />}
           </div>
           <p className="text-xs text-text-muted">{client.industry || 'General'}</p>
           <div className="flex flex-wrap items-center gap-1 mt-1.5">
-            {client.agency && <Badge className="text-[10px] px-1.5 py-0">{client.agency === 'Anderson Collaborative' ? 'AC' : client.agency}</Badge>}
+            <AgencyBadge agency={client.agency} />
             {client.services.map((s) => <Badge key={s} className="text-[10px] px-1.5 py-0">{s}</Badge>)}
           </div>
           {client.lastActivityAt && (

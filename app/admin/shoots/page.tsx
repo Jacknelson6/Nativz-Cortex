@@ -28,6 +28,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { ScheduleShootModal } from '@/components/shoots/schedule-shoot-modal';
 import { IdeateShootModal } from '@/components/shoots/ideate-shoot-modal';
 import { BulkScheduleModal } from '@/components/shoots/bulk-schedule-modal';
+import { AgencyBadge } from '@/components/clients/agency-badge';
 import { toast } from 'sonner';
 
 // ---------------------------------------------------------------------------
@@ -615,9 +616,7 @@ export default function AdminShootsPage() {
                           >
                             <p className="text-sm font-medium text-text-secondary truncate">{item.clientName}</p>
                             <div className="flex items-center gap-2 mt-0.5">
-                              {item.agency && (
-                                <span className="text-xs text-text-muted">{item.agency}</span>
-                              )}
+                              <AgencyBadge agency={item.agency || undefined} />
                             </div>
                           </button>
                           {item.editingStatus && <Badge variant={editing.variant}>{editing.label}</Badge>}
@@ -742,9 +741,7 @@ function ShootListItem({
               )}
             </div>
             <div className="flex items-center gap-2 mt-0.5">
-              {item.agency && (
-                <span className="text-xs text-text-muted">{item.agency}</span>
-              )}
+              <AgencyBadge agency={item.agency || undefined} />
             </div>
           </button>
 
@@ -1024,9 +1021,7 @@ function ShootDetailPanel({
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-sm text-text-muted">{shoot.groupTitle}</span>
-                  {shoot.agency && (
-                    <Badge variant="default">{shoot.agency}</Badge>
-                  )}
+                  <AgencyBadge agency={shoot.agency || undefined} />
                 </div>
               </div>
             </div>

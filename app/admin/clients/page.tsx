@@ -54,6 +54,7 @@ export default async function AdminClientsPage() {
       return {
         ...c,
         healthScore: health?.score ?? 0,
+        healthIsNew: health?.isNew ?? false,
         lastActivityAt: health?.lastActivityAt ?? null,
       };
     });

@@ -14,6 +14,7 @@ import { ClientStrategyCard } from '@/components/clients/client-strategy-card';
 import { HealthScoreCard } from '@/components/clients/health-score-card';
 import { calculateClientHealth } from '@/lib/clients/health';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
+import { AgencyBadge } from '@/components/clients/agency-badge';
 import type { ClientStrategy } from '@/lib/types/strategy';
 
 export default async function AdminClientDetailPage({
@@ -152,6 +153,7 @@ export default async function AdminClientDetailPage({
                 {vaultProfile.abbreviation && (
                   <span className="shrink-0 text-xs font-medium text-text-muted">{vaultProfile.abbreviation}</span>
                 )}
+                <AgencyBadge agency={vaultProfile.agency} />
               </div>
               <p className="truncate text-sm text-text-muted">{vaultProfile.industry || 'General'}</p>
             </div>
@@ -191,7 +193,7 @@ export default async function AdminClientDetailPage({
         {/* Health score + Key metrics */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {health && (
-            <HealthScoreCard score={health.score} breakdown={health.breakdown} />
+            <HealthScoreCard score={health.score} isNew={health.isNew} breakdown={health.breakdown} />
           )}
           <Card>
             <h2 className="text-base font-semibold text-text-primary mb-4">Overview</h2>
