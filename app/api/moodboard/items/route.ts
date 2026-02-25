@@ -225,8 +225,72 @@ export async function POST(request: NextRequest) {
             authorName = oembed.author_name || null;
           }
         } catch { /* youtube oembed failed */ }
-      } else if (url.includes('instagram.com')) {
+      } else if (url.includes('instagram.com/reel') || url.includes('instagram.com/p/')) {
         detectedPlatform = 'instagram';
+        // Try Instagram oEmbed
+        try {
+          const oembedRes = await fetch(`https://api.instagram.com/oembed?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5000) });
+          if (oembedRes.ok) {
+            const oembed = await oembedRes.json();
+            quickTitle = quickTitle || oembed.title || null;
+            quickThumbnail = oembed.thumbnail_url || null;
+            authorName = oembed.author_name || null;
+          }
+        } catch { /* instagram oembed failed */ }
+
+        // Fallback: HTML scrape for og tags
+        if (!quickThumbnail) {
+          try {
+            const res = await fetch(url, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml',
+                'Accept-Language': 'en-US,en;q=0.9',
+              },
+              redirect: 'follow',
+              signal: AbortSignal.timeout(5000),
+            });
+            if (res.ok) {
+              const html = await res.text();
+              const $ = cheerio.load(html);
+              quickThumbnail = quickThumbnail || $('meta[property="og:image"]').attr('content') || null;
+              quickTitle = quickTitle || $('meta[property="og:description"]').attr('content') || $('meta[property="og:title"]').attr('content') || null;
+            }
+          } catch { /* scrape failed */ }
+        }
+      } else if (url.includes('facebook.com/reel') || url.includes('fb.watch') || url.includes('facebook.com/watch') || url.includes('facebook.com/share/v/')) {
+        detectedPlatform = 'facebook';
+        // Try Facebook video oEmbed
+        try {
+          const oembedRes = await fetch(`https://www.facebook.com/plugins/video/oembed.json?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5000) });
+          if (oembedRes.ok) {
+            const oembed = await oembedRes.json();
+            quickTitle = quickTitle || oembed.title || null;
+            quickThumbnail = oembed.thumbnail_url || null;
+            authorName = oembed.author_name || null;
+          }
+        } catch { /* facebook oembed failed */ }
+
+        // Fallback: HTML scrape for og tags
+        if (!quickThumbnail) {
+          try {
+            const res = await fetch(url, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml',
+                'Accept-Language': 'en-US,en;q=0.9',
+              },
+              redirect: 'follow',
+              signal: AbortSignal.timeout(5000),
+            });
+            if (res.ok) {
+              const html = await res.text();
+              const $ = cheerio.load(html);
+              quickThumbnail = quickThumbnail || $('meta[property="og:image"]').attr('content') || null;
+              quickTitle = quickTitle || $('meta[property="og:description"]').attr('content') || $('meta[property="og:title"]').attr('content') || null;
+            }
+          } catch { /* scrape failed */ }
+        }
       } else if (url.includes('twitter.com') || url.includes('x.com')) {
         detectedPlatform = 'twitter';
       }
@@ -253,7 +317,7 @@ export async function POST(request: NextRequest) {
       created_by: user.id,
       // Metadata IS the completed state — no auto AI processing
       status: 'completed',
-      width: (detectedPlatform === 'tiktok' || detectedPlatform === 'instagram') ? 240 : 320,
+      width: (detectedPlatform === 'tiktok' || detectedPlatform === 'instagram' || detectedPlatform === 'facebook') ? 240 : 320,
     };
     // Store video_url in a metadata field if we got one (useful for later transcription)
     if (videoUrl) {

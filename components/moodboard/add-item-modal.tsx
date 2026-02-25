@@ -20,6 +20,7 @@ const TYPE_LABELS: Record<DetectedLinkType, { label: string; icon: React.ReactNo
   youtube: { label: 'YouTube video', icon: <Film size={12} />, color: 'text-red-400' },
   tiktok: { label: 'TikTok video', icon: <Film size={12} />, color: 'text-pink-400' },
   instagram: { label: 'Instagram reel', icon: <Film size={12} />, color: 'text-purple-400' },
+  facebook: { label: 'Facebook reel', icon: <Film size={12} />, color: 'text-blue-400' },
   twitter: { label: 'Twitter/X video', icon: <Film size={12} />, color: 'text-gray-400' },
   direct_video: { label: 'Direct video', icon: <Film size={12} />, color: 'text-blue-400' },
   image: { label: 'Image', icon: <ImageIcon size={12} />, color: 'text-green-400' },

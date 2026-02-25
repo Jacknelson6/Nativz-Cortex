@@ -1,6 +1,6 @@
 export type MoodboardItemType = 'video' | 'image' | 'website';
 export type MoodboardItemStatus = 'pending' | 'processing' | 'completed' | 'failed';
-export type MoodboardPlatform = 'tiktok' | 'instagram' | 'youtube' | 'twitter' | null;
+export type MoodboardPlatform = 'tiktok' | 'instagram' | 'youtube' | 'twitter' | 'facebook' | null;
 export type StickyNoteColor = 'yellow' | 'blue' | 'green' | 'pink' | 'white';
 
 export interface VideoStats {
@@ -100,6 +100,19 @@ export interface VideoAnalysis {
   music_analysis: MusicAnalysis | null;
 }
 
+export interface RescriptData {
+  adapted_script: string;
+  shot_list: { number: number; description: string; timing: string; notes?: string }[];
+  hook_alternatives: string[];
+  hashtags: string[];
+  posting_strategy: string;
+  brand_voice?: string;
+  product?: string;
+  target_audience?: string;
+  client_id?: string;
+  generated_at: string;
+}
+
 export interface MoodboardItem {
   id: string;
   board_id: string;
@@ -127,6 +140,7 @@ export interface MoodboardItem {
   winning_elements: string[];
   improvement_areas: string[];
   replication_brief: string | null;
+  rescript: RescriptData | null;
   platform: string | null;
   author_name: string | null;
   author_handle: string | null;
@@ -190,7 +204,7 @@ export interface MoodboardEdge {
 }
 
 // URL detection
-export type DetectedLinkType = 'youtube' | 'tiktok' | 'instagram' | 'twitter' | 'direct_video' | 'image' | 'website';
+export type DetectedLinkType = 'youtube' | 'tiktok' | 'instagram' | 'facebook' | 'twitter' | 'direct_video' | 'image' | 'website';
 
 export function detectLinkType(url: string): DetectedLinkType {
   const lower = url.toLowerCase();
@@ -198,6 +212,7 @@ export function detectLinkType(url: string): DetectedLinkType {
   if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'youtube';
   if (lower.includes('tiktok.com')) return 'tiktok';
   if (lower.includes('instagram.com/reel') || lower.includes('instagram.com/p/')) return 'instagram';
+  if (lower.includes('facebook.com/reel') || lower.includes('fb.watch/') || lower.includes('facebook.com/watch') || lower.includes('facebook.com/share/v/')) return 'facebook';
   if (lower.includes('twitter.com') || lower.includes('x.com')) return 'twitter';
   if (/\.(mp4|mov|webm)(\?|$)/i.test(lower)) return 'direct_video';
   if (/\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(lower)) return 'image';
@@ -210,6 +225,7 @@ export function linkTypeToItemType(linkType: DetectedLinkType): MoodboardItemTyp
     case 'youtube':
     case 'tiktok':
     case 'instagram':
+    case 'facebook':
     case 'twitter':
     case 'direct_video':
       return 'video';

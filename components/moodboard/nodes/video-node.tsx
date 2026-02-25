@@ -28,6 +28,7 @@ function PlatformBadge({ platform }: { platform: string | null }) {
     tiktok: { label: 'TikTok', bg: 'bg-black', text: 'text-white' },
     youtube: { label: 'YT', bg: 'bg-red-600', text: 'text-white' },
     instagram: { label: 'IG', bg: 'bg-gradient-to-r from-purple-500 to-pink-500', text: 'text-white' },
+    facebook: { label: 'FB', bg: 'bg-blue-600', text: 'text-white' },
     twitter: { label: '𝕏', bg: 'bg-black', text: 'text-white' },
   };
   const c = config[platform];
@@ -96,13 +97,13 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
 
   return (
     <div className={`bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden group ${
-      item.platform === 'tiktok' || item.platform === 'instagram' ? 'min-w-[200px] max-w-[240px]' : 'min-w-[280px] max-w-[360px]'
+      item.platform === 'tiktok' || item.platform === 'instagram' || item.platform === 'facebook' ? 'min-w-[200px] max-w-[240px]' : 'min-w-[280px] max-w-[360px]'
     }`}>
       <Handle type="target" position={Position.Top} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
 
       {/* Thumbnail */}
       <div className={`relative bg-surface-hover flex items-center justify-center overflow-hidden ${
-        item.platform === 'tiktok' || item.platform === 'instagram' ? 'aspect-[9/16]' : 'aspect-video'
+        item.platform === 'tiktok' || item.platform === 'instagram' || item.platform === 'facebook' ? 'aspect-[9/16]' : 'aspect-video'
       }`}>
         <PlatformBadge platform={item.platform} />
 
