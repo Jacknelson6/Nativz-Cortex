@@ -6,10 +6,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { searchVaultFTS, searchVaultSemantic } from '@/lib/vault/indexer';
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const query = request.nextUrl.searchParams.get('q');
     if (!query) {
       return NextResponse.json({ error: 'Query parameter "q" is required' }, { status: 400 });
