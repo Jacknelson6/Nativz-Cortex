@@ -18,6 +18,7 @@ import ReactFlow, {
   type EdgeTypes,
   type OnNodesChange,
   type Connection,
+  ConnectionMode,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import {
@@ -540,6 +541,7 @@ function MoodboardCanvas() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
       });
+      setNotes(prev => prev.map(n => n.id === id ? { ...n, content } : n));
     } catch {
       toast.error('Failed to update note');
     }
@@ -826,6 +828,7 @@ function MoodboardCanvas() {
           minZoom={0.1}
           maxZoom={2}
           selectionOnDrag
+          connectionMode={ConnectionMode.Loose}
           selectionMode={SelectionMode.Partial}
           multiSelectionKeyCode="Shift"
           deleteKeyCode={null}

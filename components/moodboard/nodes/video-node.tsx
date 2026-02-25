@@ -62,7 +62,7 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
     <div className={`bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden group ${
       item.platform === 'tiktok' || item.platform === 'instagram' ? 'min-w-[200px] max-w-[240px]' : 'min-w-[280px] max-w-[360px]'
     }`}>
-      <Handle type="target" position={Position.Top} className="!bg-accent !border-0 !w-2 !h-2" />
+      <Handle type="target" position={Position.Top} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
 
       {/* Thumbnail */}
       <div className={`relative bg-surface-hover flex items-center justify-center overflow-hidden ${
@@ -120,8 +120,9 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
         )}
       </div>
 
-      {/* Key Frames Filmstrip */}
-      {isComplete && (item.frames ?? []).length > 1 && (
+      {/* Key Frames Filmstrip — only show if frames have distinct URLs */}
+      {isComplete && (item.frames ?? []).length > 1 &&
+        new Set((item.frames ?? []).map(f => f.url)).size > 1 && (
         <div className="flex gap-0.5 overflow-x-auto bg-black/20 px-1 py-1">
           {(item.frames ?? []).map((frame, i) => (
             <div key={i} className="relative shrink-0 w-12 h-8 rounded-sm overflow-hidden">
@@ -264,7 +265,7 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
         )}
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="!bg-accent !border-0 !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
     </div>
   );
 });

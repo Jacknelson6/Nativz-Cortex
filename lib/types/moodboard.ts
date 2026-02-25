@@ -35,6 +35,7 @@ export interface MoodboardBoard {
   // joined fields
   client_name?: string;
   item_count?: number;
+  thumbnails?: string[];
   tags?: MoodboardTag[];
 }
 

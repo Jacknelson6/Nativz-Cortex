@@ -1115,13 +1115,13 @@ function ShootDetailPanel({
           {/* Actions */}
           <div className="space-y-2 pt-2 border-t border-nativz-border">
             {/* Ideate button — always available */}
-            <button
+            <GlassButton
               onClick={() => onIdeate(shoot)}
-              className="cursor-pointer flex items-center justify-center gap-2 w-full rounded-lg border border-purple-500/25 bg-purple-500/10 px-3 py-2.5 text-sm font-medium text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/40 transition-colors"
+              className="w-full justify-center"
             >
               <Sparkles size={14} />
               {shoot.planData ? 'Regenerate shoot plan' : 'Ideate shoot plan'}
-            </button>
+            </GlassButton>
 
             {/* Schedule button — context-aware for past vs upcoming */}
             {shootIsPast ? (

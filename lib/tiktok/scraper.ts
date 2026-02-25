@@ -342,7 +342,19 @@ export async function extractTikTokTranscript(
     console.error('TikTok subtitle extraction (HTML) error:', e);
   }
 
-  // --- Approach 2: Try tikwm API for subtitle data ---
+  // --- Approach 2: Groq Whisper fallback (transcribe audio from video URL) ---
+  const groqKey = process.env.GROQ_API_KEY;
+  const videoUrlForWhisper = _videoUrl;
+  if (groqKey && videoUrlForWhisper) {
+    try {
+      const result = await transcribeViaGroqWhisper(videoUrlForWhisper, groqKey);
+      if (result.text) return result;
+    } catch (e) {
+      console.error('Groq Whisper transcription error:', e);
+    }
+  }
+
+  // --- Approach 3: Try tikwm API for subtitle data ---
   try {
     const tikwmRes = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`, {
       headers: { 'User-Agent': UA },
@@ -370,6 +382,87 @@ export async function extractTikTokTranscript(
   }
 
   return empty;
+}
+
+/**
+ * Transcribe video audio via Groq's free Whisper API.
+ * Downloads the video, sends to Groq, returns timestamped transcript.
+ */
+async function transcribeViaGroqWhisper(
+  videoUrl: string,
+  apiKey: string,
+): Promise<TranscriptResult> {
+  const empty: TranscriptResult = { text: '', segments: [] };
+
+  // Download video (limit to 25MB for Whisper)
+  const videoRes = await fetch(videoUrl, {
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!videoRes.ok) return empty;
+
+  const contentLength = Number(videoRes.headers.get('content-length') || 0);
+  if (contentLength > 25 * 1024 * 1024) {
+    console.warn('Video too large for Whisper API (>25MB), skipping');
+    return empty;
+  }
+
+  const videoBuffer = Buffer.from(await videoRes.arrayBuffer());
+
+  // Build multipart form data
+  const boundary = `----GroqWhisper${Date.now()}`;
+  const parts: Buffer[] = [];
+
+  // file field
+  parts.push(Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="video.mp4"\r\nContent-Type: video/mp4\r\n\r\n`
+  ));
+  parts.push(videoBuffer);
+  parts.push(Buffer.from('\r\n'));
+
+  // model field
+  parts.push(Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-large-v3\r\n`
+  ));
+
+  // response_format for timestamps
+  parts.push(Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="response_format"\r\n\r\nverbose_json\r\n`
+  ));
+
+  // language hint
+  parts.push(Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="language"\r\n\r\nen\r\n`
+  ));
+
+  parts.push(Buffer.from(`--${boundary}--\r\n`));
+
+  const body = Buffer.concat(parts);
+
+  const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+    },
+    body,
+    signal: AbortSignal.timeout(60000),
+  });
+
+  if (!groqRes.ok) {
+    console.error('Groq Whisper API error:', groqRes.status, await groqRes.text().catch(() => ''));
+    return empty;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const json = (await groqRes.json()) as any;
+  const text: string = json.text ?? '';
+  const segments: SubtitleSegment[] = (json.segments ?? []).map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (s: any) => ({ start: s.start ?? 0, end: s.end ?? 0, text: (s.text ?? '').trim() }),
+  );
+
+  return { text, segments };
 }
 
 /**

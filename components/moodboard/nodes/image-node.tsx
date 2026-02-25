@@ -18,7 +18,7 @@ export const ImageNode = memo(function ImageNode({ data }: NodeProps<ImageNodeDa
 
   return (
     <div className="bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden group min-w-[200px] max-w-[400px]">
-      <Handle type="target" position={Position.Top} className="!bg-accent !border-0 !w-2 !h-2" />
+      <Handle type="target" position={Position.Top} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
 
       {/* Image */}
       <div className="relative">
@@ -68,7 +68,7 @@ export const ImageNode = memo(function ImageNode({ data }: NodeProps<ImageNodeDa
         </div>
       )}
 
-      <Handle type="source" position={Position.Bottom} className="!bg-accent !border-0 !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
     </div>
   );
 });

@@ -36,6 +36,10 @@ export const StickyNode = memo(function StickyNode({ data }: NodeProps<StickyNod
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    setText(note.content);
+  }, [note.content]);
+
+  useEffect(() => {
     if (editing && textareaRef.current) {
       textareaRef.current.focus();
     }
@@ -50,7 +54,7 @@ export const StickyNode = memo(function StickyNode({ data }: NodeProps<StickyNod
 
   return (
     <div className={`rounded-lg border p-3 shadow-md min-w-[160px] max-w-[280px] group ${STICKY_COLORS[note.color]}`}>
-      <Handle type="target" position={Position.Top} className="!bg-gray-400 !border-0 !w-2 !h-2" />
+      <Handle type="target" position={Position.Top} className="!bg-gray-400 !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
 
       {/* Controls */}
       <div className="flex items-center justify-end gap-1 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -102,7 +106,7 @@ export const StickyNode = memo(function StickyNode({ data }: NodeProps<StickyNod
         </button>
       )}
 
-      <Handle type="source" position={Position.Bottom} className="!bg-gray-400 !border-0 !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className="!bg-gray-400 !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
     </div>
   );
 });

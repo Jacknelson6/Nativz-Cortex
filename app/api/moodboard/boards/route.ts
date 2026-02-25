@@ -49,19 +49,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch boards' }, { status: 500 });
     }
 
-    // Get item counts per board
+    // Get item counts + thumbnails per board
     const boardIds = (boards || []).map((b: Record<string, unknown>) => b.id as string);
     let itemCounts: Record<string, number> = {};
+    let boardThumbnails: Record<string, string[]> = {};
 
     if (boardIds.length > 0) {
-      const { data: countData } = await adminClient
+      const { data: itemData } = await adminClient
         .from('moodboard_items')
-        .select('board_id')
+        .select('board_id, thumbnail_url')
         .in('board_id', boardIds);
 
-      if (countData) {
-        itemCounts = countData.reduce((acc: Record<string, number>, row: { board_id: string }) => {
+      if (itemData) {
+        itemCounts = itemData.reduce((acc: Record<string, number>, row: { board_id: string }) => {
           acc[row.board_id] = (acc[row.board_id] || 0) + 1;
+          return acc;
+        }, {});
+
+        boardThumbnails = itemData.reduce((acc: Record<string, string[]>, row: { board_id: string; thumbnail_url: string | null }) => {
+          if (row.thumbnail_url) {
+            if (!acc[row.board_id]) acc[row.board_id] = [];
+            if (acc[row.board_id].length < 4) acc[row.board_id].push(row.thumbnail_url);
+          }
           return acc;
         }, {});
       }
@@ -72,6 +81,7 @@ export async function GET(request: NextRequest) {
       ...b,
       client_name: (b.clients as { name: string } | null)?.name ?? null,
       item_count: itemCounts[b.id as string] || 0,
+      thumbnails: boardThumbnails[b.id as string] || [],
       clients: undefined,
     }));
 
