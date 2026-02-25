@@ -800,6 +800,19 @@ function MoodboardCanvas() {
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => {
+              const selIds = selectedNodes.filter(n => n.type !== 'sticky').map(n => n.id);
+              if (selIds.length > 0) setChatItemIds(selIds);
+              setChatOpen(true);
+            }}
+            className={chatOpen ? 'text-accent-text' : ''}
+          >
+            <MessageSquare size={14} />
+            AI Chat
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setShowMinimap(!showMinimap)}
             className={showMinimap ? 'text-accent-text' : ''}
           >
@@ -895,6 +908,17 @@ function MoodboardCanvas() {
           item={analysisItem}
           onClose={() => setAnalysisItem(null)}
           onReplicate={(item) => { setAnalysisItem(null); setReplicateItem(item); }}
+        />
+      )}
+
+      {/* AI Chat Panel */}
+      {chatOpen && (
+        <AiChatPanel
+          boardId={boardId}
+          items={items}
+          connectedItemIds={chatItemIds}
+          onConnectedItemsChange={setChatItemIds}
+          onClose={() => setChatOpen(false)}
         />
       )}
 
