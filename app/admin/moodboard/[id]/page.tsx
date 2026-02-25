@@ -39,6 +39,7 @@ import { Input } from '@/components/ui/input';
 import { AddItemModal } from '@/components/moodboard/add-item-modal';
 import { VideoAnalysisPanel } from '@/components/moodboard/video-analysis-panel';
 import { ReplicationBriefModal } from '@/components/moodboard/replication-brief-modal';
+import { RescriptPanel } from '@/components/moodboard/rescript-panel';
 import { ShareBoardModal } from '@/components/moodboard/share-board-modal';
 import { AiChatPanel } from '@/components/moodboard/ai-chat-panel';
 import { VideoNode } from '@/components/moodboard/nodes/video-node';
@@ -941,6 +942,18 @@ function MoodboardCanvas() {
           onSaved={(brief) => {
             setItems((prev) => prev.map((i) => (i.id === replicateItem.id ? { ...i, replication_brief: brief } : i)));
             setReplicateItem(null);
+          }}
+        />
+      )}
+
+      {/* Rescript Panel */}
+      {rescriptItem && (
+        <RescriptPanel
+          item={rescriptItem}
+          onClose={() => setRescriptItem(null)}
+          onSaved={(rescript) => {
+            setItems((prev) => prev.map((i) => (i.id === rescriptItem.id ? { ...i, rescript } : i)));
+            setRescriptItem(null);
           }}
         />
       )}

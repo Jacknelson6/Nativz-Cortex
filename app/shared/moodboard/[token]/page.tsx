@@ -111,6 +111,7 @@ function SharedMoodboardCanvas() {
         item,
         onViewAnalysis: (i: MoodboardItem) => setAnalysisItem(i),
         onReplicate: () => {},
+        onRescript: () => {},
         onDelete: () => {},
         onExtractInsights: () => {},
       },
