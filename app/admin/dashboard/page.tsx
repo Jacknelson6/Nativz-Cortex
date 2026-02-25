@@ -19,10 +19,11 @@ import {
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { GlassButton } from '@/components/ui/glass-button';
 import { PageError } from '@/components/shared/page-error';
 import { formatRelativeTime } from '@/lib/utils/format';
 
-function GlassStatCard({
+function StatCard({
   icon,
   value,
   label,
@@ -36,11 +37,11 @@ function GlassStatCard({
   accentClass?: string;
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.03] p-5 backdrop-blur-sm transition-all duration-300 hover:border-white/[0.12] hover:bg-white/[0.05] hover:shadow-lg hover:shadow-purple-500/5 hover:-translate-y-0.5">
+    <Card className="group relative overflow-hidden !p-5 transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5">
       <div className={`absolute inset-0 bg-gradient-to-br ${accentClass} opacity-[0.03] group-hover:opacity-[0.06] transition-opacity duration-300`} />
       <div className="relative">
         <div className="flex items-center justify-between">
-          <div className="rounded-lg bg-white/[0.06] p-2 text-white/40 group-hover:text-white/60 transition-colors">
+          <div className="rounded-lg bg-surface-elevated p-2 text-text-muted group-hover:text-text-secondary transition-colors">
             {icon}
           </div>
           {trend !== undefined && trend !== 0 && (
@@ -50,10 +51,10 @@ function GlassStatCard({
             </span>
           )}
         </div>
-        <p className="mt-3 text-3xl font-bold text-white tracking-tight">{value.toLocaleString()}</p>
-        <p className="mt-0.5 text-sm text-white/40">{label}</p>
+        <p className="mt-3 text-3xl font-bold text-text-primary tracking-tight">{value.toLocaleString()}</p>
+        <p className="mt-0.5 text-sm text-text-muted">{label}</p>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -152,43 +153,43 @@ export default async function AdminDashboardPage() {
     }));
 
     return (
-      <div className="p-6 space-y-8 max-w-7xl mx-auto">
+      <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
               <Sparkles size={22} className="text-purple-400" />
               Command Center
             </h1>
-            <p className="text-sm text-white/40 mt-0.5">Your content strategy at a glance</p>
+            <p className="text-sm text-text-muted mt-0.5">Your content strategy at a glance</p>
           </div>
-          <div className="text-xs text-white/30">
+          <div className="text-xs text-text-muted">
             {now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
         </div>
 
         {/* Hero Stats Row */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <GlassStatCard
+          <StatCard
             icon={<Users size={18} />}
             value={totalClients}
             label="Total Clients"
             accentClass="from-emerald-500 to-teal-500"
           />
-          <GlassStatCard
+          <StatCard
             icon={<Search size={18} />}
             value={activeSearches}
             label="Searches This Month"
             trend={searchTrend}
             accentClass="from-blue-500 to-cyan-500"
           />
-          <GlassStatCard
+          <StatCard
             icon={<Calendar size={18} />}
             value={upcomingShoots}
             label="Upcoming Shoots"
             accentClass="from-purple-500 to-pink-500"
           />
-          <GlassStatCard
+          <StatCard
             icon={<Image size={18} />}
             value={moodboardItems}
             label="Moodboard Items"
@@ -199,19 +200,17 @@ export default async function AdminDashboardPage() {
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { label: 'New Search', href: '/admin/search', icon: <Search size={16} />, color: 'blue' },
-            { label: 'Schedule Shoot', href: '/admin/shoots', icon: <Camera size={16} />, color: 'purple' },
-            { label: 'New Moodboard', href: '/admin/moodboard', icon: <LayoutGrid size={16} />, color: 'pink' },
-            { label: 'Add Client', href: '/admin/clients', icon: <UserPlus size={16} />, color: 'emerald' },
+            { label: 'New Search', href: '/admin/search', icon: <Search size={16} /> },
+            { label: 'Schedule Shoot', href: '/admin/shoots', icon: <Camera size={16} /> },
+            { label: 'New Moodboard', href: '/admin/moodboard', icon: <LayoutGrid size={16} /> },
+            { label: 'Add Client', href: '/admin/clients', icon: <UserPlus size={16} /> },
           ].map((action) => (
-            <Link
-              key={action.label}
-              href={action.href}
-              className={`group flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm font-medium text-white/70 transition-all duration-200 hover:border-${action.color}-500/30 hover:bg-${action.color}-500/[0.06] hover:text-white hover:-translate-y-0.5`}
-            >
-              <span className="text-white/40 group-hover:text-white/70 transition-colors">{action.icon}</span>
-              <Plus size={12} className="text-white/20" />
-              {action.label}
+            <Link key={action.label} href={action.href}>
+              <GlassButton className="w-full justify-start !py-2.5 !px-4 !text-sm !font-medium">
+                {action.icon}
+                <Plus size={12} className="text-text-muted" />
+                {action.label}
+              </GlassButton>
             </Link>
           ))}
         </div>
@@ -219,33 +218,33 @@ export default async function AdminDashboardPage() {
         <div className="grid gap-6 lg:grid-cols-5">
           {/* Activity Feed — spans 3 cols */}
           <div className="lg:col-span-3">
-            <Card className="!bg-white/[0.02] !border-white/[0.06]">
+            <Card>
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                <h2 className="text-base font-semibold text-text-primary flex items-center gap-2">
                   <Activity size={16} className="text-blue-400" />
                   Recent Activity
                 </h2>
               </div>
               {activityFeed.length === 0 ? (
-                <p className="text-sm text-white/30 text-center py-8">No recent activity</p>
+                <p className="text-sm text-text-muted text-center py-8">No recent activity</p>
               ) : (
                 <div className="space-y-1">
                   {activityFeed.map((item, i) => (
                     <Link
                       key={`${item.type}-${item.id}`}
                       href={item.link}
-                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all duration-150 hover:bg-white/[0.04] group"
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all duration-150 hover:bg-surface-elevated group"
                       style={{ animationDelay: `${i * 30}ms` }}
                     >
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.05]">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-elevated">
                         {activityIcons[item.type]}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white/70 truncate group-hover:text-white transition-colors">
+                        <p className="text-sm text-text-secondary truncate group-hover:text-text-primary transition-colors">
                           {item.description}
                         </p>
                       </div>
-                      <span className="text-xs text-white/25 shrink-0 flex items-center gap-1">
+                      <span className="text-xs text-text-muted shrink-0 flex items-center gap-1">
                         <Clock size={10} />
                         {formatRelativeTime(item.created_at)}
                       </span>
@@ -259,18 +258,18 @@ export default async function AdminDashboardPage() {
           {/* Right sidebar — spans 2 cols */}
           <div className="lg:col-span-2 space-y-6">
             {/* Upcoming Shoots */}
-            <Card className="!bg-white/[0.02] !border-white/[0.06]">
+            <Card>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                <h2 className="text-base font-semibold text-text-primary flex items-center gap-2">
                   <Calendar size={16} className="text-purple-400" />
                   Next 7 Days
                 </h2>
-                <Link href="/admin/shoots" className="text-xs text-white/40 hover:text-white/70 flex items-center gap-1 transition-colors">
+                <Link href="/admin/shoots" className="text-xs text-text-muted hover:text-text-secondary flex items-center gap-1 transition-colors">
                   View all <ArrowRight size={12} />
                 </Link>
               </div>
               {shoots.length === 0 ? (
-                <p className="text-sm text-white/30 text-center py-6">No shoots this week</p>
+                <p className="text-sm text-text-muted text-center py-6">No shoots this week</p>
               ) : (
                 <div className="space-y-2">
                   {shoots.map((shoot) => {
@@ -278,20 +277,20 @@ export default async function AdminDashboardPage() {
                     return (
                       <div
                         key={shoot.id}
-                        className="flex items-center gap-3 rounded-lg border border-white/[0.04] px-3 py-2.5 hover:bg-white/[0.03] transition-colors"
+                        className="flex items-center gap-3 rounded-lg border border-nativz-border px-3 py-2.5 hover:bg-surface-elevated transition-colors"
                       >
                         <div className="flex flex-col items-center justify-center rounded-lg bg-purple-500/10 px-2 py-1 min-w-[40px]">
                           <span className="text-sm font-bold text-purple-400 leading-none">{shootDate.getDate()}</span>
                           <span className="text-[8px] font-medium text-purple-400/60 uppercase">{shootDate.toLocaleDateString('en-US', { month: 'short' })}</span>
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm text-white/80 truncate">{shoot.title}</p>
+                          <p className="text-sm text-text-secondary truncate">{shoot.title}</p>
                           <div className="flex items-center gap-2 mt-0.5">
                             {shoot.clients && (
-                              <span className="text-xs text-white/30">{shoot.clients.name}</span>
+                              <span className="text-xs text-text-muted">{shoot.clients.name}</span>
                             )}
                             {shoot.location && (
-                              <span className="text-xs text-white/20 flex items-center gap-0.5">
+                              <span className="text-xs text-text-muted flex items-center gap-0.5">
                                 <MapPin size={8} /> {shoot.location}
                               </span>
                             )}
@@ -305,24 +304,24 @@ export default async function AdminDashboardPage() {
             </Card>
 
             {/* Recent Searches */}
-            <Card className="!bg-white/[0.02] !border-white/[0.06]">
+            <Card>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                <h2 className="text-base font-semibold text-text-primary flex items-center gap-2">
                   <Search size={16} className="text-blue-400" />
                   Recent Searches
                 </h2>
               </div>
               {searches.length === 0 ? (
-                <p className="text-sm text-white/30 text-center py-6">No searches yet</p>
+                <p className="text-sm text-text-muted text-center py-6">No searches yet</p>
               ) : (
                 <div className="space-y-2">
                   {searches.map((search) => (
                     <Link
                       key={search.id}
                       href={`/admin/search/${search.id}`}
-                      className="block rounded-lg border border-white/[0.04] px-3 py-2.5 hover:bg-white/[0.03] transition-colors group"
+                      className="block rounded-lg border border-nativz-border px-3 py-2.5 hover:bg-surface-elevated transition-colors group"
                     >
-                      <p className="text-sm text-white/70 truncate group-hover:text-white transition-colors">
+                      <p className="text-sm text-text-secondary truncate group-hover:text-text-primary transition-colors">
                         &quot;{search.query}&quot;
                       </p>
                       <div className="flex items-center gap-2 mt-1">
@@ -332,7 +331,7 @@ export default async function AdminDashboardPage() {
                         <Badge variant={search.search_type === 'brand' ? 'purple' : 'default'}>
                           {search.search_type === 'brand' ? 'Brand' : 'Topic'}
                         </Badge>
-                        <span className="text-xs text-white/20 ml-auto">{formatRelativeTime(search.created_at)}</span>
+                        <span className="text-xs text-text-muted ml-auto">{formatRelativeTime(search.created_at)}</span>
                       </div>
                     </Link>
                   ))}
