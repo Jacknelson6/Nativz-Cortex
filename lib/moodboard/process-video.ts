@@ -119,7 +119,7 @@ export async function processVideoItem(itemId: string): Promise<void> {
   // Set processing status
   await adminClient
     .from('moodboard_items')
-    .update({ status: 'processing', platform, error_message: null })
+    .update({ status: 'processing', platform, error_message: null, width: (platform === 'tiktok' || platform === 'instagram') ? 240 : 320 })
     .eq('id', itemId);
 
   try {
