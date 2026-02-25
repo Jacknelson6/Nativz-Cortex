@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Clock, Send, Undo2, Building2, Check, Plus, X, Mail, Users, User } from 'lucide-react';
+import { ArrowLeft, Clock, Send, Undo2, Building2, Check, Plus, X, Mail, Users, User, Search, BarChart3, TrendingUp, MessageSquare } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -18,10 +18,16 @@ import { ContentPillars } from '@/components/results/content-pillars';
 import { NicheInsights } from '@/components/results/niche-insights';
 import { SourcesPanel } from '@/components/results/sources-panel';
 import { ActivityChart } from '@/components/charts/activity-chart';
+import { KeyFindings } from '@/components/results/key-findings';
+import { SentimentBadge } from '@/components/results/sentiment-badge';
+import { ActionItems } from '@/components/results/action-items';
+import { CompetitiveAnalysis } from '@/components/results/competitive-analysis';
+import { ExportPdfButton } from '@/components/results/export-pdf-button';
+import { ShareButton } from '@/components/results/share-button';
 import { SearchProgress } from '@/components/search/search-progress';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { hasSerp } from '@/lib/types/search';
-import type { TopicSearch, TopicSearchAIResponse } from '@/lib/types/search';
+import type { TopicSearch, TopicSearchAIResponse, TrendingTopic } from '@/lib/types/search';
 import type { Recipient } from './page';
 
 interface AdminResultsClientProps {
@@ -115,12 +121,17 @@ export function AdminResultsClient({ search, clientInfo, recipients = [] }: Admi
             )}
           </div>
           <div className="ml-auto flex items-center gap-3">
+            {aiResponse?.overall_sentiment !== undefined && (
+              <SentimentBadge sentiment={aiResponse.overall_sentiment} />
+            )}
             {search.completed_at && (
               <span className="hidden sm:flex items-center gap-1 text-xs text-text-muted">
                 <Clock size={12} />
                 {formatRelativeTime(search.completed_at)}
               </span>
             )}
+            <ExportPdfButton search={search} clientName={clientInfo?.name} />
+            <ShareButton searchId={search.id} />
             {search.approved_at ? (
               <>
                 <Badge variant="success">Sent</Badge>
@@ -155,6 +166,11 @@ export function AdminResultsClient({ search, clientInfo, recipients = [] }: Admi
         ) : (
           search.summary && <ExecutiveSummary summary={search.summary} />
         )}
+        {/* Key Findings Cards */}
+        {search.summary && aiResponse?.trending_topics && (
+          <KeyFindings summary={search.summary} topics={aiResponse.trending_topics} />
+        )}
+
         {search.metrics && <MetricsRow metrics={search.metrics} isBrandSearch={!!aiResponse?.brand_alignment_notes} />}
 
         {search.activity_data && search.activity_data.length > 0 && (
@@ -184,6 +200,23 @@ export function AdminResultsClient({ search, clientInfo, recipients = [] }: Admi
               <NicheInsights insights={aiResponse.niche_performance_insights} />
             )}
           </div>
+        )}
+
+        {/* Competitive Analysis (brand search) */}
+        {aiResponse?.niche_performance_insights && !!aiResponse?.brand_alignment_notes && (
+          <CompetitiveAnalysis
+            nicheInsights={aiResponse.niche_performance_insights}
+            brandNotes={aiResponse.brand_alignment_notes}
+          />
+        )}
+
+        {/* Action Items & Recommendations */}
+        {aiResponse && aiResponse.trending_topics && aiResponse.trending_topics.length > 0 && (
+          <ActionItems
+            aiResponse={aiResponse}
+            topics={aiResponse.trending_topics as TrendingTopic[]}
+            isBrandSearch={!!aiResponse.brand_alignment_notes}
+          />
         )}
 
         {hasSerp(search) && search.serp_data && (

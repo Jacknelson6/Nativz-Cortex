@@ -6,19 +6,22 @@ import { GlowButton } from '@/components/ui/glow-button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import { ClientSearchGrid } from '@/components/clients/client-search-grid';
+import { calculateAllClientHealth } from '@/lib/clients/health';
 
 export default async function AdminClientsPage() {
   try {
+    const adminClient = createAdminClient();
+
     const [vaultClients, dbClients] = await Promise.all([
       getVaultClients(),
-      // Fetch industry, is_active, logo_url from DB
-      createAdminClient()
+      adminClient
         .from('clients')
-        .select('slug, industry, is_active, logo_url')
+        .select('id, slug, industry, is_active, logo_url')
         .then(({ data }) => {
-          const map = new Map<string, { industry: string; isActive: boolean; logoUrl: string | null }>();
+          const map = new Map<string, { id: string; industry: string; isActive: boolean; logoUrl: string | null }>();
           for (const c of data ?? []) {
             map.set(c.slug, {
+              id: c.id,
               industry: c.industry && c.industry !== 'General' ? c.industry : '',
               isActive: c.is_active ?? true,
               logoUrl: c.logo_url ?? null,
@@ -38,8 +41,22 @@ export default async function AdminClientsPage() {
           industry: db.industry || c.industry,
           isActive: db.isActive,
           logoUrl: db.logoUrl,
+          dbId: db.id,
         };
       });
+
+    // Calculate health scores for all clients with DB records
+    const clientIds = mergedClients.map((c) => c.dbId).filter(Boolean);
+    const healthMap = await calculateAllClientHealth(clientIds);
+
+    const clientsWithHealth = mergedClients.map((c) => {
+      const health = c.dbId ? healthMap.get(c.dbId) : undefined;
+      return {
+        ...c,
+        healthScore: health?.score ?? 0,
+        lastActivityAt: health?.lastActivityAt ?? null,
+      };
+    });
 
     return (
       <div className="p-6 space-y-6">
@@ -56,7 +73,7 @@ export default async function AdminClientsPage() {
           </Link>
         </div>
 
-        {mergedClients.length === 0 ? (
+        {clientsWithHealth.length === 0 ? (
           <EmptyState
             icon={<Building2 size={32} />}
             title="No clients yet"
@@ -71,7 +88,7 @@ export default async function AdminClientsPage() {
             }
           />
         ) : (
-          <ClientSearchGrid clients={mergedClients} />
+          <ClientSearchGrid clients={clientsWithHealth} />
         )}
       </div>
     );
