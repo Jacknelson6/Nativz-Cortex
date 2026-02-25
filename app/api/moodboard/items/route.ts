@@ -65,13 +65,44 @@ export async function POST(request: NextRequest) {
     try {
       if (url.includes('tiktok.com')) {
         detectedPlatform = 'tiktok';
-        const tikwmRes = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5000) });
-        if (tikwmRes.ok) {
-          const tikwm = await tikwmRes.json();
-          if (tikwm.code === 0 && tikwm.data) {
-            quickTitle = quickTitle || tikwm.data.title || null;
-            quickThumbnail = tikwm.data.cover || tikwm.data.origin_cover || null;
+        // Try tikwm first
+        try {
+          const tikwmRes = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(4000) });
+          if (tikwmRes.ok) {
+            const tikwm = await tikwmRes.json();
+            if (tikwm.code === 0 && tikwm.data) {
+              quickTitle = quickTitle || tikwm.data.title || null;
+              quickThumbnail = tikwm.data.cover || tikwm.data.origin_cover || null;
+            }
           }
+        } catch { /* tikwm failed, try oembed */ }
+        // Fallback to TikTok oEmbed
+        if (!quickThumbnail) {
+          try {
+            const oembedRes = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(4000) });
+            if (oembedRes.ok) {
+              const oembed = await oembedRes.json();
+              quickTitle = quickTitle || oembed.title || null;
+              quickThumbnail = oembed.thumbnail_url || null;
+            }
+          } catch { /* oembed also failed */ }
+        }
+        // Fallback: scrape og:image from page
+        if (!quickThumbnail) {
+          try {
+            const pageRes = await fetch(url, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
+              signal: AbortSignal.timeout(5000),
+              redirect: 'follow',
+            });
+            if (pageRes.ok) {
+              const html = await pageRes.text();
+              const ogImage = html.match(/property="og:image"\s+content="([^"]+)"/)?.[1];
+              const ogTitle = html.match(/property="og:title"\s+content="([^"]+)"/)?.[1];
+              quickThumbnail = ogImage || null;
+              quickTitle = quickTitle || ogTitle || null;
+            }
+          } catch { /* page scrape failed */ }
         }
       } else if (url.includes('youtube.com') || url.includes('youtu.be')) {
         detectedPlatform = 'youtube';
