@@ -1,8 +1,8 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo, useState, useCallback } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
-import { Film, Play, Loader2, Eye, Copy, AlertCircle, RefreshCw, Music, MessageSquare, Trash2, MoreHorizontal } from 'lucide-react';
+import { Film, Play, Loader2, Eye, Copy, AlertCircle, RefreshCw, Music, MessageSquare, Trash2, MoreHorizontal, Sparkles, FileText, ClipboardList, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { MoodboardItem } from '@/lib/types/moodboard';
 
@@ -11,6 +11,7 @@ interface VideoNodeData {
   onViewAnalysis: (item: MoodboardItem) => void;
   onReplicate: (item: MoodboardItem) => void;
   onDelete: (id: string) => void;
+  onItemUpdate?: (item: MoodboardItem) => void;
   commentCount?: number;
 }
 
@@ -39,24 +40,59 @@ function PlatformBadge({ platform }: { platform: string | null }) {
 }
 
 export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeData>) {
-  const { item, onViewAnalysis, onReplicate, onDelete, commentCount } = data;
-  const isProcessing = item.status === 'processing';
+  const { item, onViewAnalysis, onReplicate, onDelete, onItemUpdate, commentCount } = data;
   const isFailed = item.status === 'failed';
-  const isComplete = item.status === 'completed';
   const [reprocessing, setReprocessing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [briefing, setBriefing] = useState(false);
+
+  const isAnalyzed = item.hook_score != null;
+  const isTranscribed = !!item.transcript;
+  const hasBrief = !!item.replication_brief;
 
   const handleReprocess = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setReprocessing(true);
     try {
       await fetch(`/api/moodboard/items/${item.id}/reprocess`, { method: 'POST' });
-    } catch {
-      // ignore — UI will update via realtime
-    } finally {
-      setReprocessing(false);
-    }
+    } catch { /* ignore */ }
+    finally { setReprocessing(false); }
   };
+
+  const handleAnalyze = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAnalyzing(true);
+    try {
+      const res = await fetch(`/api/moodboard/items/${item.id}/analyze`, { method: 'POST' });
+      if (res.ok && onItemUpdate) {
+        const updated = await res.json();
+        onItemUpdate(updated);
+      }
+    } catch { /* ignore */ }
+    finally { setAnalyzing(false); }
+  }, [item.id, onItemUpdate]);
+
+  const handleTranscribe = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTranscribing(true);
+    try {
+      const res = await fetch(`/api/moodboard/items/${item.id}/transcribe`, { method: 'POST' });
+      if (res.ok && onItemUpdate) {
+        const updated = await res.json();
+        onItemUpdate(updated);
+      }
+    } catch { /* ignore */ }
+    finally { setTranscribing(false); }
+  }, [item.id, onItemUpdate]);
+
+  const handleBrief = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setBriefing(true);
+    onReplicate(item);
+    setBriefing(false);
+  }, [item, onReplicate]);
 
   return (
     <div className={`bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden group ${
@@ -120,22 +156,6 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
         )}
       </div>
 
-      {/* Key Frames Filmstrip — only show if frames have distinct URLs */}
-      {isComplete && (item.frames ?? []).length > 1 &&
-        new Set((item.frames ?? []).map(f => f.url)).size > 1 && (
-        <div className="flex gap-0.5 overflow-x-auto bg-black/20 px-1 py-1">
-          {(item.frames ?? []).map((frame, i) => (
-            <div key={i} className="relative shrink-0 w-12 h-8 rounded-sm overflow-hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={frame.url} alt={frame.label} className="w-full h-full object-cover" />
-              <span className="absolute bottom-0 inset-x-0 text-center text-[7px] text-white bg-black/60 leading-tight">
-                {frame.label}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Content */}
       <div className="p-3 space-y-2">
         {/* Title */}
@@ -171,33 +191,30 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
           </div>
         )}
 
-        {/* Transcript snippet */}
-        {isComplete && item.transcript && (
-          <div className="bg-surface-hover rounded-md px-2 py-1.5">
-            <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-0.5">Transcript</p>
-            <p className="text-[11px] text-text-secondary line-clamp-3 leading-relaxed">
-              {item.transcript.substring(0, 200)}{item.transcript.length > 200 ? '...' : ''}
-            </p>
+        {/* Hook score badge + theme tags (only if analyzed) */}
+        {isAnalyzed && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 pl-5">
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                item.hook_score! >= 7 ? 'bg-green-500/20 text-green-400' :
+                item.hook_score! >= 4 ? 'bg-yellow-500/20 text-yellow-400' :
+                'bg-red-500/20 text-red-400'
+              }`}>Hook {item.hook_score}/10</span>
+              {item.hook_type && (
+                <span className="text-[9px] text-text-muted bg-surface-hover rounded px-1">{item.hook_type}</span>
+              )}
+            </div>
+            {(item.content_themes ?? []).length > 0 && (
+              <div className="flex flex-wrap gap-1 pl-5">
+                {(item.content_themes ?? []).slice(0, 3).map((tag, i) => (
+                  <Badge key={i} variant="default">{tag}</Badge>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Tags */}
-        {isComplete && (item.content_themes ?? []).length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {(item.content_themes ?? []).slice(0, 3).map((tag, i) => (
-              <Badge key={i} variant="default">{tag}</Badge>
-            ))}
-          </div>
-        )}
-
-        {/* Processing state */}
-        {isProcessing && (
-          <div className="flex items-center gap-2 text-xs text-purple-400">
-            <Loader2 size={12} className="animate-spin" />
-            Analyzing video...
-          </div>
-        )}
-
+        {/* Failed state */}
         {isFailed && (
           <div className="space-y-1.5">
             <div className="flex items-center gap-2 text-xs text-red-400">
@@ -218,51 +235,80 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
           </div>
         )}
 
-        {/* Hook / CTA preview */}
-        {isComplete && item.hook && (
-          <div className="space-y-1 border-t border-nativz-border pt-2">
-            <div className="flex items-center gap-2">
-              <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide">Hook</p>
-              {item.hook_score != null && (
-                <span className={`text-[10px] font-bold px-1 rounded ${
-                  item.hook_score >= 7 ? 'bg-green-500/20 text-green-400' :
-                  item.hook_score >= 4 ? 'bg-yellow-500/20 text-yellow-400' :
-                  'bg-red-500/20 text-red-400'
-                }`}>{item.hook_score}/10</span>
-              )}
-              {item.hook_type && (
-                <span className="text-[9px] text-text-muted bg-surface-hover rounded px-1">{item.hook_type}</span>
-              )}
-            </div>
-            <p className="text-xs text-text-secondary line-clamp-2 italic">&ldquo;{item.hook}&rdquo;</p>
-            {item.cta && (
-              <>
-                <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mt-1">CTA</p>
-                <p className="text-xs text-text-secondary line-clamp-1">{item.cta}</p>
-              </>
+        {/* On-demand action buttons */}
+        {(!isAnalyzed || !isTranscribed || !hasBrief) && (
+          <div className="flex flex-wrap gap-1.5 border-t border-nativz-border pt-2">
+            {!isAnalyzed && (
+              <button
+                onClick={handleAnalyze}
+                disabled={analyzing}
+                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-purple-400 hover:bg-purple-400/10 transition-colors disabled:opacity-50"
+              >
+                {analyzing ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                {analyzing ? 'Analyzing...' : '✨ Analyze'}
+              </button>
+            )}
+            {!isTranscribed && (
+              <button
+                onClick={handleTranscribe}
+                disabled={transcribing}
+                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-blue-400 hover:bg-blue-400/10 transition-colors disabled:opacity-50"
+              >
+                {transcribing ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />}
+                {transcribing ? 'Transcribing...' : '📝 Transcribe'}
+              </button>
+            )}
+            {!hasBrief && (
+              <button
+                onClick={handleBrief}
+                disabled={briefing}
+                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-orange-400 hover:bg-orange-400/10 transition-colors disabled:opacity-50"
+              >
+                {briefing ? <Loader2 size={11} className="animate-spin" /> : <ClipboardList size={11} />}
+                {briefing ? 'Generating...' : '📋 Brief'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Completed badges row */}
+        {(isAnalyzed || isTranscribed || hasBrief) && (
+          <div className="flex items-center gap-1.5 pl-5">
+            {isAnalyzed && (
+              <span className="flex items-center gap-0.5 text-[9px] text-green-400">
+                <Check size={9} /> Analyzed
+              </span>
+            )}
+            {isTranscribed && (
+              <span className="flex items-center gap-0.5 text-[9px] text-green-400">
+                <Check size={9} /> Transcript
+              </span>
+            )}
+            {hasBrief && (
+              <span className="flex items-center gap-0.5 text-[9px] text-green-400">
+                <Check size={9} /> Brief
+              </span>
             )}
           </div>
         )}
 
         {/* Actions */}
-        {isComplete && (
-          <div className="flex items-center gap-2 border-t border-nativz-border pt-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); onViewAnalysis(item); }}
-              className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
-            >
-              <Eye size={11} />
-              View analysis
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onReplicate(item); }}
-              className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-accent-text hover:bg-accent-surface transition-colors"
-            >
-              <Copy size={11} />
-              Replicate
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-2 border-t border-nativz-border pt-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); onViewAnalysis(item); }}
+            className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
+          >
+            <Eye size={11} />
+            Details
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onReplicate(item); }}
+            className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-accent-text hover:bg-accent-surface transition-colors"
+          >
+            <Copy size={11} />
+            Replicate
+          </button>
+        </div>
       </div>
 
       <Handle type="source" position={Position.Bottom} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />

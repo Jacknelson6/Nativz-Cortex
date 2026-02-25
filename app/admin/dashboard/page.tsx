@@ -5,7 +5,6 @@ import {
   Calendar,
   Image,
   ArrowRight,
-  Plus,
   Camera,
   LayoutGrid,
   UserPlus,
@@ -202,12 +201,11 @@ export default async function AdminDashboardPage() {
             { label: 'New Search', href: '/admin/search', icon: <Search size={16} /> },
             { label: 'Schedule Shoot', href: '/admin/shoots', icon: <Camera size={16} /> },
             { label: 'New Moodboard', href: '/admin/moodboard', icon: <LayoutGrid size={16} /> },
-            { label: 'Add Client', href: '/admin/clients', icon: <UserPlus size={16} /> },
+            { label: 'Onboard Client', href: '/admin/clients/onboard', icon: <UserPlus size={16} /> },
           ].map((action) => (
             <Link key={action.label} href={action.href}>
               <GlassButton className="w-full justify-start !py-2.5 !px-4 !text-sm !font-medium">
                 {action.icon}
-                <Plus size={12} className="text-text-muted" />
                 {action.label}
               </GlassButton>
             </Link>

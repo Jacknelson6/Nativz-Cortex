@@ -4,7 +4,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import {
   X, Play, Copy as CopyIcon, Check, Film, Clock, Scissors, Zap,
   AlertTriangle, ChevronRight, Search, Download, Quote, Gauge,
-  FileText, Image as ImageIcon, Target, Music, Eye
+  FileText, Image as ImageIcon, Target, Music, Eye, Loader2, Sparkles
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,10 +24,40 @@ const PLATFORM_COLORS: Record<string, string> = {
   twitter: 'bg-sky-500 text-white',
 };
 
-export function VideoAnalysisPanel({ item, onClose, onReplicate }: VideoAnalysisPanelProps) {
+export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: VideoAnalysisPanelProps) {
+  const [item, setItem] = useState(initialItem);
   const [copied, setCopied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedFrame, setExpandedFrame] = useState<number | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+
+  const isAnalyzed = item.hook_score != null;
+  const isTranscribed = !!item.transcript;
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true);
+    try {
+      const res = await fetch(`/api/moodboard/items/${item.id}/analyze`, { method: 'POST' });
+      if (res.ok) {
+        const updated = await res.json();
+        setItem(updated);
+      }
+    } catch { /* ignore */ }
+    finally { setAnalyzing(false); }
+  };
+
+  const handleTranscribe = async () => {
+    setTranscribing(true);
+    try {
+      const res = await fetch(`/api/moodboard/items/${item.id}/transcribe`, { method: 'POST' });
+      if (res.ok) {
+        const updated = await res.json();
+        setItem(updated);
+      }
+    } catch { /* ignore */ }
+    finally { setTranscribing(false); }
+  };
 
   const handleCopy = useCallback((text: string) => {
     navigator.clipboard.writeText(text);
@@ -178,7 +208,15 @@ export function VideoAnalysisPanel({ item, onClose, onReplicate }: VideoAnalysis
 
           {/* ── 2. Hook ── */}
           <PanelSection title="Hook" icon={<Target size={14} className="text-accent-text" />}>
-            {item.hook ? (
+            {!isAnalyzed && !item.hook ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-text-muted mb-3">Run analysis to see hook breakdown</p>
+                <Button onClick={handleAnalyze} disabled={analyzing}>
+                  {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  {analyzing ? 'Analyzing...' : '✨ Analyze Video'}
+                </Button>
+              </div>
+            ) : item.hook ? (
               <div className="rounded-xl border border-accent/20 bg-accent-surface p-4">
                 <Quote size={16} className="text-accent-text mb-1.5 opacity-50" />
                 <p className="text-base text-text-primary font-medium italic leading-relaxed">
@@ -216,12 +254,32 @@ export function VideoAnalysisPanel({ item, onClose, onReplicate }: VideoAnalysis
 
           {/* ── 3. Transcript ── */}
           <PanelSection title="Transcript" icon={<FileText size={14} className="text-accent-text" />}>
-            <TranscriptSection item={item} searchQuery={searchQuery} setSearchQuery={setSearchQuery} onCopy={handleCopy} copied={copied} />
+            {!isTranscribed ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-text-muted mb-3">Extract the video transcript</p>
+                <Button onClick={handleTranscribe} disabled={transcribing}>
+                  {transcribing ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                  {transcribing ? 'Transcribing...' : '📝 Transcribe'}
+                </Button>
+              </div>
+            ) : (
+              <TranscriptSection item={item} searchQuery={searchQuery} setSearchQuery={setSearchQuery} onCopy={handleCopy} copied={copied} />
+            )}
           </PanelSection>
 
           {/* ── 4. Pacing ── */}
           <PanelSection title="Pacing" icon={<Gauge size={14} className="text-accent-text" />}>
-            <PacingSection item={item} />
+            {!isAnalyzed ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-text-muted mb-3">Run analysis to see pacing data</p>
+                <Button onClick={handleAnalyze} disabled={analyzing}>
+                  {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  {analyzing ? 'Analyzing...' : '✨ Analyze Video'}
+                </Button>
+              </div>
+            ) : (
+              <PacingSection item={item} />
+            )}
           </PanelSection>
 
           {/* ── 5. Frames ── */}
