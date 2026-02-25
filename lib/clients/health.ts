@@ -55,13 +55,13 @@ export async function calculateClientHealth(clientId: string): Promise<ClientHea
 
   const [shootsThisMonth, shootsNextMonth, searches, moodboards, ideas] = await Promise.all([
     supabase
-      .from('shoots')
+      .from('shoot_events')
       .select('shoot_date, status')
       .eq('client_id', clientId)
       .gte('shoot_date', thisMonthStart)
       .lte('shoot_date', thisMonthEnd),
     supabase
-      .from('shoots')
+      .from('shoot_events')
       .select('shoot_date')
       .eq('client_id', clientId)
       .gte('shoot_date', nextMonthStart)
@@ -96,7 +96,7 @@ export async function calculateClientHealth(clientId: string): Promise<ClientHea
   if (isNew) {
     // Also check if they have ANY historical data
     const [historicShoots, historicSearches] = await Promise.all([
-      supabase.from('shoots').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
+      supabase.from('shoot_events').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
       supabase.from('topic_searches').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
     ]);
     const hasAnyData = ((historicShoots.count ?? 0) + (historicSearches.count ?? 0)) > 0;
