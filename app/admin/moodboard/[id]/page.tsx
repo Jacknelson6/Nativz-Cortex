@@ -104,6 +104,10 @@ function MoodboardCanvas() {
   const historyIndexRef = useRef(-1);
 
   const positionSaveTimer = useRef<ReturnType<typeof setTimeout>>(null);
+  const nodesRef = useRef<Node[]>([]);
+
+  // Keep nodesRef in sync for use in memoized callbacks
+  nodesRef.current = nodes;
 
   // Track selected nodes
   const selectedNodes = useMemo(() => nodes.filter((n) => n.selected), [nodes]);
@@ -280,7 +284,7 @@ function MoodboardCanvas() {
 
     setNodes([...itemNodes, ...noteNodes]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, notes]);
+  }, [items, notes, itemPassesFilter]);
 
   // Convert db edges to React Flow edges
   useEffect(() => {
@@ -455,7 +459,7 @@ function MoodboardCanvas() {
   }, [onNodesChange, pushHistory]);
 
   async function savePositions() {
-    const currentNodes = nodes;
+    const currentNodes = nodesRef.current;
     const itemPositions = currentNodes
       .filter((n) => n.id.startsWith('item-'))
       .map((n) => ({

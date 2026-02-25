@@ -198,7 +198,7 @@ export default async function AdminDashboardPage() {
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { label: 'New Search', href: '/admin/search', icon: <Search size={16} /> },
+            { label: 'New Search', href: '/admin/search/new', icon: <Search size={16} /> },
             { label: 'Schedule Shoot', href: '/admin/shoots', icon: <Camera size={16} /> },
             { label: 'New Moodboard', href: '/admin/moodboard', icon: <LayoutGrid size={16} /> },
             { label: 'Onboard Client', href: '/admin/clients/onboard', icon: <UserPlus size={16} /> },
