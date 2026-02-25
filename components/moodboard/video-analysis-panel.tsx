@@ -15,6 +15,7 @@ interface VideoAnalysisPanelProps {
   item: MoodboardItem;
   onClose: () => void;
   onReplicate: (item: MoodboardItem) => void;
+  onRescript?: (item: MoodboardItem) => void;
 }
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -24,7 +25,7 @@ const PLATFORM_COLORS: Record<string, string> = {
   twitter: 'bg-sky-500 text-white',
 };
 
-export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: VideoAnalysisPanelProps) {
+export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate, onRescript }: VideoAnalysisPanelProps) {
   const [item, setItem] = useState(initialItem);
   const [copied, setCopied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -290,6 +291,29 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
           {/* ── 6. Brief ── */}
           <PanelSection title="Replication Brief" icon={<CopyIcon size={14} className="text-accent-text" />}>
             <BriefSection item={item} onReplicate={onReplicate} onCopy={handleCopy} copied={copied} />
+          </PanelSection>
+
+          {/* ── 7. Rescript ── */}
+          <PanelSection title="Rescript for Brand" icon={<Sparkles size={14} className="text-indigo-400" />}>
+            {item.rescript ? (
+              <div className="space-y-3">
+                <p className="text-xs text-green-400">✅ Rescript generated {item.rescript.product ? `for ${item.rescript.product}` : ''}</p>
+                <button
+                  onClick={() => onRescript?.(item)}
+                  className="cursor-pointer text-xs text-accent hover:underline"
+                >
+                  View full rescript →
+                </button>
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-xs text-text-muted mb-3">Adapt this video&apos;s formula for your brand</p>
+                <Button onClick={() => onRescript?.(item)} size="sm" className="gap-1.5">
+                  <Sparkles size={14} />
+                  Rescript for Brand
+                </Button>
+              </div>
+            )}
           </PanelSection>
         </div>
       </div>

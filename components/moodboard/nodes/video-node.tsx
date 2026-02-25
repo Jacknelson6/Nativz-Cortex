@@ -10,6 +10,7 @@ interface VideoNodeData {
   item: MoodboardItem;
   onViewAnalysis: (item: MoodboardItem) => void;
   onReplicate: (item: MoodboardItem) => void;
+  onRescript: (item: MoodboardItem) => void;
   onDelete: (id: string) => void;
   onItemUpdate?: (item: MoodboardItem) => void;
   commentCount?: number;
@@ -41,7 +42,7 @@ function PlatformBadge({ platform }: { platform: string | null }) {
 }
 
 export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeData>) {
-  const { item, onViewAnalysis, onReplicate, onDelete, onItemUpdate, commentCount } = data;
+  const { item, onViewAnalysis, onReplicate, onRescript, onDelete, onItemUpdate, commentCount } = data;
   const isFailed = item.status === 'failed';
   const [reprocessing, setReprocessing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -52,6 +53,7 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
   const isAnalyzed = item.hook_score != null;
   const isTranscribed = !!item.transcript;
   const hasBrief = !!item.replication_brief;
+  const hasRescript = !!item.rescript;
 
   const handleReprocess = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -237,7 +239,7 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
         )}
 
         {/* On-demand action buttons */}
-        {(!isAnalyzed || !isTranscribed || !hasBrief) && (
+        {(!isAnalyzed || !isTranscribed || !hasBrief || !hasRescript) && (
           <div className="flex flex-wrap gap-1.5 border-t border-nativz-border pt-2">
             {!isAnalyzed && (
               <button
@@ -269,11 +271,20 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
                 {briefing ? 'Generating...' : '📋 Brief'}
               </button>
             )}
+            {!hasRescript && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onRescript(item); }}
+                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-indigo-400 hover:bg-indigo-400/10 transition-colors"
+              >
+                <Sparkles size={11} />
+                ✍️ Rescript
+              </button>
+            )}
           </div>
         )}
 
         {/* Completed badges row */}
-        {(isAnalyzed || isTranscribed || hasBrief) && (
+        {(isAnalyzed || isTranscribed || hasBrief || hasRescript) && (
           <div className="flex items-center gap-1.5 pl-5">
             {isAnalyzed && (
               <span className="flex items-center gap-0.5 text-[9px] text-green-400">
@@ -288,6 +299,11 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
             {hasBrief && (
               <span className="flex items-center gap-0.5 text-[9px] text-green-400">
                 <Check size={9} /> Brief
+              </span>
+            )}
+            {hasRescript && (
+              <span className="flex items-center gap-0.5 text-[9px] text-indigo-400 cursor-pointer" onClick={(e) => { e.stopPropagation(); onRescript(item); }}>
+                <Check size={9} /> Rescript
               </span>
             )}
           </div>

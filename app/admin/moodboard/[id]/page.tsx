@@ -91,6 +91,7 @@ function MoodboardCanvas() {
   // Analysis panel
   const [analysisItem, setAnalysisItem] = useState<MoodboardItem | null>(null);
   const [replicateItem, setReplicateItem] = useState<MoodboardItem | null>(null);
+  const [rescriptItem, setRescriptItem] = useState<MoodboardItem | null>(null);
 
   // AI Chat panel
   const [chatOpen, setChatOpen] = useState(false);
@@ -269,6 +270,7 @@ function MoodboardCanvas() {
         item,
         onViewAnalysis: (i: MoodboardItem) => setAnalysisItem(i),
         onReplicate: (i: MoodboardItem) => setReplicateItem(i),
+        onRescript: (i: MoodboardItem) => setRescriptItem(i),
         onDelete: handleDeleteItem,
         onExtractInsights: handleExtractInsights,
       },
@@ -908,6 +910,7 @@ function MoodboardCanvas() {
           item={analysisItem}
           onClose={() => setAnalysisItem(null)}
           onReplicate={(item) => { setAnalysisItem(null); setReplicateItem(item); }}
+          onRescript={(item) => { setAnalysisItem(null); setRescriptItem(item); }}
         />
       )}
 

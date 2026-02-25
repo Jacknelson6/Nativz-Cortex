@@ -127,3 +127,6 @@ BEGIN
       );
   END IF;
 END $$;
+
+-- Rescript column for moodboard items
+ALTER TABLE moodboard_items ADD COLUMN IF NOT EXISTS rescript JSONB;
