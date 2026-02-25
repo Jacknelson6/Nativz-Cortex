@@ -4,8 +4,7 @@ import { useState } from 'react';
 import { FileDown, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import type { TopicSearch, TopicSearchAIResponse, TrendingTopic } from '@/lib/types/search';
-import { hasSources } from '@/lib/types/search';
+import type { TopicSearch } from '@/lib/types/search';
 
 interface ExportPdfButtonProps {
   search: TopicSearch;

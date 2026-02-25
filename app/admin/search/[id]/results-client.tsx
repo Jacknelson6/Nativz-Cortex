@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Clock, Send, Undo2, Building2, Check, Plus, X, Mail, Users, User, Search, BarChart3, TrendingUp, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Clock, Send, Undo2, Building2, Check, Plus, X, Mail, Users, User } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -206,7 +206,6 @@ export function AdminResultsClient({ search, clientInfo, recipients = [] }: Admi
         {aiResponse?.niche_performance_insights && !!aiResponse?.brand_alignment_notes && (
           <CompetitiveAnalysis
             nicheInsights={aiResponse.niche_performance_insights}
-            brandNotes={aiResponse.brand_alignment_notes}
           />
         )}
 
@@ -215,7 +214,6 @@ export function AdminResultsClient({ search, clientInfo, recipients = [] }: Admi
           <ActionItems
             aiResponse={aiResponse}
             topics={aiResponse.trending_topics as TrendingTopic[]}
-            isBrandSearch={!!aiResponse.brand_alignment_notes}
           />
         )}
 

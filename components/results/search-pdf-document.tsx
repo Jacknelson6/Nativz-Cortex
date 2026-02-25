@@ -1,7 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer';
-import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, SearchMetrics, LegacySearchMetrics } from '@/lib/types/search';
-import { isNewMetrics, hasSources } from '@/lib/types/search';
+import type { TopicSearch, TopicSearchAIResponse, TrendingTopic } from '@/lib/types/search';
+import { isNewMetrics } from '@/lib/types/search';
 
 const colors = {
   primary: '#046BD2',

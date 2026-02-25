@@ -7,7 +7,7 @@ interface KeyFindingsProps {
   topics: { name: string; resonance: string; sentiment: number }[];
 }
 
-export function KeyFindings({ summary, topics }: KeyFindingsProps) {
+export function KeyFindings({ summary }: KeyFindingsProps) {
   // Extract key sentences from summary
   const sentences = summary
     .split(/[.!?]+/)

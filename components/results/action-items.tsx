@@ -1,16 +1,15 @@
 'use client';
 
-import { CheckCircle2, Target, Zap, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Target, Zap } from 'lucide-react';
 import { Card, CardTitle } from '@/components/ui/card';
 import type { TopicSearchAIResponse, TrendingTopic, VideoIdea } from '@/lib/types/search';
 
 interface ActionItemsProps {
   aiResponse: TopicSearchAIResponse;
   topics: TrendingTopic[];
-  isBrandSearch: boolean;
 }
 
-export function ActionItems({ aiResponse, topics, isBrandSearch }: ActionItemsProps) {
+export function ActionItems({ aiResponse, topics }: ActionItemsProps) {
   // Generate recommendations from AI response data
   const recommendations: { icon: React.ReactNode; text: string; priority: 'high' | 'medium' | 'low' }[] = [];
 

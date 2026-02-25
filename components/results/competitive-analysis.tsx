@@ -2,14 +2,13 @@
 
 import { Swords, TrendingUp, AlertTriangle, Sparkles } from 'lucide-react';
 import { Card, CardTitle } from '@/components/ui/card';
-import type { NicheInsights, ContentPillar } from '@/lib/types/search';
+import type { NicheInsights } from '@/lib/types/search';
 
 interface CompetitiveAnalysisProps {
   nicheInsights: NicheInsights;
-  brandNotes?: string;
 }
 
-export function CompetitiveAnalysis({ nicheInsights, brandNotes }: CompetitiveAnalysisProps) {
+export function CompetitiveAnalysis({ nicheInsights }: CompetitiveAnalysisProps) {
   return (
     <Card>
       <div className="flex items-center gap-2.5 mb-5">
