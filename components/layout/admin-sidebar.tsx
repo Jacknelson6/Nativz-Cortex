@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Search, History, Camera, BarChart3, Layers, Flame } from 'lucide-react';
+import { LayoutDashboard, Users, Search, History, Camera, BarChart3, Layers, Flame, UserSearch } from 'lucide-react';
 import { FloatingDock } from '@/components/ui/floating-dock';
 import { Button } from '@/components/ui/button';
 import { SidebarAccount } from '@/components/layout/sidebar-account';

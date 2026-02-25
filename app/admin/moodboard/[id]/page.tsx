@@ -32,6 +32,7 @@ import {
   X,
   Clipboard,
   Share2,
+  MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +40,7 @@ import { AddItemModal } from '@/components/moodboard/add-item-modal';
 import { VideoAnalysisPanel } from '@/components/moodboard/video-analysis-panel';
 import { ReplicationBriefModal } from '@/components/moodboard/replication-brief-modal';
 import { ShareBoardModal } from '@/components/moodboard/share-board-modal';
+import { AiChatPanel } from '@/components/moodboard/ai-chat-panel';
 import { VideoNode } from '@/components/moodboard/nodes/video-node';
 import { ImageNode } from '@/components/moodboard/nodes/image-node';
 import { WebsiteNode } from '@/components/moodboard/nodes/website-node';
@@ -89,6 +91,10 @@ function MoodboardCanvas() {
   // Analysis panel
   const [analysisItem, setAnalysisItem] = useState<MoodboardItem | null>(null);
   const [replicateItem, setReplicateItem] = useState<MoodboardItem | null>(null);
+
+  // AI Chat panel
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatItemIds, setChatItemIds] = useState<string[]>([]);
 
   // Tags & filters
   const [boardTags, setBoardTags] = useState<MoodboardTag[]>([]);
