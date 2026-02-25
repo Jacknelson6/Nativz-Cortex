@@ -6,6 +6,8 @@ import { Header } from '@/components/layout/header';
 import { SidebarProvider } from '@/components/layout/sidebar-provider';
 import { MobileSidebar } from '@/components/layout/mobile-sidebar';
 import { EasterEgg } from '@/components/easter-egg';
+import { CommandPalette } from '@/components/shared/command-palette';
+import { PageTransition } from '@/components/shared/page-transition';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +44,7 @@ export default async function AdminLayout({
   return (
     <SidebarProvider>
       <EasterEgg />
+      <CommandPalette />
       <div className="flex h-screen flex-col">
         <Header />
         <div className="flex flex-1 overflow-hidden">
@@ -50,7 +53,7 @@ export default async function AdminLayout({
             <AdminNavItems />
           </MobileSidebar>
           <main className="flex-1 overflow-y-auto bg-background">
-            {children}
+            <PageTransition>{children}</PageTransition>
           </main>
         </div>
       </div>

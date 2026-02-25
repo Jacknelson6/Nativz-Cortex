@@ -13,6 +13,7 @@ import { InviteButton } from '@/components/clients/invite-button';
 import { ClientStrategyCard } from '@/components/clients/client-strategy-card';
 import { HealthScoreCard } from '@/components/clients/health-score-card';
 import { calculateClientHealth } from '@/lib/clients/health';
+import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import type { ClientStrategy } from '@/lib/types/strategy';
 
 export default async function AdminClientDetailPage({
@@ -125,6 +126,10 @@ export default async function AdminClientDetailPage({
 
     return (
       <div className="p-6 space-y-6">
+        <Breadcrumbs items={[
+          { label: 'Clients', href: '/admin/clients' },
+          { label: vaultProfile.name },
+        ]} />
         {/* Header */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">

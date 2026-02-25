@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isNangoConfigured, createCalendarEventViaNango } from '@/lib/nango/client';
+import { createNotification } from '@/lib/notifications/create';
 
 const scheduleSchema = z.object({
   client_name: z.string().min(1),
@@ -130,6 +131,15 @@ export async function POST(request: NextRequest) {
       console.error('Failed to create shoot event:', insertError);
       return NextResponse.json({ error: 'Failed to save shoot' }, { status: 500 });
     }
+
+    // Notify admin about scheduled shoot
+    createNotification({
+      recipientUserId: user.id,
+      type: 'shoot_scheduled',
+      title: 'Shoot scheduled',
+      body: `${data.client_name} shoot on ${data.shoot_date}`,
+      linkPath: `/admin/shoots/${shootEvent.id}`,
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,
