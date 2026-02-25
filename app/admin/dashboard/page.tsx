@@ -158,7 +158,6 @@ export default async function AdminDashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
-              <Sparkles size={22} className="text-purple-400" />
               Command Center
             </h1>
             <p className="text-sm text-text-muted mt-0.5">Your content strategy at a glance</p>
@@ -174,26 +173,26 @@ export default async function AdminDashboardPage() {
             icon={<Users size={18} />}
             value={totalClients}
             label="Total Clients"
-            accentClass="from-emerald-500 to-teal-500"
+            accentClass="from-blue-500 to-purple-500"
           />
           <StatCard
             icon={<Search size={18} />}
             value={activeSearches}
             label="Searches This Month"
             trend={searchTrend}
-            accentClass="from-blue-500 to-cyan-500"
+            accentClass="from-blue-500 to-purple-500"
           />
           <StatCard
             icon={<Calendar size={18} />}
             value={upcomingShoots}
             label="Upcoming Shoots"
-            accentClass="from-purple-500 to-pink-500"
+            accentClass="from-blue-500 to-purple-500"
           />
           <StatCard
             icon={<Image size={18} />}
             value={moodboardItems}
             label="Moodboard Items"
-            accentClass="from-orange-500 to-pink-500"
+            accentClass="from-blue-500 to-purple-500"
           />
         </div>
 
