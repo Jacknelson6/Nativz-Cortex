@@ -168,13 +168,12 @@ export function ScheduleShootModal({ open, onClose, onCreated, shoot, prefilledD
   useEffect(() => {
     if (!open) return;
     async function fetchClients() {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from('clients')
-        .select('id, name, agency, poc_email')
-        .eq('is_active', true)
-        .order('name');
-      if (data) setClients(data);
+      try {
+        const res = await fetch('/api/clients');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data)) setClients(data.map((c: Record<string, unknown>) => ({ id: c.id as string, name: c.name as string, agency: (c.agency as string) || undefined, poc_email: (c.poc_email as string) || undefined })));
+      } catch { /* silent */ }
     }
     async function fetchSchedulingLinks() {
       try {

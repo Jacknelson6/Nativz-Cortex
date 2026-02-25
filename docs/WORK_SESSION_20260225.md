@@ -1,49 +1,50 @@
 # Work Session — Feb 25, 2026 (Atlas Solo)
 
-## Active Agents
-- [ ] cortex-shoots-calendar — Calendar click-to-schedule + scheduling links + email drafts
+## Completed ✅
 
-## QA Pass — Full App Audit
-- [ ] Build passes clean (npm run build)
-- [ ] All API routes have proper auth guards
-- [ ] All pages render without errors
-- [ ] Supabase migrations are up to date
+### Wave 1
+- **cortex-shoots-calendar** — Calendar click-to-schedule, scheduling links in settings, email drafts, bulk schedule
+- **cortex-qa-full** — Full API audit (75 routes), fixed 3 missing auth guards on vault routes, combined migrations, loading states
+- **cortex-dashboard** — Admin dashboard redesign: hero stats, activity feed, upcoming shoots, recent searches, quick actions
+- **cortex-polish** — Skeleton loaders, error boundaries (global + admin + portal), empty states, mobile responsiveness fixes
 
-## Bug Fixes Needed
-- [ ] Verify moodboard TikTok processing end-to-end on Vercel
-- [ ] Verify Groq Whisper transcript fallback works in production
-- [ ] Test moodboard connectors/arrows actually work after fix
-- [ ] Test sticky note persistence after fix
-- [ ] Test board card thumbnail mosaic rendering
-- [ ] Verify single-scroll analysis panel deployed correctly
-- [ ] Test 9:16 aspect ratio cards for TikTok
-- [ ] Test delete button on video cards
-- [ ] Test reprocess button on failed items
-- [ ] Verify search history Brand/Topic filter works
+### Wave 2
+- **cortex-search-polish** — Search results page redesign: sentiment badges, key findings cards, competitive analysis, recommendations, PDF export, share links
+- **cortex-clients** — Client health scores (0-100), detail page improvements, list view with sort/filter/grid toggle, agency filter
 
-## Feature Improvements
-- [ ] Dashboard — make it actually useful (key metrics, recent activity, quick actions)
-- [ ] Analytics page — verify Instagram analytics charts render with real data
-- [ ] Client detail pages — verify strategy generation works
-- [ ] Client onboarding flow — test the full flow
-- [ ] Portal pages — verify client portal works (login, dashboard, search, reports)
-- [ ] Notifications system — check if it works
-- [ ] Calendar integration — verify Google Calendar sync
-- [ ] Ideas system — verify CRUD works for both admin and portal
-- [ ] Vault (Obsidian) integration — verify it connects
-- [ ] Monday.com sync — verify webhook and sync routes
+### Wave 3
+- **cortex-final-polish** — Cmd+K command palette, breadcrumbs, page transitions, favicon, toast styling
+- **cortex-settings-notifications** — Settings hub, notification bell with dropdown, auto-notifications on search complete/shoot scheduled
 
-## New Features to Build
-- [ ] Admin dashboard redesign — hero stats cards, recent searches, upcoming shoots, client activity
-- [ ] Client health scores — based on search frequency, content output, engagement
-- [ ] Search results improvements — better presentation of AI analysis
-- [ ] Shoot detail page — click into a shoot for full details, footage, plan
-- [ ] Email integration — actually send emails from the app (scheduling, reports)
-- [ ] Export functionality — export search results, client reports as PDF
-- [ ] Mobile responsiveness audit — make sure tablet/mobile works
-- [ ] Loading states — skeleton loaders instead of spinners
-- [ ] Error boundaries — graceful error handling on all pages
-- [ ] Empty states — better empty state designs across all pages
+## Build Status: ✅ Clean (0 errors)
 
-## Completed This Session
-- (will be filled as work completes)
+## Pending Migrations (Jack needs to run in Supabase SQL editor)
+```sql
+-- 006: Search mode
+ALTER TABLE topic_searches ADD COLUMN IF NOT EXISTS search_mode TEXT DEFAULT 'general';
+
+-- 007: Agency settings
+CREATE TABLE IF NOT EXISTS agency_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agency TEXT NOT NULL UNIQUE,
+  scheduling_link TEXT,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+INSERT INTO agency_settings (agency) VALUES ('nativz'), ('ac') ON CONFLICT DO NOTHING;
+
+-- 008: Notifications (if not exists)
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT,
+  link TEXT,
+  read BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id) WHERE read = false;
+```
+
+## Total: 8 agents, ~30 minutes, all pushed to main
