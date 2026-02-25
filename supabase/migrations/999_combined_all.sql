@@ -16,6 +16,10 @@ ALTER TABLE moodboard_items ADD COLUMN IF NOT EXISTS hook_score INTEGER;
 ALTER TABLE moodboard_items ADD COLUMN IF NOT EXISTS hook_type TEXT;
 ALTER TABLE moodboard_items ADD COLUMN IF NOT EXISTS transcript_segments JSONB DEFAULT '[]';
 ALTER TABLE moodboard_items ADD COLUMN IF NOT EXISTS error_message TEXT;
+ALTER TABLE moodboard_items ADD COLUMN IF NOT EXISTS duration INTEGER;
+ALTER TABLE moodboard_items ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
+ALTER TABLE moodboard_items ADD COLUMN IF NOT EXISTS duration INTEGER;
+ALTER TABLE moodboard_items ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
 
 ALTER TABLE moodboard_comments ADD COLUMN IF NOT EXISTS video_timestamp INTEGER;
 
