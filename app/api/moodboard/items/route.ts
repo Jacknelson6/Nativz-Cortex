@@ -56,15 +56,52 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Board not found' }, { status: 404 });
     }
 
+    // Quick metadata fetch for instant thumbnail + title
+    let quickTitle = parsed.data.title ?? null;
+    let quickThumbnail: string | null = null;
+    let detectedPlatform: string | null = null;
+    const url = parsed.data.url;
+
+    try {
+      if (url.includes('tiktok.com')) {
+        detectedPlatform = 'tiktok';
+        const tikwmRes = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5000) });
+        if (tikwmRes.ok) {
+          const tikwm = await tikwmRes.json();
+          if (tikwm.code === 0 && tikwm.data) {
+            quickTitle = quickTitle || tikwm.data.title || null;
+            quickThumbnail = tikwm.data.cover || tikwm.data.origin_cover || null;
+          }
+        }
+      } else if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        detectedPlatform = 'youtube';
+        const oembedRes = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`, { signal: AbortSignal.timeout(5000) });
+        if (oembedRes.ok) {
+          const oembed = await oembedRes.json();
+          quickTitle = quickTitle || oembed.title || null;
+          quickThumbnail = oembed.thumbnail_url || null;
+        }
+      } else if (url.includes('instagram.com')) {
+        detectedPlatform = 'instagram';
+      } else if (url.includes('twitter.com') || url.includes('x.com')) {
+        detectedPlatform = 'twitter';
+      }
+    } catch {
+      // Quick fetch failed, no problem — full processing will handle it
+    }
+
     const insertData: Record<string, unknown> = {
         board_id: parsed.data.board_id,
         url: parsed.data.url,
         type: parsed.data.type,
-        title: parsed.data.title ?? null,
+        title: quickTitle,
+        thumbnail_url: quickThumbnail,
+        platform: detectedPlatform,
         position_x: parsed.data.position_x,
         position_y: parsed.data.position_y,
         created_by: user.id,
         status: parsed.data.type === 'image' ? 'completed' : 'pending',
+        width: (detectedPlatform === 'tiktok' || detectedPlatform === 'instagram') ? 240 : 320,
       };
     if (parsed.data.width !== undefined) insertData.width = parsed.data.width;
     if (parsed.data.height !== undefined) insertData.height = parsed.data.height;
