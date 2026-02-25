@@ -59,11 +59,15 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
   };
 
   return (
-    <div className="bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden min-w-[280px] max-w-[360px] group">
+    <div className={`bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden group ${
+      item.platform === 'tiktok' || item.platform === 'instagram' ? 'min-w-[200px] max-w-[240px]' : 'min-w-[280px] max-w-[360px]'
+    }`}>
       <Handle type="target" position={Position.Top} className="!bg-accent !border-0 !w-2 !h-2" />
 
       {/* Thumbnail */}
-      <div className="relative aspect-video bg-surface-hover flex items-center justify-center overflow-hidden">
+      <div className={`relative bg-surface-hover flex items-center justify-center overflow-hidden ${
+        item.platform === 'tiktok' || item.platform === 'instagram' ? 'aspect-[9/16]' : 'aspect-video'
+      }`}>
         <PlatformBadge platform={item.platform} />
 
         {/* Comment count badge */}

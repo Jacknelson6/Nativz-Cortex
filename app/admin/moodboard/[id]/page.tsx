@@ -261,7 +261,7 @@ function MoodboardCanvas() {
         onDelete: handleDeleteItem,
         onExtractInsights: handleExtractInsights,
       },
-      style: { width: item.width },
+      style: { width: item.width || (item.platform === 'tiktok' || item.platform === 'instagram' ? 220 : 320) },
     }));
 
     const noteNodes: Node[] = notes.map((note) => ({
