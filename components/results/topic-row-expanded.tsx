@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { MessageSquare, FileText, Globe, MessageCircle, Video, ExternalLink, Copy, Check } from 'lucide-react';
+import { toast } from 'sonner';
 import { VideoIdeaCard } from './video-idea-card';
 import { hasSources } from '@/lib/types/search';
 import type { TrendingTopic, LegacyTrendingTopic, TopicSource, VideoIdea } from '@/lib/types/search';
@@ -62,9 +63,10 @@ export function TopicRowExpanded({ topic, clientId, searchId }: TopicRowExpanded
         formatAllIdeasForClipboard(topic.name, topic.video_ideas)
       );
       setCopiedAll(true);
+      toast.success('All ideas copied to clipboard');
       setTimeout(() => setCopiedAll(false), 2000);
     } catch {
-      // Clipboard API not available
+      toast.error('Failed to copy to clipboard');
     }
   }
 

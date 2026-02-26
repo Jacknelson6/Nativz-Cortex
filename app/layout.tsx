@@ -12,7 +12,7 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: 'Nativz Cortex',
   description: 'Social media intelligence platform',
-  icons: { icon: '/favicon.svg' },
+  icons: { icon: '/favicon.ico', apple: '/apple-icon.png' },
   openGraph: {
     title: 'Nativz Cortex',
     description: 'Social media intelligence platform',

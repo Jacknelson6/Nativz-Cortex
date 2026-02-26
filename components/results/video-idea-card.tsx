@@ -69,9 +69,10 @@ export function VideoIdeaCard({ idea, topicName, clientId, searchId, initialReac
     try {
       await navigator.clipboard.writeText(formatIdeaForClipboard(idea));
       setCopied(true);
+      toast.success('Idea copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Clipboard API not available
+      toast.error('Failed to copy to clipboard');
     }
   }
 

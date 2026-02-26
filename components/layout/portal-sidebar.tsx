@@ -6,38 +6,52 @@ import { LayoutDashboard, Search, FileText, Settings, Palette, Lightbulb } from 
 import { FloatingDock } from '@/components/ui/floating-dock';
 import { Button } from '@/components/ui/button';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
+import type { FeatureFlags } from '@/lib/portal/get-portal-client';
 
-const NAV_ITEMS = [
-  { href: '/portal/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/portal/reports', label: 'Reports', icon: FileText },
-  { href: '/portal/preferences', label: 'Preferences', icon: Palette },
-  { href: '/portal/ideas', label: 'Ideas', icon: Lightbulb },
-  { href: '/portal/settings', label: 'Settings', icon: Settings },
+interface PortalNavItemsProps {
+  featureFlags?: FeatureFlags;
+}
+
+const ALL_NAV_ITEMS = [
+  { href: '/portal/dashboard', label: 'Dashboard', icon: LayoutDashboard, flag: null },
+  { href: '/portal/reports', label: 'Reports', icon: FileText, flag: 'can_view_reports' as const },
+  { href: '/portal/preferences', label: 'Preferences', icon: Palette, flag: null },
+  { href: '/portal/ideas', label: 'Ideas', icon: Lightbulb, flag: null },
+  { href: '/portal/settings', label: 'Settings', icon: Settings, flag: null },
 ];
 
-export function PortalNavItems() {
+export function PortalNavItems({ featureFlags }: PortalNavItemsProps) {
   const pathname = usePathname();
 
   function isActive(href: string) {
     return pathname === href || pathname.startsWith(href + '/');
   }
 
-  const dockItems = NAV_ITEMS.map((item) => ({
+  const navItems = ALL_NAV_ITEMS.filter((item) => {
+    if (!item.flag) return true;
+    return featureFlags?.[item.flag] !== false;
+  });
+
+  const dockItems = navItems.map((item) => ({
     title: item.label,
     icon: <item.icon size={18} />,
     href: item.href,
     isActive: isActive(item.href),
   }));
 
+  const canSearch = featureFlags?.can_search !== false;
+
   return (
     <>
       {/* CTA */}
-      <Link href="/portal/search/new" className="mb-2">
-        <Button shape="pill" className="w-full">
-          <Search size={16} />
-          New search
-        </Button>
-      </Link>
+      {canSearch && (
+        <Link href="/portal/search/new" className="mb-2">
+          <Button shape="pill" className="w-full">
+            <Search size={16} />
+            New search
+          </Button>
+        </Link>
+      )}
 
       {/* Navigation */}
       <FloatingDock items={dockItems} />
@@ -48,13 +62,14 @@ export function PortalNavItems() {
 interface PortalSidebarProps {
   userName?: string;
   avatarUrl?: string | null;
+  featureFlags?: FeatureFlags;
 }
 
-export function PortalSidebar({ userName, avatarUrl }: PortalSidebarProps) {
+export function PortalSidebar({ userName, avatarUrl, featureFlags }: PortalSidebarProps) {
   return (
     <nav className="hidden md:flex w-56 flex-col border-r border-nativz-border bg-surface">
       <div className="flex flex-1 flex-col gap-0.5 p-3">
-        <PortalNavItems />
+        <PortalNavItems featureFlags={featureFlags} />
       </div>
       <SidebarAccount
         userName={userName}

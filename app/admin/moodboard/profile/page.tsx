@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { UserSearch, ChevronDown, ChevronRight, Eye, Heart, MessageCircle, Share2, Clock, Loader2, CheckSquare, Square } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { UserSearch, ChevronDown, ChevronRight, Eye, Heart, MessageCircle, Clock, Loader2, CheckSquare, Square, FolderPlus, ExternalLink } from 'lucide-react';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Card } from '@/components/ui/card';
+import { toast } from 'sonner';
+import type { MoodboardBoard } from '@/lib/types/moodboard';
 
 interface PostData {
   url: string;
@@ -54,23 +56,34 @@ function formatLabel(key: string): string {
 }
 
 export default function ProfileExtractPage() {
-  // DEPRECATED - This feature is currently disabled
-  return (
-    <div className="flex items-center justify-center h-full p-6">
-      <div className="text-center">
-        <h1 className="text-xl font-semibold text-text-primary mb-2">Profile Extract</h1>
-        <p className="text-sm text-text-muted">This feature is currently undergoing maintenance.</p>
-      </div>
-    </div>
-  );
-  
-  // eslint-disable-next-line no-unreachable
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<ExtractResult | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [selectedPosts, setSelectedPosts] = useState<Set<string>>(new Set());
+  const [boards, setBoards] = useState<MoodboardBoard[]>([]);
+  const [selectedBoardId, setSelectedBoardId] = useState<string>('');
+  const [saving, setSaving] = useState(false);
+
+  const fetchBoards = useCallback(async () => {
+    try {
+      const res = await fetch('/api/moodboard/boards');
+      if (res.ok) {
+        const data = await res.json();
+        setBoards(data);
+        if (data.length > 0 && !selectedBoardId) {
+          setSelectedBoardId(data[0].id);
+        }
+      }
+    } catch {
+      // Boards fetch optional
+    }
+  }, [selectedBoardId]);
+
+  useEffect(() => {
+    fetchBoards();
+  }, [fetchBoards]);
 
   async function handleExtract() {
     if (!url.trim()) return;
@@ -91,6 +104,7 @@ export default function ProfileExtractPage() {
         return;
       }
       setResult(data);
+      toast.success(`Found ${data.posts.length} posts from @${data.profile.handle}`);
     } catch {
       setError('Network error. Please try again.');
     } finally {
@@ -106,10 +120,10 @@ export default function ProfileExtractPage() {
     });
   }
 
-  function togglePost(url: string) {
+  function togglePost(postUrl: string) {
     setSelectedPosts((prev) => {
       const next = new Set(prev);
-      next.has(url) ? next.delete(url) : next.add(url);
+      next.has(postUrl) ? next.delete(postUrl) : next.add(postUrl);
       return next;
     });
   }
@@ -117,6 +131,52 @@ export default function ProfileExtractPage() {
   function selectAll() {
     if (!result) return;
     setSelectedPosts(new Set(result.posts.map((p) => p.url)));
+  }
+
+  async function handleSaveToBoard() {
+    if (!selectedBoardId || selectedPosts.size === 0 || !result) return;
+    setSaving(true);
+
+    const selected = result.posts.filter((p) => selectedPosts.has(p.url));
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < selected.length; i++) {
+      const post = selected[i];
+      const col = i % 5;
+      const row = Math.floor(i / 5);
+
+      try {
+        const res = await fetch('/api/moodboard/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            board_id: selectedBoardId,
+            url: post.url,
+            type: 'video',
+            title: post.title || null,
+            position_x: col * 260,
+            position_y: row * 420,
+            width: 240,
+          }),
+        });
+        if (res.ok) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch {
+        failCount++;
+      }
+    }
+
+    setSaving(false);
+    if (successCount > 0) {
+      toast.success(`Added ${successCount} videos to board`);
+    }
+    if (failCount > 0) {
+      toast.error(`Failed to add ${failCount} videos`);
+    }
   }
 
   return (
@@ -127,7 +187,7 @@ export default function ProfileExtractPage() {
           <UserSearch size={20} className="text-white" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-white">Profile Extract</h1>
+          <h1 className="text-xl font-semibold text-white">Profile extract</h1>
           <p className="text-sm text-white/50">Analyze a creator&apos;s top content by format</p>
         </div>
       </div>
@@ -152,45 +212,57 @@ export default function ProfileExtractPage() {
       </Card>
 
       {/* Results */}
-      {result && (
+      {result && (() => {
+        const r = result;
+        return (
         <>
           {/* Creator Header */}
           <Card padding="none">
             <div className="relative overflow-hidden rounded-xl">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-600/30 via-purple-600/20 to-pink-600/30" />
               <div className="relative flex items-center gap-5 p-6">
-                {result.profile.avatar ? (
+                {r.profile.avatar ? (
                   <img
-                    src={result.profile.avatar}
-                    alt={result.profile.name}
+                    src={r.profile.avatar}
+                    alt={r.profile.name}
                     className="h-20 w-20 rounded-full border-2 border-white/20 object-cover"
                   />
                 ) : (
                   <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/10 text-2xl font-bold text-white">
-                    {result.profile.name[0]?.toUpperCase()}
+                    {r.profile.name[0]?.toUpperCase()}
                   </div>
                 )}
                 <div className="flex-1">
-                  <h2 className="text-lg font-semibold text-white">{result.profile.name}</h2>
-                  <p className="text-sm text-white/50">@{result.profile.handle}</p>
-                  {result.profile.bio && <p className="mt-1 text-sm text-white/60 line-clamp-2">{result.profile.bio}</p>}
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-semibold text-white">{r.profile.name}</h2>
+                    <a
+                      href={`https://www.tiktok.com/@${r.profile.handle}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-white/30 hover:text-white/60 transition-colors"
+                    >
+                      <ExternalLink size={14} />
+                    </a>
+                  </div>
+                  <p className="text-sm text-white/50">@{r.profile.handle}</p>
+                  {r.profile.bio && <p className="mt-1 text-sm text-white/60 line-clamp-2">{r.profile.bio}</p>}
                 </div>
                 <div className="flex gap-6 text-center">
-                  {result.profile.followers != null && (
+                  {r.profile.followers != null && (
                     <div>
-                      <p className="text-lg font-semibold text-white">{formatNumber(result.profile.followers)}</p>
+                      <p className="text-lg font-semibold text-white">{formatNumber(r.profile.followers)}</p>
                       <p className="text-xs text-white/40">Followers</p>
                     </div>
                   )}
-                  {result.profile.likes != null && (
+                  {r.profile.likes != null && (
                     <div>
-                      <p className="text-lg font-semibold text-white">{formatNumber(result.profile.likes)}</p>
+                      <p className="text-lg font-semibold text-white">{formatNumber(r.profile.likes)}</p>
                       <p className="text-xs text-white/40">Likes</p>
                     </div>
                   )}
-                  {result.profile.videos != null && (
+                  {r.profile.videos != null && (
                     <div>
-                      <p className="text-lg font-semibold text-white">{formatNumber(result.profile.videos)}</p>
+                      <p className="text-lg font-semibold text-white">{formatNumber(r.profile.videos)}</p>
                       <p className="text-xs text-white/40">Videos</p>
                     </div>
                   )}
@@ -200,19 +272,43 @@ export default function ProfileExtractPage() {
           </Card>
 
           {/* Actions */}
-          <div className="flex items-center gap-3">
-            <GlassButton onClick={selectAll}>Select All ({result.posts.length})</GlassButton>
+          <div className="flex items-center gap-3 flex-wrap">
+            <GlassButton onClick={selectAll}>Select all ({r.posts.length})</GlassButton>
             {selectedPosts.size > 0 && (
               <GlassButton onClick={() => setSelectedPosts(new Set())}>
                 Clear ({selectedPosts.size})
               </GlassButton>
             )}
-            <div className="flex-1" />
-            <p className="text-sm text-white/40">{result.posts.length} posts analyzed</p>
+
+            {selectedPosts.size > 0 && boards.length > 0 && (
+              <div className="flex items-center gap-2 ml-auto">
+                <select
+                  value={selectedBoardId}
+                  onChange={(e) => setSelectedBoardId(e.target.value)}
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                >
+                  {boards.map((b) => (
+                    <option key={b.id} value={b.id} className="bg-gray-900 text-white">
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+                <GlassButton onClick={handleSaveToBoard} disabled={saving}>
+                  {saving ? <Loader2 size={16} className="animate-spin" /> : <FolderPlus size={16} />}
+                  {saving ? 'Saving...' : `Save ${selectedPosts.size} to board`}
+                </GlassButton>
+              </div>
+            )}
+
+            {selectedPosts.size === 0 && (
+              <div className="flex-1 text-right">
+                <p className="text-sm text-white/40">{r.posts.length} posts analyzed</p>
+              </div>
+            )}
           </div>
 
           {/* Format Groups */}
-          {Object.entries(result.formatGroups)
+          {Object.entries(r.formatGroups)
             .sort(([, a], [, b]) => b.avgEngagement - a.avgEngagement)
             .map(([groupName, group]) => (
               <Card key={groupName} padding="none">
@@ -243,7 +339,9 @@ export default function ProfileExtractPage() {
                     {group.posts.map((post) => (
                       <div
                         key={post.url}
-                        className="group relative cursor-pointer overflow-hidden rounded-lg border border-white/5 bg-white/5 transition-all hover:border-blue-500/30"
+                        className={`group relative cursor-pointer overflow-hidden rounded-lg border transition-all hover:border-blue-500/30 ${
+                          selectedPosts.has(post.url) ? 'border-blue-500/40 bg-blue-500/10' : 'border-white/5 bg-white/5'
+                        }`}
                         onClick={() => togglePost(post.url)}
                       >
                         {/* Selection indicator */}
@@ -286,7 +384,8 @@ export default function ProfileExtractPage() {
               </Card>
             ))}
         </>
-      )}
+        );
+      })()}
     </div>
   );
 }

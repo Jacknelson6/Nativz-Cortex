@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Send, Copy, Check, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface InviteButtonProps {
   clientId: string;
@@ -32,6 +33,7 @@ export function InviteButton({ clientId, clientName }: InviteButtonProps) {
       }
 
       setInviteUrl(data.invite_url);
+      toast.success('Invite link generated');
     } catch {
       setError('Something went wrong. Try again.');
     } finally {
@@ -43,6 +45,7 @@ export function InviteButton({ clientId, clientName }: InviteButtonProps) {
     if (!inviteUrl) return;
     await navigator.clipboard.writeText(inviteUrl);
     setCopied(true);
+    toast.success('Invite link copied to clipboard');
     setTimeout(() => setCopied(false), 2000);
   }
 
