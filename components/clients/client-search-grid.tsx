@@ -50,8 +50,8 @@ function ClientCard({ client, i, dimmed, listView }: { client: ClientItem; i: nu
       <Link href={`/admin/clients/${client.slug}`}>
         <div className={`flex items-center gap-3 rounded-lg border border-nativz-border-light px-4 py-3 hover:bg-surface-hover transition-colors animate-stagger-in ${dimmed ? 'opacity-50 hover:opacity-80' : ''}`} style={{ animationDelay: `${i * 30}ms` }}>
           {client.logoUrl ? (
-            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg">
-              <img src={client.logoUrl} alt={client.name} className="h-full w-full object-cover" />
+            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-surface-hover/50 flex items-center justify-center">
+              <img src={client.logoUrl} alt={client.name} className="h-full w-full object-contain p-0.5" />
             </div>
           ) : (
             <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
@@ -84,8 +84,8 @@ function ClientCard({ client, i, dimmed, listView }: { client: ClientItem; i: nu
     <Link href={`/admin/clients/${client.slug}`}>
       <Card interactive className={`animate-stagger-in flex items-start gap-3 ${dimmed ? 'opacity-50 hover:opacity-80' : ''}`} style={{ animationDelay: `${i * 50}ms` }}>
         {client.logoUrl ? (
-          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg">
-            <img src={client.logoUrl} alt={client.name} className="h-full w-full object-cover" />
+          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-surface-hover/50 flex items-center justify-center">
+            <img src={client.logoUrl} alt={client.name} className="h-full w-full object-contain p-1" />
           </div>
         ) : (
           <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
@@ -173,7 +173,7 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
         <select
           value={agencyFilter}
           onChange={(e) => setAgencyFilter(e.target.value as AgencyFilter)}
-          className="rounded-lg border border-nativz-border bg-surface-primary px-3 py-2 text-sm text-text-primary focus:border-accent-border focus:outline-none cursor-pointer"
+          className="rounded-lg border border-nativz-border bg-surface-primary pl-3 pr-8 py-2 text-sm text-text-primary focus:border-accent-border focus:outline-none cursor-pointer appearance-auto"
         >
           <option value="all">All agencies</option>
           <option value="nativz">Nativz</option>

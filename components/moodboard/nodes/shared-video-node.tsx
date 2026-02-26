@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
-import { Film, Play, Eye, Music } from 'lucide-react';
+import { Film, Play, Eye, Music, Heart, MessageCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { MoodboardItem } from '@/lib/types/moodboard';
 
@@ -83,9 +83,9 @@ export const SharedVideoNode = memo(function SharedVideoNode({ data }: NodeProps
 
         {item.stats && (
           <div className="flex items-center gap-3 text-[10px] text-text-muted pl-5">
-            {item.stats.views != null && <span>👁 {formatCompactNumber(item.stats.views)}</span>}
-            {item.stats.likes != null && <span>❤️ {formatCompactNumber(item.stats.likes)}</span>}
-            {item.stats.comments != null && <span>💬 {formatCompactNumber(item.stats.comments)}</span>}
+            {item.stats.views != null && <span className="flex items-center gap-0.5"><Eye size={10} /> {formatCompactNumber(item.stats.views)}</span>}
+            {item.stats.likes != null && <span className="flex items-center gap-0.5"><Heart size={10} /> {formatCompactNumber(item.stats.likes)}</span>}
+            {item.stats.comments != null && <span className="flex items-center gap-0.5"><MessageCircle size={10} /> {formatCompactNumber(item.stats.comments)}</span>}
           </div>
         )}
 

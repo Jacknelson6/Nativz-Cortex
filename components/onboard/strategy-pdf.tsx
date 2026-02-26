@@ -177,7 +177,7 @@ export function StrategyPdf({ strategy, clientName, agency }: StrategyPdfProps) 
     <Document>
       {/* Cover page */}
       <Page size="A4" style={styles.coverPage}>
-        <Image src={logo} style={{ width: 160, height: 40, marginBottom: 10, objectFit: 'contain' }} />
+        <Image src={logo} style={{ width: 160, height: 48, marginBottom: 10, objectFit: 'contain' }} />
         <View style={[styles.accentLine, { backgroundColor: brandColor }]} />
         <Text style={styles.coverTitle}>{clientName}</Text>
         <Text style={[styles.coverSubtitle, { color: brandColor }]}>Content Strategy Playbook</Text>
@@ -293,7 +293,7 @@ export function StrategyPdf({ strategy, clientName, agency }: StrategyPdfProps) 
             </>
           )}
           <View style={styles.footer}>
-            <Text>Nativz</Text>
+            <Text>{isAC ? 'Anderson Collaborative' : 'Nativz'}</Text>
             <Text>{clientName} — Platforms & Trends</Text>
           </View>
         </Page>
@@ -314,7 +314,7 @@ export function StrategyPdf({ strategy, clientName, agency }: StrategyPdfProps) 
             </View>
           ))}
           <View style={styles.footer}>
-            <Text>Nativz</Text>
+            <Text>{isAC ? 'Anderson Collaborative' : 'Nativz'}</Text>
             <Text>{clientName} — Video Ideas</Text>
           </View>
         </Page>
@@ -365,7 +365,7 @@ export function StrategyPdf({ strategy, clientName, agency }: StrategyPdfProps) 
           </>
         )}
         <View style={styles.footer}>
-          <Text>Nativz</Text>
+          <Text>{isAC ? 'Anderson Collaborative' : 'Nativz'}</Text>
           <Text>{clientName} — Competitive & Next Steps</Text>
         </View>
       </Page>
