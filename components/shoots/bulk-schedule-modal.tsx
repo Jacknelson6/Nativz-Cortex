@@ -57,7 +57,7 @@ export function BulkScheduleModal({ open, onClose }: BulkScheduleModalProps) {
       setLoading(true);
       const supabase = createClient();
       const [clientsRes, linksRes] = await Promise.all([
-        supabase.from('clients').select('id, name, agency, poc_email').eq('is_active', true).order('name'),
+        supabase.from('clients').select('id, name').eq('is_active', true).order('name'),
         fetch('/api/settings/scheduling').then((r) => r.ok ? r.json() : { settings: [] }),
       ]);
       if (clientsRes.data) setClients(clientsRes.data);
