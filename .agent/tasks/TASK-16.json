@@ -1,0 +1,44 @@
+{
+  "id": "TASK-16",
+  "title": "Shoots — Add Select All for multi-client scheduling",
+  "category": "functional",
+  "description": "Add a 'Select all' option to the client selection UI when scheduling shoots. Enable bulk selection so scheduling applies to all selected clients at once.",
+  "acceptanceCriteria": [
+    "'Select all' option available in client selector",
+    "Bulk selection mode toggles all clients",
+    "Scheduling applies to all selected clients",
+    "State persists during multi-select interactions",
+    "UX clearly shows how many clients are selected"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Locate client selection in schedule modal",
+      "details": "Find the ScheduleShootsModal component. Identify how clients are currently listed and selected (checkboxes, list items, etc.).",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Add Select All checkbox/button",
+      "details": "Add a 'Select all' checkbox at the top of the client list. When checked, set all clients to selected. When unchecked, deselect all. Handle indeterminate state when some are selected.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Update scheduling logic for bulk",
+      "details": "Ensure the schedule API call handles multiple client IDs. May need to call the API in sequence or batch. Show progress if scheduling multiple shoots.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Show selection count",
+      "details": "Display 'X clients selected' count near the Select All control for clarity.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "Check if ScheduleShootsModal already uses a multi-select pattern — may just need the Select All toggle added"
+  ]
+}

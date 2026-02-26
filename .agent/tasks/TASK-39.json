@@ -1,0 +1,35 @@
+{
+  "id": "TASK-39",
+  "title": "Clients — Remove not sent label from recent searches",
+  "category": "ui-ux",
+  "description": "Remove the 'not sent' label from recent searches on the client detail page. Retain 'sent' label only when applicable. Fix visual alignment of brand/topic badge with timestamp.",
+  "acceptanceCriteria": [
+    "'not sent' label no longer displayed",
+    "'sent' label shows only when search was actually sent to client",
+    "Brand/topic badge aligns visually with timestamp",
+    "Consistent spacing and date formatting"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Find and remove 'not sent' label",
+      "details": "Search client detail components for 'not sent' text. Remove the conditional rendering for the 'not sent' state. Keep only the 'sent' badge when applicable.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Fix visual alignment",
+      "details": "Ensure the brand/topic badge, timestamp ('X days ago'), and optional 'sent' badge align horizontally with consistent spacing. Use flex with items-center and gap.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Verify date formatting",
+      "details": "Confirm date formatting uses relative time ('3 days ago') consistently. Verify the date calculation is correct.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": []
+}

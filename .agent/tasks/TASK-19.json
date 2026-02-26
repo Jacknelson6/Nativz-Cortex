@@ -1,0 +1,45 @@
+{
+  "id": "TASK-19",
+  "title": "Mood Board — Standardize button styling",
+  "category": "ui-ux",
+  "description": "Audit all action buttons inside mood board items. Remove emoji-based styling, standardize colors, and match the design system used across other Cortex pages.",
+  "acceptanceCriteria": [
+    "No emoji-based button styling anywhere in mood board",
+    "Consistent color system across all mood board buttons",
+    "Matches Cortex design system (bg-surface, border-nativz-border, accent-text)",
+    "Consistent hover/active/disabled states",
+    "Clean visual hierarchy"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Audit all mood board buttons",
+      "details": "Search mood board components for all button elements. List each button's current styling (classes, emojis, colors). Identify inconsistencies.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Remove emojis from buttons",
+      "details": "Replace any emoji characters in button labels with lucide-react icons or remove them entirely. Use icon + text pattern consistent with rest of app.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Standardize to design system",
+      "details": "Apply consistent Button component variants. Primary actions use accent variant, secondary use ghost/outline. Ensure all buttons use the same padding, font-size, and border-radius patterns.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Verify states",
+      "details": "Test hover, active, focus, and disabled states for all buttons. Ensure consistent visual feedback.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "Mood board components are under components/moodboard/",
+    "Use the existing Button component from components/ui/button.tsx for consistency"
+  ]
+}

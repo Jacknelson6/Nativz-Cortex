@@ -1,0 +1,28 @@
+{
+  "id": "TASK-42",
+  "title": "Clients — Fix agency selector chevron spacing",
+  "category": "ui-ux",
+  "description": "Add spacing between the chevron arrow and container edge in the agency selector dropdown. Currently flush against the far right.",
+  "acceptanceCriteria": [
+    "Chevron has proper spacing from container edge",
+    "Matches design system alignment patterns",
+    "Responsive behavior maintained"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Find the agency selector component",
+      "details": "Locate the agency selector dropdown on the client detail or clients list page. Find the chevron icon element.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Add right padding/margin",
+      "details": "Add pr-2 or pr-3 to the container, or mr-2 to the chevron icon. Ensure it aligns with other dropdowns/selectors in the app.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": []
+}

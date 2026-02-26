@@ -1,0 +1,45 @@
+{
+  "id": "TASK-17",
+  "title": "Mood Board — Fix TikTok link ingestion",
+  "category": "functional",
+  "description": "Fix the failure when pasting TikTok URLs into the mood board. Ensure item creation triggers correctly and thumbnail, title, and metadata populate.",
+  "acceptanceCriteria": [
+    "TikTok URL creates a board item successfully",
+    "Thumbnail populates from TikTok metadata",
+    "Title populates from TikTok metadata",
+    "No ingestion errors in console or API response"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Reproduce and log the TikTok ingestion failure",
+      "details": "Paste a TikTok URL into the mood board add item flow. Check browser console and API response for errors. Check the /api/moodboard/items POST endpoint logs.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Debug metadata extraction for TikTok",
+      "details": "Check lib/moodboard/process-video.ts and the tikwm.com API calls. Verify the tikwm endpoint is reachable and returning valid data. Check fallback logic (tikwm → oEmbed → HTML scrape).",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Fix the ingestion pipeline",
+      "details": "Apply fix based on root cause — may be URL parsing, API response handling, or database write issue. Ensure item is created with correct platform, thumbnail_url, and title fields.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Verify end-to-end",
+      "details": "Test with multiple TikTok URL formats (short links, full URLs, with/without query params). Verify item appears on board with correct metadata.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "high",
+  "technicalNotes": [
+    "TikTok metadata uses tikwm.com API with multi-fallback: tikwm → oEmbed → HTML scrape",
+    "Check if tikwm.com API has changed or rate-limited the service",
+    "TikTok short URLs (vm.tiktok.com) need redirect resolution"
+  ]
+}

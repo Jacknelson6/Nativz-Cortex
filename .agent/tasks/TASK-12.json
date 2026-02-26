@@ -1,0 +1,28 @@
+{
+  "id": "TASK-12",
+  "title": "Shoots — Remove star icon from Ideate modal",
+  "category": "ui-ux",
+  "description": "Remove the star icon next to the Ideate Shoot button in the modal. Ensure no layout shift and modal alignment remains correct.",
+  "acceptanceCriteria": [
+    "Star icon removed from Ideate modal",
+    "No layout shift after removal",
+    "Modal alignment intact"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Find and remove star icon",
+      "details": "Locate the Star or Sparkles icon import in the shoots ideate modal component. Remove the icon JSX element.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Verify layout integrity",
+      "details": "Confirm the button/modal content doesn't shift or leave a gap where the icon was. Adjust spacing if needed.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": []
+}

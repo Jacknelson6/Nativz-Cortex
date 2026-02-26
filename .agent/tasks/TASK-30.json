@@ -1,0 +1,50 @@
+{
+  "id": "TASK-30",
+  "title": "Mood Board — Cross-platform ingestion audit",
+  "category": "functional",
+  "description": "Comprehensive audit of ingestion and metadata behavior across TikTok, Instagram, YouTube, and arbitrary websites. Ensure consistent flow, transcript availability, and UI behavior regardless of source.",
+  "acceptanceCriteria": [
+    "Consistent ingestion flow across TikTok, Instagram, YouTube, and websites",
+    "Transcript availability logic correct per platform (video platforms: yes, websites: no)",
+    "Consistent UI behavior regardless of media source",
+    "Metadata (title, thumbnail, platform badge) populated for all sources"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Test TikTok ingestion end-to-end",
+      "details": "Add a TikTok URL. Verify: item creates, thumbnail populates, title populates, transcript available, insights extractable.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Test Instagram ingestion end-to-end",
+      "details": "Add an Instagram URL. Verify same criteria as TikTok.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Test YouTube ingestion end-to-end",
+      "details": "Add a YouTube URL. Verify same criteria. YouTube should use oEmbed for metadata.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Test website ingestion end-to-end",
+      "details": "Add an arbitrary website URL. Verify: item creates, title from OpenGraph, thumbnail from og:image, no transcript button (not a video), insights extractable.",
+      "pass": false
+    },
+    {
+      "step": 5,
+      "description": "Document and fix inconsistencies",
+      "details": "Log any inconsistencies between platforms. Fix any remaining issues. Ensure platform badge displays correctly for each source type.",
+      "pass": false
+    }
+  ],
+  "dependencies": ["TASK-17", "TASK-18", "TASK-22", "TASK-28", "TASK-29"],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "This is a validation task — run after all individual platform fixes are complete",
+    "Keep a checklist of: item creation, title, thumbnail, transcript, insights for each platform"
+  ]
+}

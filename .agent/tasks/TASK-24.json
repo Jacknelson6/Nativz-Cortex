@@ -1,0 +1,29 @@
+{
+  "id": "TASK-24",
+  "title": "Mood Board — Remove Rescript for Brand button",
+  "category": "ui-ux",
+  "description": "Remove the 'Rescript for Brand' button from mood board items. Ensure no layout breaks.",
+  "acceptanceCriteria": [
+    "'Rescript for Brand' button removed",
+    "No layout breaks after removal"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Find and remove the button",
+      "details": "Search mood board components for 'Rescript' or 'rescript'. Remove the button JSX and its onClick handler. Remove any associated API call logic if unused elsewhere.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Clean up dead code",
+      "details": "Remove any rescript-related imports, state, types, or API routes that are now unused.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": [
+    "The rescript column was recently added to moodboard_items — leave the DB column but remove the UI trigger"
+  ]
+}

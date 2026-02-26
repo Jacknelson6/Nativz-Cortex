@@ -1,0 +1,44 @@
+{
+  "id": "TASK-23",
+  "title": "Mood Board — Auto-transcription on media ingestion",
+  "category": "functional",
+  "description": "Implement automatic transcription attempt when media is ingested into the mood board. Consolidate into a single transcription control. Remove redundant transcript triggers.",
+  "acceptanceCriteria": [
+    "Transcription auto-attempts on media ingestion",
+    "Single transcription control (no redundant triggers)",
+    "Transcript status visible to user (loading/complete/failed)",
+    "Downstream analysis tools depend on transcript state"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Trigger transcription after item creation",
+      "details": "In the item creation flow (/api/moodboard/items POST), after metadata extraction succeeds, automatically queue a transcription job. This may already happen in process-video.ts — verify and enable.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Show transcript status on item",
+      "details": "Add a visual indicator on the mood board item showing transcript state: pending (spinner), complete (checkmark), failed (warning). Use the item's transcript field to determine state.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Consolidate transcript controls",
+      "details": "Remove any redundant 'Transcribe' buttons if auto-transcription handles it. Keep a single retry button for failed transcriptions only.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Gate analysis on transcript",
+      "details": "Disable analysis buttons (insights, hook, etc.) until transcript is available. Show tooltip explaining 'Transcript required' when disabled.",
+      "pass": false
+    }
+  ],
+  "dependencies": ["TASK-17", "TASK-18", "TASK-22"],
+  "estimatedComplexity": "high",
+  "technicalNotes": [
+    "process-video.ts already has a transcription step — may just need to ensure it's triggered consistently",
+    "Consider adding a transcript_status column (pending/complete/failed) to moodboard_items for better state tracking"
+  ]
+}

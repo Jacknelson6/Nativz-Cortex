@@ -1,0 +1,28 @@
+{
+  "id": "TASK-25",
+  "title": "Mood Board — Rename Replication Brief to Replicate this video",
+  "category": "ui-ux",
+  "description": "Rename the 'Replication Brief' button label to 'Replicate this video'. Function remains unchanged.",
+  "acceptanceCriteria": [
+    "Button label reads 'Replicate this video'",
+    "Underlying function unchanged",
+    "Routing and API calls still work"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Find and rename the button label",
+      "details": "Search mood board components for 'Replication Brief'. Replace the label string with 'Replicate this video'.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Verify function still works",
+      "details": "Click the renamed button and confirm it triggers the same replication brief generation. Verify the output is unchanged.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": []
+}

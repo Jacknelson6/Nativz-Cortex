@@ -1,0 +1,28 @@
+{
+  "id": "TASK-15",
+  "title": "Shoots — Validate links section",
+  "category": "functional",
+  "description": "Confirm the links section on the shoots page remains functional with no regressions from other changes.",
+  "acceptanceCriteria": [
+    "All links render correctly",
+    "Routing works for all link destinations",
+    "No regressions from other shoots page changes"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Test all links in section",
+      "details": "Click each link in the shoots links section. Verify navigation works and target pages load correctly.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Verify no visual regressions",
+      "details": "Ensure link styling, spacing, and layout haven't shifted due to other shoots page changes.",
+      "pass": false
+    }
+  ],
+  "dependencies": ["TASK-11", "TASK-12", "TASK-13", "TASK-14"],
+  "estimatedComplexity": "low",
+  "technicalNotes": []
+}

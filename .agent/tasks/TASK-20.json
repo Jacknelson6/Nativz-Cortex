@@ -1,0 +1,38 @@
+{
+  "id": "TASK-20",
+  "title": "Mood Board — Click-to-open side panel on blocks",
+  "category": "ui-ux",
+  "description": "Enable clicking the entire mood board block/node to open the details/analysis side panel, not just the Details button. Must not conflict with drag behavior on the React Flow canvas.",
+  "acceptanceCriteria": [
+    "Clicking a mood board block opens the side panel",
+    "Details button still works independently",
+    "Click does not conflict with drag behavior",
+    "Consistent with board-style UX patterns"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Add click handler to block node",
+      "details": "In the React Flow custom node component, add an onClick handler that opens the selected item's side panel. Set the selected item ID in state.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Differentiate click from drag",
+      "details": "Use React Flow's onNodeClick callback (fires only for clicks, not drags). Alternatively, track mousedown/mouseup position delta to distinguish click from drag.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Ensure Details button still works",
+      "details": "The Details button's onClick should stopPropagation to prevent double-triggering. Both paths should open the same side panel.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "React Flow provides onNodeClick which only fires for actual clicks (not drag start)",
+    "Side panel is likely the analysis panel component in the moodboard page"
+  ]
+}

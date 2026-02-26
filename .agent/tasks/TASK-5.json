@@ -1,0 +1,28 @@
+{
+  "id": "TASK-5",
+  "title": "Dashboard — Rename heading to Dashboard",
+  "category": "ui-ux",
+  "description": "Change the main heading on the dashboard page from 'Command Center' to 'Dashboard'. Subheading remains unchanged.",
+  "acceptanceCriteria": [
+    "Heading reads 'Dashboard'",
+    "Subheading unchanged",
+    "Styling consistent with other page headings"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Find and update heading text",
+      "details": "In app/admin/dashboard/page.tsx, find 'Command Center' string and replace with 'Dashboard'.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Verify styling",
+      "details": "Confirm the heading still uses the same text-2xl or text-3xl font-bold styling pattern as other admin pages.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": []
+}

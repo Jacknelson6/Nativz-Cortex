@@ -1,0 +1,34 @@
+{
+  "id": "TASK-3",
+  "title": "New Search — Relocate search history below research blocks",
+  "category": "ui-ux",
+  "description": "Move the search history section to appear below the 'What would you like to research today?' prompt, Brand Intel block, and Topic Research block. Validate layout hierarchy and spacing after relocation.",
+  "acceptanceCriteria": [
+    "Search history appears below research type selection blocks",
+    "Layout hierarchy: prompt → Brand Intel / Topic Research → Search History",
+    "Spacing consistent with rest of page"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Locate search history section in new search page",
+      "details": "Find the search history component in app/admin/search/new/page.tsx or its child components. Identify where it currently renders in the JSX tree.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Move search history JSX below research blocks",
+      "details": "Cut the search history section and paste it after the Brand Intel / Topic Research blocks. Maintain the same component props and data fetching.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Validate spacing and layout",
+      "details": "Ensure consistent margin/padding between sections. Use the same spacing pattern as between other sections on the page (likely mb-6 or gap-6).",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": []
+}

@@ -1,0 +1,52 @@
+{
+  "id": "TASK-27",
+  "title": "Mood Board — Fix node connection system",
+  "category": "functional",
+  "description": "Fix unreliable connections between mood board nodes. Implement ability to delete connections. Fix unpredictable behavior and orphaned edges.",
+  "acceptanceCriteria": [
+    "Connections visually reflect actual state",
+    "Can delete connections (click to select, then delete or right-click menu)",
+    "Drag-to-connect works consistently",
+    "Connections persist after page refresh",
+    "No orphaned or invalid edges in state"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Audit React Flow edge state management",
+      "details": "Review how edges are stored and managed in the mood board React Flow instance. Check if edges are persisted to the database or only in local state. Identify any state sync issues.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Fix connection creation",
+      "details": "Ensure onConnect callback properly creates edges with unique IDs. Verify new edges are saved to the database immediately. Handle error cases gracefully.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Implement connection deletion",
+      "details": "Add onEdgeClick or onEdgesDelete handler. When an edge is selected and user presses Delete (or right-click → Delete), remove the edge from state and database.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Clean up orphaned edges",
+      "details": "On board load, filter out edges that reference non-existent nodes. Remove them from the database. Add validation to prevent creating edges to deleted nodes.",
+      "pass": false
+    },
+    {
+      "step": 5,
+      "description": "Verify persistence",
+      "details": "Create connections, refresh the page, verify they appear. Delete connections, refresh, verify they're gone.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "high",
+  "technicalNotes": [
+    "React Flow stores edges as { id, source, target, type } objects",
+    "Edges should be persisted alongside node positions in the board's JSON data",
+    "Consider storing edges in a separate moodboard_edges table or as part of the board's layout JSON"
+  ]
+}

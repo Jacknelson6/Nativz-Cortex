@@ -1,0 +1,44 @@
+{
+  "id": "TASK-34",
+  "title": "Clients — Health score dropdown override",
+  "category": "functional",
+  "description": "Replace the unreliable health score calculation with a manual dropdown override. Options: Poor, Fair, Good, Excellent. Score persists and visual indicator updates correctly.",
+  "acceptanceCriteria": [
+    "Dropdown with Poor/Fair/Good/Excellent options displayed",
+    "Manual selection persists to database",
+    "Visual indicator (color/badge) updates to match selection",
+    "Works correctly for all clients"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Add health_score_override column",
+      "details": "Add a health_score_override TEXT column to the clients table via Supabase migration. Allowed values: 'poor', 'fair', 'good', 'excellent'. Nullable (null = not set).",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Create dropdown UI component",
+      "details": "In the client detail page, replace the current health score display with a Select dropdown. Options: Poor, Fair, Good, Excellent. Style with appropriate colors (red, yellow, blue, green).",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Wire up save logic",
+      "details": "On dropdown change, call the clients API (PATCH /api/clients/[id]) to save health_score_override. Show toast on success.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Update visual indicator",
+      "details": "Display a colored badge or dot next to the health score. Colors: Poor=red, Fair=yellow, Good=blue, Excellent=green. Update in real-time on selection.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "May need to add health_score_override to the clients API PATCH handler",
+    "Consider showing health score on the clients list page too, not just the detail view"
+  ]
+}

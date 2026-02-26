@@ -1,0 +1,37 @@
+{
+  "id": "TASK-44",
+  "title": "Clients — Validate portal access and brand preferences",
+  "category": "functional",
+  "description": "Validate portal access functionality and brand preference persistence. Confirm no regression from other layout updates.",
+  "acceptanceCriteria": [
+    "Portal access routing works correctly",
+    "Permission routing enforced (unauthorized users redirected)",
+    "Brand preferences persist after save",
+    "No regressions from other client page changes"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Test portal access from client page",
+      "details": "Navigate to portal access settings on a client. Toggle access on/off. Verify the portal user can/cannot log in accordingly.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Test brand preferences",
+      "details": "Set brand preferences for a client (colors, tone, etc.). Save and refresh. Verify preferences persist.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Check for regressions",
+      "details": "After all other client page changes are complete, verify portal access and brand preferences still work. No broken links or missing data.",
+      "pass": false
+    }
+  ],
+  "dependencies": ["TASK-34", "TASK-35", "TASK-36", "TASK-37", "TASK-38", "TASK-39", "TASK-40", "TASK-41", "TASK-42", "TASK-43"],
+  "estimatedComplexity": "low",
+  "technicalNotes": [
+    "This is a validation task — run after all client page changes are complete"
+  ]
+}

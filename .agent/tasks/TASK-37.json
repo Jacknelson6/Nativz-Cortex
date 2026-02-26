@@ -1,0 +1,51 @@
+{
+  "id": "TASK-37",
+  "title": "Clients — Fix PDF logo scaling and add AC branded export",
+  "category": "functional",
+  "description": "Fix the Nativz logo being squished in PDF exports. Maintain proper aspect ratio. Implement an Anderson Collaborative branded PDF export option that auto-selects based on client agency.",
+  "acceptanceCriteria": [
+    "Nativz logo maintains proper aspect ratio in PDF",
+    "AC branded PDF export option available",
+    "Branding auto-selects based on client's agency",
+    "Layout consistent in both Nativz and AC versions"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Fix Nativz logo aspect ratio",
+      "details": "In the PDF export components (components/onboard/strategy-pdf.tsx and components/results/search-pdf-document.tsx), find the Image component rendering the logo. Set explicit width and height that maintain the logo's aspect ratio. Use objectFit='contain' equivalent for @react-pdf/renderer.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Find/verify AC logo asset",
+      "details": "Search the project for an AC/Anderson Collaborative logo file. Verify it exists and is suitable for PDF rendering (PNG preferred). Note the path.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Create AC logo export in brand-logo.ts",
+      "details": "Add a proper AC_LOGO_PNG export in lib/brand-logo.ts with the actual AC logo (currently it's aliased to NATIVZ_LOGO_PNG as a placeholder).",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Add agency-based branding logic",
+      "details": "In the PDF export components, accept a client agency prop. Use NATIVZ_LOGO_PNG for Nativz clients and AC_LOGO_PNG for AC clients. Adjust any brand colors if needed.",
+      "pass": false
+    },
+    {
+      "step": 5,
+      "description": "Verify both PDF versions",
+      "details": "Generate PDF for a Nativz client and an AC client. Verify logos display correctly with proper aspect ratios in both.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "AC_LOGO_PNG currently aliases to NATIVZ_LOGO_PNG in lib/brand-logo.ts — needs real AC logo",
+    "@react-pdf/renderer Image component uses style={{ width, height }} for sizing",
+    "Logo is base64 encoded PNG in brand-logo.ts"
+  ]
+}

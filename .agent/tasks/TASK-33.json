@@ -1,0 +1,37 @@
+{
+  "id": "TASK-33",
+  "title": "Onboarding — Validate end-to-end flow",
+  "category": "functional",
+  "description": "Validate the full onboarding wizard flow end-to-end. No structural changes required — just verify it works correctly.",
+  "acceptanceCriteria": [
+    "Flow completes end-to-end without errors",
+    "No validation failures on form submissions",
+    "Data persists after completion",
+    "Routing post-completion directs to correct page"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Walk through onboarding flow",
+      "details": "Navigate to the onboarding wizard. Complete each step with valid data. Verify progression through all steps.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Verify data persistence",
+      "details": "After completing onboarding, check Supabase for the created records. Verify all form data was saved correctly.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Verify post-completion routing",
+      "details": "After onboarding completes, confirm the user is redirected to the correct page (likely admin dashboard or client detail).",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": [
+    "This is a validation task — no code changes expected unless issues are found"
+  ]
+}

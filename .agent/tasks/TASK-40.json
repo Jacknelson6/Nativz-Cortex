@@ -1,0 +1,45 @@
+{
+  "id": "TASK-40",
+  "title": "Clients — Add in-context Mood Board and Shoot buttons",
+  "category": "ui-ux",
+  "description": "Add 'Create Mood Board for this client' button within the mood board section of client detail. Add 'Schedule Shoot' button within the shoots section. Both auto-populate the client context.",
+  "acceptanceCriteria": [
+    "'Create Mood Board for this client' button in mood board section",
+    "'Schedule Shoot' button in shoots section",
+    "Client ID auto-populated when navigating to mood board or schedule",
+    "No duplicate scheduling possible",
+    "UI consistent with design system"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Add Create Mood Board button",
+      "details": "In the client detail mood board section, add a Button that links to /admin/moodboard/new?client_id=[clientId] (or equivalent). Use the client's ID from the page context.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Add Schedule Shoot button",
+      "details": "In the client detail shoots section, add a Button that opens the schedule shoot modal with the client pre-selected. Pass client_id as a prop or URL param.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Auto-populate client context",
+      "details": "Ensure the target pages/modals read the client_id param and pre-select the client. No need for the user to re-select from a list.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Style consistently",
+      "details": "Use secondary/outline Button variant to match the section context. Consistent sizing and placement within each section block.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "Check if mood board creation already supports a client_id query param",
+    "ScheduleShootsModal may already accept a preselected client prop"
+  ]
+}

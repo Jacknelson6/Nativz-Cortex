@@ -1,0 +1,34 @@
+{
+  "id": "TASK-38",
+  "title": "Clients — Fix saved ideas layout and responsive scaling",
+  "category": "ui-ux",
+  "description": "Fix layout width and responsive scaling for the saved ideas section on the client detail page. Ensure content truncation logic works properly.",
+  "acceptanceCriteria": [
+    "Saved ideas section has proper layout width",
+    "Responsive scaling works on all viewports",
+    "Content truncation logic works (long text truncates with ellipsis)"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Audit saved ideas layout",
+      "details": "Navigate to a client detail page with saved ideas. Inspect the layout at different viewports. Identify width/overflow issues.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Fix width and responsive behavior",
+      "details": "Ensure the saved ideas container uses proper max-width or w-full. Add responsive grid/flex layout if items need to reflow on smaller screens.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Fix content truncation",
+      "details": "Add truncate or line-clamp classes to text that may overflow. Ensure titles use truncate and descriptions use line-clamp-2 or similar.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": []
+}

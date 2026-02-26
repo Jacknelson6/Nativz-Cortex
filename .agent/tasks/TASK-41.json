@@ -1,0 +1,66 @@
+{
+  "id": "TASK-41",
+  "title": "Clients — Multi-contact support",
+  "category": "functional",
+  "description": "Implement multi-contact support for clients. Each contact has name, email, role, and a primary flag. Allow adding, editing, and deleting contacts. UI scales for multiple entries.",
+  "acceptanceCriteria": [
+    "Can add multiple contacts per client",
+    "Each contact has name, email, role fields",
+    "One contact can be marked as primary",
+    "Can edit existing contacts",
+    "Can delete contacts",
+    "Data persists to database",
+    "UI scales for 5+ contacts"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Create client_contacts database table",
+      "details": "Create migration for client_contacts table: id (UUID PK), client_id (UUID FK to clients), name (TEXT NOT NULL), email (TEXT NOT NULL), role (TEXT), is_primary (BOOLEAN DEFAULT false), created_at (TIMESTAMPTZ). Add index on client_id.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Migrate existing contact data",
+      "details": "If clients table has existing contact fields (point_of_contact, email), migrate that data to the new client_contacts table as the first contact with is_primary=true.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Create API endpoints for contacts",
+      "details": "Create /api/clients/[id]/contacts with GET (list), POST (create), PATCH (update), DELETE (delete) handlers. Validate with Zod. Ensure only one contact per client can be primary.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Build contacts list UI",
+      "details": "In the client detail page, add a contacts section showing all contacts in a list. Each contact shows name, email, role, and a primary badge. Add 'Add contact' button.",
+      "pass": false
+    },
+    {
+      "step": 5,
+      "description": "Build add/edit contact form",
+      "details": "Create a form (inline or modal) for adding/editing contacts. Fields: name, email, role, is_primary checkbox. Validate email format. On save, call the API.",
+      "pass": false
+    },
+    {
+      "step": 6,
+      "description": "Implement delete with confirmation",
+      "details": "Add delete button per contact. Show confirmation dialog before deleting. Prevent deleting the last/only contact.",
+      "pass": false
+    },
+    {
+      "step": 7,
+      "description": "Handle primary flag logic",
+      "details": "When setting a contact as primary, automatically unset the previous primary. Enforce at most one primary contact per client at the API level.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "high",
+  "technicalNotes": [
+    "Consider using a JSONB array on the clients table as an alternative to a separate table — simpler but less queryable",
+    "Primary flag enforcement: use a database trigger or handle in API logic",
+    "Existing client contact data may be in point_of_contact or similar field — check schema"
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "id": "TASK-36",
+  "title": "Clients — Remove Top Video Ideas, add strategy expand/collapse",
+  "category": "ui-ux",
+  "description": "Remove or suppress the 'Top Video Ideas' section from client detail. Keep the high-level content strategy visible. Add expand/collapse to view the full content strategy.",
+  "acceptanceCriteria": [
+    "'Top Video Ideas' section removed or hidden",
+    "High-level content strategy remains visible",
+    "Full content strategy viewable via expand/collapse",
+    "Expand/collapse state works correctly"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Remove Top Video Ideas section",
+      "details": "Find the 'Top Video Ideas' section in the client detail page. Remove or hide the JSX. Keep the data query intact in case it's needed later.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Keep high-level strategy visible",
+      "details": "Ensure the content strategy summary/overview section remains. This is the high-level strategy text that's currently acceptable.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Add expand/collapse for full strategy",
+      "details": "Wrap the full content strategy in a collapsible section. Show a brief summary by default with a 'View full strategy' toggle button. Use a Collapsible component or simple state toggle with height animation.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": [
+    "Consider using Radix Collapsible or a simple useState + conditional rendering with transition"
+  ]
+}

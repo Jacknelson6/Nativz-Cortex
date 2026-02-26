@@ -1,0 +1,28 @@
+{
+  "id": "TASK-11",
+  "title": "Shoots — Match Ideate button to Schedule Shoot styling",
+  "category": "ui-ux",
+  "description": "Update the Ideate button in the upcoming shoots section to match the styling of the Schedule Shoot button. Ensure consistent button hierarchy, hover, and active states.",
+  "acceptanceCriteria": [
+    "Ideate button matches Schedule Shoot button styling",
+    "Consistent hover and active states",
+    "Consistent button hierarchy across shoots page"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Identify Schedule Shoot button styling",
+      "details": "Find the Schedule Shoot button and note its classes/variant (e.g., Button variant, size, color scheme).",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Update Ideate button to match",
+      "details": "Apply the same Button component variant, size, and styling to the Ideate button. Ensure both use the same visual weight.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": []
+}

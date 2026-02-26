@@ -1,0 +1,44 @@
+{
+  "id": "TASK-18",
+  "title": "Mood Board — Fix Instagram metadata and thumbnails",
+  "category": "functional",
+  "description": "Fix Instagram items showing 'Untitled video' with no thumbnail. Ensure metadata fetches correctly and persists after refresh.",
+  "acceptanceCriteria": [
+    "Instagram link fetches title metadata",
+    "Thumbnail populates for Instagram items",
+    "No 'Untitled video' default when metadata exists",
+    "Metadata persists after page refresh"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Debug Instagram metadata extraction",
+      "details": "Check the Instagram extraction path in /api/moodboard/items. Instagram uses HTML scrape for metadata (no public API). Verify the scraping logic finds og:title and og:image meta tags.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Fix title extraction",
+      "details": "Ensure Instagram metadata parsing extracts the title from og:title or og:description. Fall back to caption text if available. Never default to 'Untitled video' when any metadata exists.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Fix thumbnail extraction",
+      "details": "Extract thumbnail from og:image meta tag. Instagram may block direct scraping — consider using alternative metadata sources or caching the thumbnail.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Verify persistence",
+      "details": "After creating an Instagram item, refresh the page. Confirm title and thumbnail persist from the database, not from re-fetching.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "high",
+  "technicalNotes": [
+    "Instagram blocks many scraping attempts — may need to use their oEmbed endpoint (api.instagram.com/oembed) which doesn't require auth for public posts",
+    "Metadata should be stored in the moodboard_items row on creation, not re-fetched on render"
+  ]
+}

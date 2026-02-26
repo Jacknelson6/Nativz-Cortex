@@ -1,0 +1,52 @@
+{
+  "id": "TASK-32",
+  "title": "Navigation — Remove Profile Extract and Viral Library",
+  "category": "functional",
+  "description": "Completely remove Profile Extract and Viral Library pages, routes, and sidebar navigation entries. Ensure no broken links or workflow dependencies.",
+  "acceptanceCriteria": [
+    "Profile Extract page and route deleted",
+    "Viral Library page and route deleted",
+    "Sidebar entries for both removed",
+    "No broken links anywhere in the app",
+    "No other workflows broken by removal"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Remove Profile Extract page",
+      "details": "Delete app/admin/moodboard/profile/ directory and all contents. Remove any route references.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Remove Viral Library page",
+      "details": "Delete app/admin/viral-library/ directory (or wherever it lives) and all contents. Remove any route references.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Remove sidebar nav entries",
+      "details": "In the admin sidebar component, remove the nav items for Profile Extract and Viral Library. Clean up any associated imports.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Search for broken references",
+      "details": "Grep the codebase for 'profile-extract', 'viral-library', 'profile/extract', or related route paths. Remove or update any remaining references (links, redirects, etc.).",
+      "pass": false
+    },
+    {
+      "step": 5,
+      "description": "Clean up unused components and API routes",
+      "details": "If there are API routes exclusively used by these pages (e.g., /api/moodboard/profile), consider removing them. Remove unused component imports.",
+      "pass": false
+    }
+  ],
+  "dependencies": ["TASK-31"],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "Profile Extract was already partially disabled (had a DEPRECATED early return that was recently re-enabled)",
+    "Check if /api/moodboard/profile route is used by anything else before removing",
+    "Viral Library may have components shared with other features — check before deleting"
+  ]
+}

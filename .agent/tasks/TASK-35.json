@@ -1,0 +1,35 @@
+{
+  "id": "TASK-35",
+  "title": "Clients — Green AC agency badge",
+  "category": "ui-ux",
+  "description": "Make the Anderson Collaborative (AC) agency badge green to reflect their branding. Only the badge changes color, not the entire card.",
+  "acceptanceCriteria": [
+    "AC badge is green",
+    "Only the badge changes color (card unchanged)",
+    "Nativz badge retains its current color",
+    "Consistent badge styling across all clients"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Find the agency badge component",
+      "details": "Locate where agency badges ('Nativz' or 'AC') are rendered in client list and detail pages. Likely uses the Badge component.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Add green variant for AC",
+      "details": "Set AC badge to use a green color variant (e.g., variant='success' or custom className with bg-emerald-500/10 text-emerald-400 border-emerald-500/20). Keep Nativz badge as-is.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Verify across pages",
+      "details": "Check badge color on clients list page, client detail page, and any other place agency badges appear (e.g., search page client selector).",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": []
+}

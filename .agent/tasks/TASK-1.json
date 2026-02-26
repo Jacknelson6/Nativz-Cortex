@@ -1,0 +1,44 @@
+{
+  "id": "TASK-1",
+  "title": "New Search — Fix client selection modal layout",
+  "category": "ui-ux",
+  "description": "Fix the client selection modal positioning, alignment, width, padding, and overflow when selecting a client in the search page header. Modal should be visually clear, properly aligned to its trigger, and accessible.",
+  "acceptanceCriteria": [
+    "Modal aligns correctly relative to header trigger button",
+    "Modal has proper width and padding with no content overflow",
+    "Modal is accessible (keyboard navigable, focus trapped)",
+    "Modal renders correctly on all viewport sizes"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Locate the client selection modal component",
+      "details": "Find the modal in the new search page (app/admin/search/new/). Identify the component rendering the client selector dropdown/modal and its positioning logic.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Audit modal positioning CSS",
+      "details": "Check absolute/fixed positioning, transform, top/left values. Ensure modal is anchored to trigger button using proper positioning strategy (e.g., Radix Popover or absolute positioning relative to parent).",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Fix width, padding, and overflow",
+      "details": "Set appropriate max-width (e.g., w-80 or max-w-sm), add consistent padding (p-3 or p-4), add overflow-y-auto with max-height to handle long client lists.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Test across viewport sizes",
+      "details": "Verify modal renders correctly on mobile (375px), tablet (768px), and desktop (1280px+). Ensure no content clips off-screen.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": [
+    "Check if using Radix UI Popover or custom modal — approach differs",
+    "Ensure z-index doesn't conflict with header sticky positioning"
+  ]
+}

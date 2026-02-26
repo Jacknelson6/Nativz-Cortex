@@ -1,0 +1,38 @@
+{
+  "id": "TASK-28",
+  "title": "Mood Board — Fix website item metadata",
+  "category": "functional",
+  "description": "Fix website links showing 'Untitled video' as title. Detect content type (website vs video) and populate title from OpenGraph metadata.",
+  "acceptanceCriteria": [
+    "Content type correctly detected (website vs video)",
+    "Title populated from OpenGraph og:title",
+    "No 'Untitled video' for website items",
+    "Metadata persists after refresh"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Fix content type detection",
+      "details": "In the item creation pipeline, detect whether a URL is a video platform (TikTok, YouTube, Instagram) or a generic website. Set the item type/platform accordingly.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Fix default title logic",
+      "details": "Replace the fallback 'Untitled video' with logic that: 1) uses og:title if available, 2) falls back to <title> tag, 3) falls back to domain name. Never show 'Untitled video' for websites.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Fetch OpenGraph metadata for websites",
+      "details": "For non-video URLs, fetch the page HTML and extract og:title, og:description, og:image. Store in the moodboard_items metadata fields.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "OpenGraph extraction can reuse the existing HTML scrape logic from the Instagram path",
+    "Some websites block server-side fetching — handle 403/timeout gracefully"
+  ]
+}

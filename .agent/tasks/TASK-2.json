@@ -1,0 +1,44 @@
+{
+  "id": "TASK-2",
+  "title": "New Search — Add client logos and agency badges to list",
+  "category": "ui-ux",
+  "description": "Enhance the client selection list inside the modal to show each client's logo and an agency indicator badge (Anderson Collaborative or Nativz). Layout must scale for long client lists.",
+  "acceptanceCriteria": [
+    "Client logo displays next to client name in selection list",
+    "Agency badge (AC or Nativz) visible per client",
+    "Layout scales for 20+ clients without overflow issues",
+    "Visually structured and readable"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Check client data includes logo_url and agency",
+      "details": "Verify the API/query populating the client list includes logo_url and agency fields from the clients table. Add to select query if missing.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Add logo avatar to each client row",
+      "details": "Add a 24x24 or 32x32 rounded image showing client logo_url. Use Next.js Image component or img with fallback to initials avatar if no logo.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Add agency badge",
+      "details": "Add a small Badge component after client name showing 'AC' or 'Nativz'. Use existing Badge component with appropriate variant.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Test with long client list",
+      "details": "Verify scrollable list with 20+ items. Ensure consistent row height, no layout shifts, and smooth scrolling.",
+      "pass": false
+    }
+  ],
+  "dependencies": ["TASK-1"],
+  "estimatedComplexity": "low",
+  "technicalNotes": [
+    "Client agency is determined by the agency field on the clients table",
+    "Logo URLs come from client.logo_url in Supabase"
+  ]
+}

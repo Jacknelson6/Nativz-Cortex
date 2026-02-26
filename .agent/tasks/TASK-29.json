@@ -1,0 +1,44 @@
+{
+  "id": "TASK-29",
+  "title": "Mood Board — Fix Extract Insights for websites",
+  "category": "functional",
+  "description": "Fix the insights extraction for website blocks. Loader appears but insights may not populate, requiring page reload. Auto-update the block after generation.",
+  "acceptanceCriteria": [
+    "Insights extraction completes successfully for websites",
+    "Loader resolves properly (not stuck in loading state)",
+    "Block auto-updates after insight generation (no manual refresh)",
+    "OpenGraph extraction happens automatically on ingestion"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Debug insights extraction for websites",
+      "details": "Trigger insights extraction on a website item. Monitor the API call and response. Check if the analysis pipeline handles non-video content correctly.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Fix loader state management",
+      "details": "Ensure the loading state resolves on both success and failure. Add timeout handling for stuck loaders. Use try/finally to always clear loading state.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Auto-update block after generation",
+      "details": "After insights are generated and saved, update the local state/React Flow node data to reflect the new insights without requiring a page refresh. Use state setter or refetch query.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Auto-trigger metadata on ingestion",
+      "details": "For website items, automatically extract OpenGraph metadata (title, description, image) during the item creation flow. Don't require manual 'Extract Insights' click for basic metadata.",
+      "pass": false
+    }
+  ],
+  "dependencies": ["TASK-28"],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "Insights for websites may need a different prompt/pipeline than video analysis",
+    "Auto-update may require invalidating a React Query cache or updating React Flow node data directly"
+  ]
+}

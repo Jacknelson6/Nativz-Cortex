@@ -1,0 +1,44 @@
+{
+  "id": "TASK-26",
+  "title": "Mood Board — Fix notes persistence bug",
+  "category": "functional",
+  "description": "Fix notes reverting to 'Click to edit' after editing. Ensure note content persists by firing save on blur/exit and confirming database write.",
+  "acceptanceCriteria": [
+    "Note content persists after edit",
+    "Save event fires on blur/exit",
+    "Database write succeeds (verify in Supabase)",
+    "No UI reset on state change or navigation"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Identify the notes save mechanism",
+      "details": "Find the notes/text editor component in mood board items. Trace the onBlur or onSave handler. Check if it calls an API to persist the note content.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Debug the persistence failure",
+      "details": "Add console logging to the save handler. Check if the API call fires, if it succeeds, and if the response confirms the write. Check the moodboard_items.notes column in Supabase.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Fix the save mechanism",
+      "details": "Apply fix based on root cause — may be missing onBlur handler, incorrect API call, optimistic state reset, or race condition. Ensure the save fires reliably on blur, tab switch, and navigation.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Add save confirmation",
+      "details": "Show a subtle save indicator (e.g., 'Saved' text or checkmark) after successful persistence. Use toast for failures.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "Common cause: state resets when component unmounts before save completes",
+    "Consider debounced auto-save (save 500ms after last keystroke) as a more reliable pattern"
+  ]
+}

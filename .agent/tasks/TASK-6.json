@@ -1,0 +1,36 @@
+{
+  "id": "TASK-6",
+  "title": "Dashboard — Remove Shoots/Moodboard metric block",
+  "category": "ui-ux",
+  "description": "Remove the 'Upcoming Shoots and Mood Board Items' metric card from the dashboard top row. Retain 'Searches This Month' and 'Total Clients'. Ensure grid reflows cleanly.",
+  "acceptanceCriteria": [
+    "'Upcoming Shoots and Mood Board Items' card removed",
+    "Grid reflows cleanly with remaining cards",
+    "Spacing remains consistent"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Locate metric cards in dashboard",
+      "details": "Find the metrics grid in app/admin/dashboard/page.tsx. Identify the card for 'Upcoming Shoots and Mood Board Items'.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Remove the card JSX and data fetching",
+      "details": "Delete the card component and any associated data query (e.g., shoots count, moodboard items count). Remove unused imports.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Verify grid reflow",
+      "details": "Ensure remaining cards (Total Client Searches, Searches This Month, Total Clients) distribute evenly. May need to adjust grid-cols from 4 to 3.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": [
+    "Check if the removed metric data is fetched in a shared query — only remove the specific field, not the entire query"
+  ]
+}

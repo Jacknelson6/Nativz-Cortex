@@ -1,0 +1,39 @@
+{
+  "id": "TASK-22",
+  "title": "Mood Board — Fix Instagram transcript extraction",
+  "category": "functional",
+  "description": "Debug and fix transcript extraction pipeline for Instagram. Transcribe button not functioning, no transcript visible after pressing.",
+  "acceptanceCriteria": [
+    "Transcript extraction works for Instagram videos",
+    "Transcribe button triggers extraction successfully",
+    "Transcript persists after generation",
+    "Transcript survives page refresh"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Debug transcript API for Instagram",
+      "details": "Check the /api/moodboard/items/[id]/transcribe endpoint (or equivalent). Verify it receives the correct video URL for Instagram. Check if the transcription service can access Instagram video URLs.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Fix video URL extraction for Instagram",
+      "details": "Instagram may require extracting the actual video file URL from the page metadata. Ensure the pipeline resolves the direct video URL before sending to transcription service.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Verify transcript persistence",
+      "details": "After successful transcription, confirm the transcript is saved to the moodboard_items.transcript column. Verify it loads correctly on page refresh.",
+      "pass": false
+    }
+  ],
+  "dependencies": ["TASK-18"],
+  "estimatedComplexity": "high",
+  "technicalNotes": [
+    "Instagram video URLs may be temporary/signed — may need to download and cache video",
+    "Transcription likely uses an external service (Whisper, AssemblyAI, etc.)",
+    "Check lib/moodboard/process-video.ts for transcription pipeline"
+  ]
+}

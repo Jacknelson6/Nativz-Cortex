@@ -1,0 +1,38 @@
+{
+  "id": "TASK-9",
+  "title": "Dashboard — Rename and fix Shoots this week section",
+  "category": "ui-ux",
+  "description": "Rename 'Next seven days' to 'Shoots this week'. Debug missing scheduled shoot display and validate date filtering logic.",
+  "acceptanceCriteria": [
+    "Section label reads 'Shoots this week'",
+    "Upcoming shoots display correctly",
+    "Date filtering returns shoots within current week",
+    "Scheduled shoots from Monday board data appear"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Rename section heading",
+      "details": "Find 'Next seven days' string in dashboard page/components and replace with 'Shoots this week'.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Debug missing shoot display",
+      "details": "Check the query fetching upcoming shoots. Verify date range filter (should be from today to end of current week or +7 days). Check if shoots table has data matching the filter criteria.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Fix date filtering logic",
+      "details": "Ensure the date comparison uses correct timezone handling. Filter shoots where shoot_date >= today AND shoot_date <= today + 7 days. Test with known scheduled shoots.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "Date filtering must account for timezone — use UTC or server timezone consistently",
+    "Cross-reference with shoots table data to confirm filter accuracy"
+  ]
+}

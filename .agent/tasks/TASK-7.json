@@ -1,0 +1,36 @@
+{
+  "id": "TASK-7",
+  "title": "Dashboard — Review action button section styling",
+  "category": "ui-ux",
+  "description": "Audit the action buttons row (New Search, Schedule Shoot, New Mood Board, On-board Client) for design system consistency, visual hierarchy, and responsive behavior.",
+  "acceptanceCriteria": [
+    "Button styling matches design system (bg-surface, border-nativz-border, consistent padding)",
+    "Visual hierarchy doesn't conflict with metrics above",
+    "Layout responsive on mobile and desktop"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Audit current button styles",
+      "details": "Review each action button's classes. Compare against the design system patterns used in other pages (e.g., Button component with consistent variants).",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Standardize button styling",
+      "details": "Ensure all action buttons use the same Button component variant, padding, font size, and icon sizing. Use consistent gap between buttons.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Verify responsive layout",
+      "details": "Ensure buttons stack or wrap gracefully on mobile. Test at 375px, 768px, and 1280px viewports.",
+      "pass": false
+    }
+  ],
+  "dependencies": ["TASK-6"],
+  "estimatedComplexity": "low",
+  "technicalNotes": [
+    "Action buttons should have secondary visual weight compared to metrics cards above"
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "id": "TASK-14",
+  "title": "Shoots — Replace ideation blocks with text box + AI button",
+  "category": "functional",
+  "description": "Remove the structured ideation output blocks (Roz, Editing assignment, Client approval, Boosting) and replace with a single editable text box. Add an 'Ideate shoot plan' button that generates an AI plan directly into the text box. Content is editable after generation.",
+  "acceptanceCriteria": [
+    "Structured blocks (Roz, Editing, Client approval, Boosting) removed",
+    "Single text box present in notes/plan section",
+    "'Ideate shoot plan' button generates AI content into text box",
+    "Text box is fully editable after AI generation",
+    "Content persists on save"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Remove structured block components",
+      "details": "In the shoot detail/ideation component, remove the JSX rendering Roz, Editing assignment, Client approval, and Boosting blocks. Remove associated state and data handling.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Add single text area",
+      "details": "Replace with a textarea or rich text input. Use a controlled component with local state. Style with bg-surface, border-nativz-border, min-height of 200px.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Add 'Ideate shoot plan' button",
+      "details": "Add a Button inside or above the text area labeled 'Ideate shoot plan'. Wire it to call the existing /api/shoots/ideate endpoint (or equivalent).",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Populate AI response into text box",
+      "details": "On successful AI generation, set the text area value to the response. Show loading state on button while generating. Use streaming if the API supports it.",
+      "pass": false
+    },
+    {
+      "step": 5,
+      "description": "Ensure persistence",
+      "details": "Save text box content on blur or via explicit save button. Call the shoots API to persist the plan content.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "Check existing /api/shoots/ideate endpoint — may need to adjust response format to return plain text instead of structured blocks",
+    "Consider debounced auto-save for the text area"
+  ]
+}

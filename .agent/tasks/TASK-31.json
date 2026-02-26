@@ -1,0 +1,36 @@
+{
+  "id": "TASK-31",
+  "title": "Navigation — Fix active tab highlighting",
+  "category": "ui-ux",
+  "description": "Fix incorrect active tab highlighting where Profile Extract and Viral Library highlight the Mood Board tab. After removal of those pages, ensure all remaining tabs highlight correctly.",
+  "acceptanceCriteria": [
+    "Each page has independent active state in sidebar",
+    "Correct tab highlights on page load",
+    "No shared layout container causing mis-highlighting"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Audit sidebar nav active state logic",
+      "details": "Check the admin sidebar component. Look at how active state is determined — likely by comparing pathname to href. Identify if Profile Extract and Viral Library share a route prefix with Mood Board.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Fix route matching",
+      "details": "Ensure each nav item uses exact match or proper startsWith logic. If moodboard is /admin/moodboard and profile extract is /admin/moodboard/profile, the startsWith logic would match both — fix by using more specific matching.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Verify after page removals",
+      "details": "After TASK-32 removes Profile Extract and Viral Library, verify all remaining tabs highlight correctly. Test by clicking each sidebar item.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": [
+    "Root cause is likely that /admin/moodboard/profile startsWith /admin/moodboard — need exact or segment-aware matching"
+  ]
+}

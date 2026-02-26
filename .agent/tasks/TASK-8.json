@@ -1,0 +1,34 @@
+{
+  "id": "TASK-8",
+  "title": "Dashboard — Validate recent activity data",
+  "category": "functional",
+  "description": "Confirm the recent activity section populates correctly with chronologically accurate data and no UI overflow issues.",
+  "acceptanceCriteria": [
+    "Activity items populate with correct data",
+    "Chronological order is accurate (newest first)",
+    "No UI overflow or truncation issues"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Verify data query",
+      "details": "Check the query fetching recent activity. Confirm it orders by created_at DESC and limits to a reasonable count (e.g., 10-20 items).",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Test with real data",
+      "details": "Load dashboard and verify activity items match actual database records. Cross-reference timestamps with Supabase data.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Check overflow handling",
+      "details": "Verify long activity descriptions truncate properly. Ensure no horizontal overflow on any viewport size.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": []
+}

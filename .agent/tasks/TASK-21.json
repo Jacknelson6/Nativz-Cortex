@@ -1,0 +1,37 @@
+{
+  "id": "TASK-21",
+  "title": "Mood Board — Decouple hook and pacing button logic",
+  "category": "functional",
+  "description": "Fix the hook button incorrectly triggering pacing logic. Decouple the two functions. Evaluate removing the pacing button entirely.",
+  "acceptanceCriteria": [
+    "Hook button performs only hook-related action",
+    "Pacing logic is separated or pacing button removed",
+    "UI accurately reflects button functionality"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Identify the hook and pacing button handlers",
+      "details": "Find the hook and pacing buttons in the mood board analysis panel components. Trace their onClick handlers to the underlying API calls or state mutations.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Decouple the logic",
+      "details": "Ensure the hook button calls hook-specific analysis (e.g., generateHook or similar) and the pacing button calls pacing-specific analysis. Fix any shared handler that conflates the two.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Evaluate pacing button removal",
+      "details": "If pacing is not a frequently used feature, remove the pacing button and its handler. Clean up any pacing-related UI and dead code.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "medium",
+  "technicalNotes": [
+    "Check the analysis panel component for button definitions",
+    "Hook and pacing may share a common AI endpoint with different prompt parameters"
+  ]
+}

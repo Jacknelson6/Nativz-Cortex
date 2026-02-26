@@ -1,0 +1,35 @@
+{
+  "id": "TASK-10",
+  "title": "Dashboard — Add View All to recent searches",
+  "category": "ui-ux",
+  "description": "Add a 'View all' button to the recent searches section on the dashboard, matching the pattern used in the 'Shoots this week' section. Button navigates to search history page.",
+  "acceptanceCriteria": [
+    "Search count is accurate",
+    "'View all' button present with correct placement",
+    "Button placement mirrors 'Shoots this week' section",
+    "Button navigates to /admin/history"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Verify search data completeness",
+      "details": "Confirm the recent searches query returns accurate count. Check if any searches are missing from the display.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Add View All button",
+      "details": "Add a 'View all' link/button in the section header, matching the same pattern as the Shoots this week section. Use Link from next/link pointing to /admin/history.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Style consistently",
+      "details": "Match the text-sm text-accent-text hover styling used in the Shoots this week View All button.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": []
+}

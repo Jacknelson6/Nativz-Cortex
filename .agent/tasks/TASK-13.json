@@ -1,0 +1,51 @@
+{
+  "id": "TASK-13",
+  "title": "Shoots — Calendar drag-to-reschedule with confirmation",
+  "category": "functional",
+  "description": "Allow already-scheduled shoots to be dragged to a new date on the calendar, but require a confirmation dialog before the reschedule takes effect. Prevent duplicate scheduling. Cancelled drag reverts position.",
+  "acceptanceCriteria": [
+    "Scheduled shoots are draggable on the calendar",
+    "Dragging triggers a confirmation dialog ('Reschedule to [date]?')",
+    "Confirmed drag updates the shoot date via API",
+    "Cancelled drag reverts the shoot to its original position",
+    "No duplicate scheduling possible"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Enable drag on scheduled shoot events",
+      "details": "In the calendar component, set editable/draggable props on shoot events. If using FullCalendar or similar, enable eventDrop handler.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Add confirmation dialog on drop",
+      "details": "In the eventDrop handler, prevent immediate save. Show a confirmation dialog with the new date. Use the existing AlertDialog or similar confirmation component.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Handle confirm — update shoot date",
+      "details": "On confirm, call the shoots API (PATCH /api/shoots/[id]) with the new date. Update local state on success. Show toast on success.",
+      "pass": false
+    },
+    {
+      "step": 4,
+      "description": "Handle cancel — revert position",
+      "details": "On cancel, revert the event to its original date. Use the revert() callback provided by the calendar library's eventDrop event.",
+      "pass": false
+    },
+    {
+      "step": 5,
+      "description": "Prevent duplicate scheduling",
+      "details": "Check if a shoot already exists for the target date + client combination before allowing the drop. Show warning toast if duplicate detected.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "high",
+  "technicalNotes": [
+    "Calendar library may provide a revert() function in the eventDrop callback — use it for cancel behavior",
+    "Optimistic update pattern: move visually first, revert on API failure"
+  ]
+}

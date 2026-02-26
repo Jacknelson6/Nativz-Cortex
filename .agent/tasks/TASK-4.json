@@ -1,0 +1,27 @@
+{
+  "id": "TASK-4",
+  "title": "New Search — Remove attribution text",
+  "category": "ui-ux",
+  "description": "Remove the 'Powered by Brave Search plus Claude AI' attribution text from the search page. Confirm no layout break after removal.",
+  "acceptanceCriteria": [
+    "Attribution text no longer visible on search page",
+    "No layout break or spacing gap after removal"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Find and remove attribution text",
+      "details": "Search for 'Powered by' or 'Brave Search' in the search page components. Remove the JSX element containing this text.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Verify no layout break",
+      "details": "Check that removing the element doesn't leave an empty container or gap. Remove any parent wrapper if it's now empty.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": []
+}

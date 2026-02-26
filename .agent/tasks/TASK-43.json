@@ -1,0 +1,36 @@
+{
+  "id": "TASK-43",
+  "title": "Clients — Center client logo and reduce whitespace",
+  "category": "ui-ux",
+  "description": "Center the client logo within its container and reduce excess whitespace. Ensure consistent rendering across different logo aspect ratios.",
+  "acceptanceCriteria": [
+    "Logo centered vertically and horizontally in container",
+    "Excess whitespace reduced",
+    "Consistent rendering across wide, tall, and square logos"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Find the logo container",
+      "details": "Locate the client logo display on the client detail page. Identify the container element and its current sizing/alignment styles.",
+      "pass": false
+    },
+    {
+      "step": 2,
+      "description": "Center the logo",
+      "details": "Apply flex items-center justify-center to the container. Set the image to object-contain with appropriate max-width and max-height constraints.",
+      "pass": false
+    },
+    {
+      "step": 3,
+      "description": "Reduce whitespace",
+      "details": "Reduce the container's padding and height to minimize empty space. Use a tighter container (e.g., h-20 w-20 or h-24 w-24) with the logo scaling within it.",
+      "pass": false
+    }
+  ],
+  "dependencies": [],
+  "estimatedComplexity": "low",
+  "technicalNotes": [
+    "object-contain ensures logos maintain aspect ratio regardless of container size"
+  ]
+}
