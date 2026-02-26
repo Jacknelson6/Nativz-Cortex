@@ -46,6 +46,7 @@ export function ScheduleShootsModal({ open, onClose, initialClientId }: Schedule
   const [drafts, setDrafts] = useState<DraftEmail[]>([]);
   const [step, setStep] = useState<'select' | 'drafts'>('select');
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'nativz' | 'ac'>('nativz');
 
   useEffect(() => {
     if (!open) return;
@@ -57,11 +58,29 @@ export function ScheduleShootsModal({ open, onClose, initialClientId }: Schedule
     async function load() {
       setLoading(true);
       const supabase = createClient();
-      const [clientsRes, linksRes] = await Promise.all([
+      const [clientsRes, linksRes, mondayRes] = await Promise.all([
         supabase.from('clients').select('id, name').eq('is_active', true).order('name'),
         fetch('/api/settings/scheduling').then((r) => r.ok ? r.json() : { settings: [] }),
+        fetch('/api/clients/monday-cache').then((r) => r.ok ? r.json() : []),
       ]);
-      if (clientsRes.data) setClients(clientsRes.data);
+      
+      if (clientsRes.data) {
+        const enriched = clientsRes.data.map((client) => {
+          const mClient = mondayRes.find((m: any) => m.name.toLowerCase() === client.name.toLowerCase());
+          return {
+            ...client,
+            agency: mClient?.agency || 'Nativz',
+            poc_email: mClient?.contacts?.[0]?.email || '',
+          };
+        });
+        setClients(enriched);
+        if (initialClientId) {
+          const initial = enriched.find(c => c.id === initialClientId);
+          if (initial) {
+            setActiveTab(initial.agency?.toLowerCase().includes('anderson') ? 'ac' : 'nativz');
+          }
+        }
+      }
       const links: Record<string, string> = {};
       for (const s of linksRes.settings) {
         if (s.scheduling_link) links[s.agency] = s.scheduling_link;
@@ -124,7 +143,11 @@ The ${agencyName} Team`,
     setDrafts((prev) => prev.map((d, i) => (i === index ? { ...d, body } : d)));
   }
 
-  const filtered = clients.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = clients.filter((c) => {
+    const isAC = c.agency?.toLowerCase().includes('anderson');
+    const matchesTab = activeTab === 'ac' ? isAC : !isAC;
+    return matchesTab && c.name.toLowerCase().includes(search.toLowerCase());
+  });
 
   return (
     <Dialog open={open} onClose={onClose} title="Schedule shoots" maxWidth="lg">
@@ -135,6 +158,24 @@ The ${agencyName} Team`,
       ) : step === 'select' ? (
         <div className="space-y-4">
           <p className="text-sm text-text-muted">Select clients to generate scheduling email drafts.</p>
+
+          {/* Tabs */}
+          <div className="flex p-1 bg-surface-hover/30 rounded-lg">
+            <button
+              type="button"
+              onClick={() => { setActiveTab('nativz'); setSelectedIds(new Set()); }}
+              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === 'nativz' ? 'bg-surface text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}
+            >
+              Nativz
+            </button>
+            <button
+              type="button"
+              onClick={() => { setActiveTab('ac'); setSelectedIds(new Set()); }}
+              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === 'ac' ? 'bg-surface text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}
+            >
+              Anderson Collaborative
+            </button>
+          </div>
 
           {/* Search */}
           <div className="flex items-center gap-2 rounded-lg border border-nativz-border bg-surface-hover/50 px-3 py-2">
