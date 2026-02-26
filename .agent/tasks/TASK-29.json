@@ -1,5 +1,6 @@
 {
   "id": "TASK-29",
+  "passes": true,
   "title": "Mood Board — Fix Extract Insights for websites",
   "category": "functional",
   "description": "Fix the insights extraction for website blocks. Loader appears but insights may not populate, requiring page reload. Auto-update the block after generation.",

@@ -1,5 +1,6 @@
 {
   "id": "TASK-16",
+  "passes": true,
   "title": "Shoots — Add Select All for multi-client scheduling",
   "category": "functional",
   "description": "Add a 'Select all' option to the client selection UI when scheduling shoots. Enable bulk selection so scheduling applies to all selected clients at once.",

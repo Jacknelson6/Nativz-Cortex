@@ -1,5 +1,6 @@
 {
   "id": "TASK-1",
+  "passes": true,
   "title": "New Search — Fix client selection modal layout",
   "category": "ui-ux",
   "description": "Fix the client selection modal positioning, alignment, width, padding, and overflow when selecting a client in the search page header. Modal should be visually clear, properly aligned to its trigger, and accessible.",

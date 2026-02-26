@@ -1,5 +1,6 @@
 {
   "id": "TASK-41",
+  "passes": true,
   "title": "Clients — Multi-contact support",
   "category": "functional",
   "description": "Implement multi-contact support for clients. Each contact has name, email, role, and a primary flag. Allow adding, editing, and deleting contacts. UI scales for multiple entries.",

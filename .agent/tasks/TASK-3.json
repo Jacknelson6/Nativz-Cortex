@@ -1,5 +1,6 @@
 {
   "id": "TASK-3",
+  "passes": true,
   "title": "New Search — Relocate search history below research blocks",
   "category": "ui-ux",
   "description": "Move the search history section to appear below the 'What would you like to research today?' prompt, Brand Intel block, and Topic Research block. Validate layout hierarchy and spacing after relocation.",

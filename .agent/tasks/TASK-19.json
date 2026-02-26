@@ -1,5 +1,6 @@
 {
   "id": "TASK-19",
+  "passes": true,
   "title": "Mood Board — Standardize button styling",
   "category": "ui-ux",
   "description": "Audit all action buttons inside mood board items. Remove emoji-based styling, standardize colors, and match the design system used across other Cortex pages.",

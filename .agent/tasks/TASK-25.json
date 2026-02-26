@@ -1,5 +1,6 @@
 {
   "id": "TASK-25",
+  "passes": true,
   "title": "Mood Board — Rename Replication Brief to Replicate this video",
   "category": "ui-ux",
   "description": "Rename the 'Replication Brief' button label to 'Replicate this video'. Function remains unchanged.",

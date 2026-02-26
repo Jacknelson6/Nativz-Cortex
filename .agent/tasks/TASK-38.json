@@ -1,5 +1,6 @@
 {
   "id": "TASK-38",
+  "passes": true,
   "title": "Clients — Fix saved ideas layout and responsive scaling",
   "category": "ui-ux",
   "description": "Fix layout width and responsive scaling for the saved ideas section on the client detail page. Ensure content truncation logic works properly.",

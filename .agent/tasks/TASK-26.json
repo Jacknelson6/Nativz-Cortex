@@ -1,5 +1,6 @@
 {
   "id": "TASK-26",
+  "passes": true,
   "title": "Mood Board — Fix notes persistence bug",
   "category": "functional",
   "description": "Fix notes reverting to 'Click to edit' after editing. Ensure note content persists by firing save on blur/exit and confirming database write.",

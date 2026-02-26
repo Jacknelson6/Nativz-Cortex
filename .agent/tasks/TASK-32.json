@@ -1,5 +1,6 @@
 {
   "id": "TASK-32",
+  "passes": true,
   "title": "Navigation — Remove Profile Extract and Viral Library",
   "category": "functional",
   "description": "Completely remove Profile Extract and Viral Library pages, routes, and sidebar navigation entries. Ensure no broken links or workflow dependencies.",

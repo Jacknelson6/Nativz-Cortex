@@ -1,5 +1,6 @@
 {
   "id": "TASK-35",
+  "passes": true,
   "title": "Clients — Green AC agency badge",
   "category": "ui-ux",
   "description": "Make the Anderson Collaborative (AC) agency badge green to reflect their branding. Only the badge changes color, not the entire card.",

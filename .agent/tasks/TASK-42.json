@@ -1,5 +1,6 @@
 {
   "id": "TASK-42",
+  "passes": true,
   "title": "Clients — Fix agency selector chevron spacing",
   "category": "ui-ux",
   "description": "Add spacing between the chevron arrow and container edge in the agency selector dropdown. Currently flush against the far right.",

@@ -1,5 +1,6 @@
 {
   "id": "TASK-5",
+  "passes": true,
   "title": "Dashboard — Rename heading to Dashboard",
   "category": "ui-ux",
   "description": "Change the main heading on the dashboard page from 'Command Center' to 'Dashboard'. Subheading remains unchanged.",

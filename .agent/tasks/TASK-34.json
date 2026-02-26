@@ -1,5 +1,6 @@
 {
   "id": "TASK-34",
+  "passes": true,
   "title": "Clients — Health score dropdown override",
   "category": "functional",
   "description": "Replace the unreliable health score calculation with a manual dropdown override. Options: Poor, Fair, Good, Excellent. Score persists and visual indicator updates correctly.",

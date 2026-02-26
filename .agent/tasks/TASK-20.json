@@ -1,5 +1,6 @@
 {
   "id": "TASK-20",
+  "passes": true,
   "title": "Mood Board — Click-to-open side panel on blocks",
   "category": "ui-ux",
   "description": "Enable clicking the entire mood board block/node to open the details/analysis side panel, not just the Details button. Must not conflict with drag behavior on the React Flow canvas.",

@@ -1,5 +1,6 @@
 {
   "id": "TASK-8",
+  "passes": true,
   "title": "Dashboard — Validate recent activity data",
   "category": "functional",
   "description": "Confirm the recent activity section populates correctly with chronologically accurate data and no UI overflow issues.",

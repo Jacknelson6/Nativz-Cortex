@@ -1,5 +1,6 @@
 {
   "id": "TASK-14",
+  "passes": true,
   "title": "Shoots — Replace ideation blocks with text box + AI button",
   "category": "functional",
   "description": "Remove the structured ideation output blocks (Roz, Editing assignment, Client approval, Boosting) and replace with a single editable text box. Add an 'Ideate shoot plan' button that generates an AI plan directly into the text box. Content is editable after generation.",

@@ -1,5 +1,6 @@
 {
   "id": "TASK-9",
+  "passes": true,
   "title": "Dashboard — Rename and fix Shoots this week section",
   "category": "ui-ux",
   "description": "Rename 'Next seven days' to 'Shoots this week'. Debug missing scheduled shoot display and validate date filtering logic.",

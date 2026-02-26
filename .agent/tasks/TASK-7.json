@@ -1,5 +1,6 @@
 {
   "id": "TASK-7",
+  "passes": true,
   "title": "Dashboard — Review action button section styling",
   "category": "ui-ux",
   "description": "Audit the action buttons row (New Search, Schedule Shoot, New Mood Board, On-board Client) for design system consistency, visual hierarchy, and responsive behavior.",

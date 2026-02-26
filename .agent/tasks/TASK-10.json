@@ -1,5 +1,6 @@
 {
   "id": "TASK-10",
+  "passes": true,
   "title": "Dashboard — Add View All to recent searches",
   "category": "ui-ux",
   "description": "Add a 'View all' button to the recent searches section on the dashboard, matching the pattern used in the 'Shoots this week' section. Button navigates to search history page.",

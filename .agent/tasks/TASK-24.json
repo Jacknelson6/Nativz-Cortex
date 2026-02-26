@@ -1,5 +1,6 @@
 {
   "id": "TASK-24",
+  "passes": true,
   "title": "Mood Board — Remove Rescript for Brand button",
   "category": "ui-ux",
   "description": "Remove the 'Rescript for Brand' button from mood board items. Ensure no layout breaks.",

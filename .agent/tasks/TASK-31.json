@@ -1,5 +1,6 @@
 {
   "id": "TASK-31",
+  "passes": true,
   "title": "Navigation — Fix active tab highlighting",
   "category": "ui-ux",
   "description": "Fix incorrect active tab highlighting where Profile Extract and Viral Library highlight the Mood Board tab. After removal of those pages, ensure all remaining tabs highlight correctly.",

@@ -1,5 +1,6 @@
 {
   "id": "TASK-6",
+  "passes": true,
   "title": "Dashboard — Remove Shoots/Moodboard metric block",
   "category": "ui-ux",
   "description": "Remove the 'Upcoming Shoots and Mood Board Items' metric card from the dashboard top row. Retain 'Searches This Month' and 'Total Clients'. Ensure grid reflows cleanly.",

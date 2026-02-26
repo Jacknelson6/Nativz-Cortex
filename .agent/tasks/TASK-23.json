@@ -1,5 +1,6 @@
 {
   "id": "TASK-23",
+  "passes": true,
   "title": "Mood Board — Auto-transcription on media ingestion",
   "category": "functional",
   "description": "Implement automatic transcription attempt when media is ingested into the mood board. Consolidate into a single transcription control. Remove redundant transcript triggers.",

@@ -1,5 +1,6 @@
 {
   "id": "TASK-15",
+  "passes": true,
   "title": "Shoots — Validate links section",
   "category": "functional",
   "description": "Confirm the links section on the shoots page remains functional with no regressions from other changes.",

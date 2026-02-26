@@ -1,5 +1,6 @@
 {
   "id": "TASK-27",
+  "passes": true,
   "title": "Mood Board — Fix node connection system",
   "category": "functional",
   "description": "Fix unreliable connections between mood board nodes. Implement ability to delete connections. Fix unpredictable behavior and orphaned edges.",

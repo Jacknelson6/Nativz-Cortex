@@ -1,5 +1,6 @@
 {
   "id": "TASK-39",
+  "passes": true,
   "title": "Clients — Remove not sent label from recent searches",
   "category": "ui-ux",
   "description": "Remove the 'not sent' label from recent searches on the client detail page. Retain 'sent' label only when applicable. Fix visual alignment of brand/topic badge with timestamp.",

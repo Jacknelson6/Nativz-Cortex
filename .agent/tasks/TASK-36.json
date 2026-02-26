@@ -1,5 +1,6 @@
 {
   "id": "TASK-36",
+  "passes": true,
   "title": "Clients — Remove Top Video Ideas, add strategy expand/collapse",
   "category": "ui-ux",
   "description": "Remove or suppress the 'Top Video Ideas' section from client detail. Keep the high-level content strategy visible. Add expand/collapse to view the full content strategy.",

@@ -1,5 +1,6 @@
 {
   "id": "TASK-11",
+  "passes": true,
   "title": "Shoots — Match Ideate button to Schedule Shoot styling",
   "category": "ui-ux",
   "description": "Update the Ideate button in the upcoming shoots section to match the styling of the Schedule Shoot button. Ensure consistent button hierarchy, hover, and active states.",

@@ -1,5 +1,6 @@
 {
   "id": "TASK-28",
+  "passes": true,
   "title": "Mood Board — Fix website item metadata",
   "category": "functional",
   "description": "Fix website links showing 'Untitled video' as title. Detect content type (website vs video) and populate title from OpenGraph metadata.",

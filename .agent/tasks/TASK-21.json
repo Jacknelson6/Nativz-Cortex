@@ -1,5 +1,6 @@
 {
   "id": "TASK-21",
+  "passes": true,
   "title": "Mood Board — Decouple hook and pacing button logic",
   "category": "functional",
   "description": "Fix the hook button incorrectly triggering pacing logic. Decouple the two functions. Evaluate removing the pacing button entirely.",

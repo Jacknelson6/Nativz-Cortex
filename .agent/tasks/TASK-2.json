@@ -1,5 +1,6 @@
 {
   "id": "TASK-2",
+  "passes": true,
   "title": "New Search — Add client logos and agency badges to list",
   "category": "ui-ux",
   "description": "Enhance the client selection list inside the modal to show each client's logo and an agency indicator badge (Anderson Collaborative or Nativz). Layout must scale for long client lists.",

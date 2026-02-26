@@ -1,5 +1,6 @@
 {
   "id": "TASK-37",
+  "passes": true,
   "title": "Clients — Fix PDF logo scaling and add AC branded export",
   "category": "functional",
   "description": "Fix the Nativz logo being squished in PDF exports. Maintain proper aspect ratio. Implement an Anderson Collaborative branded PDF export option that auto-selects based on client agency.",

@@ -1,5 +1,6 @@
 {
   "id": "TASK-40",
+  "passes": true,
   "title": "Clients — Add in-context Mood Board and Shoot buttons",
   "category": "ui-ux",
   "description": "Add 'Create Mood Board for this client' button within the mood board section of client detail. Add 'Schedule Shoot' button within the shoots section. Both auto-populate the client context.",

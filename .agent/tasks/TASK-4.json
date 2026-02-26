@@ -1,5 +1,6 @@
 {
   "id": "TASK-4",
+  "passes": true,
   "title": "New Search — Remove attribution text",
   "category": "ui-ux",
   "description": "Remove the 'Powered by Brave Search plus Claude AI' attribution text from the search page. Confirm no layout break after removal.",

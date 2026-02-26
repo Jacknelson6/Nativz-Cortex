@@ -1,5 +1,6 @@
 {
   "id": "TASK-43",
+  "passes": true,
   "title": "Clients — Center client logo and reduce whitespace",
   "category": "ui-ux",
   "description": "Center the client logo within its container and reduce excess whitespace. Ensure consistent rendering across different logo aspect ratios.",

@@ -1,5 +1,6 @@
 {
   "id": "TASK-12",
+  "passes": true,
   "title": "Shoots — Remove star icon from Ideate modal",
   "category": "ui-ux",
   "description": "Remove the star icon next to the Ideate Shoot button in the modal. Ensure no layout shift and modal alignment remains correct.",
