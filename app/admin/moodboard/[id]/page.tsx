@@ -39,7 +39,6 @@ import { Input } from '@/components/ui/input';
 import { AddItemModal } from '@/components/moodboard/add-item-modal';
 import { VideoAnalysisPanel } from '@/components/moodboard/video-analysis-panel';
 import { ReplicationBriefModal } from '@/components/moodboard/replication-brief-modal';
-import { RescriptPanel } from '@/components/moodboard/rescript-panel';
 import { ShareBoardModal } from '@/components/moodboard/share-board-modal';
 import { AiChatPanel } from '@/components/moodboard/ai-chat-panel';
 import { VideoNode } from '@/components/moodboard/nodes/video-node';
@@ -92,8 +91,6 @@ function MoodboardCanvas() {
   // Analysis panel
   const [analysisItem, setAnalysisItem] = useState<MoodboardItem | null>(null);
   const [replicateItem, setReplicateItem] = useState<MoodboardItem | null>(null);
-  const [rescriptItem, setRescriptItem] = useState<MoodboardItem | null>(null);
-
   // AI Chat panel
   const [chatOpen, setChatOpen] = useState(false);
   const [chatItemIds, setChatItemIds] = useState<string[]>([]);
@@ -271,9 +268,9 @@ function MoodboardCanvas() {
         item,
         onViewAnalysis: (i: MoodboardItem) => setAnalysisItem(i),
         onReplicate: (i: MoodboardItem) => setReplicateItem(i),
-        onRescript: (i: MoodboardItem) => setRescriptItem(i),
         onDelete: handleDeleteItem,
         onExtractInsights: handleExtractInsights,
+        onItemUpdate: (updated: MoodboardItem) => setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i))),
       },
       style: { width: item.width || (item.platform === 'tiktok' || item.platform === 'instagram' || item.platform === 'facebook' ? 220 : 320) },
     }));
@@ -911,7 +908,6 @@ function MoodboardCanvas() {
           item={analysisItem}
           onClose={() => setAnalysisItem(null)}
           onReplicate={(item) => { setAnalysisItem(null); setReplicateItem(item); }}
-          onRescript={(item) => { setAnalysisItem(null); setRescriptItem(item); }}
         />
       )}
 
@@ -946,17 +942,6 @@ function MoodboardCanvas() {
         />
       )}
 
-      {/* Rescript Panel */}
-      {rescriptItem && (
-        <RescriptPanel
-          item={rescriptItem}
-          onClose={() => setRescriptItem(null)}
-          onSaved={(rescript) => {
-            setItems((prev) => prev.map((i) => (i.id === rescriptItem.id ? { ...i, rescript } : i)));
-            setRescriptItem(null);
-          }}
-        />
-      )}
     </div>
   );
 }

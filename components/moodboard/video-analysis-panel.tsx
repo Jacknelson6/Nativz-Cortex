@@ -15,7 +15,6 @@ interface VideoAnalysisPanelProps {
   item: MoodboardItem;
   onClose: () => void;
   onReplicate: (item: MoodboardItem) => void;
-  onRescript?: (item: MoodboardItem) => void;
 }
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -25,7 +24,7 @@ const PLATFORM_COLORS: Record<string, string> = {
   twitter: 'bg-sky-500 text-white',
 };
 
-export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate, onRescript }: VideoAnalysisPanelProps) {
+export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: VideoAnalysisPanelProps) {
   const [item, setItem] = useState(initialItem);
   const [copied, setCopied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -221,7 +220,7 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate, on
                 <p className="text-sm text-text-muted mb-3">Run analysis to see hook breakdown</p>
                 <Button onClick={handleAnalyze} disabled={analyzing}>
                   {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  {analyzing ? 'Analyzing...' : '✨ Analyze Video'}
+                  {analyzing ? 'Analyzing...' : 'Analyze video'}
                 </Button>
               </div>
             ) : item.hook ? (
@@ -267,7 +266,7 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate, on
                 <p className="text-sm text-text-muted mb-3">Extract the video transcript</p>
                 <Button onClick={handleTranscribe} disabled={transcribing}>
                   {transcribing ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
-                  {transcribing ? 'Transcribing...' : '📝 Transcribe'}
+                  {transcribing ? 'Transcribing...' : 'Transcribe'}
                 </Button>
               </div>
             ) : (
@@ -282,7 +281,7 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate, on
                 <p className="text-sm text-text-muted mb-3">Run analysis to see pacing data</p>
                 <Button onClick={handleAnalyze} disabled={analyzing}>
                   {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  {analyzing ? 'Analyzing...' : '✨ Analyze Video'}
+                  {analyzing ? 'Analyzing...' : 'Analyze video'}
                 </Button>
               </div>
             ) : (

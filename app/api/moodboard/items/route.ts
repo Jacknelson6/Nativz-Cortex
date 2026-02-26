@@ -309,6 +309,24 @@ export async function POST(request: NextRequest) {
         }
       } else if (url.includes('twitter.com') || url.includes('x.com')) {
         detectedPlatform = 'twitter';
+      } else if (parsed.data.type === 'website') {
+        // Fetch OpenGraph metadata for generic websites
+        try {
+          const res = await fetch(url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml',
+            },
+            redirect: 'follow',
+            signal: AbortSignal.timeout(5000),
+          });
+          if (res.ok) {
+            const html = await res.text();
+            const $ = cheerio.load(html);
+            quickTitle = quickTitle || $('meta[property="og:title"]').attr('content') || $('title').text() || null;
+            quickThumbnail = quickThumbnail || $('meta[property="og:image"]').attr('content') || null;
+          }
+        } catch { /* website scrape failed */ }
       }
     } catch {
       // Metadata fetch failed — still create the item
@@ -319,7 +337,7 @@ export async function POST(request: NextRequest) {
       board_id: parsed.data.board_id,
       url: parsed.data.url,
       type: parsed.data.type,
-      title: quickTitle || 'Untitled video',
+      title: quickTitle || (parsed.data.type === 'website' ? (() => { try { return new URL(parsed.data.url).hostname; } catch { return 'Untitled'; } })() : 'Untitled video'),
       thumbnail_url: quickThumbnail,
       platform: detectedPlatform,
       author_name: authorName,

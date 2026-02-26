@@ -20,7 +20,10 @@ export function AdminNavItems() {
   const pathname = usePathname();
 
   function isActive(href: string) {
-    return pathname === href || pathname.startsWith(href + '/');
+    if (pathname === href) return true;
+    // Prevent /admin/moodboard matching /admin/moodboard/profile etc. as sub-pages
+    // Only match if the next char after href is '/'
+    return pathname.startsWith(href + '/');
   }
 
   const dockItems = NAV_ITEMS.map((item) => ({

@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState, useRef, useEffect } from 'react';
+import { memo, useState, useRef, useEffect, useCallback } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import { X } from 'lucide-react';
 import type { MoodboardNote, StickyNoteColor } from '@/lib/types/moodboard';
@@ -34,10 +34,16 @@ export const StickyNode = memo(function StickyNode({ data }: NodeProps<StickyNod
   const [text, setText] = useState(note.content);
   const [showColors, setShowColors] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>(null);
+  const latestText = useRef(text);
+  latestText.current = text;
 
+  // Only sync from parent if we're not actively editing
   useEffect(() => {
-    setText(note.content);
-  }, [note.content]);
+    if (!editing) {
+      setText(note.content);
+    }
+  }, [note.content, editing]);
 
   useEffect(() => {
     if (editing && textareaRef.current) {
@@ -45,10 +51,27 @@ export const StickyNode = memo(function StickyNode({ data }: NodeProps<StickyNod
     }
   }, [editing]);
 
+  // Debounced auto-save while typing
+  const debouncedSave = useCallback((value: string) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      if (value !== note.content) {
+        onUpdate(note.id, value);
+      }
+    }, 800);
+  }, [note.id, note.content, onUpdate]);
+
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const value = e.target.value;
+    setText(value);
+    debouncedSave(value);
+  }
+
   function handleBlur() {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
     setEditing(false);
-    if (text !== note.content) {
-      onUpdate(note.id, text);
+    if (latestText.current !== note.content) {
+      onUpdate(note.id, latestText.current);
     }
   }
 
@@ -90,7 +113,7 @@ export const StickyNode = memo(function StickyNode({ data }: NodeProps<StickyNod
         <textarea
           ref={textareaRef}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={handleChange}
           onBlur={handleBlur}
           onKeyDown={(e) => { if (e.key === 'Escape') handleBlur(); }}
           className="w-full bg-transparent text-sm font-medium resize-none outline-none min-h-[40px] placeholder:text-black/30"

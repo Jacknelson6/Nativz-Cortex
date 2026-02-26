@@ -43,6 +43,7 @@ export async function PATCH(
       'logo_url',
       'website_url',
       'preferences',
+      'health_score_override',
     ];
 
     const updates: Record<string, unknown> = {};

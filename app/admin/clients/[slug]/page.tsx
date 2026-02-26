@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Building2, Settings, Search, Clock, Lightbulb, User2, Mail, Globe, Camera, Palette, Plus } from 'lucide-react';
+import { ArrowLeft, Building2, Settings, Search, Clock, Lightbulb, User2, Globe, Camera, Palette, Plus } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getVaultClientBySlug } from '@/lib/vault/reader';
 import { Card } from '@/components/ui/card';
@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import { formatRelativeTime } from '@/lib/utils/format';
-import { InviteButton } from '@/components/clients/invite-button';
 import { ClientStrategyCard } from '@/components/clients/client-strategy-card';
+import { ClientContactsCard } from '@/components/clients/client-contacts-card';
 import { HealthScoreCard } from '@/components/clients/health-score-card';
 import { calculateClientHealth } from '@/lib/clients/health';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
@@ -34,7 +34,7 @@ export default async function AdminClientDetailPage({
 
     const { data: dbClient } = await adminClient
       .from('clients')
-      .select('id, organization_id, logo_url, is_active, feature_flags')
+      .select('id, organization_id, logo_url, is_active, feature_flags, health_score_override')
       .eq('slug', slug)
       .maybeSingle();
 
@@ -195,7 +195,7 @@ export default async function AdminClientDetailPage({
         {/* Health score + Key metrics */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {health && (
-            <HealthScoreCard score={health.score} isNew={health.isNew} breakdown={health.breakdown} />
+            <HealthScoreCard score={health.score} isNew={health.isNew} breakdown={health.breakdown} clientId={clientId} healthOverride={dbClient?.health_score_override} />
           )}
           <Card>
             <h2 className="text-base font-semibold text-text-primary mb-4">Overview</h2>
@@ -262,73 +262,23 @@ export default async function AdminClientDetailPage({
             </div>
           </Card>
 
-          <Card>
-            <h2 className="text-base font-semibold text-text-primary mb-4">Points of contact</h2>
-            {clientContacts.length === 0 && (vaultProfile.contacts?.length ?? 0) === 0 ? (
+          {clientId ? (
+            <ClientContactsCard
+              clientId={clientId}
+              clientName={vaultProfile.name}
+              vaultContacts={vaultProfile.contacts ?? []}
+              portalContacts={clientContacts}
+            />
+          ) : (
+            <Card>
+              <h2 className="text-base font-semibold text-text-primary mb-4">Points of contact</h2>
               <EmptyState
                 icon={<User2 size={24} />}
                 title="No contacts yet"
                 description={`When ${vaultProfile.name} adds contacts, they'll appear here.`}
               />
-            ) : (
-              <div className="space-y-3">
-                {/* Vault Contacts */}
-                {(vaultProfile.contacts ?? []).map((contact: any, i: number) => (
-                  <div key={`vault-${i}`} className="flex items-center gap-3 rounded-lg border border-nativz-border-light px-4 py-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface text-accent-text">
-                      <User2 size={16} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-text-primary truncate">{contact.name}</p>
-                    {contact.title && <p className="text-xs text-text-muted truncate">{contact.title}</p>}
-                    <p className="text-xs text-text-muted flex items-center gap-1 truncate">
-                        <Mail size={10} className="shrink-0" />
-                        {contact.email}
-                      </p>
-                    </div>
-                    <a href={`mailto:${contact.email}`}>
-                      <Badge variant="default" className="cursor-pointer hover:bg-accent-surface/80 transition-colors">
-                        Contact
-                      </Badge>
-                    </a>
-                  </div>
-                ))}
-
-                {/* Portal Users */}
-                {clientContacts.map((contact) => (
-                  <div key={contact.id} className="flex items-center gap-3 rounded-lg border border-nativz-border bg-surface-hover/30 px-4 py-3">
-                    {contact.avatar_url ? (
-                      <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={contact.avatar_url} alt={contact.full_name} className="h-full w-full object-cover" />
-                      </div>
-                    ) : (
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white">
-                        <User2 size={16} />
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-text-primary truncate">{contact.full_name}</p>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="info" className="text-[9px] px-1 py-0">Portal</Badge>
-                        {contact.job_title && <p className="text-xs text-text-muted truncate">{contact.job_title}</p>}
-                      </div>
-                    </div>
-                    {contact.last_login && (
-                      <span className="text-[10px] text-text-muted shrink-0">
-                        {formatRelativeTime(contact.last_login)}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            {clientId && (
-              <div className="mt-4">
-                <InviteButton clientId={clientId} clientName={vaultProfile.name} />
-              </div>
-            )}
-          </Card>
+            </Card>
+          )}
         </div>
 
         {/* Content strategy */}
