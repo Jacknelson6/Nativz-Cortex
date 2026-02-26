@@ -35,9 +35,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    console.log('Received request:', { board_id: body.board_id, url: body.url, type: body.type });
+    
     const parsed = createItemSchema.safeParse(body);
 
     if (!parsed.success) {
+      console.error('Validation failed:', parsed.error.flatten().fieldErrors);
       return NextResponse.json(
         { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
         { status: 400 }
@@ -45,13 +48,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify board exists
-    const { data: board } = await adminClient
+    const { data: board, error: boardError } = await adminClient
       .from('moodboard_boards')
       .select('id')
       .eq('id', parsed.data.board_id)
       .single();
 
-    if (!board) {
+    if (boardError || !board) {
+      console.error('Board not found:', boardError);
       return NextResponse.json({ error: 'Board not found' }, { status: 404 });
     }
 
@@ -76,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       console.error('Error creating item:', insertError);
-      return NextResponse.json({ error: 'Failed to create item' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to create item', details: insertError.message }, { status: 500 });
     }
 
     // Update board's updated_at timestamp

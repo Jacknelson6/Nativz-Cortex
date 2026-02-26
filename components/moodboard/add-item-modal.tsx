@@ -61,6 +61,8 @@ export function AddItemModal({ open, onClose, boardId, onItemAdded }: AddItemMod
       const linkType = detectLinkType(trimmed);
       const itemType = linkTypeToItemType(linkType);
 
+      console.log('Adding item:', { url: trimmed, type: itemType, linkType });
+
       const res = await fetch('/api/moodboard/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -73,9 +75,12 @@ export function AddItemModal({ open, onClose, boardId, onItemAdded }: AddItemMod
         }),
       });
 
+      console.log('Response status:', res.status);
+      
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Failed to add item');
+        console.error('API error:', data);
+        throw new Error(data.error || data.details || 'Failed to add item');
       }
 
       toast.success('Item added to board');
@@ -84,6 +89,7 @@ export function AddItemModal({ open, onClose, boardId, onItemAdded }: AddItemMod
       onItemAdded();
       onClose();
     } catch (err) {
+      console.error('Submit error:', err);
       toast.error(err instanceof Error ? err.message : 'Failed to add item');
     } finally {
       setLoading(false);

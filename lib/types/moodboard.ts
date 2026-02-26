@@ -117,7 +117,9 @@ export interface MoodboardComment {
 export type DetectedLinkType = 'youtube' | 'tiktok' | 'instagram' | 'direct_video' | 'image' | 'website';
 
 export function detectLinkType(url: string): DetectedLinkType {
-  const lower = url.toLowerCase();
+  if (!url || typeof url !== 'string') return 'website';
+  
+  const lower = url.toLowerCase().trim();
 
   if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'youtube';
   if (lower.includes('tiktok.com')) return 'tiktok';
@@ -128,7 +130,7 @@ export function detectLinkType(url: string): DetectedLinkType {
   return 'website';
 }
 
-export function linkTypeToItemType(linkType: DetectedLinkType): MoodboardItemType {
+export function linkTypeToItemType(linkType: DetectedLinkType | null | undefined): MoodboardItemType {
   switch (linkType) {
     case 'youtube':
     case 'tiktok':
@@ -138,6 +140,7 @@ export function linkTypeToItemType(linkType: DetectedLinkType): MoodboardItemTyp
     case 'image':
       return 'image';
     case 'website':
+    default:
       return 'website';
   }
 }
