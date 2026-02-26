@@ -103,7 +103,8 @@ export function ScheduleShootsModal({ open, onClose, initialClientId }: Schedule
   function generateDrafts() {
     const selected = clients.filter((c) => selectedIds.has(c.id));
     const newDrafts: DraftEmail[] = selected.map((client) => {
-      const agencyKey = client.agency?.toLowerCase().includes('anderson') ? 'ac' : 'nativz';
+      const isAC = client.agency?.toLowerCase().includes('anderson') || client.agency?.toLowerCase() === 'ac';
+      const agencyKey = isAC ? 'ac' : 'nativz';
       const agencyName = agencyKey === 'ac' ? 'Anderson Collaborative' : 'Nativz';
       const link = schedulingLinks[agencyKey] || '';
 
@@ -144,7 +145,7 @@ The ${agencyName} Team`,
   }
 
   const filtered = clients.filter((c) => {
-    const isAC = c.agency?.toLowerCase().includes('anderson');
+    const isAC = c.agency?.toLowerCase().includes('anderson') || c.agency?.toLowerCase() === 'ac';
     const matchesTab = activeTab === 'ac' ? isAC : !isAC;
     return matchesTab && c.name.toLowerCase().includes(search.toLowerCase());
   });
