@@ -25,9 +25,8 @@ import { Badge } from '@/components/ui/badge';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
-import { ScheduleShootModal } from '@/components/shoots/schedule-shoot-modal';
+import { ScheduleShootsModal } from '@/components/shoots/schedule-shoot-modal';
 import { IdeateShootModal } from '@/components/shoots/ideate-shoot-modal';
-import { BulkScheduleModal } from '@/components/shoots/bulk-schedule-modal';
 import { AgencyBadge } from '@/components/clients/agency-badge';
 import { toast } from 'sonner';
 
@@ -214,8 +213,7 @@ export default function AdminShootsPage() {
   const [shootToSchedule, setShootToSchedule] = useState<ShootItem | null>(null);
   const [scheduleDate, setScheduleDate] = useState<string | null>(null);
   const [ideateModalOpen, setIdeateModalOpen] = useState(false);
-  const [bulkScheduleOpen, setBulkScheduleOpen] = useState(false);
-  const [shootToIdeate, setShootToIdeate] = useState<ShootItem | null>(null);
+    const [shootToIdeate, setShootToIdeate] = useState<ShootItem | null>(null);
 
   // Plan data from DB keyed by mondayItemId
   const [planDataMap, setPlanDataMap] = useState<Record<string, ShootPlanData>>({});
@@ -391,13 +389,9 @@ export default function AdminShootsPage() {
           <Button variant="ghost" size="sm" onClick={handleRefresh} title="Refresh data">
             <RefreshCw size={14} />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setBulkScheduleOpen(true)} title="Bulk schedule emails">
-            <Mail size={14} />
-            Bulk emails
-          </Button>
           <GlassButton onClick={() => { setShootToSchedule(null); setScheduleModalOpen(true); }}>
-            <Plus size={14} />
-            Schedule shoot
+            <Mail size={14} />
+            Schedule shoots
           </GlassButton>
         </div>
       </div>
@@ -648,27 +642,11 @@ export default function AdminShootsPage() {
         />
       )}
 
-      {/* Schedule Shoot Modal */}
-      <ScheduleShootModal
+      {/* Schedule Shoots Modal */}
+      <ScheduleShootsModal
         open={scheduleModalOpen}
-        onClose={() => { setScheduleModalOpen(false); setShootToSchedule(null); setScheduleDate(null); }}
-        onCreated={handleRefresh}
-        prefilledDate={scheduleDate}
-        shoot={shootToSchedule ? {
-          clientName: shootToSchedule.clientName,
-          clientId: shootToSchedule.clientId,
-          mondayItemId: isShootPast(shootToSchedule.date) ? undefined : shootToSchedule.mondayItemId,
-          date: isShootPast(shootToSchedule.date) ? null : shootToSchedule.date,
-          location: '',
-          notes: isShootPast(shootToSchedule.date) ? '' : shootToSchedule.notes,
-          agency: shootToSchedule.agency || undefined,
-        } : undefined}
-      />
-
-      {/* Bulk Schedule Modal */}
-      <BulkScheduleModal
-        open={bulkScheduleOpen}
-        onClose={() => setBulkScheduleOpen(false)}
+        onClose={() => { setScheduleModalOpen(false); setShootToSchedule(null); }}
+        initialClientId={shootToSchedule?.clientId || null}
       />
 
       {/* Ideate Shoot Modal */}

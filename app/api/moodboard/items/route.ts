@@ -363,7 +363,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('POST /api/moodboard/items error:', error);
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: 'Internal server error', details: message }, { status: 500 });
+    const stack = error instanceof Error ? error.stack : '';
+    return NextResponse.json({ error: 'Internal server error', details: message, stack: stack?.substring(0, 500) }, { status: 500 });
   }
 }
 // on-demand refactor
