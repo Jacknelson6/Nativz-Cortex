@@ -43,3 +43,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# scratch files and debug artifacts
+/scratch/
+/logs_llm/
+vectors.db
+vectors.db-shm
+vectors.db-wal
