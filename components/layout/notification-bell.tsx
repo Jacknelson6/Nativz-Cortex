@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, Check, Lightbulb, FileText, MessageSquare, Settings2, Mail } from 'lucide-react';
+import { Bell, Check, Lightbulb, FileText, MessageSquare, Settings2, Mail, Search, Camera } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/format';
 
 interface Notification {
@@ -22,6 +22,8 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   feedback_received: <MessageSquare size={14} className="text-purple-400" />,
   preferences_updated: <Settings2 size={14} className="text-blue-400" />,
   weekly_digest: <Mail size={14} className="text-text-muted" />,
+  search_completed: <Search size={14} className="text-emerald-400" />,
+  shoot_scheduled: <Camera size={14} className="text-blue-400" />,
 };
 
 export function NotificationBell() {

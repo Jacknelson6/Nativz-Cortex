@@ -11,6 +11,7 @@ import type { TopicSearchAIResponse } from '@/lib/types/search';
 import type { BraveSerpData } from '@/lib/brave/types';
 import type { ClientPreferences } from '@/lib/types/database';
 import { syncSearchToVault } from '@/lib/vault/sync';
+import { createNotification } from '@/lib/notifications/create';
 
 export const maxDuration = 300;
 
@@ -194,6 +195,15 @@ export async function POST(
         },
         clientContext?.name,
       ).catch(() => {}); // Never fail the response
+
+      // Notify user
+      createNotification({
+        recipientUserId: user.id,
+        type: 'search_completed',
+        title: 'Search completed',
+        body: `Results ready for "${search.query}"`,
+        linkPath: `/admin/search/${id}`,
+      }).catch(() => {});
 
       return NextResponse.json({ status: 'completed' });
     } catch (aiError) {

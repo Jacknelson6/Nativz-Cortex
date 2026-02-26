@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { notFound } from 'next/navigation';
 import type { TopicSearch } from '@/lib/types/search';
 import { AdminResultsClient } from './results-client';
+import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 
 export interface Recipient {
   id: string;
@@ -82,5 +83,15 @@ export default async function AdminSearchResultsPage({
     }
   }
 
-  return <AdminResultsClient search={search as TopicSearch} clientInfo={clientInfo} recipients={recipients} />;
+  return (
+    <>
+      <div className="px-6 pt-6">
+        <Breadcrumbs items={[
+          { label: 'Search History', href: '/admin/search/history' },
+          { label: (search as TopicSearch).query },
+        ]} />
+      </div>
+      <AdminResultsClient search={search as TopicSearch} clientInfo={clientInfo} recipients={recipients} />
+    </>
+  );
 }

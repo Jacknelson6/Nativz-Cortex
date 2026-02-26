@@ -7,6 +7,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getVaultClients } from '@/lib/vault/reader';
 
@@ -16,6 +17,12 @@ export const maxDuration = 60;
 
 export async function POST() {
   try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const vaultClients = await getVaultClients();
     if (vaultClients.length === 0) {
       return NextResponse.json({ message: 'No vault clients found' });

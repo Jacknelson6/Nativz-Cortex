@@ -24,7 +24,7 @@ export const WebsiteNode = memo(function WebsiteNode({ data }: NodeProps<Website
 
   return (
     <div className="bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden min-w-[280px] max-w-[360px] group">
-      <Handle type="target" position={Position.Top} className="!bg-accent !border-0 !w-2 !h-2" />
+      <Handle type="target" position={Position.Top} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
 
       {/* Screenshot */}
       <div className="relative aspect-[16/10] bg-surface-hover overflow-hidden">
@@ -114,7 +114,7 @@ export const WebsiteNode = memo(function WebsiteNode({ data }: NodeProps<Website
         </div>
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="!bg-accent !border-0 !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
     </div>
   );
 });

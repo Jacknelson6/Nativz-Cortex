@@ -28,7 +28,7 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Public routes — no auth needed
-  if (pathname.startsWith('/portal/join/') || pathname === '/api/calendar/webhook') {
+  if (pathname.startsWith('/portal/join/') || pathname === '/api/calendar/webhook' || pathname.startsWith('/shared/') || pathname.startsWith('/api/shared/')) {
     return supabaseResponse;
   }
 

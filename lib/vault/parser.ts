@@ -124,6 +124,7 @@ export interface ParsedClientProfile {
   brand_voice?: string;
   topic_keywords: string[];
   services: string[];
+  agency?: string;
   point_of_contact?: { name: string; email: string };
 }
 
@@ -159,6 +160,7 @@ export function parseClientProfile(markdown: string): ParsedClientProfile | null
     brand_voice: extractSection(body, 'Brand voice') || undefined,
     topic_keywords: extractListItems(body, 'Topic keywords'),
     services: (fm.services as string[]) || extractListItems(body, 'Services'),
+    agency: (fm.agency as string) || undefined,
     point_of_contact: extractPointOfContact(body) || undefined,
   };
 }

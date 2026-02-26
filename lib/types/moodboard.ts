@@ -1,6 +1,27 @@
 export type MoodboardItemType = 'video' | 'image' | 'website';
 export type MoodboardItemStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type MoodboardPlatform = 'tiktok' | 'instagram' | 'youtube' | 'twitter' | 'facebook' | null;
 export type StickyNoteColor = 'yellow' | 'blue' | 'green' | 'pink' | 'white';
+
+export interface VideoStats {
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+}
+
+export interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface MoodboardTag {
+  id: string;
+  board_id: string;
+  name: string;
+  color: string;
+}
 
 export interface MoodboardBoard {
   id: string;
@@ -10,15 +31,43 @@ export interface MoodboardBoard {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
   // joined fields
   client_name?: string;
   item_count?: number;
+  thumbnails?: string[];
+  tags?: MoodboardTag[];
 }
 
 export interface VideoPacing {
   description: string;
   estimated_cuts: number;
   cuts_per_minute: number;
+}
+
+export interface VideoPacingDetail {
+  description: string;
+  estimated_cuts: number;
+  cuts_per_minute: number;
+  scenes: Array<{ timestamp: number; description: string }>;
+}
+
+export interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface MusicAnalysis {
+  type: string;
+  mood: string;
+  name: string | null;
+}
+
+export interface CaptionOverlayDetail {
+  timestamp: number;
+  text: string;
+  style: string;
 }
 
 export interface VideoFrame {
@@ -39,13 +88,29 @@ export interface PageInsights {
 export interface VideoAnalysis {
   hook: string;
   hook_analysis: string;
+  hook_score: number;
+  hook_type: string;
   cta: string;
   concept_summary: string;
-  pacing: VideoPacing;
-  caption_overlays: string[];
+  pacing: VideoPacingDetail;
+  caption_overlays: CaptionOverlayDetail[];
   content_themes: string[];
   winning_elements: string[];
   improvement_areas: string[];
+  music_analysis: MusicAnalysis | null;
+}
+
+export interface RescriptData {
+  adapted_script: string;
+  shot_list: { number: number; description: string; timing: string; notes?: string }[];
+  hook_alternatives: string[];
+  hashtags: string[];
+  posting_strategy: string;
+  brand_voice?: string;
+  product?: string;
+  target_audience?: string;
+  client_id?: string;
+  generated_at: string;
 }
 
 export interface MoodboardItem {
@@ -60,17 +125,29 @@ export interface MoodboardItem {
   // video fields
   duration: number | null;
   transcript: string | null;
+  transcript_segments: TranscriptSegment[];
   hook: string | null;
   hook_analysis: string | null;
+  hook_score: number | null;
+  hook_type: string | null;
   cta: string | null;
   concept_summary: string | null;
   pacing: VideoPacing | null;
+  pacing_detail: VideoPacingDetail | null;
   frames: VideoFrame[];
-  caption_overlays: string[];
+  caption_overlays: CaptionOverlayDetail[];
   content_themes: string[];
   winning_elements: string[];
   improvement_areas: string[];
   replication_brief: string | null;
+  rescript: RescriptData | null;
+  platform: string | null;
+  author_name: string | null;
+  author_handle: string | null;
+  stats: { views: number; likes: number; comments: number; shares: number } | null;
+  music: string | null;
+  hashtags: string[];
+  error_message: string | null;
 
   // website fields
   screenshot_url: string | null;
@@ -106,6 +183,7 @@ export interface MoodboardComment {
   item_id: string;
   user_id: string;
   content: string;
+  video_timestamp: number | null;
   created_at: string;
   updated_at: string;
   // joined
@@ -113,8 +191,20 @@ export interface MoodboardComment {
   user_avatar?: string | null;
 }
 
+export interface MoodboardEdge {
+  id: string;
+  board_id: string;
+  source_node_id: string;
+  target_node_id: string;
+  label: string | null;
+  style: 'solid' | 'dashed' | 'dotted';
+  color: string;
+  created_by: string | null;
+  created_at: string;
+}
+
 // URL detection
-export type DetectedLinkType = 'youtube' | 'tiktok' | 'instagram' | 'direct_video' | 'image' | 'website';
+export type DetectedLinkType = 'youtube' | 'tiktok' | 'instagram' | 'facebook' | 'twitter' | 'direct_video' | 'image' | 'website';
 
 export function detectLinkType(url: string): DetectedLinkType {
   if (!url || typeof url !== 'string') return 'website';
@@ -124,6 +214,8 @@ export function detectLinkType(url: string): DetectedLinkType {
   if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'youtube';
   if (lower.includes('tiktok.com')) return 'tiktok';
   if (lower.includes('instagram.com/reel') || lower.includes('instagram.com/p/')) return 'instagram';
+  if (lower.includes('facebook.com/reel') || lower.includes('fb.watch/') || lower.includes('facebook.com/watch') || lower.includes('facebook.com/share/v/')) return 'facebook';
+  if (lower.includes('twitter.com') || lower.includes('x.com')) return 'twitter';
   if (/\.(mp4|mov|webm)(\?|$)/i.test(lower)) return 'direct_video';
   if (/\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(lower)) return 'image';
 
@@ -135,6 +227,8 @@ export function linkTypeToItemType(linkType: DetectedLinkType | null | undefined
     case 'youtube':
     case 'tiktok':
     case 'instagram':
+    case 'facebook':
+    case 'twitter':
     case 'direct_video':
       return 'video';
     case 'image':

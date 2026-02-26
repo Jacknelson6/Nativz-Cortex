@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Building2, Settings, Search, Clock, Lightbulb, User2, Mail, Globe } from 'lucide-react';
+import { ArrowLeft, Building2, Settings, Search, Clock, Lightbulb, User2, Mail, Globe, Camera, Palette } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getVaultClientBySlug } from '@/lib/vault/reader';
 import { Card } from '@/components/ui/card';
@@ -11,6 +11,10 @@ import { PageError } from '@/components/shared/page-error';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { InviteButton } from '@/components/clients/invite-button';
 import { ClientStrategyCard } from '@/components/clients/client-strategy-card';
+import { HealthScoreCard } from '@/components/clients/health-score-card';
+import { calculateClientHealth } from '@/lib/clients/health';
+import { Breadcrumbs } from '@/components/shared/breadcrumbs';
+import { AgencyBadge } from '@/components/clients/agency-badge';
 import type { ClientStrategy } from '@/lib/types/strategy';
 
 export default async function AdminClientDetailPage({
@@ -21,7 +25,6 @@ export default async function AdminClientDetailPage({
   const { slug } = await params;
 
   try {
-    // Read brand data from the vault (source of truth)
     const vaultProfile = await getVaultClientBySlug(slug);
     if (!vaultProfile) {
       notFound();
@@ -29,17 +32,25 @@ export default async function AdminClientDetailPage({
 
     const adminClient = createAdminClient();
 
-    // Check if this client has a Supabase record (for operational data)
     const { data: dbClient } = await adminClient
       .from('clients')
       .select('id, organization_id, logo_url, is_active, feature_flags')
       .eq('slug', slug)
       .maybeSingle();
 
-    // Fetch searches, ideas, and contacts if we have a DB record
     const clientId = dbClient?.id;
 
-    const [{ data: searches }, { data: recentIdeas }, { count: ideaCount }, { data: contacts }, { data: strategyData }] = await Promise.all([
+    // Fetch all data in parallel
+    const [
+      { data: searches },
+      { data: recentIdeas },
+      { count: ideaCount },
+      { data: contacts },
+      { data: strategyData },
+      { data: shoots },
+      { data: moodboards },
+      health,
+    ] = await Promise.all([
       clientId
         ? adminClient
             .from('topic_searches')
@@ -81,15 +92,45 @@ export default async function AdminClientDetailPage({
             .limit(1)
             .maybeSingle()
         : Promise.resolve({ data: null as ClientStrategy | null }),
+      clientId
+        ? adminClient
+            .from('shoot_events')
+            .select('id, title, shoot_date, location')
+            .eq('client_id', clientId)
+            .order('shoot_date', { ascending: false })
+            .limit(3)
+        : Promise.resolve({ data: [] as Array<{ id: string; title: string; shoot_date: string; location: string | null }> }),
+      clientId
+        ? adminClient
+            .from('moodboard_boards')
+            .select('id, name, created_at, updated_at')
+            .eq('client_id', clientId)
+            .order('updated_at', { ascending: false })
+            .limit(3)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string; created_at: string; updated_at: string }> }),
+      clientId
+        ? calculateClientHealth(clientId)
+        : Promise.resolve(null),
     ]);
 
     const items = searches || [];
     const ideas = recentIdeas || [];
     const clientContacts = contacts || [];
     const existingStrategy = (strategyData as ClientStrategy) ?? null;
+    const recentShoots = shoots || [];
+    const recentMoodboards = moodboards || [];
+
+    // Metrics
+    const totalSearches = items.length;
+    const totalShoots = recentShoots.length;
+    const totalMoodboards = recentMoodboards.length;
 
     return (
       <div className="p-6 space-y-6">
+        <Breadcrumbs items={[
+          { label: 'Clients', href: '/admin/clients' },
+          { label: vaultProfile.name },
+        ]} />
         {/* Header */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -112,6 +153,7 @@ export default async function AdminClientDetailPage({
                 {vaultProfile.abbreviation && (
                   <span className="shrink-0 text-xs font-medium text-text-muted">{vaultProfile.abbreviation}</span>
                 )}
+                <AgencyBadge agency={vaultProfile.agency} />
               </div>
               <p className="truncate text-sm text-text-muted">{vaultProfile.industry || 'General'}</p>
             </div>
@@ -126,9 +168,59 @@ export default async function AdminClientDetailPage({
           </div>
         </div>
 
+        {/* Quick actions */}
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/admin/search/new?client=${clientId || slug}`}>
+            <Button size="sm">
+              <Search size={14} />
+              New search
+            </Button>
+          </Link>
+          <Link href="/admin/shoots">
+            <Button variant="outline" size="sm">
+              <Camera size={14} />
+              Schedule shoot
+            </Button>
+          </Link>
+          <Link href="/admin/moodboard">
+            <Button variant="outline" size="sm">
+              <Palette size={14} />
+              Create moodboard
+            </Button>
+          </Link>
+        </div>
+
+        {/* Health score + Key metrics */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {health && (
+            <HealthScoreCard score={health.score} isNew={health.isNew} breakdown={health.breakdown} />
+          )}
+          <Card>
+            <h2 className="text-base font-semibold text-text-primary mb-4">Overview</h2>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-text-primary tabular-nums">{totalSearches}</p>
+                <p className="text-xs text-text-muted mt-0.5">Recent searches</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-text-primary tabular-nums">{totalShoots}</p>
+                <p className="text-xs text-text-muted mt-0.5">Recent shoots</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-text-primary tabular-nums">{totalMoodboards}</p>
+                <p className="text-xs text-text-muted mt-0.5">Moodboards</p>
+              </div>
+            </div>
+            {health?.lastActivityAt && (
+              <p className="text-xs text-text-muted mt-4 pt-3 border-t border-nativz-border-light">
+                Last activity: {formatRelativeTime(health.lastActivityAt)}
+              </p>
+            )}
+          </Card>
+        </div>
+
         {/* Brand profile + Point of contact — side by side */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {/* Brand profile — from vault */}
           <Card>
             <h2 className="text-base font-semibold text-text-primary mb-4">Brand profile</h2>
             <div className="space-y-4">
@@ -168,10 +260,8 @@ export default async function AdminClientDetailPage({
             </div>
           </Card>
 
-          {/* Point of contact — vault POC + portal users */}
           <Card>
             <h2 className="text-base font-semibold text-text-primary mb-4">Point of contact</h2>
-            {/* Vault POC (from Monday.com) */}
             {vaultProfile.point_of_contact && (
               <div className="flex items-center gap-3 rounded-lg border border-nativz-border-light px-4 py-3 mb-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface text-accent-text">
@@ -192,7 +282,6 @@ export default async function AdminClientDetailPage({
                 </a>
               </div>
             )}
-            {/* Portal users from Supabase */}
             {clientContacts.length === 0 && !vaultProfile.point_of_contact ? (
               <EmptyState
                 icon={<User2 size={24} />}
@@ -232,8 +321,6 @@ export default async function AdminClientDetailPage({
                 ))}
               </div>
             )}
-
-            {/* Invite button */}
             {clientId && (
               <div className="mt-4">
                 <InviteButton clientId={clientId} clientName={vaultProfile.name} />
@@ -251,6 +338,80 @@ export default async function AdminClientDetailPage({
           />
         )}
 
+        {/* Recent activity: shoots + moodboards */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Recent shoots */}
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-text-primary">Recent shoots</h2>
+              <Link href="/admin/shoots">
+                <Button size="sm" variant="outline">
+                  <Camera size={14} />
+                  View all
+                </Button>
+              </Link>
+            </div>
+            {recentShoots.length === 0 ? (
+              <EmptyState
+                icon={<Camera size={24} />}
+                title="No shoots"
+                description="No shoots scheduled for this client yet."
+              />
+            ) : (
+              <div className="space-y-2">
+                {recentShoots.map((shoot) => (
+                  <div key={shoot.id} className="flex items-center justify-between rounded-lg border border-nativz-border-light px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-text-primary truncate">{shoot.title}</p>
+                      <span className="text-xs text-text-muted flex items-center gap-1">
+                        <Clock size={10} />
+                        {new Date(shoot.shoot_date).toLocaleDateString()}
+                        {shoot.location && ` · ${shoot.location}`}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Recent moodboards */}
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-text-primary">Moodboards</h2>
+              <Link href="/admin/moodboard">
+                <Button size="sm" variant="outline">
+                  <Palette size={14} />
+                  View all
+                </Button>
+              </Link>
+            </div>
+            {recentMoodboards.length === 0 ? (
+              <EmptyState
+                icon={<Palette size={24} />}
+                title="No moodboards"
+                description="Create a moodboard for this client."
+              />
+            ) : (
+              <div className="space-y-2">
+                {recentMoodboards.map((board) => (
+                  <Link key={board.id} href={`/admin/moodboard/${board.id}`}>
+                    <div className="flex items-center justify-between rounded-lg border border-nativz-border-light px-4 py-3 hover:bg-surface-hover transition-colors">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-text-primary truncate">{board.name}</p>
+                        <span className="text-xs text-text-muted flex items-center gap-1">
+                          <Clock size={10} />
+                          Updated {formatRelativeTime(board.updated_at)}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+
         {/* Saved ideas */}
         <Card>
           <div className="flex items-center justify-between mb-4">
@@ -265,7 +426,6 @@ export default async function AdminClientDetailPage({
               </Button>
             </Link>
           </div>
-
           {ideas.length === 0 ? (
             <EmptyState
               icon={<Lightbulb size={24} />}
@@ -305,7 +465,6 @@ export default async function AdminClientDetailPage({
               </Button>
             </Link>
           </div>
-
           {items.length === 0 ? (
             <EmptyState
               icon={<Search size={24} />}

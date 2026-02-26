@@ -151,7 +151,8 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
         <CardTitle>Trending topics</CardTitle>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 overflow-x-auto">
+        <div className="min-w-[540px]">
         {/* Table header */}
         <div className={`grid ${gridCols} gap-4 border-b border-nativz-border px-6 py-2.5 text-xs font-medium text-text-muted uppercase tracking-wide`}>
           <span>Topic</span>
@@ -233,6 +234,7 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
             )}
           </div>
         ))}
+      </div>
       </div>
     </Card>
   );

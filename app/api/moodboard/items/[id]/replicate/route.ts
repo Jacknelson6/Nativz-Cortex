@@ -70,10 +70,13 @@ Original video analysis:
 - Title: ${item.title || 'Unknown'}
 - Concept: ${item.concept_summary || 'Not analyzed'}
 - Hook: ${item.hook || 'Not identified'}
+- Hook Score: ${item.hook_score || 'N/A'}/10
+- Hook Type: ${item.hook_type || 'N/A'}
 - CTA: ${item.cta || 'Not identified'}
 - Transcript: ${item.transcript ? item.transcript.substring(0, 3000) : 'Not available'}
-- Pacing: ${item.pacing ? JSON.stringify(item.pacing) : 'Not analyzed'}
+- Pacing: ${item.pacing_detail ? JSON.stringify(item.pacing_detail) : item.pacing ? JSON.stringify(item.pacing) : 'Not analyzed'}
 - Winning elements: ${(item.winning_elements ?? []).join(', ') || 'Not analyzed'}
+- Content themes: ${(item.content_themes ?? []).join(', ') || 'Not analyzed'}
 - Platform: ${platform}
 
 ${clientInfo || 'No specific client — generate a generic brief.'}
@@ -82,20 +85,27 @@ ${parsed.data.notes ? `Adaptation notes: ${parsed.data.notes}` : ''}
 
 Generate a complete video replication brief with these clearly labeled sections:
 
-## Adapted Hook
-Rewritten hook for this client/format
+## Concept Adaptation
+How this concept is adapted for the client's brand and audience (2-3 sentences)
 
-## Full Script
-Complete word-for-word script adapted for the client
+## Suggested Hook
+Rewritten hook optimized for the client — include why this hook style works
+
+## Script Outline
+Scene-by-scene script outline with timestamps, dialogue/VO, and on-screen action
 
 ## Shot List
-Numbered list of every shot needed, with description and estimated duration
+Numbered list of every shot needed:
+| # | Description | Duration | Camera Angle | Notes |
 
-## Text Overlays
-List of any on-screen captions/text to include with timing
+## Music Direction
+Suggested sound/music style, mood, and any specific recommendations
+
+## Caption Suggestions
+On-screen text overlays with timing and style notes
 
 ## Pacing Notes
-Editing rhythm guidance (cuts per minute, transitions, energy)
+Editing rhythm guidance (cuts per minute, transitions, energy curve)
 
 ## CTA
 Adapted call-to-action

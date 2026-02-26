@@ -1,50 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createCompletion } from '@/lib/ai/client';
-import { parseAIResponseJSON } from '@/lib/ai/parse';
-import type { VideoAnalysis } from '@/lib/types/moodboard';
-
-// YouTube oEmbed for metadata
-async function getYouTubeMetadata(url: string) {
-  try {
-    const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return {
-      title: data.title as string,
-      thumbnail_url: data.thumbnail_url as string,
-      author_name: data.author_name as string,
-    };
-  } catch {
-    return null;
-  }
-}
-
-// Generic oEmbed for TikTok/Instagram
-async function getOembedMetadata(url: string) {
-  try {
-    // TikTok
-    if (url.includes('tiktok.com')) {
-      const res = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
-      if (res.ok) {
-        const data = await res.json();
-        return { title: data.title, thumbnail_url: data.thumbnail_url, author_name: data.author_name };
-      }
-    }
-    // Instagram
-    if (url.includes('instagram.com')) {
-      const res = await fetch(`https://api.instagram.com/oembed?url=${encodeURIComponent(url)}`);
-      if (res.ok) {
-        const data = await res.json();
-        return { title: data.title || data.author_name, thumbnail_url: data.thumbnail_url, author_name: data.author_name };
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
+import { processVideoItem } from '@/lib/moodboard/process-video';
 
 export async function POST(
   request: NextRequest,
@@ -60,10 +17,10 @@ export async function POST(
 
     const adminClient = createAdminClient();
 
-    // Get the item
+    // Verify item exists
     const { data: item, error: fetchError } = await adminClient
       .from('moodboard_items')
-      .select('*')
+      .select('id, type')
       .eq('id', id)
       .single();
 
@@ -75,179 +32,20 @@ export async function POST(
       return NextResponse.json({ error: 'Only video items can be processed' }, { status: 400 });
     }
 
-    // Set processing status
-    await adminClient
+    // Process using shared function
+    await processVideoItem(id);
+
+    // Fetch updated item
+    const { data: updated } = await adminClient
       .from('moodboard_items')
-      .update({ status: 'processing' })
-      .eq('id', id);
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    try {
-      // Step 1: Get metadata
-      let metadata: { title: string; thumbnail_url: string; author_name: string } | null = null;
-
-      if (item.url.includes('youtube.com') || item.url.includes('youtu.be')) {
-        metadata = await getYouTubeMetadata(item.url);
-      } else {
-        metadata = await getOembedMetadata(item.url);
-      }
-
-      // Update with metadata immediately
-      if (metadata) {
-        await adminClient
-          .from('moodboard_items')
-          .update({
-            title: metadata.title || item.title,
-            thumbnail_url: metadata.thumbnail_url || item.thumbnail_url,
-          })
-          .eq('id', id);
-      }
-
-      // Step 2: Get transcript (YouTube captions via a simple approach)
-      // For YouTube, we try to get auto-captions
-      let transcript = '';
-      let platform = 'unknown';
-
-      if (item.url.includes('youtube.com') || item.url.includes('youtu.be')) {
-        platform = 'youtube';
-        // Try to extract YouTube video ID and get captions
-        const videoId = extractYouTubeId(item.url);
-        if (videoId) {
-          transcript = await fetchYouTubeCaptions(videoId);
-        }
-      } else if (item.url.includes('tiktok.com')) {
-        platform = 'tiktok';
-      } else if (item.url.includes('instagram.com')) {
-        platform = 'instagram';
-      }
-
-      // Step 3: AI Analysis
-      // Even without transcript, we can analyze based on title and metadata
-      const analysisPrompt = `You are a video content strategist analyzing a video for a marketing agency.
-
-${transcript ? `Transcript: ${transcript}` : 'No transcript available — analyze based on available metadata only.'}
-Video URL: ${item.url}
-Platform: ${platform}
-Title: ${metadata?.title || item.title || 'Unknown'}
-Author: ${metadata?.author_name || 'Unknown'}
-
-Analyze this video and return a JSON object with:
-{
-  "hook": "The first 1-3 sentences that serve as the hook (estimate from title/transcript if available)",
-  "hook_analysis": "Why this hook works or doesn't (2-3 sentences)",
-  "cta": "Identified call-to-action, or 'Not identified' if unclear",
-  "concept_summary": "2-3 sentence summary of what this video is about",
-  "pacing": {
-    "description": "Estimated pacing style based on platform norms and content type",
-    "estimated_cuts": 0,
-    "cuts_per_minute": 0
-  },
-  "caption_overlays": [],
-  "content_themes": ["3-5 thematic tags"],
-  "winning_elements": ["list of what likely works well"],
-  "improvement_areas": ["list of potential improvements"]
-}
-
-Return ONLY the JSON, no other text.`;
-
-      const aiResponse = await createCompletion({
-        messages: [
-          { role: 'system', content: 'You are a video content strategist. Return only valid JSON.' },
-          { role: 'user', content: analysisPrompt },
-        ],
-        maxTokens: 2000,
-      });
-
-      const analysis = parseAIResponseJSON<VideoAnalysis>(aiResponse.text);
-
-      // Step 4: Update item with all data
-      const { data: updated, error: updateError } = await adminClient
-        .from('moodboard_items')
-        .update({
-          status: 'completed',
-          title: metadata?.title || item.title || analysis.concept_summary?.substring(0, 60),
-          thumbnail_url: metadata?.thumbnail_url || item.thumbnail_url,
-          transcript: transcript || null,
-          hook: analysis.hook ?? null,
-          hook_analysis: analysis.hook_analysis ?? null,
-          cta: analysis.cta ?? null,
-          concept_summary: analysis.concept_summary ?? null,
-          pacing: analysis.pacing ?? null,
-          caption_overlays: analysis.caption_overlays ?? [],
-          content_themes: analysis.content_themes ?? [],
-          winning_elements: analysis.winning_elements ?? [],
-          improvement_areas: analysis.improvement_areas ?? [],
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (updateError) throw updateError;
-
-      // Update board timestamp
-      await adminClient
-        .from('moodboard_boards')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', item.board_id);
-
-      return NextResponse.json(updated);
-    } catch (processingError) {
-      // Mark as failed
-      await adminClient
-        .from('moodboard_items')
-        .update({ status: 'failed' })
-        .eq('id', id);
-
-      console.error('Video processing error:', processingError);
-      return NextResponse.json(
-        { error: 'Video processing failed', details: processingError instanceof Error ? processingError.message : 'Unknown error' },
-        { status: 500 }
-      );
-    }
+    return NextResponse.json(updated);
   } catch (error) {
     console.error('POST /api/moodboard/items/[id]/process error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
-
-function extractYouTubeId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/,
-    /(?:youtu\.be\/)([a-zA-Z0-9_-]{11})/,
-    /(?:youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
-    /(?:youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-  ];
-
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
-  }
-  return null;
-}
-
-async function fetchYouTubeCaptions(videoId: string): Promise<string> {
-  try {
-    // Try to get captions from YouTube's timedtext API
-    const res = await fetch(
-      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }
-    );
-
-    if (!res.ok) return '';
-
-    const xml = await res.text();
-    // Parse simple caption XML
-    const textMatches = xml.match(/<text[^>]*>([^<]*)<\/text>/g);
-    if (!textMatches) return '';
-
-    return textMatches
-      .map((m) => {
-        const content = m.replace(/<[^>]*>/g, '');
-        return content.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"');
-      })
-      .join(' ')
-      .trim();
-  } catch {
-    return '';
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

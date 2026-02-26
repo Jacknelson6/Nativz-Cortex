@@ -10,6 +10,7 @@ import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
 import type { TopicSearchAIResponse } from '@/lib/types/search';
 import type { BraveSerpData } from '@/lib/brave/types';
+import { createNotification } from '@/lib/notifications/create';
 
 export const maxDuration = 300;
 
@@ -194,6 +195,15 @@ export async function POST(request: NextRequest) {
       if (updateError) {
         console.error('Error updating search with results:', updateError);
       }
+
+      // Notify the user that search is complete
+      createNotification({
+        recipientUserId: user.id,
+        type: 'search_completed',
+        title: 'Search completed',
+        body: `Results ready for "${parsed.data.query}"`,
+        linkPath: `/admin/search/${search.id}`,
+      }).catch(() => {});
 
       return NextResponse.json({ id: search.id, status: 'completed' });
     } catch (aiError) {

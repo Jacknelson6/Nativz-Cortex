@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Plus,
   Film,
+  Mail,
   ChevronDown,
   ExternalLink,
   X,
@@ -26,6 +27,8 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ScheduleShootModal } from '@/components/shoots/schedule-shoot-modal';
 import { IdeateShootModal } from '@/components/shoots/ideate-shoot-modal';
+import { BulkScheduleModal } from '@/components/shoots/bulk-schedule-modal';
+import { AgencyBadge } from '@/components/clients/agency-badge';
 import { toast } from 'sonner';
 
 // ---------------------------------------------------------------------------
@@ -209,7 +212,9 @@ export default function AdminShootsPage() {
   const [pastExpanded, setPastExpanded] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [shootToSchedule, setShootToSchedule] = useState<ShootItem | null>(null);
+  const [scheduleDate, setScheduleDate] = useState<string | null>(null);
   const [ideateModalOpen, setIdeateModalOpen] = useState(false);
+  const [bulkScheduleOpen, setBulkScheduleOpen] = useState(false);
   const [shootToIdeate, setShootToIdeate] = useState<ShootItem | null>(null);
 
   // Plan data from DB keyed by mondayItemId
@@ -386,6 +391,10 @@ export default function AdminShootsPage() {
           <Button variant="ghost" size="sm" onClick={handleRefresh} title="Refresh data">
             <RefreshCw size={14} />
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => setBulkScheduleOpen(true)} title="Bulk schedule emails">
+            <Mail size={14} />
+            Bulk emails
+          </Button>
           <GlassButton onClick={() => { setShootToSchedule(null); setScheduleModalOpen(true); }}>
             <Plus size={14} />
             Schedule shoot
@@ -468,19 +477,33 @@ export default function AdminShootsPage() {
                     <div
                       key={di}
                       className={`
-                        min-h-[90px] border-r border-nativz-border last:border-r-0 p-1.5
+                        group/cell relative min-h-[90px] border-r border-nativz-border last:border-r-0 p-1.5
                         ${!day ? 'bg-surface-hover/30' : ''}
                         ${isDayPast && day ? 'opacity-50' : ''}
                       `}
                     >
                       {day && (
                         <>
-                          <span className={`
-                            inline-flex items-center justify-center text-xs font-medium w-6 h-6 rounded-full
-                            ${isToday ? 'bg-accent text-white' : 'text-text-secondary'}
-                          `}>
-                            {day}
-                          </span>
+                          <div className="flex items-center justify-between">
+                            <span className={`
+                              inline-flex items-center justify-center text-xs font-medium w-6 h-6 rounded-full
+                              ${isToday ? 'bg-accent text-white' : 'text-text-secondary'}
+                            `}>
+                              {day}
+                            </span>
+                            <button
+                              onClick={() => {
+                                const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                                setScheduleDate(dateStr);
+                                setShootToSchedule(null);
+                                setScheduleModalOpen(true);
+                              }}
+                              className="cursor-pointer flex items-center justify-center w-5 h-5 rounded-full bg-white/[0.08] text-text-muted opacity-0 group-hover/cell:opacity-100 hover:bg-accent/30 hover:text-accent-text transition-all duration-150"
+                              title="Schedule shoot"
+                            >
+                              <Plus size={12} />
+                            </button>
+                          </div>
                           <div className="mt-0.5 space-y-0.5">
                             {dayEvents.map((event) => (
                               <button
@@ -593,9 +616,7 @@ export default function AdminShootsPage() {
                           >
                             <p className="text-sm font-medium text-text-secondary truncate">{item.clientName}</p>
                             <div className="flex items-center gap-2 mt-0.5">
-                              {item.agency && (
-                                <span className="text-xs text-text-muted">{item.agency}</span>
-                              )}
+                              <AgencyBadge agency={item.agency || undefined} />
                             </div>
                           </button>
                           {item.editingStatus && <Badge variant={editing.variant}>{editing.label}</Badge>}
@@ -630,8 +651,9 @@ export default function AdminShootsPage() {
       {/* Schedule Shoot Modal */}
       <ScheduleShootModal
         open={scheduleModalOpen}
-        onClose={() => { setScheduleModalOpen(false); setShootToSchedule(null); }}
+        onClose={() => { setScheduleModalOpen(false); setShootToSchedule(null); setScheduleDate(null); }}
         onCreated={handleRefresh}
+        prefilledDate={scheduleDate}
         shoot={shootToSchedule ? {
           clientName: shootToSchedule.clientName,
           clientId: shootToSchedule.clientId,
@@ -641,6 +663,12 @@ export default function AdminShootsPage() {
           notes: isShootPast(shootToSchedule.date) ? '' : shootToSchedule.notes,
           agency: shootToSchedule.agency || undefined,
         } : undefined}
+      />
+
+      {/* Bulk Schedule Modal */}
+      <BulkScheduleModal
+        open={bulkScheduleOpen}
+        onClose={() => setBulkScheduleOpen(false)}
       />
 
       {/* Ideate Shoot Modal */}
@@ -713,9 +741,7 @@ function ShootListItem({
               )}
             </div>
             <div className="flex items-center gap-2 mt-0.5">
-              {item.agency && (
-                <span className="text-xs text-text-muted">{item.agency}</span>
-              )}
+              <AgencyBadge agency={item.agency || undefined} />
             </div>
           </button>
 
@@ -995,9 +1021,7 @@ function ShootDetailPanel({
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-sm text-text-muted">{shoot.groupTitle}</span>
-                  {shoot.agency && (
-                    <Badge variant="default">{shoot.agency}</Badge>
-                  )}
+                  <AgencyBadge agency={shoot.agency || undefined} />
                 </div>
               </div>
             </div>
@@ -1115,13 +1139,13 @@ function ShootDetailPanel({
           {/* Actions */}
           <div className="space-y-2 pt-2 border-t border-nativz-border">
             {/* Ideate button — always available */}
-            <button
+            <GlassButton
               onClick={() => onIdeate(shoot)}
-              className="cursor-pointer flex items-center justify-center gap-2 w-full rounded-lg border border-purple-500/25 bg-purple-500/10 px-3 py-2.5 text-sm font-medium text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/40 transition-colors"
+              className="w-full justify-center"
             >
               <Sparkles size={14} />
               {shoot.planData ? 'Regenerate shoot plan' : 'Ideate shoot plan'}
-            </button>
+            </GlassButton>
 
             {/* Schedule button — context-aware for past vs upcoming */}
             {shootIsPast ? (

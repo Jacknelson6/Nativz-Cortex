@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Search, History, Camera, BarChart3, Layers } from 'lucide-react';
+import { LayoutDashboard, Users, Search, History, Camera, BarChart3, Layers, Flame, UserSearch } from 'lucide-react';
 import { FloatingDock } from '@/components/ui/floating-dock';
 import { Button } from '@/components/ui/button';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
@@ -12,6 +12,8 @@ const NAV_ITEMS = [
   { href: '/admin/search/history', label: 'Search history', icon: History },
   { href: '/admin/shoots', label: 'Shoots', icon: Camera },
   { href: '/admin/moodboard', label: 'Moodboard', icon: Layers },
+  { href: '/admin/moodboard/profile', label: 'Profile Extract', icon: UserSearch },
+  { href: '/admin/moodboard/viral-library', label: 'Viral Library', icon: Flame },
   { href: '/admin/clients', label: 'Clients', icon: Users },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
 ];

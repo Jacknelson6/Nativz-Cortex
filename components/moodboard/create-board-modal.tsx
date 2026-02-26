@@ -20,16 +20,24 @@ interface ClientOption {
   name: string;
 }
 
+interface Template {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export function CreateBoardModal({ open, onClose, onCreated }: CreateBoardModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [clientId, setClientId] = useState<string | null>(null);
+  const [templateId, setTemplateId] = useState<string | null>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    async function fetchClients() {
+    async function fetchData() {
       const supabase = createClient();
       const { data } = await supabase
         .from('clients')
@@ -37,14 +45,23 @@ export function CreateBoardModal({ open, onClose, onCreated }: CreateBoardModalP
         .eq('is_active', true)
         .order('name');
       if (data) setClients(data);
+
+      try {
+        const res = await fetch('/api/moodboard/templates');
+        if (res.ok) {
+          const t = await res.json();
+          setTemplates(t);
+        }
+      } catch { /* ignore */ }
     }
-    fetchClients();
+    fetchData();
   }, [open]);
 
   function reset() {
     setName('');
     setDescription('');
     setClientId(null);
+    setTemplateId(null);
     setLoading(false);
   }
 
@@ -61,6 +78,7 @@ export function CreateBoardModal({ open, onClose, onCreated }: CreateBoardModalP
           name: name.trim(),
           description: description.trim() || undefined,
           client_id: clientId || undefined,
+          template_id: templateId || undefined,
         }),
       });
 
@@ -116,6 +134,25 @@ export function CreateBoardModal({ open, onClose, onCreated }: CreateBoardModalP
             ))}
           </select>
         </div>
+
+        {templates.length > 0 && (
+          <div>
+            <label htmlFor="board-template" className="block text-xs font-medium text-text-muted mb-1.5">
+              Template (optional)
+            </label>
+            <select
+              id="board-template"
+              value={templateId || ''}
+              onChange={(e) => setTemplateId(e.target.value || null)}
+              className="w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30"
+            >
+              <option value="">Blank board</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>{t.name} — {t.description}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <label htmlFor="board-desc" className="block text-xs font-medium text-text-muted mb-1.5">

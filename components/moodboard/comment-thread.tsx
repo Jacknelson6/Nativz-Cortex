@@ -10,6 +10,7 @@ interface Comment {
   item_id: string;
   user_id: string;
   content: string;
+  video_timestamp: number | null;
   created_at: string;
   updated_at: string;
   users?: { full_name: string; avatar_url: string | null } | null;
@@ -17,16 +18,25 @@ interface Comment {
 
 interface CommentThreadProps {
   itemId: string;
+  itemType?: string;
   onClose: () => void;
   onCountChange: (count: number) => void;
 }
 
-export function CommentThread({ itemId, onClose, onCountChange }: CommentThreadProps) {
+function formatTimestamp(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+export function CommentThread({ itemId, itemType, onClose, onCountChange }: CommentThreadProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
+  const [videoTimestamp, setVideoTimestamp] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isVideo = itemType === 'video';
 
   useEffect(() => {
     fetchComments();
@@ -55,13 +65,18 @@ export function CommentThread({ itemId, onClose, onCountChange }: CommentThreadP
       const res = await fetch('/api/moodboard/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item_id: itemId, content: newComment.trim() }),
+        body: JSON.stringify({
+          item_id: itemId,
+          content: newComment.trim(),
+          video_timestamp: videoTimestamp ? parseInt(videoTimestamp, 10) : null,
+        }),
       });
 
       if (!res.ok) throw new Error();
       const comment = await res.json();
       setComments((prev) => [...prev, comment]);
       setNewComment('');
+      setVideoTimestamp('');
       onCountChange(comments.length + 1);
 
       // Scroll to bottom
@@ -145,6 +160,11 @@ export function CommentThread({ itemId, onClose, onCountChange }: CommentThreadP
                     <span className="text-xs font-medium text-text-primary">
                       {comment.users?.full_name || 'Unknown'}
                     </span>
+                    {comment.video_timestamp != null && (
+                      <span className="text-[10px] font-medium text-accent-text bg-accent-surface rounded px-1 py-0.5">
+                        at {formatTimestamp(comment.video_timestamp)}
+                      </span>
+                    )}
                     <span className="text-[10px] text-text-muted">{formatTime(comment.created_at)}</span>
                     <button
                       onClick={() => handleDelete(comment.id)}
@@ -161,7 +181,19 @@ export function CommentThread({ itemId, onClose, onCountChange }: CommentThreadP
         </div>
 
         {/* Input */}
-        <form onSubmit={handleSubmit} className="shrink-0 px-4 py-3 border-t border-nativz-border">
+        <form onSubmit={handleSubmit} className="shrink-0 px-4 py-3 border-t border-nativz-border space-y-2">
+          {isVideo && (
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] text-text-muted shrink-0">Timestamp (sec):</label>
+              <input
+                value={videoTimestamp}
+                onChange={(e) => setVideoTimestamp(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="e.g. 15"
+                className="w-16 rounded border border-nativz-border bg-surface px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent/30"
+                disabled={submitting}
+              />
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <input
               value={newComment}

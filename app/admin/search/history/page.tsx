@@ -13,7 +13,7 @@ import { formatRelativeTime } from '@/lib/utils/format';
 export default async function AdminSearchHistoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ client?: string; status?: string; approval?: string }>;
+  searchParams: Promise<{ client?: string; type?: string }>;
 }) {
   const filters = await searchParams;
 
@@ -40,20 +40,14 @@ export default async function AdminSearchHistoryPage({
     query = query.eq('client_id', filters.client);
   }
 
-  if (filters.status) {
-    query = query.eq('status', filters.status);
-  }
-
-  if (filters.approval === 'approved') {
-    query = query.not('approved_at', 'is', null);
-  } else if (filters.approval === 'pending') {
-    query = query.is('approved_at', null).eq('status', 'completed');
+  if (filters.type) {
+    query = query.eq('search_mode', filters.type);
   }
 
   const { data: searches } = await query;
   const items = searches || [];
 
-  const hasFilters = filters.client || filters.status || filters.approval;
+  const hasFilters = filters.client || filters.type;
 
   return (
     <div className="p-6 space-y-6">
