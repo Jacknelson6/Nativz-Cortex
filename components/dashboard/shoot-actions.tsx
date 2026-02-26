@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ScheduleShootModal } from '@/components/shoots/schedule-shoot-modal';
+import { ScheduleShootsModal } from '@/components/shoots/schedule-shoot-modal';
 
 interface ShootData {
   id: string;
@@ -53,19 +53,10 @@ export function ShootScheduleButton({ shoot }: ShootScheduleButtonProps) {
         <Calendar size={14} />
         Send invite
       </Button>
-      <ScheduleShootModal
+      <ScheduleShootsModal
         open={open}
         onClose={() => setOpen(false)}
-        shoot={{
-          clientName,
-          clientId: shoot.client_id,
-          mondayItemId: shoot.mondayItemId,
-          date: toDateInputValue(shoot.shoot_date),
-          location: shoot.location ?? '',
-          notes: '',
-          pocEmails: shoot.pocEmails ?? [],
-          agency: shoot.agency,
-        }}
+        initialClientId={shoot.client_id}
       />
     </>
   );
