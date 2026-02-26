@@ -849,6 +849,7 @@ function MoodboardCanvas() {
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           defaultEdgeOptions={{ type: 'labeled' }}
+          deleteKeyCode={['Backspace', 'Delete']}
           fitView
           fitViewOptions={{ padding: 0.3 }}
           minZoom={0.1}
@@ -857,7 +858,6 @@ function MoodboardCanvas() {
           connectionMode={ConnectionMode.Loose}
           selectionMode={SelectionMode.Partial}
           multiSelectionKeyCode="Shift"
-          deleteKeyCode={null}
           proOptions={{ hideAttribution: true }}
         >
           <Background

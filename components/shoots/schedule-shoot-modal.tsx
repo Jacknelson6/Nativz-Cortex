@@ -178,16 +178,29 @@ The ${agencyName} Team`,
             </button>
           </div>
 
-          {/* Search */}
-          <div className="flex items-center gap-2 rounded-lg border border-nativz-border bg-surface-hover/50 px-3 py-2">
-            <Search size={14} className="text-text-muted" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search clients..."
-              className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
-            />
+          {/* Search & Select All */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center gap-2 rounded-lg border border-nativz-border bg-surface-hover/50 px-3 py-2">
+              <Search size={14} className="text-text-muted" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search clients..."
+                className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+              />
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                const allIds = filtered.map(c => c.id);
+                setSelectedIds(new Set(allIds));
+              }}
+              disabled={filtered.length === 0}
+            >
+              Select All
+            </Button>
           </div>
 
           {/* Client list */}

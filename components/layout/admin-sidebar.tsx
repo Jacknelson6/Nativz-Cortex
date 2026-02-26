@@ -12,8 +12,6 @@ const NAV_ITEMS = [
   { href: '/admin/search/history', label: 'Search history', icon: History },
   { href: '/admin/shoots', label: 'Shoots', icon: Camera },
   { href: '/admin/moodboard', label: 'Moodboard', icon: Layers },
-  { href: '/admin/moodboard/profile', label: 'Profile Extract', icon: UserSearch },
-  { href: '/admin/moodboard/viral-library', label: 'Viral Library', icon: Flame },
   { href: '/admin/clients', label: 'Clients', icon: Users },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
 ];

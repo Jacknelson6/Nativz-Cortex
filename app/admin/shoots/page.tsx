@@ -210,7 +210,8 @@ export default function AdminShootsPage() {
   const [selectedShoot, setSelectedShoot] = useState<ShootItem | null>(null);
   const [pastExpanded, setPastExpanded] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
-  const [shootToSchedule, setShootToSchedule] = useState<ShootItem | null>(null);
+    const [shootToSchedule, setShootToSchedule] = useState<ShootItem | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [scheduleDate, setScheduleDate] = useState<string | null>(null);
   const [ideateModalOpen, setIdeateModalOpen] = useState(false);
     const [shootToIdeate, setShootToIdeate] = useState<ShootItem | null>(null);
@@ -485,18 +486,20 @@ export default function AdminShootsPage() {
                             `}>
                               {day}
                             </span>
-                            <button
-                              onClick={() => {
-                                const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                                setScheduleDate(dateStr);
-                                setShootToSchedule(null);
-                                setScheduleModalOpen(true);
-                              }}
-                              className="cursor-pointer flex items-center justify-center w-5 h-5 rounded-full bg-white/[0.08] text-text-muted opacity-0 group-hover/cell:opacity-100 hover:bg-accent/30 hover:text-accent-text transition-all duration-150"
-                              title="Schedule shoot"
-                            >
-                              <Plus size={12} />
-                            </button>
+                            {dayEvents.length === 0 && (
+                              <button
+                                onClick={() => {
+                                  const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                                  setScheduleDate(dateStr);
+                                  setShootToSchedule(null);
+                                  setScheduleModalOpen(true);
+                                }}
+                                className="cursor-pointer flex items-center justify-center w-5 h-5 rounded-full bg-white/[0.08] text-text-muted opacity-0 group-hover/cell:opacity-100 hover:bg-accent/30 hover:text-accent-text transition-all duration-150"
+                                title="Schedule shoot"
+                              >
+                                <Plus size={12} />
+                              </button>
+                            )}
                           </div>
                           <div className="mt-0.5 space-y-0.5">
                             {dayEvents.map((event) => (
@@ -725,24 +728,20 @@ function ShootListItem({
 
           {/* Ideate / View plan */}
           {plan ? (
-            <Button
-              variant="ghost"
-              size="sm"
+            <GlassButton
               onClick={() => setPlanExpanded(!planExpanded)}
             >
               <Sparkles size={14} />
               {plan.videoIdeas?.length ?? 0} ideas
               {planExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </Button>
+            </GlassButton>
           ) : (
-            <Button
-              variant="ghost"
-              size="sm"
+            <GlassButton
               onClick={onIdeate}
             >
               <Sparkles size={14} />
               Ideate
-            </Button>
+            </GlassButton>
           )}
         </div>
 
@@ -1024,56 +1023,36 @@ function ShootDetailPanel({
             )}
           </div>
 
-          {/* Status grid */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border border-nativz-border bg-surface-hover/30 p-3">
-              <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1.5">RAWs</p>
-              <Badge variant={raws.variant}>{raws.label}</Badge>
-            </div>
-            <div className="rounded-lg border border-nativz-border bg-surface-hover/30 p-3">
-              <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1.5">Editing</p>
-              <Badge variant={editing.variant}>{editing.label}</Badge>
-            </div>
-            {shoot.assignmentStatus && (
-              <div className="rounded-lg border border-nativz-border bg-surface-hover/30 p-3">
-                <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1.5">Assignment</p>
-                <Badge>{shoot.assignmentStatus}</Badge>
-              </div>
-            )}
-            {shoot.clientApproval && (
-              <div className="rounded-lg border border-nativz-border bg-surface-hover/30 p-3">
-                <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1.5">Client approval</p>
-                <Badge>{shoot.clientApproval}</Badge>
-              </div>
-            )}
-            {shoot.boostingStatus && (
-              <div className="rounded-lg border border-nativz-border bg-surface-hover/30 p-3">
-                <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1.5">Boosting</p>
-                <Badge>{shoot.boostingStatus}</Badge>
-              </div>
-            )}
+          {/* Status summary */}
+          <div className="flex flex-wrap gap-2">
+            <Badge variant={raws.variant}>{raws.label}</Badge>
+            <Badge variant={editing.variant}>{editing.label}</Badge>
           </div>
 
-          {/* Shoot Plan (inline) */}
-          {shoot.planData && (
-            <div>
-              <h3 className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                <Sparkles size={12} className="text-purple-400" />
-                Shoot plan
-              </h3>
-              <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
-                <ShootPlanPreview plan={shoot.planData} clientName={shoot.clientName} />
-              </div>
+          {/* Plan & Notes Section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-medium text-text-muted uppercase tracking-wide">Shoot Plan & Notes</h3>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 text-[10px] text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
+                onClick={() => onIdeate(shoot)}
+              >
+                <Sparkles size={12} />
+                Ideate shoot plan
+              </Button>
             </div>
-          )}
-
-          {/* Notes */}
-          {shoot.notes && (
-            <div>
-              <h3 className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">Notes</h3>
-              <p className="text-sm text-text-secondary whitespace-pre-wrap">{shoot.notes}</p>
-            </div>
-          )}
+            <textarea
+              className="w-full min-h-[300px] rounded-lg border border-nativz-border bg-surface-hover/20 p-4 text-sm text-text-secondary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-all resize-none"
+              placeholder="Paste or generate a shoot plan here..."
+              defaultValue={shoot.notes || (shoot.planData ? 
+                `TITLE: ${shoot.planData.title}\n\nSUMMARY: ${shoot.planData.summary}\n\n` + 
+                shoot.planData.videoIdeas.map((v, i) => 
+                  `VIDEO ${i+1}: ${v.title}\nHOOK: ${v.hook}\nFORMAT: ${v.format}\n\nPOINTS:\n${v.talkingPoints.map(p => `- ${p}`).join('\n')}\n\nSHOTS:\n${v.shotList.map(s => `- ${s}`).join('\n')}`
+                ).join('\n\n---\n\n') : '')}
+            />
+          </div>
 
           {/* Links */}
           {(shoot.rawsFolderUrl || shoot.editedVideosFolderUrl || shoot.laterCalendarUrl) && (
@@ -1116,14 +1095,6 @@ function ShootDetailPanel({
 
           {/* Actions */}
           <div className="space-y-2 pt-2 border-t border-nativz-border">
-            {/* Ideate button — always available */}
-            <GlassButton
-              onClick={() => onIdeate(shoot)}
-              className="w-full justify-center"
-            >
-              <Sparkles size={14} />
-              {shoot.planData ? 'Regenerate shoot plan' : 'Ideate shoot plan'}
-            </GlassButton>
 
             {/* Schedule button — context-aware for past vs upcoming */}
             {shootIsPast ? (

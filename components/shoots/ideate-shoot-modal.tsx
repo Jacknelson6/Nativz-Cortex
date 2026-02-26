@@ -133,7 +133,6 @@ export function IdeateShootModal({ open, onClose, onGenerated, shoot }: IdeateSh
         <div className="flex items-center justify-between pt-1">
           <Button variant="ghost" onClick={handleClose}>Cancel</Button>
           <GlassButton onClick={handleGenerate} disabled={!context.trim()}>
-            <Sparkles size={14} />
             Generate shoot plan
           </GlassButton>
         </div>

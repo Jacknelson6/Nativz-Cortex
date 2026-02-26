@@ -103,7 +103,7 @@ export function ClientStrategyCard({ clientId, clientName, initialStrategy }: Cl
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const doc = React.createElement(StrategyPdf, { strategy, clientName }) as any;
+      const doc = React.createElement(StrategyPdf, { strategy, clientName, agency: (strategy as any).agency }) as any;
       const blob = await pdf(doc).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -263,20 +263,7 @@ export function ClientStrategyCard({ clientId, clientName, initialStrategy }: Cl
                 </div>
               )}
 
-              {/* Top video ideas */}
-              {(strategy.video_ideas ?? []).length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">Top video ideas</p>
-                  <div className="space-y-1.5">
-                    {(strategy.video_ideas ?? []).slice(0, 4).map((v, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs text-text-secondary">
-                        <span className="text-text-muted tabular-nums">{String(i + 1).padStart(2, '0')}</span>
-                        <span className="truncate">{v.title}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+
             </div>
           )}
         </>

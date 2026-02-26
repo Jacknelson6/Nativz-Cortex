@@ -1,6 +1,6 @@
-import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Link, Image } from '@react-pdf/renderer';
 import type { TopicSearch, TopicSearchAIResponse, TrendingTopic } from '@/lib/types/search';
+import { NATIVZ_LOGO_PNG, AC_LOGO_PNG } from '@/lib/brand-logo';
 import { isNewMetrics } from '@/lib/types/search';
 
 const colors = {
@@ -56,9 +56,13 @@ function SentimentBadge({ sentiment }: { sentiment: number }) {
 interface SearchPdfDocumentProps {
   search: TopicSearch;
   clientName?: string;
+  agency?: string | null;
 }
 
-export function SearchPdfDocument({ search, clientName }: SearchPdfDocumentProps) {
+export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocumentProps) {
+  const isAC = agency?.toLowerCase().includes('anderson') || agency?.toLowerCase() === 'ac';
+  const logo = isAC ? AC_LOGO_PNG : NATIVZ_LOGO_PNG;
+  const brandColor = isAC ? '#10B981' : colors.primary;
   const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
   const topics = (search.trending_topics || []) as TrendingTopic[];
   const dateStr = search.completed_at
@@ -69,8 +73,9 @@ export function SearchPdfDocument({ search, clientName }: SearchPdfDocumentProps
     <Document>
       <Page size="A4" style={styles.page}>
         {/* Header */}
-        <View style={styles.brandBar} />
+        <View style={[styles.brandBar, { backgroundColor: brandColor }]} />
         <View style={styles.header}>
+          <Image src={logo} style={{ width: 120, height: 30, marginBottom: 10, objectFit: 'contain' }} />
           <Text style={styles.title}>{search.query}</Text>
           <Text style={styles.subtitle}>
             {clientName ? `Prepared for ${clientName}` : 'Research Report'}
@@ -199,7 +204,7 @@ export function SearchPdfDocument({ search, clientName }: SearchPdfDocumentProps
 
         {/* Footer */}
         <View style={styles.footer} fixed>
-          <Text style={styles.footerText}>Nativz Cortex · Research Report</Text>
+          <Text style={styles.footerText}>{isAC ? 'Anderson Collaborative' : 'Nativz'} Cortex · Research Report</Text>
           <Text style={styles.footerText}>{dateStr}</Text>
         </View>
       </Page>

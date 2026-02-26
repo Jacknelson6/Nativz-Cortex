@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   X, Play, Copy as CopyIcon, Check, Film, Clock, Scissors, Zap,
   AlertTriangle, ChevronRight, Search, Download, Quote, Gauge,
@@ -69,6 +69,13 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate, on
 
   const platform = item.platform || 'unknown';
   const platformClass = PLATFORM_COLORS[platform] || 'bg-gray-600 text-white';
+
+  // Auto-trigger transcription if missing
+  useEffect(() => {
+    if (!isTranscribed && !transcribing && item.type === 'video') {
+      handleTranscribe();
+    }
+  }, []);
 
   return (
     <>
@@ -289,31 +296,8 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate, on
           </PanelSection>
 
           {/* ── 6. Brief ── */}
-          <PanelSection title="Replication Brief" icon={<CopyIcon size={14} className="text-accent-text" />}>
+          <PanelSection title="Replicate this video" icon={<CopyIcon size={14} className="text-accent-text" />}>
             <BriefSection item={item} onReplicate={onReplicate} onCopy={handleCopy} copied={copied} />
-          </PanelSection>
-
-          {/* ── 7. Rescript ── */}
-          <PanelSection title="Rescript for Brand" icon={<Sparkles size={14} className="text-indigo-400" />}>
-            {item.rescript ? (
-              <div className="space-y-3">
-                <p className="text-xs text-green-400">✅ Rescript generated {item.rescript.product ? `for ${item.rescript.product}` : ''}</p>
-                <button
-                  onClick={() => onRescript?.(item)}
-                  className="cursor-pointer text-xs text-accent hover:underline"
-                >
-                  View full rescript →
-                </button>
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-xs text-text-muted mb-3">Adapt this video&apos;s formula for your brand</p>
-                <Button onClick={() => onRescript?.(item)} size="sm" className="gap-1.5">
-                  <Sparkles size={14} />
-                  Rescript for Brand
-                </Button>
-              </div>
-            )}
           </PanelSection>
         </div>
       </div>
@@ -562,9 +546,9 @@ function BriefSection({ item, onReplicate, onCopy, copied }: {
     return (
       <div className="text-center py-6">
         <p className="text-sm text-text-muted mb-3">No brief generated yet</p>
-        <Button onClick={() => onReplicate(item)}>
+          <Button onClick={() => onReplicate(item)}>
           <CopyIcon size={14} />
-          Generate Replication Brief
+          Replicate this video
           <ChevronRight size={14} />
         </Button>
       </div>

@@ -18,7 +18,7 @@ export function AgencyBadge({ agency, className }: AgencyBadgeProps) {
 
   if (lower.includes('anderson') || lower === 'ac') {
     return (
-      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border border-purple-500/30 bg-purple-500/15 text-purple-400 ${className || ''}`}>
+      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border border-emerald-500/30 bg-emerald-500/15 text-emerald-400 ${className || ''}`}>
         AC
       </span>
     );

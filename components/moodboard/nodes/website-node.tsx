@@ -23,7 +23,10 @@ export const WebsiteNode = memo(function WebsiteNode({ data }: NodeProps<Website
   })();
 
   return (
-    <div className="bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden min-w-[280px] max-w-[360px] group">
+    <div 
+      onClick={() => onExtractInsights(item)}
+      className="bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden min-w-[280px] max-w-[360px] group cursor-pointer hover:border-accent/40 transition-colors"
+    >
       <Handle type="target" position={Position.Top} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
 
       {/* Screenshot */}

@@ -102,12 +102,25 @@ function extractWebsite(body: string): string | null {
   return match ? match[1] : null;
 }
 
-function extractPointOfContact(body: string): { name: string; email: string } | null {
-  const section = extractSection(body, 'Point of contact');
-  if (!section) return null;
-  const match = section.match(/-\s*(.+?)\s*<(.+?)>/);
-  if (!match) return null;
-  return { name: match[1].trim(), email: match[2].trim() };
+function extractContacts(body: string): Array<{ name: string; email: string; title?: string }> {
+  const section = extractSection(body, 'Points of contact') || extractSection(body, 'Point of contact');
+  if (!section) return [];
+  
+  const contacts: Array<{ name: string; email: string; title?: string }> = [];
+  const lines = section.split('\n').filter(line => line.startsWith('- '));
+  
+  for (const line of lines) {
+    const match = line.match(/-\s*(.+?)\s*(?:\((.+?)\)\s*)?<(.+?)>/);
+    if (match) {
+      contacts.push({ 
+        name: match[1].trim(), 
+        title: match[2]?.trim(), 
+        email: match[3].trim() 
+      });
+    }
+  }
+  
+  return contacts;
 }
 
 // ---------------------------------------------------------------------------
@@ -125,7 +138,7 @@ export interface ParsedClientProfile {
   topic_keywords: string[];
   services: string[];
   agency?: string;
-  point_of_contact?: { name: string; email: string };
+  contacts?: Array<{ name: string; email: string; title?: string }>;
 }
 
 function slugify(text: string): string {
@@ -161,7 +174,7 @@ export function parseClientProfile(markdown: string): ParsedClientProfile | null
     topic_keywords: extractListItems(body, 'Topic keywords'),
     services: (fm.services as string[]) || extractListItems(body, 'Services'),
     agency: (fm.agency as string) || undefined,
-    point_of_contact: extractPointOfContact(body) || undefined,
+    contacts: extractContacts(body),
   };
 }
 

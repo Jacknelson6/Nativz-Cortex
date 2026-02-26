@@ -9,9 +9,10 @@ import type { TopicSearch } from '@/lib/types/search';
 interface ExportPdfButtonProps {
   search: TopicSearch;
   clientName?: string | null;
+  agency?: string | null;
 }
 
-export function ExportPdfButton({ search, clientName }: ExportPdfButtonProps) {
+export function ExportPdfButton({ search, clientName, agency }: ExportPdfButtonProps) {
   const [exporting, setExporting] = useState(false);
 
   async function handleExport() {
@@ -22,7 +23,7 @@ export function ExportPdfButton({ search, clientName }: ExportPdfButtonProps) {
       const { SearchPdfDocument } = await import('./search-pdf-document');
 
       const blob = await pdf(
-        SearchPdfDocument({ search, clientName: clientName || undefined })
+        SearchPdfDocument({ search, clientName: clientName || undefined, agency })
       ).toBlob();
 
       const url = URL.createObjectURL(blob);

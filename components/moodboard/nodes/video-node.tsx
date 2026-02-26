@@ -98,9 +98,12 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
   }, [item, onReplicate]);
 
   return (
-    <div className={`bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden group ${
-      item.platform === 'tiktok' || item.platform === 'instagram' || item.platform === 'facebook' ? 'min-w-[200px] max-w-[240px]' : 'min-w-[280px] max-w-[360px]'
-    }`}>
+    <div 
+      onClick={() => onViewAnalysis(item)}
+      className={`bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden group cursor-pointer hover:border-accent/40 transition-colors ${
+        item.platform === 'tiktok' || item.platform === 'instagram' || item.platform === 'facebook' ? 'min-w-[200px] max-w-[240px]' : 'min-w-[280px] max-w-[360px]'
+      }`}
+    >
       <Handle type="target" position={Position.Top} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
 
       {/* Thumbnail */}
@@ -239,45 +242,36 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
         )}
 
         {/* On-demand action buttons */}
-        {(!isAnalyzed || !isTranscribed || !hasBrief || !hasRescript) && (
+        {(!isAnalyzed || !isTranscribed || !hasBrief) && (
           <div className="flex flex-wrap gap-1.5 border-t border-nativz-border pt-2">
             {!isAnalyzed && (
               <button
                 onClick={handleAnalyze}
                 disabled={analyzing}
-                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-purple-400 hover:bg-purple-400/10 transition-colors disabled:opacity-50"
+                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-accent-text hover:bg-accent-surface transition-colors disabled:opacity-50"
               >
                 {analyzing ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-                {analyzing ? 'Analyzing...' : '✨ Analyze'}
+                {analyzing ? 'Analyzing...' : 'Analyze'}
               </button>
             )}
             {!isTranscribed && (
               <button
                 onClick={handleTranscribe}
                 disabled={transcribing}
-                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-blue-400 hover:bg-blue-400/10 transition-colors disabled:opacity-50"
+                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-accent-text hover:bg-accent-surface transition-colors disabled:opacity-50"
               >
                 {transcribing ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />}
-                {transcribing ? 'Transcribing...' : '📝 Transcribe'}
+                {transcribing ? 'Transcribing...' : 'Transcribe'}
               </button>
             )}
             {!hasBrief && (
               <button
                 onClick={handleBrief}
                 disabled={briefing}
-                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-orange-400 hover:bg-orange-400/10 transition-colors disabled:opacity-50"
+                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-accent-text hover:bg-accent-surface transition-colors disabled:opacity-50"
               >
                 {briefing ? <Loader2 size={11} className="animate-spin" /> : <ClipboardList size={11} />}
-                {briefing ? 'Generating...' : '📋 Brief'}
-              </button>
-            )}
-            {!hasRescript && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onRescript(item); }}
-                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-indigo-400 hover:bg-indigo-400/10 transition-colors"
-              >
-                <Sparkles size={11} />
-                ✍️ Rescript
+                {briefing ? 'Generating...' : 'Brief'}
               </button>
             )}
           </div>
@@ -323,7 +317,7 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
             className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-accent-text hover:bg-accent-surface transition-colors"
           >
             <Copy size={11} />
-            Replicate
+            Replicate this video
           </button>
         </div>
       </div>

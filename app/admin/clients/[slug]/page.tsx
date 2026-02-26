@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Building2, Settings, Search, Clock, Lightbulb, User2, Mail, Globe, Camera, Palette } from 'lucide-react';
+import { ArrowLeft, Building2, Settings, Search, Clock, Lightbulb, User2, Mail, Globe, Camera, Palette, Plus } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getVaultClientBySlug } from '@/lib/vault/reader';
 import { Card } from '@/components/ui/card';
@@ -137,23 +137,25 @@ export default async function AdminClientDetailPage({
             <Link href="/admin/clients" className="shrink-0 text-text-muted hover:text-text-secondary transition-colors">
               <ArrowLeft size={20} />
             </Link>
-            {dbClient?.logo_url ? (
-              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={dbClient.logo_url} alt={vaultProfile.name} className="h-full w-full object-cover" />
-              </div>
-            ) : (
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-surface text-sm font-bold text-accent-text">
-                {vaultProfile.abbreviation || <Building2 size={20} />}
-              </div>
-            )}
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-hover/50 border border-nativz-border-light">
+              {dbClient?.logo_url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={dbClient.logo_url} alt={vaultProfile.name} className="h-full w-full object-contain p-2" />
+              ) : (
+                <div className="text-lg font-bold text-accent-text">
+                  {vaultProfile.abbreviation || <Building2 size={24} />}
+                </div>
+              )}
+            </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h1 className="truncate text-2xl font-semibold text-text-primary">{vaultProfile.name}</h1>
                 {vaultProfile.abbreviation && (
                   <span className="shrink-0 text-xs font-medium text-text-muted">{vaultProfile.abbreviation}</span>
                 )}
-                <AgencyBadge agency={vaultProfile.agency} />
+                <div className="ml-auto flex items-center gap-2">
+                  <AgencyBadge agency={vaultProfile.agency} />
+                </div>
               </div>
               <p className="truncate text-sm text-text-muted">{vaultProfile.industry || 'General'}</p>
             </div>
@@ -261,60 +263,60 @@ export default async function AdminClientDetailPage({
           </Card>
 
           <Card>
-            <h2 className="text-base font-semibold text-text-primary mb-4">Point of contact</h2>
-            {vaultProfile.point_of_contact && (
-              <div className="flex items-center gap-3 rounded-lg border border-nativz-border-light px-4 py-3 mb-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface text-accent-text">
-                  <User2 size={16} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-text-primary truncate">{vaultProfile.point_of_contact.name}</p>
-                  <p className="text-xs text-text-muted flex items-center gap-1 truncate">
-                    <Mail size={10} className="shrink-0" />
-                    {vaultProfile.point_of_contact.email}
-                  </p>
-                </div>
-                <a href={`mailto:${vaultProfile.point_of_contact.email}`}>
-                  <Badge variant="default" className="cursor-pointer hover:bg-accent-surface/80 transition-colors flex items-center gap-1.5">
-                    <Mail size={10} />
-                    Contact
-                  </Badge>
-                </a>
-              </div>
-            )}
-            {clientContacts.length === 0 && !vaultProfile.point_of_contact ? (
+            <h2 className="text-base font-semibold text-text-primary mb-4">Points of contact</h2>
+            {clientContacts.length === 0 && (vaultProfile.contacts?.length ?? 0) === 0 ? (
               <EmptyState
                 icon={<User2 size={24} />}
                 title="No contacts yet"
-                description={`When ${vaultProfile.name} creates a portal account, they'll appear here.`}
+                description={`When ${vaultProfile.name} adds contacts, they'll appear here.`}
               />
             ) : (
               <div className="space-y-3">
+                {/* Vault Contacts */}
+                {(vaultProfile.contacts ?? []).map((contact: any, i: number) => (
+                  <div key={`vault-${i}`} className="flex items-center gap-3 rounded-lg border border-nativz-border-light px-4 py-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface text-accent-text">
+                      <User2 size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-text-primary truncate">{contact.name}</p>
+                    {contact.title && <p className="text-xs text-text-muted truncate">{contact.title}</p>}
+                    <p className="text-xs text-text-muted flex items-center gap-1 truncate">
+                        <Mail size={10} className="shrink-0" />
+                        {contact.email}
+                      </p>
+                    </div>
+                    <a href={`mailto:${contact.email}`}>
+                      <Badge variant="default" className="cursor-pointer hover:bg-accent-surface/80 transition-colors">
+                        Contact
+                      </Badge>
+                    </a>
+                  </div>
+                ))}
+
+                {/* Portal Users */}
                 {clientContacts.map((contact) => (
-                  <div key={contact.id} className="flex items-center gap-3 rounded-lg border border-nativz-border-light px-4 py-3">
+                  <div key={contact.id} className="flex items-center gap-3 rounded-lg border border-nativz-border bg-surface-hover/30 px-4 py-3">
                     {contact.avatar_url ? (
                       <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={contact.avatar_url} alt={contact.full_name} className="h-full w-full object-cover scale-125" />
+                        <img src={contact.avatar_url} alt={contact.full_name} className="h-full w-full object-cover" />
                       </div>
                     ) : (
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface text-accent-text">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white">
                         <User2 size={16} />
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-text-primary truncate">{contact.full_name}</p>
-                      {contact.job_title && (
-                        <p className="text-xs text-text-muted truncate">{contact.job_title}</p>
-                      )}
-                      <p className="text-xs text-text-muted flex items-center gap-1 truncate">
-                        <Mail size={10} className="shrink-0" />
-                        {contact.email}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="info" className="text-[9px] px-1 py-0">Portal</Badge>
+                        {contact.job_title && <p className="text-xs text-text-muted truncate">{contact.job_title}</p>}
+                      </div>
                     </div>
                     {contact.last_login && (
-                      <span className="text-xs text-text-muted shrink-0">
-                        Active {formatRelativeTime(contact.last_login)}
+                      <span className="text-[10px] text-text-muted shrink-0">
+                        {formatRelativeTime(contact.last_login)}
                       </span>
                     )}
                   </div>
@@ -343,7 +345,15 @@ export default async function AdminClientDetailPage({
           {/* Recent shoots */}
           <Card>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-text-primary">Recent shoots</h2>
+              <div>
+                <h2 className="text-base font-semibold text-text-primary">Recent shoots</h2>
+                <Link href="/admin/shoots">
+                  <Button size="xs" variant="ghost" className="text-accent-text -ml-2">
+                    <Plus size={12} />
+                    Schedule shoot
+                  </Button>
+                </Link>
+              </div>
               <Link href="/admin/shoots">
                 <Button size="sm" variant="outline">
                   <Camera size={14} />
@@ -378,7 +388,15 @@ export default async function AdminClientDetailPage({
           {/* Recent moodboards */}
           <Card>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-text-primary">Moodboards</h2>
+              <div>
+                <h2 className="text-base font-semibold text-text-primary">Moodboards</h2>
+                <Link href="/admin/moodboard">
+                  <Button size="xs" variant="ghost" className="text-accent-text -ml-2">
+                    <Plus size={12} />
+                    Create moodboard
+                  </Button>
+                </Link>
+              </div>
               <Link href="/admin/moodboard">
                 <Button size="sm" variant="outline">
                   <Palette size={14} />
@@ -478,22 +496,18 @@ export default async function AdminClientDetailPage({
                   <div className="flex items-center justify-between rounded-lg border border-nativz-border-light px-4 py-3 hover:bg-surface-hover transition-colors">
                     <div>
                       <p className="text-sm font-medium text-text-primary">{search.query}</p>
-                      <span className="text-xs text-text-muted flex items-center gap-1">
-                        <Clock size={10} />
-                        {formatRelativeTime(search.created_at)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant={search.search_mode === 'client_strategy' ? 'info' : 'default'}>
-                        {search.search_mode === 'client_strategy' ? 'Brand' : 'Topic'}
-                      </Badge>
-                      {search.approved_at ? (
-                        <Badge variant="success">Sent</Badge>
-                      ) : search.status === 'completed' ? (
-                        <Badge variant="warning">Not sent</Badge>
-                      ) : (
-                        <Badge>{search.status}</Badge>
-                      )}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <Badge variant={search.search_mode === 'client_strategy' ? 'info' : 'default'} className="text-[10px] px-1.5 py-0">
+                          {search.search_mode === 'client_strategy' ? 'Brand' : 'Topic'}
+                        </Badge>
+                        <span className="text-xs text-text-muted flex items-center gap-1">
+                          <Clock size={10} />
+                          {formatRelativeTime(search.created_at)}
+                        </span>
+                        {search.approved_at && (
+                          <Badge variant="emerald" className="text-[10px] px-1.5 py-0">Sent</Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </Link>

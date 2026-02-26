@@ -9,6 +9,8 @@ import { createClient } from '@/lib/supabase/client';
 interface ClientOption {
   id: string;
   name: string;
+  logo_url?: string | null;
+  agency?: string | null;
 }
 
 interface SearchModeSelectorProps {
@@ -16,6 +18,7 @@ interface SearchModeSelectorProps {
   fixedClientId?: string | null;
   fixedClientName?: string | null;
   portalMode?: boolean;
+  initialClients?: ClientOption[];
 }
 
 export function SearchModeSelector({
@@ -23,6 +26,7 @@ export function SearchModeSelector({
   fixedClientId,
   fixedClientName,
   portalMode = false,
+  initialClients,
 }: SearchModeSelectorProps) {
   // Brand card state
   const [brandClientId, setBrandClientId] = useState<string | null>(fixedClientId ?? null);
@@ -34,14 +38,14 @@ export function SearchModeSelector({
   const [topicLoading, setTopicLoading] = useState(false);
 
   // Shared state
-  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [clients, setClients] = useState<ClientOption[]>(initialClients || []);
   const [error, setError] = useState('');
   const router = useRouter();
   const topicInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch clients (admin only)
   useEffect(() => {
-    if (portalMode) return;
+    if (portalMode || initialClients) return;
     async function fetchClients() {
       const supabase = createClient();
       const { data } = await supabase
@@ -156,13 +160,13 @@ export function SearchModeSelector({
                 <span className="text-sm text-white">{fixedClientName}</span>
               </div>
             ) : (
-              <ClientPickerTrigger
-                clients={clients}
-                value={brandClientId}
-                onChange={setBrandClientId}
-                disabled={anyLoading}
-                placeholder="Select a client"
-              />
+                <ClientPickerTrigger
+                  clients={clients}
+                  value={brandClientId}
+                  onChange={setBrandClientId}
+                  disabled={anyLoading}
+                  placeholder="Select a client"
+                />
             )}
 
             {/* Spacer pushes button to bottom */}
@@ -238,6 +242,7 @@ export function SearchModeSelector({
                 value={topicClientId}
                 onChange={setTopicClientId}
                 placeholder="Attach to a client (optional)"
+                disabled={anyLoading}
               />
             )}
 
@@ -260,10 +265,6 @@ export function SearchModeSelector({
         <p className="mt-4 text-center text-sm text-red-400">{error}</p>
       )}
 
-      {/* Footer */}
-      <p className="mt-8 text-center text-xs text-white/30">
-        Powered by Brave Search + Claude AI
-      </p>
     </div>
   );
 }
@@ -377,7 +378,7 @@ function ClientPickerModal({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg rounded-xl border border-white/[0.06] bg-surface shadow-2xl animate-modal-pop-in">
+      <div className="relative w-full max-w-2xl rounded-xl border border-white/[0.06] bg-surface shadow-2xl animate-modal-pop-in">
         {/* Header */}
         <div className="p-5 pb-0">
           <div className="flex items-center justify-between mb-4">
@@ -415,7 +416,7 @@ function ClientPickerModal({
               <p className="text-sm text-white/40">No clients match &ldquo;{search}&rdquo;</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {filtered.map((client) => (
                 <button
                   key={client.id}
@@ -427,12 +428,27 @@ function ClientPickerModal({
                       : 'border-white/[0.06] bg-white/[0.03] text-white/70 hover:border-white/[0.12] hover:bg-white/[0.06]'
                   }`}
                 >
-                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden ${
                     client.id === value ? 'bg-accent/20' : 'bg-white/[0.04]'
                   }`}>
-                    <Building2 size={14} className={client.id === value ? 'text-accent-text' : 'text-white/40'} />
+                    {client.logo_url ? (
+                      <img src={client.logo_url} alt={client.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <Building2 size={14} className={client.id === value ? 'text-accent-text' : 'text-white/40'} />
+                    )}
                   </div>
-                  <span className="truncate">{client.name}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-white/90">{client.name}</p>
+                    {client.agency && (
+                      <p className={`text-[9px] font-bold uppercase tracking-wider ${
+                        client.agency.toLowerCase().includes('anderson') || client.agency.toLowerCase() === 'ac'
+                          ? 'text-emerald-400'
+                          : 'text-blue-400'
+                      }`}>
+                        {client.agency.toLowerCase().includes('anderson') || client.agency.toLowerCase() === 'ac' ? 'Anderson Collaborative' : 'Nativz'}
+                      </p>
+                    )}
+                  </div>
                 </button>
               ))}
             </div>

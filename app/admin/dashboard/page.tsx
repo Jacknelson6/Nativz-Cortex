@@ -78,7 +78,9 @@ export default async function AdminDashboardPage() {
       clientsCount,
       searchesThisMonth,
       searchesLastMonth,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       upcomingShootsCount,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       moodboardItemsCount,
       upcomingShootsList,
       recentSearchesList,
@@ -157,7 +159,7 @@ export default async function AdminDashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
-              Command Center
+              Dashboard
             </h1>
             <p className="text-sm text-text-muted mt-0.5">Your content strategy at a glance</p>
           </div>
@@ -167,13 +169,7 @@ export default async function AdminDashboardPage() {
         </div>
 
         {/* Hero Stats Row */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard
-            icon={<Users size={18} />}
-            value={totalClients}
-            label="Total Clients"
-            accentClass="from-blue-500 to-purple-500"
-          />
+        <div className="grid grid-cols-2 gap-4">
           <StatCard
             icon={<Search size={18} />}
             value={activeSearches}
@@ -182,15 +178,9 @@ export default async function AdminDashboardPage() {
             accentClass="from-blue-500 to-purple-500"
           />
           <StatCard
-            icon={<Calendar size={18} />}
-            value={upcomingShoots}
-            label="Upcoming Shoots"
-            accentClass="from-blue-500 to-purple-500"
-          />
-          <StatCard
-            icon={<Image size={18} />}
-            value={moodboardItems}
-            label="Moodboard Items"
+            icon={<Users size={18} />}
+            value={totalClients}
+            label="Total Clients"
             accentClass="from-blue-500 to-purple-500"
           />
         </div>
@@ -259,7 +249,7 @@ export default async function AdminDashboardPage() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-text-primary flex items-center gap-2">
                   <Calendar size={16} className="text-purple-400" />
-                  Next 7 Days
+                  Shoots this week
                 </h2>
                 <Link href="/admin/shoots" className="text-xs text-text-muted hover:text-text-secondary flex items-center gap-1 transition-colors">
                   View all <ArrowRight size={12} />
@@ -307,6 +297,9 @@ export default async function AdminDashboardPage() {
                   <Search size={16} className="text-blue-400" />
                   Recent Searches
                 </h2>
+                <Link href="/admin/search/history" className="text-xs text-text-muted hover:text-text-secondary flex items-center gap-1 transition-colors">
+                  View all <ArrowRight size={12} />
+                </Link>
               </div>
               {searches.length === 0 ? (
                 <p className="text-sm text-text-muted text-center py-6">No searches yet</p>

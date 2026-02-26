@@ -2,7 +2,7 @@
 
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import type { ClientStrategy } from '@/lib/types/strategy';
-import { NATIVZ_LOGO_PNG } from '@/lib/brand-logo';
+import { NATIVZ_LOGO_PNG, AC_LOGO_PNG } from '@/lib/brand-logo';
 
 const colors = {
   primary: '#046BD2',
@@ -160,9 +160,13 @@ const styles = StyleSheet.create({
 interface StrategyPdfProps {
   strategy: ClientStrategy;
   clientName: string;
+  agency?: string | null;
 }
 
-export function StrategyPdf({ strategy, clientName }: StrategyPdfProps) {
+export function StrategyPdf({ strategy, clientName, agency }: StrategyPdfProps) {
+  const isAC = agency?.toLowerCase().includes('anderson') || agency?.toLowerCase() === 'ac';
+  const logo = isAC ? AC_LOGO_PNG : NATIVZ_LOGO_PNG;
+  const brandColor = isAC ? '#10B981' : colors.primary;
   const date = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -173,10 +177,10 @@ export function StrategyPdf({ strategy, clientName }: StrategyPdfProps) {
     <Document>
       {/* Cover page */}
       <Page size="A4" style={styles.coverPage}>
-        <Image src={NATIVZ_LOGO_PNG} style={{ width: 160, height: 40, marginBottom: 10 }} />
-        <View style={styles.accentLine} />
+        <Image src={logo} style={{ width: 160, height: 40, marginBottom: 10, objectFit: 'contain' }} />
+        <View style={[styles.accentLine, { backgroundColor: brandColor }]} />
         <Text style={styles.coverTitle}>{clientName}</Text>
-        <Text style={styles.coverSubtitle}>Content Strategy Playbook</Text>
+        <Text style={[styles.coverSubtitle, { color: brandColor }]}>Content Strategy Playbook</Text>
         <Text style={styles.coverDate}>{date}</Text>
       </Page>
 
@@ -214,7 +218,7 @@ export function StrategyPdf({ strategy, clientName }: StrategyPdfProps) {
           </>
         )}
         <View style={styles.footer}>
-          <Text>Nativz</Text>
+          <Text>{isAC ? 'Anderson Collaborative' : 'Nativz'}</Text>
           <Text>{clientName} — Content Strategy</Text>
         </View>
       </Page>
@@ -244,7 +248,7 @@ export function StrategyPdf({ strategy, clientName }: StrategyPdfProps) {
             </View>
           ))}
           <View style={styles.footer}>
-            <Text>Nativz</Text>
+            <Text>{isAC ? 'Anderson Collaborative' : 'Nativz'}</Text>
             <Text>{clientName} — Content Pillars</Text>
           </View>
         </Page>

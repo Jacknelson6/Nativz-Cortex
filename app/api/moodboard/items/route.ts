@@ -231,36 +231,48 @@ export async function POST(request: NextRequest) {
         } catch { /* youtube oembed failed */ }
       } else if (url.includes('instagram.com/reel') || url.includes('instagram.com/p/')) {
         detectedPlatform = 'instagram';
-        // Try Instagram oEmbed
+        
+        // Use a more aggressive scrape for Instagram since oEmbed usually fails without auth
         try {
-          const oembedRes = await fetch(`https://api.instagram.com/oembed?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5000) });
-          if (oembedRes.ok) {
-            const oembed = await oembedRes.json();
-            quickTitle = quickTitle || oembed.title || null;
-            quickThumbnail = oembed.thumbnail_url || null;
-            authorName = oembed.author_name || null;
-          }
-        } catch { /* instagram oembed failed */ }
+          const res = await fetch(url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.9',
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            },
+            redirect: 'follow',
+            signal: AbortSignal.timeout(7000),
+          });
 
-        // Fallback: HTML scrape for og tags
-        if (!quickThumbnail) {
-          try {
-            const res = await fetch(url, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml',
-                'Accept-Language': 'en-US,en;q=0.9',
-              },
-              redirect: 'follow',
-              signal: AbortSignal.timeout(5000),
-            });
-            if (res.ok) {
-              const html = await res.text();
-              const $ = cheerio.load(html);
-              quickThumbnail = quickThumbnail || $('meta[property="og:image"]').attr('content') || null;
-              quickTitle = quickTitle || $('meta[property="og:description"]').attr('content') || $('meta[property="og:title"]').attr('content') || null;
+          if (res.ok) {
+            const html = await res.text();
+            const $ = cheerio.load(html);
+            
+            // Try meta tags first
+            quickThumbnail = $('meta[property="og:image"]').attr('content') || null;
+            quickTitle = $('meta[property="og:title"]').attr('content') || null;
+            const ogDesc = $('meta[property="og:description"]').attr('content');
+            
+            if (quickTitle && quickTitle.includes('Instagram:')) {
+               const parts = quickTitle.split(': ');
+               if (parts.length > 1) {
+                 authorName = parts[0].replace(' on Instagram', '');
+                 quickTitle = parts.slice(1).join(': ').replace(/^["']|["']$/g, '');
+               }
             }
-          } catch { /* scrape failed */ }
+
+            if (!quickTitle || quickTitle === 'Instagram') {
+              quickTitle = ogDesc || null;
+            }
+
+            if (!authorName) {
+              authorName = $('meta[name="author"]').attr('content') || null;
+            }
+          }
+        } catch (err) {
+          console.error('Instagram aggressive scrape failed:', err);
         }
       } else if (url.includes('facebook.com/reel') || url.includes('fb.watch') || url.includes('facebook.com/watch') || url.includes('facebook.com/share/v/')) {
         detectedPlatform = 'facebook';
@@ -347,16 +359,17 @@ export async function POST(request: NextRequest) {
       .update({ updated_at: new Date().toISOString() })
       .eq('id', parsed.data.board_id);
 
-    // Auto-trigger processing for website items only (non-blocking)
-    if (item && parsed.data.type === 'website') {
-      const processUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/moodboard/items/${item.id}/insights`;
+    // Auto-trigger processing (non-blocking)
+    if (item) {
+      const processType = parsed.data.type === 'website' ? 'insights' : 'transcribe';
+      const processUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/moodboard/items/${item.id}/${processType}`;
       fetch(processUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Cookie': request.headers.get('cookie') || '',
         },
-      }).catch((err) => console.error('Auto-process trigger failed:', err));
+      }).catch((err) => console.error(`Auto-process trigger (${processType}) failed:`, err));
     }
 
     return NextResponse.json(item, { status: 201 });

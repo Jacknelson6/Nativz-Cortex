@@ -54,6 +54,17 @@ function formatLabel(key: string): string {
 }
 
 export default function ProfileExtractPage() {
+  // DEPRECATED - This feature is currently disabled
+  return (
+    <div className="flex items-center justify-center h-full p-6">
+      <div className="text-center">
+        <h1 className="text-xl font-semibold text-text-primary mb-2">Profile Extract</h1>
+        <p className="text-sm text-text-muted">This feature is currently undergoing maintenance.</p>
+      </div>
+    </div>
+  );
+  
+  // eslint-disable-next-line no-unreachable
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
