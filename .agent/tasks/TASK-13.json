@@ -15,31 +15,31 @@
       "step": 1,
       "description": "Enable drag on scheduled shoot events",
       "details": "In the calendar component, set editable/draggable props on shoot events. If using FullCalendar or similar, enable eventDrop handler.",
-      "pass": false
+      "pass": true
     },
     {
       "step": 2,
       "description": "Add confirmation dialog on drop",
       "details": "In the eventDrop handler, prevent immediate save. Show a confirmation dialog with the new date. Use the existing AlertDialog or similar confirmation component.",
-      "pass": false
+      "pass": true
     },
     {
       "step": 3,
       "description": "Handle confirm — update shoot date",
       "details": "On confirm, call the shoots API (PATCH /api/shoots/[id]) with the new date. Update local state on success. Show toast on success.",
-      "pass": false
+      "pass": true
     },
     {
       "step": 4,
       "description": "Handle cancel — revert position",
       "details": "On cancel, revert the event to its original date. Use the revert() callback provided by the calendar library's eventDrop event.",
-      "pass": false
+      "pass": true
     },
     {
       "step": 5,
       "description": "Prevent duplicate scheduling",
       "details": "Check if a shoot already exists for the target date + client combination before allowing the drop. Show warning toast if duplicate detected.",
-      "pass": false
+      "pass": true
     }
   ],
   "dependencies": [],
@@ -47,5 +47,6 @@
   "technicalNotes": [
     "Calendar library may provide a revert() function in the eventDrop callback — use it for cancel behavior",
     "Optimistic update pattern: move visually first, revert on API failure"
-  ]
+  ],
+  "passes": true
 }

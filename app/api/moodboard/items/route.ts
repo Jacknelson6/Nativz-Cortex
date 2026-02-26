@@ -204,9 +204,10 @@ export async function POST(request: NextRequest) {
     let hashtags: string[] = [];
     let videoUrl: string | null = null;
     const url = parsed.data.url;
+    const urlLower = url.toLowerCase();
 
     try {
-      if (url.includes('tiktok.com')) {
+      if (urlLower.includes('tiktok.com')) {
         detectedPlatform = 'tiktok';
         const meta = await fetchTikTokMetadata(url);
         quickTitle = quickTitle || meta.title;
@@ -218,7 +219,7 @@ export async function POST(request: NextRequest) {
         duration = meta.duration;
         hashtags = meta.hashtags;
         videoUrl = meta.video_url;
-      } else if (url.includes('youtube.com') || url.includes('youtu.be')) {
+      } else if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) {
         detectedPlatform = 'youtube';
         try {
           const oembedRes = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`, { signal: AbortSignal.timeout(5000) });
@@ -229,52 +230,70 @@ export async function POST(request: NextRequest) {
             authorName = oembed.author_name || null;
           }
         } catch { /* youtube oembed failed */ }
-      } else if (url.includes('instagram.com/reel') || url.includes('instagram.com/p/')) {
+      } else if (urlLower.includes('instagram.com/reel') || urlLower.includes('instagram.com/p/')) {
         detectedPlatform = 'instagram';
-        
-        // Use a more aggressive scrape for Instagram since oEmbed usually fails without auth
+
+        // Tier 1: Try Instagram oEmbed (works for public posts)
         try {
-          const res = await fetch(url, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-              'Accept-Language': 'en-US,en;q=0.9',
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache'
-            },
-            redirect: 'follow',
-            signal: AbortSignal.timeout(7000),
-          });
-
-          if (res.ok) {
-            const html = await res.text();
-            const $ = cheerio.load(html);
-            
-            // Try meta tags first
-            quickThumbnail = $('meta[property="og:image"]').attr('content') || null;
-            quickTitle = $('meta[property="og:title"]').attr('content') || null;
-            const ogDesc = $('meta[property="og:description"]').attr('content');
-            
-            if (quickTitle && quickTitle.includes('Instagram:')) {
-               const parts = quickTitle.split(': ');
-               if (parts.length > 1) {
-                 authorName = parts[0].replace(' on Instagram', '');
-                 quickTitle = parts.slice(1).join(': ').replace(/^["']|["']$/g, '');
-               }
-            }
-
-            if (!quickTitle || quickTitle === 'Instagram') {
-              quickTitle = ogDesc || null;
-            }
-
-            if (!authorName) {
-              authorName = $('meta[name="author"]').attr('content') || null;
-            }
+          const oembedRes = await fetch(
+            `https://api.instagram.com/oembed?url=${encodeURIComponent(url)}&omitscript=true`,
+            { signal: AbortSignal.timeout(4000) },
+          );
+          if (oembedRes.ok) {
+            const oembed = await oembedRes.json();
+            quickTitle = quickTitle || oembed.title || null;
+            quickThumbnail = oembed.thumbnail_url || null;
+            authorName = oembed.author_name || null;
           }
-        } catch (err) {
-          console.error('Instagram aggressive scrape failed:', err);
+        } catch { /* Instagram oEmbed failed — try HTML scrape */ }
+
+        // Tier 2: HTML scrape for remaining metadata
+        if (!quickThumbnail) {
+          try {
+            const res = await fetch(url, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+              },
+              redirect: 'follow',
+              signal: AbortSignal.timeout(7000),
+            });
+
+            if (res.ok) {
+              const html = await res.text();
+              const $ = cheerio.load(html);
+
+              // Try meta tags first
+              quickThumbnail = quickThumbnail || $('meta[property="og:image"]').attr('content') || null;
+              const ogTitle = $('meta[property="og:title"]').attr('content') || null;
+              const ogDesc = $('meta[property="og:description"]').attr('content');
+
+              if (ogTitle && ogTitle.includes('Instagram:')) {
+                 const parts = ogTitle.split(': ');
+                 if (parts.length > 1) {
+                   authorName = authorName || parts[0].replace(' on Instagram', '');
+                   if (!quickTitle) {
+                     quickTitle = parts.slice(1).join(': ').replace(/^["']|["']$/g, '');
+                   }
+                 }
+              }
+
+              if (!quickTitle || quickTitle === 'Instagram') {
+                quickTitle = ogTitle || ogDesc || null;
+              }
+
+              if (!authorName) {
+                authorName = $('meta[name="author"]').attr('content') || null;
+              }
+            }
+          } catch (err) {
+            console.error('Instagram HTML scrape failed:', err);
+          }
         }
-      } else if (url.includes('facebook.com/reel') || url.includes('fb.watch') || url.includes('facebook.com/watch') || url.includes('facebook.com/share/v/')) {
+      } else if (urlLower.includes('facebook.com/reel') || urlLower.includes('fb.watch') || urlLower.includes('facebook.com/watch') || urlLower.includes('facebook.com/share/v/')) {
         detectedPlatform = 'facebook';
         // Try Facebook video oEmbed
         try {
@@ -307,7 +326,7 @@ export async function POST(request: NextRequest) {
             }
           } catch { /* scrape failed */ }
         }
-      } else if (url.includes('twitter.com') || url.includes('x.com')) {
+      } else if (urlLower.includes('twitter.com') || urlLower.includes('x.com')) {
         detectedPlatform = 'twitter';
       } else if (parsed.data.type === 'website') {
         // Fetch OpenGraph metadata for generic websites

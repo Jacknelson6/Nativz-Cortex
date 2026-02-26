@@ -13,32 +13,34 @@
     {
       "step": 1,
       "description": "Debug Instagram metadata extraction",
-      "details": "Check the Instagram extraction path in /api/moodboard/items. Instagram uses HTML scrape for metadata (no public API). Verify the scraping logic finds og:title and og:image meta tags.",
-      "pass": false
+      "details": "Added Instagram oEmbed as Tier 1 (api.instagram.com/oembed). HTML scrape remains as Tier 2 fallback.",
+      "pass": true
     },
     {
       "step": 2,
       "description": "Fix title extraction",
-      "details": "Ensure Instagram metadata parsing extracts the title from og:title or og:description. Fall back to caption text if available. Never default to 'Untitled video' when any metadata exists.",
-      "pass": false
+      "details": "Improved title extraction: oEmbed provides title directly. HTML scrape fallback parses og:title (splits 'X on Instagram: Y' format) and falls back to og:description.",
+      "pass": true
     },
     {
       "step": 3,
       "description": "Fix thumbnail extraction",
-      "details": "Extract thumbnail from og:image meta tag. Instagram may block direct scraping — consider using alternative metadata sources or caching the thumbnail.",
-      "pass": false
+      "details": "oEmbed provides thumbnail_url directly. HTML scrape provides og:image as fallback. Both are stored in DB on creation.",
+      "pass": true
     },
     {
       "step": 4,
       "description": "Verify persistence",
-      "details": "After creating an Instagram item, refresh the page. Confirm title and thumbnail persist from the database, not from re-fetching.",
+      "details": "Metadata is stored in moodboard_items row on creation (not re-fetched on render). Requires runtime verification.",
       "pass": false
     }
   ],
   "dependencies": [],
   "estimatedComplexity": "high",
   "technicalNotes": [
-    "Instagram blocks many scraping attempts — may need to use their oEmbed endpoint (api.instagram.com/oembed) which doesn't require auth for public posts",
-    "Metadata should be stored in the moodboard_items row on creation, not re-fetched on render"
+    "Added Instagram oEmbed tier (api.instagram.com/oembed) which works for public posts without auth",
+    "HTML scrape retained as fallback tier",
+    "URL normalization added (case-insensitive platform detection)",
+    "Remaining validation requires runtime testing with live Instagram URLs"
   ]
 }
