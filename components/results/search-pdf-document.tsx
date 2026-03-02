@@ -203,7 +203,7 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
               </Text>
               <Text style={s.meta}>{dateStr} · Powered by Nativz Cortex</Text>
             </View>
-            <Image src={logo} style={{ width: 100, height: 25, objectFit: 'contain' }} />
+            <Image src={logo} style={{ width: 80, height: 20 }} />
           </View>
         </View>
 
