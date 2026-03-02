@@ -104,6 +104,8 @@ export const config = {
     '/',
     '/admin/:path*',
     '/portal/:path*',
+    '/api/:path*',
+    '/shared/:path*',
     '/login',
     '/search/:path*',
     '/history',

@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import crypto from 'crypto';
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -28,7 +28,7 @@ export async function GET(
       return NextResponse.json({ shared: false });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     return NextResponse.json({
       shared: true,
       token: link.token,
@@ -42,7 +42,7 @@ export async function GET(
 }
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -90,7 +90,7 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to create share link' }, { status: 500 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     return NextResponse.json({
       shared: true,
       token,
