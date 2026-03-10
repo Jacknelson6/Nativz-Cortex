@@ -10,6 +10,7 @@ import {
   Calendar,
   Check,
   ChevronRight,
+  Copy,
   Loader2,
   User,
   Link as LinkIcon,
@@ -20,6 +21,7 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
+  Trash2,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
@@ -1073,6 +1075,23 @@ function ApiKeysSection() {
     }
   }
 
+  async function handleDelete(id: string) {
+    setRevokingId(id);
+    try {
+      const res = await fetch(`/api/api-keys/${id}?permanent=true`, { method: 'DELETE' });
+      if (!res.ok) {
+        toast.error('Failed to delete key');
+        return;
+      }
+      setKeys((prev) => prev.filter((k) => k.id !== id));
+      toast.success('API key deleted');
+    } catch {
+      toast.error('Something went wrong');
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
   function toggleScope(scope: string) {
     setNewKeyScopes((prev) =>
       prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
@@ -1139,7 +1158,7 @@ function ApiKeysSection() {
                     )}
                   </p>
                 </div>
-                {key.is_active && (
+                {key.is_active ? (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1149,6 +1168,17 @@ function ApiKeysSection() {
                   >
                     {revokingId === key.id ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />}
                     Revoke
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDelete(key.id)}
+                    disabled={revokingId === key.id}
+                    className="text-text-muted hover:text-red-400 shrink-0"
+                  >
+                    {revokingId === key.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    Delete
                   </Button>
                 )}
               </div>
@@ -1214,16 +1244,14 @@ function ApiKeysSection() {
             <p className="text-xs text-amber-400 mb-4">
               Copy this key now — you won&apos;t be able to see it again.
             </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 rounded-lg bg-background border border-nativz-border px-3 py-2 text-sm text-text-primary font-mono break-all select-all">
-                {createdKey}
-              </code>
+            <code className="block rounded-lg bg-background border border-nativz-border px-3 py-2.5 text-sm text-text-primary font-mono break-all select-all">
+              {createdKey}
+            </code>
+            <div className="flex justify-end gap-2 mt-4">
               <Button size="sm" onClick={copyKey} variant="outline">
-                {copied ? <Check size={14} /> : <ChevronRight size={14} />}
+                {copied ? <Check size={14} /> : <Copy size={14} />}
                 {copied ? 'Copied' : 'Copy'}
               </Button>
-            </div>
-            <div className="flex justify-end mt-4">
               <Button size="sm" onClick={() => setCreatedKey(null)}>
                 Done
               </Button>
