@@ -28,14 +28,14 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Public routes — no auth needed
-  if (pathname.startsWith('/portal/join/') || pathname === '/api/calendar/webhook' || pathname.startsWith('/shared/') || pathname.startsWith('/api/shared/')) {
+  if (pathname.startsWith('/api/v1/') || pathname.startsWith('/portal/join/') || pathname === '/api/calendar/webhook' || pathname.startsWith('/api/social/callback/') || pathname.startsWith('/shared/') || pathname.startsWith('/api/shared/')) {
     return supabaseResponse;
   }
 
   // Login pages don't require auth
   if (pathname === '/admin/login' || pathname === '/portal/login') {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
       if (pathname === '/admin/login') {
         return NextResponse.redirect(new URL('/admin/dashboard', request.url));
       }
@@ -49,8 +49,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/admin/login', request.url));
   }
 
-  // All other routes require auth
-  const { data: { user } } = await supabase.auth.getUser();
+  // Use getSession() for fast local JWT check (no network call).
+  // Actual auth validation happens via getUser() in page/API routes.
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   if (!user) {
     if (pathname.startsWith('/admin')) {
@@ -104,10 +106,10 @@ export const config = {
     '/',
     '/admin/:path*',
     '/portal/:path*',
-    '/api/:path*',
     '/shared/:path*',
     '/login',
     '/search/:path*',
     '/history',
+    '/api/v1/:path*',
   ],
 };
