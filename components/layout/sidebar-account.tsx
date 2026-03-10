@@ -4,14 +4,14 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, LogOut, ChevronUp, User } from 'lucide-react';
+import { Settings, LogOut, User, Key } from 'lucide-react';
 
 interface SidebarAccountProps {
   userName?: string;
   avatarUrl?: string | null;
   settingsHref: string;
   logoutRedirect: string;
+  collapsed?: boolean;
 }
 
 export function SidebarAccount({
@@ -19,6 +19,7 @@ export function SidebarAccount({
   avatarUrl,
   settingsHref,
   logoutRedirect,
+  collapsed = false,
 }: SidebarAccountProps) {
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -62,42 +63,46 @@ export function SidebarAccount({
     : '?';
 
   return (
-    <div ref={containerRef} className="relative p-3">
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 25, mass: 0.8 }}
-            className="absolute bottom-full left-3 right-3 mb-2 rounded-xl border border-nativz-border bg-surface p-1.5 shadow-elevated"
-            style={{ backdropFilter: 'blur(16px)' }}
+    <div ref={containerRef} className={`relative ${collapsed ? 'p-2' : 'p-3'}`}>
+      {open && (
+        <div
+          className={`absolute rounded-xl border border-nativz-border bg-surface p-1.5 shadow-elevated animate-[popIn_200ms_cubic-bezier(0.16,1,0.3,1)_forwards] ${
+            collapsed ? 'left-full ml-2 bottom-0' : 'bottom-full mb-2 left-3 right-3'
+          }`}
+          style={{ backdropFilter: 'blur(16px)', zIndex: 50 }}
+        >
+          <Link
+            href={settingsHref}
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors whitespace-nowrap"
           >
-            <Link
-              href={settingsHref}
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
-            >
-              <Settings size={15} />
-              Account settings
-            </Link>
-            <button
-              onClick={handleLogout}
-              disabled={loggingOut}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-red-400 transition-colors disabled:opacity-50"
-            >
-              <LogOut size={15} />
-              {loggingOut ? 'Signing out...' : 'Sign out'}
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <Settings size={15} />
+            Account settings
+          </Link>
+          <Link
+            href="/admin/nerd/api"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors whitespace-nowrap"
+          >
+            <Key size={15} />
+            API docs
+          </Link>
+          <button
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-red-400 transition-colors disabled:opacity-50 whitespace-nowrap"
+          >
+            <LogOut size={15} />
+            {loggingOut ? 'Signing out...' : 'Sign out'}
+          </button>
+        </div>
+      )}
 
-      <motion.button
+      <button
         onClick={() => setOpen((prev) => !prev)}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        className={`group flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 transition-all duration-200 ${
+        className={`group flex w-full items-center rounded-xl border transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
+          collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3 py-2.5'
+        } ${
           open
             ? 'border-accent/30 bg-accent-surface shadow-[0_0_12px_rgba(4,107,210,0.15)]'
             : 'border-transparent hover:border-nativz-border hover:bg-surface-hover'
@@ -124,7 +129,6 @@ export function SidebarAccount({
               )}
             </div>
           )}
-          {/* Ring */}
           <div className={`absolute inset-0 rounded-full border-2 transition-all duration-300 ${
             open
               ? 'border-accent/50'
@@ -132,21 +136,17 @@ export function SidebarAccount({
           }`} />
         </div>
 
-        {/* Name */}
-        <div className="flex-1 min-w-0 text-left">
-          <p className="truncate text-sm font-medium text-text-primary">
-            {userName || 'Account'}
-          </p>
-        </div>
-
-        {/* Chevron */}
-        <motion.div
-          animate={{ rotate: open ? 0 : 180 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-        >
-          <ChevronUp size={14} className="shrink-0 text-text-muted" />
-        </motion.div>
-      </motion.button>
+        {/* Name + Chevron — hidden when collapsed */}
+        {!collapsed && (
+          <>
+            <div className="flex-1 min-w-0 text-left">
+              <p className="truncate text-sm font-medium text-text-primary">
+                {userName || 'Account'}
+              </p>
+            </div>
+          </>
+        )}
+      </button>
     </div>
   );
 }
