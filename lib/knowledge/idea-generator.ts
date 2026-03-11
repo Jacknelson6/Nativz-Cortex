@@ -1,0 +1,171 @@
+import { createAdminClient } from '@/lib/supabase/admin';
+import { createCompletion } from '@/lib/ai/client';
+import { parseAIResponseJSON } from '@/lib/ai/parse';
+import { getKnowledgeEntries, getBrandProfile } from '@/lib/knowledge/queries';
+
+export interface GeneratedIdea {
+  title: string;
+  description: string;
+  hook: string;
+  format: 'short_form' | 'long_form' | 'reel' | 'story';
+  content_pillar: string;
+}
+
+export async function generateVideoIdeas(config: {
+  clientId: string;
+  concept?: string;
+  count: number;
+}): Promise<GeneratedIdea[]> {
+  const { clientId, concept, count } = config;
+  const admin = createAdminClient();
+
+  // Parallel fetch all context
+  const [
+    brandProfile,
+    clientRecord,
+    topicSearches,
+    contentLogs,
+    latestStrategy,
+    savedIdeas,
+  ] = await Promise.all([
+    getBrandProfile(clientId),
+    admin
+      .from('clients')
+      .select('name, industry, target_audience, brand_voice, topic_keywords, preferences')
+      .eq('id', clientId)
+      .single()
+      .then(({ data }) => data),
+    admin
+      .from('topic_searches')
+      .select('query, summary, trending_topics')
+      .eq('client_id', clientId)
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(10)
+      .then(({ data }) => data ?? []),
+    admin
+      .from('content_logs')
+      .select('title, content_type, platform, performance_notes')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+      .limit(15)
+      .then(({ data }) => data ?? []),
+    admin
+      .from('client_strategies')
+      .select('content_pillars, executive_summary')
+      .eq('client_id', clientId)
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => data),
+    getKnowledgeEntries(clientId, 'idea'),
+  ]);
+
+  // Build context blocks
+  const contextBlocks: string[] = [];
+
+  if (clientRecord) {
+    contextBlocks.push(
+      `<brand>
+Name: ${clientRecord.name ?? ''}
+Industry: ${clientRecord.industry ?? ''}
+Target audience: ${clientRecord.target_audience ?? ''}
+Brand voice: ${clientRecord.brand_voice ?? ''}
+Topic keywords: ${Array.isArray(clientRecord.topic_keywords) ? (clientRecord.topic_keywords as string[]).join(', ') : clientRecord.topic_keywords ?? ''}
+Preferences: ${clientRecord.preferences ? JSON.stringify(clientRecord.preferences) : 'none'}
+</brand>`
+    );
+  }
+
+  if (brandProfile) {
+    contextBlocks.push(
+      `<brand_profile>
+${brandProfile.content ?? ''}
+</brand_profile>`
+    );
+  }
+
+  if (latestStrategy) {
+    contextBlocks.push(
+      `<strategy>
+Content pillars: ${latestStrategy.content_pillars ? JSON.stringify(latestStrategy.content_pillars) : 'none'}
+Executive summary: ${(latestStrategy.executive_summary as string) ?? ''}
+</strategy>`
+    );
+  }
+
+  if (topicSearches.length > 0) {
+    const searchSummaries = topicSearches.map((s) => {
+      const trending = Array.isArray(s.trending_topics)
+        ? (s.trending_topics as string[]).join(', ')
+        : s.trending_topics ?? '';
+      return `- Query: ${s.query ?? ''}\n  Summary: ${(s.summary as string) ?? ''}\n  Trending: ${trending}`;
+    }).join('\n');
+    contextBlocks.push(
+      `<past_research>
+${searchSummaries}
+</past_research>`
+    );
+  }
+
+  if (contentLogs.length > 0) {
+    const logSummaries = contentLogs.map((l) =>
+      `- ${l.title ?? 'Untitled'} (${l.content_type ?? ''}, ${l.platform ?? ''}): ${l.performance_notes ?? 'no notes'}`
+    ).join('\n');
+    contextBlocks.push(
+      `<already_produced>
+${logSummaries}
+</already_produced>`
+    );
+  }
+
+  if (savedIdeas.length > 0) {
+    const ideaSummaries = savedIdeas.map((i) => `- ${i.title}`).join('\n');
+    contextBlocks.push(
+      `<saved_ideas_avoid_repeating>
+${ideaSummaries}
+</saved_ideas_avoid_repeating>`
+    );
+  }
+
+  if (concept) {
+    contextBlocks.push(
+      `<concept_direction>
+${concept}
+</concept_direction>`
+    );
+  }
+
+  const systemPrompt = `You are a creative video content strategist for a marketing agency. Generate exactly ${count} unique video ideas as a JSON array.
+
+Each idea must have these fields:
+- "title": a concise, compelling video title
+- "description": 2-3 sentences explaining what the video covers and why it matters
+- "hook": the opening line or visual that grabs attention in the first 3 seconds
+- "format": one of "short_form", "long_form", "reel", or "story"
+- "content_pillar": the content category/pillar this falls under
+
+Requirements:
+- Ideas must be actionable for a videographer showing up on set
+- Align with the brand voice and audience
+- Do NOT repeat any existing saved ideas
+- Each idea must be distinct from the others
+- Mix formats unless the concept direction suggests otherwise
+
+Output ONLY the JSON array. No other text.`;
+
+  const userPrompt = contextBlocks.join('\n\n');
+
+  const result = await createCompletion({
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    maxTokens: 4000,
+  });
+
+  const ideas = parseAIResponseJSON<GeneratedIdea[]>(result.text);
+
+  return ideas.slice(0, count);
+}
