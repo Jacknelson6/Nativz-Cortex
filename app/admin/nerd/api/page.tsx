@@ -21,6 +21,10 @@ const ENDPOINTS = [
   { method: 'POST', path: '/api/v1/search', scope: 'search', description: 'Trigger AI topic search for a client' },
   { method: 'GET', path: '/api/v1/team', scope: 'team', description: 'List active team members' },
   { method: 'POST', path: '/api/v1/team', scope: 'team', description: 'Create a team member' },
+  { method: 'GET', path: '/api/v1/clients/:id/knowledge', scope: 'knowledge', description: 'List knowledge entries for a client' },
+  { method: 'POST', path: '/api/v1/clients/:id/knowledge', scope: 'knowledge', description: 'Create a knowledge entry' },
+  { method: 'GET', path: '/api/v1/clients/:id/knowledge/:entryId', scope: 'knowledge', description: 'Get a single knowledge entry' },
+  { method: 'GET', path: '/api/v1/clients/:id/knowledge/graph', scope: 'knowledge', description: 'Get knowledge graph data (entries + links)' },
 ] as const;
 
 const METHOD_COLORS: Record<string, string> = {
