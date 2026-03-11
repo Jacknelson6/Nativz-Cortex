@@ -18,6 +18,7 @@ interface TopicResearchConfig {
     websiteUrl?: string | null;
   } | null;
   brandPreferences?: ClientPreferences | null;
+  clientKnowledgeBlock?: string | null;
 }
 
 const TIME_RANGE_LABELS: Record<string, string> = {
@@ -94,6 +95,10 @@ export function buildTopicResearchPrompt(config: TopicResearchConfig): string {
       ) + '\n'
     : '';
 
+  const knowledgeBlock = config.clientKnowledgeBlock
+    ? `\n## CLIENT KNOWLEDGE\n${config.clientKnowledgeBlock}`
+    : '';
+
   const serpBlock = formatSerpDataBlock(config.serpData);
 
   return `# TOPIC RESEARCH & CONTENT IDEATION
@@ -110,7 +115,7 @@ You are an expert social media researcher and content strategist. You have been 
 ${langFilter ? `- ${langFilter}` : ''}
 ${countryFilter ? `- ${countryFilter}` : ''}
 ${clientBlock}
-${prefsBlock}
+${prefsBlock}${knowledgeBlock}
 ## REAL SEARCH DATA
 The following data was gathered from live web searches. Use it as the basis for your analysis. Do NOT make up information — base all insights on this data.
 

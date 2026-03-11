@@ -24,6 +24,7 @@ export interface ClientMemory {
   pastResearch: PastResearch[];
   contentLogs: PastContentLog[];
   strategyExcerpt: string | null;
+  knowledgeSummary: string | null;
 }
 
 /**
@@ -89,7 +90,29 @@ export async function getClientMemory(clientId: string): Promise<ClientMemory> {
     ].filter(Boolean).join('\n\n');
   }
 
-  return { pastResearch, contentLogs, strategyExcerpt };
+  // Fetch knowledge summary
+  // Dynamic import to avoid circular deps
+  const { getKnowledgeEntries, getBrandProfile } = await import('@/lib/knowledge/queries');
+  const knowledgeEntries = await getKnowledgeEntries(clientId);
+  const brandProfile = await getBrandProfile(clientId);
+
+  let knowledgeSummary: string | null = null;
+  if (knowledgeEntries.length > 0 || brandProfile) {
+    const parts: string[] = [];
+    if (brandProfile) {
+      parts.push(`Brand Profile:\n${brandProfile.content.substring(0, 1000)}`);
+    }
+    const counts: Record<string, number> = {};
+    for (const e of knowledgeEntries) {
+      counts[e.type] = (counts[e.type] ?? 0) + 1;
+    }
+    if (Object.keys(counts).length > 0) {
+      parts.push(`Knowledge entries: ${Object.entries(counts).map(([t, c]) => `${c} ${t}(s)`).join(', ')}`);
+    }
+    knowledgeSummary = parts.join('\n\n');
+  }
+
+  return { pastResearch, contentLogs, strategyExcerpt, knowledgeSummary };
 }
 
 /**
@@ -114,6 +137,10 @@ export function formatClientMemoryBlock(memory: ClientMemory): string {
       `- ${l.title} (${l.content_type ?? 'unknown'} on ${l.platform ?? 'unknown'})${l.performance_notes ? ` — ${l.performance_notes}` : ''}`
     );
     sections.push(`<content_produced>\n${logLines.join('\n')}\n</content_produced>`);
+  }
+
+  if (memory.knowledgeSummary) {
+    sections.push(`<knowledge_summary>\n${memory.knowledgeSummary}\n</knowledge_summary>`);
   }
 
   if (sections.length === 0) {
