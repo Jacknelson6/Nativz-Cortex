@@ -101,14 +101,12 @@ function buildGraph(data: KnowledgeGraphData) {
 interface KnowledgeGraphInnerProps {
   clientId: string;
   clientSlug: string;
-  clientName: string;
   initialData: KnowledgeGraphData;
 }
 
 function KnowledgeGraphInner({
   clientId,
   clientSlug,
-  clientName,
   initialData,
 }: KnowledgeGraphInnerProps) {
   const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set());
@@ -230,7 +228,6 @@ function KnowledgeGraphInner({
 interface KnowledgeGraphProps {
   clientId: string;
   clientSlug: string;
-  clientName: string;
   initialData: KnowledgeGraphData;
 }
 

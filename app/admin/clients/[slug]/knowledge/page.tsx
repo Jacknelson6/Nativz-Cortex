@@ -27,7 +27,6 @@ export default async function KnowledgeGraphPage({
     <KnowledgeGraph
       clientId={client.id}
       clientSlug={client.slug}
-      clientName={client.name ?? slug}
       initialData={graphData}
     />
   );

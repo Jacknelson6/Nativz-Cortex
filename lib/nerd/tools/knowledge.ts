@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ToolDefinition } from '../types';
-import { getKnowledgeEntries, getBrandProfile } from '@/lib/knowledge/queries';
+import { getKnowledgeEntries } from '@/lib/knowledge/queries';
 import { generateBrandProfile } from '@/lib/knowledge/brand-profile';
 import { generateVideoIdeas } from '@/lib/knowledge/idea-generator';
 
