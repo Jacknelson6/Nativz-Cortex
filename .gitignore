@@ -50,3 +50,6 @@ next-env.d.ts
 vectors.db
 vectors.db-shm
 vectors.db-wal
+
+# worktrees
+.worktrees/
