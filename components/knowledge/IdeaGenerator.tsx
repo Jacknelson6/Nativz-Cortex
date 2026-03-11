@@ -59,15 +59,15 @@ export function IdeaGenerator({ clientId, clientName }: IdeaGeneratorProps) {
             className="flex-1 rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:ring-1 focus:ring-accent-text"
           />
 
-          <select
+          <input
+            type="number"
+            min={1}
+            max={50}
             value={count}
-            onChange={(e) => setCount(Number(e.target.value))}
-            className="rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-text"
-          >
-            <option value={5}>5 ideas</option>
-            <option value={10}>10 ideas</option>
-            <option value={15}>15 ideas</option>
-          </select>
+            onChange={(e) => setCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+            className="w-24 rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-text"
+            placeholder="# ideas"
+          />
 
           <button
             onClick={handleGenerate}

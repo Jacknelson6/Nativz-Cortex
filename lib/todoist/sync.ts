@@ -176,7 +176,8 @@ export async function syncTodoist(
       }
 
       // New from Todoist — create in Cortex (assigned to creator)
-      const { error } = await admin.from('tasks').insert({
+      // Use upsert with todoist_task_id to prevent duplicates
+      const { error } = await admin.from('tasks').upsert({
         title: tt.content,
         description: tt.description || null,
         status: tt.checked ? 'done' : 'backlog',
@@ -188,7 +189,7 @@ export async function syncTodoist(
         created_by: userId,
         assignee_id: assigneeId,
         task_type: 'other',
-      });
+      }, { onConflict: 'todoist_task_id' });
 
       if (error) {
         result.errors.push(`Import ${tt.content}: ${error.message}`);

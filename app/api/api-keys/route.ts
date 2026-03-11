@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
         scopes: parsed.data.scopes,
         expires_at: parsed.data.expires_at ?? null,
       })
-      .select('id, name, key_prefix, scopes, created_at, expires_at')
+      .select('id, name, key_prefix, scopes, is_active, created_at, expires_at')
       .single();
 
     if (error) {

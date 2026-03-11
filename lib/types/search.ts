@@ -173,6 +173,10 @@ export interface VideoIdea {
   format: string;
   virality: 'low' | 'medium' | 'high' | 'viral_potential';
   why_it_works: string;
+  /** 3-5 bullet script outline / talking points */
+  script_outline?: string[];
+  /** Suggested call-to-action */
+  cta?: string;
 }
 
 // Filter options for the search form

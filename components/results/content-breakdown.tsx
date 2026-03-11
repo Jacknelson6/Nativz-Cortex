@@ -13,7 +13,7 @@ interface ContentBreakdownProps {
 type Tab = 'intentions' | 'categories';
 
 const TAB_LABELS: Record<Tab, string> = {
-  intentions: 'Intentions',
+  intentions: 'Why people watch',
   categories: 'Categories',
 };
 
@@ -56,20 +56,22 @@ export function ContentBreakdown({ data }: ContentBreakdownProps) {
       {/* Items */}
       <div className="mt-4 space-y-3">
         {items.map((item: ContentBreakdownItem) => (
-          <div key={item.name} className="flex items-center gap-3">
-            <span className="w-40 shrink-0 text-sm text-text-secondary">{item.name}</span>
-            <div className="flex-1 h-5 rounded-full bg-surface-hover overflow-hidden">
+          <div key={item.name}>
+            <div className="flex items-baseline justify-between mb-1.5">
+              <span className="text-sm text-text-secondary">{item.name}</span>
+              <div className="flex items-baseline gap-3">
+                <span className="text-xs font-medium text-text-muted tabular-nums">{item.percentage}%</span>
+                <span className="text-xs text-text-muted tabular-nums">
+                  {(item.engagement_rate * 100).toFixed(1)}% ER
+                </span>
+              </div>
+            </div>
+            <div className="h-2 rounded-full bg-surface-hover overflow-hidden">
               <div
                 className="h-full rounded-full bg-accent transition-all duration-500"
                 style={{ width: `${item.percentage}%` }}
               />
             </div>
-            <span className="w-10 text-right text-xs font-medium text-text-secondary">
-              {item.percentage}%
-            </span>
-            <span className="w-14 text-right text-xs text-text-muted">
-              {(item.engagement_rate * 100).toFixed(1)}% ER
-            </span>
           </div>
         ))}
       </div>

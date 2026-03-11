@@ -13,6 +13,13 @@ import { Badge } from '@/components/ui/badge';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 
+/** Extract first valid URL from a string that may have prefixed text (e.g. "April - https://...") */
+function extractUrl(raw: string | null): string | null {
+  if (!raw) return null;
+  const match = raw.match(/https?:\/\/[^\s]+/);
+  return match ? match[0] : raw;
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface PipelineItem {
@@ -700,19 +707,19 @@ export default function PipelineViewComponent({
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1">
                       {item.edited_videos_folder_url && (
-                        <a href={item.edited_videos_folder_url} target="_blank" rel="noopener noreferrer" title="Edited videos folder"
+                        <a href={extractUrl(item.edited_videos_folder_url)!} target="_blank" rel="noopener noreferrer" title="Edited videos folder"
                           className="p-1 rounded hover:bg-surface-hover text-text-muted hover:text-accent-text">
                           <ExternalLink size={12} />
                         </a>
                       )}
                       {item.raws_folder_url && (
-                        <a href={item.raws_folder_url} target="_blank" rel="noopener noreferrer" title="RAWs folder"
+                        <a href={extractUrl(item.raws_folder_url)!} target="_blank" rel="noopener noreferrer" title="RAWs folder"
                           className="p-1 rounded hover:bg-surface-hover text-text-muted hover:text-accent-text">
                           <ExternalLink size={12} />
                         </a>
                       )}
                       {item.later_calendar_link && (
-                        <a href={item.later_calendar_link} target="_blank" rel="noopener noreferrer" title="Calendar link"
+                        <a href={extractUrl(item.later_calendar_link)!} target="_blank" rel="noopener noreferrer" title="Calendar link"
                           className="p-1 rounded hover:bg-surface-hover text-text-muted hover:text-accent-text">
                           <ExternalLink size={12} />
                         </a>

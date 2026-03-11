@@ -26,6 +26,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'client_id is required' }, { status: 400 });
   }
 
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(clientId)) {
+    return NextResponse.json({ error: 'Invalid client_id format' }, { status: 400 });
+  }
+
   let query = admin
     .from('scheduled_posts')
     .select('id, client_id, caption, hashtags, scheduled_at, status, post_type, created_at')
@@ -46,7 +51,9 @@ export async function POST(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;
 
-  const body = await request.json();
+  let body;
+  try { body = await request.json(); }
+  catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
   const parsed = createPostSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });

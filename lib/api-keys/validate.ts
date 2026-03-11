@@ -17,6 +17,7 @@ const SCOPE_MAP: Record<string, string> = {
   search: 'search',
   team: 'team',
   knowledge: 'knowledge',
+  calendar: 'calendar',
 };
 
 function getScopeFromPath(pathname: string): string | null {

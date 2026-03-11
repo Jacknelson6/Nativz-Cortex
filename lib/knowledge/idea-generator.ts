@@ -33,7 +33,7 @@ export async function generateVideoIdeas(config: {
       .from('clients')
       .select('name, industry, target_audience, brand_voice, topic_keywords, preferences')
       .eq('id', clientId)
-      .single()
+      .maybeSingle()
       .then(({ data }) => data),
     admin
       .from('topic_searches')

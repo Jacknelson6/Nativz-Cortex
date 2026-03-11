@@ -28,7 +28,21 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Public routes — no auth needed
-  if (pathname.startsWith('/api/v1/') || pathname.startsWith('/portal/join/') || pathname.startsWith('/api/social/callback/') || pathname.startsWith('/shared/') || pathname.startsWith('/api/shared/')) {
+  if (
+    pathname.startsWith('/api/v1/') ||
+    pathname.startsWith('/portal/join/') ||
+    pathname.startsWith('/api/social/') ||
+    pathname.startsWith('/shared/') ||
+    pathname.startsWith('/api/shared/') ||
+    pathname.startsWith('/api/cron/') ||
+    pathname.startsWith('/api/scheduler/webhooks') ||
+    pathname.startsWith('/api/scheduler/connect/callback') ||
+    pathname.startsWith('/api/calendar/webhook') ||
+    pathname.startsWith('/api/monday/webhook') ||
+    pathname.startsWith('/api/vault/webhook') ||
+    pathname.startsWith('/api/nango/callback') ||
+    pathname.startsWith('/api/google/callback')
+  ) {
     return supabaseResponse;
   }
 
@@ -110,6 +124,6 @@ export const config = {
     '/login',
     '/search/:path*',
     '/history',
-    '/api/v1/:path*',
+    '/api/:path*',
   ],
 };

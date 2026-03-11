@@ -7,7 +7,12 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { GlowButton } from '@/components/ui/glow-button';
 import type { ClientStrategy } from '@/lib/types/strategy';
-import { PdfDownloadButton } from './pdf-download-button';
+import dynamic from 'next/dynamic';
+
+const PdfDownloadButton = dynamic(() => import('./pdf-download-button').then(m => ({ default: m.PdfDownloadButton })), {
+  ssr: false,
+  loading: () => <Button disabled className="opacity-50">Preparing PDF...</Button>,
+});
 import { InviteButton } from '@/components/clients/invite-button';
 
 interface OnboardReviewProps {

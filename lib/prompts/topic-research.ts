@@ -19,6 +19,10 @@ interface TopicResearchConfig {
   } | null;
   brandPreferences?: ClientPreferences | null;
   clientKnowledgeBlock?: string | null;
+  /** Crawled website content (markdown) for brand context */
+  websiteContent?: { url: string; content: string }[] | null;
+  /** Past research, content logs, strategy — from getClientMemory() */
+  clientMemoryBlock?: string | null;
 }
 
 const TIME_RANGE_LABELS: Record<string, string> = {
@@ -99,12 +103,17 @@ export function buildTopicResearchPrompt(config: TopicResearchConfig): string {
     ? `\n## CLIENT KNOWLEDGE\n${config.clientKnowledgeBlock}`
     : '';
 
+  // Website content block (from Cloudflare crawl)
+  const websiteBlock = config.websiteContent?.length
+    ? `\n## CLIENT WEBSITE CONTENT\nThe following was crawled from the client's website. Use it to understand their brand, offerings, and messaging.\n\n${config.websiteContent.map((p) => `### ${p.url}\n${p.content}`).join('\n\n')}\n`
+    : '';
+
   const serpBlock = formatSerpDataBlock(config.serpData);
 
-  return `# TOPIC RESEARCH & CONTENT IDEATION
+  return `# TOPIC RESEARCH — SHORT-FORM VIDEO IDEATION
 
 ## ROLE
-You are an expert social media researcher and content strategist. You have been given real search data gathered from the web about a topic. Your task is to analyze this data, identify trends, sentiment, and engagement patterns, then generate actionable insights and video content ideas.
+You are an expert short-form video strategist specializing in TikTok, Instagram Reels, YouTube Shorts, and Facebook Reels. You have been given real search data gathered from the web about a topic. Your task is to analyze this data, identify trends and engagement patterns, then generate actionable short-form video ideas that a videographer can take straight to set.
 
 ## RESEARCH TOPIC
 "${config.query}"
@@ -115,7 +124,7 @@ You are an expert social media researcher and content strategist. You have been 
 ${langFilter ? `- ${langFilter}` : ''}
 ${countryFilter ? `- ${countryFilter}` : ''}
 ${clientBlock}
-${prefsBlock}${knowledgeBlock}
+${prefsBlock}${knowledgeBlock}${websiteBlock}${config.clientMemoryBlock ? `\n## CLIENT CONTENT HISTORY\nUse the following history to avoid repeating past research and to build on what has worked.\n\n${config.clientMemoryBlock}\n` : ''}
 ## REAL SEARCH DATA
 The following data was gathered from live web searches. Use it as the basis for your analysis. Do NOT make up information — base all insights on this data.
 
@@ -150,7 +159,7 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 
   "content_breakdown": {
     "intentions": [
-      { "name": "Educational", "percentage": 0, "engagement_rate": 0.0 }
+      { "name": "To learn something new", "percentage": 0, "engagement_rate": 0.0 }
     ],
     "categories": [
       { "name": "How-to", "percentage": 0, "engagement_rate": 0.0 }
@@ -179,9 +188,17 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
         {
           "title": "Compelling video title that would work as a TikTok/Reel caption",
           "hook": "The first 3 seconds — what grabs attention immediately",
-          "format": "talking_head | tutorial | reaction | street_interview | before_after | myth_bust | day_in_the_life | ugc_style",
+          "format": "talking_head | tutorial | reaction | street_interview | before_after | myth_bust | day_in_the_life | ugc_style | pov | storytime | hot_take | listicle",
           "virality": "low | medium | high | viral_potential",
-          "why_it_works": "1-2 sentences explaining the psychological or strategic reason this idea would perform well"
+          "why_it_works": "1-2 sentences explaining why this performs well on short-form platforms",
+          "script_outline": [
+            "Hook / opening line (first 1-3 seconds)",
+            "Key point 1",
+            "Key point 2",
+            "Key point 3",
+            "CTA / closing"
+          ],
+          "cta": "Suggested call-to-action (e.g. 'Follow for more', 'Save this for later', 'Drop your take in the comments')"
         }
       ]
     }
@@ -190,7 +207,7 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 
 ## IMPORTANT GUIDELINES
 - Include 5-8 emotions that sum to approximately 100%
-- Include 3-5 items each for intentions, categories, and formats
+- Include 3-5 items each for intentions (viewer motivations — why people watch, e.g. "To learn something new", "For entertainment", "To stay informed", "To feel inspired"), categories, and formats
 - Generate 5-8 trending_topics, each with 2-4 video_ideas
 - Each trending_topic MUST have 2-5 items in its "sources" array
 - **Do NOT invent URLs.** Every URL in sources must be copied exactly from the search data above. If you cannot find a relevant URL, do not include a source entry for it.
@@ -200,7 +217,9 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 - Sentiment scores range from -1.0 (very negative) to 1.0 (very positive). IMPORTANT: Be realistic — NOT every topic is positive. Use the FULL range: negative topics (complaints, frustrations, risks) should be -0.3 to -1.0, neutral/mixed topics should be -0.2 to 0.2, and only genuinely positive topics should be above 0.3. A typical set of 6-8 topics should have a mix of positive, neutral, and negative sentiments.
 - overall_sentiment: a single number from -1.0 to 1.0 representing the overall sentiment across all search data
 - conversation_intensity: "low", "moderate", "high", or "very_high" based on volume and engagement in the search data
-- All video ideas should be specific and actionable — ready to produce
+- All video ideas are for SHORT-FORM VIDEO ONLY (TikTok, Instagram Reels, YouTube Shorts, Facebook Reels). No long-form video, no blog posts, no articles, no written content.
+- Each video idea MUST include "script_outline" (3-5 bullet talking points) and "cta" (call-to-action)
+- All video ideas should be specific and actionable — ready to produce on set
 - engagement_rate should be a decimal between 0 and 1 (e.g., 0.045 for 4.5%)${config.brandPreferences ? `
 - BRAND PREFERENCES ARE HARD CONSTRAINTS: If <brand_context> is present above, you MUST follow it. Topics listed under "avoid" must NOT appear in any trending topic or video idea. Topics listed under "lean into" should be prioritized. Tone keywords must influence the style of all video titles and hooks. Seasonal priorities should be weighted if relevant to the current date.` : ''}`;
 }

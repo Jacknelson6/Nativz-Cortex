@@ -2,13 +2,12 @@
 
 import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
+import { ClientSelector } from '@/components/search/client-selector';
 import { IdeaGenerator } from './IdeaGenerator';
 
 interface Client {
   id: string;
   name: string;
-  slug: string;
-  logo_url: string | null;
 }
 
 interface IdeaGeneratorWithClientSelectorProps {
@@ -16,7 +15,7 @@ interface IdeaGeneratorWithClientSelectorProps {
 }
 
 export function IdeaGeneratorWithClientSelector({ clients }: IdeaGeneratorWithClientSelectorProps) {
-  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   const selectedClient = clients.find((c) => c.id === selectedClientId);
 
@@ -37,22 +36,13 @@ export function IdeaGeneratorWithClientSelector({ clients }: IdeaGeneratorWithCl
         </div>
 
         <div className="bg-surface rounded-xl border border-nativz-border p-4">
-          <label htmlFor="client-select" className="block text-sm font-medium text-text-secondary mb-2">
+          <label className="block text-sm font-medium text-text-secondary mb-2">
             Select a client
           </label>
-          <select
-            id="client-select"
+          <ClientSelector
             value={selectedClientId}
-            onChange={(e) => setSelectedClientId(e.target.value)}
-            className="w-full max-w-sm rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/40 transition-colors"
-          >
-            <option value="">Choose a client...</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
+            onChange={setSelectedClientId}
+          />
         </div>
       </div>
 

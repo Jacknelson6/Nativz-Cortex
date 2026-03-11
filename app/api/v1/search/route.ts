@@ -9,11 +9,17 @@ const searchSchema = z.object({
   search_mode: z.enum(['quick', 'deep']).optional().default('quick'),
 });
 
+export async function GET() {
+  return NextResponse.json({ error: 'Use POST to trigger a search' }, { status: 405 });
+}
+
 export async function POST(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;
 
-  const body = await request.json();
+  let body;
+  try { body = await request.json(); }
+  catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
   const parsed = searchSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });

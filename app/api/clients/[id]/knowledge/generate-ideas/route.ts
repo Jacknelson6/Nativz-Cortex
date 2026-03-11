@@ -5,7 +5,7 @@ import { generateVideoIdeas } from '@/lib/knowledge/idea-generator';
 
 const ideaSchema = z.object({
   concept: z.string().optional(),
-  count: z.number().min(1).max(20).default(10),
+  count: z.number().min(1).max(50).default(10),
 });
 
 export async function POST(
@@ -36,7 +36,8 @@ export async function POST(
 
     return NextResponse.json({ ideas });
   } catch (error) {
-    console.error('POST /api/clients/[id]/knowledge/generate-ideas error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('POST /api/clients/[id]/knowledge/generate-ideas error:', message, error);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

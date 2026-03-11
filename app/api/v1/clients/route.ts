@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient();
   const { data: clients, error } = await admin
     .from('clients')
-    .select('id, name, slug, abbreviation, agency, services, health_score, is_active, industry, website_url, logo_url')
+    .select('id, name, slug, agency, services, health_score, is_active, industry, website_url, logo_url')
     .order('name');
 
   if (error) {
@@ -39,7 +39,9 @@ export async function POST(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;
 
-  const body = await request.json();
+  let body;
+  try { body = await request.json(); }
+  catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
   const parsed = onboardSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });

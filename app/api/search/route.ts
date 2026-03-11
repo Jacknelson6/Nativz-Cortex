@@ -11,6 +11,9 @@ import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
 import type { TopicSearchAIResponse } from '@/lib/types/search';
 import type { BraveSerpData } from '@/lib/brave/types';
 import { createNotification } from '@/lib/notifications/create';
+import { crawlWebsite } from '@/lib/cloudflare/crawl';
+import { getClientMemory, formatClientMemoryBlock } from '@/lib/vault/content-memory';
+import type { ClientPreferences } from '@/lib/types/database';
 
 export const maxDuration = 300;
 
@@ -75,12 +78,16 @@ export async function POST(request: NextRequest) {
     // Use admin client for DB operations (bypasses RLS)
     const adminClient = createAdminClient();
 
-    // Fetch optional client context
+    // Fetch optional client context + preferences + memory
     let clientContext = null;
+    let brandPreferences: ClientPreferences | null = null;
+    let websiteContent: { url: string; content: string }[] | null = null;
+    let clientMemoryBlock: string | null = null;
+
     if (client_id) {
       const { data: client } = await adminClient
         .from('clients')
-        .select('name, industry, target_audience, brand_voice, topic_keywords, website_url')
+        .select('name, industry, target_audience, brand_voice, topic_keywords, website_url, preferences')
         .eq('id', client_id)
         .single();
 
@@ -93,6 +100,19 @@ export async function POST(request: NextRequest) {
           topicKeywords: client.topic_keywords,
           websiteUrl: client.website_url,
         };
+        brandPreferences = (client.preferences as ClientPreferences) ?? null;
+
+        // Fetch client content history (past research, content logs, strategy)
+        const memory = await getClientMemory(client_id);
+        const memBlock = formatClientMemoryBlock(memory);
+        if (!memBlock.includes('No previous content history')) {
+          clientMemoryBlock = memBlock;
+        }
+
+        // For brand strategy searches, crawl the client website for deeper context
+        if (search_mode === 'client_strategy' && client.website_url) {
+          websiteContent = await crawlWebsite(client.website_url);
+        }
       }
     }
 
@@ -141,6 +161,9 @@ export async function POST(request: NextRequest) {
           country,
           serpData,
           clientContext,
+          brandPreferences,
+          websiteContent,
+          clientMemoryBlock,
         });
       } else {
         prompt = buildTopicResearchPrompt({
@@ -151,6 +174,9 @@ export async function POST(request: NextRequest) {
           country,
           serpData,
           clientContext,
+          brandPreferences,
+          websiteContent,
+          clientMemoryBlock,
         });
       }
 

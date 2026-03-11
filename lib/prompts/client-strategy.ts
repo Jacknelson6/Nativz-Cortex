@@ -18,6 +18,10 @@ interface ClientStrategyConfig {
     websiteUrl?: string | null;
   };
   brandPreferences?: ClientPreferences | null;
+  /** Crawled website content (markdown) for brand context */
+  websiteContent?: { url: string; content: string }[] | null;
+  /** Past research, content logs, strategy — from getClientMemory() */
+  clientMemoryBlock?: string | null;
 }
 
 const TIME_RANGE_LABELS: Record<string, string> = {
@@ -90,12 +94,17 @@ export function buildClientStrategyPrompt(config: ClientStrategyConfig): string 
       ) + '\n'
     : '';
 
+  // Website content block (from Cloudflare crawl)
+  const websiteBlock = config.websiteContent?.length
+    ? `\n## CLIENT WEBSITE CONTENT\nThe following was crawled from ${ctx.name}'s website. Use it to deeply understand their brand, products, services, and messaging style.\n\n${config.websiteContent.map((p) => `### ${p.url}\n${p.content}`).join('\n\n')}\n`
+    : '';
+
   const serpBlock = formatSerpDataBlock(config.serpData);
 
-  return `# CLIENT STRATEGY — BRAND-SPECIFIC CONTENT RESEARCH
+  return `# CLIENT STRATEGY — SHORT-FORM VIDEO CONTENT RESEARCH
 
 ## ROLE
-You are an expert social media strategist working with a specific brand. Analyze the search data through the lens of this brand — what's relevant to THEIR audience, what content pillars they should build, and how trending topics connect to their brand positioning.
+You are an expert short-form video strategist specializing in TikTok, Instagram Reels, YouTube Shorts, and Facebook Reels. You work with a specific brand. Analyze the search data through the lens of this brand — what's relevant to THEIR audience, what content pillars they should build, and how trending topics connect to their brand. All content ideas are strictly for short-form video.
 
 ## RESEARCH TOPIC
 "${config.query}"
@@ -113,7 +122,7 @@ ${countryFilter ? `- ${countryFilter}` : ''}
 - Target audience: ${ctx.targetAudience || 'General'}
 - Brand voice: ${ctx.brandVoice || 'Not specified'}
 ${keywordsLine}
-${prefsBlock}
+${prefsBlock}${websiteBlock}${config.clientMemoryBlock ? `\n## CLIENT CONTENT HISTORY\nUse the following history to avoid repeating past research, differentiate new ideas, and build on what has worked for ${ctx.name}.\n\n${config.clientMemoryBlock}\n` : ''}
 ## REAL SEARCH DATA
 The following data was gathered from live web searches. Use it as the basis for your analysis. Do NOT make up information — base all insights on this data.
 
@@ -151,7 +160,7 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 
   "content_breakdown": {
     "intentions": [
-      { "name": "Educational", "percentage": 0, "engagement_rate": 0.0 }
+      { "name": "To learn something new", "percentage": 0, "engagement_rate": 0.0 }
     ],
     "categories": [
       { "name": "How-to", "percentage": 0, "engagement_rate": 0.0 }
@@ -180,9 +189,17 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
         {
           "title": "Video title tailored to ${ctx.name}'s voice",
           "hook": "Opening hook that matches ${ctx.name}'s brand voice",
-          "format": "talking_head | tutorial | reaction | street_interview | before_after | myth_bust | day_in_the_life | ugc_style",
+          "format": "talking_head | tutorial | reaction | street_interview | before_after | myth_bust | day_in_the_life | ugc_style | pov | storytime | hot_take | listicle",
           "virality": "low | medium | high | viral_potential",
-          "why_it_works": "Why this works specifically for ${ctx.name}'s audience"
+          "why_it_works": "Why this works specifically for ${ctx.name}'s audience",
+          "script_outline": [
+            "Hook / opening line (first 1-3 seconds)",
+            "Key point 1",
+            "Key point 2",
+            "Key point 3",
+            "CTA / closing"
+          ],
+          "cta": "Suggested call-to-action for ${ctx.name}'s audience"
         }
       ]
     }
@@ -209,13 +226,15 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 
 ## IMPORTANT GUIDELINES
 - Include 5-8 emotions that sum to approximately 100%
-- Include 3-5 items each for intentions, categories, and formats
+- Include 3-5 items each for intentions (viewer motivations — why people watch, e.g. "To learn something new", "For entertainment", "To stay informed", "To feel inspired"), categories, and formats
 - Generate 5-8 trending_topics, each with 2-4 video_ideas
 - Each trending_topic MUST have 2-5 items in its "sources" array
 - **Do NOT invent URLs.** Every URL in sources must be copied exactly from the search data above.
 - Include 3-5 content_pillars specific to ${ctx.name}
 - niche_performance_insights should have 3-5 formats, 3-5 hooks
 - brand_alignment_notes should directly reference ${ctx.name}'s industry and audience
+- All video ideas are for SHORT-FORM VIDEO ONLY (TikTok, Instagram Reels, YouTube Shorts, Facebook Reels). No long-form video, no blog posts, no articles, no written content.
+- Each video idea MUST include "script_outline" (3-5 bullet talking points) and "cta" (call-to-action)
 - All video ideas should match ${ctx.name}'s brand voice: ${ctx.brandVoice || 'professional and approachable'}
 - Emotion colors: #6366F1 indigo, #10B981 emerald, #F59E0B amber, #EF4444 red, #8B5CF6 purple, #3B82F6 blue, #EC4899 pink, #14B8A6 teal
 - Resonance values: "low", "medium", "high", or "viral"
