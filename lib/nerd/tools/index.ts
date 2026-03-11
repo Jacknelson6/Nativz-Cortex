@@ -9,6 +9,7 @@ import { moodboardTools } from './moodboard';
 import { notificationTools } from './notifications';
 import { analyticsTools } from './analytics';
 import { affiliateTools } from './affiliates';
+import { knowledgeTools } from './knowledge';
 
 /** Register all tool domains. Call once at startup. */
 export function registerAllTools() {
@@ -22,4 +23,5 @@ export function registerAllTools() {
   registerTools(notificationTools);
   registerTools(analyticsTools);
   registerTools(affiliateTools);
+  registerTools(knowledgeTools);
 }

@@ -14,6 +14,7 @@ import {
   CheckSquare,
   Send,
   Workflow,
+  Sparkles,
   BotMessageSquare,
   ChevronRight,
   Share2,
@@ -64,6 +65,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/scheduler', label: 'Scheduler', icon: Send },
       { href: '/admin/moodboard', label: 'Moodboard', icon: Layers },
       { href: '/admin/search/new', label: 'Search', icon: Search },
+      { href: '/admin/ideas/generate', label: 'Idea generator', icon: Sparkles },
     ],
   },
   {
@@ -87,6 +89,9 @@ const NAV_SECTIONS: NavSection[] = [
 function isActivePath(pathname: string, href: string) {
   if (href === '/admin/search/new') {
     return pathname.startsWith('/admin/search');
+  }
+  if (href === '/admin/ideas/generate') {
+    return pathname.startsWith('/admin/ideas');
   }
   return pathname === href || pathname.startsWith(href + '/');
 }

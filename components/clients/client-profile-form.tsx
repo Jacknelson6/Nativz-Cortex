@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Building2, Save, Sparkles,
   Clock, Pencil, X, Settings2, ExternalLink, DollarSign,
+  BookOpen, Lightbulb, Wand2,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +24,7 @@ import { ProfileField, TagField, SectionLabel } from './client-profile-fields';
 import { ClientActivityCards } from './client-activity-cards';
 import { PortalAccessCard, DangerZone } from './client-settings-section';
 import { UpPromoteIntegrationCard } from './uppromote-integration-card';
+import { KnowledgeActions } from '@/components/knowledge/KnowledgeActions';
 import type { ClientStrategy } from '@/lib/types/strategy';
 import type { ClientPreferences } from '@/lib/types/database';
 
@@ -235,6 +237,40 @@ export function ClientProfileForm({
           </div>
         </div>
 
+        {/* Quick navigation */}
+        {!inModal && (
+          <nav className="flex items-center gap-1 border-b border-nativz-border-light pb-3 -mt-2">
+            <Link
+              href={`/admin/clients/${slug}/knowledge`}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            >
+              <BookOpen size={14} />
+              Knowledge
+            </Link>
+            <Link
+              href={`/admin/clients/${slug}/ideas`}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            >
+              <Lightbulb size={14} />
+              Ideas
+            </Link>
+            <Link
+              href={`/admin/clients/${slug}/ideas/generate`}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            >
+              <Wand2 size={14} />
+              Idea generator
+            </Link>
+            <Link
+              href={`/admin/clients/${slug}/settings`}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            >
+              <Settings2 size={14} />
+              Settings
+            </Link>
+          </nav>
+        )}
+
         {editingLogo && (
           <Card className="max-w-xs">
             <div className="flex items-center justify-between mb-3">
@@ -414,6 +450,28 @@ export function ClientProfileForm({
 
       {/* Content strategy */}
       <ClientStrategyCard clientId={clientId} clientName={clientName} initialStrategy={initialStrategy} />
+
+      {/* Knowledge */}
+      <SectionLabel icon={BookOpen} label="Knowledge" />
+      <Card>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-text-primary">Client knowledge base</h2>
+            <p className="text-sm text-text-muted mt-0.5">
+              Brand profile, scraped content, and knowledge graph for AI-powered insights.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <KnowledgeActions clientId={clientId} hasWebsite={!!websiteUrl.trim()} />
+            <Link href={`/admin/clients/${slug}/knowledge`}>
+              <Button size="sm" variant="outline">
+                <BookOpen size={14} />
+                View knowledge
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </Card>
 
       {/* Activity */}
       <SectionLabel icon={Clock} label="Activity" />

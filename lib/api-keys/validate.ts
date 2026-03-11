@@ -16,12 +16,17 @@ const SCOPE_MAP: Record<string, string> = {
   posts: 'scheduler',
   search: 'search',
   team: 'team',
+  knowledge: 'knowledge',
 };
 
 function getScopeFromPath(pathname: string): string | null {
   // /api/v1/tasks/... → "tasks"
-  const segment = pathname.replace('/api/v1/', '').split('/')[0];
-  return SCOPE_MAP[segment] ?? null;
+  const segments = pathname.replace('/api/v1/', '').split('/');
+  // Check for nested resource scopes: /clients/:id/knowledge → "knowledge"
+  if (segments[0] === 'clients' && segments.length >= 3 && SCOPE_MAP[segments[2]]) {
+    return SCOPE_MAP[segments[2]];
+  }
+  return SCOPE_MAP[segments[0]] ?? null;
 }
 
 export async function validateApiKey(

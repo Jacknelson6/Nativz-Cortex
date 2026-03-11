@@ -176,6 +176,13 @@ export async function POST(req: NextRequest) {
             if (pillars.length) parts.push(`Content Pillars: ${pillars.map(p => p.name).join(', ')}`);
           }
 
+          // Fetch brand profile from knowledge system
+          const { getBrandProfile } = await import('@/lib/knowledge/queries');
+          const brandProfile = await getBrandProfile(client.id);
+          if (brandProfile) {
+            parts.push(`\nBrand Profile:\n${brandProfile.content.substring(0, 2000)}`);
+          }
+
           clientContexts += '\n\n---\n\n' + parts.join('\n');
         }
       }
