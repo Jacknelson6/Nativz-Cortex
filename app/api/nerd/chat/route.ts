@@ -138,6 +138,30 @@ function buildClientSummary(c: ClientRow, profiles: SocialProfileRow[], strategy
   return parts.join('\n');
 }
 
+async function buildKnowledgeSummary(clientId: string): Promise<string> {
+  try {
+    const { getKnowledgeEntries, getBrandProfile } = await import('@/lib/knowledge/queries');
+    const entries = await getKnowledgeEntries(clientId);
+    if (entries.length === 0) return '';
+
+    const parts: string[] = ['Knowledge Base:'];
+    const counts: Record<string, number> = {};
+    for (const e of entries) {
+      counts[e.type] = (counts[e.type] ?? 0) + 1;
+    }
+    parts.push(`  Entries: ${Object.entries(counts).map(([t, c]) => `${c} ${t}(s)`).join(', ')}`);
+
+    const brandProfile = await getBrandProfile(clientId);
+    if (brandProfile) {
+      parts.push(`  Brand Profile: ${brandProfile.content.substring(0, 300)}...`);
+    }
+
+    return parts.join('\n');
+  } catch {
+    return '';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
@@ -228,9 +252,25 @@ export async function POST(req: NextRequest) {
       buildClientSummary(c, profilesByClient.get(c.id) ?? [], strategyByClient.get(c.id) ?? null),
     );
 
+    // Enrich mentioned clients with knowledge context
+    const mentionedClientIds = new Set(
+      (mentions ?? []).filter((m) => m.type === 'client').map((m) => m.id),
+    );
+    const knowledgeSummaries = await Promise.all(
+      allClients
+        .filter((c) => mentionedClientIds.has(c.id))
+        .map(async (c) => ({ id: c.id, summary: await buildKnowledgeSummary(c.id) })),
+    );
+    const knowledgeByClient = new Map(knowledgeSummaries.map((k) => [k.id, k.summary]));
+
+    const enrichedSummaries = allClients.map((c, i) => {
+      const knowledge = knowledgeByClient.get(c.id);
+      return knowledge ? `${clientSummaries[i]}\n${knowledge}` : clientSummaries[i];
+    });
+
     const teamContext = (teamMembers ?? []).map((t) => `- ${t.full_name} (id: ${t.id}, role: ${t.role ?? 'team member'})`).join('\n');
 
-    let portfolioContext = `# Nativz Client Portfolio (${allClients.length} active clients)\n\n${clientSummaries.join('\n\n---\n\n')}`;
+    let portfolioContext = `# Nativz Client Portfolio (${allClients.length} active clients)\n\n${enrichedSummaries.join('\n\n---\n\n')}`;
     portfolioContext += `\n\n# Team Members\n${teamContext}`;
 
     // Add mention context if present
