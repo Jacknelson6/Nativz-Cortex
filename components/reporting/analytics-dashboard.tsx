@@ -1,13 +1,17 @@
 'use client';
 
-import { RefreshCw } from 'lucide-react';
-import { Select } from '@/components/ui/select';
+import { useState } from 'react';
+import dynamic from 'next/dynamic';
+import { RefreshCw, Download } from 'lucide-react';
+import { ComboSelect } from '@/components/ui/combo-select';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useReportingData } from './hooks/use-reporting-data';
 import { DateRangePicker } from './date-range-picker';
 import { SummaryView } from './summary-view';
 import { TopPostsView } from './top-posts-view';
+
+const ReportBuilder = dynamic(() => import('./report-builder').then(m => ({ default: m.ReportBuilder })));
 
 const viewTabs: { value: 'summary' | 'top-posts'; label: string }[] = [
   { value: 'summary', label: 'Performance summary' },
@@ -17,10 +21,14 @@ const viewTabs: { value: 'summary' | 'top-posts'; label: string }[] = [
 export function AnalyticsDashboard() {
   const {
     clients,
+    selectedClient,
     selectedClientId,
     setSelectedClientId,
     datePreset,
     setDatePreset,
+    customRange,
+    setCustomRange,
+    dateRange,
     activeView,
     setActiveView,
     topPostsLimit,
@@ -31,7 +39,10 @@ export function AnalyticsDashboard() {
     dataLoading,
     syncing,
     syncNow,
+    fetchTopPostsForReport,
   } = useReportingData();
+
+  const [reportOpen, setReportOpen] = useState(false);
 
   if (loading) {
     return (
@@ -56,11 +67,12 @@ export function AnalyticsDashboard() {
       {/* Header row */}
       <div className="flex flex-wrap items-end gap-4">
         <div className="w-64">
-          <Select
+          <ComboSelect
             label="Client"
             options={clientOptions}
             value={selectedClientId}
-            onChange={(e) => setSelectedClientId(e.target.value)}
+            onChange={setSelectedClientId}
+            placeholder="Select a client…"
           />
         </div>
         <Button
@@ -72,6 +84,15 @@ export function AnalyticsDashboard() {
           <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
           Sync now
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setReportOpen(true)}
+          disabled={!selectedClientId}
+        >
+          <Download size={14} />
+          Download report
+        </Button>
       </div>
 
       {!selectedClientId ? (
@@ -82,7 +103,12 @@ export function AnalyticsDashboard() {
         <>
           {/* Controls row */}
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <DateRangePicker value={datePreset} onChange={setDatePreset} />
+            <DateRangePicker
+              value={datePreset}
+              onChange={setDatePreset}
+              customRange={customRange}
+              onCustomRangeChange={setCustomRange}
+            />
 
             <div className="inline-flex rounded-lg bg-surface-hover/50 p-1">
               {viewTabs.map((tab) => (
@@ -113,6 +139,21 @@ export function AnalyticsDashboard() {
             />
           )}
         </>
+      )}
+
+      {/* Report builder modal */}
+      {selectedClient && (
+        <ReportBuilder
+          open={reportOpen}
+          onClose={() => setReportOpen(false)}
+          clientName={selectedClient.name}
+          clientId={selectedClient.id}
+          agency={selectedClient.agency}
+          logoUrl={selectedClient.logo_url}
+          dateRange={dateRange}
+          summary={summary}
+          fetchTopPostsForReport={fetchTopPostsForReport}
+        />
       )}
     </div>
   );

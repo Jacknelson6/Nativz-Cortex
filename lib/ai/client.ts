@@ -59,6 +59,9 @@ export async function createCompletion(options: CompletionOptions): Promise<AICo
   if (!response.ok) {
     const errorBody = await response.text();
     console.error('OpenRouter API error:', response.status, errorBody.substring(0, 500));
+    if (response.status === 402) {
+      throw new Error('AI credits exhausted. Add credits at openrouter.ai/settings/credits');
+    }
     throw new Error(`OpenRouter API error (${response.status}): ${errorBody.substring(0, 300)}`);
   }
 

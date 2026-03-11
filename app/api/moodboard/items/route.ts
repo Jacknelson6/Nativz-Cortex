@@ -4,6 +4,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import * as cheerio from 'cheerio';
 
+export const maxDuration = 30;
+
 const createItemSchema = z.object({
   board_id: z.string().uuid('Invalid board ID'),
   url: z.string().url('Invalid URL'),
@@ -33,67 +35,73 @@ async function fetchTikTokMetadata(url: string): Promise<QuickMetadata> {
     stats: null, music: null, duration: null, hashtags: [], video_url: null,
   };
 
-  // Try tikwm (4s timeout)
-  try {
-    const res = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`, {
-      signal: AbortSignal.timeout(4000),
-    });
-    if (res.ok) {
-      const json = await res.json();
-      if (json.code === 0 && json.data) {
-        const d = json.data;
-        result.title = d.title || null;
-        result.thumbnail_url = d.cover || d.origin_cover || null;
-        result.author_name = d.author?.nickname || null;
-        result.author_handle = d.author?.unique_id || null;
-        result.duration = d.duration || null;
-        result.music = d.music_info?.title ?? d.music ?? null;
-        result.video_url = d.play || null;
-        const s = d.statistics ?? {};
-        result.stats = {
-          views: s.playCount ?? d.play_count ?? 0,
-          likes: s.diggCount ?? d.digg_count ?? 0,
-          comments: s.commentCount ?? d.comment_count ?? 0,
-          shares: s.shareCount ?? d.share_count ?? 0,
-        };
-        const hashtagMatches = (d.title || '').match(/#\w+/g);
-        result.hashtags = hashtagMatches ? hashtagMatches.map((h: string) => h.replace('#', '')) : [];
-        if (result.thumbnail_url) return result;
-      }
-    }
-  } catch { /* tikwm failed */ }
+  // Run all three sources in parallel with a 6s overall timeout
+  const tikwmPromise = fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`, {
+    signal: AbortSignal.timeout(6000),
+  }).then(async (res) => {
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.code !== 0 || !json.data) return null;
+    return json.data;
+  }).catch(() => null);
 
-  // Try oEmbed (4s timeout)
-  try {
-    const res = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`, {
-      signal: AbortSignal.timeout(4000),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      result.title = result.title || data.title || null;
-      result.thumbnail_url = result.thumbnail_url || data.thumbnail_url || null;
-      result.author_name = result.author_name || data.author_name || null;
-      result.author_handle = result.author_handle || data.author_unique_id || null;
-      if (result.thumbnail_url) return result;
-    }
-  } catch { /* oembed failed */ }
+  const oembedPromise = fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`, {
+    signal: AbortSignal.timeout(5000),
+  }).then(async (res) => {
+    if (!res.ok) return null;
+    return res.json();
+  }).catch(() => null);
 
-  // Try HTML scrape with __UNIVERSAL_DATA_FOR_REHYDRATION__ (5s timeout)
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(5000),
-    });
-    if (res.ok) {
-      const html = await res.text();
-      const $ = cheerio.load(html);
+  const scrapePromise = fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(5000),
+  }).then(async (res) => {
+    if (!res.ok) return null;
+    return res.text();
+  }).catch(() => null);
 
-      // Try __UNIVERSAL_DATA_FOR_REHYDRATION__ first (richest data)
+  const [tikwmData, oembedData, htmlText] = await Promise.all([tikwmPromise, oembedPromise, scrapePromise]);
+
+  // Merge tikwm data (richest source)
+  if (tikwmData) {
+    const d = tikwmData;
+    result.title = d.title || null;
+    result.thumbnail_url = d.cover || d.origin_cover || null;
+    result.author_name = d.author?.nickname || null;
+    result.author_handle = d.author?.unique_id || null;
+    result.duration = d.duration || null;
+    result.music = d.music_info?.title ?? d.music ?? null;
+    result.video_url = d.play || null;
+    const s = d.statistics ?? {};
+    result.stats = {
+      views: s.playCount ?? d.play_count ?? 0,
+      likes: s.diggCount ?? d.digg_count ?? 0,
+      comments: s.commentCount ?? d.comment_count ?? 0,
+      shares: s.shareCount ?? d.share_count ?? 0,
+    };
+    const hashtagMatches = (d.title || '').match(/#\w+/g);
+    result.hashtags = hashtagMatches ? hashtagMatches.map((h: string) => h.replace('#', '')) : [];
+  }
+
+  // Fill gaps with oEmbed data
+  if (oembedData) {
+    result.title = result.title || oembedData.title || null;
+    result.thumbnail_url = result.thumbnail_url || oembedData.thumbnail_url || null;
+    result.author_name = result.author_name || oembedData.author_name || null;
+    result.author_handle = result.author_handle || oembedData.author_unique_id || null;
+  }
+
+  // Fill gaps with HTML scrape
+  if (htmlText) {
+    try {
+      const $ = cheerio.load(htmlText);
+
+      // Try __UNIVERSAL_DATA_FOR_REHYDRATION__ (richest embedded data)
       let universalData: Record<string, unknown> | null = null;
       $('script#__UNIVERSAL_DATA_FOR_REHYDRATION__').each((_i, el) => {
         try { universalData = JSON.parse($(el).html() || ''); } catch { /* ignore */ }
@@ -122,7 +130,6 @@ async function fetchTikTokMetadata(url: string): Promise<QuickMetadata> {
             if (videoDetail.music?.title) {
               result.music = result.music || videoDetail.music.title;
             }
-            // Extract hashtags from textExtra if available
             if (!result.hashtags.length && videoDetail.textExtra) {
               result.hashtags = videoDetail.textExtra
                 .filter((t: { hashtagName?: string }) => t.hashtagName)
@@ -141,8 +148,8 @@ async function fetchTikTokMetadata(url: string): Promise<QuickMetadata> {
         const ogTitle = $('meta[property="og:title"]').attr('content');
         result.title = ogDesc || ogTitle || null;
       }
-    }
-  } catch { /* scrape failed */ }
+    } catch { /* HTML parsing failed */ }
+  }
 
   return result;
 }
@@ -372,10 +379,7 @@ export async function POST(request: NextRequest) {
       status: 'completed',
       width: (detectedPlatform === 'tiktok' || detectedPlatform === 'instagram' || detectedPlatform === 'facebook') ? 240 : 320,
     };
-    // Store video_url in a metadata field if we got one (useful for later transcription)
-    if (videoUrl) {
-      insertData.metadata = { video_url: videoUrl };
-    }
+    // Note: video_url from tikwm is not persisted — transcription fetches it independently
     if (parsed.data.width !== undefined) insertData.width = parsed.data.width;
     if (parsed.data.height !== undefined) insertData.height = parsed.data.height;
 

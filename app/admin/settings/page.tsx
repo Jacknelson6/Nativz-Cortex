@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { toast } from 'sonner';
 import {
   Save,
@@ -28,6 +29,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { AvatarEditor } from '@/components/ui/avatar-editor';
+import { NotificationPreferencesSection } from '@/components/settings/notification-preferences';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,9 +49,8 @@ interface UserData {
 const SECTIONS = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'scheduling', label: 'Scheduling Links', icon: LinkIcon },
-  { id: 'todoist', label: 'Todoist', icon: CheckSquare },
+  { id: 'connections', label: 'Connections', icon: LinkIcon },
   { id: 'api-keys', label: 'API keys', icon: Key },
-  { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'team', label: 'Team', icon: Users },
   { id: 'security', label: 'Security', icon: KeyRound },
@@ -73,9 +74,7 @@ export default function AdminSettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Notification preferences
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [inAppNotifications, setInAppNotifications] = useState(true);
+  // Notification preferences are now managed by NotificationPreferencesSection
 
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -299,29 +298,31 @@ export default function AdminSettingsPage() {
           <SchedulingLinksSection />
         </div>
 
-        {/* Todoist Integration */}
-        <div id="todoist" ref={(el) => { sectionRefs.current['todoist'] = el; }}>
-          <h2 className="text-base font-semibold text-text-primary mb-4">Todoist</h2>
-          <TodoistSection
-            connected={!!user.todoist_api_key}
-            projectId={user.todoist_project_id}
-            syncedAt={user.todoist_synced_at}
-            onConnectionChange={(connected) =>
-              setUser((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      todoist_api_key: connected ? 'connected' : null,
-                      todoist_project_id: connected ? prev.todoist_project_id : null,
-                      todoist_synced_at: connected ? prev.todoist_synced_at : null,
-                    }
-                  : prev,
-              )
-            }
-            onSyncComplete={(syncedAt) =>
-              setUser((prev) => (prev ? { ...prev, todoist_synced_at: syncedAt } : prev))
-            }
-          />
+        {/* Connections */}
+        <div id="connections" ref={(el) => { sectionRefs.current['connections'] = el; }}>
+          <h2 className="text-base font-semibold text-text-primary mb-4">Connections</h2>
+          <div className="space-y-4">
+            <TodoistSection
+              connected={!!user.todoist_api_key}
+              projectId={user.todoist_project_id}
+              syncedAt={user.todoist_synced_at}
+              onConnectionChange={(connected) =>
+                setUser((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        todoist_api_key: connected ? 'connected' : null,
+                        todoist_project_id: connected ? prev.todoist_project_id : null,
+                        todoist_synced_at: connected ? prev.todoist_synced_at : null,
+                      }
+                    : prev,
+                )
+              }
+              onSyncComplete={(syncedAt) =>
+                setUser((prev) => (prev ? { ...prev, todoist_synced_at: syncedAt } : prev))
+              }
+            />
+          </div>
         </div>
 
         {/* API Keys */}
@@ -330,39 +331,10 @@ export default function AdminSettingsPage() {
           <ApiKeysSection />
         </div>
 
-        {/* Calendar Integration */}
-        <div id="calendar" ref={(el) => { sectionRefs.current['calendar'] = el; }}>
-          <h2 className="text-base font-semibold text-text-primary mb-4">Google Calendar</h2>
-          <GoogleCalendarSection
-            connected={!!user.nango_connection_id}
-            onConnectionChange={(connected) =>
-              setUser((prev) =>
-                prev ? { ...prev, nango_connection_id: connected ? 'connected' : null } : prev,
-              )
-            }
-          />
-        </div>
-
         {/* Notifications */}
         <div id="notifications" ref={(el) => { sectionRefs.current['notifications'] = el; }}>
           <h2 className="text-base font-semibold text-text-primary mb-4">Notifications</h2>
-          <Card>
-            <div className="space-y-4">
-              <ToggleRow
-                label="In-app notifications"
-                description="Show notification bell alerts in Cortex"
-                checked={inAppNotifications}
-                onChange={setInAppNotifications}
-              />
-              <div className="border-t border-nativz-border" />
-              <ToggleRow
-                label="Email notifications"
-                description="Receive email alerts for important events"
-                checked={emailNotifications}
-                onChange={setEmailNotifications}
-              />
-            </div>
-          </Card>
+          <NotificationPreferencesSection />
         </div>
 
         {/* Team */}
@@ -647,14 +619,8 @@ function GoogleCalendarSection({
   return (
     <Card>
       <div className="flex items-center gap-3">
-        <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-            connected
-              ? 'bg-emerald-500/15 text-emerald-400'
-              : 'bg-surface-hover text-text-muted'
-          }`}
-        >
-          <Calendar size={18} />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-hover">
+          <Image src="/icons/google-calendar.svg" alt="Google Calendar" width={22} height={22} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -852,14 +818,8 @@ function TodoistSection({
   return (
     <Card>
       <div className="flex items-center gap-3">
-        <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-            connected
-              ? 'bg-red-500/15 text-red-400'
-              : 'bg-surface-hover text-text-muted'
-          }`}
-        >
-          <CheckSquare size={18} />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-hover">
+          <Image src="/icons/todoist.svg" alt="Todoist" width={22} height={22} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -992,7 +952,7 @@ interface ApiKeyData {
   plaintext?: string;
 }
 
-const ALL_SCOPES = ['tasks', 'clients', 'shoots', 'scheduler', 'search', 'team', 'calendar'] as const;
+const ALL_SCOPES = ['tasks', 'clients', 'shoots', 'scheduler', 'search', 'team'] as const;
 
 function ApiKeysSection() {
   const [keys, setKeys] = useState<ApiKeyData[]>([]);

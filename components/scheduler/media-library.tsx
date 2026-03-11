@@ -1,32 +1,57 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Upload, X, Film, Filter } from 'lucide-react';
+import { Upload, X, Film, Filter, Trash2, Calendar, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
-import type { MediaItem } from './types';
+import type { MediaItem, ConnectedProfile } from './types';
 
 interface MediaLibraryProps {
   clientId: string | null;
   media: MediaItem[];
+  profiles: ConnectedProfile[];
   loading: boolean;
   onUploadComplete: () => void;
   showUnusedOnly: boolean;
   onToggleUnused: () => void;
+  onMediaClick: (item: MediaItem) => void;
+  onMediaDelete: (mediaId: string) => void;
 }
 
 export function MediaLibrary({
   clientId,
   media,
+  profiles,
   loading,
   onUploadComplete,
   showUnusedOnly,
   onToggleUnused,
+  onMediaClick,
+  onMediaDelete,
 }: MediaLibraryProps) {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<MediaItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { confirm: confirmBulkDelete, dialog: bulkDeleteDialog } = useConfirm({
+    title: 'Delete selected media',
+    description: `Delete ${selectedIds.size} media item${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`,
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
+
+  const { confirm: confirmSingleDelete, dialog: singleDeleteDialog } = useConfirm({
+    title: 'Delete media',
+    description: pendingDeleteItem ? `Delete "${pendingDeleteItem.filename}"? This cannot be undone.` : '',
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
+
+  const hasSelection = selectedIds.size > 0;
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -40,7 +65,7 @@ export function MediaLibrary({
       const urlRes = await fetch('/api/scheduler/media', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'get-upload-url', contentType: file.type }),
+        body: JSON.stringify({ action: 'get-upload-url', contentType: file.type, filename: file.name }),
       });
       if (!urlRes.ok) throw new Error('Failed to get upload URL');
       const { uploadUrl, publicUrl } = await urlRes.json();
@@ -64,7 +89,15 @@ export function MediaLibrary({
         xhr.send(file);
       });
 
-      // Step 3: Confirm upload in our DB
+      // Step 3: Generate thumbnail
+      let thumbnailUrl: string | null = null;
+      if (file.type.startsWith('image/')) {
+        thumbnailUrl = publicUrl;
+      } else if (file.type.startsWith('video/')) {
+        thumbnailUrl = await generateVideoThumbnail(file);
+      }
+
+      // Step 4: Confirm upload in our DB
       const confirmRes = await fetch('/api/scheduler/media', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,6 +108,7 @@ export function MediaLibrary({
           public_url: publicUrl,
           file_size_bytes: file.size,
           mime_type: file.type,
+          thumbnail_url: thumbnailUrl,
         }),
       });
       if (!confirmRes.ok) throw new Error('Failed to save media record');
@@ -90,9 +124,84 @@ export function MediaLibrary({
     }
   }
 
+  /** Extract a thumbnail frame from a video file as a data URL */
+  function generateVideoThumbnail(file: File): Promise<string | null> {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+
+      video.onloadeddata = () => {
+        video.currentTime = Math.min(1, video.duration * 0.1);
+      };
+
+      video.onseeked = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 320;
+          canvas.height = Math.round(320 * (video.videoHeight / video.videoWidth));
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { resolve(null); return; }
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          URL.revokeObjectURL(video.src);
+          resolve(dataUrl);
+        } catch {
+          resolve(null);
+        }
+      };
+
+      video.onerror = () => resolve(null);
+      setTimeout(() => resolve(null), 5000);
+      video.src = URL.createObjectURL(file);
+    });
+  }
+
   function handleDragStart(e: React.DragEvent, item: MediaItem) {
     e.dataTransfer.setData('application/json', JSON.stringify(item));
     e.dataTransfer.effectAllowed = 'copy';
+  }
+
+  function handleItemClick(e: React.MouseEvent, item: MediaItem) {
+    if (e.shiftKey || e.metaKey || e.ctrlKey) {
+      // Multi-select mode
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(item.id)) next.delete(item.id);
+        else next.add(item.id);
+        return next;
+      });
+    } else if (hasSelection) {
+      // If already in selection mode, toggle this item
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(item.id)) next.delete(item.id);
+        else next.add(item.id);
+        return next;
+      });
+    } else {
+      // Single click — open post editor with this media
+      onMediaClick(item);
+    }
+  }
+
+  async function handleDeleteSelected() {
+    if (selectedIds.size === 0) return;
+    const ok = await confirmBulkDelete();
+    if (!ok) return;
+    selectedIds.forEach(id => onMediaDelete(id));
+    setSelectedIds(new Set());
+  }
+
+  function handleScheduleSelected() {
+    if (selectedIds.size === 0) return;
+    // Open the first selected item for scheduling
+    const firstSelected = media.find(m => selectedIds.has(m.id));
+    if (firstSelected) {
+      onMediaClick(firstSelected);
+    }
+    setSelectedIds(new Set());
   }
 
   function formatDuration(seconds: number | null): string {
@@ -142,7 +251,7 @@ export function MediaLibrary({
         )}
       </div>
 
-      {/* Filters */}
+      {/* Filters + selection actions */}
       <div className="px-3 py-2 flex items-center gap-2 border-b border-nativz-border">
         <button
           onClick={onToggleUnused}
@@ -158,6 +267,32 @@ export function MediaLibrary({
             <X size={10} className="ml-0.5" />
           )}
         </button>
+
+        {hasSelection && (
+          <>
+            <div className="h-3 w-px bg-nativz-border" />
+            <button
+              onClick={handleScheduleSelected}
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs bg-accent-surface text-accent-text cursor-pointer"
+            >
+              <Calendar size={10} />
+              Schedule
+            </button>
+            <button
+              onClick={handleDeleteSelected}
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs bg-red-500/10 text-red-400 cursor-pointer"
+            >
+              <Trash2 size={10} />
+              Delete
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="text-[10px] text-text-muted cursor-pointer hover:text-text-secondary"
+            >
+              Clear
+            </button>
+          </>
+        )}
       </div>
 
       {/* Media grid */}
@@ -180,52 +315,102 @@ export function MediaLibrary({
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2">
-            {media.map((item) => (
-              <div
-                key={item.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, item)}
-                className="group relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-hover cursor-grab active:cursor-grabbing border border-transparent hover:border-accent-text/30 transition-colors"
-              >
-                {item.thumbnail_url || item.late_media_url ? (
-                  <img
-                    src={item.thumbnail_url ?? item.late_media_url ?? ''}
-                    alt={item.filename}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Film size={20} className="text-text-muted" />
+            {media.map((item) => {
+              const isSelected = selectedIds.has(item.id);
+              return (
+                <div
+                  key={item.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, item)}
+                  onClick={(e) => handleItemClick(e, item)}
+                  className={`group relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-hover cursor-pointer border-2 transition-all ${
+                    isSelected
+                      ? 'border-accent-text ring-1 ring-accent-text/30'
+                      : 'border-transparent hover:border-accent-text/30'
+                  }`}
+                >
+                  {item.thumbnail_url ? (
+                    <img
+                      src={item.thumbnail_url}
+                      alt={item.filename}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : item.mime_type?.startsWith('image/') && item.late_media_url ? (
+                    <img
+                      src={item.late_media_url}
+                      alt={item.filename}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Film size={20} className="text-text-muted" />
+                    </div>
+                  )}
+
+                  {/* Selection indicator */}
+                  {isSelected && (
+                    <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-accent-text flex items-center justify-center">
+                      <CheckCircle2 size={12} className="text-white" />
+                    </div>
+                  )}
+
+                  {/* Duration overlay */}
+                  {item.duration_seconds && (
+                    <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[10px] text-white">
+                      {formatDuration(item.duration_seconds)}
+                    </span>
+                  )}
+
+                  {/* Used indicator */}
+                  {item.is_used && (
+                    <Badge variant="info" className="absolute top-1 left-1 text-[9px] px-1 py-0">
+                      Used
+                    </Badge>
+                  )}
+
+                  {/* Hover info */}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-1.5 pointer-events-none">
+                    <p className="text-[10px] text-white truncate">{item.filename}</p>
+                    {item.file_size_bytes && (
+                      <p className="text-[9px] text-white/60">{formatSize(item.file_size_bytes)}</p>
+                    )}
                   </div>
-                )}
 
-                {/* Duration overlay */}
-                {item.duration_seconds && (
-                  <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[10px] text-white">
-                    {formatDuration(item.duration_seconds)}
-                  </span>
-                )}
-
-                {/* Used indicator */}
-                {item.is_used && (
-                  <Badge variant="info" className="absolute top-1 left-1 text-[9px] px-1 py-0">
-                    Used
-                  </Badge>
-                )}
-
-                {/* Hover info */}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-1.5">
-                  <p className="text-[10px] text-white truncate">{item.filename}</p>
-                  {item.file_size_bytes && (
-                    <p className="text-[9px] text-white/60">{formatSize(item.file_size_bytes)}</p>
+                  {/* Delete button on hover */}
+                  {!isSelected && (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setPendingDeleteItem(item);
+                        const ok = await confirmSingleDelete();
+                        setPendingDeleteItem(null);
+                        if (ok) onMediaDelete(item.id);
+                      }}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80 cursor-pointer"
+                    >
+                      <Trash2 size={12} className="text-white" />
+                    </button>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
+
+      {/* Multi-select hint */}
+      {!hasSelection && media.length > 0 && (
+        <div className="px-3 py-2 border-t border-nativz-border">
+          <p className="text-[10px] text-text-muted text-center">
+            Click to schedule · Shift+click to multi-select
+          </p>
+        </div>
+      )}
+
+      {bulkDeleteDialog}
+      {singleDeleteDialog}
     </div>
   );
 }

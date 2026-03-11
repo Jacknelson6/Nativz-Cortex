@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Search, X, ChevronDown, Check } from 'lucide-react';
 import type { MoodboardTag } from '@/lib/types/moodboard';
 
-const PLATFORMS = ['all', 'tiktok', 'instagram', 'youtube', 'twitter'] as const;
+const PLATFORMS = ['all', 'tiktok', 'instagram', 'youtube', 'facebook'] as const;
 const STATUSES = ['all', 'completed', 'processing', 'failed'] as const;
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -12,7 +12,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   tiktok: 'TikTok',
   instagram: 'Instagram',
   youtube: 'YouTube',
-  twitter: '𝕏',
+  facebook: 'Facebook',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -79,23 +79,6 @@ export function FilterBar({ boardTags, filters, onFiltersChange }: FilterBarProp
         ))}
       </div>
 
-      {/* Status filter */}
-      <div className="flex items-center gap-0.5 rounded-lg border border-nativz-border p-0.5">
-        {STATUSES.map((s) => (
-          <button
-            key={s}
-            onClick={() => onFiltersChange({ ...filters, status: s })}
-            className={`cursor-pointer rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
-              filters.status === s
-                ? 'bg-accent text-white'
-                : 'text-text-muted hover:bg-surface-hover hover:text-text-secondary'
-            }`}
-          >
-            {STATUS_LABELS[s]}
-          </button>
-        ))}
-      </div>
-
       {/* Tag filter */}
       {boardTags.length > 0 && (
         <div className="relative" ref={tagRef}>
@@ -156,18 +139,6 @@ export function FilterBar({ boardTags, filters, onFiltersChange }: FilterBarProp
         )}
       </div>
 
-      {/* Clear all */}
-      {hasActiveFilters && (
-        <button
-          onClick={() => {
-            setSearchInput('');
-            onFiltersChange({ platform: 'all', status: 'all', tagIds: [], searchQuery: '' });
-          }}
-          className="cursor-pointer text-[10px] font-medium text-accent-text hover:underline shrink-0"
-        >
-          Clear all
-        </button>
-      )}
     </div>
   );
 }

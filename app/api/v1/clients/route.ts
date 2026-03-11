@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateApiKey } from '@/lib/api-keys/validate';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createLateProfile } from '@/lib/posting/late';
 
 const onboardSchema = z.object({
   name: z.string().min(1),
@@ -95,6 +96,15 @@ export async function POST(request: NextRequest) {
 
   if (clientError) {
     return NextResponse.json({ error: 'Failed to create client' }, { status: 500 });
+  }
+
+  // Create Late profile for SMM clients (non-blocking)
+  if (data.services.includes('SMM') && client) {
+    createLateProfile(data.name)
+      .then((profileId) =>
+        admin.from('clients').update({ late_profile_id: profileId }).eq('id', client.id)
+      )
+      .catch((err) => console.error('Failed to create Late profile:', err));
   }
 
   return NextResponse.json({ client }, { status: 201 });

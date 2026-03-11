@@ -1,18 +1,23 @@
 'use client';
 
-import { memo, useState, useCallback } from 'react';
+import { memo, useState } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
-import { Film, Play, Loader2, Eye, Copy, AlertCircle, RefreshCw, Music, MessageSquare, Trash2, MoreHorizontal, Sparkles, FileText, ClipboardList, Check } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Film, Play, AlertCircle, RefreshCw, MessageSquare, Trash2, MoreHorizontal, Eye, Link } from 'lucide-react';
+import { toast } from 'sonner';
 import type { MoodboardItem } from '@/lib/types/moodboard';
+
+interface MediaPipeProgress {
+  stage: string;
+  percent: number;
+}
 
 interface VideoNodeData {
   item: MoodboardItem;
   onViewAnalysis: (item: MoodboardItem) => void;
-  onReplicate: (item: MoodboardItem) => void;
   onDelete: (id: string) => void;
   onItemUpdate?: (item: MoodboardItem) => void;
   commentCount?: number;
+  mediapipeProgress?: MediaPipeProgress | null;
 }
 
 function formatCompactNumber(n: number | undefined | null): string {
@@ -20,6 +25,13 @@ function formatCompactNumber(n: number | undefined | null): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
   return n.toString();
+}
+
+function erColor(rate: number): string {
+  if (rate >= 5) return 'text-emerald-400 bg-emerald-400/10';
+  if (rate >= 3) return 'text-sky-400 bg-sky-400/10';
+  if (rate >= 1) return 'text-blue-400 bg-blue-400/10';
+  return 'text-text-muted bg-white/5';
 }
 
 function PlatformBadge({ platform }: { platform: string | null }) {
@@ -40,19 +52,21 @@ function PlatformBadge({ platform }: { platform: string | null }) {
   );
 }
 
+function stageLabel(stage: string): string {
+  switch (stage) {
+    case 'loading_models': return 'Loading models...';
+    case 'extracting_frames': return 'Extracting frames...';
+    case 'analyzing': return 'Analyzing video...';
+    case 'complete': return 'Complete';
+    default: return 'Processing...';
+  }
+}
+
 export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeData>) {
-  const { item, onViewAnalysis, onReplicate, onDelete, onItemUpdate, commentCount } = data;
+  const { item, onViewAnalysis, onDelete, commentCount, mediapipeProgress } = data;
   const isFailed = item.status === 'failed';
   const [reprocessing, setReprocessing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
-  const [briefing, setBriefing] = useState(false);
-
-  const isAnalyzed = item.hook_score != null;
-  const isTranscribed = !!item.transcript;
-  const hasBrief = !!item.replication_brief;
-
 
   const handleReprocess = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -63,47 +77,19 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
     finally { setReprocessing(false); }
   };
 
-  const handleAnalyze = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setAnalyzing(true);
-    try {
-      const res = await fetch(`/api/moodboard/items/${item.id}/analyze`, { method: 'POST' });
-      if (res.ok && onItemUpdate) {
-        const updated = await res.json();
-        onItemUpdate(updated);
-      }
-    } catch { /* ignore */ }
-    finally { setAnalyzing(false); }
-  }, [item.id, onItemUpdate]);
-
-  const handleTranscribe = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setTranscribing(true);
-    try {
-      const res = await fetch(`/api/moodboard/items/${item.id}/transcribe`, { method: 'POST' });
-      if (res.ok && onItemUpdate) {
-        const updated = await res.json();
-        onItemUpdate(updated);
-      }
-    } catch { /* ignore */ }
-    finally { setTranscribing(false); }
-  }, [item.id, onItemUpdate]);
-
-  const handleBrief = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setBriefing(true);
-    onReplicate(item);
-    setBriefing(false);
-  }, [item, onReplicate]);
-
   return (
-    <div 
+    <div
       onClick={() => onViewAnalysis(item)}
       className={`bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden group cursor-pointer hover:border-accent/40 transition-colors ${
         item.platform === 'tiktok' || item.platform === 'instagram' || item.platform === 'facebook' ? 'min-w-[200px] max-w-[240px]' : 'min-w-[280px] max-w-[360px]'
       }`}
     >
-      <Handle type="target" position={Position.Top} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
+      <Handle type="target" position={Position.Top} id="top-target" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
+      <Handle type="source" position={Position.Top} id="top-source" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
+      <Handle type="target" position={Position.Left} id="left-target" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
+      <Handle type="source" position={Position.Left} id="left-source" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
+      <Handle type="target" position={Position.Right} id="right-target" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
+      <Handle type="source" position={Position.Right} id="right-source" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
 
       {/* Thumbnail */}
       <div className={`relative bg-surface-hover flex items-center justify-center overflow-hidden ${
@@ -131,6 +117,20 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
           {menuOpen && (
             <div className="absolute right-0 top-full z-20 mt-1 min-w-[140px] rounded-lg border border-nativz-border bg-surface py-1 shadow-dropdown animate-fade-in">
               <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  if (item.url) {
+                    navigator.clipboard.writeText(item.url);
+                    toast.success('Link copied');
+                  }
+                }}
+                className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors"
+              >
+                <Link size={12} />
+                Copy link
+              </button>
+              <button
                 onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(item.id); }}
                 className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-red-400 hover:bg-surface-hover transition-colors"
               >
@@ -141,16 +141,22 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
           )}
         </div>
 
-        {item.thumbnail_url ? (
-          <a href={item.url} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
+        {(item.thumbnail_candidates?.selectedUrl || item.thumbnail_url) ? (
+          <div className="w-full h-full relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={item.thumbnail_url} alt={item.title ?? 'Video'} className="w-full h-full object-cover" />
+            <img src={item.thumbnail_candidates?.selectedUrl || item.thumbnail_url!} alt={item.title ?? 'Video'} className="w-full h-full object-cover transition-opacity duration-200" />
             <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="rounded-full bg-white/20 backdrop-blur-sm p-3">
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="cursor-pointer rounded-full bg-white/20 backdrop-blur-sm p-3 hover:bg-white/30 transition-colors"
+              >
                 <Play size={20} className="text-white" />
-              </div>
+              </a>
             </div>
-          </a>
+          </div>
         ) : (
           <Film size={32} className="text-text-muted/40" />
         )}
@@ -159,164 +165,95 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
             {Math.floor(item.duration / 60)}:{String(item.duration % 60).padStart(2, '0')}
           </span>
         )}
+
+        {/* MediaPipe progress indicator */}
+        {mediapipeProgress && (
+          <div className="absolute bottom-0 left-0 right-0 pointer-events-none" aria-live="polite" aria-label={`MediaPipe analysis: ${stageLabel(mediapipeProgress.stage)} ${Math.round(mediapipeProgress.percent * 100)}%`}>
+            <div className="px-2 pb-1.5">
+              <span className="text-[9px] text-white/80 drop-shadow-sm">
+                {stageLabel(mediapipeProgress.stage)} {Math.round(mediapipeProgress.percent * 100)}%
+              </span>
+            </div>
+            <div className="h-1 bg-white/10">
+              <div
+                className="h-full bg-accent transition-all duration-300 ease-out"
+                style={{ width: `${Math.round(mediapipeProgress.percent * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Content */}
       <div className="p-3 space-y-2">
-        {/* Title */}
-        <div className="flex items-start gap-2">
-          <Film size={12} className="text-accent-text shrink-0 mt-0.5" />
-          <p className="text-xs font-semibold text-text-primary line-clamp-2 leading-tight">
-            {item.title || 'Untitled video'}
-          </p>
-        </div>
+        {/* Headline — prefer AI concept summary over raw caption */}
+        <p className="text-xs font-semibold text-text-primary line-clamp-2 leading-tight text-center">
+          {item.concept_summary || item.title || 'Untitled video'}
+        </p>
 
-        {/* Author */}
-        {(item.author_name || item.author_handle) && (
-          <p className="text-[11px] text-text-muted truncate pl-5">
-            {item.author_name}{item.author_handle ? ` @${item.author_handle.replace(/^@/, '')}` : ''}
-          </p>
-        )}
-
-        {/* Engagement Stats */}
+        {/* Stats */}
         {item.stats && (
-          <div className="flex items-center gap-3 text-[10px] text-text-muted pl-5">
-            {item.stats.views != null && <span>{formatCompactNumber(item.stats.views)} views</span>}
-            {item.stats.likes != null && <span>{formatCompactNumber(item.stats.likes)} likes</span>}
-            {item.stats.comments != null && <span>{formatCompactNumber(item.stats.comments)} comments</span>}
-            {item.stats.shares != null && <span>{formatCompactNumber(item.stats.shares)} shares</span>}
-          </div>
-        )}
-
-        {/* Music */}
-        {item.music && (
-          <div className="flex items-center gap-1 text-[10px] text-text-muted pl-5 truncate">
-            <Music size={10} className="shrink-0" />
-            <span className="truncate">{item.music}</span>
-          </div>
-        )}
-
-        {/* Hook score badge + theme tags (only if analyzed) */}
-        {isAnalyzed && (
           <div className="space-y-1.5">
-            <div className="flex items-center gap-2 pl-5">
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                item.hook_score! >= 7 ? 'bg-green-500/20 text-green-400' :
-                item.hook_score! >= 4 ? 'bg-yellow-500/20 text-yellow-400' :
-                'bg-red-500/20 text-red-400'
-              }`}>Hook {item.hook_score}/10</span>
-              {item.hook_type && (
-                <span className="text-[9px] text-text-muted bg-surface-hover rounded px-1">{item.hook_type}</span>
+            <div className="flex items-center justify-center gap-3 text-[10px] text-text-muted">
+              {item.stats.views != null && <span>{formatCompactNumber(item.stats.views)} views</span>}
+              {item.stats.likes != null && <span>{formatCompactNumber(item.stats.likes)} likes</span>}
+              {item.stats.shares != null && <span>{formatCompactNumber(item.stats.shares)} shares</span>}
+            </div>
+            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+              {item.stats.views != null && item.stats.likes != null && item.stats.views > 0 && (() => {
+                const rate = (item.stats!.likes! / item.stats!.views!) * 100;
+                return (
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${erColor(rate)}`}>
+                    ER {rate.toFixed(1)}%
+                  </span>
+                );
+              })()}
+              {item.content_themes?.[0] && (
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-white/5 text-text-muted border border-nativz-border">
+                  {item.content_themes[0].replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                </span>
               )}
             </div>
-            {(item.content_themes ?? []).length > 0 && (
-              <div className="flex flex-wrap gap-1 pl-5">
-                {(item.content_themes ?? []).slice(0, 3).map((tag, i) => (
-                  <Badge key={i} variant="default">{tag}</Badge>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
         {/* Failed state */}
         {isFailed && (
           <div className="space-y-1.5">
-            <div className="flex items-center gap-2 text-xs text-red-400">
+            <div className="flex items-center justify-center gap-2 text-xs text-red-400">
               <AlertCircle size={12} />
               Processing failed
             </div>
             {item.error_message && (
-              <p className="text-[10px] text-red-400/70 line-clamp-2 pl-5">{item.error_message}</p>
+              <p className="text-[10px] text-red-400/70 line-clamp-2 text-center">{item.error_message}</p>
             )}
-            <button
-              onClick={handleReprocess}
-              disabled={reprocessing}
-              className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-amber-400 hover:bg-amber-400/10 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw size={11} className={reprocessing ? 'animate-spin' : ''} />
-              {reprocessing ? 'Reprocessing...' : 'Reprocess'}
-            </button>
+            <div className="flex justify-center">
+              <button
+                onClick={handleReprocess}
+                disabled={reprocessing}
+                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-amber-400 hover:bg-amber-400/10 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={11} className={reprocessing ? 'animate-spin' : ''} />
+                {reprocessing ? 'Reprocessing...' : 'Reprocess'}
+              </button>
+            </div>
           </div>
         )}
 
-        {/* On-demand action buttons */}
-        {(!isAnalyzed || !isTranscribed || !hasBrief) && (
-          <div className="flex flex-wrap gap-1.5 border-t border-nativz-border pt-2">
-            {!isAnalyzed && (
-              <button
-                onClick={handleAnalyze}
-                disabled={analyzing}
-                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-accent-text hover:bg-accent-surface transition-colors disabled:opacity-50"
-              >
-                {analyzing ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-                {analyzing ? 'Analyzing...' : 'Analyze'}
-              </button>
-            )}
-            {!isTranscribed && (
-              <button
-                onClick={handleTranscribe}
-                disabled={transcribing}
-                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-accent-text hover:bg-accent-surface transition-colors disabled:opacity-50"
-              >
-                {transcribing ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />}
-                {transcribing ? 'Transcribing...' : 'Transcribe'}
-              </button>
-            )}
-            {!hasBrief && (
-              <button
-                onClick={handleBrief}
-                disabled={briefing}
-                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-accent-text hover:bg-accent-surface transition-colors disabled:opacity-50"
-              >
-                {briefing ? <Loader2 size={11} className="animate-spin" /> : <ClipboardList size={11} />}
-                {briefing ? 'Generating...' : 'Brief'}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Completed badges row */}
-        {(isAnalyzed || isTranscribed || hasBrief) && (
-          <div className="flex items-center gap-1.5 pl-5">
-            {isAnalyzed && (
-              <span className="flex items-center gap-0.5 text-[9px] text-green-400">
-                <Check size={9} /> Analyzed
-              </span>
-            )}
-            {isTranscribed && (
-              <span className="flex items-center gap-0.5 text-[9px] text-green-400">
-                <Check size={9} /> Transcript
-              </span>
-            )}
-            {hasBrief && (
-              <span className="flex items-center gap-0.5 text-[9px] text-green-400">
-                <Check size={9} /> Brief
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex items-center gap-2 border-t border-nativz-border pt-2">
+        {/* Details button */}
+        <div className="flex justify-center border-t border-nativz-border pt-2">
           <button
             onClick={(e) => { e.stopPropagation(); onViewAnalysis(item); }}
-            className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
+            className="cursor-pointer flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-all duration-150 hover:scale-[1.02] active:scale-[0.97]"
           >
-            <Eye size={11} />
+            <Eye size={12} />
             Details
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onReplicate(item); }}
-            className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-accent-text hover:bg-accent-surface transition-colors"
-          >
-            <Copy size={11} />
-            Replicate this video
           </button>
         </div>
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
+      <Handle type="source" position={Position.Bottom} id="bottom-source" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
+      <Handle type="target" position={Position.Bottom} id="bottom-target" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
     </div>
   );
 });

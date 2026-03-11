@@ -1,0 +1,87 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+
+async function requireAdmin() {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
+
+  const adminClient = createAdminClient();
+  const { data: userData } = await adminClient
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  if (!userData || userData.role !== 'admin') return null;
+  return user;
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const admin = await requireAdmin();
+    if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const adminClient = createAdminClient();
+
+    // Get team member
+    const { data: member, error: memberError } = await adminClient
+      .from('team_members')
+      .select('id, full_name, email, user_id')
+      .eq('id', id)
+      .single();
+
+    if (memberError || !member) {
+      return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
+    }
+
+    if (member.user_id) {
+      return NextResponse.json({ error: 'Team member already has a linked account' }, { status: 400 });
+    }
+
+    if (!member.email) {
+      return NextResponse.json({ error: 'Team member has no email address. Add an email first.' }, { status: 400 });
+    }
+
+    // Expire any existing unused invites for this member
+    await adminClient
+      .from('team_invite_tokens')
+      .update({ expires_at: new Date().toISOString() })
+      .eq('team_member_id', id)
+      .is('used_at', null);
+
+    // Create new invite token
+    const { data: invite, error: inviteError } = await adminClient
+      .from('team_invite_tokens')
+      .insert({
+        team_member_id: id,
+        email: member.email,
+        created_by: admin.id,
+      })
+      .select('token, expires_at')
+      .single();
+
+    if (inviteError) {
+      console.error('Failed to create team invite:', inviteError);
+      return NextResponse.json({ error: 'Failed to create invite' }, { status: 500 });
+    }
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    const inviteUrl = `${baseUrl}/shared/join/${invite.token}`;
+
+    return NextResponse.json({
+      token: invite.token,
+      invite_url: inviteUrl,
+      expires_at: invite.expires_at,
+      member_name: member.full_name,
+    });
+  } catch (error) {
+    console.error('POST /api/team/[id]/invite error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

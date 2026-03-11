@@ -8,6 +8,7 @@ const rescriptSchema = z.object({
   brand_voice: z.string().optional(),
   product: z.string().optional(),
   target_audience: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 export async function POST(
@@ -57,6 +58,7 @@ export async function POST(
     const brandVoice = parsed.data.brand_voice || '';
     const product = parsed.data.product || '';
     const targetAudience = parsed.data.target_audience || '';
+    const userNotes = parsed.data.notes || '';
 
     const prompt = `You are a senior video content strategist specializing in adapting viral content for brands.
 
@@ -68,24 +70,19 @@ Original video analysis:
 - Hook Type: ${item.hook_type || 'N/A'}
 - CTA: ${item.cta || 'Not identified'}
 - Transcript: ${item.transcript ? item.transcript.substring(0, 3000) : 'Not available'}
-- Pacing: ${item.pacing_detail ? JSON.stringify(item.pacing_detail) : item.pacing ? JSON.stringify(item.pacing) : 'Not analyzed'}
 - Winning elements: ${(item.winning_elements ?? []).join(', ') || 'Not analyzed'}
 - Content themes: ${(item.content_themes ?? []).join(', ') || 'Not analyzed'}
 - Duration: ${item.duration ? `${item.duration}s` : 'Unknown'}
 
-${clientInfo ? `${clientInfo}\n` : ''}${brandVoice ? `Brand Voice: ${brandVoice}\n` : ''}${product ? `Product/Service: ${product}\n` : ''}${targetAudience ? `Target Audience: ${targetAudience}\n` : ''}
+${clientInfo ? `${clientInfo}\n` : ''}${brandVoice ? `Brand Voice: ${brandVoice}\n` : ''}${product ? `Product/Service: ${product}\n` : ''}${targetAudience ? `Target Audience: ${targetAudience}\n` : ''}${userNotes ? `Additional notes: ${userNotes}\n` : ''}
 
-Rescript this video for the specified brand. Keep the same structural formula and hook style that made the original work, but adapt the content entirely.
+Rescript this video for the specified brand. Write ONLY the spoken word script — the exact words the person on camera should say. Keep the same structural formula, hook style, and pacing that made the original work, but adapt the content entirely for the brand.
+
+Do NOT include shot descriptions, camera directions, stage directions, hashtags, or posting strategy. Just the spoken words, line by line.
 
 Return a JSON object with exactly this structure (no markdown, just raw JSON):
 {
-  "adapted_script": "The full adapted script with stage directions in brackets. Keep the same pacing and structure.",
-  "shot_list": [
-    { "number": 1, "description": "Shot description", "timing": "0:00-0:03", "notes": "Camera/edit notes" }
-  ],
-  "hook_alternatives": ["Hook option 1", "Hook option 2", "Hook option 3"],
-  "hashtags": ["hashtag1", "hashtag2", "hashtag3"],
-  "posting_strategy": "When to post, platform-specific tips, engagement strategy"
+  "script": "The full spoken word script. Each line or beat on a new line. Just the words to say, nothing else."
 }`;
 
     const apiKey = process.env.OPENROUTER_API_KEY;
@@ -103,7 +100,7 @@ Return a JSON object with exactly this structure (no markdown, just raw JSON):
       },
       body: JSON.stringify({
         model: 'anthropic/claude-sonnet-4',
-        max_tokens: 4000,
+        max_tokens: 2000,
         messages: [
           { role: 'system', content: 'You are a senior video content strategist. Return only valid JSON, no markdown code fences.' },
           { role: 'user', content: prompt },
@@ -125,33 +122,31 @@ Return a JSON object with exactly this structure (no markdown, just raw JSON):
     }
 
     // Parse JSON from response (handle possible markdown fences)
-    let rescriptData;
+    let script: string;
     try {
       const jsonStr = content.replace(/^```json?\n?/gm, '').replace(/\n?```$/gm, '').trim();
-      rescriptData = JSON.parse(jsonStr);
+      const parsed2 = JSON.parse(jsonStr);
+      script = parsed2.script || parsed2.adapted_script || content;
     } catch {
-      // If JSON parse fails, wrap the raw text
-      rescriptData = {
-        adapted_script: content,
-        shot_list: [],
-        hook_alternatives: [],
-        hashtags: [],
-        posting_strategy: '',
-      };
+      // If JSON parse fails, use the raw text as the script
+      script = content;
     }
 
-    // Add metadata
-    rescriptData.brand_voice = brandVoice || undefined;
-    rescriptData.product = product || undefined;
-    rescriptData.target_audience = targetAudience || undefined;
-    rescriptData.client_id = parsed.data.client_id || undefined;
-    rescriptData.generated_at = new Date().toISOString();
+    const rescriptData = {
+      script,
+      client_id: parsed.data.client_id || undefined,
+      brand_voice: brandVoice || undefined,
+      product: product || undefined,
+      target_audience: targetAudience || undefined,
+      generated_at: new Date().toISOString(),
+    };
 
     // Save to DB
     await adminClient
       .from('moodboard_items')
       .update({
         rescript: rescriptData,
+        replication_brief: script,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id);

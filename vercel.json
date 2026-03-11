@@ -7,6 +7,22 @@
     {
       "path": "/api/cron/sync-reporting",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/sync-reporting",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/publish-posts",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/check-velocity",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-affiliates",
+      "schedule": "30 * * * *"
     }
   ]
 }

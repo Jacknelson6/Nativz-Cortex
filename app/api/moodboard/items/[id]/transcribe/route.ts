@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { extractTikTokTranscript } from '@/lib/tiktok/scraper';
+import { createCompletion } from '@/lib/ai/client';
 
 export async function POST(
   request: NextRequest,
@@ -52,14 +53,39 @@ export async function POST(
       return NextResponse.json({ error: 'Could not extract transcript. The video may not have captions or audio.' }, { status: 422 });
     }
 
-    // Save transcript
+    // Auto-generate title from transcript using AI
+    const needsTitle = !item.title || item.title === 'Untitled video' || item.title === 'TikTok video';
+    let generatedTitle: string | null = null;
+    if (needsTitle && transcript) {
+      try {
+        const aiResult = await createCompletion({
+          messages: [{ role: 'user', content: `Generate a short, catchy title (max 60 characters) for a video based on this transcript. Return ONLY the title text, nothing else.\n\nTranscript:\n${transcript.slice(0, 500)}` }],
+          maxTokens: 50,
+        });
+        const title = aiResult.text.trim().replace(/^["']|["']$/g, '');
+        if (title && title.length <= 80) {
+          generatedTitle = title;
+        }
+      } catch {
+        // Fallback: use first few words of transcript
+        const words = transcript.replace(/\s+/g, ' ').trim().split(' ');
+        generatedTitle = words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
+      }
+    }
+
+    // Save transcript + title
+    const updateData: Record<string, unknown> = {
+      transcript,
+      transcript_segments: segments.length > 0 ? segments : null,
+      updated_at: new Date().toISOString(),
+    };
+    if (generatedTitle) {
+      updateData.title = generatedTitle;
+    }
+
     await adminClient
       .from('moodboard_items')
-      .update({
-        transcript,
-        transcript_segments: segments.length > 0 ? segments : null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', id);
 
     const { data: updated } = await adminClient

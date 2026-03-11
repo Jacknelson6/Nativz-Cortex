@@ -4,6 +4,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { syncClientProfileToVault } from '@/lib/vault/sync';
 import { createMondayItem } from '@/lib/monday/client';
+import { logActivity } from '@/lib/activity';
+import { createLateProfile } from '@/lib/posting/late';
 
 const onboardSchema = z.object({
   name: z.string().min(1, 'Client name is required'),
@@ -64,8 +66,8 @@ export async function POST(request: NextRequest) {
       slug = `${slug}-${Date.now().toString(36)}`;
     }
 
-    // Provision across all three systems in parallel
-    const [cortexResult, vaultResult, mondayResult] = await Promise.allSettled([
+    // Provision across all four systems in parallel
+    const [cortexResult, vaultResult, mondayResult, lateResult] = await Promise.allSettled([
       // 1. Create in Cortex DB
       (async () => {
         // Create organization first
@@ -94,6 +96,7 @@ export async function POST(request: NextRequest) {
             brand_voice: data.brand_voice || null,
             topic_keywords: data.topic_keywords,
             logo_url: data.logo_url,
+            services: data.services,
             is_active: true,
           })
           .select('id')
@@ -149,6 +152,13 @@ export async function POST(request: NextRequest) {
         );
         return result ? { mondayId: result.id } : { mondayId: null };
       })(),
+
+      // 4. Create Late profile (for social media scheduling)
+      (async () => {
+        if (!data.services.includes('SMM')) return { lateProfileId: null };
+        const profileId = await createLateProfile(data.name);
+        return { lateProfileId: profileId };
+      })(),
     ]);
 
     // Build response
@@ -162,6 +172,9 @@ export async function POST(request: NextRequest) {
       monday: mondayResult.status === 'fulfilled'
         ? { success: true, mondayId: (mondayResult.value as { mondayId: string | null }).mondayId }
         : { success: false, error: (mondayResult.reason as Error).message },
+      late: lateResult.status === 'fulfilled'
+        ? { success: true, lateProfileId: (lateResult.value as { lateProfileId: string | null }).lateProfileId }
+        : { success: false, error: (lateResult.reason as Error).message },
     };
 
     // If the core DB creation failed, that's a hard error
@@ -170,6 +183,23 @@ export async function POST(request: NextRequest) {
         { error: 'Failed to create client in database', details: response },
         { status: 500 },
       );
+    }
+
+    // Link Late profile to client (non-blocking)
+    if (response.late.success && response.late.lateProfileId && 'clientId' in response.cortex) {
+      Promise.resolve(
+        adminClient
+          .from('clients')
+          .update({ late_profile_id: response.late.lateProfileId })
+          .eq('id', response.cortex.clientId as string)
+      ).catch(() => {});
+    }
+
+    // Log activity (non-blocking)
+    if (response.cortex.success && 'clientId' in response.cortex) {
+      logActivity(user.id, 'client_created', 'client', response.cortex.clientId as string, {
+        client_name: data.name,
+      }).catch(() => {});
     }
 
     return NextResponse.json(response);

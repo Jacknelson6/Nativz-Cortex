@@ -5,24 +5,15 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 const createContactSchema = z.object({
   name: z.string().min(1).max(200),
-  email: z.string().email(),
+  email: z.string().email().optional().nullable(),
+  phone: z.string().max(50).optional().nullable(),
   role: z.string().max(100).optional().nullable(),
+  project_role: z.string().max(100).optional().nullable(),
+  avatar_url: z.string().url().optional().nullable(),
   is_primary: z.boolean().optional().default(false),
 });
 
-const updateContactSchema = z.object({
-  contact_id: z.string().uuid(),
-  name: z.string().min(1).max(200).optional(),
-  email: z.string().email().optional(),
-  role: z.string().max(100).optional().nullable(),
-  is_primary: z.boolean().optional(),
-});
-
-const deleteContactSchema = z.object({
-  contact_id: z.string().uuid(),
-});
-
-async function requireAdmin(request: NextRequest) {
+async function requireAdmin() {
   const supabase = await createServerSupabaseClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return null;
@@ -44,18 +35,19 @@ export async function GET(
 ) {
   try {
     const { id: clientId } = await params;
-    const user = await requireAdmin(_request);
+    const user = await requireAdmin();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
-      .from('client_contacts')
+      .from('contacts')
       .select('*')
       .eq('client_id', clientId)
       .order('is_primary', { ascending: false })
       .order('name');
 
     if (error) {
+      console.error('Error fetching contacts:', error);
       return NextResponse.json({ error: 'Failed to fetch contacts' }, { status: 500 });
     }
 
@@ -72,7 +64,7 @@ export async function POST(
 ) {
   try {
     const { id: clientId } = await params;
-    const user = await requireAdmin(request);
+    const user = await requireAdmin();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
@@ -86,105 +78,26 @@ export async function POST(
     // If setting as primary, unset existing primary first
     if (parsed.data.is_primary) {
       await adminClient
-        .from('client_contacts')
+        .from('contacts')
         .update({ is_primary: false })
         .eq('client_id', clientId)
         .eq('is_primary', true);
     }
 
     const { data, error } = await adminClient
-      .from('client_contacts')
+      .from('contacts')
       .insert({ client_id: clientId, ...parsed.data })
       .select()
       .single();
 
     if (error) {
+      console.error('Error creating contact:', error);
       return NextResponse.json({ error: 'Failed to create contact' }, { status: 500 });
     }
 
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     console.error('POST /api/clients/[id]/contacts error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
-
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id: clientId } = await params;
-    const user = await requireAdmin(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const body = await request.json();
-    const parsed = updateContactSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors }, { status: 400 });
-    }
-
-    const { contact_id, ...updates } = parsed.data;
-    const adminClient = createAdminClient();
-
-    // If setting as primary, unset existing primary first
-    if (updates.is_primary) {
-      await adminClient
-        .from('client_contacts')
-        .update({ is_primary: false })
-        .eq('client_id', clientId)
-        .eq('is_primary', true);
-    }
-
-    const { data, error } = await adminClient
-      .from('client_contacts')
-      .update(updates)
-      .eq('id', contact_id)
-      .eq('client_id', clientId)
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: 'Failed to update contact' }, { status: 500 });
-    }
-
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error('PATCH /api/clients/[id]/contacts error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
-
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id: clientId } = await params;
-    const user = await requireAdmin(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const body = await request.json();
-    const parsed = deleteContactSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
-    }
-
-    const adminClient = createAdminClient();
-
-    const { error } = await adminClient
-      .from('client_contacts')
-      .delete()
-      .eq('id', parsed.data.contact_id)
-      .eq('client_id', clientId);
-
-    if (error) {
-      return NextResponse.json({ error: 'Failed to delete contact' }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('DELETE /api/clients/[id]/contacts error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

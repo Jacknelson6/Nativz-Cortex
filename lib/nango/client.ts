@@ -94,6 +94,7 @@ export async function createCalendarEventViaNango(
     start: { dateTime: string; timeZone?: string };
     end: { dateTime: string; timeZone?: string };
     attendees?: Array<{ email: string }>;
+    recurrence?: string[];
   },
 ): Promise<{ id: string; htmlLink: string }> {
   const nango = getNango();
@@ -107,4 +108,50 @@ export async function createCalendarEventViaNango(
   });
 
   return response.data;
+}
+
+/**
+ * Update a Google Calendar event via Nango's proxy.
+ */
+export async function updateCalendarEventViaNango(
+  nangoConnectionId: string,
+  googleEventId: string,
+  event: {
+    summary?: string;
+    description?: string;
+    location?: string;
+    start?: { dateTime: string; timeZone?: string };
+    end?: { dateTime: string; timeZone?: string };
+    attendees?: Array<{ email: string }>;
+    recurrence?: string[];
+  },
+): Promise<{ id: string; htmlLink: string }> {
+  const nango = getNango();
+
+  const response = await nango.patch<{ id: string; htmlLink: string }>({
+    endpoint: `/calendar/v3/calendars/primary/events/${googleEventId}`,
+    providerConfigKey: PROVIDER_CONFIG_KEY,
+    connectionId: nangoConnectionId,
+    params: { sendUpdates: 'all' },
+    data: event,
+  });
+
+  return response.data;
+}
+
+/**
+ * Delete a Google Calendar event via Nango's proxy.
+ */
+export async function deleteCalendarEventViaNango(
+  nangoConnectionId: string,
+  googleEventId: string,
+): Promise<void> {
+  const nango = getNango();
+
+  await nango.delete({
+    endpoint: `/calendar/v3/calendars/primary/events/${googleEventId}`,
+    providerConfigKey: PROVIDER_CONFIG_KEY,
+    connectionId: nangoConnectionId,
+    params: { sendUpdates: 'all' },
+  });
 }

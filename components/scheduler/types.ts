@@ -14,7 +14,7 @@ export interface CalendarPost {
   thumbnail_url: string | null;
   platforms: { platform: SocialPlatform; profile_id: string; username: string }[];
   review_status: 'none' | 'pending' | 'approved' | 'changes_requested';
-  media: { id: string; filename: string; storage_path: string; thumbnail_url: string | null }[];
+  media: { id: string; filename: string; storage_path: string; thumbnail_url: string | null; late_media_url: string | null; mime_type: string | null }[];
 }
 
 export interface MediaItem {

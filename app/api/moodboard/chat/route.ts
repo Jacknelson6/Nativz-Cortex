@@ -4,20 +4,24 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const chatSchema = z.object({
-  board_id: z.string().uuid(),
-  item_ids: z.array(z.string().uuid()).min(1),
+  board_id: z.string(),
+  item_ids: z.array(z.string()),
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string(),
   })).min(1),
+  note_contents: z.array(z.string()).optional(),
+  client_slugs: z.array(z.string()).optional(),
   model: z.string().optional(),
 });
 
 const SYSTEM_PROMPT = `You are Cortex AI — a creative strategist and viral content expert embedded in Nativz Cortex, a moodboard tool for content creators and agencies.
 
-You have deep context on the selected moodboard items (videos/images) including transcripts, analysis, metadata, and visual breakdowns. Use this context to:
+You have deep context on the moodboard items including videos (transcripts, analysis, metadata, visual breakdowns) and websites (page insights, headlines, content themes). Use this context to:
 
-- Analyze hooks, pacing, and content structure
+- Analyze hooks, pacing, and content structure from videos
+- Analyze website messaging, positioning, and content strategy
+- Cross-reference video content with website messaging
 - Suggest rescripts and adaptations for different brands/audiences
 - Compare content styles across multiple pieces
 - Identify winning elements and improvement areas
@@ -28,7 +32,29 @@ Be direct, insightful, and creative. Speak like a senior creative strategist —
 
 function buildItemContext(item: Record<string, unknown>): string {
   const parts: string[] = [];
-  parts.push(`## ${item.title || 'Untitled'} (${item.type})`);
+  const itemType = item.type as string;
+  parts.push(`## ${item.title || 'Untitled'} (${itemType})`);
+
+  if (itemType === 'website') {
+    // Website-specific context
+    if (item.url) parts.push(`URL: ${item.url}`);
+    const insights = item.page_insights as Record<string, unknown> | null;
+    if (insights) {
+      if (insights.summary) parts.push(`Summary: ${insights.summary}`);
+      const headlines = insights.key_headlines as string[] | null;
+      if (headlines?.length) parts.push(`Key Headlines:\n${headlines.map(h => `  - ${h}`).join('\n')}`);
+      const valueProps = insights.value_propositions as string[] | null;
+      if (valueProps?.length) parts.push(`Value Propositions:\n${valueProps.map(v => `  - ${v}`).join('\n')}`);
+      if (insights.design_notes) parts.push(`Design Notes: ${insights.design_notes}`);
+      const notable = insights.notable_insights as string[] | null;
+      if (notable?.length) parts.push(`Notable Insights:\n${notable.map(n => `  - ${n}`).join('\n')}`);
+      const themes = insights.content_themes as string[] | null;
+      if (themes?.length) parts.push(`Content Themes: ${themes.join(', ')}`);
+    }
+    return parts.join('\n');
+  }
+
+  // Video/image context
   if (item.platform) parts.push(`Platform: ${item.platform}`);
   if (item.author_name) parts.push(`Creator: ${item.author_name} (@${item.author_handle || 'unknown'})`);
   if (item.url) parts.push(`URL: ${item.url}`);
@@ -84,7 +110,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Invalid request', details: parsed.error.flatten() }), { status: 400 });
     }
 
-    const { board_id, item_ids, messages, model } = parsed.data;
+    const { board_id, item_ids, messages, note_contents, client_slugs, model } = parsed.data;
     const adminClient = createAdminClient();
 
     // Verify board access
@@ -98,20 +124,80 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Board not found' }), { status: 404 });
     }
 
-    // Fetch items
-    const { data: items } = await adminClient
-      .from('moodboard_items')
-      .select('*')
-      .in('id', item_ids)
-      .eq('board_id', board_id);
+    // Fetch items (allow empty — context may come from notes or clients)
+    let items: Record<string, unknown>[] = [];
+    if (item_ids.length > 0) {
+      const { data } = await adminClient
+        .from('moodboard_items')
+        .select('*')
+        .in('id', item_ids)
+        .eq('board_id', board_id);
+      items = data ?? [];
+    }
 
-    if (!items?.length) {
-      return new Response(JSON.stringify({ error: 'No items found' }), { status: 404 });
+    // Fetch client data if @mentioned
+    let clientContexts = '';
+    if (client_slugs?.length) {
+      const { data: clientRows } = await adminClient
+        .from('clients')
+        .select('id, name, slug, industry, description, target_audience, brand_voice, topic_keywords, preferences')
+        .in('slug', client_slugs);
+
+      if (clientRows?.length) {
+        // Also fetch latest strategy for each client
+        for (const client of clientRows) {
+          const parts: string[] = [];
+          parts.push(`## Client: ${client.name}`);
+          if (client.industry) parts.push(`Industry: ${client.industry}`);
+          if (client.description) parts.push(`Description: ${client.description}`);
+          if (client.target_audience) parts.push(`Target Audience: ${client.target_audience}`);
+          if (client.brand_voice) parts.push(`Brand Voice: ${client.brand_voice}`);
+          if (client.topic_keywords?.length) parts.push(`Key Topics: ${client.topic_keywords.join(', ')}`);
+          const prefs = client.preferences as Record<string, unknown> | null;
+          if (prefs) {
+            if ((prefs.tone_keywords as string[])?.length) parts.push(`Tone: ${(prefs.tone_keywords as string[]).join(', ')}`);
+            if ((prefs.topics_lean_into as string[])?.length) parts.push(`Topics to Lean Into: ${(prefs.topics_lean_into as string[]).join(', ')}`);
+            if ((prefs.topics_avoid as string[])?.length) parts.push(`Topics to Avoid: ${(prefs.topics_avoid as string[]).join(', ')}`);
+          }
+
+          // Get latest strategy
+          const { data: strategy } = await adminClient
+            .from('client_strategies')
+            .select('executive_summary, content_pillars')
+            .eq('client_id', client.id)
+            .eq('status', 'completed')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (strategy?.executive_summary) parts.push(`\nStrategy Summary:\n${strategy.executive_summary}`);
+          if (strategy?.content_pillars) {
+            const pillars = strategy.content_pillars as Array<{ name: string; description?: string }>;
+            if (pillars.length) parts.push(`Content Pillars: ${pillars.map(p => p.name).join(', ')}`);
+          }
+
+          clientContexts += '\n\n---\n\n' + parts.join('\n');
+        }
+      }
+    }
+
+    if (!items.length && !note_contents?.length && !clientContexts) {
+      return new Response(JSON.stringify({ error: 'No content to discuss' }), { status: 400 });
     }
 
     // Build context
-    const itemContexts = items.map(buildItemContext).join('\n\n---\n\n');
-    const contextMessage = `Here are the moodboard items the user wants to discuss:\n\n${itemContexts}`;
+    const contextParts: string[] = [];
+    if (items.length > 0) {
+      const itemContexts = items.map(buildItemContext).join('\n\n---\n\n');
+      contextParts.push(`Here are the moodboard items:\n\n${itemContexts}`);
+    }
+    if (note_contents?.length) {
+      contextParts.push(`\n\nSticky notes on the board:\n${note_contents.map((n, i) => `- Note ${i + 1}: ${n}`).join('\n')}`);
+    }
+    if (clientContexts) {
+      contextParts.push(`\n\nClient context (mentioned with @):${clientContexts}`);
+    }
+    const contextMessage = contextParts.join('\n');
 
     const apiMessages = [
       { role: 'system' as const, content: SYSTEM_PROMPT },

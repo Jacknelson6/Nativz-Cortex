@@ -16,7 +16,6 @@ const SCOPE_MAP: Record<string, string> = {
   posts: 'scheduler',
   search: 'search',
   team: 'team',
-  calendar: 'calendar',
 };
 
 function getScopeFromPath(pathname: string): string | null {
@@ -34,7 +33,7 @@ export async function validateApiKey(
   }
 
   const token = auth.slice(7);
-  if (!token.startsWith('sk_live_')) {
+  if (!token.startsWith('ntvz_')) {
     return { error: NextResponse.json({ error: 'Invalid API key format' }, { status: 401 }) };
   }
 

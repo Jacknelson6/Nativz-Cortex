@@ -1,15 +1,18 @@
 'use client';
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
-  X, Play, Copy as CopyIcon, Check, Film, Clock, Scissors, Zap,
-  AlertTriangle, ChevronRight, Search, Download, Quote, Gauge,
+  X, Play, Copy as CopyIcon, Check, Film, Clock,
+  ChevronRight, Search, Download, Quote,
   FileText, Image as ImageIcon, Target, Music, Eye, Loader2, Sparkles
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import type { MoodboardItem, TranscriptSegment } from '@/lib/types/moodboard';
+import { PacingTimeline } from './pacing-timeline';
+import { ContentBreakdown } from './content-breakdown';
+import type { HookVisualAnalysis } from '@/lib/mediapipe/types';
 
 interface VideoAnalysisPanelProps {
   item: MoodboardItem;
@@ -24,39 +27,95 @@ const PLATFORM_COLORS: Record<string, string> = {
   twitter: 'bg-sky-500 text-white',
 };
 
+type PanelView = 'transcript' | 'hook' | 'replicate' | 'frames';
+
 export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: VideoAnalysisPanelProps) {
   const [item, setItem] = useState(initialItem);
   const [copied, setCopied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedFrame, setExpandedFrame] = useState<number | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [transcribeFailed, setTranscribeFailed] = useState(false);
+  const [extractingFrames, setExtractingFrames] = useState(false);
+  const [view, setView] = useState<PanelView>('transcript');
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [view]);
 
   const isAnalyzed = item.hook_score != null;
   const isTranscribed = !!item.transcript;
+  const framesList = item.frames ?? [];
+  const hasFrames = framesList.length > 0 && new Set(framesList.map(f => f.url)).size > 1;
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = () => {
+    if (isAnalyzed) {
+      setView('hook');
+      return;
+    }
+    const itemId = item.id;
     setAnalyzing(true);
-    try {
-      const res = await fetch(`/api/moodboard/items/${item.id}/analyze`, { method: 'POST' });
-      if (res.ok) {
+    toast.info('Analyzing hook...', { duration: 3000 });
+
+    // Fire-and-forget
+    fetch(`/api/moodboard/items/${itemId}/analyze`, { method: 'POST' })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(body.error || `Analysis failed (${res.status})`);
+        }
         const updated = await res.json();
         setItem(updated);
-      }
-    } catch { /* ignore */ }
-    finally { setAnalyzing(false); }
+        setView('hook');
+        toast.success('Hook analysis ready', { duration: 5000 });
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Hook analysis failed');
+      })
+      .finally(() => setAnalyzing(false));
+  };
+
+  const handleExtractFrames = () => {
+    const itemId = item.id;
+    const itemTitle = item.title || 'Video';
+    setExtractingFrames(true);
+    toast.info('Extracting frames...', { duration: 3000 });
+
+    fetch(`/api/moodboard/items/${itemId}/extract-frames`, { method: 'POST' })
+      .then(async (res) => {
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Frame extraction failed');
+        }
+        const updated = await res.json();
+        setItem(updated);
+        setView('frames');
+        toast.success('Frames extracted', { duration: 5000 });
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Frame extraction failed');
+      })
+      .finally(() => setExtractingFrames(false));
   };
 
   const handleTranscribe = async () => {
     setTranscribing(true);
-    try {
-      const res = await fetch(`/api/moodboard/items/${item.id}/transcribe`, { method: 'POST' });
-      if (res.ok) {
-        const updated = await res.json();
-        setItem(updated);
-      }
-    } catch { /* ignore */ }
-    finally { setTranscribing(false); }
+    setTranscribeFailed(false);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(`/api/moodboard/items/${item.id}/transcribe`, { method: 'POST' });
+        if (res.ok) {
+          const updated = await res.json();
+          setItem(updated);
+          setTranscribing(false);
+          return;
+        }
+      } catch { /* continue to retry */ }
+    }
+    // Both attempts failed
+    setTranscribing(false);
+    setTranscribeFailed(true);
   };
 
   const handleCopy = useCallback((text: string) => {
@@ -79,10 +138,11 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
+      <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Panel */}
-      <div className="fixed right-0 top-0 z-50 h-full w-[480px] border-l border-nativz-border bg-surface shadow-elevated overflow-hidden flex flex-col animate-fade-slide-in">
+      {/* Modal */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-6 pointer-events-none">
+        <div className="pointer-events-auto w-full max-w-lg max-h-[75vh] rounded-2xl border border-nativz-border bg-surface shadow-elevated overflow-hidden flex flex-col animate-fade-slide-in">
         {/* Header */}
         <div className="px-5 pt-5 pb-3 border-b border-nativz-border shrink-0">
           <div className="flex items-start justify-between">
@@ -112,207 +172,256 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
               <X size={18} />
             </button>
           </div>
+
+          {/* Watch video + Export */}
+          <div className="mt-3 flex items-center gap-3">
+            <a href={item.url} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-accent-text hover:underline">
+              <Play size={12} /> Watch video
+            </a>
+            <button
+              onClick={() => window.open(`/api/moodboard/items/${item.id}/analysis/pdf`, '_blank')}
+              className="cursor-pointer inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors"
+            >
+              <Download size={12} /> Export PDF
+            </button>
+          </div>
         </div>
 
-        {/* Single scrollable content — all sections stacked */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-6">
-          {/* ── 1. Overview ── */}
-          <PanelSection title="Overview" icon={<Eye size={14} className="text-accent-text" />}>
-            {/* Thumbnail */}
-            <div className="aspect-video rounded-lg bg-surface-hover flex items-center justify-center overflow-hidden">
-              {item.thumbnail_url ? (
-                <div className="relative w-full h-full">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={item.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                  <a href={item.url} target="_blank" rel="noopener noreferrer"
-                    className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
-                    <div className="rounded-full bg-white/20 backdrop-blur-sm p-4">
-                      <Play size={24} className="text-white" />
-                    </div>
-                  </a>
-                </div>
-              ) : (
-                <a href={item.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-accent-text text-sm hover:underline">
-                  <Play size={16} /> Watch video
-                </a>
-              )}
-            </div>
+        {/* Scrollable content */}
+        <div ref={contentRef} className="flex-1 overflow-y-auto p-5">
+          {view === 'transcript' && (
+            <TranscriptView
+              item={item}
+              isTranscribed={isTranscribed}
+              transcribing={transcribing}
+              transcribeFailed={transcribeFailed}
+              onTranscribe={handleTranscribe}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              onCopy={handleCopy}
+              copied={copied}
+            />
+          )}
 
-            {/* Concept summary */}
-            {item.concept_summary && (
-              <div>
-                <p className="text-sm text-text-secondary">{item.concept_summary}</p>
-                <button onClick={() => handleCopy(item.concept_summary!)}
-                  className="cursor-pointer text-[10px] text-text-muted hover:text-accent-text transition-colors mt-1">
-                  Copy summary
-                </button>
-              </div>
-            )}
+          {view === 'hook' && (
+            <HookView
+              item={item}
+              isAnalyzed={isAnalyzed}
+              analyzing={analyzing}
+              onAnalyze={handleAnalyze}
+            />
+          )}
 
-            {/* Engagement stats */}
-            {item.stats && (
-              <div className="grid grid-cols-4 gap-2">
-                {[
-                  { label: 'Views', value: item.stats.views },
-                  { label: 'Likes', value: item.stats.likes },
-                  { label: 'Comments', value: item.stats.comments },
-                  { label: 'Shares', value: item.stats.shares },
-                ].map((s) => (
-                  <div key={s.label} className="rounded-lg border border-nativz-border bg-surface-hover/30 p-2 text-center">
-                    <p className="text-base font-bold text-text-primary">{formatNumber(s.value)}</p>
-                    <p className="text-[9px] text-text-muted">{s.label}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Content themes */}
-            {(item.content_themes ?? []).length > 0 && (
-              <div>
-                <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1.5">Themes</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {item.content_themes.map((tag, i) => (
-                    <Badge key={i} variant="info">{tag}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Winning elements */}
-            {(item.winning_elements ?? []).length > 0 && (
-              <div>
-                <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1">
-                  <Check size={10} className="text-emerald-400" /> What works
-                </p>
-                <ul className="space-y-1.5">
-                  {item.winning_elements.map((el, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-text-secondary">
-                      <Check size={12} className="text-emerald-400 shrink-0 mt-0.5" />
-                      {el}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Improvement areas */}
-            {(item.improvement_areas ?? []).length > 0 && (
-              <div>
-                <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1.5 flex items-center gap-1">
-                  <AlertTriangle size={10} className="text-yellow-400" /> Could improve
-                </p>
-                <ul className="space-y-1.5">
-                  {item.improvement_areas.map((el, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-text-secondary">
-                      <AlertTriangle size={12} className="text-yellow-400 shrink-0 mt-0.5" />
-                      {el}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </PanelSection>
-
-          {/* ── 2. Hook ── */}
-          <PanelSection title="Hook" icon={<Target size={14} className="text-accent-text" />}>
-            {!isAnalyzed && !item.hook ? (
-              <div className="text-center py-4">
-                <p className="text-sm text-text-muted mb-3">Run analysis to see hook breakdown</p>
-                <Button onClick={handleAnalyze} disabled={analyzing}>
-                  {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  {analyzing ? 'Analyzing...' : 'Analyze video'}
-                </Button>
-              </div>
-            ) : item.hook ? (
-              <div className="rounded-xl border border-accent/20 bg-accent-surface p-4">
-                <Quote size={16} className="text-accent-text mb-1.5 opacity-50" />
-                <p className="text-base text-text-primary font-medium italic leading-relaxed">
-                  &ldquo;{item.hook}&rdquo;
-                </p>
-              </div>
-            ) : (
-              <p className="text-sm text-text-muted">No hook identified</p>
-            )}
-
-            {item.hook_score != null && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-text-muted uppercase tracking-wide">Hook Score</span>
-                  <span className="text-2xl font-bold text-accent-text">{item.hook_score}<span className="text-sm text-text-muted">/10</span></span>
-                </div>
-                <HookScoreBar score={item.hook_score} />
-              </div>
-            )}
-
-            {item.hook_type && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-text-muted">Type:</span>
-                <Badge variant="info" className="text-xs">{item.hook_type.replace(/_/g, ' ')}</Badge>
-              </div>
-            )}
-
-            {item.hook_analysis && (
-              <div>
-                <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1">Why it works</p>
-                <p className="text-sm text-text-secondary leading-relaxed">{item.hook_analysis}</p>
-              </div>
-            )}
-          </PanelSection>
-
-          {/* ── 3. Transcript ── */}
-          <PanelSection title="Transcript" icon={<FileText size={14} className="text-accent-text" />}>
-            {!isTranscribed ? (
-              <div className="text-center py-4">
-                <p className="text-sm text-text-muted mb-3">Extract the video transcript</p>
-                <Button onClick={handleTranscribe} disabled={transcribing}>
-                  {transcribing ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
-                  {transcribing ? 'Transcribing...' : 'Transcribe'}
-                </Button>
-              </div>
-            ) : (
-              <TranscriptSection item={item} searchQuery={searchQuery} setSearchQuery={setSearchQuery} onCopy={handleCopy} copied={copied} />
-            )}
-          </PanelSection>
-
-          {/* ── 4. Pacing ── */}
-          <PanelSection title="Pacing" icon={<Gauge size={14} className="text-accent-text" />}>
-            {!isAnalyzed ? (
-              <div className="text-center py-4">
-                <p className="text-sm text-text-muted mb-3">Run analysis to see pacing data</p>
-                <Button onClick={handleAnalyze} disabled={analyzing}>
-                  {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  {analyzing ? 'Analyzing...' : 'Analyze video'}
-                </Button>
-              </div>
-            ) : (
-              <PacingSection item={item} />
-            )}
-          </PanelSection>
-
-          {/* ── 5. Frames ── */}
-          <PanelSection title="Frames" icon={<ImageIcon size={14} className="text-accent-text" />}>
-            <FramesSection item={item} expandedFrame={expandedFrame} setExpandedFrame={setExpandedFrame} />
-          </PanelSection>
-
-          {/* ── 6. Brief ── */}
-          <PanelSection title="Replicate this video" icon={<CopyIcon size={14} className="text-accent-text" />}>
+          {view === 'replicate' && (
             <BriefSection item={item} onReplicate={onReplicate} onCopy={handleCopy} copied={copied} />
-          </PanelSection>
+          )}
+
+          {view === 'frames' && (
+            <FramesSection item={item} extracting={extractingFrames} onExtract={handleExtractFrames} />
+          )}
         </div>
+
+        {/* Pinned bottom buttons */}
+        {(isTranscribed || transcribeFailed) && (
+          <div className="shrink-0 border-t border-nativz-border px-5 py-3">
+            <div className="grid grid-cols-4 gap-2">
+              {([
+                { key: 'transcript' as PanelView, icon: <FileText size={14} className="shrink-0" />, label: 'Transcript', onClick: () => setView('transcript'), disabled: false },
+                { key: 'hook' as PanelView, icon: analyzing ? <Loader2 size={14} className="shrink-0 animate-spin" /> : <Target size={14} className="shrink-0" />, label: 'Hook', onClick: () => { setView('hook'); if (!isAnalyzed && !analyzing) handleAnalyze(); }, disabled: false },
+                { key: 'replicate' as PanelView, icon: <Sparkles size={14} className="shrink-0" />, label: 'Rescript', onClick: () => setView('replicate'), disabled: false },
+                { key: 'frames' as PanelView, icon: extractingFrames ? <Loader2 size={14} className="shrink-0 animate-spin" /> : <ImageIcon size={14} className="shrink-0" />, label: 'Frames', onClick: () => setView('frames'), disabled: false },
+              ]).map((btn) => (
+                <button
+                  key={btn.key}
+                  onClick={btn.onClick}
+                  disabled={btn.disabled}
+                  className={`cursor-pointer flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium border transition-colors duration-150 hover:scale-[1.02] active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none focus:outline-none ${
+                    view === btn.key
+                      ? 'bg-surface-hover text-text-primary border-transparent'
+                      : 'border-nativz-border text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+                  }`}
+                >
+                  {btn.icon}
+                  {btn.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
       </div>
     </>
   );
 }
 
-// ─── Panel Section wrapper ──────────────────────────────────
-function PanelSection({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 border-b border-nativz-border pb-2">
-        {icon}
-        <h3 className="text-xs font-semibold text-text-primary uppercase tracking-wider">{title}</h3>
+// ─── Transcript View ─────────────────────────────────────────
+function TranscriptView({ item, isTranscribed, transcribing, transcribeFailed, onTranscribe, searchQuery, setSearchQuery, onCopy, copied }: {
+  item: MoodboardItem; isTranscribed: boolean; transcribing: boolean; transcribeFailed: boolean; onTranscribe: () => void;
+  searchQuery: string; setSearchQuery: (q: string) => void; onCopy: (t: string) => void; copied: boolean;
+}) {
+  if (!isTranscribed) {
+    return (
+      <div className="text-center py-12">
+        {transcribing ? (
+          <>
+            <Loader2 size={24} className="animate-spin text-accent-text mx-auto mb-3" />
+            <p className="text-sm text-text-muted">Transcribing video...</p>
+          </>
+        ) : transcribeFailed ? (
+          <>
+            <FileText size={24} className="text-text-muted/40 mx-auto mb-3" />
+            <p className="text-sm text-text-muted">This video could not be transcribed</p>
+          </>
+        ) : (
+          <>
+            <FileText size={24} className="text-text-muted mx-auto mb-3" />
+            <p className="text-sm text-text-muted mb-3">Extract the video transcript</p>
+            <Button onClick={onTranscribe}>
+              <FileText size={14} />
+              Transcribe
+            </Button>
+          </>
+        )}
       </div>
-      {children}
+    );
+  }
+
+  return <TranscriptSection item={item} searchQuery={searchQuery} setSearchQuery={setSearchQuery} onCopy={onCopy} copied={copied} />;
+}
+
+// ─── Hook View ───────────────────────────────────────────────
+function HookView({ item, isAnalyzed, analyzing, onAnalyze }: {
+  item: MoodboardItem; isAnalyzed: boolean; analyzing: boolean; onAnalyze: () => void;
+}) {
+  if (!isAnalyzed && !item.hook) {
+    return (
+      <div className="text-center py-12">
+        {analyzing ? (
+          <>
+            <Loader2 size={24} className="animate-spin text-accent-text mx-auto mb-3" />
+            <p className="text-sm text-text-muted">Analyzing hook...</p>
+            <p className="text-xs text-text-muted mt-1">You can switch tabs while this runs</p>
+          </>
+        ) : (
+          <>
+            <Target size={24} className="text-text-muted mx-auto mb-3" />
+            <p className="text-sm text-text-muted mb-3">Run analysis to see hook breakdown</p>
+            <Button onClick={onAnalyze} className="cursor-pointer">
+              <Sparkles size={14} />
+              Analyze
+            </Button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  const formatTag = (s: string) => s.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+
+  return (
+    <div className="space-y-4 overflow-y-auto">
+      {/* Hook quote */}
+      {item.hook && (
+        <div className="rounded-xl border border-accent/20 bg-accent-surface p-4">
+          <Quote size={16} className="text-accent-text mb-1.5 opacity-50" />
+          <p className="text-base text-text-primary font-medium italic leading-relaxed">
+            &ldquo;{item.hook}&rdquo;
+          </p>
+        </div>
+      )}
+
+      {/* Score + type row */}
+      {item.hook_score != null && (
+        <div className="rounded-lg border border-nativz-border bg-surface-hover/30 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-text-muted uppercase tracking-wide">Hook score</span>
+              {item.hook_type && (
+                <Badge variant="info" className="text-[10px]">{formatTag(item.hook_type)}</Badge>
+              )}
+              {item.mediapipe_analysis?.hook && item.mediapipe_analysis.hook.visualHookType !== 'unknown' && (
+                <span className="text-[10px] bg-white/5 rounded-full px-2 py-0.5 text-text-muted">
+                  {formatTag(item.mediapipe_analysis.hook.visualHookType)}
+                </span>
+              )}
+            </div>
+            <span className="text-2xl font-bold text-accent-text">{item.hook_score}<span className="text-sm text-text-muted">/10</span></span>
+          </div>
+          <HookScoreBar score={item.hook_score} />
+        </div>
+      )}
+
+      {/* Why it works */}
+      {item.hook_analysis && (
+        <div>
+          <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1">Why it works</p>
+          <p className="text-sm text-text-secondary leading-relaxed">{item.hook_analysis}</p>
+        </div>
+      )}
+
+      {/* Summary */}
+      {item.concept_summary && (
+        <div>
+          <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1">Summary</p>
+          <p className="text-sm text-text-secondary">{item.concept_summary}</p>
+        </div>
+      )}
+
+      {/* Themes */}
+      {(item.content_themes ?? []).length > 0 && (
+        <div>
+          <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1.5">Themes</p>
+          <div className="flex flex-wrap gap-1.5">
+            {item.content_themes.map((tag, i) => (
+              <span key={i} className="text-[11px] bg-white/5 rounded-full px-2.5 py-0.5 text-text-secondary">
+                {formatTag(tag)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* What works */}
+      {(item.winning_elements ?? []).length > 0 && (
+        <div>
+          <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-2">What works</p>
+          <div className="space-y-1">
+            {item.winning_elements.map((el, i) => (
+              <div key={i} className="flex gap-2 text-sm text-text-secondary">
+                <span className="text-emerald-400 shrink-0 mt-0.5">+</span>
+                <span>{el}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Improvement areas */}
+      {(item.improvement_areas ?? []).length > 0 && (
+        <div>
+          <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-2">Could improve</p>
+          <div className="space-y-1">
+            {item.improvement_areas.map((el, i) => (
+              <div key={i} className="flex gap-2 text-sm text-text-secondary">
+                <span className="text-amber-400 shrink-0 mt-0.5">-</span>
+                <span>{el}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pacing */}
+      {item.mediapipe_analysis?.pacing && (
+        <div className="rounded-lg border border-nativz-border bg-surface-hover/30 p-3">
+          <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-2">Pacing</p>
+          <PacingTimeline
+            pacing={item.mediapipe_analysis.pacing}
+            videoDurationMs={(item.duration ?? 30) * 1000}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -363,7 +472,7 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied }
       )}
 
       {hasSegments ? (
-        <div className="space-y-1 max-h-[400px] overflow-y-auto">
+        <div className="space-y-1 overflow-y-auto">
           {filteredSegments.map((seg, i) => (
             <div key={i} className="flex gap-2 rounded p-1.5 hover:bg-surface-hover/50 transition-colors">
               <span className="text-[10px] text-accent-text font-mono shrink-0 pt-0.5 w-10 text-right">
@@ -379,7 +488,7 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied }
           )}
         </div>
       ) : item.transcript ? (
-        <div className="rounded-lg border border-nativz-border bg-surface-hover/30 p-4 text-sm text-text-secondary whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+        <div className="rounded-lg border border-nativz-border bg-surface-hover/30 p-4 text-sm text-text-secondary whitespace-pre-wrap overflow-y-auto">
           {highlightedTranscript ? renderHighlighted(highlightedTranscript) : item.transcript}
         </div>
       ) : null}
@@ -402,133 +511,100 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied }
   );
 }
 
-// ─── Pacing Section ─────────────────────────────────────────
-function PacingSection({ item }: { item: MoodboardItem }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rawPacing = (item.pacing_detail || item.pacing) as any;
+// ─── Frames Section ─────────────────────────────────────────
 
-  if (!rawPacing) {
-    return <p className="text-sm text-text-muted text-center py-4">No pacing data available</p>;
-  }
-
-  const pacingDescription: string = String(rawPacing.description ?? '');
-  const estimatedCuts: number = Number(rawPacing.estimated_cuts ?? 0);
-  const cutsPerMinute: number = Number(rawPacing.cuts_per_minute ?? 0);
-  const pacingScenes: Array<{ timestamp: number; description: string }> = rawPacing.scenes ?? [];
-
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard icon={<Scissors size={16} className="text-accent-text" />} value={estimatedCuts} label="Total cuts" />
-        <StatCard icon={<Zap size={16} className="text-yellow-400" />} value={cutsPerMinute} label="Cuts/min" />
-      </div>
-
-      <div>
-        <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1">Pacing style</p>
-        <p className="text-sm text-text-secondary">{pacingDescription}</p>
-      </div>
-
-      {pacingScenes.length > 0 && item.duration && (
-        <div>
-          <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-2">Scene Timeline</p>
-          <div className="relative">
-            <div className="h-2 rounded-full bg-surface-hover border border-nativz-border relative">
-              {pacingScenes.map((scene, i) => {
-                const pct = (scene.timestamp / item.duration!) * 100;
-                return (
-                  <div key={i} className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-accent border-2 border-surface"
-                    style={{ left: `${Math.min(pct, 97)}%` }}
-                    title={`${formatTimestamp(scene.timestamp)} — ${scene.description}`}
-                  />
-                );
-              })}
-            </div>
-            <div className="mt-3 space-y-1.5">
-              {pacingScenes.map((scene, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs">
-                  <span className="text-accent-text font-mono shrink-0 w-10 text-right">{formatTimestamp(scene.timestamp)}</span>
-                  <span className="text-text-secondary">{scene.description}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {item.music && (
-        <div>
-          <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1 flex items-center gap-1">
-            <Music size={10} className="text-purple-400" /> Music
-          </p>
-          <p className="text-sm text-text-secondary">{item.music}</p>
-        </div>
-      )}
-    </div>
+/** Find the transcript text that overlaps a given timestamp */
+function getTranscriptAtTimestamp(segments: TranscriptSegment[], timestamp: number, intervalSec: number): string {
+  if (segments.length === 0) return '';
+  const endTs = timestamp + intervalSec;
+  const matching = segments.filter(s => s.start < endTs && s.end > timestamp);
+  if (matching.length > 0) return matching.map(s => s.text).join(' ');
+  // Fallback: find nearest segment
+  const nearest = segments.reduce((prev, curr) =>
+    Math.abs(curr.start - timestamp) < Math.abs(prev.start - timestamp) ? curr : prev
   );
+  return nearest.text;
 }
 
-// ─── Frames Section ─────────────────────────────────────────
-function FramesSection({ item, expandedFrame, setExpandedFrame }: {
-  item: MoodboardItem; expandedFrame: number | null; setExpandedFrame: (i: number | null) => void;
+function FramesSection({ item, extracting, onExtract }: {
+  item: MoodboardItem;
+  extracting: boolean; onExtract: () => void;
 }) {
   const frames = item.frames ?? [];
+  const segments: TranscriptSegment[] = item.transcript_segments ?? [];
   const hasDistinctFrames = new Set(frames.map(f => f.url)).size > 1;
 
-  if (frames.length === 0) {
-    return <p className="text-sm text-text-muted text-center py-4">No frames extracted</p>;
-  }
-
-  // All frames have the same thumbnail URL — show timestamp reference instead
-  if (!hasDistinctFrames) {
+  if (frames.length === 0 || !hasDistinctFrames) {
     return (
-      <div className="space-y-2">
-        <p className="text-sm text-text-muted">
-          Frame extraction requires server-side processing. Timestamps are shown for reference.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {frames.map((frame, i) => (
-            <span key={i} className="inline-flex items-center gap-1 rounded-md border border-nativz-border bg-surface-hover/30 px-2 py-1 text-xs text-text-secondary font-mono">
-              <Clock size={10} className="text-accent-text" />
-              {formatTimestamp(frame.timestamp)}
-              <span className="text-text-muted font-sans ml-0.5">{frame.label}</span>
-            </span>
-          ))}
-        </div>
+      <div className="text-center py-12">
+        {extracting ? (
+          <>
+            <Loader2 size={24} className="animate-spin text-accent-text mx-auto mb-3" />
+            <p className="text-sm text-text-muted">Extracting frames...</p>
+            <p className="text-xs text-text-muted mt-1">You can switch tabs while this runs</p>
+          </>
+        ) : (
+          <>
+            <ImageIcon size={24} className="text-text-muted mx-auto mb-3" />
+            <p className="text-sm text-text-muted mb-3">Extract key frames from this video</p>
+            <Button onClick={onExtract} className="cursor-pointer">
+              <ImageIcon size={14} />
+              Extract frames
+            </Button>
+          </>
+        )}
       </div>
     );
   }
 
+  const contentClassification = item.mediapipe_analysis?.contentClassification;
+
   return (
-    <div className="space-y-3">
-      {expandedFrame !== null && frames[expandedFrame] && (
-        <div className="relative rounded-lg overflow-hidden border border-accent/30 mb-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={frames[expandedFrame].url} alt={frames[expandedFrame].label} className="w-full" />
-          <button onClick={() => setExpandedFrame(null)}
-            className="cursor-pointer absolute top-2 right-2 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80 transition-colors">
-            <X size={14} />
-          </button>
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-            <p className="text-xs text-white font-medium">{frames[expandedFrame].label}</p>
-            <p className="text-[10px] text-white/70">{formatTimestamp(frames[expandedFrame].timestamp)}</p>
-          </div>
+    <div className="space-y-3 overflow-y-auto">
+      {contentClassification && (
+        <div className="rounded-lg border border-nativz-border bg-surface-hover/20 p-3">
+          <ContentBreakdown
+            classification={contentClassification}
+            videoDurationMs={(item.duration ?? 30) * 1000}
+          />
         </div>
       )}
+      {frames.map((frame, i) => {
+        const transcriptText = segments.length > 0
+          ? getTranscriptAtTimestamp(segments, frame.timestamp, 3)
+          : '';
 
-      <div className="grid grid-cols-3 gap-2">
-        {frames.map((frame, i) => (
-          <button key={i} onClick={() => setExpandedFrame(expandedFrame === i ? null : i)}
-            className={`cursor-pointer group relative rounded-lg overflow-hidden border transition-colors ${
-              expandedFrame === i ? 'border-accent' : 'border-nativz-border hover:border-accent/50'
-            }`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={frame.url} alt={frame.label} className="w-full aspect-video object-cover" />
-            <div className="absolute top-1 left-1 bg-black/70 text-white text-[9px] font-mono px-1 py-0.5 rounded">
-              {formatTimestamp(frame.timestamp)}
+        return (
+          <div key={i} className="flex gap-3 rounded-lg border border-nativz-border bg-surface-hover/20 p-2 hover:border-accent/30 transition-colors">
+            {/* 9:16 frame preview */}
+            <div className="relative shrink-0 w-[72px] rounded-md overflow-hidden border border-nativz-border">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={frame.url}
+                alt={frame.label}
+                className="w-full aspect-[9/16] object-cover"
+              />
+              <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-mono text-center py-0.5">
+                {frame.label}
+              </div>
             </div>
-          </button>
-        ))}
-      </div>
+
+            {/* Transcript text */}
+            <div className="flex-1 min-w-0 py-0.5">
+              <p className="text-[10px] font-medium text-text-muted mb-1">
+                {frame.label}{i < frames.length - 1 ? ` – ${frames[i + 1].label}` : '+'}
+              </p>
+              {transcriptText ? (
+                <p className="text-sm text-text-secondary leading-relaxed">
+                  {transcriptText}
+                </p>
+              ) : (
+                <p className="text-xs text-text-muted italic">No transcript at this point</p>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -543,11 +619,12 @@ function BriefSection({ item, onReplicate, onCopy, copied }: {
 
   if (!item.replication_brief) {
     return (
-      <div className="text-center py-6">
-        <p className="text-sm text-text-muted mb-3">No brief generated yet</p>
-          <Button onClick={() => onReplicate(item)}>
+      <div className="text-center py-12">
+        <Sparkles size={24} className="text-text-muted mx-auto mb-3" />
+        <p className="text-sm text-text-muted mb-3">No rescript generated yet</p>
+        <Button onClick={() => onReplicate(item)} className="cursor-pointer">
           <CopyIcon size={14} />
-          Replicate this video
+          Rescript
           <ChevronRight size={14} />
         </Button>
       </div>
@@ -573,24 +650,58 @@ function BriefSection({ item, onReplicate, onCopy, copied }: {
         </button>
       </div>
 
-      <div className="rounded-lg border border-nativz-border bg-surface-hover/20 p-4 text-sm text-text-secondary whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto">
+      <div className="rounded-lg border border-nativz-border bg-surface-hover/20 p-4 text-sm text-text-secondary whitespace-pre-wrap leading-relaxed overflow-y-auto">
         {item.replication_brief}
       </div>
     </div>
   );
 }
 
-// ─── Shared Components ──────────────────────────────────────
-function StatCard({ icon, value, label }: { icon: React.ReactNode; value: number; label: string }) {
+// ─── Visual Hook Metrics ─────────────────────────────────────
+function VisualHookMetrics({ hook }: { hook: HookVisualAnalysis }) {
+  const metrics = [
+    { label: 'Face prominence', value: hook.faceProminence, color: 'bg-blue-400' },
+    { label: 'Movement energy', value: hook.movementEnergy, color: 'bg-amber-400' },
+    { label: 'Visual complexity', value: hook.visualComplexity, color: 'bg-purple-400' },
+  ].filter((m) => m.value > 0);
+
+  if (metrics.length === 0 && hook.objectsDetected.length === 0) return null;
+
   return (
-    <div className="rounded-lg border border-nativz-border bg-surface-hover/30 p-3 text-center">
-      <div className="mx-auto mb-1 w-fit">{icon}</div>
-      <p className="text-xl font-bold text-text-primary">{value}</p>
-      <p className="text-[10px] text-text-muted">{label}</p>
+    <div className="space-y-2">
+      {metrics.length > 0 && (
+        <div className="space-y-1.5">
+          {metrics.map((m) => (
+            <div key={m.label} className="flex items-center gap-2">
+              <span className="text-[10px] text-text-muted w-28 shrink-0">{m.label}</span>
+              <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${m.color}`}
+                  style={{ width: `${Math.round(m.value * 100)}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-text-muted w-8 text-right">{Math.round(m.value * 100)}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {hook.objectsDetected.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {hook.objectsDetected.slice(0, 5).map((obj, i) => (
+            <span key={i} className="text-[10px] bg-white/5 rounded-full px-2 py-0.5 text-text-muted">
+              {obj}
+            </span>
+          ))}
+          {hook.objectsDetected.length > 5 && (
+            <span className="text-[10px] text-text-muted">+{hook.objectsDetected.length - 5} more</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
+// ─── Shared Components ──────────────────────────────────────
 function HookScoreBar({ score }: { score: number }) {
   const pct = (score / 10) * 100;
   const color = score >= 7 ? 'bg-emerald-500' : score >= 4 ? 'bg-yellow-500' : 'bg-red-500';

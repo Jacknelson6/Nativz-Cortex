@@ -27,7 +27,12 @@ export const WebsiteNode = memo(function WebsiteNode({ data }: NodeProps<Website
       onClick={() => onExtractInsights(item)}
       className="bg-surface rounded-xl border border-nativz-border shadow-card overflow-hidden min-w-[280px] max-w-[360px] group cursor-pointer hover:border-accent/40 transition-colors"
     >
-      <Handle type="target" position={Position.Top} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
+      <Handle type="target" position={Position.Top} id="top-target" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
+      <Handle type="source" position={Position.Top} id="top-source" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
+      <Handle type="target" position={Position.Left} id="left-target" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
+      <Handle type="source" position={Position.Left} id="left-source" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
+      <Handle type="target" position={Position.Right} id="right-target" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
+      <Handle type="source" position={Position.Right} id="right-source" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
 
       {/* Screenshot */}
       <div className="relative aspect-[16/10] bg-surface-hover overflow-hidden">
@@ -117,7 +122,8 @@ export const WebsiteNode = memo(function WebsiteNode({ data }: NodeProps<Website
         </div>
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all" />
+      <Handle type="source" position={Position.Bottom} id="bottom-source" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
+      <Handle type="target" position={Position.Bottom} id="bottom-target" className="!bg-accent !border-0 !w-2 !h-2 hover:!w-3 hover:!h-3 !transition-all !opacity-0 group-hover:!opacity-100" />
     </div>
   );
 });

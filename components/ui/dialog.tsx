@@ -8,7 +8,7 @@ interface DialogProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '5xl' | 'full';
 }
 
 const maxWidthStyles = {
@@ -17,6 +17,8 @@ const maxWidthStyles = {
   lg: 'max-w-lg',
   xl: 'max-w-xl',
   '2xl': 'max-w-2xl',
+  '5xl': 'max-w-5xl',
+  full: 'max-w-[calc(100vw-4rem)] max-h-[calc(100vh-4rem)]',
 };
 
 export function Dialog({ open, onClose, title, children, maxWidth = 'md' }: DialogProps) {

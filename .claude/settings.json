@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "deny": ["Read(.agent/history/**)"],
+    "allow": ["**"]
+  },
+  "defaultMode": "acceptEdits",
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": ["playwright", "context7", "sequential-thinking"],
+  "hooks": {
+    "UserPromptSubmit": [],
+    "PreToolUse": [],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/play-sound.js notification"
+          }
+        ]
+      }
+    ]
+  }
+}

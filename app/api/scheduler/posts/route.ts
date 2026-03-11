@@ -193,7 +193,9 @@ export async function GET(request: NextRequest) {
             id,
             filename,
             storage_path,
-            thumbnail_url
+            thumbnail_url,
+            late_media_url,
+            mime_type
           )
         ),
         post_review_links (
@@ -239,6 +241,8 @@ export async function GET(request: NextRequest) {
             filename: m?.filename ?? '',
             storage_path: m?.storage_path ?? '',
             thumbnail_url: m?.thumbnail_url ?? null,
+            late_media_url: m?.late_media_url ?? null,
+            mime_type: m?.mime_type ?? null,
           };
         });
 

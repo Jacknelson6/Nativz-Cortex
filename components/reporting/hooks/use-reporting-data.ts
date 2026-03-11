@@ -13,6 +13,8 @@ interface ClientOption {
   id: string;
   name: string;
   slug: string;
+  logo_url?: string | null;
+  agency?: string | null;
 }
 
 function getDateRange(preset: DateRangePreset, customRange?: DateRange): DateRange {
@@ -33,6 +35,14 @@ function getDateRange(preset: DateRangePreset, customRange?: DateRange): DateRan
     case 'mtd': {
       const start = new Date(today.getFullYear(), today.getMonth(), 1);
       return { start: start.toISOString().split('T')[0], end };
+    }
+    case 'last_month': {
+      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
+      return {
+        start: start.toISOString().split('T')[0],
+        end: lastDay.toISOString().split('T')[0],
+      };
     }
     case 'ytd': {
       const start = new Date(today.getFullYear(), 0, 1);
@@ -71,9 +81,14 @@ export function useReportingData() {
       try {
         const res = await fetch('/api/clients');
         const data = await res.json();
-        const list: ClientOption[] = Array.isArray(data)
-          ? data
-          : data.clients ?? [];
+        const raw = Array.isArray(data) ? data : data.clients ?? [];
+        const list: ClientOption[] = raw.map((c: Record<string, unknown>) => ({
+          id: c.id as string,
+          name: c.name as string,
+          slug: c.slug as string,
+          logo_url: (c.logo_url as string | null) ?? null,
+          agency: (c.agency as string | null) ?? null,
+        }));
         setClients(list);
         if (list.length > 0 && !selectedClientId) {
           setSelectedClientId(list[0].id);
@@ -150,14 +165,35 @@ export function useReportingData() {
     fetchData();
   }, [fetchData]);
 
+  const fetchTopPostsForReport = useCallback(
+    async (limit: number): Promise<TopPostItem[]> => {
+      if (!selectedClientId) return [];
+      const params = new URLSearchParams({
+        clientId: selectedClientId,
+        start: dateRange.start,
+        end: dateRange.end,
+        limit: String(limit),
+      });
+      const res = await fetch(`/api/reporting/top-posts?${params}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.posts ?? data ?? [];
+    },
+    [selectedClientId, dateRange.start, dateRange.end],
+  );
+
+  const selectedClient = clients.find((c) => c.id === selectedClientId) ?? null;
+
   return {
     clients,
+    selectedClient,
     selectedClientId,
     setSelectedClientId,
     datePreset,
     setDatePreset,
     customRange,
     setCustomRange,
+    dateRange,
     activeView,
     setActiveView,
     topPostsLimit,
@@ -169,5 +205,6 @@ export function useReportingData() {
     syncing,
     syncNow,
     refreshData,
+    fetchTopPostsForReport,
   };
 }

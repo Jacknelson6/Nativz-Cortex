@@ -1,63 +1,39 @@
 import Link from 'next/link';
 import { Building2, Sparkles } from 'lucide-react';
-import { getVaultClients } from '@/lib/vault/reader';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { GlowButton } from '@/components/ui/glow-button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import { ClientSearchGrid } from '@/components/clients/client-search-grid';
-import { calculateAllClientHealth } from '@/lib/clients/health';
 
 export default async function AdminClientsPage() {
   try {
     const adminClient = createAdminClient();
 
-    const [vaultClients, dbClients] = await Promise.all([
-      getVaultClients(),
-      adminClient
-        .from('clients')
-        .select('id, slug, industry, is_active, logo_url')
-        .then(({ data }) => {
-          const map = new Map<string, { id: string; industry: string; isActive: boolean; logoUrl: string | null }>();
-          for (const c of data ?? []) {
-            map.set(c.slug, {
-              id: c.id,
-              industry: c.industry && c.industry !== 'General' ? c.industry : '',
-              isActive: c.is_active ?? true,
-              logoUrl: c.logo_url ?? null,
-            });
-          }
-          return map;
-        }),
-    ]);
+    // Fetch all clients from DB
+    const { data: dbClients, error: dbError } = await adminClient
+      .from('clients')
+      .select('id, name, slug, industry, is_active, logo_url, services, agency, health_score')
+      .order('name');
 
-    // Merge DB fields into vault profiles — exclude clients not in DB (deleted)
-    const mergedClients = vaultClients
-      .filter((c) => dbClients.has(c.slug))
-      .map((c) => {
-        const db = dbClients.get(c.slug)!;
-        return {
-          ...c,
-          industry: db.industry || c.industry,
-          isActive: db.isActive,
-          logoUrl: db.logoUrl,
-          dbId: db.id,
-        };
-      });
+    if (dbError) {
+      console.error('Database error fetching clients:', JSON.stringify(dbError, null, 2));
+      throw dbError;
+    }
 
-    // Calculate health scores for all clients with DB records
-    const clientIds = mergedClients.map((c) => c.dbId).filter(Boolean);
-    const healthMap = await calculateAllClientHealth(clientIds);
-
-    const clientsWithHealth = mergedClients.map((c) => {
-      const health = c.dbId ? healthMap.get(c.dbId) : undefined;
-      return {
-        ...c,
-        healthScore: health?.score ?? 0,
-        healthIsNew: health?.isNew ?? false,
-        lastActivityAt: health?.lastActivityAt ?? null,
-      };
-    });
+    // Transform DB results to match the grid component's expectations
+    const clients = (dbClients ?? []).map((c) => ({
+      id: c.slug,
+      dbId: c.id,
+      name: c.name,
+      slug: c.slug,
+      industry: c.industry && c.industry !== 'General' ? c.industry : '',
+      isActive: c.is_active ?? true,
+      logoUrl: c.logo_url ?? null,
+      services: (c.services as string[]) ?? [],
+      agency: c.agency ?? null,
+      healthScore: c.health_score ?? null,
+    }));
 
     return (
       <div className="p-6 space-y-6">
@@ -74,7 +50,7 @@ export default async function AdminClientsPage() {
           </Link>
         </div>
 
-        {clientsWithHealth.length === 0 ? (
+        {clients.length === 0 ? (
           <EmptyState
             icon={<Building2 size={32} />}
             title="No clients yet"
@@ -89,12 +65,16 @@ export default async function AdminClientsPage() {
             }
           />
         ) : (
-          <ClientSearchGrid clients={clientsWithHealth} />
+          <ClientSearchGrid clients={clients} />
         )}
       </div>
     );
-  } catch (error) {
-    console.error('AdminClientsPage error:', error);
+  } catch (error: any) {
+    console.error('AdminClientsPage full error:', error);
+    if (error.message) console.error('Error message:', error.message);
+    if (error.details) console.error('Error details:', error.details);
+    if (error.hint) console.error('Error hint:', error.hint);
+    if (error.code) console.error('Error code:', error.code);
     return <PageError />;
   }
 }

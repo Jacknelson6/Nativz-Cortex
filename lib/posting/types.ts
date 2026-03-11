@@ -59,6 +59,8 @@ export interface ConnectProfileInput {
   platform: SocialPlatform;
   /** Redirect URL after OAuth completion */
   callbackUrl: string;
+  /** Late profile ID (groups social accounts per client) */
+  profileId: string;
 }
 
 export interface ConnectProfileResult {
@@ -107,6 +109,126 @@ export interface LatePost {
   createdAt: string;
 }
 
+// --- Late analytics types ---
+
+export interface DailyMetricsQuery {
+  accountId: string;
+  startDate: string;
+  endDate: string;
+}
+
+export interface DailyMetric {
+  date: string;
+  impressions: number;
+  reach: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  views: number;
+  engagement: number;
+  engagementRate: number;
+  postsCount: number;
+}
+
+export interface FollowerStats {
+  followers: number;
+  followerChange: number;
+}
+
+export interface PostAnalyticsItem {
+  postId: string;
+  platform: SocialPlatform;
+  postUrl: string | null;
+  thumbnailUrl: string | null;
+  caption: string | null;
+  postType: string | null;
+  publishedAt: string | null;
+  impressions: number;
+  reach: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  views: number;
+}
+
+export interface PostAnalyticsQuery {
+  accountId: string;
+  startDate: string;
+  endDate: string;
+}
+
+// --- Late unified analytics response ---
+
+export interface LateAnalyticsPost {
+  _id: string;
+  content: string | null;
+  publishedAt: string | null;
+  scheduledFor: string | null;
+  status: string;
+  platform: string;
+  platformPostUrl: string | null;
+  thumbnailUrl: string | null;
+  mediaType: string | null;
+  profileId: string | null;
+  isExternal: boolean;
+  analytics: {
+    impressions: number;
+    reach: number;
+    likes: number;
+    comments: number;
+    shares: number;
+    saves: number;
+    clicks: number;
+    views: number;
+    engagementRate: number;
+    lastUpdated: string | null;
+  } | null;
+  platforms: Array<{
+    platform: string;
+    status: string;
+    accountId: string;
+    accountUsername: string;
+    analytics: {
+      impressions: number;
+      reach: number;
+      likes: number;
+      comments: number;
+      shares: number;
+      saves: number;
+      clicks: number;
+      views: number;
+      engagementRate: number;
+    } | null;
+  }>;
+  mediaItems?: Array<{ type: string; url: string; thumbnail?: string }>;
+}
+
+export interface LateAnalyticsAccount {
+  _id: string;
+  platform: string;
+  username: string;
+  followersCount: number;
+}
+
+export interface LateAnalyticsResponse {
+  overview: {
+    totalPosts: number;
+    publishedPosts: number;
+    scheduledPosts: number;
+    lastSync: string | null;
+  };
+  posts: LateAnalyticsPost[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+  accounts: LateAnalyticsAccount[];
+  hasAnalyticsAccess: boolean;
+}
+
 export interface PostingService {
   /** Publish or schedule a post across platforms */
   publishPost(input: PublishPostInput): Promise<PublishResult>;
@@ -127,7 +249,7 @@ export interface PostingService {
   getConnectedProfiles(): Promise<SocialProfile[]>;
 
   /** Get a presigned upload URL for media */
-  getMediaUploadUrl(contentType?: string): Promise<{ uploadUrl: string; publicUrl: string }>;
+  getMediaUploadUrl(contentType?: string, filename?: string): Promise<{ uploadUrl: string; publicUrl: string }>;
 
   /** List posts from Late */
   listPosts(query?: ListPostsQuery): Promise<LatePost[]>;
@@ -137,4 +259,13 @@ export interface PostingService {
 
   /** Retry a failed post */
   retryPost(externalPostId: string): Promise<PublishResult>;
+
+  /** Get daily aggregate metrics for an account */
+  getDailyMetrics(query: DailyMetricsQuery): Promise<DailyMetric[]>;
+
+  /** Get follower stats for an account */
+  getFollowerStats(accountId: string): Promise<FollowerStats>;
+
+  /** Get per-post analytics for an account */
+  getPostAnalytics(query: PostAnalyticsQuery): Promise<PostAnalyticsItem[]>;
 }

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
+  <!-- Background rounded rect (blue) -->
+  <rect width="500" height="500" rx="80" fill="#4285F4"/>
+  <!-- Top-right yellow section -->
+  <path d="M310 0h110c44.2 0 80 35.8 80 80v230H310V0z" fill="#FBBC04"/>
+  <!-- Bottom-left dark green -->
+  <path d="M0 310h190v190H80c-44.2 0-80-35.8-80-80V310z" fill="#0D652D"/>
+  <!-- Bottom-right green -->
+  <path d="M190 310h310v110c0 44.2-35.8 80-80 80H190V310z" fill="#34A853"/>
+  <!-- Bottom-right corner fold (red triangle) -->
+  <path d="M500 310v110c0 44.2-35.8 80-80 80h-0L500 310z" fill="#EA4335"/>
+  <!-- White center square -->
+  <rect x="130" y="130" width="240" height="240" rx="4" fill="#fff"/>
+  <!-- "31" text -->
+  <text x="250" y="290" text-anchor="middle" font-family="Google Sans,Product Sans,Roboto,Arial,sans-serif" font-size="160" font-weight="500" fill="#4285F4">31</text>
+</svg>

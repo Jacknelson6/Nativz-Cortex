@@ -11,7 +11,7 @@ interface HeaderProps {
 }
 
 export function Header({ portalMode = false }: HeaderProps) {
-  const { isOpen, toggle } = useSidebar();
+  const { isOpen, toggle, isCollapsed } = useSidebar();
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-nativz-border bg-surface px-4 md:px-6">
@@ -36,18 +36,37 @@ export function Header({ portalMode = false }: HeaderProps) {
             />
           </div>
         </button>
-        <Link href="/" aria-label="Go to home" className="hidden md:flex flex-col items-center w-56 -ml-6 hover:opacity-80 transition-opacity duration-150">
-          <Image
-            src="/nativz-logo.svg"
-            alt="Nativz"
-            width={140}
-            height={54}
-            className="h-10 w-auto"
-            priority
-          />
-          <span className="text-[11px] font-bold text-text-secondary tracking-[0.35em] uppercase -mt-1">
-            Cortex
-          </span>
+        <Link
+          href="/"
+          aria-label="Go to home"
+          className={`hidden md:flex flex-col items-center -ml-6 hover:opacity-80 transition-all duration-200 ${
+            isCollapsed ? 'w-16' : 'w-56'
+          }`}
+        >
+          {isCollapsed ? (
+            <Image
+              src="/nativz-logo.svg"
+              alt="Nativz"
+              width={80}
+              height={30}
+              className="h-6 w-auto"
+              priority
+            />
+          ) : (
+            <>
+              <Image
+                src="/nativz-logo.svg"
+                alt="Nativz"
+                width={140}
+                height={54}
+                className="h-10 w-auto"
+                priority
+              />
+              <span className="text-[11px] font-bold text-text-secondary tracking-[0.35em] uppercase -mt-1">
+                Cortex
+              </span>
+            </>
+          )}
         </Link>
         <Link href="/" aria-label="Go to home" className="flex md:hidden flex-col items-center hover:opacity-80 transition-opacity duration-150">
           <Image

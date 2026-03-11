@@ -1,20 +1,25 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Send, Sparkles, Loader2, Link2, Unlink } from 'lucide-react';
+import { X, Send, Sparkles, Loader2, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { MoodboardItem } from '@/lib/types/moodboard';
+import type { MoodboardItem, MoodboardNote } from '@/lib/types/moodboard';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
+interface ClientOption {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 interface AiChatPanelProps {
   boardId: string;
   items: MoodboardItem[];
-  connectedItemIds: string[];
-  onConnectedItemsChange: (ids: string[]) => void;
+  notes: MoodboardNote[];
   onClose: () => void;
 }
 
@@ -43,8 +48,6 @@ function SimpleMarkdown({ content }: { content: string }) {
       return;
     }
 
-    let processed: React.ReactNode = line;
-
     // Headers
     if (line.startsWith('### ')) {
       elements.push(<h4 key={i} className="font-semibold text-sm text-white mt-3 mb-1">{line.slice(4)}</h4>);
@@ -59,14 +62,34 @@ function SimpleMarkdown({ content }: { content: string }) {
       return;
     }
 
-    // Bullets
-    const bulletMatch = line.match(/^(\s*)[-*]\s+(.*)/);
+    // Standalone bold line → treat as subheading
+    const boldLineMatch = line.match(/^\*\*(.+?)\*\*:?$/);
+    if (boldLineMatch) {
+      elements.push(<h4 key={i} className="font-semibold text-sm text-white mt-3 mb-1">{boldLineMatch[1]}</h4>);
+      return;
+    }
+
+    // Bullets — only match single - or * followed by space (not **)
+    const bulletMatch = line.match(/^(\s*)[-]\s+(.*)|^(\s*)\*\s+(.*)/);
     if (bulletMatch) {
-      const indent = bulletMatch[1].length > 0 ? 'ml-4' : '';
+      const indent = (bulletMatch[1] || bulletMatch[3] || '').length > 0 ? 'ml-4' : '';
+      const text = bulletMatch[2] || bulletMatch[4];
       elements.push(
         <div key={i} className={`flex gap-2 ${indent}`}>
-          <span className="text-blue-400 shrink-0">•</span>
-          <span className="text-sm">{formatInline(bulletMatch[2])}</span>
+          <span className="text-blue-400 shrink-0">&bull;</span>
+          <span className="text-sm">{formatInline(text)}</span>
+        </div>
+      );
+      return;
+    }
+
+    // Numbered lists
+    const numberedMatch = line.match(/^(\s*)\d+[.)]\s+(.*)/);
+    if (numberedMatch) {
+      elements.push(
+        <div key={i} className="flex gap-2">
+          <span className="text-blue-400 shrink-0">&bull;</span>
+          <span className="text-sm">{formatInline(numberedMatch[2])}</span>
         </div>
       );
       return;
@@ -93,9 +116,9 @@ function SimpleMarkdown({ content }: { content: string }) {
 }
 
 function formatInline(text: string): React.ReactNode {
-  // Bold and inline code
+  // Bold, italic, and inline code
   const parts: React.ReactNode[] = [];
-  const regex = /(\*\*(.+?)\*\*|`(.+?)`)/g;
+  const regex = /(\*\*(.+?)\*\*|\*([^*]+?)\*|`(.+?)`)/g;
   let lastIndex = 0;
   let match;
 
@@ -106,7 +129,9 @@ function formatInline(text: string): React.ReactNode {
     if (match[2]) {
       parts.push(<strong key={match.index} className="font-semibold text-white">{match[2]}</strong>);
     } else if (match[3]) {
-      parts.push(<code key={match.index} className="bg-black/30 rounded px-1 py-0.5 text-xs font-mono text-blue-300">{match[3]}</code>);
+      parts.push(<em key={match.index} className="italic">{match[3]}</em>);
+    } else if (match[4]) {
+      parts.push(<code key={match.index} className="bg-black/30 rounded px-1 py-0.5 text-xs font-mono text-blue-300">{match[4]}</code>);
     }
     lastIndex = match.index + match[0].length;
   }
@@ -118,16 +143,41 @@ function formatInline(text: string): React.ReactNode {
   return parts.length ? <>{parts}</> : text;
 }
 
-export function AiChatPanel({ boardId, items, connectedItemIds, onConnectedItemsChange, onClose }: AiChatPanelProps) {
+export function AiChatPanel({ boardId, items, notes, onClose }: AiChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
-  const [showItemPicker, setShowItemPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const connectedItems = items.filter(i => connectedItemIds.includes(i.id));
+  // @mention state
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [mentionedClientSlugs, setMentionedClientSlugs] = useState<string[]>([]);
+
+  // Fetch clients list once for @mention autocomplete
+  useEffect(() => {
+    fetch('/api/clients')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setClients(Array.isArray(data) ? data.map((c: { id: string; name: string; slug: string }) => ({ id: c.id, name: c.name, slug: c.slug })) : []))
+      .catch(() => {});
+  }, []);
+
+  // Auto-include all videos and websites
+  const videoItems = items.filter(i => i.type === 'video');
+  const websiteItems = items.filter(i => i.type === 'website');
+  const contentItemIds = [...videoItems, ...websiteItems].map(i => i.id);
+  const contentLabel = [
+    videoItems.length > 0 ? `${videoItems.length} video${videoItems.length !== 1 ? 's' : ''}` : '',
+    websiteItems.length > 0 ? `${websiteItems.length} website${websiteItems.length !== 1 ? 's' : ''}` : '',
+  ].filter(Boolean).join(' and ');
+
+  // Extract @mentions from input
+  const mentionMatches = mentionQuery !== null
+    ? clients.filter(c => c.name.toLowerCase().includes(mentionQuery.toLowerCase()) || c.slug.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 5)
+    : [];
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -143,7 +193,19 @@ export function AiChatPanel({ boardId, items, connectedItemIds, onConnectedItems
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || streaming || connectedItemIds.length === 0) return;
+    if (!text || streaming) return;
+
+    // Extract @slugs from the message for this request
+    const slugRegex = /@(\S+)/g;
+    const slugsInMessage: string[] = [];
+    let slugMatch: RegExpExecArray | null;
+    while ((slugMatch = slugRegex.exec(text)) !== null) {
+      const matchedClient = clients.find(c => c.slug === slugMatch![1] || c.name.toLowerCase().replace(/\s+/g, '') === slugMatch![1].toLowerCase());
+      if (matchedClient) slugsInMessage.push(matchedClient.slug);
+    }
+    // Merge with previously mentioned slugs
+    const allSlugs = [...new Set([...mentionedClientSlugs, ...slugsInMessage])];
+    if (slugsInMessage.length > 0) setMentionedClientSlugs(allSlugs);
 
     const userMessage: ChatMessage = { role: 'user', content: text };
     const newMessages = [...messages, userMessage];
@@ -154,14 +216,19 @@ export function AiChatPanel({ boardId, items, connectedItemIds, onConnectedItems
     const controller = new AbortController();
     abortRef.current = controller;
 
+    // Gather note contents for context
+    const noteContents = notes.filter(n => n.content).map(n => n.content);
+
     try {
       const res = await fetch('/api/moodboard/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           board_id: boardId,
-          item_ids: connectedItemIds,
+          item_ids: contentItemIds,
           messages: newMessages,
+          note_contents: noteContents.length > 0 ? noteContents : undefined,
+          client_slugs: allSlugs.length > 0 ? allSlugs : undefined,
         }),
         signal: controller.signal,
       });
@@ -198,18 +265,61 @@ export function AiChatPanel({ boardId, items, connectedItemIds, onConnectedItems
     }
   };
 
+  const handleInputChange = (value: string) => {
+    setInput(value);
+    // Detect @mention in progress
+    const cursorPos = inputRef.current?.selectionStart ?? value.length;
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const mentionMatch = textBeforeCursor.match(/@([\w-]*)$/);
+    if (mentionMatch) {
+      setMentionQuery(mentionMatch[1]);
+      setMentionIndex(0);
+    } else {
+      setMentionQuery(null);
+    }
+    // Remove badges for clients whose @slug was deleted from the input
+    setMentionedClientSlugs(prev => prev.filter(slug => value.includes(`@${slug}`)));
+  };
+
+  const insertMention = (client: ClientOption) => {
+    const cursorPos = inputRef.current?.selectionStart ?? input.length;
+    const textBeforeCursor = input.slice(0, cursorPos);
+    const atIndex = textBeforeCursor.lastIndexOf('@');
+    const newInput = input.slice(0, atIndex) + `@${client.slug} ` + input.slice(cursorPos);
+    setInput(newInput);
+    setMentionQuery(null);
+    if (!mentionedClientSlugs.includes(client.slug)) {
+      setMentionedClientSlugs(prev => [...prev, client.slug]);
+    }
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Handle @mention navigation
+    if (mentionQuery !== null && mentionMatches.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex(i => Math.min(i + 1, mentionMatches.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex(i => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === 'Tab' || e.key === 'Enter') {
+        e.preventDefault();
+        insertMention(mentionMatches[mentionIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setMentionQuery(null);
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
-    }
-  };
-
-  const toggleItem = (itemId: string) => {
-    if (connectedItemIds.includes(itemId)) {
-      onConnectedItemsChange(connectedItemIds.filter(id => id !== itemId));
-    } else {
-      onConnectedItemsChange([...connectedItemIds, itemId]);
     }
   };
 
@@ -237,71 +347,11 @@ export function AiChatPanel({ boardId, items, connectedItemIds, onConnectedItems
             </Button>
           </div>
 
-          {/* Connected items */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowItemPicker(!showItemPicker)}
-              className="flex items-center gap-1.5 text-[11px] text-text-muted hover:text-text-secondary transition-colors"
-            >
+          {/* Content indicator */}
+          {contentLabel && (
+            <div className="flex items-center gap-1.5 text-[11px] text-text-muted">
               <Link2 size={12} />
-              {connectedItems.length} item{connectedItems.length !== 1 ? 's' : ''} connected
-            </button>
-            <div className="flex gap-1 overflow-x-auto flex-1">
-              {connectedItems.slice(0, 5).map(item => (
-                <div key={item.id} className="relative group shrink-0">
-                  {item.thumbnail_url ? (
-                    <img
-                      src={item.thumbnail_url}
-                      alt={item.title || ''}
-                      className="w-8 h-8 rounded object-cover border border-nativz-border"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded bg-surface-hover border border-nativz-border flex items-center justify-center text-[9px] text-text-muted">
-                      {item.type[0].toUpperCase()}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => toggleItem(item.id)}
-                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X size={8} />
-                  </button>
-                </div>
-              ))}
-              {connectedItems.length > 5 && (
-                <div className="w-8 h-8 rounded bg-surface-hover border border-nativz-border flex items-center justify-center text-[10px] text-text-muted shrink-0">
-                  +{connectedItems.length - 5}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Item picker dropdown */}
-          {showItemPicker && (
-            <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-nativz-border bg-surface-hover p-2 space-y-1">
-              {items.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => toggleItem(item.id)}
-                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs transition-colors ${
-                    connectedItemIds.includes(item.id)
-                      ? 'bg-blue-500/20 text-blue-300'
-                      : 'hover:bg-white/5 text-text-secondary'
-                  }`}
-                >
-                  {item.thumbnail_url ? (
-                    <img src={item.thumbnail_url} alt="" className="w-6 h-6 rounded object-cover shrink-0" />
-                  ) : (
-                    <div className="w-6 h-6 rounded bg-surface border border-nativz-border shrink-0" />
-                  )}
-                  <span className="truncate flex-1">{item.title || item.url}</span>
-                  {connectedItemIds.includes(item.id) ? (
-                    <Unlink size={12} className="shrink-0 text-blue-400" />
-                  ) : (
-                    <Link2 size={12} className="shrink-0 text-text-muted" />
-                  )}
-                </button>
-              ))}
+              <span>Chatting with {contentLabel}</span>
             </div>
           )}
         </div>
@@ -315,24 +365,23 @@ export function AiChatPanel({ boardId, items, connectedItemIds, onConnectedItems
               </div>
               <p className="text-sm font-medium text-text-secondary mb-1">Chat with your content</p>
               <p className="text-xs text-text-muted leading-relaxed">
-                Ask about hooks, pacing, transcripts, or get rescript suggestions.
-                {connectedItems.length === 0 && (
-                  <span className="block mt-2 text-yellow-400/80">Connect items above to get started.</span>
+                Ask about hooks, pacing, transcripts, websites, or get rescript suggestions.
+                {contentLabel && (
+                  <span className="block mt-1.5 text-text-muted/60">Using {contentLabel} from the board.</span>
                 )}
               </p>
-              {connectedItems.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-2 justify-center">
-                  {['Analyze the hook', 'Compare these videos', 'Suggest a rescript', 'What makes this viral?'].map(suggestion => (
-                    <button
-                      key={suggestion}
-                      onClick={() => { setInput(suggestion); inputRef.current?.focus(); }}
-                      className="text-[11px] px-3 py-1.5 rounded-full border border-nativz-border text-text-muted hover:text-text-secondary hover:border-blue-500/30 transition-colors"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <p className="text-[11px] text-text-muted/50 mt-2">Type <span className="text-accent-text">@clientname</span> to include client context</p>
+              <div className="mt-4 flex flex-wrap gap-2 justify-center">
+                {['Analyze the hooks', 'Compare these videos', 'Suggest a rescript', 'What makes this viral?'].map(suggestion => (
+                  <button
+                    key={suggestion}
+                    onClick={() => { setInput(suggestion); inputRef.current?.focus(); }}
+                    className="text-[11px] px-3 py-1.5 rounded-full border border-nativz-border text-text-muted hover:text-text-secondary hover:border-blue-500/30 transition-colors"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -364,22 +413,59 @@ export function AiChatPanel({ boardId, items, connectedItemIds, onConnectedItems
         </div>
 
         {/* Input */}
-        <div className="px-4 pb-4 pt-2 border-t border-nativz-border shrink-0">
+        <div className="px-4 pb-4 pt-2 border-t border-nativz-border shrink-0 relative">
+          {/* @mention autocomplete dropdown */}
+          {mentionQuery !== null && mentionMatches.length > 0 && (
+            <div className="absolute bottom-full left-4 right-4 mb-1 rounded-lg border border-nativz-border bg-surface shadow-dropdown py-1 z-10">
+              {mentionMatches.map((client, i) => (
+                <button
+                  key={client.id}
+                  onClick={() => insertMention(client)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors ${
+                    i === mentionIndex ? 'bg-accent/20 text-accent-text' : 'text-text-secondary hover:bg-white/5'
+                  }`}
+                >
+                  <span className="w-5 h-5 rounded bg-surface-hover border border-nativz-border flex items-center justify-center text-[9px] font-bold text-text-muted shrink-0">
+                    {client.name[0]}
+                  </span>
+                  <span className="truncate">{client.name}</span>
+                  <span className="text-text-muted ml-auto shrink-0">@{client.slug}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Mentioned clients badges */}
+          {mentionedClientSlugs.length > 0 && (
+            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+              {mentionedClientSlugs.map(slug => {
+                const client = clients.find(c => c.slug === slug);
+                return (
+                  <span key={slug} className="inline-flex items-center gap-1 rounded-full bg-accent/10 border border-accent/20 px-2 py-0.5 text-[10px] text-accent-text">
+                    @{client?.name || slug}
+                    <button onClick={() => setMentionedClientSlugs(prev => prev.filter(s => s !== slug))} className="hover:text-white">
+                      <X size={8} />
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
           <div className="flex items-end gap-2">
             <textarea
               ref={inputRef}
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={e => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={connectedItemIds.length === 0 ? 'Connect items to start chatting...' : 'Ask about your content...'}
-              disabled={connectedItemIds.length === 0}
+              placeholder="Ask about your content... (type @ to mention a client)"
               rows={1}
-              className="flex-1 resize-none rounded-xl border border-nativz-border bg-surface-hover px-4 py-2.5 text-sm text-white placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-50 max-h-32"
+              className="flex-1 resize-none rounded-xl border border-nativz-border bg-surface-hover px-4 py-2.5 text-sm text-white placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-blue-500/50 max-h-32"
               style={{ minHeight: '40px' }}
             />
             <Button
               onClick={handleSend}
-              disabled={!input.trim() || streaming || connectedItemIds.length === 0}
+              disabled={!input.trim() || streaming}
               size="sm"
               className="h-10 w-10 p-0 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:opacity-30"
             >

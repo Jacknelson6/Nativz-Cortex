@@ -33,6 +33,28 @@ export async function POST(request: NextRequest) {
           .eq('late_post_id', data.postId);
         break;
       }
+      case 'post.scheduled': {
+        await adminClient
+          .from('scheduled_posts')
+          .update({ status: 'scheduled' })
+          .eq('late_post_id', data.postId);
+        break;
+      }
+      case 'post.partial_publish': {
+        await adminClient
+          .from('scheduled_posts')
+          .update({ status: 'partially_failed' })
+          .eq('late_post_id', data.postId);
+        break;
+      }
+      case 'account.connected': {
+        // Re-sync profiles when a new account is connected
+        await adminClient
+          .from('social_profiles')
+          .update({ is_active: true })
+          .eq('late_account_id', data.accountId);
+        break;
+      }
       case 'account.disconnected': {
         await adminClient
           .from('social_profiles')
@@ -41,7 +63,8 @@ export async function POST(request: NextRequest) {
         break;
       }
       default: {
-        // Unknown event — acknowledge but don't process
+        // message.received, comment.received — log for now
+        console.log(`Late webhook: ${event}`, data);
         break;
       }
     }

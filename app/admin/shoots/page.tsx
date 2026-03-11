@@ -7,18 +7,10 @@ import {
   ChevronRight,
   CalendarDays,
   Plus,
-  Film,
-  Mail,
   ChevronDown,
-  ExternalLink,
-  X,
+  Mail,
   Sparkles,
   RefreshCw,
-  Video,
-  Lightbulb,
-  Target,
-  ChevronUp,
-  Download,
   GripVertical,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -31,173 +23,22 @@ import { IdeateShootModal } from '@/components/shoots/ideate-shoot-modal';
 import { AgencyBadge } from '@/components/clients/agency-badge';
 import { toast } from 'sonner';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface VideoIdea {
-  title: string;
-  hook: string;
-  format: string;
-  talkingPoints: string[];
-  shotList: string[];
-  whyItWorks: string;
-}
-
-interface ShootPlanData {
-  title: string;
-  summary: string;
-  videoIdeas: VideoIdea[];
-  generalTips: string[];
-  equipmentSuggestions: string[];
-}
-
-interface ShootItem {
-  mondayItemId: string;
-  clientName: string;
-  abbreviation: string;
-  groupTitle: string;
-  date: string | null;
-  rawsStatus: string;
-  editingStatus: string;
-  assignmentStatus: string;
-  clientApproval: string;
-  agency: string;
-  boostingStatus: string;
-  notes: string;
-  rawsFolderUrl: string;
-  editedVideosFolderUrl: string;
-  laterCalendarUrl: string;
-  columns: Record<string, string>;
-  clientId: string | null;
-  clientSlug: string | null;
-  clientIndustry: string | null;
-  clientLogoUrl: string | null;
-  // Plan data (fetched from DB)
-  planData?: ShootPlanData | null;
-  planStatus?: string | null;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-function getMonthName(date: Date) {
-  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-}
-
-function isSameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-function isShootPast(dateStr: string | null) {
-  if (!dateStr) return false;
-  const d = new Date(dateStr + 'T00:00:00');
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return d < today;
-}
-
-function isPast(date: Date) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return date < today;
-}
-
-/** Get abbreviation — prefer parsed from Monday name, fallback to initials */
-function getAbbr(item: ShootItem): string {
-  if (item.abbreviation) return item.abbreviation;
-  const words = item.clientName.split(/\s+/).filter(Boolean);
-  if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
-  return words.slice(0, 3).map((w) => w[0]).join('').toUpperCase();
-}
-
-/** Client avatar — logo image or abbreviation fallback */
-function ShootAvatar({ item, size = 'md', dimmed }: { item: ShootItem; size?: 'sm' | 'md' | 'lg'; dimmed?: boolean }) {
-  const sizeClass = size === 'sm' ? 'h-6 w-6' : size === 'lg' ? 'h-10 w-10' : 'h-8 w-8';
-  const textSize = size === 'sm' ? 'text-[8px]' : size === 'lg' ? 'text-xs' : 'text-[10px]';
-
-  if (item.clientLogoUrl) {
-    return (
-      <div className={`relative ${sizeClass} shrink-0 overflow-hidden rounded-lg`}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={item.clientLogoUrl} alt={item.clientName} className="h-full w-full object-cover" />
-      </div>
-    );
-  }
-
-  return (
-    <div className={`flex ${sizeClass} shrink-0 items-center justify-center rounded-lg ${textSize} font-bold ${dimmed ? 'bg-white/[0.06] text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
-      {getAbbr(item)}
-    </div>
-  );
-}
-
-function getEditingBadge(status: string) {
-  const s = status.toLowerCase();
-  if (s.includes('edited') || s.includes('done') || s.includes('complete'))
-    return { variant: 'success' as const, label: status };
-  if (s.includes('editing') || s.includes('progress'))
-    return { variant: 'info' as const, label: status };
-  if (s.includes('scheduled'))
-    return { variant: 'warning' as const, label: status };
-  if (s.includes('not started'))
-    return { variant: 'default' as const, label: status };
-  return { variant: 'default' as const, label: status || 'No status' };
-}
-
-function getRawsBadge(status: string) {
-  const s = status.toLowerCase();
-  if (s.includes('uploaded'))
-    return { variant: 'success' as const, label: 'RAWs uploaded' };
-  if (s.includes('no shoot'))
-    return { variant: 'default' as const, label: 'No shoot' };
-  return { variant: 'warning' as const, label: status || 'Pending' };
-}
-
-// ---------------------------------------------------------------------------
-// Client-side cache for content calendar data
-// ---------------------------------------------------------------------------
-
-const CLIENT_CACHE_KEY = 'shoots_content_calendar';
-const CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-function getClientCache(): { groups: unknown; items: unknown } | null {
-  try {
-    const raw = sessionStorage.getItem(CLIENT_CACHE_KEY);
-    if (!raw) return null;
-    const { data, ts } = JSON.parse(raw);
-    if (Date.now() - ts > CLIENT_CACHE_TTL) {
-      sessionStorage.removeItem(CLIENT_CACHE_KEY);
-      return null;
-    }
-    return data;
-  } catch {
-    return null;
-  }
-}
-
-function setClientCache(data: { groups: unknown; items: unknown }) {
-  try {
-    sessionStorage.setItem(CLIENT_CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
-  } catch {
-    // sessionStorage full or unavailable
-  }
-}
-
-function clearClientCache() {
-  try {
-    sessionStorage.removeItem(CLIENT_CACHE_KEY);
-  } catch {
-    // ignore
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+import type { ShootItem, ShootPlanData } from '@/components/shoots/types';
+import {
+  WEEKDAYS,
+  getMonthName,
+  isSameDay,
+  isPast,
+  isShootPast,
+  getAbbr,
+  getEditingBadge,
+  getClientCache,
+  setClientCache,
+  clearClientCache,
+} from '@/components/shoots/helpers';
+import { ShootAvatar } from '@/components/shoots/shoot-avatar';
+import { ShootListItem } from '@/components/shoots/shoot-list-item';
+import { ShootDetailPanel } from '@/components/shoots/shoot-detail-panel';
 
 export default function AdminShootsPage() {
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -211,11 +52,11 @@ export default function AdminShootsPage() {
   const [selectedShoot, setSelectedShoot] = useState<ShootItem | null>(null);
   const [pastExpanded, setPastExpanded] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
-    const [shootToSchedule, setShootToSchedule] = useState<ShootItem | null>(null);
+  const [shootToSchedule, setShootToSchedule] = useState<ShootItem | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [scheduleDate, setScheduleDate] = useState<string | null>(null);
   const [ideateModalOpen, setIdeateModalOpen] = useState(false);
-    const [shootToIdeate, setShootToIdeate] = useState<ShootItem | null>(null);
+  const [shootToIdeate, setShootToIdeate] = useState<ShootItem | null>(null);
 
   // Plan data from DB keyed by mondayItemId
   const [planDataMap, setPlanDataMap] = useState<Record<string, ShootPlanData>>({});
@@ -300,10 +141,35 @@ export default function AdminShootsPage() {
     setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1));
   }
 
+  const [syncing, setSyncing] = useState(false);
+
   function handleRefresh() {
     clearClientCache();
     fetchData(false);
     fetchPlans();
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/shoots/sync', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Sync failed');
+        return;
+      }
+      if (data.synced === 0) {
+        toast.info(data.message || 'No shoot events found in Google Calendar');
+      } else {
+        toast.success(`Synced ${data.synced} shoot${data.synced !== 1 ? 's' : ''} from Google Calendar`);
+        // Refresh the list to show synced events
+        handleRefresh();
+      }
+    } catch {
+      toast.error('Failed to sync with Google Calendar');
+    } finally {
+      setSyncing(false);
+    }
   }
 
   // Build calendar grid for current month
@@ -393,7 +259,6 @@ export default function AdminShootsPage() {
     setDraggedShoot(shoot);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', shoot.mondayItemId);
-    // Make the drag ghost semi-transparent
     if (e.currentTarget instanceof HTMLElement) {
       e.currentTarget.style.opacity = '0.4';
     }
@@ -516,6 +381,16 @@ export default function AdminShootsPage() {
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={handleRefresh} title="Refresh data">
             <RefreshCw size={14} />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={syncing}
+            title="Sync shoots from Google Calendar"
+          >
+            <CalendarDays size={14} className={syncing ? 'animate-pulse' : ''} />
+            {syncing ? 'Syncing...' : 'Sync'}
           </Button>
           <GlassButton onClick={() => { setShootToSchedule(null); setScheduleModalOpen(true); }}>
             <Mail size={14} />
@@ -868,467 +743,5 @@ export default function AdminShootsPage() {
         </>
       )}
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Shoot List Item — with expandable plan preview
-// ---------------------------------------------------------------------------
-
-function ShootListItem({
-  item,
-  index,
-  onSelect,
-  onIdeate,
-}: {
-  item: ShootItem;
-  index: number;
-  onSelect: () => void;
-  onIdeate: () => void;
-}) {
-  const [planExpanded, setPlanExpanded] = useState(false);
-  const date = item.date ? new Date(item.date + 'T00:00:00') : null;
-  const plan = item.planData;
-
-  return (
-    <div
-      className="animate-stagger-in"
-      style={{ animationDelay: `${index * 30}ms` }}
-    >
-      <Card className="space-y-0">
-        <div className="flex items-center gap-3">
-          {/* Date badge */}
-          {date && (
-            <button
-              onClick={onSelect}
-              className="cursor-pointer flex flex-col items-center justify-center rounded-lg bg-accent/10 text-accent px-2.5 py-1.5 min-w-[48px] hover:bg-accent/20 transition-colors"
-            >
-              <span className="text-base font-bold leading-none">{date.getDate()}</span>
-              <span className="text-[9px] font-medium uppercase mt-0.5">
-                {date.toLocaleDateString('en-US', { month: 'short' })}
-              </span>
-            </button>
-          )}
-
-          {/* Avatar */}
-          <button onClick={onSelect} className="cursor-pointer hover:opacity-80 transition-opacity">
-            <ShootAvatar item={item} />
-          </button>
-
-          {/* Content */}
-          <button onClick={onSelect} className="cursor-pointer flex-1 min-w-0 text-left">
-            <div className="flex items-center gap-1.5">
-              <p className="text-sm font-medium text-text-primary truncate">{item.clientName}</p>
-              {item.abbreviation && (
-                <span className="shrink-0 text-[10px] font-medium text-text-muted">{item.abbreviation}</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <AgencyBadge agency={item.agency || undefined} />
-            </div>
-          </button>
-
-          {/* Ideate / View plan */}
-          {plan ? (
-            <GlassButton
-              onClick={() => setPlanExpanded(!planExpanded)}
-            >
-              <Sparkles size={14} />
-              {plan.videoIdeas?.length ?? 0} ideas
-              {planExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </GlassButton>
-          ) : (
-            <GlassButton
-              onClick={onIdeate}
-            >
-              <Sparkles size={14} />
-              Ideate
-            </GlassButton>
-          )}
-        </div>
-
-        {/* Expanded plan preview */}
-        {plan && planExpanded && (
-          <ShootPlanPreview plan={plan} clientName={item.clientName} />
-        )}
-      </Card>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Inline Shoot Plan Preview
-// ---------------------------------------------------------------------------
-
-function ShootPlanPreview({ plan, clientName }: { plan: ShootPlanData; clientName: string }) {
-  const [expandedIdea, setExpandedIdea] = useState<number | null>(0);
-
-  function handleDownload() {
-    const lines: string[] = [
-      plan.title || `${clientName} Shoot Plan`,
-      '='.repeat(50),
-      '',
-      plan.summary || '',
-      '',
-    ];
-
-    plan.videoIdeas?.forEach((idea, i) => {
-      lines.push(`--- Video ${i + 1}: ${idea.title} ---`);
-      lines.push(`Format: ${idea.format}`);
-      lines.push(`Hook: ${idea.hook}`);
-      lines.push('');
-      if (idea.talkingPoints?.length) {
-        lines.push('Talking points:');
-        idea.talkingPoints.forEach((p) => lines.push(`  - ${p}`));
-        lines.push('');
-      }
-      if (idea.shotList?.length) {
-        lines.push('Shot list:');
-        idea.shotList.forEach((s) => lines.push(`  - ${s}`));
-        lines.push('');
-      }
-      if (idea.whyItWorks) {
-        lines.push(`Why it works: ${idea.whyItWorks}`);
-        lines.push('');
-      }
-    });
-
-    if (plan.generalTips?.length) {
-      lines.push('--- General tips ---');
-      plan.generalTips.forEach((t) => lines.push(`  - ${t}`));
-      lines.push('');
-    }
-
-    if (plan.equipmentSuggestions?.length) {
-      lines.push('--- Equipment suggestions ---');
-      plan.equipmentSuggestions.forEach((e) => lines.push(`  - ${e}`));
-    }
-
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${clientName.replace(/\s+/g, '-').toLowerCase()}-shoot-plan.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success('Shoot plan downloaded');
-  }
-
-  return (
-    <div className="mt-3 pt-3 border-t border-nativz-border space-y-3 animate-expand-in">
-      {/* Plan header */}
-      <div className="flex items-center justify-between">
-        <div>
-          {plan.title && (
-            <h4 className="text-sm font-semibold text-text-primary">{plan.title}</h4>
-          )}
-          {plan.summary && (
-            <p className="text-xs text-text-secondary mt-0.5 line-clamp-2">{plan.summary}</p>
-          )}
-        </div>
-        <Button variant="ghost" size="sm" onClick={handleDownload}>
-          <Download size={12} />
-          Download
-        </Button>
-      </div>
-
-      {/* Video Ideas */}
-      {(plan.videoIdeas ?? []).length > 0 && (
-        <div className="space-y-1.5">
-          <h5 className="flex items-center gap-1.5 text-[10px] font-medium text-text-muted uppercase tracking-wide">
-            <Video size={11} />
-            Video ideas ({plan.videoIdeas.length})
-          </h5>
-
-          {plan.videoIdeas.map((idea, i) => {
-            const isExpanded = expandedIdea === i;
-
-            return (
-              <div
-                key={i}
-                className="rounded-lg border border-nativz-border bg-surface-hover/30 overflow-hidden"
-              >
-                <button
-                  onClick={() => setExpandedIdea(isExpanded ? null : i)}
-                  className="cursor-pointer w-full flex items-center justify-between gap-3 p-2.5 text-left"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-500/15 text-[9px] font-bold text-purple-400">
-                      {i + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-text-primary truncate">{idea.title}</p>
-                      {!isExpanded && idea.format && (
-                        <p className="text-[10px] text-text-muted truncate">{idea.format}</p>
-                      )}
-                    </div>
-                  </div>
-                  {isExpanded ? (
-                    <ChevronUp size={12} className="shrink-0 text-text-muted" />
-                  ) : (
-                    <ChevronDown size={12} className="shrink-0 text-text-muted" />
-                  )}
-                </button>
-
-                {isExpanded && (
-                  <div className="px-2.5 pb-2.5 space-y-2.5 border-t border-nativz-border pt-2.5">
-                    {idea.format && <Badge variant="purple">{idea.format}</Badge>}
-
-                    {idea.hook && (
-                      <div>
-                        <p className="text-[9px] font-medium text-text-muted uppercase tracking-wide mb-0.5">Hook</p>
-                        <p className="text-xs text-text-primary italic">&ldquo;{idea.hook}&rdquo;</p>
-                      </div>
-                    )}
-
-                    {idea.talkingPoints?.length > 0 && (
-                      <div>
-                        <p className="text-[9px] font-medium text-text-muted uppercase tracking-wide mb-1 flex items-center gap-1">
-                          <Lightbulb size={9} /> Talking points
-                        </p>
-                        <ul className="space-y-0.5">
-                          {idea.talkingPoints.map((point, pi) => (
-                            <li key={pi} className="flex items-start gap-1.5 text-xs text-text-secondary">
-                              <span className="text-accent-text mt-0.5">-</span>
-                              {point}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {idea.shotList?.length > 0 && (
-                      <div>
-                        <p className="text-[9px] font-medium text-text-muted uppercase tracking-wide mb-1 flex items-center gap-1">
-                          <Camera size={9} /> Shot list
-                        </p>
-                        <ul className="space-y-0.5">
-                          {idea.shotList.map((shot, si) => (
-                            <li key={si} className="flex items-start gap-1.5 text-xs text-text-secondary">
-                              <span className="text-purple-400 mt-0.5">-</span>
-                              {shot}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {idea.whyItWorks && (
-                      <div className="rounded-md bg-accent/5 border border-accent/10 px-2.5 py-1.5">
-                        <p className="text-[9px] font-medium text-text-muted uppercase tracking-wide mb-0.5 flex items-center gap-1">
-                          <Target size={9} /> Why it works
-                        </p>
-                        <p className="text-[11px] text-text-secondary">{idea.whyItWorks}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Tips & Equipment */}
-      {(plan.generalTips ?? []).length > 0 && (
-        <div>
-          <h5 className="flex items-center gap-1.5 text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1">
-            <Lightbulb size={11} /> Tips
-          </h5>
-          <ul className="space-y-0.5">
-            {plan.generalTips.map((tip, i) => (
-              <li key={i} className="flex items-start gap-1.5 text-xs text-text-secondary">
-                <span className="text-amber-400 mt-0.5">-</span>
-                {tip}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {(plan.equipmentSuggestions ?? []).length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {plan.equipmentSuggestions.map((eq, i) => (
-            <Badge key={i} variant="info">{eq}</Badge>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Shoot Detail Panel
-// ---------------------------------------------------------------------------
-
-function ShootDetailPanel({
-  shoot,
-  onClose,
-  onSchedule,
-  onIdeate,
-}: {
-  shoot: ShootItem;
-  onClose: () => void;
-  onSchedule: (s: ShootItem) => void;
-  onIdeate: (s: ShootItem) => void;
-}) {
-  const date = shoot.date ? new Date(shoot.date + 'T00:00:00') : null;
-  const raws = getRawsBadge(shoot.rawsStatus);
-  const editing = getEditingBadge(shoot.editingStatus);
-  const shootIsPast = isShootPast(shoot.date);
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
-
-      {/* Panel */}
-      <div className="fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-nativz-border bg-surface shadow-elevated overflow-y-auto animate-fade-slide-in">
-        <div className="p-6 space-y-6">
-          {/* Header */}
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <ShootAvatar item={shoot} size="lg" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-semibold text-text-primary">{shoot.clientName}</h2>
-                  {shoot.abbreviation && (
-                    <span className="text-xs font-medium text-text-muted">{shoot.abbreviation}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-sm text-text-muted">{shoot.groupTitle}</span>
-                  <AgencyBadge agency={shoot.agency || undefined} />
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          {/* Key details */}
-          <div className="space-y-3">
-            {date && (
-              <div className="flex items-center gap-3">
-                <CalendarDays size={16} className="text-text-muted shrink-0" />
-                <span className="text-sm text-text-primary">
-                  {date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-                </span>
-                {shootIsPast && <Badge variant="default">Past</Badge>}
-              </div>
-            )}
-          </div>
-
-          {/* Status summary */}
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={raws.variant}>{raws.label}</Badge>
-            <Badge variant={editing.variant}>{editing.label}</Badge>
-          </div>
-
-          {/* Plan & Notes Section */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-medium text-text-muted uppercase tracking-wide">Shoot Plan & Notes</h3>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 text-[10px] text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
-                onClick={() => onIdeate(shoot)}
-              >
-                <Sparkles size={12} />
-                Ideate shoot plan
-              </Button>
-            </div>
-            <textarea
-              className="w-full min-h-[300px] rounded-lg border border-nativz-border bg-surface-hover/20 p-4 text-sm text-text-secondary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-all resize-none"
-              placeholder="Paste or generate a shoot plan here..."
-              defaultValue={shoot.notes || (shoot.planData ? 
-                `TITLE: ${shoot.planData.title}\n\nSUMMARY: ${shoot.planData.summary}\n\n` + 
-                shoot.planData.videoIdeas.map((v, i) => 
-                  `VIDEO ${i+1}: ${v.title}\nHOOK: ${v.hook}\nFORMAT: ${v.format}\n\nPOINTS:\n${v.talkingPoints.map(p => `- ${p}`).join('\n')}\n\nSHOTS:\n${v.shotList.map(s => `- ${s}`).join('\n')}`
-                ).join('\n\n---\n\n') : '')}
-            />
-          </div>
-
-          {/* Links */}
-          {(shoot.rawsFolderUrl || shoot.editedVideosFolderUrl || shoot.laterCalendarUrl) && (
-            <div>
-              <h3 className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">Links</h3>
-              <div className="space-y-1.5">
-                {shoot.rawsFolderUrl && (
-                  <a
-                    href={shoot.rawsFolderUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-accent-text hover:underline"
-                  >
-                    <Film size={14} /> RAWs folder
-                  </a>
-                )}
-                {shoot.editedVideosFolderUrl && (
-                  <a
-                    href={shoot.editedVideosFolderUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-accent-text hover:underline"
-                  >
-                    <Film size={14} /> Edited videos folder
-                  </a>
-                )}
-                {shoot.laterCalendarUrl && (
-                  <a
-                    href={shoot.laterCalendarUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-accent-text hover:underline"
-                  >
-                    <CalendarDays size={14} /> Later calendar view
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="space-y-2 pt-2 border-t border-nativz-border">
-
-            {/* Schedule button — context-aware for past vs upcoming */}
-            {shootIsPast ? (
-              <GlassButton
-                onClick={() => onSchedule(shoot)}
-                className="w-full justify-center"
-              >
-                <RefreshCw size={14} />
-                Schedule next shoot
-              </GlassButton>
-            ) : (
-              <GlassButton
-                onClick={() => onSchedule(shoot)}
-                className="w-full justify-center"
-              >
-                <Camera size={14} />
-                Schedule shoot
-              </GlassButton>
-            )}
-
-            <a
-              href={`https://nativz-team.monday.com/boards/9232769015/pulses/${shoot.mondayItemId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full rounded-lg border border-nativz-border px-3 py-2 text-sm text-text-muted hover:text-text-secondary hover:border-text-muted transition-colors"
-            >
-              <ExternalLink size={14} />
-              View in Monday
-            </a>
-          </div>
-        </div>
-      </div>
-    </>
   );
 }

@@ -1,0 +1,222 @@
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  Bell,
+  Check,
+  Lightbulb,
+  FileText,
+  MessageSquare,
+  Mail,
+  Search,
+  Camera,
+  CheckSquare,
+  Clock,
+  AlertTriangle,
+  CheckCircle,
+  TrendingUp,
+  Flame,
+  Users,
+  RefreshCcw,
+  Zap,
+} from 'lucide-react';
+import { formatRelativeTime } from '@/lib/utils/format';
+import { Card } from '@/components/ui/card';
+
+interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  link_path: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+const TYPE_ICON: Record<string, React.ReactNode> = {
+  idea_submitted: <Lightbulb size={14} className="text-amber-400" />,
+  report_published: <FileText size={14} className="text-accent-text" />,
+  concepts_ready: <FileText size={14} className="text-emerald-400" />,
+  feedback_received: <MessageSquare size={14} className="text-purple-400" />,
+  weekly_digest: <Mail size={14} className="text-text-muted" />,
+  search_completed: <Search size={14} className="text-emerald-400" />,
+  shoot_scheduled: <Camera size={14} className="text-blue-400" />,
+  task_assigned: <CheckSquare size={14} className="text-blue-400" />,
+  task_due_tomorrow: <Clock size={14} className="text-amber-400" />,
+  task_overdue: <AlertTriangle size={14} className="text-red-400" />,
+  task_completed: <CheckCircle size={14} className="text-emerald-400" />,
+  monday_status: <FileText size={14} className="text-blue-400" />,
+  pipeline_alert: <AlertTriangle size={14} className="text-amber-400" />,
+  post_top_performer: <Flame size={14} className="text-orange-400" />,
+  engagement_spike: <TrendingUp size={14} className="text-emerald-400" />,
+  follower_milestone: <Users size={14} className="text-purple-400" />,
+  sync_failed: <RefreshCcw size={14} className="text-red-400" />,
+  post_published: <CheckCircle size={14} className="text-emerald-400" />,
+  post_failed: <AlertTriangle size={14} className="text-red-400" />,
+  post_trending: <Zap size={14} className="text-yellow-400" />,
+};
+
+export function NotificationsWidget() {
+  const router = useRouter();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await fetch('/api/notifications?limit=8');
+      if (res.ok) {
+        const data = await res.json();
+        const normalized: Notification[] = (data.notifications ?? []).map(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (n: any) => ({
+            id: n.id,
+            type: n.type,
+            title: n.title,
+            body: n.body ?? n.message ?? null,
+            link_path: n.link_path ?? (n.task_id ? `/admin/tasks?task=${n.task_id}` : null),
+            is_read: n.is_read ?? n.read ?? false,
+            created_at: n.created_at,
+          })
+        );
+        setNotifications(normalized);
+        setUnreadCount(data.unread_count ?? 0);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  async function markAllRead() {
+    try {
+      await fetch('/api/notifications/mark-all-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function handleClick(notif: Notification) {
+    if (!notif.is_read) {
+      try {
+        await fetch(`/api/notifications/${notif.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ read: true }),
+        });
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n))
+        );
+        setUnreadCount((c) => Math.max(0, c - 1));
+      } catch {
+        /* ignore */
+      }
+    }
+    if (notif.link_path) {
+      if (notif.link_path.startsWith('http')) {
+        window.open(notif.link_path, '_blank', 'noopener');
+      } else {
+        router.push(notif.link_path);
+      }
+    }
+  }
+
+  return (
+    <Card className="h-full flex flex-col">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-base font-semibold text-text-primary flex items-center gap-2">
+          <Bell size={16} className="text-accent-text" />
+          Notifications
+          {unreadCount > 0 && (
+            <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold text-white">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </h2>
+        {unreadCount > 0 && (
+          <button
+            type="button"
+            onClick={markAllRead}
+            className="flex items-center gap-1 text-xs text-accent-text hover:text-accent-hover transition-colors"
+          >
+            <Check size={12} />
+            Mark all read
+          </button>
+        )}
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-1">
+        {loading ? (
+          <div className="space-y-2 px-1">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-2 py-2 animate-pulse">
+                <div className="h-4 w-4 rounded-full bg-surface-elevated" />
+                <div className="flex-1 h-4 rounded bg-surface-elevated" />
+              </div>
+            ))}
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <Bell size={20} className="mb-2 text-text-muted/40" />
+            <p className="text-sm text-text-muted">No notifications</p>
+            <p className="text-xs text-text-muted/60 mt-0.5">You&apos;re all caught up</p>
+          </div>
+        ) : (
+          <div>
+            {notifications.map((notif) => (
+              <button
+                key={notif.id}
+                type="button"
+                onClick={() => handleClick(notif)}
+                className={`flex w-full items-start gap-3 px-2 py-2.5 text-left rounded-lg transition-colors hover:bg-surface-hover ${
+                  !notif.is_read ? 'bg-accent-surface/20' : ''
+                }`}
+              >
+                {/* Thumbnail for post notifications, icon for everything else */}
+                {notif.body && notif.body.startsWith('http') ? (
+                  <img
+                    src={notif.body}
+                    alt=""
+                    className="mt-0.5 h-9 w-9 shrink-0 rounded-md object-cover"
+                  />
+                ) : (
+                  <div className="mt-0.5 shrink-0">
+                    {TYPE_ICON[notif.type] || <Bell size={14} className="text-text-muted" />}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`text-sm leading-snug truncate ${
+                      !notif.is_read ? 'font-medium text-text-primary' : 'text-text-secondary'
+                    }`}
+                  >
+                    {notif.title}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-text-muted/60">
+                    {formatRelativeTime(notif.created_at)}
+                  </p>
+                </div>
+                {!notif.is_read && (
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}

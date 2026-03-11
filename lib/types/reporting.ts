@@ -1,6 +1,6 @@
 export type SocialPlatform = 'facebook' | 'instagram' | 'tiktok' | 'youtube';
 
-export type DateRangePreset = '7d' | '30d' | 'mtd' | 'ytd' | 'custom';
+export type DateRangePreset = '7d' | '30d' | 'mtd' | 'last_month' | 'ytd' | 'custom';
 
 export interface DateRange {
   start: string;
@@ -89,32 +89,3 @@ export interface TopPostItem {
   totalEngagement: number;
 }
 
-export interface NormalizedInsights {
-  followers: number;
-  followersChange: number;
-  views: number;
-  engagement: number;
-  engagementRate: number;
-  postsCount: number;
-}
-
-export interface NormalizedPost {
-  externalPostId: string;
-  postUrl: string | null;
-  thumbnailUrl: string | null;
-  caption: string | null;
-  postType: string;
-  publishedAt: string;
-  views: number;
-  likes: number;
-  comments: number;
-  shares: number;
-  saves: number;
-  reach: number;
-}
-
-export interface PlatformNormalizer {
-  platform: SocialPlatform;
-  fetchInsights(connectionId: string, dateRange: DateRange): Promise<NormalizedInsights>;
-  fetchPosts(connectionId: string, dateRange: DateRange): Promise<NormalizedPost[]>;
-}

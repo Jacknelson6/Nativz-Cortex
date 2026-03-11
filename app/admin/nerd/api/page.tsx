@@ -21,8 +21,6 @@ const ENDPOINTS = [
   { method: 'POST', path: '/api/v1/search', scope: 'search', description: 'Trigger AI topic search for a client' },
   { method: 'GET', path: '/api/v1/team', scope: 'team', description: 'List active team members' },
   { method: 'POST', path: '/api/v1/team', scope: 'team', description: 'Create a team member' },
-  { method: 'GET', path: '/api/v1/calendar/events', scope: 'calendar', description: 'List calendar events (requires start, end)' },
-  { method: 'POST', path: '/api/v1/calendar/events', scope: 'calendar', description: 'Create a calendar event' },
 ] as const;
 
 const METHOD_COLORS: Record<string, string> = {
@@ -66,13 +64,13 @@ export default async function ApiDocsPage() {
           <div>
             <p className="text-xs text-text-muted mb-1">Authentication</p>
             <code className="block rounded-lg bg-background border border-nativz-border px-3 py-2 text-sm text-text-primary font-mono">
-              Authorization: Bearer sk_live_your_key_here
+              Authorization: Bearer ntvz_your_key_here
             </code>
           </div>
           <div>
             <p className="text-xs text-text-muted mb-1">Example request</p>
             <code className="block rounded-lg bg-background border border-nativz-border px-3 py-2 text-sm text-text-primary font-mono whitespace-pre-wrap">
-{`curl -H "Authorization: Bearer sk_live_xxx" \\
+{`curl -H "Authorization: Bearer ntvz_xxx" \\
   ${baseUrl}/api/v1/tasks`}
             </code>
           </div>

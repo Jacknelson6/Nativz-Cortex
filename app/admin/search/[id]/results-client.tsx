@@ -92,7 +92,7 @@ export function AdminResultsClient({ search, clientInfo, recipients = [] }: Admi
   return (
     <div className="min-h-full">
       {/* Header */}
-      <div className="sticky top-0 z-10 border-b border-nativz-border bg-surface/80 backdrop-blur-sm">
+      <div className="border-b border-nativz-border bg-surface">
         <div className="flex h-14 items-center gap-4 px-6">
           <Link href="/admin/search/history" className="text-text-muted hover:text-text-secondary transition-colors">
             <ArrowLeft size={20} />

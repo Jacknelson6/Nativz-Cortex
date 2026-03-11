@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, Check, Lightbulb, FileText, MessageSquare, Settings2, Mail, Search, Camera } from 'lucide-react';
+import { Bell, Check, Lightbulb, FileText, MessageSquare, Settings2, Mail, Search, Camera, CheckSquare, Clock, AlertTriangle, CheckCircle, TrendingUp, Flame, Users, RefreshCcw, Zap } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/format';
 
 interface Notification {
@@ -24,6 +24,17 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   weekly_digest: <Mail size={14} className="text-text-muted" />,
   search_completed: <Search size={14} className="text-emerald-400" />,
   shoot_scheduled: <Camera size={14} className="text-blue-400" />,
+  task_assigned: <CheckSquare size={14} className="text-blue-400" />,
+  task_due_tomorrow: <Clock size={14} className="text-amber-400" />,
+  task_overdue: <AlertTriangle size={14} className="text-red-400" />,
+  task_completed: <CheckCircle size={14} className="text-emerald-400" />,
+  post_top_performer: <Flame size={14} className="text-orange-400" />,
+  engagement_spike: <TrendingUp size={14} className="text-emerald-400" />,
+  follower_milestone: <Users size={14} className="text-purple-400" />,
+  sync_failed: <RefreshCcw size={14} className="text-red-400" />,
+  post_published: <CheckCircle size={14} className="text-emerald-400" />,
+  post_failed: <AlertTriangle size={14} className="text-red-400" />,
+  post_trending: <Zap size={14} className="text-yellow-400" />,
 };
 
 export function NotificationBell() {
@@ -38,7 +49,19 @@ export function NotificationBell() {
       const res = await fetch('/api/notifications?limit=10');
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data.notifications);
+        const normalized: Notification[] = (data.notifications ?? []).map(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (n: any) => ({
+            id: n.id,
+            type: n.type,
+            title: n.title,
+            body: n.body ?? n.message ?? null,
+            link_path: n.link_path ?? (n.task_id ? `/admin/tasks?task=${n.task_id}` : null),
+            is_read: n.is_read ?? n.read ?? false,
+            created_at: n.created_at,
+          })
+        );
+        setNotifications(normalized);
         setUnreadCount(data.unread_count);
       }
     } catch { /* ignore */ }
@@ -46,8 +69,8 @@ export function NotificationBell() {
 
   useEffect(() => {
     fetchNotifications();
-    // Poll every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000);
+    // Poll every 60 seconds
+    const interval = setInterval(fetchNotifications, 60000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
@@ -64,10 +87,9 @@ export function NotificationBell() {
 
   async function markAllRead() {
     try {
-      await fetch('/api/notifications', {
-        method: 'PATCH',
+      await fetch('/api/notifications/mark-all-read', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mark_all_read: true }),
       });
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
@@ -77,10 +99,10 @@ export function NotificationBell() {
   async function handleClick(notif: Notification) {
     if (!notif.is_read) {
       try {
-        await fetch('/api/notifications', {
+        await fetch(`/api/notifications/${notif.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: notif.id }),
+          body: JSON.stringify({ read: true }),
         });
         setNotifications((prev) =>
           prev.map((n) => n.id === notif.id ? { ...n, is_read: true } : n)
@@ -90,7 +112,11 @@ export function NotificationBell() {
     }
     if (notif.link_path) {
       setOpen(false);
-      router.push(notif.link_path);
+      if (notif.link_path.startsWith('http')) {
+        window.open(notif.link_path, '_blank', 'noopener');
+      } else {
+        router.push(notif.link_path);
+      }
     }
   }
 

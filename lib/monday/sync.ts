@@ -149,11 +149,11 @@ export async function syncMondayClientToVault(
 
   await writeFile(path, content, `monday-sync: ${parsed.name}`, existing?.sha);
 
-  // Auto-deactivate clients with no services, reactivate those with services
+  // Sync services + auto-deactivate clients with no services
   const adminClient = createAdminClient();
   await adminClient
     .from('clients')
-    .update({ is_active: parsed.services.length > 0 })
+    .update({ is_active: parsed.services.length > 0, services: parsed.services })
     .ilike('name', parsed.name);
 
   return {
@@ -181,10 +181,10 @@ export async function syncAllMondayClients(): Promise<{
       const parsed = parseMondayClient(item);
       const result = await syncMondayClientToVault(item);
 
-      // Auto-deactivate clients with no services, reactivate those with services
+      // Sync services + auto-deactivate clients with no services
       await adminClient
         .from('clients')
-        .update({ is_active: parsed.services.length > 0 })
+        .update({ is_active: parsed.services.length > 0, services: parsed.services })
         .ilike('name', parsed.name);
 
       results.push(result);

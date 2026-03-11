@@ -10,6 +10,7 @@ const ConfirmUploadSchema = z.object({
   public_url: z.string().url(),
   file_size_bytes: z.number(),
   mime_type: z.string(),
+  thumbnail_url: z.string().nullable().optional(),
 });
 
 // POST: Get presigned upload URL or confirm upload
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     if (action === 'get-upload-url') {
       const service = getPostingService();
-      const { uploadUrl, publicUrl } = await service.getMediaUploadUrl(body.contentType);
+      const { uploadUrl, publicUrl } = await service.getMediaUploadUrl(body.contentType, body.filename);
       return NextResponse.json({ uploadUrl, publicUrl });
     }
 
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
           filename: data.filename,
           storage_path: '',
           late_media_url: data.public_url,
-          thumbnail_url: null,
+          thumbnail_url: data.thumbnail_url ?? null,
           file_size_bytes: data.file_size_bytes,
           mime_type: data.mime_type,
           is_used: false,

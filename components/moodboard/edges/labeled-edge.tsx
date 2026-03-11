@@ -7,7 +7,7 @@ import {
   getBezierPath,
   type EdgeProps,
 } from 'reactflow';
-import { Trash2, Pencil } from 'lucide-react';
+import { X as XIcon, Pencil, Trash2 } from 'lucide-react';
 
 export interface LabeledEdgeData {
   label?: string | null;
@@ -44,6 +44,7 @@ function LabeledEdgeComponent({
     targetPosition,
   });
 
+  const [hovered, setHovered] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [editingLabel, setEditingLabel] = useState(false);
   const [labelInput, setLabelInput] = useState(data?.label || '');
@@ -92,13 +93,24 @@ function LabeledEdgeComponent({
 
   return (
     <>
+      {/* Invisible wider path for hover detection */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={24}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{ pointerEvents: 'stroke' }}
+      />
       <BaseEdge
         id={id}
         path={edgePath}
         style={{
           stroke: edgeColor,
-          strokeWidth: selected ? 3 : 2,
+          strokeWidth: selected || hovered ? 3 : 2,
           strokeDasharray: styleToStrokeDasharray[edgeStyle] || 'none',
+          transition: 'stroke-width 0.15s ease',
         }}
         markerEnd={`url(#arrow-${id})`}
         interactionWidth={20}
@@ -109,19 +121,19 @@ function LabeledEdgeComponent({
           <defs>
             <marker
               id={`arrow-${id}`}
-              viewBox="0 0 10 10"
-              refX="10"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
+              viewBox="0 0 12 12"
+              refX="11"
+              refY="6"
+              markerWidth="8"
+              markerHeight="8"
+              orient="auto"
             >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill={edgeColor} />
+              <path d="M 1 1 L 11 6 L 1 11 z" fill={edgeColor} />
             </marker>
           </defs>
         </svg>
 
-        {/* Label */}
+        {/* Hover delete X + label area */}
         <div
           style={{
             position: 'absolute',
@@ -130,7 +142,20 @@ function LabeledEdgeComponent({
           }}
           className="nodrag nopan"
           onContextMenu={handleContextMenu}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
         >
+          {/* Delete X button — shows on hover */}
+          {(hovered || selected) && !editingLabel && !showMenu && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+              className="cursor-pointer absolute -top-3 -right-3 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white shadow-md hover:bg-red-600 transition-colors"
+              title="Delete connection"
+            >
+              <XIcon size={10} strokeWidth={3} />
+            </button>
+          )}
+
           {editingLabel ? (
             <input
               value={labelInput}
@@ -151,7 +176,10 @@ function LabeledEdgeComponent({
             >
               {data.label}
             </span>
-          ) : null}
+          ) : (
+            /* Invisible hover target when there's no label */
+            <div className="w-6 h-6" />
+          )}
 
           {/* Context menu */}
           {showMenu && !editingLabel && (

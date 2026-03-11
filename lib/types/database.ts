@@ -17,6 +17,7 @@ export interface User {
   organization_id: string | null;
   avatar_url: string | null;
   job_title: string | null;
+  is_owner: boolean;
   created_at: string;
   last_login: string | null;
 }
@@ -27,6 +28,7 @@ export interface ClientPreferences {
   topics_avoid: string[];
   competitor_accounts: string[];
   seasonal_priorities: string[];
+  boosting_budget?: string | null;
 }
 
 export interface Client {

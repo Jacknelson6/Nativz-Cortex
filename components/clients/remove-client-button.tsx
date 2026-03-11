@@ -5,13 +5,22 @@ import { useRouter } from 'next/navigation';
 import { Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 export function RemoveClientButton({ clientId, clientName }: { clientId: string; clientName: string }) {
   const router = useRouter();
   const [removing, setRemoving] = useState(false);
 
+  const { confirm, dialog: confirmDialog } = useConfirm({
+    title: 'Remove client',
+    description: `Remove ${clientName} from the clients board?`,
+    confirmLabel: 'Remove',
+    variant: 'danger',
+  });
+
   async function handleRemove() {
-    if (!confirm(`Remove ${clientName} from the clients board?`)) return;
+    const ok = await confirm();
+    if (!ok) return;
 
     setRemoving(true);
     try {
@@ -36,9 +45,12 @@ export function RemoveClientButton({ clientId, clientName }: { clientId: string;
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={handleRemove} disabled={removing}>
-      {removing ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-      Remove
-    </Button>
+    <>
+      <Button variant="outline" size="sm" onClick={handleRemove} disabled={removing}>
+        {removing ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+        Remove
+      </Button>
+      {confirmDialog}
+    </>
   );
 }

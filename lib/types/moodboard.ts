@@ -1,3 +1,5 @@
+import type { MediaPipeAnalysis, StoredThumbnailCandidates } from '@/lib/mediapipe/types';
+
 export type MoodboardItemType = 'video' | 'image' | 'website';
 export type MoodboardItemStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export type MoodboardPlatform = 'tiktok' | 'instagram' | 'youtube' | 'twitter' | 'facebook' | null;
@@ -153,6 +155,10 @@ export interface MoodboardItem {
   screenshot_url: string | null;
   page_insights: PageInsights | null;
 
+  // mediapipe analysis
+  mediapipe_analysis: MediaPipeAnalysis | null;
+  thumbnail_candidates: StoredThumbnailCandidates | null;
+
   // canvas positioning
   position_x: number;
   position_y: number;
@@ -196,6 +202,8 @@ export interface MoodboardEdge {
   board_id: string;
   source_node_id: string;
   target_node_id: string;
+  source_handle: string | null;
+  target_handle: string | null;
   label: string | null;
   style: 'solid' | 'dashed' | 'dotted';
   color: string;

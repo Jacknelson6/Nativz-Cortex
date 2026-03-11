@@ -1,0 +1,318 @@
+'use client';
+
+import { useState } from 'react';
+import { Users, Briefcase, ListTodo, Mail, Plus, Loader2, CheckSquare, Calendar } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/shared/empty-state';
+import { TeamMemberModal } from './team-member-modal';
+import { toast } from 'sonner';
+
+interface TeamMember {
+  id: string;
+  full_name: string;
+  email: string | null;
+  role: string | null;
+  avatar_url: string | null;
+  is_active: boolean;
+  user_id: string | null;
+}
+
+interface ClientInfo {
+  name: string;
+  slug: string;
+}
+
+interface TeamGridProps {
+  initialMembers: TeamMember[];
+  assignmentsByMember: Record<string, ClientInfo[]>;
+  todoCountByUser: Record<string, number>;
+  integrationsByUser: Record<string, { todoist: boolean; calendar: boolean }>;
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+export function TeamGrid({
+  initialMembers,
+  assignmentsByMember,
+  todoCountByUser,
+  integrationsByUser,
+}: TeamGridProps) {
+  const [members, setMembers] = useState<TeamMember[]>(initialMembers);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    full_name: '',
+    email: '',
+    role: '',
+  });
+
+  // Modal state
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+
+  async function handleAdd() {
+    if (!form.full_name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch('/api/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: form.full_name.trim(),
+          email: form.email.trim() || null,
+          role: form.role.trim() || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? 'Failed to add team member');
+      }
+
+      const newMember = await res.json();
+      setMembers((prev) => [...prev, newMember]);
+      setForm({ full_name: '', email: '', role: '' });
+      setDialogOpen(false);
+      toast.success('Team member added');
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to add team member',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleMemberUpdated(updated: TeamMember) {
+    setMembers((prev) =>
+      prev.map((m) => (m.id === updated.id ? updated : m)),
+    );
+    setSelectedMember(updated);
+  }
+
+  return (
+    <>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
+            <Users size={22} className="text-blue-400" />
+            Team
+          </h1>
+          <p className="text-sm text-text-muted mt-0.5">
+            {members.length} active team member
+            {members.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setDialogOpen(true)}>
+          <Plus size={14} />
+          Add member
+        </Button>
+      </div>
+
+      {/* Grid */}
+      {members.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<Users size={32} />}
+            title="No team members yet"
+            description="Add team members to start managing assignments and tasks."
+            action={
+              <Button size="sm" onClick={() => setDialogOpen(true)}>
+                <Plus size={14} />
+                Add member
+              </Button>
+            }
+          />
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {members.map((member) => {
+            const clients = assignmentsByMember[member.id] ?? [];
+            const openTodos = member.user_id ? (todoCountByUser[member.user_id] ?? 0) : 0;
+            const integrations = member.user_id ? integrationsByUser[member.user_id] : null;
+
+            return (
+              <button
+                key={member.id}
+                onClick={() => setSelectedMember(member)}
+                className="text-left cursor-pointer"
+              >
+                <Card className="group relative overflow-hidden transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5 hover:border-accent/30">
+                  <div className="flex items-start gap-4">
+                    {member.avatar_url ? (
+                      <img
+                        src={member.avatar_url}
+                        alt={member.full_name}
+                        className="h-16 w-16 rounded-full object-cover ring-2 ring-nativz-border shrink-0"
+                      />
+                    ) : (
+                      <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 ring-2 ring-nativz-border flex items-center justify-center shrink-0">
+                        <span className="text-base font-semibold text-text-secondary">
+                          {getInitials(member.full_name)}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="text-sm font-semibold text-text-primary truncate group-hover:text-accent-text transition-colors">
+                          {member.full_name}
+                        </h3>
+                        {member.user_id ? (
+                          <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" title="Has account" />
+                        ) : (
+                          <span className="h-2 w-2 rounded-full bg-amber-400/60 shrink-0" title="No account" />
+                        )}
+                      </div>
+                      {member.role && (
+                        <p className="text-xs text-text-muted mt-0.5 flex items-center gap-1">
+                          <Briefcase size={10} />
+                          {member.role}
+                        </p>
+                      )}
+                      {member.email && (
+                        <p className="text-[11px] text-text-muted/60 mt-0.5 flex items-center gap-1 truncate">
+                          <Mail size={9} />
+                          {member.email}
+                        </p>
+                      )}
+                    </div>
+
+                    {openTodos > 0 && (
+                      <div className="flex items-center gap-1 text-xs text-text-muted shrink-0">
+                        <ListTodo size={12} />
+                        <span>{openTodos}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Integration badges */}
+                  {integrations && (integrations.todoist || integrations.calendar) && (
+                    <div className="mt-3 flex items-center gap-1.5">
+                      {integrations.todoist && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-400" title="Todoist connected">
+                          <CheckSquare size={9} />
+                          Todoist
+                        </span>
+                      )}
+                      {integrations.calendar && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400" title="Google Calendar connected">
+                          <Calendar size={9} />
+                          Calendar
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {clients.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {clients.map((client) => (
+                        <Badge key={client.slug} variant="info">
+                          {client.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-xs text-text-muted/50">
+                      No clients assigned
+                    </p>
+                  )}
+                </Card>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Team member detail modal */}
+      <TeamMemberModal
+        member={selectedMember}
+        assignments={selectedMember ? (assignmentsByMember[selectedMember.id] ?? []) : []}
+        todoCount={selectedMember?.user_id ? (todoCountByUser[selectedMember.user_id] ?? 0) : 0}
+        onClose={() => setSelectedMember(null)}
+        onMemberUpdated={handleMemberUpdated}
+      />
+
+      {/* Add member dialog */}
+      <Dialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        title="Add team member"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-text-muted mb-1">
+              Full name *
+            </label>
+            <input
+              value={form.full_name}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, full_name: e.target.value }))
+              }
+              placeholder="Jane Smith"
+              className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-text-muted mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, email: e.target.value }))
+              }
+              placeholder="jane@nativz.com"
+              className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-text-muted mb-1">
+              Role
+            </label>
+            <input
+              value={form.role}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, role: e.target.value }))
+              }
+              placeholder="e.g. Videographer, Editor, Strategist"
+              className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleAdd} disabled={saving}>
+              {saving && <Loader2 size={14} className="animate-spin" />}
+              {saving ? 'Adding...' : 'Add member'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    </>
+  );
+}

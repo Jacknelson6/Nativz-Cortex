@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { CreateBoardModal } from '@/components/moodboard/create-board-modal';
 import { toast } from 'sonner';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import type { MoodboardBoard } from '@/lib/types/moodboard';
 
 export default function MoodboardPage() {
@@ -18,6 +19,13 @@ export default function MoodboardPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirm({
+    title: 'Delete board',
+    description: 'This will permanently delete this board and all its items. This action cannot be undone.',
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
 
   const fetchBoards = useCallback(async () => {
     try {
@@ -38,7 +46,8 @@ export default function MoodboardPage() {
   }, [fetchBoards]);
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this board and all its items?')) return;
+    const ok = await confirmDelete();
+    if (!ok) return;
     try {
       const res = await fetch(`/api/moodboard/boards/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
@@ -285,6 +294,8 @@ export default function MoodboardPage() {
           router.push(`/admin/moodboard/${board.id}`);
         }}
       />
+
+      {confirmDeleteDialog}
     </div>
   );
 }

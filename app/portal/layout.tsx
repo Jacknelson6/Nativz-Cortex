@@ -1,10 +1,9 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { unstable_cache } from 'next/cache';
-import { PortalSidebar, PortalNavItems } from '@/components/layout/portal-sidebar';
-import { Header } from '@/components/layout/header';
-import { SidebarProvider } from '@/components/layout/sidebar-provider';
-import { MobileSidebar } from '@/components/layout/mobile-sidebar';
+import { PortalSidebar } from '@/components/layout/portal-sidebar';
+import { PortalHeader } from '@/components/layout/portal-header';
+import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
 import type { FeatureFlags } from '@/lib/portal/get-portal-client';
 
 const getCachedPortalUser = unstable_cache(
@@ -44,7 +43,7 @@ const getCachedPortalUser = unstable_cache(
     };
   },
   ['portal-layout-user'],
-  { revalidate: 300 }, // 5 minutes
+  { revalidate: 300 },
 );
 
 export default async function PortalLayout({
@@ -73,18 +72,11 @@ export default async function PortalLayout({
 
   return (
     <SidebarProvider>
-      <div className="flex h-screen flex-col">
-        <Header portalMode />
-        <div className="flex flex-1 overflow-hidden">
-          <PortalSidebar userName={userName} avatarUrl={avatarUrl} featureFlags={featureFlags} />
-          <MobileSidebar>
-            <PortalNavItems featureFlags={featureFlags} />
-          </MobileSidebar>
-          <main className="flex-1 overflow-y-auto bg-background">
-            {children}
-          </main>
-        </div>
-      </div>
+      <PortalSidebar userName={userName} avatarUrl={avatarUrl} featureFlags={featureFlags} />
+      <SidebarInset>
+        <PortalHeader />
+        {children}
+      </SidebarInset>
     </SidebarProvider>
   );
 }

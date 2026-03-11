@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       title: data.title,
       description: data.description ?? null,
       status: data.status ?? 'backlog',
-      priority: data.priority ?? 'medium',
+      priority: data.priority ?? 'low',
       client_id: data.client_id ?? null,
       assignee_id: assigneeId,
       created_by: auth.ctx.userId,

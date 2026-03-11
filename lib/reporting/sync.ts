@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getNormalizer } from './normalizers';
-import type { DateRange, SocialPlatform } from '@/lib/types/reporting';
+import { getPostingService } from '@/lib/posting';
+import type { DateRange } from '@/lib/types/reporting';
+import type { SocialPlatform } from '@/lib/posting/types';
 
 interface SyncResult {
   synced: boolean;
@@ -14,6 +15,7 @@ export async function syncClientReporting(
   dateRange: DateRange,
 ): Promise<SyncResult> {
   const adminClient = createAdminClient();
+  const service = getPostingService();
   const result: SyncResult = {
     synced: false,
     platforms: [],
@@ -21,12 +23,13 @@ export async function syncClientReporting(
     errors: [],
   };
 
-  // 1. Query active social profiles for this client
+  // 1. Query active social profiles connected via Late
   const { data: profiles, error: profilesError } = await adminClient
     .from('social_profiles')
-    .select('id, platform, access_token_ref')
+    .select('id, platform, late_account_id')
     .eq('client_id', clientId)
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .not('late_account_id', 'is', null);
 
   if (profilesError) {
     result.errors.push(`Failed to fetch social profiles: ${profilesError.message}`);
@@ -39,22 +42,38 @@ export async function syncClientReporting(
 
   const snapshotDate = new Date().toISOString().split('T')[0];
 
-  // 2. Process each profile
+  // 2. Process each profile via Late API
   for (const profile of profiles) {
-    if (!profile.access_token_ref) {
-      result.errors.push(
-        `Profile ${profile.id} (${profile.platform}) has no access_token_ref — skipping`,
-      );
-      continue;
-    }
-
     const platform = profile.platform as SocialPlatform;
-    const normalizer = getNormalizer(platform);
-    const connectionId = profile.access_token_ref;
+    const lateAccountId = profile.late_account_id as string;
 
-    // 2a. Fetch and upsert insights
+    // 2a. Fetch follower stats + daily metrics → platform_snapshots
     try {
-      const insights = await normalizer.fetchInsights(connectionId, dateRange);
+      const [followerStats, dailyMetrics] = await Promise.all([
+        service.getFollowerStats(lateAccountId),
+        service.getDailyMetrics({
+          accountId: lateAccountId,
+          startDate: dateRange.start,
+          endDate: dateRange.end,
+        }),
+      ]);
+
+      // Aggregate daily metrics for the snapshot
+      let totalViews = 0;
+      let totalEngagement = 0;
+      let totalPosts = 0;
+      let avgEngagementRate = 0;
+
+      if (dailyMetrics.length > 0) {
+        for (const day of dailyMetrics) {
+          totalViews += day.views ?? day.impressions ?? 0;
+          totalEngagement += day.engagement ?? 0;
+          totalPosts += day.postsCount ?? 0;
+        }
+        avgEngagementRate =
+          dailyMetrics.reduce((sum, d) => sum + (d.engagementRate ?? 0), 0) /
+          dailyMetrics.length;
+      }
 
       const { error: snapshotError } = await adminClient
         .from('platform_snapshots')
@@ -64,12 +83,12 @@ export async function syncClientReporting(
             client_id: clientId,
             platform,
             snapshot_date: snapshotDate,
-            followers_count: insights.followers,
-            followers_change: insights.followersChange,
-            views_count: insights.views,
-            engagement_count: insights.engagement,
-            engagement_rate: insights.engagementRate,
-            posts_count: insights.postsCount,
+            followers_count: followerStats.followers,
+            followers_change: followerStats.followerChange,
+            views_count: totalViews,
+            engagement_count: totalEngagement,
+            engagement_rate: avgEngagementRate,
+            posts_count: totalPosts,
           },
           { onConflict: 'social_profile_id,snapshot_date' },
         );
@@ -84,27 +103,31 @@ export async function syncClientReporting(
       result.errors.push(`Failed to sync insights for ${platform}: ${message}`);
     }
 
-    // 2b. Fetch and upsert posts
+    // 2b. Fetch per-post analytics → post_metrics
     try {
-      const posts = await normalizer.fetchPosts(connectionId, dateRange);
+      const posts = await service.getPostAnalytics({
+        accountId: lateAccountId,
+        startDate: dateRange.start,
+        endDate: dateRange.end,
+      });
 
       if (posts.length > 0) {
         const postRows = posts.map((p) => ({
           social_profile_id: profile.id,
           client_id: clientId,
           platform,
-          external_post_id: p.externalPostId,
+          external_post_id: p.postId,
           post_url: p.postUrl,
           thumbnail_url: p.thumbnailUrl,
           caption: p.caption,
           post_type: p.postType,
           published_at: p.publishedAt,
-          views_count: p.views,
-          likes_count: p.likes,
-          comments_count: p.comments,
-          shares_count: p.shares,
-          saves_count: p.saves,
-          reach_count: p.reach,
+          views_count: p.views ?? p.impressions ?? 0,
+          likes_count: p.likes ?? 0,
+          comments_count: p.comments ?? 0,
+          shares_count: p.shares ?? 0,
+          saves_count: p.saves ?? 0,
+          reach_count: p.reach ?? 0,
           fetched_at: new Date().toISOString(),
         }));
 

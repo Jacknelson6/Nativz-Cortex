@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logActivity } from '@/lib/activity';
 
 export async function GET(
   _request: NextRequest,
@@ -73,6 +74,8 @@ export async function PATCH(
         console.error('Error approving search:', updateError);
         return NextResponse.json({ error: 'Failed to approve search' }, { status: 500 });
       }
+
+      logActivity(user.id, 'report_approved', 'search', id).catch(() => {});
 
       return NextResponse.json({ success: true, action: 'approved' });
     }

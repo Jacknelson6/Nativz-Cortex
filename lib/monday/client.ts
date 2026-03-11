@@ -289,6 +289,195 @@ export function parseContentCalendarItem(item: MondayContentCalendarItem): Parse
 /**
  * Parse a Monday.com client item into structured data.
  */
+// ---------------------------------------------------------------------------
+// Fetch items from the Content Requests board
+// ---------------------------------------------------------------------------
+
+const CONTENT_REQUESTS_BOARD_ID = '18397706696';
+
+const CR_COLS = {
+  status: 'color_mm018a6z',
+  client: 'text_mm017mz6',
+  requestingTeam: 'dropdown_mm01pc72',
+  assignTo: 'dropdown_mm01w441',
+  contentType: 'dropdown_mm01c428',
+  platform: 'dropdown_mm01cnzd',
+  urgency: 'color_mm019qvs',
+  dueDate: 'date_mm01wbe8',
+  notes: 'long_text_mm01g3y7',
+} as const;
+
+export interface ParsedContentRequest {
+  mondayItemId: string;
+  name: string;
+  client: string;
+  status: string;
+  urgency: string;
+  contentType: string;
+  platform: string;
+  assignedTo: string;
+  dueDate: string | null;
+  notes: string;
+}
+
+export async function fetchContentRequests(): Promise<ParsedContentRequest[]> {
+  const data = await mondayQuery<{
+    boards: Array<{ items_page: { items: MondayItem[] } }>;
+  }>(`
+    query {
+      boards(ids: [${CONTENT_REQUESTS_BOARD_ID}]) {
+        items_page(limit: 200) {
+          items {
+            id
+            name
+            column_values {
+              id
+              text
+              value
+            }
+          }
+        }
+      }
+    }
+  `);
+
+  const items = data.boards[0]?.items_page.items ?? [];
+
+  return items.map((item) => {
+    const cols = Object.fromEntries(
+      item.column_values.map((c) => [c.id, c.text]),
+    );
+
+    // Parse due date
+    let dueDate: string | null = null;
+    const dateCol = item.column_values.find((c) => c.id === CR_COLS.dueDate);
+    if (dateCol?.value) {
+      try {
+        const parsed = JSON.parse(dateCol.value);
+        dueDate = parsed.date || null;
+      } catch {
+        dueDate = dateCol.text || null;
+      }
+    }
+
+    return {
+      mondayItemId: item.id,
+      name: item.name,
+      client: cols[CR_COLS.client] || '',
+      status: cols[CR_COLS.status] || '',
+      urgency: cols[CR_COLS.urgency] || '',
+      contentType: cols[CR_COLS.contentType] || '',
+      platform: cols[CR_COLS.platform] || '',
+      assignedTo: cols[CR_COLS.assignTo] || '',
+      dueDate,
+      notes: cols[CR_COLS.notes] || '',
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Fetch items from the Blog Pipeline board
+// ---------------------------------------------------------------------------
+
+const BLOG_PIPELINE_BOARD_ID = '18402569445';
+
+const BP_COLS = {
+  monthStatus: 'color_mm14nd59',
+  blogStatus: 'color_mm14kf1t',
+  clientApproved: 'color_mm14jp9y',
+  dueDate: 'date_mm14zttw',
+  wordCount: 'numeric_mm14h2rv',
+  publishedUrl: 'link_mm14ze95',
+} as const;
+
+export interface ParsedBlogItem {
+  mondayItemId: string;
+  name: string;
+  monthStatus: string;
+  blogStatus: string;
+  clientApproved: string;
+  dueDate: string | null;
+  wordCount: number;
+  publishedUrl: string;
+}
+
+export async function fetchBlogPipelineItems(): Promise<ParsedBlogItem[]> {
+  const data = await mondayQuery<{
+    boards: Array<{ items_page: { items: MondayItem[] } }>;
+  }>(`
+    query {
+      boards(ids: [${BLOG_PIPELINE_BOARD_ID}]) {
+        items_page(limit: 200) {
+          items {
+            id
+            name
+            column_values {
+              id
+              text
+              value
+            }
+          }
+        }
+      }
+    }
+  `);
+
+  const items = data.boards[0]?.items_page.items ?? [];
+
+  return items.map((item) => {
+    const cols = Object.fromEntries(
+      item.column_values.map((c) => [c.id, c.text]),
+    );
+
+    // Parse due date
+    let dueDate: string | null = null;
+    const dateCol = item.column_values.find((c) => c.id === BP_COLS.dueDate);
+    if (dateCol?.value) {
+      try {
+        const parsed = JSON.parse(dateCol.value);
+        dueDate = parsed.date || null;
+      } catch {
+        dueDate = dateCol.text || null;
+      }
+    }
+
+    // Parse word count
+    let wordCount = 0;
+    const wcCol = item.column_values.find((c) => c.id === BP_COLS.wordCount);
+    if (wcCol?.text) {
+      const n = parseInt(wcCol.text, 10);
+      if (!isNaN(n)) wordCount = n;
+    }
+
+    // Parse published URL
+    let publishedUrl = '';
+    const linkCol = item.column_values.find((c) => c.id === BP_COLS.publishedUrl);
+    if (linkCol?.value) {
+      try {
+        const parsed = JSON.parse(linkCol.value);
+        publishedUrl = parsed.url || linkCol.text || '';
+      } catch {
+        publishedUrl = linkCol.text || '';
+      }
+    }
+
+    return {
+      mondayItemId: item.id,
+      name: item.name,
+      monthStatus: cols[BP_COLS.monthStatus] || '',
+      blogStatus: cols[BP_COLS.blogStatus] || '',
+      clientApproved: cols[BP_COLS.clientApproved] || '',
+      dueDate,
+      wordCount,
+      publishedUrl,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Parse client items
+// ---------------------------------------------------------------------------
+
 export function parseMondayClient(item: MondayItem) {
   const cols = Object.fromEntries(
     item.column_values.map((c) => [c.id, c.text]),
