@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Link as LinkIcon } from 'lucide-react';
+import { Loader2, Link as LinkIcon, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { WizardShell } from './wizard-shell';
 import { GlassButton } from '@/components/ui/glass-button';
@@ -14,12 +14,24 @@ interface IdeasWizardProps {
   clients: ClientOption[];
 }
 
+type SourceMode = 'client' | 'url';
 const COUNT_PRESETS = [5, 10, 15, 20] as const;
+
+function isValidUrl(str: string): boolean {
+  try {
+    const url = new URL(str);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
+  const [sourceMode, setSourceMode] = useState<SourceMode>('client');
   const [clientId, setClientId] = useState<string | null>(null);
+  const [sourceUrl, setSourceUrl] = useState('');
   const [concept, setConcept] = useState('');
   const [count, setCount] = useState(10);
   const [referenceUrl, setReferenceUrl] = useState('');
@@ -27,9 +39,13 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const canProceed = sourceMode === 'client' ? !!clientId : isValidUrl(sourceUrl);
+
   function reset() {
     setStep(1);
+    setSourceMode('client');
     setClientId(null);
+    setSourceUrl('');
     setConcept('');
     setCount(10);
     setReferenceUrl('');
@@ -62,7 +78,7 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
   }
 
   async function handleGenerate(overrides?: { concept?: string; count?: number; referenceIds?: string[] }) {
-    if (!clientId) return;
+    if (!canProceed) return;
     setError('');
     setLoading(true);
 
@@ -71,15 +87,22 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
     const finalRefs = overrides?.referenceIds ?? referenceIds;
 
     try {
+      const body: Record<string, unknown> = {
+        concept: finalConcept.trim() || undefined,
+        count: finalCount,
+      };
+
+      if (sourceMode === 'client') {
+        body.client_id = clientId;
+        if (finalRefs.length > 0) body.reference_video_ids = finalRefs;
+      } else {
+        body.url = sourceUrl.trim();
+      }
+
       const res = await fetch('/api/ideas/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_id: clientId,
-          concept: finalConcept.trim() || undefined,
-          count: finalCount,
-          reference_video_ids: finalRefs.length > 0 ? finalRefs : undefined,
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -102,23 +125,68 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
     <WizardShell
       open={open}
       onClose={handleClose}
-      accentColor="#eab308"
+      accentColor="#a855f7"
       totalSteps={2}
       currentStep={step}
     >
-      {/* Step 1: Select client */}
+      {/* Step 1: Select client or paste URL */}
       <div>
         <h2 className="text-lg font-semibold text-text-primary mb-1">Who are the ideas for?</h2>
-        <p className="text-sm text-text-muted mb-5">Select a client to generate ideas for</p>
+        <p className="text-sm text-text-muted mb-5">Select a client or paste a website URL to scrape</p>
 
-        <ClientPickerButton
-          clients={clients}
-          value={clientId}
-          onChange={setClientId}
-        />
+        {/* Mode toggle */}
+        <div className="flex bg-white/[0.04] rounded-lg p-0.5 gap-0.5 mb-4">
+          <button
+            type="button"
+            onClick={() => { setSourceMode('client'); setSourceUrl(''); }}
+            className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              sourceMode === 'client'
+                ? 'bg-white/[0.08] text-text-primary'
+                : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            Client
+          </button>
+          <button
+            type="button"
+            onClick={() => { setSourceMode('url'); setClientId(null); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              sourceMode === 'url'
+                ? 'bg-white/[0.08] text-text-primary'
+                : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            <Globe size={14} />
+            Website URL
+          </button>
+        </div>
+
+        {sourceMode === 'client' ? (
+          <ClientPickerButton
+            clients={clients}
+            value={clientId}
+            onChange={setClientId}
+          />
+        ) : (
+          <div>
+            <div className="relative">
+              <LinkIcon size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+              <input
+                type="url"
+                value={sourceUrl}
+                onChange={(e) => setSourceUrl(e.target.value)}
+                placeholder="https://example.com"
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:border-purple-500/50 focus:outline-none"
+              />
+            </div>
+            <p className="text-[11px] text-text-muted mt-2">
+              We&apos;ll scrape the homepage, about, and products pages to understand the brand
+            </p>
+          </div>
+        )}
 
         <div className="flex justify-end mt-6">
-          <GlassButton onClick={() => setStep(2)} disabled={!clientId}>
+          <GlassButton onClick={() => setStep(2)} disabled={!canProceed}>
             Next &rarr;
           </GlassButton>
         </div>
@@ -149,7 +217,7 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
               onClick={() => setCount(n)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 count === n
-                  ? 'bg-yellow-500/20 text-yellow-400'
+                  ? 'bg-purple-500/20 text-purple-400'
                   : 'bg-white/[0.04] text-text-muted hover:bg-white/[0.08]'
               }`}
             >
@@ -158,31 +226,42 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
           ))}
         </div>
 
-        {/* Reference video URL */}
-        <label className="text-xs text-text-muted mb-1.5 block">Reference video</label>
-        <div className="flex gap-2 mb-2">
-          <div className="relative flex-1">
-            <LinkIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input
-              type="url"
-              value={referenceUrl}
-              onChange={(e) => setReferenceUrl(e.target.value)}
-              placeholder="Paste a video URL"
-              className="w-full rounded-lg border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm text-white placeholder-white/40 focus:border-accent focus:outline-none"
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReference(); } }}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={addReference}
-            disabled={!referenceUrl.trim()}
-            className="rounded-lg bg-white/[0.06] px-3 py-2 text-xs text-text-muted hover:bg-white/[0.1] transition-colors disabled:opacity-40"
-          >
-            Add
-          </button>
-        </div>
-        {referenceIds.length > 0 && (
-          <p className="text-xs text-text-muted mb-4">{referenceIds.length} reference{referenceIds.length !== 1 ? 's' : ''} added</p>
+        {/* Reference video URL — only for client mode */}
+        {sourceMode === 'client' && (
+          <>
+            <label className="text-xs text-text-muted mb-1.5 block">Reference video</label>
+            <div className="flex gap-2 mb-2">
+              <div className="relative flex-1">
+                <LinkIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                <input
+                  type="url"
+                  value={referenceUrl}
+                  onChange={(e) => setReferenceUrl(e.target.value)}
+                  placeholder="Paste a video URL"
+                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm text-white placeholder-white/40 focus:border-accent focus:outline-none"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReference(); } }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={addReference}
+                disabled={!referenceUrl.trim()}
+                className="rounded-lg bg-white/[0.06] px-3 py-2 text-xs text-text-muted hover:bg-white/[0.1] transition-colors disabled:opacity-40"
+              >
+                Add
+              </button>
+            </div>
+            {referenceIds.length > 0 && (
+              <p className="text-xs text-text-muted mb-4">{referenceIds.length} reference{referenceIds.length !== 1 ? 's' : ''} added</p>
+            )}
+          </>
+        )}
+
+        {/* URL mode note */}
+        {sourceMode === 'url' && (
+          <p className="text-[11px] text-purple-400/70 mb-4">
+            Scraping may take a few seconds — we&apos;ll analyze the site before generating ideas
+          </p>
         )}
 
         {error && <p className="text-sm text-red-400 mb-4">{error}</p>}
@@ -200,11 +279,11 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
               type="button"
               onClick={() => handleGenerate({ concept: '', count: 10, referenceIds: [] })}
               disabled={loading}
-              className="rounded-xl border border-yellow-500/30 px-5 py-2.5 text-sm font-medium text-yellow-400 hover:bg-yellow-500/10 transition-colors disabled:opacity-40"
+              className="rounded-xl border border-purple-500/30 px-5 py-2.5 text-sm font-medium text-purple-400 hover:bg-purple-500/10 transition-colors disabled:opacity-40"
             >
               Skip &amp; generate
             </button>
-            <GlassButton onClick={() => handleGenerate()} loading={loading} disabled={loading} className="!bg-[rgba(234,179,8,0.12)] !border-[rgba(234,179,8,0.25)] !text-yellow-400 hover:!bg-[rgba(234,179,8,0.2)]">
+            <GlassButton onClick={() => handleGenerate()} loading={loading} disabled={loading} className="!bg-[rgba(168,85,247,0.12)] !border-[rgba(168,85,247,0.25)] !text-purple-400 hover:!bg-[rgba(168,85,247,0.2)]">
               {loading ? <><Loader2 size={16} className="animate-spin" /> Generating...</> : error ? 'Retry' : 'Generate'}
             </GlassButton>
           </div>

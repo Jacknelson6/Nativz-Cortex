@@ -119,22 +119,22 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
             </SpotlightCard>
 
             {/* Ideas card */}
-            <SpotlightCard spotlightColor="rgba(234, 179, 8, 0.15)" className="p-7">
+            <SpotlightCard spotlightColor="rgba(168, 85, 247, 0.15)" className="p-7">
               <button
                 type="button"
                 onClick={() => setIdeasOpen(true)}
                 className="w-full text-left"
               >
                 <div className="flex flex-col items-center text-center">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-500/10 mb-3">
-                    <Sparkles size={18} className="text-yellow-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 mb-3">
+                    <Sparkles size={18} className="text-purple-400" />
                   </div>
                   <h2 className="text-base font-semibold text-text-primary mb-1">Video ideas</h2>
                   <p className="text-sm text-text-muted mb-5">
                     Generate content ideas powered by AI + knowledge
                   </p>
-                  <div className="w-full rounded-xl bg-yellow-500/10 border border-yellow-500/25 py-2.5 text-center">
-                    <span className="text-sm font-semibold text-yellow-400">Generate ideas</span>
+                  <div className="w-full rounded-xl bg-purple-500/10 border border-purple-500/25 py-2.5 text-center">
+                    <span className="text-sm font-semibold text-purple-400">Generate ideas</span>
                   </div>
                 </div>
               </button>

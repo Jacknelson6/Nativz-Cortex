@@ -26,14 +26,14 @@ const TYPE_FILTERS: { label: string; value: HistoryItemType | null }[] = [
   { label: 'Ideas', value: 'ideas' },
 ];
 
-const TYPE_BADGE_CONFIG: Record<HistoryItemType, { variant: 'purple' | 'default' | 'warning'; label: string }> = {
-  brand_intel: { variant: 'purple', label: 'Brand intel' },
+const TYPE_BADGE_CONFIG: Record<HistoryItemType, { variant: 'purple' | 'default'; label: string }> = {
+  brand_intel: { variant: 'default', label: 'Brand intel' },
   topic: { variant: 'default', label: 'Topic' },
-  ideas: { variant: 'warning', label: 'Ideas' },
+  ideas: { variant: 'purple', label: 'Ideas' },
 };
 
 function TypeIcon({ type }: { type: HistoryItemType }) {
-  if (type === 'ideas') return <Sparkles size={14} className="text-yellow-400 shrink-0" />;
+  if (type === 'ideas') return <Sparkles size={14} className="text-purple-400 shrink-0" />;
   if (type === 'brand_intel') return <Building2 size={14} className="text-purple-400 shrink-0" />;
   return <Search size={14} className="text-text-muted shrink-0" />;
 }

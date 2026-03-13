@@ -201,6 +201,39 @@ function extractContent(html: string, url: string): { title: string; content: st
 // Main crawl function
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Quick scrape — fetch homepage + key pages, return combined text (no DB)
+// ---------------------------------------------------------------------------
+
+const KEY_PATHS = ['/', '/about', '/about-us', '/products', '/services', '/our-story'];
+
+export async function quickScrapeUrl(startUrl: string): Promise<{ title: string; content: string } | null> {
+  const origin = new URL(startUrl).origin;
+  const sections: string[] = [];
+  let siteTitle = '';
+
+  for (const path of KEY_PATHS) {
+    const url = `${origin}${path}`;
+    const html = await fetchPage(url);
+    if (!html) continue;
+
+    const extracted = extractContent(html, url);
+    if (!extracted) continue;
+
+    if (!siteTitle && extracted.title) siteTitle = extracted.title;
+
+    const label = path === '/' ? 'Homepage' : path.replace(/^\//, '').replace(/-/g, ' ');
+    sections.push(`## ${label}\n${extracted.content.slice(0, 8000)}`);
+  }
+
+  if (sections.length === 0) return null;
+  return { title: siteTitle || origin, content: sections.join('\n\n') };
+}
+
+// ---------------------------------------------------------------------------
+// Main crawl function
+// ---------------------------------------------------------------------------
+
 export async function crawlClientWebsite(config: CrawlConfig): Promise<KnowledgeEntry[]> {
   const {
     clientId,

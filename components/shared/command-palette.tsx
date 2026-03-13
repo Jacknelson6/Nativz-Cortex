@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, Image, Camera, Users, Search, BarChart3, Sparkles,
+  LayoutDashboard, Image, Camera, Users, Telescope, BarChart3, Search,
   Settings, ArrowRight, Clock, ChevronRight, Plus, Loader2, CheckCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -71,11 +71,10 @@ export function CommandPalette() {
 
   const navItems: CommandItem[] = useMemo(() => [
     { id: 'dashboard', label: 'Dashboard', group: 'Navigation', icon: <LayoutDashboard className="w-4 h-4" />, action: () => navigate('/admin/dashboard'), keywords: 'home overview' },
-    { id: 'ideas', label: 'Ideas', group: 'Navigation', icon: <Sparkles className="w-4 h-4" />, action: () => navigate('/admin/ideas'), keywords: 'generate scripts moodboard inspiration' },
     { id: 'shoots', label: 'Shoots', group: 'Navigation', icon: <Camera className="w-4 h-4" />, action: () => navigate('/admin/shoots'), keywords: 'photo video production' },
     { id: 'clients', label: 'Clients', group: 'Navigation', icon: <Users className="w-4 h-4" />, action: () => navigate('/admin/clients'), keywords: 'accounts brands' },
-    { id: 'search', label: 'Search', group: 'Navigation', icon: <Search className="w-4 h-4" />, action: () => navigate('/admin/search/new'), keywords: 'topic social listening' },
-    { id: 'search-history', label: 'Search History', group: 'Navigation', icon: <Clock className="w-4 h-4" />, action: () => navigate('/admin/search/history'), keywords: 'past searches' },
+    { id: 'research', label: 'Research', group: 'Navigation', icon: <Telescope className="w-4 h-4" />, action: () => navigate('/admin/search/new'), keywords: 'topic social listening ideas generate' },
+    { id: 'research-history', label: 'Research history', group: 'Navigation', icon: <Clock className="w-4 h-4" />, action: () => navigate('/admin/search/history'), keywords: 'past searches' },
     { id: 'analytics', label: 'Analytics', group: 'Navigation', icon: <BarChart3 className="w-4 h-4" />, action: () => navigate('/admin/analytics'), keywords: 'metrics reports data' },
     { id: 'settings', label: 'Settings', group: 'Navigation', icon: <Settings className="w-4 h-4" />, action: () => navigate('/admin/settings'), keywords: 'preferences config' },
     { id: 'add-task', label: 'Add task', group: 'Quick actions', icon: <Plus className="w-4 h-4" />, action: () => enterTaskMode(), keywords: 'create todo new task' },

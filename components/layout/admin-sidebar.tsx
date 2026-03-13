@@ -8,12 +8,11 @@ import {
   LayoutDashboard,
   Building2,
   UsersRound,
-  Search,
+  Telescope,
   BarChart3,
   CheckSquare,
   Send,
   Workflow,
-  Sparkles,
   BotMessageSquare,
   ChevronRight,
   Share2,
@@ -62,8 +61,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/admin/pipeline', label: 'Pipeline', icon: Workflow },
       { href: '/admin/scheduler', label: 'Scheduler', icon: Send },
-      { href: '/admin/ideas', label: 'Ideas', icon: Sparkles },
-      { href: '/admin/search/new', label: 'Search', icon: Search },
+      { href: '/admin/search/new', label: 'Research', icon: Telescope },
     ],
   },
   {
@@ -86,10 +84,7 @@ const NAV_SECTIONS: NavSection[] = [
 
 function isActivePath(pathname: string, href: string) {
   if (href === '/admin/search/new') {
-    return pathname.startsWith('/admin/search');
-  }
-  if (href === '/admin/ideas') {
-    return pathname.startsWith('/admin/ideas');
+    return pathname.startsWith('/admin/search') || pathname.startsWith('/admin/ideas');
   }
   return pathname === href || pathname.startsWith(href + '/');
 }

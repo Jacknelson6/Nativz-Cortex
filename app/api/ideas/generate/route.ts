@@ -5,13 +5,17 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { getBrandProfile, getKnowledgeEntries } from '@/lib/knowledge/queries';
+import { quickScrapeUrl } from '@/lib/knowledge/scraper';
 
 const generateSchema = z.object({
-  client_id: z.string().uuid(),
+  client_id: z.string().uuid().optional(),
+  url: z.string().url().optional(),
   concept: z.string().optional(),
   count: z.number().min(1).max(50).default(10),
   reference_video_ids: z.array(z.string().uuid()).optional(),
   search_id: z.string().uuid().optional(),
+}).refine((d) => d.client_id || d.url, {
+  message: 'Either client_id or url is required',
 });
 
 export interface GeneratedIdeaResult {
@@ -33,14 +37,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { client_id, concept, count, reference_video_ids, search_id } = parsed.data;
+  const { client_id, url, concept, count, reference_video_ids, search_id } = parsed.data;
   const admin = createAdminClient();
 
   // ── Create generation record ──
   const { data: generation, error: createError } = await admin
     .from('idea_generations')
     .insert({
-      client_id,
+      client_id: client_id ?? null,
+      source_url: url ?? null,
       concept: concept ?? null,
       count,
       reference_video_ids: reference_video_ids ?? [],
@@ -58,127 +63,143 @@ export async function POST(req: Request) {
 
   const generationId = generation.id;
 
-  // ── Gather context in parallel ──
-  const [
-    brandProfile,
-    clientRecord,
-    topicSearches,
-    latestStrategy,
-    savedIdeas,
-    rejectedIdeas,
-    referenceVideos,
-    searchData,
-  ] = await Promise.all([
-    getBrandProfile(client_id),
-    admin
-      .from('clients')
-      .select('name, industry, target_audience, brand_voice, topic_keywords, preferences')
-      .eq('id', client_id)
-      .maybeSingle()
-      .then(({ data }) => data),
-    admin
-      .from('topic_searches')
-      .select('query, summary, trending_topics')
-      .eq('client_id', client_id)
-      .eq('status', 'completed')
-      .order('created_at', { ascending: false })
-      .limit(5)
-      .then(({ data }) => data ?? []),
-    admin
-      .from('client_strategies')
-      .select('content_pillars, executive_summary')
-      .eq('client_id', client_id)
-      .eq('status', 'completed')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => data),
-    getKnowledgeEntries(client_id, 'idea'),
-    admin
-      .from('rejected_ideas')
-      .select('title, description')
-      .eq('client_id', client_id)
-      .order('created_at', { ascending: false })
-      .limit(30)
-      .then(({ data }) => data ?? []),
-    reference_video_ids?.length
-      ? admin
-          .from('reference_videos')
-          .select('title, transcript, visual_analysis')
-          .in('id', reference_video_ids)
-          .eq('status', 'completed')
-          .then(({ data }) => data ?? [])
-      : Promise.resolve([]),
-    // Fetch linked search data if search_id provided
-    search_id
-      ? admin
-          .from('topic_searches')
-          .select('query, summary, trending_topics, serp_data, raw_ai_response')
-          .eq('id', search_id)
-          .single()
-          .then(({ data }) => data)
-      : Promise.resolve(null),
-  ]);
-
   // ── Build context blocks ──
   const contextBlocks: string[] = [];
 
-  if (clientRecord) {
-    contextBlocks.push(
-      `<brand>
+  // ── URL-based scraping mode ──
+  if (url && !client_id) {
+    const scraped = await quickScrapeUrl(url);
+    if (!scraped) {
+      await admin.from('idea_generations').update({ status: 'failed', error_message: 'Could not scrape the provided URL' }).eq('id', generationId);
+      return NextResponse.json({ error: 'Could not scrape the provided URL. Check the URL and try again.' }, { status: 400 });
+    }
+    contextBlocks.push(`<brand_from_url>\nSource: ${url}\nSite: ${scraped.title}\n\n${scraped.content}\n</brand_from_url>`);
+  }
+
+  // ── Client-based context gathering ──
+  let savedIdeas: { title: string }[] = [];
+  let rejectedIdeas: { title: string; description: string | null }[] = [];
+  let referenceVideos: { title: string | null; transcript: unknown; visual_analysis: unknown }[] = [];
+
+  if (client_id) {
+    const [
+      brandProfile,
+      clientRecord,
+      topicSearches,
+      latestStrategy,
+      savedIdeasResult,
+      rejectedIdeasResult,
+      referenceVideosResult,
+      searchData,
+    ] = await Promise.all([
+      getBrandProfile(client_id),
+      admin
+        .from('clients')
+        .select('name, industry, target_audience, brand_voice, topic_keywords, preferences')
+        .eq('id', client_id)
+        .maybeSingle()
+        .then(({ data }) => data),
+      admin
+        .from('topic_searches')
+        .select('query, summary, trending_topics')
+        .eq('client_id', client_id)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(5)
+        .then(({ data }) => data ?? []),
+      admin
+        .from('client_strategies')
+        .select('content_pillars, executive_summary')
+        .eq('client_id', client_id)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => data),
+      getKnowledgeEntries(client_id, 'idea'),
+      admin
+        .from('rejected_ideas')
+        .select('title, description')
+        .eq('client_id', client_id)
+        .order('created_at', { ascending: false })
+        .limit(30)
+        .then(({ data }) => data ?? []),
+      reference_video_ids?.length
+        ? admin
+            .from('reference_videos')
+            .select('title, transcript, visual_analysis')
+            .in('id', reference_video_ids)
+            .eq('status', 'completed')
+            .then(({ data }) => data ?? [])
+        : Promise.resolve([]),
+      search_id
+        ? admin
+            .from('topic_searches')
+            .select('query, summary, trending_topics, serp_data, raw_ai_response')
+            .eq('id', search_id)
+            .single()
+            .then(({ data }) => data)
+        : Promise.resolve(null),
+    ]);
+
+    savedIdeas = savedIdeasResult;
+    rejectedIdeas = rejectedIdeasResult;
+    referenceVideos = referenceVideosResult;
+
+    if (clientRecord) {
+      contextBlocks.push(
+        `<brand>
 Name: ${clientRecord.name ?? ''}
 Industry: ${clientRecord.industry ?? ''}
 Target audience: ${clientRecord.target_audience ?? ''}
 Brand voice: ${clientRecord.brand_voice ?? ''}
 Topic keywords: ${Array.isArray(clientRecord.topic_keywords) ? (clientRecord.topic_keywords as string[]).join(', ') : clientRecord.topic_keywords ?? ''}
 </brand>`,
-    );
-  }
+      );
+    }
 
-  if (brandProfile) {
-    contextBlocks.push(`<brand_profile>\n${brandProfile.content ?? ''}\n</brand_profile>`);
-  }
+    if (brandProfile) {
+      contextBlocks.push(`<brand_profile>\n${brandProfile.content ?? ''}\n</brand_profile>`);
+    }
 
-  if (latestStrategy) {
-    contextBlocks.push(
-      `<strategy>
+    if (latestStrategy) {
+      contextBlocks.push(
+        `<strategy>
 Content pillars: ${latestStrategy.content_pillars ? JSON.stringify(latestStrategy.content_pillars) : 'none'}
 Executive summary: ${(latestStrategy.executive_summary as string) ?? ''}
 </strategy>`,
-    );
-  }
+      );
+    }
 
-  // Search research data (high value context when coming from topic search)
-  if (searchData) {
-    const searchContext: string[] = [`Search query: ${searchData.query}`];
-    if (searchData.summary) searchContext.push(`Research summary: ${searchData.summary}`);
+    if (searchData) {
+      const searchContext: string[] = [`Search query: ${searchData.query}`];
+      if (searchData.summary) searchContext.push(`Research summary: ${searchData.summary}`);
 
-    // Extract trending topics
-    if (Array.isArray(searchData.trending_topics)) {
-      const topics = (searchData.trending_topics as { name: string; resonance?: string; sentiment?: string }[])
-        .map((t) => `- ${t.name} (resonance: ${t.resonance ?? 'unknown'}, sentiment: ${t.sentiment ?? 'unknown'})`)
+      if (Array.isArray(searchData.trending_topics)) {
+        const topics = (searchData.trending_topics as { name: string; resonance?: string; sentiment?: string }[])
+          .map((t) => `- ${t.name} (resonance: ${t.resonance ?? 'unknown'}, sentiment: ${t.sentiment ?? 'unknown'})`)
+          .join('\n');
+        searchContext.push(`Trending topics:\n${topics}`);
+      }
+
+      const aiResponse = searchData.raw_ai_response as Record<string, unknown> | null;
+      if (aiResponse?.key_findings) {
+        searchContext.push(`Key findings: ${JSON.stringify(aiResponse.key_findings)}`);
+      }
+      if (aiResponse?.content_breakdown) {
+        searchContext.push(`Content breakdown: ${JSON.stringify(aiResponse.content_breakdown)}`);
+      }
+      if (aiResponse?.action_items) {
+        searchContext.push(`Action items: ${JSON.stringify(aiResponse.action_items)}`);
+      }
+
+      contextBlocks.push(`<research_data>\n${searchContext.join('\n\n')}\n</research_data>`);
+    } else if (topicSearches.length > 0) {
+      const summaries = topicSearches
+        .map((s) => `- ${s.query}: ${(s.summary as string) ?? ''}`)
         .join('\n');
-      searchContext.push(`Trending topics:\n${topics}`);
+      contextBlocks.push(`<past_research>\n${summaries}\n</past_research>`);
     }
-
-    // Extract key findings from AI response
-    const aiResponse = searchData.raw_ai_response as Record<string, unknown> | null;
-    if (aiResponse?.key_findings) {
-      searchContext.push(`Key findings: ${JSON.stringify(aiResponse.key_findings)}`);
-    }
-    if (aiResponse?.content_breakdown) {
-      searchContext.push(`Content breakdown: ${JSON.stringify(aiResponse.content_breakdown)}`);
-    }
-    if (aiResponse?.action_items) {
-      searchContext.push(`Action items: ${JSON.stringify(aiResponse.action_items)}`);
-    }
-
-    contextBlocks.push(`<research_data>\n${searchContext.join('\n\n')}\n</research_data>`);
-  } else if (topicSearches.length > 0) {
-    const summaries = topicSearches
-      .map((s) => `- ${s.query}: ${(s.summary as string) ?? ''}`)
-      .join('\n');
-    contextBlocks.push(`<past_research>\n${summaries}\n</past_research>`);
   }
 
   // Reference video context
@@ -220,7 +241,8 @@ Executive summary: ${(latestStrategy.executive_summary as string) ?? ''}
   }
 
   const hasReferences = referenceVideos.length > 0;
-  const hasSearch = !!searchData;
+  const hasSearch = contextBlocks.some((b) => b.includes('<research_data>'));
+  const hasUrlSource = !!url && !client_id;
 
   const systemPrompt = `You are a creative video content strategist for a marketing agency. Generate exactly ${count} unique short-form video ideas as a JSON array.
 
@@ -238,6 +260,7 @@ Requirements:
 - Each idea must be distinct from the others
 ${hasReferences ? '- Draw heavy inspiration from the reference videos — match their style, energy, and content approach while adapting for this brand' : ''}
 ${hasSearch ? '- Use the research data heavily — base ideas on what is actually trending and performing well. Ground ideas in real data, not assumptions.' : ''}
+${hasUrlSource ? '- The brand context was scraped from their website. Infer the industry, target audience, and brand voice from the content. Focus ideas on what would work for THIS specific business.' : ''}
 
 Output ONLY the JSON array. No other text.`;
 
