@@ -66,11 +66,17 @@ export async function generateBrandProfile(
   if (strategy) generatedFrom.push(`strategy:${strategy.id}`);
   if (webPages.length > 0) generatedFrom.push('web_pages');
 
+  // Fetch ALL knowledge entries for wikilink title list
+  const allEntries = await getKnowledgeEntries(clientId);
+  const linkableTitles = allEntries
+    .filter((e) => e.type !== 'brand_profile')
+    .map((e) => e.title);
+
   // Truncate web page content to keep prompt reasonable
   const webPageSummaries = webPages.slice(0, 10).map((wp) => {
     const content = (wp.content ?? '').slice(0, 2000);
     const url = (wp.metadata as Record<string, unknown>)?.source_url ?? '';
-    return `<page url="${url}">\n${content}\n</page>`;
+    return `<page title="${wp.title}" url="${url}">\n${content}\n</page>`;
   });
 
   // 4-5. Build the prompt with XML-tagged context blocks
@@ -91,6 +97,7 @@ export async function generateBrandProfile(
 <contacts>
 ${contacts.map((c) => `  <contact name="${c.full_name ?? ''}" role="${c.role ?? ''}" />`).join('\n')}
 </contacts>
+(Note: You can reference contacts with wikilinks using their full name, e.g. [[${contacts[0]?.full_name ?? 'Contact Name'}]])
 
 <social_profiles>
 ${socials.map((s) => `  <profile platform="${s.platform ?? ''}" username="${s.username ?? ''}" />`).join('\n')}
@@ -107,14 +114,41 @@ ${webPageSummaries.join('\n')}
 
 Generate a structured brand profile with these sections. Write in clear, actionable detail. Use markdown formatting.
 
+IMPORTANT — Wikilinks:
+Use Obsidian-style wikilinks ([[Entry Title]]) throughout the profile to cross-reference other knowledge entries. This creates a connected knowledge graph.
+
+Rules for wikilinks:
+- Reference scraped web pages by their exact title: e.g. [[About Us - Company Name]] or [[Services | Brand]]
+- Reference contacts by name: e.g. [[John Smith]]
+- Cross-reference between sections using [[Section Topic]] links to other entries
+- Only use titles from the linkable entries list below — do NOT invent titles
+- Use wikilinks naturally within sentences, not as standalone bullet points
+- Each section should link to relevant web pages and contacts where appropriate
+
+<linkable_entries>
+${linkableTitles.length > 0 ? linkableTitles.map((t) => `- ${t}`).join('\n') : '(No existing entries to link to yet)'}
+</linkable_entries>
+
 ## Brand Identity
-Mission, values, and market positioning.
+Mission, values, and market positioning. What the brand stands for and how it presents itself.
+
+## Products & Services
+What specific products or services does this brand offer? List them with brief descriptions.
+
+## Location & Market
+Where is this business located? What markets do they serve? Include physical addresses if found.
+
+## About Us
+Company story, founding history, and any "about us" information from their website.
+
+## Key People
+Team members, founders, leadership, or notable staff listed on their website. Include names and roles.
 
 ## Voice & Tone
 Communication style, vocabulary preferences, do's and don'ts for content creation.
 
-## Visual Identity
-Colors, typography notes, imagery style and aesthetic direction.
+## Visual Identity & Color Palette
+Colors (list specific hex codes if visible), typography notes, imagery style and aesthetic direction. Describe the overall visual feel of the brand.
 
 ## Target Audience
 Demographics, psychographics, pain points, and aspirations.
@@ -125,7 +159,7 @@ Core topics, content pillars, and seasonal or timely angles to pursue.
 ## Competitive Positioning
 How this brand differentiates itself and its unique value proposition.
 
-Important: Base all analysis on the data provided. If data is sparse for a section, note what's available and provide reasonable inferences clearly marked as such.`;
+Important: Base all analysis on the data provided. Extract as much specific detail as possible from the website content — product names, team member names, locations, colors, etc. If data is sparse for a section, note what's available and provide reasonable inferences clearly marked as such. Weave wikilinks naturally throughout — every section should reference relevant web pages, contacts, or other entries where the data supports it.`;
 
   // 6. Call OpenRouter
   const aiResult = await createCompletion({

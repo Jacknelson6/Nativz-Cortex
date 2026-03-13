@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles, Loader2, RefreshCw } from 'lucide-react';
 import type { GeneratedIdea } from '@/lib/knowledge/idea-generator';
 import { IdeaCard } from './IdeaCard';
 
@@ -55,8 +55,14 @@ export function IdeaGenerator({ clientId, clientName }: IdeaGeneratorProps) {
             type="text"
             value={concept}
             onChange={(e) => setConcept(e.target.value)}
-            placeholder="e.g. summer fitness tips, behind the scenes..."
-            className="flex-1 rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:ring-1 focus:ring-accent-text"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !loading) {
+                e.preventDefault();
+                handleGenerate();
+              }
+            }}
+            placeholder="e.g. summer fitness tips, behind the scenes…"
+            className="flex-1 rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)] transition-colors"
           />
 
           <input
@@ -65,19 +71,19 @@ export function IdeaGenerator({ clientId, clientName }: IdeaGeneratorProps) {
             max={50}
             value={count}
             onChange={(e) => setCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-            className="w-24 rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-text"
+            className="w-24 rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)] transition-colors"
             placeholder="# ideas"
           />
 
           <button
             onClick={handleGenerate}
             disabled={loading}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent-text px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent-text px-5 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
           >
             {loading ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                Generating...
+                Generating…
               </>
             ) : (
               <>
@@ -93,19 +99,47 @@ export function IdeaGenerator({ clientId, clientName }: IdeaGeneratorProps) {
         )}
       </div>
 
-      {ideas.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {ideas.map((idea, i) => (
-            <IdeaCard key={`${idea.title}-${i}`} idea={idea} clientId={clientId} />
-          ))}
+      {/* Loading state */}
+      {loading && ideas.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16">
+          <Loader2 size={28} className="animate-spin text-accent-text mb-3" />
+          <p className="text-sm text-text-muted">Generating ideas for {clientName}…</p>
+          <p className="text-[11px] text-text-muted/60 mt-1">This usually takes 10–20 seconds</p>
         </div>
-      ) : (
-        !loading && (
-          <div className="flex flex-col items-center justify-center py-16 text-text-secondary">
-            <Sparkles size={32} className="mb-3 opacity-40" />
-            <p className="text-sm">No ideas generated yet. Enter an optional concept and hit generate.</p>
+      )}
+
+      {/* Results */}
+      {ideas.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-medium text-text-secondary">
+              {ideas.length} idea{ideas.length !== 1 ? 's' : ''} generated
+            </h2>
+            <button
+              onClick={handleGenerate}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 text-xs text-accent-text hover:text-accent-text/80 transition-colors cursor-pointer disabled:opacity-40"
+            >
+              {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+              Regenerate
+            </button>
           </div>
-        )
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {ideas.map((idea, i) => (
+              <IdeaCard key={`${idea.title}-${i}`} idea={idea} clientId={clientId} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && ideas.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-surface border border-nativz-border mb-4">
+            <Sparkles size={24} className="text-text-muted" />
+          </div>
+          <p className="text-sm text-text-muted">Enter an optional concept direction and hit generate</p>
+        </div>
       )}
     </div>
   );

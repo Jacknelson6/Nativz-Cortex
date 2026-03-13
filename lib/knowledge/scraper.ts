@@ -1,6 +1,8 @@
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
-import { createKnowledgeEntry, createKnowledgeLink } from '@/lib/knowledge/queries';
+import { createKnowledgeEntry, createKnowledgeLink, updateKnowledgeEntry } from '@/lib/knowledge/queries';
+import { structurePageContent } from './structurer';
+import { autoLinkEntities } from './entity-linker';
 import type { KnowledgeEntry, WebPageMetadata } from '@/lib/knowledge/types';
 
 // ---------------------------------------------------------------------------
@@ -217,6 +219,8 @@ export async function crawlClientWebsite(config: CrawlConfig): Promise<Knowledge
   const urlToEntryId = new Map<string, string>();
   // Track which URLs link to which other URLs
   const linkMap = new Map<string, string[]>();
+  // Collect titles as we go for wikilink generation
+  const existingTitles: string[] = [];
 
   // Step 1: try sitemap
   const sitemapUrls = await fetchSitemapUrls(startUrl);
@@ -278,6 +282,27 @@ export async function crawlClientWebsite(config: CrawlConfig): Promise<Knowledge
       entries.push(entry);
       urlToEntryId.set(item.url, entry.id);
       linkMap.set(item.url, extracted.links);
+      existingTitles.push(extracted.title);
+
+      // Optional structuring pass — failures must not break the crawl
+      try {
+        const structured = await structurePageContent(
+          extracted.content,
+          item.url,
+          existingTitles
+        );
+        await updateKnowledgeEntry(entry.id, {
+          content: structured.structuredContent,
+          metadata: {
+            ...metadata,
+            page_type: structured.pageType,
+            entities: structured.entities,
+          } as unknown as Record<string, unknown>,
+        });
+        await autoLinkEntities(clientId, entry.id);
+      } catch (structureErr) {
+        console.error(`Structuring failed for ${item.url} (non-fatal):`, structureErr);
+      }
     } catch (err) {
       console.error(`Failed to store knowledge entry for ${item.url}:`, err);
       continue;

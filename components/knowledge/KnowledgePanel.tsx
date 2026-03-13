@@ -1,6 +1,8 @@
 'use client';
 
-import { X, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { X, ExternalLink, Trash2, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface KnowledgePanelProps {
   node: {
@@ -18,6 +20,7 @@ interface KnowledgePanelProps {
   };
   clientId: string;
   onClose: () => void;
+  onDeleted?: (nodeId: string) => void;
 }
 
 const TYPE_BADGE_COLORS: Record<string, string> = {
@@ -33,9 +36,35 @@ const TYPE_BADGE_COLORS: Record<string, string> = {
   idea_submission: 'bg-pink-500/20 text-pink-400',
 };
 
-export function KnowledgePanel({ node, clientId, onClose }: KnowledgePanelProps) {
+export function KnowledgePanel({ node, clientId, onClose, onDeleted }: KnowledgePanelProps) {
   const { data } = node;
   const badgeColor = TYPE_BADGE_COLORS[data.type] ?? 'bg-slate-500/20 text-slate-400';
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Extract entry ID from node id (format: "entry-{uuid}")
+  const entryId = node.id.startsWith('entry-') ? node.id.slice(6) : null;
+
+  async function handleDelete() {
+    if (!entryId) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/knowledge/${entryId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json();
+        toast.error(d.error ?? 'Failed to delete');
+        return;
+      }
+      toast.success('Entry deleted');
+      onDeleted?.(node.id);
+      onClose();
+    } catch {
+      toast.error('Failed to delete');
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
 
   return (
     <div className="fixed right-0 top-0 z-50 h-full w-[400px] border-l border-nativz-border bg-surface shadow-elevated overflow-y-auto">
@@ -67,9 +96,15 @@ export function KnowledgePanel({ node, clientId, onClose }: KnowledgePanelProps)
         {data.content && (
           <div>
             <h3 className="text-xs font-medium text-text-secondary mb-1.5">Content</h3>
-            <pre className="text-xs text-text-primary whitespace-pre-wrap break-words bg-background rounded-lg p-3 max-h-[400px] overflow-y-auto">
-              {data.content}
-            </pre>
+            <pre
+              className="text-xs text-text-primary whitespace-pre-wrap break-words bg-background rounded-lg p-3 max-h-[400px] overflow-y-auto [&_.wikilink]:text-accent-text [&_.wikilink]:font-medium [&_.wikilink]:cursor-default"
+              dangerouslySetInnerHTML={{
+                __html: data.content.replace(
+                  /\[\[([^\]]+)\]\]/g,
+                  '<span class="wikilink">$1</span>'
+                ),
+              }}
+            />
           </div>
         )}
 
@@ -115,15 +150,43 @@ export function KnowledgePanel({ node, clientId, onClose }: KnowledgePanelProps)
           </div>
         )}
 
-        {/* Edit button for entries */}
-        {data.nodeKind === 'entry' && (
-          <a
-            href={`/admin/clients/${clientId}/knowledge`}
-            className="inline-flex items-center gap-1.5 rounded-md bg-accent-surface px-3 py-1.5 text-xs font-medium text-accent-text hover:bg-accent-surface/80 transition-colors"
-          >
-            <ExternalLink size={12} />
-            Edit entry
-          </a>
+        {/* Actions */}
+        {data.nodeKind === 'entry' && entryId && (
+          <div className="flex items-center gap-2 pt-2 border-t border-nativz-border">
+            <a
+              href={`/admin/clients/${clientId}/knowledge`}
+              className="inline-flex items-center gap-1.5 rounded-md bg-accent-surface px-3 py-1.5 text-xs font-medium text-accent-text hover:bg-accent-surface/80 transition-colors"
+            >
+              <ExternalLink size={12} />
+              Edit entry
+            </a>
+            {confirmDelete ? (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-red-500/15 border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/25 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {deleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                  Confirm
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="rounded-md px-2 py-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+              >
+                <Trash2 size={12} />
+                Delete
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

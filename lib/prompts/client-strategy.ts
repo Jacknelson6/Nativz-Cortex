@@ -22,6 +22,8 @@ interface ClientStrategyConfig {
   websiteContent?: { url: string; content: string }[] | null;
   /** Past research, content logs, strategy — from getClientMemory() */
   clientMemoryBlock?: string | null;
+  /** Structured knowledge base context (brand profile, entities, meetings) */
+  clientKnowledgeBlock?: string | null;
 }
 
 const TIME_RANGE_LABELS: Record<string, string> = {
@@ -94,6 +96,11 @@ export function buildClientStrategyPrompt(config: ClientStrategyConfig): string 
       ) + '\n'
     : '';
 
+  // Knowledge base block (structured entities, brand profile, meetings)
+  const knowledgeBlock = config.clientKnowledgeBlock
+    ? `\n## CLIENT KNOWLEDGE BASE\nThe following is structured data from ${ctx.name}'s knowledge vault. Use it to inform all recommendations with specific brand details.\n\n${config.clientKnowledgeBlock}\n`
+    : '';
+
   // Website content block (from Cloudflare crawl)
   const websiteBlock = config.websiteContent?.length
     ? `\n## CLIENT WEBSITE CONTENT\nThe following was crawled from ${ctx.name}'s website. Use it to deeply understand their brand, products, services, and messaging style.\n\n${config.websiteContent.map((p) => `### ${p.url}\n${p.content}`).join('\n\n')}\n`
@@ -122,7 +129,7 @@ ${countryFilter ? `- ${countryFilter}` : ''}
 - Target audience: ${ctx.targetAudience || 'General'}
 - Brand voice: ${ctx.brandVoice || 'Not specified'}
 ${keywordsLine}
-${prefsBlock}${websiteBlock}${config.clientMemoryBlock ? `\n## CLIENT CONTENT HISTORY\nUse the following history to avoid repeating past research, differentiate new ideas, and build on what has worked for ${ctx.name}.\n\n${config.clientMemoryBlock}\n` : ''}
+${prefsBlock}${knowledgeBlock}${websiteBlock}${config.clientMemoryBlock ? `\n## CLIENT CONTENT HISTORY\nUse the following history to avoid repeating past research, differentiate new ideas, and build on what has worked for ${ctx.name}.\n\n${config.clientMemoryBlock}\n` : ''}
 ## REAL SEARCH DATA
 The following data was gathered from live web searches. Use it as the basis for your analysis. Do NOT make up information — base all insights on this data.
 

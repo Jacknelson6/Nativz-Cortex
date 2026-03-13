@@ -7,7 +7,6 @@ export interface GeneratedIdea {
   title: string;
   description: string;
   hook: string;
-  format: 'short_form' | 'long_form' | 'reel' | 'story';
   content_pillar: string;
 }
 
@@ -86,6 +85,38 @@ ${brandProfile.content ?? ''}
     );
   }
 
+  // Structured entities from knowledge base
+  const allEntries = await getKnowledgeEntries(clientId);
+  const entityProducts = new Set<string>();
+  const entityFaqs: string[] = [];
+  const meetingTopics: string[] = [];
+
+  for (const entry of allEntries) {
+    const meta = entry.metadata as Record<string, unknown> | null;
+    const entities = meta?.entities as {
+      products?: { name: string; description?: string }[];
+      faqs?: { question: string; answer: string }[];
+    } | undefined;
+    if (entities) {
+      for (const p of entities.products ?? []) entityProducts.add(p.description ? `${p.name}: ${p.description}` : p.name);
+      for (const f of entities.faqs ?? []) entityFaqs.push(`Q: ${f.question}`);
+    }
+    if (entry.type === 'meeting_note') {
+      const actions = (meta?.action_items as string[]) ?? [];
+      meetingTopics.push(`Meeting "${entry.title}": ${actions.length > 0 ? actions.join('; ') : entry.content.substring(0, 150)}`);
+    }
+  }
+
+  if (entityProducts.size > 0) {
+    contextBlocks.push(`<products_and_services>\n${[...entityProducts].join('\n')}\n</products_and_services>`);
+  }
+  if (entityFaqs.length > 0) {
+    contextBlocks.push(`<common_questions>\n${entityFaqs.slice(0, 10).join('\n')}\n</common_questions>`);
+  }
+  if (meetingTopics.length > 0) {
+    contextBlocks.push(`<meeting_insights>\n${meetingTopics.slice(0, 5).join('\n')}\n</meeting_insights>`);
+  }
+
   if (latestStrategy) {
     contextBlocks.push(
       `<strategy>
@@ -143,15 +174,14 @@ Each idea must have these fields:
 - "title": a concise, compelling video title
 - "description": 2-3 sentences explaining what the video covers and why it matters
 - "hook": the opening line or visual that grabs attention in the first 3 seconds
-- "format": one of "short_form", "long_form", "reel", or "story"
 - "content_pillar": the content category/pillar this falls under
 
 Requirements:
+- All ideas are short-form video content
 - Ideas must be actionable for a videographer showing up on set
 - Align with the brand voice and audience
 - Do NOT repeat any existing saved ideas
 - Each idea must be distinct from the others
-- Mix formats unless the concept direction suggests otherwise
 
 Output ONLY the JSON array. No other text.`;
 

@@ -6,7 +6,7 @@ import { getKnowledgeEntries, createKnowledgeEntry } from '@/lib/knowledge/queri
 import type { KnowledgeEntryType } from '@/lib/knowledge/types';
 
 const createSchema = z.object({
-  type: z.enum(['brand_asset', 'brand_profile', 'document', 'web_page', 'note', 'idea']),
+  type: z.enum(['brand_asset', 'brand_profile', 'document', 'web_page', 'note', 'idea', 'meeting_note']),
   title: z.string().min(1),
   content: z.string().default(''),
   metadata: z.record(z.string(), z.unknown()).default({}),

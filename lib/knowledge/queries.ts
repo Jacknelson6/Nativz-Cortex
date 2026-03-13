@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { embedKnowledgeEntry } from '@/lib/ai/embeddings';
 import type {
   KnowledgeEntry,
   KnowledgeEntryType,
@@ -185,6 +186,32 @@ export async function getKnowledgeGraph(clientId: string): Promise<KnowledgeGrap
 
   const externalNodes = await getExternalNodes(clientId, links);
 
+  // Generate wikilink edges from entry content
+  const { generateWikilinkEdges } = await import('./wikilinks');
+  const wikilinkEdges = generateWikilinkEdges(entries);
+
+  // Merge wikilink edges into links (avoid duplicates with existing links)
+  const existingKeys = new Set(
+    links.map((l) => [l.source_id, l.target_id].sort().join(':')),
+  );
+
+  for (const edge of wikilinkEdges) {
+    const key = [edge.sourceEntryId, edge.targetEntryId].sort().join(':');
+    if (!existingKeys.has(key)) {
+      existingKeys.add(key);
+      links.push({
+        id: `wikilink-${key}`,
+        client_id: clientId,
+        source_id: edge.sourceEntryId,
+        source_type: 'entry',
+        target_id: edge.targetEntryId,
+        target_type: 'entry',
+        label: 'wikilink',
+        created_at: '',
+      });
+    }
+  }
+
   return { entries, links, externalNodes };
 }
 
@@ -203,6 +230,10 @@ export async function createKnowledgeEntry(
     .single();
 
   if (error) throw new Error(`Failed to create knowledge entry: ${error.message}`);
+
+  // Auto-embed for semantic search (non-blocking)
+  embedKnowledgeEntry(data.id).catch(() => {});
+
   return data as KnowledgeEntry;
 }
 

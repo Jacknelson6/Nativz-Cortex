@@ -1,4 +1,4 @@
-export type KnowledgeEntryType = 'brand_asset' | 'brand_profile' | 'document' | 'web_page' | 'note' | 'idea';
+export type KnowledgeEntryType = 'brand_asset' | 'brand_profile' | 'document' | 'web_page' | 'note' | 'idea' | 'meeting_note';
 export type KnowledgeSource = 'manual' | 'scraped' | 'generated' | 'imported';
 export type KnowledgeNodeType = 'entry' | 'contact' | 'search' | 'strategy' | 'idea_submission';
 
@@ -67,4 +67,11 @@ export interface IdeaMetadata {
   format?: 'short_form' | 'long_form' | 'reel' | 'story';
   content_pillar?: string;
   concept_input?: string;
+}
+
+export interface MeetingNoteMetadata {
+  meeting_date?: string;
+  attendees?: string[];
+  action_items?: string[];
+  source?: 'fyxer' | 'manual' | 'other';
 }

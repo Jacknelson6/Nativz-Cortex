@@ -1,9 +1,9 @@
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getKnowledgeGraph } from '@/lib/knowledge/queries';
-import { KnowledgeGraph } from '@/components/knowledge/KnowledgeGraph';
+import { getKnowledgeEntries, getKnowledgeGraph } from '@/lib/knowledge/queries';
+import { VaultLayout } from '@/components/knowledge/VaultLayout';
 
-export default async function KnowledgeGraphPage({
+export default async function KnowledgeVaultPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
@@ -21,13 +21,18 @@ export default async function KnowledgeGraphPage({
     notFound();
   }
 
-  const graphData = await getKnowledgeGraph(client.id);
+  const [entries, graphData] = await Promise.all([
+    getKnowledgeEntries(client.id),
+    getKnowledgeGraph(client.id),
+  ]);
 
   return (
-    <KnowledgeGraph
+    <VaultLayout
       clientId={client.id}
+      clientName={client.name ?? ''}
       clientSlug={client.slug}
-      initialData={graphData}
+      initialEntries={entries}
+      initialGraphData={graphData}
     />
   );
 }

@@ -28,6 +28,7 @@ function vaultPath(clientName: string, entry: KnowledgeEntry): string {
     document: 'Documents',
     note: 'Notes',
     idea: 'Ideas',
+    meeting_note: 'Meetings',
   };
 
   const subfolder = subfolders[entry.type];
