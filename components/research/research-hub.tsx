@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, Sparkles } from 'lucide-react';
 import { SpotlightCard } from '@/components/ui/spotlight-card';
 import { ResearchWizard } from './research-wizard';
@@ -20,6 +20,17 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
   const [ideasOpen, setIdeasOpen] = useState(false);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [optimisticItems, setOptimisticItems] = useState<HistoryItem[]>([]);
+  const prevHistoryRef = useRef(historyItems);
+
+  // Clear optimistic items when server data refreshes (avoids duplicates)
+  useEffect(() => {
+    if (prevHistoryRef.current !== historyItems) {
+      prevHistoryRef.current = historyItems;
+      setOptimisticItems((prev) =>
+        prev.filter((opt) => !historyItems.some((h) => h.id === opt.id))
+      );
+    }
+  }, [historyItems]);
 
   const allItems = [...optimisticItems, ...historyItems];
 

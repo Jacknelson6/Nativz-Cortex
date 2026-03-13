@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { lockScroll, unlockScroll } from '@/lib/utils/scroll-lock';
 import { HistoryFeed } from './history-feed';
 import type { HistoryItem } from '@/lib/research/history';
 
@@ -27,8 +28,8 @@ export function HistoryModal({ open, onClose, initialItems, clients }: HistoryMo
 
   useEffect(() => {
     if (!open) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll();
+    return () => unlockScroll();
   }, [open]);
 
   if (!open) return null;

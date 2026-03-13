@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useLayoutEffect, useState, Children, type ReactNode } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
+import { lockScroll, unlockScroll } from '@/lib/utils/scroll-lock';
 
 function StepBar({ total, current, accentColor }: { total: number; current: number; accentColor: string }) {
   return (
@@ -86,8 +87,8 @@ export function WizardShell({ open, onClose, accentColor, totalSteps, currentSte
 
   useEffect(() => {
     if (!open) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll();
+    return () => unlockScroll();
   }, [open]);
 
   const stepsArray = Children.toArray(children);

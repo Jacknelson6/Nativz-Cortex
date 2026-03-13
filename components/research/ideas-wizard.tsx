@@ -61,10 +61,14 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
     }
   }
 
-  async function handleGenerate() {
+  async function handleGenerate(overrides?: { concept?: string; count?: number; referenceIds?: string[] }) {
     if (!clientId) return;
     setError('');
     setLoading(true);
+
+    const finalConcept = overrides?.concept ?? concept;
+    const finalCount = overrides?.count ?? count;
+    const finalRefs = overrides?.referenceIds ?? referenceIds;
 
     try {
       const res = await fetch('/api/ideas/generate', {
@@ -72,9 +76,9 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           client_id: clientId,
-          concept: concept.trim() || undefined,
-          count,
-          reference_video_ids: referenceIds.length > 0 ? referenceIds : undefined,
+          concept: finalConcept.trim() || undefined,
+          count: finalCount,
+          reference_video_ids: finalRefs.length > 0 ? finalRefs : undefined,
         }),
       });
 
@@ -194,13 +198,13 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => { setConcept(''); setCount(10); setReferenceIds([]); handleGenerate(); }}
+              onClick={() => handleGenerate({ concept: '', count: 10, referenceIds: [] })}
               disabled={loading}
               className="rounded-xl border border-yellow-500/30 px-5 py-2.5 text-sm font-medium text-yellow-400 hover:bg-yellow-500/10 transition-colors disabled:opacity-40"
             >
               Skip &amp; generate
             </button>
-            <GlassButton onClick={handleGenerate} loading={loading} disabled={loading} className="!bg-[rgba(234,179,8,0.12)] !border-[rgba(234,179,8,0.25)] !text-yellow-400 hover:!bg-[rgba(234,179,8,0.2)]">
+            <GlassButton onClick={() => handleGenerate()} loading={loading} disabled={loading} className="!bg-[rgba(234,179,8,0.12)] !border-[rgba(234,179,8,0.25)] !text-yellow-400 hover:!bg-[rgba(234,179,8,0.2)]">
               {loading ? <><Loader2 size={16} className="animate-spin" /> Generating...</> : 'Generate'}
             </GlassButton>
           </div>

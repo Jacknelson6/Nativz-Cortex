@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Building2, Search } from 'lucide-react';
+import { lockScroll, unlockScroll } from '@/lib/utils/scroll-lock';
 
 export interface ClientOption {
   id: string;
@@ -100,10 +101,9 @@ export function ClientPickerModal({
     return () => document.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
-  // Lock body scroll
   useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll();
+    return () => unlockScroll();
   }, []);
 
   const filtered = search.trim()
