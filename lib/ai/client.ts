@@ -1,3 +1,5 @@
+import { logUsage, calculateCost } from './usage';
+
 export interface AICompletionResponse {
   text: string;
   usage: {
@@ -18,15 +20,17 @@ interface CompletionOptions {
   maxTokens: number;
   webSearch?: boolean;
   webSearchMaxResults?: number;
+  /** Feature name for usage tracking (e.g. 'idea_generation', 'script_generation') */
+  feature?: string;
 }
 
-// Pricing for anthropic/claude-sonnet-4.5 (per token)
-const PRICE_PER_INPUT_TOKEN = 0.003 / 1000;
-const PRICE_PER_OUTPUT_TOKEN = 0.015 / 1000;
+// Pricing for openrouter/hunter-alpha (currently free)
+const PRICE_PER_INPUT_TOKEN = 0;
+const PRICE_PER_OUTPUT_TOKEN = 0;
 
 export async function createCompletion(options: CompletionOptions): Promise<AICompletionResponse> {
   const apiKey = process.env.OPENROUTER_API_KEY;
-  const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4-5';
+  const model = process.env.OPENROUTER_MODEL || 'openrouter/hunter-alpha';
 
   if (!apiKey) {
     throw new Error('OPENROUTER_API_KEY is not configured');
@@ -80,6 +84,20 @@ export async function createCompletion(options: CompletionOptions): Promise<AICo
   }
   const promptTokens = data.usage?.prompt_tokens || 0;
   const completionTokens = data.usage?.completion_tokens || 0;
+  const estimatedCost = promptTokens * PRICE_PER_INPUT_TOKEN + completionTokens * PRICE_PER_OUTPUT_TOKEN;
+
+  // Log usage (non-blocking)
+  if (options.feature) {
+    logUsage({
+      service: 'openrouter',
+      model,
+      feature: options.feature,
+      inputTokens: promptTokens,
+      outputTokens: completionTokens,
+      totalTokens: promptTokens + completionTokens,
+      costUsd: estimatedCost,
+    }).catch(() => {});
+  }
 
   return {
     text: content,
@@ -88,9 +106,6 @@ export async function createCompletion(options: CompletionOptions): Promise<AICo
       completionTokens,
       totalTokens: promptTokens + completionTokens,
     },
-    estimatedCost: (
-      promptTokens * PRICE_PER_INPUT_TOKEN +
-      completionTokens * PRICE_PER_OUTPUT_TOKEN
-    ),
+    estimatedCost,
   };
 }

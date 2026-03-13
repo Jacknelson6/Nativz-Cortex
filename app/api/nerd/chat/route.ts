@@ -54,8 +54,16 @@ You are THE expert on:
 
 You have full access to every client in the Nativz portfolio and can take actions on their behalf using tools.
 
+Each client has a **knowledge vault** — an Obsidian-style knowledge base with structured entries (brand profiles, web pages, meeting notes, documents, ideas). The vault is semantically indexed — use **search_knowledge_base** with a natural language query to find the most relevant entries. Do NOT try to load all entries at once; always search first, then drill deeper if needed. You can also save useful information using create_knowledge_note, and import meeting transcripts using import_meeting_notes.
+
+KNOWLEDGE SEARCH PATTERN (QMD):
+1. **Query** — use search_knowledge_base with a descriptive query to find relevant context
+2. **Match** — review the returned entries and identify the most relevant ones
+3. **Decide** — answer using the matched context, or search again with a refined query if needed
+Never load all knowledge entries into your response. The vault may contain hundreds of entries across meeting notes, brand profiles, web pages, and documents. Semantic search will find what you need.
+
 TOOL USAGE RULES:
-- You have tools to manage tasks, schedule posts, view analytics, manage clients, shoots, moodboards, and more.
+- You have tools to manage tasks, schedule posts, view analytics, manage clients, shoots, moodboards, knowledge vaults, and more.
 - Use tools proactively when the user's request implies an action (e.g., "create a task" → use create_task tool).
 - When referring to clients or team members, users use @mentions. The system resolves these to IDs for you.
 - For READ tools (listing, viewing): execute immediately and summarize results naturally.
@@ -151,9 +159,46 @@ async function buildKnowledgeSummary(clientId: string): Promise<string> {
     }
     parts.push(`  Entries: ${Object.entries(counts).map(([t, c]) => `${c} ${t}(s)`).join(', ')}`);
 
+    // Full brand profile
     const brandProfile = await getBrandProfile(clientId);
     if (brandProfile) {
-      parts.push(`  Brand Profile: ${brandProfile.content.substring(0, 300)}...`);
+      parts.push(`  Brand Profile:\n${brandProfile.content.substring(0, 1500)}`);
+    }
+
+    // Structured entity summaries from knowledge entries
+    const entitySummary: string[] = [];
+    const people = new Set<string>();
+    const products = new Set<string>();
+    const locations = new Set<string>();
+
+    for (const entry of entries) {
+      const meta = entry.metadata as Record<string, unknown> | null;
+      const entities = meta?.entities as {
+        people?: { name: string; role?: string }[];
+        products?: { name: string; description?: string }[];
+        locations?: { address: string }[];
+      } | undefined;
+      if (!entities) continue;
+      for (const p of entities.people ?? []) people.add(p.role ? `${p.name} (${p.role})` : p.name);
+      for (const p of entities.products ?? []) products.add(p.name);
+      for (const l of entities.locations ?? []) locations.add(l.address);
+    }
+
+    if (people.size > 0) entitySummary.push(`  Key People: ${[...people].join(', ')}`);
+    if (products.size > 0) entitySummary.push(`  Products/Services: ${[...products].join(', ')}`);
+    if (locations.size > 0) entitySummary.push(`  Locations: ${[...locations].join(', ')}`);
+    if (entitySummary.length > 0) parts.push(...entitySummary);
+
+    // Meeting notes summaries (last 5)
+    const meetings = entries
+      .filter((e) => e.type === 'meeting_note')
+      .slice(0, 5);
+    if (meetings.length > 0) {
+      parts.push('  Recent Meetings:');
+      for (const m of meetings) {
+        const summary = m.content.substring(0, 200);
+        parts.push(`    - ${m.title}: ${summary}...`);
+      }
     }
 
     return parts.join('\n');
