@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Link2, Unlink, Loader2 } from 'lucide-react';
+import { Link2, Unlink, Loader2, Handshake, X, Check } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { SocialPlatform } from '@/lib/types/reporting';
@@ -52,6 +52,12 @@ const YouTubeIcon = () => (
   </svg>
 );
 
+const UpPromoteIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
 const PLATFORMS: {
   key: SocialPlatform;
   label: string;
@@ -64,11 +70,87 @@ const PLATFORMS: {
   { key: 'youtube', label: 'YouTube', icon: <YouTubeIcon />, bg: 'bg-red-500/10' },
 ];
 
-export function ConnectedAccounts({ clientId }: { clientId: string }) {
+// ── UpPromote API Key Modal ─────────────────────────────────────────────────
+
+function UpPromoteModal({ clientId, onClose, onConnected }: { clientId: string; onClose: () => void; onConnected: () => void }) {
+  const [apiKey, setApiKey] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!apiKey.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/uppromote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: apiKey.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error ?? 'Failed to connect');
+        return;
+      }
+      toast.success('UpPromote connected — initial sync started');
+      onConnected();
+      onClose();
+    } catch {
+      toast.error('Failed to connect');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-background rounded-xl border border-nativz-border p-5 animate-[modalScaleIn_200ms_ease-out]" style={{ boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10">
+              <Handshake size={16} className="text-emerald-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-text-primary">Connect UpPromote</h3>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer">
+            <X size={16} />
+          </button>
+        </div>
+        <p className="text-xs text-text-muted mb-3">
+          Find your API key in UpPromote → Settings → Integrations.
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <input
+            type="text"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="pk_..."
+            autoFocus
+            className="w-full rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20"
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+            <Button type="submit" size="sm" disabled={saving || !apiKey.trim()}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
+              {saving ? 'Connecting...' : 'Connect'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ──────────────────────────────────────────────────────────
+
+export function ConnectedAccounts({ clientId, hasUpPromote }: { clientId: string; hasUpPromote?: boolean }) {
   const [profiles, setProfiles] = useState<SocialProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<SocialPlatform | null>(null);
+  const [upPromoteConnected, setUpPromoteConnected] = useState(hasUpPromote ?? false);
+  const [upPromoteDisconnecting, setUpPromoteDisconnecting] = useState(false);
+  const [showUpPromoteModal, setShowUpPromoteModal] = useState(false);
 
   const fetchProfiles = useCallback(async () => {
     try {
@@ -144,78 +226,145 @@ export function ConnectedAccounts({ clientId }: { clientId: string }) {
     }
   }
 
+  async function handleUpPromoteDisconnect() {
+    setUpPromoteDisconnecting(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/uppromote`, { method: 'DELETE' });
+      if (!res.ok) {
+        toast.error('Failed to disconnect');
+        return;
+      }
+      setUpPromoteConnected(false);
+      toast.success('UpPromote disconnected');
+    } catch {
+      toast.error('Failed to disconnect');
+    } finally {
+      setUpPromoteDisconnecting(false);
+    }
+  }
+
   const connectedPlatforms = new Set(profiles.map((p) => p.platform));
 
+  const ROW_CLASS = 'flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3';
+
   return (
-    <Card>
-      <h2 className="text-base font-semibold text-text-primary mb-1">Connected accounts</h2>
-      <p className="text-sm text-text-muted mb-4">
-        Connect social media accounts for analytics and reporting.
-      </p>
+    <>
+      <Card>
+        <h2 className="text-base font-semibold text-text-primary mb-1">Integrations</h2>
+        <p className="text-sm text-text-muted mb-4">
+          Connect accounts for analytics, reporting, and affiliate tracking.
+        </p>
 
-      {loading ? (
-        <div className="flex items-center gap-2 text-sm text-text-muted py-4">
-          <Loader2 size={14} className="animate-spin" />
-          Loading...
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {PLATFORMS.map((p) => {
-            const profile = profiles.find((pr) => pr.platform === p.key);
-            const isConnected = connectedPlatforms.has(p.key);
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-text-muted py-4">
+            <Loader2 size={14} className="animate-spin" />
+            Loading...
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {PLATFORMS.map((p) => {
+              const profile = profiles.find((pr) => pr.platform === p.key);
+              const isConnected = connectedPlatforms.has(p.key);
 
-            return (
-              <div
-                key={p.key}
-                className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3"
-              >
-                <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${p.bg}`}>
-                  {p.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text-primary">{p.label}</p>
+              return (
+                <div key={p.key} className={ROW_CLASS}>
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${p.bg}`}>
+                    {p.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-text-primary">{p.label}</p>
+                    {isConnected && profile ? (
+                      <p className="text-xs text-text-muted truncate">@{profile.username}</p>
+                    ) : (
+                      <p className="text-xs text-text-muted">Not connected</p>
+                    )}
+                  </div>
                   {isConnected && profile ? (
-                    <p className="text-xs text-text-muted truncate">@{profile.username}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDisconnect(profile.id, p.label)}
+                      disabled={disconnecting === profile.id}
+                      className="shrink-0 text-text-muted hover:text-red-400 hover:border-red-500/30"
+                    >
+                      {disconnecting === profile.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Unlink size={14} />
+                      )}
+                      Disconnect
+                    </Button>
                   ) : (
-                    <p className="text-xs text-text-muted">Not connected</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleConnect(p.key)}
+                      disabled={connecting === p.key}
+                      className="shrink-0"
+                    >
+                      {connecting === p.key ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Link2 size={14} />
+                      )}
+                      Connect
+                    </Button>
                   )}
                 </div>
-                {isConnected && profile ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDisconnect(profile.id, p.label)}
-                    disabled={disconnecting === profile.id}
-                    className="shrink-0 text-text-muted hover:text-red-400 hover:border-red-500/30"
-                  >
-                    {disconnecting === profile.id ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Unlink size={14} />
-                    )}
-                    Disconnect
-                  </Button>
+              );
+            })}
+
+            {/* UpPromote row */}
+            <div className={ROW_CLASS}>
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10">
+                <UpPromoteIcon />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-text-primary">UpPromote</p>
+                {upPromoteConnected ? (
+                  <p className="text-xs text-emerald-400 flex items-center gap-1"><Check size={10} />Connected</p>
                 ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleConnect(p.key)}
-                    disabled={connecting === p.key}
-                    className="shrink-0"
-                  >
-                    {connecting === p.key ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Link2 size={14} />
-                    )}
-                    Connect
-                  </Button>
+                  <p className="text-xs text-text-muted">Not connected</p>
                 )}
               </div>
-            );
-          })}
-        </div>
+              {upPromoteConnected ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleUpPromoteDisconnect}
+                  disabled={upPromoteDisconnecting}
+                  className="shrink-0 text-text-muted hover:text-red-400 hover:border-red-500/30"
+                >
+                  {upPromoteDisconnecting ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Unlink size={14} />
+                  )}
+                  Disconnect
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowUpPromoteModal(true)}
+                  className="shrink-0"
+                >
+                  <Link2 size={14} />
+                  Connect
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {showUpPromoteModal && (
+        <UpPromoteModal
+          clientId={clientId}
+          onClose={() => setShowUpPromoteModal(false)}
+          onConnected={() => setUpPromoteConnected(true)}
+        />
       )}
-    </Card>
+    </>
   );
 }

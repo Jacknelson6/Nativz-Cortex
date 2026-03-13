@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Building2, Search, UserX, LayoutGrid, List, ArrowUpDown, Trash2, Loader2, X } from 'lucide-react';
+import { Building2, Search, UserX, LayoutGrid, List, Trash2, Loader2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { HealthBadge } from '@/components/clients/health-badge';
@@ -142,8 +142,8 @@ function ClientCard({
             style={{ animationDelay: `${i * 30}ms` }}
           >
             {client.logoUrl ? (
-              <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-surface-hover/50 flex items-center justify-center">
-                <img src={client.logoUrl} alt={client.name} className="h-full w-full object-contain p-0.5" />
+              <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-white flex items-center justify-center">
+                <img src={client.logoUrl} alt={client.name} className="h-full w-full object-cover" />
               </div>
             ) : (
               <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
@@ -184,11 +184,11 @@ function ClientCard({
         >
           <div className="relative flex items-start gap-3">
             {client.logoUrl ? (
-              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-surface-hover/50 flex items-center justify-center">
-                <img src={client.logoUrl} alt={client.name} className="h-full w-full object-contain p-1" />
+              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-white flex items-center justify-center">
+                <img src={client.logoUrl} alt={client.name} className="h-full w-full object-cover" />
               </div>
             ) : (
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
                 {client.abbreviation || <Building2 size={20} />}
               </div>
             )}
@@ -199,9 +199,11 @@ function ClientCard({
                 <HealthBadge healthScore={client.healthScore} className="ml-auto" />
               </div>
               <p className="text-xs text-text-muted">{client.industry || 'General'}</p>
-              <div className="flex flex-wrap items-center gap-1 mt-1.5">
+              <div className="mt-1.5 space-y-1">
                 <AgencyBadge agency={client.agency} />
-                {client.services.map((s) => <Badge key={s} className="text-[10px] px-1.5 py-0">{s}</Badge>)}
+                <div className="flex items-center gap-1">
+                  {client.services.map((s) => <Badge key={s} className="text-[10px] px-1.5 py-0 shrink-0">{s}</Badge>)}
+                </div>
               </div>
               {client.lastActivityAt && (
                 <p className="text-[10px] text-text-muted mt-1">Active {formatRelativeTime(client.lastActivityAt)}</p>
@@ -301,6 +303,7 @@ function ClientDetailModal({ slug, onClose }: { slug: string; onClose: () => voi
             recentMoodboards={data.recentMoodboards}
             ideas={data.ideas}
             ideaCount={data.ideaCount}
+            knowledgeSummary={data.knowledgeSummary}
             inModal
           />
         )}
@@ -311,7 +314,6 @@ function ClientDetailModal({ slug, onClose }: { slug: string; onClose: () => voi
 
 // ─── Grid ──────────────────────────────────────────────────────────────────────
 
-type SortKey = 'name' | 'health';
 type AgencyFilter = 'all' | 'nativz' | 'ac';
 
 export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[] }) {
@@ -322,7 +324,6 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
 
   const [query, setQuery] = useState('');
-  const [sortBy, setSortBy] = useState<SortKey>('health');
   const [agencyFilter, setAgencyFilter] = useState<AgencyFilter>('all');
   const [listView, setListView] = useState(false);
 
@@ -365,16 +366,8 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
     });
   }
 
-  // Sort
-  const HEALTH_RANK: Record<string, number> = { excellent: 5, great: 4, good: 3, fair: 2, not_good: 1 };
-  const sorted = [...filtered].sort((a, b) => {
-    if (sortBy === 'health') {
-      const ra = a.healthScore ? (HEALTH_RANK[a.healthScore] ?? 0) : 0;
-      const rb = b.healthScore ? (HEALTH_RANK[b.healthScore] ?? 0) : 0;
-      return rb - ra;
-    }
-    return a.name.localeCompare(b.name);
-  });
+  // Sort alphabetically
+  const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
 
   const active = sorted.filter((c) => c.isActive !== false);
   const inactive = sorted.filter((c) => c.isActive === false);
@@ -404,16 +397,6 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
           <option value="nativz">Nativz</option>
           <option value="ac">Anderson Collaborative</option>
         </select>
-
-        {/* Sort */}
-        <button
-          onClick={() => setSortBy((s) => (s === 'health' ? 'name' : 'health'))}
-          className="flex items-center gap-1.5 rounded-lg border border-nativz-border bg-surface-primary px-3 py-2 text-sm text-text-secondary hover:text-text-primary transition-colors"
-          title={`Sort by ${sortBy === 'health' ? 'name' : 'health score'}`}
-        >
-          <ArrowUpDown size={14} />
-          {sortBy === 'health' ? 'Health' : 'Name'}
-        </button>
 
         {/* View toggle */}
         <div className="flex rounded-lg border border-nativz-border overflow-hidden">
@@ -449,7 +432,7 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {active.map((client, i) => (
                   <ClientCard key={client.slug} client={client} i={i} onDelete={handleDelete} deleting={deletingId === client.dbId} onClick={() => setSelectedSlug(client.slug)} />
                 ))}
@@ -470,7 +453,7 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
                   ))}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {inactive.map((client, i) => (
                     <ClientCard key={client.slug} client={client} i={i} dimmed onDelete={handleDelete} deleting={deletingId === client.dbId} onClick={() => setSelectedSlug(client.slug)} />
                   ))}

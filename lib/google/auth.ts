@@ -27,6 +27,7 @@ const SCOPES = [
   'https://www.googleapis.com/auth/drive.readonly',
   'https://www.googleapis.com/auth/chat.spaces.readonly',
   'https://www.googleapis.com/auth/chat.messages.readonly',
+  'https://www.googleapis.com/auth/gmail.readonly',
 ].join(' ');
 
 function getClientId() {
@@ -186,9 +187,9 @@ export async function getValidToken(userId: string): Promise<string | null> {
 
   if (!row) return null;
 
-  // Check if token is still valid (with 60s buffer)
+  // Check if token is still valid (with 5 min buffer to stay ahead of cron cycles)
   const expiresAt = new Date(row.expires_at).getTime();
-  if (Date.now() < expiresAt - 60_000) {
+  if (Date.now() < expiresAt - 5 * 60_000) {
     return row.access_token;
   }
 

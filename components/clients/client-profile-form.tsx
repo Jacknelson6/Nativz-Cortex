@@ -6,25 +6,23 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Building2, Save, Sparkles,
   Clock, Pencil, X, Settings2, ExternalLink, DollarSign,
-  BookOpen, Lightbulb, Wand2,
+  BookOpen, Lightbulb, Wand2, Plug,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { ImageUpload } from '@/components/ui/image-upload';
-import { TagInput } from '@/components/ui/tag-input';
 import { GlowButton } from '@/components/ui/glow-button';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { AgencyBadge } from '@/components/clients/agency-badge';
 import { ClientContactsCard } from '@/components/clients/client-contacts-card';
 import { ClientStrategyCard } from '@/components/clients/client-strategy-card';
 import { ConnectedAccounts } from '@/components/clients/connected-accounts';
-import { ProfileField, TagField, SectionLabel } from './client-profile-fields';
+import { KnowledgeThumbnail } from '@/components/knowledge/KnowledgeThumbnail';
+import { ProfileField, SectionLabel } from './client-profile-fields';
 import { ClientActivityCards } from './client-activity-cards';
 import { PortalAccessCard, DangerZone } from './client-settings-section';
-import { UpPromoteIntegrationCard } from './uppromote-integration-card';
-import { KnowledgeActions } from '@/components/knowledge/KnowledgeActions';
 import type { ClientStrategy } from '@/lib/types/strategy';
 import type { ClientPreferences } from '@/lib/types/database';
 
@@ -55,6 +53,7 @@ export interface ClientProfileData {
   google_drive_calendars_url: string | null;
   preferences: ClientPreferences | null;
   uppromote_api_key?: string | null;
+  monthly_boosting_budget?: number | null;
 }
 
 export interface ClientProfileFormProps {
@@ -66,6 +65,7 @@ export interface ClientProfileFormProps {
   recentMoodboards: Array<{ id: string; name: string; created_at: string; updated_at: string }>;
   ideas: Array<{ id: string; title: string; category: string; status: string; created_at: string; submitted_by: string | null }>;
   ideaCount: number;
+  knowledgeSummary?: { type: string; count: number }[];
   inModal?: boolean;
 }
 
@@ -78,6 +78,7 @@ export function ClientProfileForm({
   recentMoodboards,
   ideas,
   ideaCount,
+  knowledgeSummary,
   inModal,
 }: ClientProfileFormProps) {
   const slug = client.slug;
@@ -102,15 +103,11 @@ export function ClientProfileForm({
   const [googleDriveCalendarsUrl, setGoogleDriveCalendarsUrl] = useState(client.google_drive_calendars_url ?? '');
 
   const p = client.preferences;
-  const [toneKeywords, setToneKeywords] = useState<string[]>(p?.tone_keywords || []);
-  const [topicsLeanInto, setTopicsLeanInto] = useState<string[]>(p?.topics_lean_into || []);
-  const [topicsAvoid, setTopicsAvoid] = useState<string[]>(p?.topics_avoid || []);
-  const [competitorAccounts, setCompetitorAccounts] = useState<string[]>(p?.competitor_accounts || []);
-  const [seasonalPriorities, setSeasonalPriorities] = useState<string[]>(p?.seasonal_priorities || []);
-  const [boostingBudget, setBoostingBudget] = useState(p?.boosting_budget ?? '');
+  const [boostingBudget, setBoostingBudget] = useState(
+    client.monthly_boosting_budget != null ? String(client.monthly_boosting_budget) : ''
+  );
 
   const [editingBrand, setEditingBrand] = useState(false);
-  const [editingPrefs, setEditingPrefs] = useState(false);
   const [editingLogo, setEditingLogo] = useState(false);
 
   const flags = client.feature_flags;
@@ -161,7 +158,8 @@ export function ClientProfileForm({
         logo_url: logoUrl || null,
         website_url: websiteUrl.trim() || null,
         feature_flags: { can_search: canSearch, can_view_reports: canViewReports, can_edit_preferences: canEditPreferences, can_submit_ideas: canSubmitIdeas },
-        preferences: { tone_keywords: toneKeywords, topics_lean_into: topicsLeanInto, topics_avoid: topicsAvoid, competitor_accounts: competitorAccounts, seasonal_priorities: seasonalPriorities, boosting_budget: boostingBudget.trim() || null },
+        preferences: p || {},
+        monthly_boosting_budget: boostingBudget.trim() ? Number(boostingBudget.trim()) : null,
         is_active: isActive,
         services,
         health_score: null as string | null,
@@ -176,7 +174,7 @@ export function ClientProfileForm({
         body: JSON.stringify(payload),
       });
       if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed to save.'); }
-      else { toast.success('Saved.'); setEditingBrand(false); setEditingPrefs(false); }
+      else { toast.success('Saved.'); setEditingBrand(false); }
     } catch { toast.error('Something went wrong. Try again.'); }
     finally { setSaving(false); }
   }
@@ -301,7 +299,7 @@ export function ClientProfileForm({
                   setIndustry(client.industry || ''); setAgency(client.agency ?? '');
                   setGoogleDriveBrandingUrl(client.google_drive_branding_url ?? '');
                   setGoogleDriveCalendarsUrl(client.google_drive_calendars_url ?? '');
-                  setBoostingBudget(p?.boosting_budget ?? ''); setEditingBrand(false);
+                  setBoostingBudget(client.monthly_boosting_budget != null ? String(client.monthly_boosting_budget) : ''); setEditingBrand(false);
                 }}>
                   <X size={14} />
                   Cancel
@@ -382,7 +380,7 @@ export function ClientProfileForm({
                     <p className="text-sm text-text-muted italic">Not set</p>
                   )}
                 </div>
-                <ProfileField label="Boosting budget" value={boostingBudget ? `$${boostingBudget}` : ''} />
+                <ProfileField label="Boosting budget" value={client.monthly_boosting_budget ? `$${client.monthly_boosting_budget.toLocaleString()}/mo` : boostingBudget ? `$${boostingBudget}` : ''} />
                 <div className="space-y-2">
                   <span className="block text-xs font-medium text-text-muted mb-0.5">Resources</span>
                   {googleDriveBrandingUrl && <a href={googleDriveBrandingUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-accent-text hover:underline"><ExternalLink size={10} />Branding assets</a>}
@@ -394,84 +392,42 @@ export function ClientProfileForm({
           )}
         </Card>
 
-        {/* Brand preferences */}
-        <Card>
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="text-base font-semibold text-text-primary">Brand preferences</h2>
-            {!editingPrefs ? (
-              <Button type="button" variant="ghost" size="sm" onClick={() => setEditingPrefs(true)}>
-                <Pencil size={14} />
-                Edit
-              </Button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="ghost" size="sm" onClick={() => {
-                  setToneKeywords(p?.tone_keywords || []); setTopicsLeanInto(p?.topics_lean_into || []);
-                  setTopicsAvoid(p?.topics_avoid || []); setCompetitorAccounts(p?.competitor_accounts || []);
-                  setSeasonalPriorities(p?.seasonal_priorities || []); setEditingPrefs(false);
-                }}>
-                  <X size={14} />
-                  Cancel
-                </Button>
-                <Button type="submit" size="sm" disabled={saving}>
-                  <Save size={14} />
-                  {saving ? 'Saving...' : 'Save'}
-                </Button>
-              </div>
-            )}
-          </div>
-          <p className="text-sm text-text-muted mb-4">These guide AI content recommendations.</p>
-
-          {editingPrefs ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <TagInput id="tone_keywords" label="Tone keywords" value={toneKeywords} onChange={setToneKeywords} placeholder="e.g., bold, playful" />
-              <TagInput id="topics_lean_into" label="Topics to lean into" value={topicsLeanInto} onChange={setTopicsLeanInto} placeholder="e.g., behind the scenes" />
-              <TagInput id="topics_avoid" label="Topics to avoid" value={topicsAvoid} onChange={setTopicsAvoid} placeholder="e.g., politics" />
-              <TagInput id="competitor_accounts" label="Competitors they admire" value={competitorAccounts} onChange={setCompetitorAccounts} placeholder="e.g., @nike, @glossier" />
-              <TagInput id="seasonal_priorities" label="Seasonal priorities" value={seasonalPriorities} onChange={setSeasonalPriorities} placeholder="e.g., Summer 2026 launch" />
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <TagField label="Tone keywords" tags={toneKeywords} />
-              <TagField label="Topics to lean into" tags={topicsLeanInto} />
-              <TagField label="Topics to avoid" tags={topicsAvoid} />
-              <TagField label="Competitors they admire" tags={competitorAccounts} />
-              <TagField label="Seasonal priorities" tags={seasonalPriorities} />
-            </div>
-          )}
-        </Card>
       </form>
 
-      {/* People & connections */}
+      {/* Knowledge & Contacts */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold text-text-primary">Knowledge base</h2>
+            <Link href={`/admin/clients/${slug}/knowledge`}>
+              <Button size="sm" variant="outline">
+                <BookOpen size={14} />
+                View
+              </Button>
+            </Link>
+          </div>
+          {knowledgeSummary && knowledgeSummary.length > 0 ? (
+            <Link href={`/admin/clients/${slug}/knowledge`} className="block group">
+              <div className="rounded-lg overflow-hidden border border-nativz-border bg-background hover:border-accent/30 transition-all">
+                <KnowledgeThumbnail nodes={knowledgeSummary.flatMap((item) => Array.from({ length: item.count }, () => ({ type: item.type })))} />
+              </div>
+              <div className="flex items-center gap-3 mt-2.5 px-0.5">
+                {knowledgeSummary.slice(0, 4).map((item) => (
+                  <span key={item.type} className="text-[11px] text-text-muted">
+                    {item.count} {item.type.replace(/_/g, ' ')}{item.count !== 1 ? 's' : ''}
+                  </span>
+                ))}
+              </div>
+            </Link>
+          ) : (
+            <p className="text-sm text-text-muted">No knowledge entries yet.</p>
+          )}
+        </Card>
         <ClientContactsCard clientId={clientId} clientName={clientName} vaultContacts={[]} portalContacts={portalContacts} />
-        <ConnectedAccounts clientId={clientId} />
       </div>
 
       {/* Content strategy */}
       <ClientStrategyCard clientId={clientId} clientName={clientName} initialStrategy={initialStrategy} />
-
-      {/* Knowledge */}
-      <SectionLabel icon={BookOpen} label="Knowledge" />
-      <Card>
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-text-primary">Client knowledge base</h2>
-            <p className="text-sm text-text-muted mt-0.5">
-              Brand profile, scraped content, and knowledge graph for AI-powered insights.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <KnowledgeActions clientId={clientId} hasWebsite={!!websiteUrl.trim()} />
-            <Link href={`/admin/clients/${slug}/knowledge`}>
-              <Button size="sm" variant="outline">
-                <BookOpen size={14} />
-                View knowledge
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </Card>
 
       {/* Activity */}
       <SectionLabel icon={Clock} label="Activity" />
@@ -486,17 +442,18 @@ export function ClientProfileForm({
         searches={searches}
       />
 
+      {/* Integrations */}
+      <SectionLabel icon={Plug} label="Integrations" />
+      <ConnectedAccounts clientId={clientId} hasUpPromote={!!client.uppromote_api_key} />
+
       {/* Settings */}
       <SectionLabel icon={Settings2} label="Settings" />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <PortalAccessCard
-          canSearch={canSearch} setCanSearch={setCanSearch}
-          canViewReports={canViewReports} setCanViewReports={setCanViewReports}
-          canEditPreferences={canEditPreferences} setCanEditPreferences={setCanEditPreferences}
-          canSubmitIdeas={canSubmitIdeas} setCanSubmitIdeas={setCanSubmitIdeas}
-        />
-        <UpPromoteIntegrationCard clientId={clientId} hasApiKey={!!client.uppromote_api_key} />
-      </div>
+      <PortalAccessCard
+        canSearch={canSearch} setCanSearch={setCanSearch}
+        canViewReports={canViewReports} setCanViewReports={setCanViewReports}
+        canEditPreferences={canEditPreferences} setCanEditPreferences={setCanEditPreferences}
+        canSubmitIdeas={canSubmitIdeas} setCanSubmitIdeas={setCanSubmitIdeas}
+      />
       <DangerZone clientId={clientId} clientName={clientName} isActive={isActive} setIsActive={setIsActive} />
     </div>
   );

@@ -14,7 +14,7 @@ export default async function AdminClientProfilePage({
   // Fetch client first — everything else depends on it
   const { data: dbClient } = await supabase
     .from('clients')
-    .select('id, name, slug, industry, organization_id, logo_url, website_url, target_audience, brand_voice, topic_keywords, is_active, feature_flags, health_score, agency, services, description, google_drive_branding_url, google_drive_calendars_url, preferences, uppromote_api_key')
+    .select('id, name, slug, industry, organization_id, logo_url, website_url, target_audience, brand_voice, topic_keywords, is_active, feature_flags, health_score, agency, services, description, google_drive_branding_url, google_drive_calendars_url, preferences, uppromote_api_key, monthly_boosting_budget')
     .eq('slug', slug)
     .single();
 
@@ -33,6 +33,7 @@ export default async function AdminClientProfilePage({
     { data: strategyData },
     { data: shoots },
     { data: moodboards },
+    { data: knowledgeEntries },
   ] = await Promise.all([
     supabase
       .from('topic_searches')
@@ -79,6 +80,10 @@ export default async function AdminClientProfilePage({
       .eq('client_id', id)
       .order('updated_at', { ascending: false })
       .limit(3),
+    supabase
+      .from('client_knowledge_entries')
+      .select('type')
+      .eq('client_id', id),
   ]);
 
   const client = {
@@ -100,7 +105,17 @@ export default async function AdminClientProfilePage({
     google_drive_branding_url: (dbClient.google_drive_branding_url as string) ?? null,
     google_drive_calendars_url: (dbClient.google_drive_calendars_url as string) ?? null,
     preferences: (dbClient.preferences as import('@/lib/types/database').ClientPreferences) ?? null,
+    monthly_boosting_budget: (dbClient as { monthly_boosting_budget?: number | null }).monthly_boosting_budget ?? null,
   };
+
+  // Build knowledge summary by type
+  const typeCounts = new Map<string, number>();
+  for (const entry of knowledgeEntries ?? []) {
+    typeCounts.set(entry.type, (typeCounts.get(entry.type) ?? 0) + 1);
+  }
+  const knowledgeSummary = Array.from(typeCounts.entries())
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count);
 
   return (
     <ClientProfileForm
@@ -112,6 +127,7 @@ export default async function AdminClientProfilePage({
       recentMoodboards={moodboards || []}
       ideas={ideasData || []}
       ideaCount={ideasCount ?? 0}
+      knowledgeSummary={knowledgeSummary}
     />
   );
 }

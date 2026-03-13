@@ -32,6 +32,14 @@ export function AgencyBadge({ agency, className }: AgencyBadgeProps) {
     );
   }
 
+  if (lower === 'internal') {
+    return (
+      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border border-purple-500/30 bg-purple-500/15 text-purple-400 ${className || ''}`}>
+        Internal
+      </span>
+    );
+  }
+
   // Fallback for unknown agencies
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border border-white/10 bg-white/5 text-text-muted ${className || ''}`}>
@@ -48,5 +56,6 @@ export function getAgencyLabel(agency?: string | null): string {
   const lower = agency.toLowerCase();
   if (lower.includes('anderson') || lower === 'ac') return 'AC';
   if (lower.includes('nativz')) return 'Nativz';
+  if (lower === 'internal') return 'Internal';
   return agency;
 }

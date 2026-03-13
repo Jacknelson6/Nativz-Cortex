@@ -21,7 +21,7 @@ export async function GET(
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     const { data: dbClient } = await adminClient
       .from('clients')
-      .select('id, name, slug, industry, organization_id, logo_url, website_url, target_audience, brand_voice, topic_keywords, is_active, feature_flags, health_score, agency, services, description, google_drive_branding_url, google_drive_calendars_url, preferences')
+      .select('id, name, slug, industry, organization_id, logo_url, website_url, target_audience, brand_voice, topic_keywords, is_active, feature_flags, health_score, agency, services, description, google_drive_branding_url, google_drive_calendars_url, preferences, monthly_boosting_budget')
       .eq(isUuid ? 'id' : 'slug', id)
       .single();
 
@@ -39,6 +39,7 @@ export async function GET(
       { data: strategyData },
       { data: shoots },
       { data: moodboards },
+      { data: knowledgeEntries },
     ] = await Promise.all([
       adminClient
         .from('topic_searches')
@@ -85,6 +86,10 @@ export async function GET(
         .eq('client_id', clientId)
         .order('updated_at', { ascending: false })
         .limit(3),
+      adminClient
+        .from('client_knowledge_entries')
+        .select('type')
+        .eq('client_id', clientId),
     ]);
 
     return NextResponse.json({
@@ -107,6 +112,7 @@ export async function GET(
         google_drive_branding_url: dbClient.google_drive_branding_url ?? null,
         google_drive_calendars_url: dbClient.google_drive_calendars_url ?? null,
         preferences: dbClient.preferences ?? null,
+        monthly_boosting_budget: (dbClient as { monthly_boosting_budget?: number | null }).monthly_boosting_budget ?? null,
       },
       portalContacts: contactsResult.data || [],
       strategy: strategyData ?? null,
@@ -115,6 +121,15 @@ export async function GET(
       recentMoodboards: moodboards || [],
       ideas: ideasData || [],
       ideaCount: ideasCount ?? 0,
+      knowledgeSummary: (() => {
+        const typeCounts = new Map<string, number>();
+        for (const entry of knowledgeEntries ?? []) {
+          typeCounts.set(entry.type, (typeCounts.get(entry.type) ?? 0) + 1);
+        }
+        return Array.from(typeCounts.entries())
+          .map(([type, count]) => ({ type, count }))
+          .sort((a, b) => b.count - a.count);
+      })(),
     });
   } catch (error) {
     console.error('GET /api/clients/[id] error:', error);
@@ -168,6 +183,7 @@ export async function PATCH(
       'agency',
       'google_drive_branding_url',
       'google_drive_calendars_url',
+      'monthly_boosting_budget',
     ];
 
     const updates: Record<string, unknown> = {};
