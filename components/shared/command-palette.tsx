@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, Image, Camera, Users, Search, BarChart3,
+  LayoutDashboard, Image, Camera, Users, Search, BarChart3, Sparkles,
   Settings, ArrowRight, Clock, ChevronRight, Plus, Loader2, CheckCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -71,7 +71,7 @@ export function CommandPalette() {
 
   const navItems: CommandItem[] = useMemo(() => [
     { id: 'dashboard', label: 'Dashboard', group: 'Navigation', icon: <LayoutDashboard className="w-4 h-4" />, action: () => navigate('/admin/dashboard'), keywords: 'home overview' },
-    { id: 'moodboard', label: 'Moodboard', group: 'Navigation', icon: <Image className="w-4 h-4" />, action: () => navigate('/admin/moodboard'), keywords: 'boards inspiration' },
+    { id: 'ideas', label: 'Ideas', group: 'Navigation', icon: <Sparkles className="w-4 h-4" />, action: () => navigate('/admin/ideas'), keywords: 'generate scripts moodboard inspiration' },
     { id: 'shoots', label: 'Shoots', group: 'Navigation', icon: <Camera className="w-4 h-4" />, action: () => navigate('/admin/shoots'), keywords: 'photo video production' },
     { id: 'clients', label: 'Clients', group: 'Navigation', icon: <Users className="w-4 h-4" />, action: () => navigate('/admin/clients'), keywords: 'accounts brands' },
     { id: 'search', label: 'Search', group: 'Navigation', icon: <Search className="w-4 h-4" />, action: () => navigate('/admin/search/new'), keywords: 'topic social listening' },

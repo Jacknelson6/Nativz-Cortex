@@ -23,8 +23,8 @@ import type { FeatureFlags } from '@/lib/portal/get-portal-client';
 const ALL_NAV_ITEMS = [
   { href: '/portal/dashboard', label: 'Dashboard', icon: LayoutDashboard, flag: null },
   { href: '/portal/reports', label: 'Reports', icon: FileText, flag: 'can_view_reports' as const },
-  { href: '/portal/preferences', label: 'Preferences', icon: Palette, flag: null },
-  { href: '/portal/ideas', label: 'Ideas', icon: Lightbulb, flag: null },
+  { href: '/portal/preferences', label: 'Preferences', icon: Palette, flag: 'can_edit_preferences' as const },
+  { href: '/portal/ideas', label: 'Ideas', icon: Lightbulb, flag: 'can_submit_ideas' as const },
   { href: '/portal/settings', label: 'Settings', icon: Settings, flag: null },
 ];
 

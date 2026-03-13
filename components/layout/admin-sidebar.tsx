@@ -10,7 +10,6 @@ import {
   UsersRound,
   Search,
   BarChart3,
-  Layers,
   CheckSquare,
   Send,
   Workflow,
@@ -63,9 +62,8 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/admin/pipeline', label: 'Pipeline', icon: Workflow },
       { href: '/admin/scheduler', label: 'Scheduler', icon: Send },
-      { href: '/admin/moodboard', label: 'Moodboard', icon: Layers },
+      { href: '/admin/ideas', label: 'Ideas', icon: Sparkles },
       { href: '/admin/search/new', label: 'Search', icon: Search },
-      { href: '/admin/ideas/generate', label: 'Idea generator', icon: Sparkles },
     ],
   },
   {
@@ -90,7 +88,7 @@ function isActivePath(pathname: string, href: string) {
   if (href === '/admin/search/new') {
     return pathname.startsWith('/admin/search');
   }
-  if (href === '/admin/ideas/generate') {
+  if (href === '/admin/ideas') {
     return pathname.startsWith('/admin/ideas');
   }
   return pathname === href || pathname.startsWith(href + '/');

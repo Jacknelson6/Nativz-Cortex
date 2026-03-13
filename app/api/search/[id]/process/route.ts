@@ -109,6 +109,56 @@ export async function POST(
         source: search.source,
       });
 
+      // Step 1b: Fetch knowledge base context for client searches
+      let clientKnowledgeBlock: string | null = null;
+      if (search.client_id) {
+        try {
+          const { getBrandProfile, getKnowledgeEntries } = await import('@/lib/knowledge/queries');
+          const [brandProfile, entries] = await Promise.all([
+            getBrandProfile(search.client_id),
+            getKnowledgeEntries(search.client_id),
+          ]);
+
+          const parts: string[] = [];
+          if (brandProfile) {
+            parts.push(`### Brand Profile\n${brandProfile.content.substring(0, 2000)}`);
+          }
+
+          // Extract structured entities
+          const products = new Set<string>();
+          const people = new Set<string>();
+          const faqs: string[] = [];
+          for (const entry of entries) {
+            const meta = entry.metadata as Record<string, unknown> | null;
+            const entities = meta?.entities as {
+              people?: { name: string; role?: string }[];
+              products?: { name: string; description?: string }[];
+              faqs?: { question: string; answer: string }[];
+            } | undefined;
+            if (!entities) continue;
+            for (const p of entities.people ?? []) people.add(p.role ? `${p.name} (${p.role})` : p.name);
+            for (const p of entities.products ?? []) products.add(p.description ? `${p.name}: ${p.description}` : p.name);
+            for (const f of entities.faqs ?? []) faqs.push(`Q: ${f.question}\nA: ${f.answer}`);
+          }
+
+          if (products.size > 0) parts.push(`### Products & Services\n${[...products].join('\n')}`);
+          if (people.size > 0) parts.push(`### Key People\n${[...people].join(', ')}`);
+          if (faqs.length > 0) parts.push(`### FAQs\n${faqs.slice(0, 5).join('\n\n')}`);
+
+          // Recent meeting insights
+          const meetings = entries.filter((e) => e.type === 'meeting_note').slice(0, 3);
+          if (meetings.length > 0) {
+            parts.push(`### Recent Meeting Insights\n${meetings.map((m) => `- ${m.title}: ${m.content.substring(0, 200)}...`).join('\n')}`);
+          }
+
+          if (parts.length > 0) {
+            clientKnowledgeBlock = parts.join('\n\n');
+          }
+        } catch {
+          // Non-blocking — knowledge enrichment is optional
+        }
+      }
+
       // Step 2: Build prompt with Brave results as context
       let prompt: string;
       if (search.search_mode === 'client_strategy' && clientContext) {
@@ -121,6 +171,7 @@ export async function POST(
           serpData,
           clientContext,
           brandPreferences,
+          clientKnowledgeBlock,
         });
       } else {
         prompt = buildTopicResearchPrompt({
@@ -132,6 +183,7 @@ export async function POST(
           serpData,
           clientContext,
           brandPreferences,
+          clientKnowledgeBlock,
         });
       }
 

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Settings, LogOut, User, Key } from 'lucide-react';
+import { Settings, LogOut, User, Key, BarChart3 } from 'lucide-react';
 
 interface SidebarAccountProps {
   userName?: string;
@@ -86,6 +86,14 @@ export function SidebarAccount({
           >
             <Key size={15} />
             API docs
+          </Link>
+          <Link
+            href="/admin/settings/usage"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors whitespace-nowrap"
+          >
+            <BarChart3 size={15} />
+            Usage &amp; costs
           </Link>
           <button
             onClick={handleLogout}

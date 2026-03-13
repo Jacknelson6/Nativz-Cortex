@@ -6,6 +6,7 @@ import {
   Plus, Loader2, ChevronLeft, ChevronRight, RefreshCw,
   ExternalLink, Trash2,
   Table2, Kanban,
+  FolderOpen, HardDrive, Calendar,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GlassButton } from '@/components/ui/glass-button';
@@ -100,6 +101,26 @@ const BOOSTING_STATUSES = [
 
 function getStatusConfig(statuses: typeof ASSIGNMENT_STATUSES, value: string) {
   return statuses.find(s => s.value === value) ?? statuses[0];
+}
+
+/** Returns a border color class based on overall row progress */
+function getRowProgressBorder(item: PipelineItem): string {
+  const doneStatuses = ['done', 'scheduled'];
+  const allDone =
+    item.assignment_status === 'assigned' &&
+    item.raws_status === 'uploaded' &&
+    doneStatuses.includes(item.editing_status) &&
+    ['client_approved', 'sent_to_paid_media'].includes(item.client_approval_status) &&
+    item.boosting_status === 'done';
+  if (allDone) return 'border-l-green-500';
+  const anyStarted =
+    item.assignment_status !== 'can_assign' ||
+    item.raws_status !== 'need_to_schedule' ||
+    item.editing_status !== 'not_started' ||
+    item.client_approval_status !== 'not_sent' ||
+    item.boosting_status !== 'not_boosting';
+  if (anyStarted) return 'border-l-amber-500';
+  return 'border-l-gray-600';
 }
 
 // ─── Status Pill Component ───────────────────────────────────────────────────
@@ -557,8 +578,46 @@ export default function PipelineViewComponent({
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <Loader2 size={24} className="animate-spin text-text-muted" />
+      <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-3 border-b border-nativz-border bg-surface shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="h-5 w-36 rounded bg-surface-hover animate-pulse" />
+            <div className="h-5 w-40 rounded bg-surface-hover animate-pulse" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-24 rounded-lg bg-surface-hover animate-pulse" />
+            <div className="h-8 w-24 rounded-lg bg-surface-hover animate-pulse" />
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-nativz-border bg-background">
+                {Array.from({ length: 13 }).map((_, i) => (
+                  <th key={i} className="px-4 py-2.5">
+                    <div className="h-3 w-16 rounded bg-surface-hover animate-pulse" />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 5 }).map((_, row) => (
+                <tr key={row} className="border-b border-nativz-border">
+                  <td className="px-4 py-3"><div className="h-4 w-28 rounded bg-surface-hover animate-pulse" /></td>
+                  {Array.from({ length: 5 }).map((_, col) => (
+                    <td key={col} className="px-3 py-3"><div className="h-5 w-20 rounded-full bg-surface-hover animate-pulse" /></td>
+                  ))}
+                  {Array.from({ length: 4 }).map((_, col) => (
+                    <td key={col} className="px-3 py-3"><div className="h-3 w-16 rounded bg-surface-hover animate-pulse" /></td>
+                  ))}
+                  <td className="px-3 py-3"><div className="h-3 w-20 rounded bg-surface-hover animate-pulse" /></td>
+                  <td className="px-3 py-3"><div className="h-3 w-12 rounded bg-surface-hover animate-pulse" /></td>
+                  <td className="px-2 py-3"><div className="h-3 w-4 rounded bg-surface-hover animate-pulse" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   }
@@ -573,7 +632,12 @@ export default function PipelineViewComponent({
             <button onClick={() => navigateMonth(-1)} className="p-1 rounded-lg hover:bg-surface-hover text-text-muted cursor-pointer">
               <ChevronLeft size={16} />
             </button>
-            <span className="text-sm font-medium text-text-primary min-w-[140px] text-center">{monthLabel}</span>
+            <span className="text-sm font-medium text-text-primary min-w-[140px] text-center">
+              {monthLabel}
+              {items.length > 0 && (
+                <span className="ml-1.5 text-[11px] font-normal text-text-muted">({items.length} clients)</span>
+              )}
+            </span>
             <button onClick={() => navigateMonth(1)} className="p-1 rounded-lg hover:bg-surface-hover text-text-muted cursor-pointer">
               <ChevronRight size={16} />
             </button>
@@ -615,6 +679,24 @@ export default function PipelineViewComponent({
         </div>
       </div>
 
+      {/* Summary stats bar */}
+      {items.length > 0 && (
+        <div className="flex items-center gap-2 px-6 py-2 border-b border-nativz-border bg-background shrink-0 overflow-x-auto">
+          {EDITING_STATUSES.map(status => {
+            const count = items.filter(i => i.editing_status === status.value).length;
+            if (count === 0) return null;
+            return (
+              <span
+                key={status.value}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium border whitespace-nowrap ${status.color}`}
+              >
+                {count} {status.label}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
       {/* Content views */}
       {items.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-20">
@@ -649,9 +731,9 @@ export default function PipelineViewComponent({
             </thead>
             <tbody>
               {items.map(item => (
-                <tr key={item.id} className="border-b border-nativz-border hover:bg-surface-hover/50 transition-colors">
+                <tr key={item.id} className={`border-b border-nativz-border hover:bg-surface-hover/50 transition-colors border-l-2 ${getRowProgressBorder(item)}`}>
                   {/* Client name */}
-                  <td className="px-4 py-2.5">
+                  <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-text-primary">{item.client_name}</span>
                       {item.agency && (
@@ -663,38 +745,38 @@ export default function PipelineViewComponent({
                   </td>
 
                   {/* Status columns */}
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3">
                     <StatusPill value={item.assignment_status} statuses={ASSIGNMENT_STATUSES} field="assignment_status" itemId={item.id} onUpdate={handleUpdate} />
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3">
                     <StatusPill value={item.raws_status} statuses={RAWS_STATUSES} field="raws_status" itemId={item.id} onUpdate={handleUpdate} />
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3">
                     <StatusPill value={item.editing_status} statuses={EDITING_STATUSES} field="editing_status" itemId={item.id} onUpdate={handleUpdate} />
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3">
                     <StatusPill value={item.client_approval_status} statuses={APPROVAL_STATUSES} field="client_approval_status" itemId={item.id} onUpdate={handleUpdate} />
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3">
                     <StatusPill value={item.boosting_status} statuses={BOOSTING_STATUSES} field="boosting_status" itemId={item.id} onUpdate={handleUpdate} />
                   </td>
 
                   {/* Team members */}
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3">
                     <PersonCell value={item.strategist} field="strategist" itemId={item.id} teamMembers={teamMembers} onUpdate={handleUpdate} />
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3">
                     <PersonCell value={item.videographer} field="videographer" itemId={item.id} teamMembers={teamMembers} onUpdate={handleUpdate} />
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3">
                     <PersonCell value={item.editor} field="editor" itemId={item.id} teamMembers={teamMembers} onUpdate={handleUpdate} />
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3">
                     <PersonCell value={item.smm} field="smm" itemId={item.id} teamMembers={teamMembers} onUpdate={handleUpdate} />
                   </td>
 
                   {/* Shoot date */}
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3">
                     <input
                       type="date"
                       value={item.shoot_date ?? ''}
@@ -704,31 +786,31 @@ export default function PipelineViewComponent({
                   </td>
 
                   {/* Links */}
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
                       {item.edited_videos_folder_url && (
                         <a href={extractUrl(item.edited_videos_folder_url)!} target="_blank" rel="noopener noreferrer" title="Edited videos folder"
                           className="p-1 rounded hover:bg-surface-hover text-text-muted hover:text-accent-text">
-                          <ExternalLink size={12} />
+                          <FolderOpen size={12} />
                         </a>
                       )}
                       {item.raws_folder_url && (
                         <a href={extractUrl(item.raws_folder_url)!} target="_blank" rel="noopener noreferrer" title="RAWs folder"
                           className="p-1 rounded hover:bg-surface-hover text-text-muted hover:text-accent-text">
-                          <ExternalLink size={12} />
+                          <HardDrive size={12} />
                         </a>
                       )}
                       {item.later_calendar_link && (
                         <a href={extractUrl(item.later_calendar_link)!} target="_blank" rel="noopener noreferrer" title="Calendar link"
                           className="p-1 rounded hover:bg-surface-hover text-text-muted hover:text-accent-text">
-                          <ExternalLink size={12} />
+                          <Calendar size={12} />
                         </a>
                       )}
                     </div>
                   </td>
 
                   {/* Actions */}
-                  <td className="px-2 py-2.5">
+                  <td className="px-2 py-3">
                     <button
                       onClick={() => handleDelete(item.id, item.client_name)}
                       className="p-1 rounded hover:bg-red-500/10 text-text-muted hover:text-red-400 cursor-pointer"

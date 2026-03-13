@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Clock, Send, Undo2, Building2, Check, Plus, X, Mail, Users, User } from 'lucide-react';
+import { ArrowLeft, Clock, Send, Undo2, Building2, Check, Plus, X, Mail, Users, User, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -130,6 +130,12 @@ export function AdminResultsClient({ search, clientInfo, recipients = [] }: Admi
                 {formatRelativeTime(search.completed_at)}
               </span>
             )}
+            <Link href={`/admin/ideas?search_id=${search.id}`}>
+              <Button variant="outline" size="sm">
+                <Sparkles size={14} />
+                Create video ideas
+              </Button>
+            </Link>
             <ExportPdfButton search={search} clientName={clientInfo?.name} />
             <ShareButton searchId={search.id} />
             {search.approved_at ? (
