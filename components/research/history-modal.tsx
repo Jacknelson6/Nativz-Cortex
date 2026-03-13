@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { X, Loader2 } from 'lucide-react';
 import { lockScroll, unlockScroll } from '@/lib/utils/scroll-lock';
 import { HistoryFeed } from './history-feed';
 import type { HistoryItem } from '@/lib/research/history';
@@ -19,6 +19,19 @@ interface HistoryModalProps {
 }
 
 export function HistoryModal({ open, onClose, initialItems, clients }: HistoryModalProps) {
+  const [items, setItems] = useState<HistoryItem[]>(initialItems);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Reset when modal opens with fresh data
+  useEffect(() => {
+    if (open) {
+      setItems(initialItems);
+      setHasMore(true);
+    }
+  }, [open, initialItems]);
+
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -31,6 +44,45 @@ export function HistoryModal({ open, onClose, initialItems, clients }: HistoryMo
     lockScroll();
     return () => unlockScroll();
   }, [open]);
+
+  const loadMore = useCallback(async () => {
+    if (loading || !hasMore || items.length === 0) return;
+    setLoading(true);
+
+    const cursor = items[items.length - 1]?.createdAt;
+    try {
+      const res = await fetch(`/api/research/history?limit=20&cursor=${encodeURIComponent(cursor)}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const newItems: HistoryItem[] = data.items ?? [];
+
+      if (newItems.length === 0) {
+        setHasMore(false);
+      } else {
+        setItems((prev) => [...prev, ...newItems]);
+        if (newItems.length < 20) setHasMore(false);
+      }
+    } catch {
+      setHasMore(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, hasMore, items]);
+
+  // Infinite scroll detection
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !open) return;
+
+    function handleScroll() {
+      if (!el) return;
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+      if (nearBottom) loadMore();
+    }
+
+    el.addEventListener('scroll', handleScroll);
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [open, loadMore]);
 
   if (!open) return null;
 
@@ -49,8 +101,16 @@ export function HistoryModal({ open, onClose, initialItems, clients }: HistoryMo
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
-          <HistoryFeed items={initialItems} clients={clients} />
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-5">
+          <HistoryFeed items={items} clients={clients} />
+          {loading && (
+            <div className="flex justify-center py-4">
+              <Loader2 size={20} className="animate-spin text-text-muted" />
+            </div>
+          )}
+          {!hasMore && items.length > 0 && (
+            <p className="text-center text-xs text-text-muted py-4">No more results</p>
+          )}
         </div>
       </div>
     </div>

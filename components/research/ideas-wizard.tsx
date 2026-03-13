@@ -205,7 +205,7 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
               Skip &amp; generate
             </button>
             <GlassButton onClick={() => handleGenerate()} loading={loading} disabled={loading} className="!bg-[rgba(234,179,8,0.12)] !border-[rgba(234,179,8,0.25)] !text-yellow-400 hover:!bg-[rgba(234,179,8,0.2)]">
-              {loading ? <><Loader2 size={16} className="animate-spin" /> Generating...</> : 'Generate'}
+              {loading ? <><Loader2 size={16} className="animate-spin" /> Generating...</> : error ? 'Retry' : 'Generate'}
             </GlassButton>
           </div>
         </div>

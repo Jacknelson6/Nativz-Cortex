@@ -134,7 +134,12 @@ export function HistoryFeed({ items, clients, onViewAll }: HistoryFeedProps) {
                     </div>
                   </div>
                 </div>
-                {isProcessing && <Loader2 size={16} className="animate-spin text-text-muted shrink-0" />}
+                {isProcessing && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Loader2 size={14} className="animate-spin text-text-muted" />
+                    <Badge variant="default" className="text-[10px] px-1.5 py-0">Processing</Badge>
+                  </div>
+                )}
                 {item.status === 'failed' && <Badge variant="danger">Failed</Badge>}
               </Card>
             );
