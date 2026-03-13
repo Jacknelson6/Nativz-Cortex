@@ -174,7 +174,7 @@ function TaskRow({
   );
 }
 
-function InlineAddTask({ onAdded }: { onAdded: () => void }) {
+function InlineAddTask({ onAdded, centered }: { onAdded: () => void; centered?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -241,7 +241,7 @@ function InlineAddTask({ onAdded }: { onAdded: () => void }) {
             whileHover={{ x: 2 }}
             transition={{ type: 'spring', stiffness: 400, damping: 20 }}
             onClick={() => setIsOpen(true)}
-            className="flex items-center gap-2 py-2 px-1 w-full text-accent-text/70 hover:text-accent-text transition-colors cursor-pointer group"
+            className={`flex items-center gap-2 py-2 px-1 text-accent-text/70 hover:text-accent-text transition-colors cursor-pointer group ${centered ? 'justify-center' : 'w-full'}`}
           >
             <span className="relative flex items-center justify-center w-5 h-5">
               <span className="absolute inset-0 rounded-full bg-accent-text/0 group-hover:bg-accent-text scale-75 group-hover:scale-100 transition-all duration-200" />
@@ -398,7 +398,10 @@ export function TodoWidget() {
             ))}
           </div>
         ) : tasks.length === 0 ? (
-          <p className="text-sm text-text-muted text-center py-4">All caught up!</p>
+          <div className="flex flex-col items-center justify-center flex-1 py-6 gap-3">
+            <p className="text-sm text-text-muted">All caught up!</p>
+            <InlineAddTask onAdded={fetchTasks} centered />
+          </div>
         ) : (
           <AnimatePresence mode="popLayout">
             {tasks.map((task) => (
@@ -406,8 +409,9 @@ export function TodoWidget() {
             ))}
           </AnimatePresence>
         )}
-        <InlineAddTask onAdded={fetchTasks} />
       </div>
+
+      {tasks.length > 0 && <InlineAddTask onAdded={fetchTasks} />}
     </Card>
   );
 }
