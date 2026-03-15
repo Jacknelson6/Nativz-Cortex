@@ -1,14 +1,18 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import PipelineView from '@/components/pipeline/pipeline-view';
-import type { PipelineItem, TeamMember } from '@/components/pipeline/pipeline-view';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import PipelinePageClient from '@/components/pipeline/pipeline-page-client';
+import type { PipelineItem, TeamMember } from '@/components/pipeline/pipeline-types';
 
 export default async function PipelinePage() {
   const now = new Date();
   const initialMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   const adminClient = createAdminClient();
 
-  const [pipelineResult, teamResult] = await Promise.all([
+  const [pipelineResult, teamResult, userResult, teamMemberResult] = await Promise.all([
     adminClient
       .from('content_pipeline')
       .select('*')
@@ -19,6 +23,12 @@ export default async function PipelinePage() {
       .select('*')
       .eq('is_active', true)
       .order('full_name'),
+    user
+      ? adminClient.from('users').select('is_owner').eq('id', user.id).single()
+      : Promise.resolve({ data: null }),
+    user
+      ? adminClient.from('team_members').select('id, full_name, role').eq('user_id', user.id).single()
+      : Promise.resolve({ data: null }),
   ]);
 
   const initialItems: PipelineItem[] = (pipelineResult.data ?? []) as PipelineItem[];
@@ -29,11 +39,18 @@ export default async function PipelinePage() {
     avatar_url: m.avatar_url ?? null,
   }));
 
+  const isOwner = !!userResult.data?.is_owner;
+  const userTeamMember = teamMemberResult.data
+    ? { id: teamMemberResult.data.id, full_name: teamMemberResult.data.full_name, role: teamMemberResult.data.role ?? '' }
+    : null;
+
   return (
-    <PipelineView
+    <PipelinePageClient
       initialItems={initialItems}
       initialTeamMembers={initialTeamMembers}
       initialMonth={initialMonth}
+      userTeamMember={userTeamMember}
+      isOwner={isOwner}
     />
   );
 }
