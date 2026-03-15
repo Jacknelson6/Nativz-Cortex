@@ -1,2 +1,0 @@
-[    1736ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/notifications?limit=10:0
-[    7643ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/clients/bff1c672-14a9-46cc-8c53-b6f71b51c851/contacts:0

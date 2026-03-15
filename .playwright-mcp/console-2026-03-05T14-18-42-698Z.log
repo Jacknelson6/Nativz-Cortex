@@ -1,2 +1,0 @@
-[   11795ms] [WARNING] The resource http://localhost:3000/_next/static/css/app/layout.css?v=1772720327513 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://localhost:3000/admin/dashboard:0
-[   13653ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/notifications?limit=10:0

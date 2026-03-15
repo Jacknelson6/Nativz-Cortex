@@ -1,4 +1,0 @@
-[     429ms] TypeError: Cannot read properties of null (reading 'style')
-    at https://braintoss.com/todoist-logo/:262:42
-[   22417ms] TypeError: Cannot read properties of null (reading 'style')
-    at https://braintoss.com/:459:42

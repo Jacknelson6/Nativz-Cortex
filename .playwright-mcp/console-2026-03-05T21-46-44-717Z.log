@@ -1,5 +1,0 @@
-[    2799ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/clients/assignments/strategists:0
-[    2947ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/notifications?limit=10:0
-[    2949ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/meetings?date_from=2026-03-02&date_to=2026-03-09:0
-[    5790ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/clients/assignments/strategists:0
-[    6008ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/meetings?date_from=2026-03-01&date_to=2026-04-01:0

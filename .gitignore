@@ -54,3 +54,9 @@ vectors.db-wal
 # worktrees
 .worktrees/
 .superpowers/
+
+# playwright MCP artifacts
+.playwright-mcp/
+
+# screenshots
+*.png
