@@ -266,6 +266,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
   const [downloadOptions, setDownloadOptions] = useState({
     titles: true,
     whyItWorks: true,
+    scripts: true,
   });
 
   const [pillars, setPillars] = useState<PillarInfo[]>([]);
@@ -569,7 +570,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
         lines.push('');
         reasons.forEach((r) => lines.push(`  • ${r}`));
       }
-      if (idea.script) {
+      if (downloadOptions.scripts && idea.script) {
         lines.push('');
         lines.push('Script:');
         lines.push(idea.script);
@@ -692,6 +693,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                 {([
                   ['titles', 'Titles'] as const,
                   ['whyItWorks', 'Why it works'] as const,
+                  ...(ideas.some((i) => i.script) ? [['scripts', 'Scripts'] as const] : []),
                 ]).map(([key, label]) => (
                   <label key={key} className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
                     <input
