@@ -241,6 +241,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
   const [customCta, setCustomCta] = useState('');
   const [showCtaDropdown, setShowCtaDropdown] = useState(false);
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
+  const [showScriptModal, setShowScriptModal] = useState(false);
   const [downloadOptions, setDownloadOptions] = useState({
     titles: true,
     whyItWorks: true,
@@ -315,6 +316,10 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
 
   // ── Processing state ──
   if (generation.status === 'processing') {
+    const returnHref = generation.search_id
+      ? `/admin/search/${generation.search_id}`
+      : '/admin/search/new';
+
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <motion.div
@@ -326,6 +331,13 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
         </motion.div>
         <p className="text-sm font-medium text-text-secondary">Generating ideas...</p>
         <p className="text-xs text-text-muted mt-1">This usually takes 10-30 seconds</p>
+        <Link
+          href={returnHref}
+          className="mt-4 inline-flex items-center gap-1.5 text-sm text-purple-400 hover:text-purple-300 transition-colors"
+        >
+          <ArrowLeft size={14} />
+          Return back to research
+        </Link>
         <div className="mt-6 grid grid-cols-2 gap-3 w-full max-w-lg">
           {Array.from({ length: 4 }).map((_, i) => (
             <motion.div
@@ -568,7 +580,10 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
             <Sparkles size={20} className="text-purple-400" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-text-primary">{ideas.length} ideas generated</h1>
+            <h1 className="text-xl font-semibold text-text-primary">
+              {ideas.length} {generation.concept ? generation.concept : 'video'} ideas
+              {searchQuery ? ` from ${searchQuery} research` : ''}
+            </h1>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-sm text-text-secondary flex items-center gap-1">
                 <Building2 size={12} />
@@ -579,9 +594,6 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                   <Search size={9} className="mr-1" />
                   From: {searchQuery}
                 </Badge>
-              )}
-              {generation.concept && (
-                <span className="text-xs text-text-muted">— {generation.concept}</span>
               )}
             </div>
           </div>
@@ -636,7 +648,9 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
 
         {/* Selection info */}
         <span className="text-xs text-text-muted">
-          {selectedCount > 0 ? `${selectedCount} selected` : ''}
+          {selectedCount > 0
+            ? `${selectedCount} selected for scripts`
+            : 'Select ideas to generate scripts'}
         </span>
 
         {selectedCount > 0 && (
@@ -645,7 +659,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
               onClick={deselectAll}
               className="text-[11px] text-text-muted hover:text-text-secondary cursor-pointer"
             >
-              Clear
+              Deselect
             </button>
             <button
               onClick={selectAll}
@@ -655,9 +669,8 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
             </button>
             <div className="h-5 w-px bg-nativz-border" />
             <button
-              onClick={handleGenerateScripts}
-              disabled={ideas.some((i) => i.selected && i.scriptLoading)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 px-3 py-1.5 text-xs font-medium text-purple-400 hover:bg-purple-500/20 transition-colors cursor-pointer disabled:opacity-40"
+              onClick={() => setShowScriptModal(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 px-3 py-1.5 text-xs font-medium text-purple-400 hover:bg-purple-500/20 transition-colors cursor-pointer"
             >
               <FileText size={12} />
               Generate scripts ({selectedCount})
@@ -813,6 +826,96 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
           </AnimatePresence>
         </div>
       )}
+
+      {/* Script generation modal */}
+      <AnimatePresence>
+        {showScriptModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowScriptModal(false)}
+            />
+            <motion.div
+              className="relative w-full max-w-md rounded-2xl border border-white/[0.08] bg-surface shadow-2xl p-6"
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: 'spring', duration: 0.35, bounce: 0.15 }}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10">
+                  <FileText size={20} className="text-purple-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-text-primary">Generate scripts</h2>
+                  <p className="text-sm text-text-muted">{selectedCount} idea{selectedCount !== 1 ? 's' : ''} selected</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-nativz-border bg-background p-3 mb-4 max-h-48 overflow-y-auto space-y-1.5">
+                {ideas.filter((i) => i.selected).map((idea, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs text-text-secondary">
+                    <Check size={12} className="mt-0.5 text-purple-400 shrink-0" />
+                    <span className="line-clamp-1">{idea.title}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTA selection inside modal */}
+              <label className="text-xs text-text-muted mb-1.5 block">Call-to-action for scripts</label>
+              <div className="flex flex-wrap gap-1.5 mb-5">
+                {CTA_PRESETS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    onClick={() => setCtaType(preset.value)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                      ctaType === preset.value
+                        ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                        : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
+                    }`}
+                  >
+                    {preset.icon && <preset.icon size={10} />}
+                    {preset.label}
+                  </button>
+                ))}
+                <input
+                  type="text"
+                  value={customCta}
+                  onChange={(e) => { setCustomCta(e.target.value); setCtaType('custom'); }}
+                  placeholder="Custom CTA..."
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors focus:outline-none ${
+                    ctaType === 'custom'
+                      ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30 w-36'
+                      : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08] w-28'
+                  }`}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowScriptModal(false)}
+                  className="rounded-xl px-4 py-2.5 text-sm text-text-muted hover:text-text-secondary transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowScriptModal(false);
+                    handleGenerateScripts();
+                  }}
+                  disabled={ideas.some((i) => i.selected && i.scriptLoading)}
+                  className="rounded-xl bg-purple-500/15 border border-purple-500/30 px-5 py-2.5 text-sm font-medium text-purple-400 hover:bg-purple-500/25 transition-colors disabled:opacity-40 cursor-pointer"
+                >
+                  Generate {selectedCount} script{selectedCount !== 1 ? 's' : ''}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
