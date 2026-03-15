@@ -23,7 +23,7 @@ interface GeneratedIdea {
   scriptLoading?: boolean;
   saved?: boolean;
   selected?: boolean;
-  rerolling?: boolean;
+  replacing?: boolean;
 }
 
 interface Generation {
@@ -89,9 +89,9 @@ function normalizeReasons(why: string | string[]): string[] {
     .filter((s) => s.length > 0);
 }
 
-// ── Reroll Loading Animation ────────────────────────────────────────────────
+// ── Replace Loading Animation ────────────────────────────────────────────────
 
-function RerollSkeleton() {
+function ReplaceSkeleton() {
   return (
     <div className="rounded-xl border border-purple-500/20 bg-surface p-4 flex flex-col items-center justify-center min-h-[160px] space-y-3">
       <motion.div
@@ -103,7 +103,7 @@ function RerollSkeleton() {
       </motion.div>
       <div className="flex items-center gap-2">
         <Loader2 size={12} className="animate-spin text-purple-400" />
-        <span className="text-xs text-purple-400/70">Generating replacement...</span>
+        <span className="text-xs text-purple-400/70">Replacing idea...</span>
       </div>
       <div className="w-full space-y-2 pt-2">
         {[0.8, 0.6, 0.7].map((w, i) => (
@@ -125,22 +125,22 @@ function RerollSkeleton() {
 function IdeaResultCard({
   idea,
   index,
-  onReroll,
+  onReplace,
   onSave,
   onToggleSelect,
   selectionMode,
 }: {
   idea: GeneratedIdea;
   index: number;
-  onReroll: (index: number) => void;
+  onReplace: (index: number) => void;
   onSave: (index: number) => void;
   onToggleSelect: (index: number) => void;
   selectionMode: boolean;
 }) {
   const reasons = normalizeReasons(idea.why_it_works);
 
-  if (idea.rerolling) {
-    return <RerollSkeleton />;
+  if (idea.replacing) {
+    return <ReplaceSkeleton />;
   }
 
   return (
@@ -173,9 +173,9 @@ function IdeaResultCard({
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <button
-            onClick={(e) => { e.stopPropagation(); onReroll(index); }}
+            onClick={(e) => { e.stopPropagation(); onReplace(index); }}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-hover transition-all cursor-pointer"
-            title="Re-roll this idea"
+            title="Replace this idea"
           >
             <RefreshCw size={13} />
           </button>
@@ -432,10 +432,10 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
     toast.success('Scripts generated');
   };
 
-  // ── Re-roll ──
-  const handleReroll = async (index: number) => {
+  // ── Replace ──
+  const handleReplace = async (index: number) => {
     const old = ideas[index];
-    if (!old || old.rerolling) return;
+    if (!old || old.replacing) return;
 
     if (generation.client_id) {
       fetch('/api/ideas/reject', {
@@ -450,7 +450,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
       }).catch(() => {});
     }
 
-    setIdeas((prev) => prev.map((idea, i) => (i === index ? { ...idea, rerolling: true } : idea)));
+    setIdeas((prev) => prev.map((idea, i) => (i === index ? { ...idea, replacing: true } : idea)));
 
     try {
       const body: Record<string, unknown> = {
@@ -523,11 +523,11 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
         }
       } else {
         toast.error('Failed to generate replacement');
-        setIdeas((prev) => prev.map((idea, i) => (i === index ? { ...old, rerolling: false } : idea)));
+        setIdeas((prev) => prev.map((idea, i) => (i === index ? { ...old, replacing: false } : idea)));
       }
     } catch {
-      toast.error('Failed to re-roll idea');
-      setIdeas((prev) => prev.map((idea, i) => (i === index ? { ...old, rerolling: false } : idea)));
+      toast.error('Failed to replace idea');
+      setIdeas((prev) => prev.map((idea, i) => (i === index ? { ...old, replacing: false } : idea)));
     }
   };
 
@@ -804,7 +804,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                         key={`${idea.title}-${originalIndex}`}
                         idea={idea}
                         index={originalIndex}
-                        onReroll={handleReroll}
+                        onReplace={handleReplace}
                         onSave={handleSave}
                         onToggleSelect={toggleSelect}
                         selectionMode={selectionMode}
@@ -835,7 +835,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                         key={`${idea.title}-${originalIndex}`}
                         idea={idea}
                         index={originalIndex}
-                        onReroll={handleReroll}
+                        onReplace={handleReplace}
                         onSave={handleSave}
                         onToggleSelect={toggleSelect}
                         selectionMode={selectionMode}
@@ -855,7 +855,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                 key={`${idea.title}-${i}`}
                 idea={idea}
                 index={i}
-                onReroll={handleReroll}
+                onReplace={handleReplace}
                 onSave={handleSave}
                 onToggleSelect={toggleSelect}
                 selectionMode={selectionMode}
