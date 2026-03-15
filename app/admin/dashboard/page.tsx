@@ -8,6 +8,7 @@ import {
 import { PageError } from '@/components/shared/page-error';
 import { TodoWidget } from '@/components/dashboard/todo-widget';
 import { NotificationsWidget } from '@/components/dashboard/notifications-widget';
+import { PipelineWidget } from '@/components/dashboard/pipeline-widget';
 
 function BentoTile({
   href,
@@ -81,8 +82,8 @@ export default async function AdminDashboardPage() {
           <BentoTile
             href="/admin/search/new"
             icon={<Search size={20} className="text-accent-text" />}
-            label="Search for a topic"
-            description="AI-powered topic research"
+            label="Research"
+            description="Search what people are saying about a topic"
             accentColor="#046bd2"
           />
           <BentoTile
@@ -98,6 +99,11 @@ export default async function AdminDashboardPage() {
         <div className="grid grid-cols-2 gap-3">
           <TodoWidget />
           <NotificationsWidget />
+        </div>
+
+        {/* Pipeline quick-view */}
+        <div className="grid grid-cols-1 gap-3">
+          <PipelineWidget />
         </div>
       </div>
     );
