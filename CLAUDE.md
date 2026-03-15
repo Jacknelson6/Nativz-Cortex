@@ -33,10 +33,11 @@ Detailed docs live in `docs/` — read only when needed for the current task:
 
 ## Session Startup
 
-Read these at the start of every session:
+Do these at the start of every session:
 
-1. **`docs/detail-design-patterns.md`** — Reference when implementing any UI component
-2. **`TODO.md`** — Current status, what's done, what's left, priorities
+1. Run `git status` — if there are uncommitted changes, ask the user whether to commit, stash, or discard them before starting new work. Don't silently ignore dirty state.
+2. Read **`TODO.md`** — Current status, what's done, what's left, priorities
+3. Reference **`docs/detail-design-patterns.md`** when implementing any UI component
 
 ## Memory System
 
