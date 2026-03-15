@@ -988,6 +988,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                   onClick={() => {
                     setShowScriptModal(false);
                     handleGenerateScripts();
+                    deselectAll();
                   }}
                   disabled={ideas.some((i) => i.selected && i.scriptLoading)}
                   className="rounded-xl bg-purple-500/15 border border-purple-500/30 px-5 py-2.5 text-sm font-medium text-purple-400 hover:bg-purple-500/25 transition-colors disabled:opacity-40 cursor-pointer"
