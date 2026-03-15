@@ -93,33 +93,28 @@ function normalizeReasons(why: string | string[]): string[] {
 
 function RerollSkeleton() {
   return (
-    <div className="rounded-xl border border-purple-500/20 bg-surface p-4 space-y-3">
+    <div className="rounded-xl border border-purple-500/20 bg-surface p-4 flex flex-col items-center justify-center min-h-[160px] space-y-3">
+      <motion.div
+        className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10"
+        animate={{ scale: [1, 1.1, 1] }}
+        transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <Sparkles size={18} className="text-purple-400" />
+      </motion.div>
       <div className="flex items-center gap-2">
-        <motion.div
-          className="h-4 w-4 rounded-full bg-purple-500/30"
-          animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          className="h-4 rounded bg-purple-500/15 flex-1"
-          animate={{ opacity: [0.3, 0.6, 0.3] }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-        />
-      </div>
-      <div className="space-y-2">
-        {[0.7, 0.9, 0.6].map((w, i) => (
-          <motion.div
-            key={i}
-            className="h-3 rounded bg-purple-500/10"
-            style={{ width: `${w * 100}%` }}
-            animate={{ opacity: [0.2, 0.5, 0.2] }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.15 }}
-          />
-        ))}
-      </div>
-      <div className="flex items-center gap-2 pt-1">
         <Loader2 size={12} className="animate-spin text-purple-400" />
         <span className="text-xs text-purple-400/70">Generating replacement...</span>
+      </div>
+      <div className="w-full space-y-2 pt-2">
+        {[0.8, 0.6, 0.7].map((w, i) => (
+          <motion.div
+            key={i}
+            className="h-2.5 rounded bg-purple-500/10 mx-auto"
+            style={{ width: `${w * 100}%` }}
+            animate={{ opacity: [0.2, 0.5, 0.2] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.2 }}
+          />
+        ))}
       </div>
     </div>
   );
@@ -261,6 +256,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
   const [videoLength, setVideoLength] = useState(60);
   const [customVideoLength, setCustomVideoLength] = useState('');
   const [selectedHooks, setSelectedHooks] = useState<Set<string>>(new Set());
+  const [showCopyOptions, setShowCopyOptions] = useState(false);
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   const [showScriptModal, setShowScriptModal] = useState(false);
   const [downloadOptions, setDownloadOptions] = useState({
@@ -495,7 +491,36 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
 
       const newIdea = await pollForResult(data.id);
       if (newIdea) {
-        setIdeas((prev) => prev.map((idea, i) => (i === index ? { ...newIdea, saved: false, selected: false } : idea)));
+        const hadScript = !!old.script;
+        setIdeas((prev) => prev.map((idea, i) => (i === index ? { ...newIdea, saved: false, selected: false, scriptLoading: hadScript } : idea)));
+
+        // Auto-generate script if the replaced idea had one
+        if (hadScript && generation.client_id) {
+          try {
+            const scriptRes = await fetch('/api/ideas/generate-script', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                client_id: generation.client_id,
+                title: newIdea.title,
+                why_it_works: newIdea.why_it_works,
+                content_pillar: newIdea.content_pillar,
+                reference_video_ids: completedRefIds.length > 0 ? completedRefIds : undefined,
+                cta: effectiveCta || undefined,
+                video_length_seconds: videoLength,
+                target_word_count: Math.round((videoLength / 60) * 130),
+              }),
+            });
+            if (scriptRes.ok) {
+              const scriptData = await scriptRes.json();
+              setIdeas((prev) => prev.map((i, idx) => (idx === index ? { ...i, script: scriptData.script, scriptLoading: false } : i)));
+            } else {
+              setIdeas((prev) => prev.map((i, idx) => (idx === index ? { ...i, scriptLoading: false } : i)));
+            }
+          } catch {
+            setIdeas((prev) => prev.map((i, idx) => (idx === index ? { ...i, scriptLoading: false } : i)));
+          }
+        }
       } else {
         toast.error('Failed to generate replacement');
         setIdeas((prev) => prev.map((idea, i) => (i === index ? { ...old, rerolling: false } : idea)));
@@ -549,12 +574,19 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
     const selected = ideas.filter((i) => i.selected);
     const toCopy = selected.length > 0 ? selected : ideas;
     const text = toCopy.map((i) => {
-      const reasons = normalizeReasons(i.why_it_works);
-      let out = `${i.title}\n${reasons.map((r) => `  • ${r}`).join('\n')}\n  Pillar: ${i.content_pillar}`;
-      if (i.script) out += `\n\n  Script:\n  ${i.script.split('\n').join('\n  ')}`;
-      return out;
+      const parts: string[] = [];
+      if (downloadOptions.titles) parts.push(i.title);
+      if (downloadOptions.whyItWorks) {
+        const reasons = normalizeReasons(i.why_it_works);
+        parts.push(reasons.map((r) => `  • ${r}`).join('\n'));
+      }
+      if (downloadOptions.scripts && i.script) {
+        parts.push(`Script:\n  ${i.script.split('\n').join('\n  ')}`);
+      }
+      return parts.join('\n');
     }).join('\n\n---\n\n');
     await navigator.clipboard.writeText(text);
+    setShowCopyOptions(false);
     toast.success(`${toCopy.length} idea${toCopy.length !== 1 ? 's' : ''} copied`);
   };
 
@@ -670,13 +702,45 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
           <Bookmark size={12} />
           Save{selectedCount > 0 ? ` (${selectedCount})` : ' all'}
         </button>
-        <button
-          onClick={handleCopySelected}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover cursor-pointer transition-colors"
-        >
-          <Copy size={12} />
-          Copy{selectedCount > 0 ? ` (${selectedCount})` : ' all'}
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowCopyOptions(!showCopyOptions)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover cursor-pointer transition-colors"
+          >
+            <Copy size={12} />
+            Copy{selectedCount > 0 ? ` (${selectedCount})` : ' all'}
+            <ChevronDown size={10} />
+          </button>
+          {showCopyOptions && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowCopyOptions(false)} />
+              <div className="absolute top-full right-0 mt-1 z-50 bg-surface border border-nativz-border rounded-xl shadow-xl p-3 min-w-[200px] space-y-2">
+                <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide">Include in copy</p>
+                {([
+                  ['titles', 'Titles'] as const,
+                  ['whyItWorks', 'Why it works'] as const,
+                  ...(ideas.some((i) => i.script) ? [['scripts', 'Scripts'] as const] : []),
+                ]).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={downloadOptions[key]}
+                      onChange={(e) => setDownloadOptions((prev) => ({ ...prev, [key]: e.target.checked }))}
+                      className="rounded border-nativz-border"
+                    />
+                    {label}
+                  </label>
+                ))}
+                <button
+                  onClick={handleCopySelected}
+                  className="w-full mt-2 rounded-lg bg-purple-500 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 cursor-pointer"
+                >
+                  Copy to clipboard
+                </button>
+              </div>
+            </>
+          )}
+        </div>
         <div className="relative">
           <button
             onClick={() => setShowDownloadOptions(!showDownloadOptions)}
