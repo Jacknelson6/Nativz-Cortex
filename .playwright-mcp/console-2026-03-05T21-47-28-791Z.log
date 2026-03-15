@@ -1,0 +1,7 @@
+[    3752ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/notifications?limit=10:0
+[    7060ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/notifications?limit=10:0
+[    7753ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/clients/bafcfbf0-c1dd-4b27-bfb5-ad6668007f45/contacts:0
+[   31758ms] [WARNING] [React Flow]: It looks like you've created a new nodeTypes or edgeTypes object. If this wasn't on purpose please define the nodeTypes/edgeTypes outside of the component or memoize them. Help: https://reactflow.dev/error#002 @ webpack-internal:///(app-pages-browser)/./node_modules/@reactflow/core/dist/esm/index.mjs:223
+[   31759ms] [WARNING] [React Flow]: It looks like you've created a new nodeTypes or edgeTypes object. If this wasn't on purpose please define the nodeTypes/edgeTypes outside of the component or memoize them. Help: https://reactflow.dev/error#002 @ webpack-internal:///(app-pages-browser)/./node_modules/@reactflow/core/dist/esm/index.mjs:223
+[   38552ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/notifications?limit=10:0
+[   38817ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/clients/bafcfbf0-c1dd-4b27-bfb5-ad6668007f45/contacts:0

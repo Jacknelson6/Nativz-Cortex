@@ -153,10 +153,15 @@ export default function SharedCalendarPage({
         'Comment added'
       );
 
-      // Update local review status
-      setPosts(prev => prev.map(p =>
-        p.id === postId ? { ...p, review_status: status === 'comment' ? p.review_status : status } : p
-      ));
+      // Update local review status (and promote draft → scheduled on approval)
+      setPosts(prev => prev.map(p => {
+        if (p.id !== postId) return p;
+        const updated = { ...p, review_status: status === 'comment' ? p.review_status : status };
+        if (status === 'approved' && p.status === 'draft') {
+          updated.status = 'scheduled';
+        }
+        return updated;
+      }));
     } catch {
       toast.error('Failed to submit feedback');
     } finally {
@@ -398,6 +403,13 @@ function PostDetail({
 
       {/* Feedback form */}
       <div className="p-4 mt-auto">
+        {post.status === 'draft' && post.review_status !== 'approved' && (
+          <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 mb-3">
+            <p className="text-xs text-amber-400">
+              This post is a draft. Approving it will schedule it for publishing.
+            </p>
+          </div>
+        )}
         <h3 className="text-xs font-medium text-text-muted mb-2">Leave feedback</h3>
 
         <input

@@ -319,20 +319,27 @@ export function TodoWidget() {
 
   async function fetchTasks() {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const res = await fetch(`/api/tasks?due_date_to=${today}`);
+      const res = await fetch('/api/tasks');
       const data = await res.json();
       if (data.tasks && Array.isArray(data.tasks)) {
-        // Filter out done tasks, sort overdue first then by priority
+        // Filter out done tasks, sort: overdue first, then by due date, then priority
         const priorityOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+        const todayStr = new Date().toISOString().split('T')[0];
         const open = data.tasks
-          .filter((t: Task) => t.status !== 'done')
+          .filter((t: Task) => t.status !== 'done' && t.due_date && t.due_date <= todayStr)
           .sort((a: Task, b: Task) => {
             // Overdue first
             const aOverdue = a.due_date && isDueOverdue(a.due_date);
             const bOverdue = b.due_date && isDueOverdue(b.due_date);
             if (aOverdue && !bOverdue) return -1;
             if (!aOverdue && bOverdue) return 1;
+            // Then by due date (soonest first, null last)
+            if (a.due_date && b.due_date) {
+              const cmp = a.due_date.localeCompare(b.due_date);
+              if (cmp !== 0) return cmp;
+            }
+            if (a.due_date && !b.due_date) return -1;
+            if (!a.due_date && b.due_date) return 1;
             // Then by priority
             const pa = priorityOrder[a.priority ?? ''] ?? 3;
             const pb = priorityOrder[b.priority ?? ''] ?? 3;
@@ -398,9 +405,8 @@ export function TodoWidget() {
             ))}
           </div>
         ) : tasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center flex-1 py-6 gap-3">
+          <div className="flex flex-col items-center justify-center flex-1">
             <p className="text-sm text-text-muted">All caught up!</p>
-            <InlineAddTask onAdded={fetchTasks} centered />
           </div>
         ) : (
           <AnimatePresence mode="popLayout">
@@ -411,7 +417,9 @@ export function TodoWidget() {
         )}
       </div>
 
-      {tasks.length > 0 && <InlineAddTask onAdded={fetchTasks} />}
+      <div className="border-t border-nativz-border/50">
+        <InlineAddTask onAdded={fetchTasks} />
+      </div>
     </Card>
   );
 }

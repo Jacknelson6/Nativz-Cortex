@@ -35,7 +35,7 @@ export function ClientPickerButton({
         <button
           type="button"
           onClick={() => onChange(null)}
-          className="flex w-full items-center gap-2.5 rounded-xl border border-accent/40 bg-accent-surface/50 px-4 py-3 text-sm font-medium text-accent-text hover:bg-accent-surface/70 transition-colors"
+          className="flex w-full items-center gap-2.5 rounded-xl border border-purple-500/40 bg-purple-500/10 px-4 py-3 text-sm font-medium text-purple-400 hover:bg-purple-500/15 transition-colors"
         >
           <Building2 size={16} />
           <span className="flex-1 text-left">{selected.name}</span>
@@ -144,7 +144,7 @@ export function ClientPickerModal({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search clients..."
-              className="w-full rounded-lg border border-white/10 bg-white/[0.04] pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
+              className="w-full rounded-lg border border-white/10 bg-white/[0.04] pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:border-purple-500/50 focus:outline-none focus:ring-1 focus:ring-purple-500/50 transition-colors"
             />
           </div>
         </div>
@@ -165,17 +165,17 @@ export function ClientPickerModal({
                   onClick={() => onSelect(client.id)}
                   className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-3 text-left text-sm transition-all hover:scale-[1.02] active:scale-[0.98] ${
                     client.id === value
-                      ? 'border-accent/50 bg-accent-surface text-accent-text font-medium shadow-[0_0_12px_rgba(4,107,210,0.15)]'
+                      ? 'border-purple-500/50 bg-purple-500/10 text-purple-400 font-medium shadow-[0_0_12px_rgba(168,85,247,0.15)]'
                       : 'border-white/[0.06] bg-white/[0.03] text-white/70 hover:border-white/[0.12] hover:bg-white/[0.06]'
                   }`}
                 >
                   <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden ${
-                    client.id === value ? 'bg-accent/20' : 'bg-white/[0.04]'
+                    client.id === value ? 'bg-purple-500/20' : 'bg-white/[0.04]'
                   }`}>
                     {client.logo_url ? (
                       <img src={client.logo_url} alt={client.name} className="h-full w-full object-cover" />
                     ) : (
-                      <Building2 size={14} className={client.id === value ? 'text-accent-text' : 'text-white/40'} />
+                      <Building2 size={14} className={client.id === value ? 'text-purple-400' : 'text-white/40'} />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">

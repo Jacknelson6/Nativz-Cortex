@@ -49,7 +49,7 @@ export function ConnectAccountDialog({ open, onClose, clientId, profiles }: Conn
       <div className="bg-surface rounded-xl border border-nativz-border p-6 w-96 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-text-primary">Connect account</h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors">
+          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors cursor-pointer">
             <X size={18} />
           </button>
         </div>

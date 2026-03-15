@@ -15,6 +15,8 @@ interface ComboSelectProps {
   onChange: (value: string) => void;
   placeholder?: string;
   searchable?: boolean;
+  dropdownPosition?: 'bottom' | 'top';
+  accent?: 'blue' | 'purple';
 }
 
 export function ComboSelect({
@@ -24,6 +26,8 @@ export function ComboSelect({
   onChange,
   placeholder = 'Select…',
   searchable = true,
+  dropdownPosition = 'bottom',
+  accent = 'blue',
 }: ComboSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -78,27 +82,32 @@ export function ComboSelect({
   );
 
   return (
-    <div ref={containerRef} className="relative space-y-1.5">
+    <div ref={containerRef} className="space-y-1.5">
       {label && (
         <span className="block text-sm font-medium text-text-secondary">{label}</span>
       )}
 
-      {/* Trigger */}
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex items-center justify-between w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors hover:border-accent/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)] cursor-pointer"
-      >
-        <span className={selected ? '' : 'text-text-muted'}>{selected?.label ?? placeholder}</span>
-        <ChevronDown
-          size={16}
-          className={`text-text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
+      {/* Trigger + dropdown wrapper */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className={`flex items-center justify-between w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors cursor-pointer ${
+            accent === 'purple'
+              ? 'hover:border-purple-500/50 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:shadow-[0_0_0_3px_rgba(168,85,247,0.15)]'
+              : 'hover:border-accent/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)]'
+          }`}
+        >
+          <span className={selected ? '' : 'text-text-muted'}>{selected?.label ?? placeholder}</span>
+          <ChevronDown
+            size={16}
+            className={`text-text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
 
-      {/* Dropdown */}
-      {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-xl border border-nativz-border bg-surface shadow-elevated overflow-hidden animate-fade-slide-in">
+        {/* Dropdown */}
+        {open && (
+          <div className={`absolute z-50 w-full rounded-xl border border-nativz-border bg-surface shadow-elevated overflow-hidden animate-fade-slide-in ${dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
           {/* Search */}
           {searchable && options.length > 6 && (
             <div className="flex items-center gap-2 px-3 py-2 border-b border-nativz-border/50">
@@ -128,12 +137,14 @@ export function ComboSelect({
                     onClick={() => handleSelect(opt.value)}
                     className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm text-left transition-colors cursor-pointer ${
                       isSelected
-                        ? 'text-accent-text bg-accent-surface/10'
+                        ? accent === 'purple'
+                          ? 'text-purple-400 bg-purple-500/10'
+                          : 'text-accent-text bg-accent-surface/10'
                         : 'text-text-primary hover:bg-surface-hover'
                     }`}
                   >
                     <span className="w-4 shrink-0 flex items-center justify-center">
-                      {isSelected && <Check size={14} className="text-accent-text" />}
+                      {isSelected && <Check size={14} className={accent === 'purple' ? 'text-purple-400' : 'text-accent-text'} />}
                     </span>
                     <span className="truncate">{opt.label}</span>
                   </button>
@@ -143,6 +154,7 @@ export function ComboSelect({
           </div>
         </div>
       )}
+      </div>
 
     </div>
   );

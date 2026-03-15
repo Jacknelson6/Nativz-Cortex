@@ -8,9 +8,10 @@ import { MediaLibrary } from '@/components/scheduler/media-library';
 import type { PostEditorData } from '@/components/scheduler/post-editor';
 import { useSchedulerData } from '@/components/scheduler/hooks/use-scheduler-data';
 import type { CalendarPost, CalendarViewMode, MediaItem, ClientOption } from '@/components/scheduler/types';
-import { Select } from '@/components/ui/select';
+import { ComboSelect } from '@/components/ui/combo-select';
 import { Button } from '@/components/ui/button';
-import { Plus, Loader2, Link2, Share2, Wand2 } from 'lucide-react';
+import { Plus, Loader2, Link2, Share2, Wand2, Send } from 'lucide-react';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 const PostEditor = dynamic(() => import('@/components/scheduler/post-editor').then(m => ({ default: m.PostEditor })));
 const ConnectAccountDialog = dynamic(() => import('@/components/scheduler/connect-account-dialog').then(m => ({ default: m.ConnectAccountDialog })));
@@ -173,6 +174,41 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
     setPosts((prev) => prev.filter((p) => p.id !== postId));
   }
 
+  const draftCount = posts.filter((p) => p.status === 'draft').length;
+
+  const { confirm: confirmPublishDrafts, dialog: publishDraftsDialog } = useConfirm({
+    title: 'Publish all drafts',
+    description: `Set ${draftCount} draft post${draftCount === 1 ? '' : 's'} to auto-publish? They will be published at their scheduled times.`,
+    confirmLabel: 'Publish all',
+  });
+
+  async function handlePublishAllDrafts() {
+    if (!selectedClientId || draftCount === 0) return;
+    const ok = await confirmPublishDrafts();
+    if (!ok) return;
+    try {
+      const res = await fetch('/api/scheduler/posts/publish-drafts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: selectedClientId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? 'Failed to publish drafts');
+      }
+      const data = await res.json();
+      toast.success(data.message);
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const end = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      refresh(start, end);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to publish drafts');
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
@@ -187,12 +223,6 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
       <div className="flex items-center justify-between px-4 py-3 border-b border-nativz-border bg-surface">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold text-text-primary">Scheduler</h1>
-          <Select
-            id="scheduler-client"
-            value={selectedClientId ?? ''}
-            onChange={(e) => setSelectedClientId(e.target.value || null)}
-            options={clients.map((c) => ({ value: c.id, label: c.name }))}
-          />
         </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg bg-background p-0.5">
@@ -210,6 +240,16 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
               </button>
             ))}
           </div>
+          {draftCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handlePublishAllDrafts}
+            >
+              <Send size={14} />
+              Publish {draftCount} draft{draftCount === 1 ? '' : 's'}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -254,20 +294,36 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
 
       {/* Body */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Media library panel */}
-        {selectedClientId && (
-          <MediaLibrary
-            clientId={selectedClientId}
-            media={media}
-            profiles={profiles}
-            loading={mediaLoading}
-            onUploadComplete={() => selectedClientId && fetchMedia(selectedClientId, showUnusedOnly)}
-            showUnusedOnly={showUnusedOnly}
-            onToggleUnused={() => setShowUnusedOnly(!showUnusedOnly)}
-            onMediaClick={handleMediaClick}
-            onMediaDelete={handleMediaDelete}
-          />
-        )}
+        {/* Left sidebar: media library + client selector */}
+        <div className="flex flex-col w-72 border-r border-nativz-border bg-surface">
+          {selectedClientId ? (
+            <MediaLibrary
+              clientId={selectedClientId}
+              media={media}
+              profiles={profiles}
+              loading={mediaLoading}
+              onUploadComplete={() => selectedClientId && fetchMedia(selectedClientId, showUnusedOnly)}
+              showUnusedOnly={showUnusedOnly}
+              onToggleUnused={() => setShowUnusedOnly(!showUnusedOnly)}
+              onMediaClick={handleMediaClick}
+              onMediaDelete={handleMediaDelete}
+            />
+          ) : (
+            <div className="flex-1" />
+          )}
+
+          {/* Client selector */}
+          <div className="p-3 border-t border-nativz-border">
+            <ComboSelect
+              label="Client"
+              value={selectedClientId ?? ''}
+              onChange={(val) => setSelectedClientId(val || null)}
+              options={clients.map((c) => ({ value: c.id, label: c.name }))}
+              placeholder="Select client…"
+              dropdownPosition="top"
+            />
+          </div>
+        </div>
 
         {/* Calendar */}
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -328,6 +384,8 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
           onComplete={handleAutoScheduleComplete}
         />
       )}
+
+      {publishDraftsDialog}
     </div>
   );
 }

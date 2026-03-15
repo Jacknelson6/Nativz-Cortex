@@ -86,6 +86,15 @@ export interface NicheInsights {
   competitor_gaps: string;
 }
 
+// Big movers — who's making noise in the space
+export interface BigMover {
+  name: string;
+  type: 'brand' | 'creator' | 'product' | 'company';
+  why: string;
+  tactics: string[];
+  takeaway: string;
+}
+
 // AI response — single call returns everything
 export interface TopicSearchAIResponse {
   summary: string;
@@ -94,6 +103,7 @@ export interface TopicSearchAIResponse {
   emotions: EmotionBreakdown[];
   content_breakdown: ContentBreakdown;
   trending_topics: TrendingTopic[];
+  big_movers?: BigMover[];
   content_pillars?: ContentPillar[];
   niche_performance_insights?: NicheInsights;
   brand_alignment_notes?: string;

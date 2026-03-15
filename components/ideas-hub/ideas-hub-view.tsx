@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { ComboSelect } from '@/components/ui/combo-select';
-import { IdeaGenerator } from './idea-generator';
+import { ContentWizard } from './content-wizard';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -86,7 +86,7 @@ function MiniGenerator({ clientId, onGenerated }: { clientId: string; onGenerate
 
   return (
     <div className="flex items-center gap-2 mt-3 pt-3 border-t border-nativz-border">
-      <Sparkles size={14} className="text-accent-text shrink-0" />
+      <Sparkles size={14} className="text-purple-400 shrink-0" />
       <input
         type="text"
         value={concept}
@@ -98,12 +98,12 @@ function MiniGenerator({ clientId, onGenerated }: { clientId: string; onGenerate
           }
         }}
         placeholder="Quick generate 5 ideas (optional direction)…"
-        className="flex-1 rounded-lg border border-nativz-border bg-background px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+        className="flex-1 rounded-lg border border-nativz-border bg-background px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-colors"
       />
       <button
         onClick={handleQuickGenerate}
         disabled={generating}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-accent-text px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-40 cursor-pointer transition-opacity shrink-0"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-40 cursor-pointer transition-opacity shrink-0"
       >
         {generating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
         Generate
@@ -186,7 +186,7 @@ function ClientSection({
                           </span>
                         )}
                         {hasScript && (
-                          <span className="text-[10px] text-accent-text flex items-center gap-1">
+                          <span className="text-[10px] text-purple-400 flex items-center gap-1">
                             <FileText size={10} />
                             Script
                           </span>
@@ -264,7 +264,7 @@ export function IdeasHubView({ initialIdeas, clients, searchId, searchQuery, sea
       {/* Generator — centered like topic search */}
       <div className="flex flex-col items-center justify-center pt-8">
         <div className="w-full max-w-4xl">
-          <IdeaGenerator
+          <ContentWizard
             clients={clients}
             onIdeasSaved={handleRefresh}
             initialSearchId={searchId}
@@ -277,7 +277,7 @@ export function IdeasHubView({ initialIdeas, clients, searchId, searchQuery, sea
       <div className="max-w-4xl mx-auto w-full">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
-            <Building2 size={18} className="text-accent-text" />
+            <Building2 size={18} className="text-purple-400" />
             Clients
           </h2>
           <span className="text-sm text-text-muted">

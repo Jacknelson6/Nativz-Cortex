@@ -226,7 +226,7 @@ export default function AdminSettingsPage() {
                 <button
                   type="button"
                   onClick={() => scrollToSection(s.id)}
-                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors cursor-pointer ${
                     isActive
                       ? 'bg-accent/10 text-accent-text font-medium'
                       : 'text-text-muted hover:bg-surface-hover hover:text-text-secondary'

@@ -53,3 +53,4 @@ vectors.db-wal
 
 # worktrees
 .worktrees/
+.superpowers/

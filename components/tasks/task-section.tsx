@@ -61,11 +61,11 @@ export function TaskSection({
 
 export function TodayEmpty({ addRow }: { addRow: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
+    <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
       <Check size={48} className="text-text-muted/30 mb-4" />
       <h3 className="text-lg font-semibold text-text-primary mb-1">All clear for today</h3>
       <p className="text-sm text-text-muted mb-6">Enjoy your day or add a task below</p>
-      <div className="w-full max-w-md">{addRow}</div>
+      <div className="w-full max-w-md [&_button]:justify-center">{addRow}</div>
     </div>
   );
 }
@@ -76,7 +76,7 @@ export function UpcomingEmpty({ addRow }: { addRow: React.ReactNode }) {
       <CalendarIcon size={48} className="text-text-muted/30 mb-4" />
       <h3 className="text-lg font-semibold text-text-primary mb-1">Nothing on the horizon</h3>
       <p className="text-sm text-text-muted mb-6">Add tasks to start planning ahead</p>
-      <div className="w-full max-w-md">{addRow}</div>
+      <div className="w-full max-w-md [&_button]:justify-center">{addRow}</div>
     </div>
   );
 }

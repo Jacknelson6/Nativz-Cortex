@@ -443,7 +443,7 @@ export function AiChatPanel({ boardId, items, notes, onClose }: AiChatPanelProps
                 return (
                   <span key={slug} className="inline-flex items-center gap-1 rounded-full bg-accent/10 border border-accent/20 px-2 py-0.5 text-[10px] text-accent-text">
                     @{client?.name || slug}
-                    <button onClick={() => setMentionedClientSlugs(prev => prev.filter(s => s !== slug))} className="hover:text-white">
+                    <button onClick={() => setMentionedClientSlugs(prev => prev.filter(s => s !== slug))} className="hover:text-white cursor-pointer">
                       <X size={8} />
                     </button>
                   </span>

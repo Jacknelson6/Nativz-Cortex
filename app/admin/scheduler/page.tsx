@@ -9,6 +9,7 @@ export default async function SchedulerPage() {
     .from('clients')
     .select('id, name, slug, default_posting_time, default_posting_timezone')
     .eq('is_active', true)
+    .contains('services', ['SMM'])
     .order('name');
 
   const clients: ClientOption[] = (clientRows ?? []).map((c) => ({

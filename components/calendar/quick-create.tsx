@@ -283,7 +283,7 @@ export function QuickCreate({ date, hour, onClose, onCreated, prefillClientId, p
           <h3 className="text-sm font-semibold text-text-primary">{isEditing ? 'Edit event' : 'Quick schedule'}</h3>
           <p className="text-xs text-text-muted">{dateStr} at {timeStr}</p>
         </div>
-        <button onClick={onClose} className="rounded-md p-1 text-text-muted hover:bg-surface-hover transition-colors">
+        <button onClick={onClose} className="rounded-md p-1 text-text-muted hover:bg-surface-hover transition-colors cursor-pointer">
           <X size={14} />
         </button>
       </div>

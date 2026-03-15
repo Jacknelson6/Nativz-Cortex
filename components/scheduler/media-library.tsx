@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Upload, X, Film, Filter, Trash2, Calendar, CheckCircle2 } from 'lucide-react';
+import { Upload, X, Film, Filter, Trash2, Calendar, CheckCircle2, MousePointerClick } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -34,6 +34,7 @@ export function MediaLibrary({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<MediaItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -164,16 +165,7 @@ export function MediaLibrary({
   }
 
   function handleItemClick(e: React.MouseEvent, item: MediaItem) {
-    if (e.shiftKey || e.metaKey || e.ctrlKey) {
-      // Multi-select mode
-      setSelectedIds(prev => {
-        const next = new Set(prev);
-        if (next.has(item.id)) next.delete(item.id);
-        else next.add(item.id);
-        return next;
-      });
-    } else if (hasSelection) {
-      // If already in selection mode, toggle this item
+    if (selectMode || e.shiftKey || e.metaKey || e.ctrlKey || hasSelection) {
       setSelectedIds(prev => {
         const next = new Set(prev);
         if (next.has(item.id)) next.delete(item.id);
@@ -181,7 +173,6 @@ export function MediaLibrary({
         return next;
       });
     } else {
-      // Single click — open post editor with this media
       onMediaClick(item);
     }
   }
@@ -219,7 +210,7 @@ export function MediaLibrary({
   }
 
   return (
-    <div className="flex flex-col h-full w-72 border-r border-nativz-border bg-surface">
+    <div className="flex flex-col flex-1 overflow-hidden">
       {/* Header */}
       <div className="p-3 border-b border-nativz-border">
         <h3 className="text-sm font-medium text-text-primary mb-2">Media library</h3>
@@ -254,6 +245,24 @@ export function MediaLibrary({
       {/* Filters + selection actions */}
       <div className="px-3 py-2 flex items-center gap-2 border-b border-nativz-border">
         <button
+          onClick={() => {
+            if (selectMode) {
+              setSelectMode(false);
+              setSelectedIds(new Set());
+            } else {
+              setSelectMode(true);
+            }
+          }}
+          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors cursor-pointer ${
+            selectMode
+              ? 'bg-accent-surface text-accent-text'
+              : 'bg-surface-hover text-text-muted hover:text-text-secondary'
+          }`}
+        >
+          <MousePointerClick size={10} />
+          Select
+        </button>
+        <button
           onClick={onToggleUnused}
           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors cursor-pointer ${
             showUnusedOnly
@@ -286,7 +295,7 @@ export function MediaLibrary({
               Delete
             </button>
             <button
-              onClick={() => setSelectedIds(new Set())}
+              onClick={() => { setSelectedIds(new Set()); setSelectMode(false); }}
               className="text-[10px] text-text-muted cursor-pointer hover:text-text-secondary"
             >
               Clear
@@ -300,7 +309,7 @@ export function MediaLibrary({
         {loading ? (
           <div className="grid grid-cols-2 gap-2">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="aspect-[9/16] rounded-lg bg-surface-hover animate-pulse" />
+              <div key={i} className="aspect-square rounded-lg bg-surface-hover animate-pulse" />
             ))}
           </div>
         ) : media.length === 0 ? (
@@ -323,7 +332,7 @@ export function MediaLibrary({
                   draggable
                   onDragStart={(e) => handleDragStart(e, item)}
                   onClick={(e) => handleItemClick(e, item)}
-                  className={`group relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-hover cursor-pointer border-2 transition-all ${
+                  className={`group relative aspect-square rounded-lg overflow-hidden bg-surface-hover cursor-pointer border-2 transition-all ${
                     isSelected
                       ? 'border-accent-text ring-1 ring-accent-text/30'
                       : 'border-transparent hover:border-accent-text/30'
@@ -400,11 +409,11 @@ export function MediaLibrary({
         )}
       </div>
 
-      {/* Multi-select hint */}
+      {/* Hint */}
       {!hasSelection && media.length > 0 && (
         <div className="px-3 py-2 border-t border-nativz-border">
           <p className="text-[10px] text-text-muted text-center">
-            Click to schedule · Shift+click to multi-select
+            {selectMode ? 'Click items to select' : 'Click to schedule · Drag to calendar'}
           </p>
         </div>
       )}

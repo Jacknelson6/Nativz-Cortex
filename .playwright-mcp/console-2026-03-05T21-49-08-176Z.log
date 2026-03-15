@@ -1,0 +1,2 @@
+[    2310ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://phypsgxszrvwdaaqpxup.supabase.co/rest/v1/users?select=full_name%2Cemail%2Cavatar_url%2Cjob_title%2Cnango_connection_id&id=eq.55dc3ef9-ac65-491a-b74f-d71a150b46e5:0
+[    4143ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/notifications?limit=10:0

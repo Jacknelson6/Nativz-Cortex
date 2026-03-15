@@ -12,6 +12,7 @@ interface IdeasWizardProps {
   open: boolean;
   onClose: () => void;
   clients: ClientOption[];
+  onStarted?: (item: { id: string; concept: string | null; clientName: string | null }) => void;
 }
 
 type SourceMode = 'client' | 'url';
@@ -26,7 +27,7 @@ function isValidUrl(str: string): boolean {
   }
 }
 
-export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
+export function IdeasWizard({ open, onClose, clients, onStarted }: IdeasWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [sourceMode, setSourceMode] = useState<SourceMode>('client');
@@ -34,6 +35,7 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
   const [sourceUrl, setSourceUrl] = useState('');
   const [concept, setConcept] = useState('');
   const [count, setCount] = useState(10);
+  const [customCount, setCustomCount] = useState('');
   const [referenceUrl, setReferenceUrl] = useState('');
   const [referenceIds, setReferenceIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -48,6 +50,7 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
     setSourceUrl('');
     setConcept('');
     setCount(10);
+    setCustomCount('');
     setReferenceUrl('');
     setReferenceIds([]);
     setLoading(false);
@@ -112,12 +115,28 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
         return;
       }
 
-      toast.success(`${data.ideas?.length ?? count} ideas generated`);
+      // Notify parent about the new processing item
+      const clientName = clientId ? clients.find((c) => c.id === clientId)?.name ?? null : sourceUrl.trim();
+      onStarted?.({
+        id: data.id,
+        concept: finalConcept.trim() || null,
+        clientName,
+      });
+
+      toast.success('Generating ideas in the background');
       handleClose();
       router.push(`/admin/ideas/${data.id}`);
     } catch {
       setError('Something went wrong. Try again.');
       setLoading(false);
+    }
+  }
+
+  function handleCustomCountChange(val: string) {
+    setCustomCount(val);
+    const num = parseInt(val, 10);
+    if (!isNaN(num) && num >= 1 && num <= 50) {
+      setCount(num);
     }
   }
 
@@ -176,17 +195,14 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
                 value={sourceUrl}
                 onChange={(e) => setSourceUrl(e.target.value)}
                 placeholder="https://example.com"
-                className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:border-purple-500/50 focus:outline-none"
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:border-purple-500/50 focus:outline-none focus-visible:outline-none focus:ring-1 focus:ring-purple-500/50"
               />
             </div>
-            <p className="text-[11px] text-text-muted mt-2">
-              We&apos;ll scrape the homepage, about, and products pages to understand the brand
-            </p>
           </div>
         )}
 
         <div className="flex justify-end mt-6">
-          <GlassButton onClick={() => setStep(2)} disabled={!canProceed}>
+          <GlassButton onClick={() => setStep(2)} disabled={!canProceed} className="!text-purple-400 !bg-[rgba(168,85,247,0.12)] !border-[rgba(168,85,247,0.25)] hover:!bg-[rgba(168,85,247,0.2)] hover:!border-[rgba(168,85,247,0.4)] hover:!shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_0_20px_rgba(168,85,247,0.15)] active:!bg-[rgba(168,85,247,0.25)] focus-visible:!ring-purple-500">
             Next &rarr;
           </GlassButton>
         </div>
@@ -204,19 +220,19 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
           value={concept}
           onChange={(e) => setConcept(e.target.value)}
           placeholder='e.g. "franchise growth", "behind the scenes"'
-          className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 px-4 text-sm text-white placeholder-white/40 focus:border-accent focus:outline-none mb-4"
+          className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 px-4 text-sm text-white placeholder-white/40 focus:border-purple-500/50 focus:outline-none focus-visible:outline-none focus:ring-1 focus:ring-purple-500/50 mb-4"
         />
 
-        {/* Count presets */}
+        {/* Count presets + custom input */}
         <label className="text-xs text-text-muted mb-1.5 block">How many ideas?</label>
-        <div className="flex gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-4">
           {COUNT_PRESETS.map((n) => (
             <button
               key={n}
               type="button"
-              onClick={() => setCount(n)}
+              onClick={() => { setCount(n); setCustomCount(''); }}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                count === n
+                count === n && !customCount
                   ? 'bg-purple-500/20 text-purple-400'
                   : 'bg-white/[0.04] text-text-muted hover:bg-white/[0.08]'
               }`}
@@ -224,6 +240,19 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
               {n}
             </button>
           ))}
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={customCount}
+            onChange={(e) => handleCustomCountChange(e.target.value)}
+            placeholder="#"
+            className={`w-16 px-3 py-2 rounded-lg text-sm font-medium text-center transition-colors focus:outline-none ${
+              customCount
+                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
+            }`}
+          />
         </div>
 
         {/* Reference video URL — only for client mode */}
@@ -238,7 +267,7 @@ export function IdeasWizard({ open, onClose, clients }: IdeasWizardProps) {
                   value={referenceUrl}
                   onChange={(e) => setReferenceUrl(e.target.value)}
                   placeholder="Paste a video URL"
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm text-white placeholder-white/40 focus:border-accent focus:outline-none"
+                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm text-white placeholder-white/40 focus:border-purple-500/50 focus:outline-none focus-visible:outline-none focus:ring-1 focus:ring-purple-500/50"
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReference(); } }}
                 />
               </div>

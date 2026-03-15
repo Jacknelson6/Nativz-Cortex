@@ -96,8 +96,8 @@ export async function POST(request: NextRequest) {
         .in('id', data.media_ids);
     }
 
-    // Sync to Late API if platforms are connected
-    try {
+    // Sync to Late API only for scheduled posts (not drafts)
+    if (data.status === 'scheduled') try {
       const { data: profileRows } = await adminClient
         .from('social_profiles')
         .select('id, platform, late_account_id')

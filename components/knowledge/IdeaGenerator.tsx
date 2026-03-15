@@ -62,7 +62,7 @@ export function IdeaGenerator({ clientId, clientName }: IdeaGeneratorProps) {
               }
             }}
             placeholder="e.g. summer fitness tips, behind the scenes…"
-            className="flex-1 rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)] transition-colors"
+            className="flex-1 rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 focus:shadow-[0_0_0_3px_rgba(168,85,247,0.15)] transition-colors"
           />
 
           <input
@@ -71,14 +71,14 @@ export function IdeaGenerator({ clientId, clientName }: IdeaGeneratorProps) {
             max={50}
             value={count}
             onChange={(e) => setCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-            className="w-24 rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)] transition-colors"
+            className="w-24 rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 focus:shadow-[0_0_0_3px_rgba(168,85,247,0.15)] transition-colors"
             placeholder="# ideas"
           />
 
           <button
             onClick={handleGenerate}
             disabled={loading}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent-text px-5 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-500 px-5 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
           >
             {loading ? (
               <>
@@ -102,7 +102,7 @@ export function IdeaGenerator({ clientId, clientName }: IdeaGeneratorProps) {
       {/* Loading state */}
       {loading && ideas.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16">
-          <Loader2 size={28} className="animate-spin text-accent-text mb-3" />
+          <Loader2 size={28} className="animate-spin text-purple-400 mb-3" />
           <p className="text-sm text-text-muted">Generating ideas for {clientName}…</p>
           <p className="text-[11px] text-text-muted/60 mt-1">This usually takes 10–20 seconds</p>
         </div>
@@ -118,7 +118,7 @@ export function IdeaGenerator({ clientId, clientName }: IdeaGeneratorProps) {
             <button
               onClick={handleGenerate}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 text-xs text-accent-text hover:text-accent-text/80 transition-colors cursor-pointer disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-400/80 transition-colors cursor-pointer disabled:opacity-40"
             >
               {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
               Regenerate

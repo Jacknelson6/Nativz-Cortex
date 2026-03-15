@@ -454,8 +454,22 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
           </View>
         )}
 
-        {/* Recommended Actions */}
-        {actions.length > 0 && (
+        {/* Big Movers */}
+        {aiResponse?.big_movers && aiResponse.big_movers.length > 0 ? (
+          <View style={s.section}>
+            <SectionHeader title="Big movers" dotColor={c.amber} />
+            {aiResponse.big_movers.map((mover: { name: string; type: string; why: string; tactics: string[]; takeaway: string }, i: number) => (
+              <View key={i} style={s.card} wrap={false}>
+                <Text style={{ fontSize: 10, fontWeight: 700, color: c.text, marginBottom: 2 }}>{mover.name} ({mover.type})</Text>
+                <Text style={{ fontSize: 8, color: c.textSecondary, marginBottom: 4 }}>{mover.why}</Text>
+                {mover.tactics.map((t: string, j: number) => (
+                  <Text key={j} style={{ fontSize: 8, color: c.muted, marginBottom: 1, paddingLeft: 8 }}>• {t}</Text>
+                ))}
+                <Text style={{ fontSize: 8, color: c.accent, marginTop: 3 }}>{mover.takeaway}</Text>
+              </View>
+            ))}
+          </View>
+        ) : actions.length > 0 ? (
           <View style={s.section}>
             <SectionHeader title="Recommended actions" dotColor={c.green} />
             {actions.map((action, i) => (
@@ -471,7 +485,7 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
               </View>
             ))}
           </View>
-        )}
+        ) : null}
 
         {/* Sources */}
         {search.serp_data && (

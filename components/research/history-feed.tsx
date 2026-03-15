@@ -106,10 +106,11 @@ export function HistoryFeed({ items, clients, onViewAll }: HistoryFeedProps) {
           {filtered.map((item, index) => {
             const badge = TYPE_BADGE_CONFIG[item.type];
             const isProcessing = item.status === 'processing' || item.status === 'pending';
+            const uniqueKey = `${item.type}-${item.id}-${index}`;
 
             const content = (
               <Card
-                interactive={!isProcessing}
+                interactive
                 className={`flex items-center justify-between py-3 px-4 animate-stagger-in ${isProcessing ? 'opacity-70' : ''}`}
                 style={{ animationDelay: `${index * 30}ms` }}
               >
@@ -144,8 +145,7 @@ export function HistoryFeed({ items, clients, onViewAll }: HistoryFeedProps) {
               </Card>
             );
 
-            if (isProcessing) return <div key={item.id}>{content}</div>;
-            return <Link key={item.id} href={item.href}>{content}</Link>;
+            return <Link key={uniqueKey} href={item.href}>{content}</Link>;
           })}
         </div>
       )}

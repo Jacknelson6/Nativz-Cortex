@@ -63,6 +63,7 @@ export async function fetchHistory({
     let query = supabase
       .from('idea_generations')
       .select('id, concept, count, status, created_at, client_id, clients(name)')
+      .gt('count', 1) // Exclude re-roll generations (count=1)
       .order('created_at', { ascending: false })
       .limit(limit);
 

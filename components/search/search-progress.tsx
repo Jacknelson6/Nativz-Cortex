@@ -11,7 +11,7 @@ const STAGES = [
   { label: 'Searching the web...', duration: 8000, progress: 20 },
   { label: 'Analyzing discussions...', duration: 10000, progress: 40 },
   { label: 'Processing videos...', duration: 10000, progress: 60 },
-  { label: 'AI is writing your report...', duration: 25000, progress: 80 },
+  { label: 'The Nerd is writing your report...', duration: 25000, progress: 80 },
   { label: 'Finalizing...', duration: 60000, progress: 90 },
 ];
 

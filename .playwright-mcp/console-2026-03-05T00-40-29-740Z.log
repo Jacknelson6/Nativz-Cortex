@@ -1,0 +1,6 @@
+[    2406ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/notifications?limit=10:0
+[    7056ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/reporting/summary?clientId=e1b61d86-8c55-4c5b-b19c-a1542b41492d&start=2026-02-03&end=2026-03-05:0
+[   13073ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/reporting/summary?clientId=8013e014-7738-4f1c-af32-40ae59a446ad&start=2026-02-03&end=2026-03-05:0
+[   32027ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/notifications?limit=10:0
+[   61943ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/notifications?limit=10:0
+[   91952ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/api/notifications?limit=10:0

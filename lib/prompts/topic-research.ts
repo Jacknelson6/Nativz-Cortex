@@ -169,6 +169,18 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
     ]
   },
 
+  "big_movers": [
+    {
+      "name": "Brand, creator, or company name",
+      "type": "brand | creator | product | company",
+      "why": "1 sentence — why they're dominating the conversation right now",
+      "tactics": [
+        "Specific tactic or strategy they're using (bulleted, 3-5 items)"
+      ],
+      "takeaway": "1 sentence — how to replicate or learn from their approach"
+    }
+  ],
+
   "trending_topics": [
     {
       "name": "Specific sub-topic or angle",
@@ -206,6 +218,7 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 }
 
 ## IMPORTANT GUIDELINES
+- Include 3-5 big_movers — the brands, creators, companies, or products generating the most conversation in this space. For each, explain WHY they're making noise, list 3-5 specific tactics they use, and give a 1-sentence takeaway on how to replicate their success. Base this on the search data — who appears most frequently? Who gets the most engagement?
 - Include 5-8 emotions that sum to approximately 100%
 - Include 3-5 items each for intentions (viewer motivations — why people watch, e.g. "To learn something new", "For entertainment", "To stay informed", "To feel inspired"), categories, and formats
 - Generate 5-8 trending_topics, each with 2-4 video_ideas

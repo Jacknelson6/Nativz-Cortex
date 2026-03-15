@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import {
   TrendingUp,
   AlertTriangle,
@@ -10,7 +9,6 @@ import {
   Zap,
   BarChart3,
   Lightbulb,
-  ChevronDown,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -77,12 +75,8 @@ function extractInsights(summary: string): Insight[] {
 }
 
 function InsightCard({ insight }: { insight: Insight }) {
-  const [expanded, setExpanded] = useState(false);
   const Icon = insight.icon;
-  const isLong = insight.text.length > 120;
-  const displayText = isLong && !expanded
-    ? insight.text.slice(0, 120).replace(/\s+\S*$/, '') + '...'
-    : insight.text;
+  const displayText = insight.text;
 
   return (
     <div className="group relative overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 transition-colors hover:border-white/[0.10] hover:bg-white/[0.03]">
@@ -94,19 +88,9 @@ function InsightCard({ insight }: { insight: Insight }) {
           <span className={`text-[10px] font-semibold uppercase tracking-wider ${insight.iconColor}`}>
             {insight.label}
           </span>
-          <p className="text-sm leading-relaxed text-text-secondary mt-0.5">
+          <p className="text-xs leading-relaxed text-text-secondary mt-0.5">
             {displayText}
           </p>
-          {isLong && (
-            <button
-              type="button"
-              onClick={() => setExpanded(!expanded)}
-              className="mt-1 flex items-center gap-0.5 text-[11px] text-text-muted hover:text-text-secondary transition-colors"
-            >
-              <ChevronDown size={11} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
-              {expanded ? 'Less' : 'More'}
-            </button>
-          )}
         </div>
       </div>
     </div>

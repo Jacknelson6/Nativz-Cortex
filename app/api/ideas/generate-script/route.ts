@@ -8,10 +8,11 @@ import { getBrandProfile } from '@/lib/knowledge/queries';
 const scriptSchema = z.object({
   client_id: z.string().uuid(),
   title: z.string().min(1),
-  why_it_works: z.string().optional(),
+  why_it_works: z.union([z.string(), z.array(z.string())]).optional(),
   content_pillar: z.string().optional(),
   reference_video_ids: z.array(z.string().uuid()).optional(),
   idea_entry_id: z.string().uuid().optional(),
+  cta: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { client_id, title, why_it_works, content_pillar, reference_video_ids, idea_entry_id } = parsed.data;
+  const { client_id, title, why_it_works, content_pillar, reference_video_ids, idea_entry_id, cta } = parsed.data;
   const admin = createAdminClient();
 
   // Gather context
@@ -77,10 +78,12 @@ Brand voice: ${clientRecord.brand_voice ?? ''}
     contextBlocks.push(`<reference_style_guide>\n${refContext}\n</reference_style_guide>`);
   }
 
+  const whyText = Array.isArray(why_it_works) ? why_it_works.join('. ') : why_it_works;
   contextBlocks.push(`<video_idea>
 Title: ${title}
-${why_it_works ? `Why it works: ${why_it_works}` : ''}
+${whyText ? `Why it works: ${whyText}` : ''}
 ${content_pillar ? `Content pillar: ${content_pillar}` : ''}
+${cta ? `Desired CTA: ${cta}` : ''}
 </video_idea>`);
 
   const systemPrompt = `You are a professional video script writer for a marketing agency. Write a spoken-word script for the given video idea.
@@ -90,7 +93,7 @@ Rules:
 - The script should be for a short-form video (30-90 seconds spoken)
 - Match the brand voice and tone
 - Start with a strong hook that grabs attention in the first 3 seconds
-- End with a clear call to action
+- End with a clear call to action${cta ? ` — the CTA should drive viewers to: ${cta}` : ''}
 ${referenceVideos.length > 0 ? '- Match the style, energy, and delivery cadence of the reference videos' : ''}
 
 Output ONLY the script text. Nothing else — no title, no labels, no formatting markers.`;

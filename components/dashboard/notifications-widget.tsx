@@ -158,7 +158,8 @@ export function NotificationsWidget() {
         )}
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto -mx-1">
+      <div className="relative flex-1 min-h-0 -mx-1">
+      <div className="h-full max-h-[320px] overflow-y-auto" style={{ maskImage: 'linear-gradient(to bottom, black calc(100% - 48px), transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black calc(100% - 48px), transparent 100%)' }}>
         {loading ? (
           <div className="space-y-2 px-1">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -216,6 +217,7 @@ export function NotificationsWidget() {
             ))}
           </div>
         )}
+      </div>
       </div>
     </Card>
   );

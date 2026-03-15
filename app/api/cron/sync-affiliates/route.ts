@@ -3,7 +3,7 @@ import { syncAllAffiliateClients } from '@/lib/uppromote/sync';
 
 export const maxDuration = 60;
 
-export async function POST(request: NextRequest) {
+async function handler(request: NextRequest) {
   try {
     // Optional CRON_SECRET check
     const cronSecret = process.env.CRON_SECRET;
@@ -17,10 +17,14 @@ export async function POST(request: NextRequest) {
     const result = await syncAllAffiliateClients();
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
-    console.error('POST /api/cron/sync-affiliates error:', error);
+    console.error('/api/cron/sync-affiliates error:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 },
     );
   }
 }
+
+// GET for Vercel crons, POST for manual triggers
+export const GET = handler;
+export const POST = handler;

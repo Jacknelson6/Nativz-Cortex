@@ -104,7 +104,7 @@ export function SharePostsDialog({
               Select which posts to include in the share link
             </p>
           </div>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors">
+          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors cursor-pointer">
             <X size={18} />
           </button>
         </div>

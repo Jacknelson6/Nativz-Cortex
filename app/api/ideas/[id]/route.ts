@@ -3,6 +3,30 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+// ── GET — poll generation status ──
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('idea_generations')
+    .select('id, status, ideas, error_message, completed_at')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  return NextResponse.json(data);
+}
+
 const ideaTriageSchema = z.object({
   status: z.enum(['new', 'reviewed', 'accepted', 'archived']).optional(),
   admin_notes: z.string().max(2000).optional().nullable(),

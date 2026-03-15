@@ -66,7 +66,7 @@ export function IdeaCard({ idea, clientId }: IdeaCardProps) {
   }
 
   return (
-    <div className="group bg-surface rounded-xl border border-nativz-border p-4 flex flex-col gap-3 transition-all duration-200 hover:border-accent/30 hover:shadow-card-hover">
+    <div className="group bg-surface rounded-xl border border-nativz-border p-4 flex flex-col gap-3 transition-all duration-200 hover:border-purple-500/30 hover:shadow-card-hover">
       {/* Title + actions */}
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-sm font-semibold text-text-primary leading-snug">{idea.title}</h3>
@@ -76,7 +76,7 @@ export function IdeaCard({ idea, clientId }: IdeaCardProps) {
             className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted opacity-0 group-hover:opacity-100 hover:text-text-primary hover:bg-surface-hover transition-all cursor-pointer"
             title="Copy idea"
           >
-            {copied ? <Check size={13} className="text-accent-text" /> : <Copy size={13} />}
+            {copied ? <Check size={13} className="text-purple-400" /> : <Copy size={13} />}
           </button>
           <button
             onClick={handleSave}
@@ -95,8 +95,8 @@ export function IdeaCard({ idea, clientId }: IdeaCardProps) {
 
       {/* Hook */}
       <div className="flex items-start gap-1.5">
-        <Zap size={12} className="mt-0.5 text-accent-text shrink-0" />
-        <p className="text-xs font-medium text-accent-text leading-relaxed">&ldquo;{idea.hook}&rdquo;</p>
+        <Zap size={12} className="mt-0.5 text-purple-400 shrink-0" />
+        <p className="text-xs font-medium text-purple-400 leading-relaxed">&ldquo;{idea.hook}&rdquo;</p>
       </div>
 
       {/* Description */}

@@ -26,7 +26,7 @@ export function RecurrenceEditDialog({ title, onChoice, onClose }: RecurrenceEdi
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-text-primary">Edit recurring meeting</h3>
-          <button onClick={onClose} className="rounded-md p-1 text-text-muted hover:bg-surface-hover transition-colors">
+          <button onClick={onClose} className="rounded-md p-1 text-text-muted hover:bg-surface-hover transition-colors cursor-pointer">
             <X size={14} />
           </button>
         </div>

@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  X, Trash2, Sparkles, Hash, Bookmark,
+  X, Trash2, Sparkles, Bookmark,
   ChevronDown, Users, UserPlus, Image, Share2,
   Play, Pause, Volume2, VolumeX,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Badge } from '@/components/ui/badge';
+import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 import type { CalendarPost, ConnectedProfile, MediaItem } from './types';
@@ -56,7 +57,6 @@ export function PostEditor({
 }: PostEditorProps) {
   const [caption, setCaption] = useState('');
   const [hashtags, setHashtags] = useState<string[]>([]);
-  const [hashtagInput, setHashtagInput] = useState('');
   const [selectedProfiles, setSelectedProfiles] = useState<string[]>([]);
   const [publishMode, setPublishMode] = useState<'draft' | 'schedule'>('draft');
   const [scheduledDate, setScheduledDate] = useState('');
@@ -150,7 +150,7 @@ export function PostEditor({
     setSaving(true);
     try {
       let scheduled_at: string | null = null;
-      if (!asDraft && scheduledDate && scheduledTime) {
+      if (scheduledDate && scheduledTime) {
         scheduled_at = new Date(`${scheduledDate}T${scheduledTime}`).toISOString();
       }
 
@@ -219,29 +219,7 @@ export function PostEditor({
     }
   }
 
-  async function handleHashtagSuggestions() {
-    setAiLoading(true);
-    try {
-      const res = await fetch('/api/scheduler/ai/hashtag-suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          caption,
-          client_id: clientId ?? post?.client_id,
-        }),
-      });
-      if (!res.ok) throw new Error('AI request failed');
-      const data = await res.json();
-      if (data.hashtags?.length) {
-        setHashtags(prev => [...new Set([...prev, ...data.hashtags])]);
-        toast.success(`Added ${data.hashtags.length} hashtags`);
-      }
-    } catch {
-      toast.error('Failed to get suggestions');
-    } finally {
-      setAiLoading(false);
-    }
-  }
+
 
   async function handleShareForReview() {
     if (!post?.id) {
@@ -290,14 +268,6 @@ export function PostEditor({
     } catch {
       toast.error('Failed to capture frame');
     }
-  }
-
-  function addHashtag() {
-    const tag = hashtagInput.trim().replace(/^#/, '');
-    if (tag && !hashtags.includes(tag)) {
-      setHashtags(prev => [...prev, tag]);
-    }
-    setHashtagInput('');
   }
 
   function addTag(type: 'tag' | 'collab') {
@@ -506,23 +476,12 @@ export function PostEditor({
                     Draft
                   </button>
                 </div>
-                {publishMode === 'schedule' && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-text-muted">on</span>
-                    <input
-                      type="date"
-                      value={scheduledDate}
-                      onChange={(e) => setScheduledDate(e.target.value)}
-                      className="rounded-lg border border-nativz-border bg-transparent px-2 py-1 text-xs text-text-primary"
-                    />
-                    <input
-                      type="time"
-                      value={scheduledTime}
-                      onChange={(e) => setScheduledTime(e.target.value)}
-                      className="rounded-lg border border-nativz-border bg-transparent px-2 py-1 text-xs text-text-primary"
-                    />
-                  </div>
-                )}
+                <DateTimePicker
+                  date={scheduledDate}
+                  time={scheduledTime}
+                  onDateChange={setScheduledDate}
+                  onTimeChange={setScheduledTime}
+                />
               </div>
 
               {/* Caption */}
@@ -547,40 +506,6 @@ export function PostEditor({
                   <span className={`text-[10px] ${caption.length > activeLimit ? 'text-red-400' : 'text-text-muted'}`}>
                     {caption.length}/{activeLimit}
                   </span>
-                </div>
-              </div>
-
-              {/* Hashtags */}
-              <div className="px-5 py-3 border-b border-nativz-border">
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {hashtags.map(tag => (
-                    <span key={tag} className="inline-flex items-center gap-0.5 rounded-full bg-accent-surface/50 px-2 py-0.5 text-xs text-accent-text">
-                      #{tag}
-                      <button
-                        onClick={() => setHashtags(prev => prev.filter(t => t !== tag))}
-                        className="cursor-pointer hover:text-red-400"
-                      >
-                        <X size={10} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-1.5">
-                  <input
-                    value={hashtagInput}
-                    onChange={(e) => setHashtagInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addHashtag())}
-                    placeholder="Add hashtag..."
-                    className="flex-1 rounded-lg border border-nativz-border bg-transparent px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text"
-                  />
-                  <button
-                    onClick={handleHashtagSuggestions}
-                    disabled={aiLoading}
-                    className="flex items-center gap-1 text-xs text-accent-text hover:text-accent-text/80 cursor-pointer disabled:opacity-50"
-                  >
-                    <Hash size={12} />
-                    Suggestions
-                  </button>
                 </div>
               </div>
 
@@ -675,9 +600,9 @@ export function PostEditor({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {publishMode === 'schedule' && (
+            {publishMode === 'draft' && (
               <span className="text-[10px] text-text-muted">
-                This post will be automatically published
+                Won&apos;t publish until approved or manually set to publish
               </span>
             )}
             <GlassButton

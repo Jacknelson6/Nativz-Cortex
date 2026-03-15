@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Search, Sparkles } from 'lucide-react';
 import { SpotlightCard } from '@/components/ui/spotlight-card';
 import { ResearchWizard } from './research-wizard';
-import { IdeasWizard } from './ideas-wizard';
+import { ContentWizardModal } from '@/components/ideas-hub/content-wizard-modal';
 import { HistoryFeed } from './history-feed';
 import { HistoryModal } from './history-modal';
 import type { HistoryItem } from '@/lib/research/history';
@@ -19,7 +19,7 @@ interface ResearchHubProps {
 export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
   const router = useRouter();
   const [researchOpen, setResearchOpen] = useState(false);
-  const [ideasOpen, setIdeasOpen] = useState(false);
+  const [strategyOpen, setStrategyOpen] = useState(false);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [optimisticItems, setOptimisticItems] = useState<HistoryItem[]>([]);
   const prevHistoryRef = useRef(historyItems);
@@ -101,7 +101,7 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
               <button
                 type="button"
                 onClick={() => setResearchOpen(true)}
-                className="w-full text-left"
+                className="w-full text-left cursor-pointer"
               >
                 <div className="flex flex-col items-center text-center">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-surface mb-3">
@@ -122,19 +122,19 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
             <SpotlightCard spotlightColor="rgba(168, 85, 247, 0.15)" className="p-7">
               <button
                 type="button"
-                onClick={() => setIdeasOpen(true)}
-                className="w-full text-left"
+                onClick={() => setStrategyOpen(true)}
+                className="w-full text-left cursor-pointer"
               >
                 <div className="flex flex-col items-center text-center">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 mb-3">
                     <Sparkles size={18} className="text-purple-400" />
                   </div>
-                  <h2 className="text-base font-semibold text-text-primary mb-1">Video ideas</h2>
+                  <h2 className="text-base font-semibold text-text-primary mb-1">Strategize</h2>
                   <p className="text-sm text-text-muted mb-5">
                     Generate content ideas powered by AI + knowledge
                   </p>
                   <div className="w-full rounded-xl bg-purple-500/10 border border-purple-500/25 py-2.5 text-center">
-                    <span className="text-sm font-semibold text-purple-400">Generate ideas</span>
+                    <span className="text-sm font-semibold text-purple-400">Generate strategy</span>
                   </div>
                 </div>
               </button>
@@ -159,10 +159,10 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
         clients={clients}
         onStarted={handleResearchStarted}
       />
-      <IdeasWizard
-        open={ideasOpen}
-        onClose={() => setIdeasOpen(false)}
-        clients={clients}
+      <ContentWizardModal
+        open={strategyOpen}
+        onClose={() => setStrategyOpen(false)}
+        clients={clients.map((c) => ({ id: c.id, name: c.name }))}
       />
 
       {/* History modal */}

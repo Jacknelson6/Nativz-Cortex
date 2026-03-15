@@ -20,14 +20,14 @@ import { SourcesPanel } from '@/components/results/sources-panel';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { KeyFindings } from '@/components/results/key-findings';
 import { SentimentBadge } from '@/components/results/sentiment-badge';
-import { ActionItems } from '@/components/results/action-items';
+import { BigMovers } from '@/components/results/big-movers';
 import { CompetitiveAnalysis } from '@/components/results/competitive-analysis';
 import { ExportPdfButton } from '@/components/results/export-pdf-button';
 import { ShareButton } from '@/components/results/share-button';
 import { SearchProgress } from '@/components/search/search-progress';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { hasSerp } from '@/lib/types/search';
-import type { TopicSearch, TopicSearchAIResponse, TrendingTopic } from '@/lib/types/search';
+import type { TopicSearch, TopicSearchAIResponse } from '@/lib/types/search';
 import type { Recipient } from './page';
 
 interface AdminResultsClientProps {
@@ -68,7 +68,7 @@ export function AdminResultsClient({ search, clientInfo, recipients = [] }: Admi
 
   if (search.status === 'processing' || search.status === 'pending') {
     return (
-      <div className="flex min-h-full flex-col items-center justify-center px-4">
+      <div className="flex min-h-[70vh] flex-col items-center justify-center px-4">
         <p className="text-lg font-semibold text-text-primary mb-2">
           Researching &ldquo;{search.query}&rdquo;
         </p>
@@ -215,12 +215,9 @@ export function AdminResultsClient({ search, clientInfo, recipients = [] }: Admi
           />
         )}
 
-        {/* Action Items & Recommendations */}
-        {aiResponse && aiResponse.trending_topics && aiResponse.trending_topics.length > 0 && (
-          <ActionItems
-            aiResponse={aiResponse}
-            topics={aiResponse.trending_topics as TrendingTopic[]}
-          />
+        {/* Big movers — who's making noise in this space */}
+        {aiResponse?.big_movers && aiResponse.big_movers.length > 0 && (
+          <BigMovers movers={aiResponse.big_movers} />
         )}
 
         {hasSerp(search) && search.serp_data && (
@@ -384,7 +381,7 @@ function SendReportModal({
                   className="flex items-center gap-1.5 rounded-full border border-nativz-border bg-surface-hover px-3 py-1 text-xs text-text-secondary"
                 >
                   {email}
-                  <button onClick={() => removeCustomEmail(email)} className="text-text-muted hover:text-red-400 transition-colors">
+                  <button onClick={() => removeCustomEmail(email)} className="text-text-muted hover:text-red-400 transition-colors cursor-pointer">
                     <X size={12} />
                   </button>
                 </span>

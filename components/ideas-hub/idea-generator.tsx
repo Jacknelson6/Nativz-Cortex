@@ -55,7 +55,7 @@ function CountSelector({ value, onChange }: { value: number; onChange: (n: numbe
               onClick={() => onChange(n)}
               className={`h-9 min-w-[2.25rem] rounded-lg px-2 text-sm font-medium transition-all cursor-pointer ${
                 value === n
-                  ? 'bg-accent-text text-white shadow-sm'
+                  ? 'bg-purple-500 text-white shadow-sm'
                   : 'border border-nativz-border bg-surface text-text-secondary hover:bg-surface-hover'
               }`}
             >
@@ -70,7 +70,7 @@ function CountSelector({ value, onChange }: { value: number; onChange: (n: numbe
           <Plus size={14} />
         </button>
         {!presets.includes(value) && (
-          <span className="ml-1 text-sm font-medium text-accent-text tabular-nums">{value}</span>
+          <span className="ml-1 text-sm font-medium text-purple-400 tabular-nums">{value}</span>
         )}
       </div>
     </div>
@@ -201,8 +201,8 @@ export function IdeaGenerator({ clients, onIdeasSaved, initialSearchId, initialS
       {/* Header */}
       <div className="text-center space-y-2">
         <div className="flex justify-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-surface">
-            <Sparkles size={24} className="text-accent-text" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-500/10">
+            <Sparkles size={24} className="text-purple-400" />
           </div>
         </div>
         <h1 className="text-2xl font-semibold text-text-primary">Generate video ideas</h1>
@@ -228,6 +228,7 @@ export function IdeaGenerator({ clients, onIdeasSaved, initialSearchId, initialS
             onChange={setClientId}
             placeholder="Search clients…"
             searchable
+            accent="purple"
           />
           <CountSelector value={count} onChange={setCount} />
         </div>
@@ -248,7 +249,7 @@ export function IdeaGenerator({ clients, onIdeasSaved, initialSearchId, initialS
               }
             }}
             placeholder="e.g. summer fitness tips, behind the scenes, product launches…"
-            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-colors"
           />
         </div>
 
@@ -283,7 +284,7 @@ export function IdeaGenerator({ clients, onIdeasSaved, initialSearchId, initialS
           </div>
 
           {/* File upload */}
-          <label className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-nativz-border/60 bg-background px-4 py-3 text-xs text-text-muted hover:border-accent/40 hover:text-text-secondary transition-colors cursor-pointer">
+          <label className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-nativz-border/60 bg-background px-4 py-3 text-xs text-text-muted hover:border-purple-500/40 hover:text-text-secondary transition-colors cursor-pointer">
             <Upload size={14} />
             Drop or click to upload video files
             <input
@@ -303,7 +304,7 @@ export function IdeaGenerator({ clients, onIdeasSaved, initialSearchId, initialS
                   key={i}
                   className="flex items-center gap-2 rounded-lg border border-nativz-border bg-background px-3 py-2"
                 >
-                  {ref.status === 'processing' && <Loader2 size={12} className="animate-spin text-accent-text shrink-0" />}
+                  {ref.status === 'processing' && <Loader2 size={12} className="animate-spin text-purple-400 shrink-0" />}
                   {ref.status === 'completed' && <Check size={12} className="text-emerald-400 shrink-0" />}
                   {ref.status === 'failed' && <X size={12} className="text-red-400 shrink-0" />}
                   {ref.status === 'pending' && <div className="w-3 h-3 rounded-full border-2 border-nativz-border shrink-0" />}
@@ -325,7 +326,7 @@ export function IdeaGenerator({ clients, onIdeasSaved, initialSearchId, initialS
           <button
             onClick={handleGenerate}
             disabled={generating || processingRefs || !clientId}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent-text px-8 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-purple-500 px-8 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
           >
             {generating || processingRefs ? (
               <>
