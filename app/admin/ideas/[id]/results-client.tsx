@@ -692,7 +692,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
           className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 px-3 py-1.5 text-xs font-medium text-purple-400 hover:bg-purple-500/20 transition-colors cursor-pointer"
         >
           <FileText size={12} />
-          Generate scripts{selectedCount > 0 ? ` (${selectedCount})` : ''}
+          Generate scripts{selectedCount > 0 ? ` (${selectedCount})` : ' (all)'}
         </button>
         <button
           onClick={handleSaveAll}
