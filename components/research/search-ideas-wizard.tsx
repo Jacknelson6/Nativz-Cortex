@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Link as LinkIcon } from 'lucide-react';
+import { Loader2, Link as LinkIcon, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { WizardShell } from './wizard-shell';
 import { GlassButton } from '@/components/ui/glass-button';
@@ -16,12 +16,24 @@ interface SearchIdeasWizardProps {
   clients: ClientOption[];
 }
 
+type SourceMode = 'client' | 'none' | 'url';
 const COUNT_PRESETS = [5, 10, 15, 20] as const;
+
+function isValidUrl(str: string): boolean {
+  try {
+    const url = new URL(str);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialClientId, clients }: SearchIdeasWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
+  const [sourceMode, setSourceMode] = useState<SourceMode>(initialClientId ? 'client' : 'none');
   const [clientId, setClientId] = useState<string | null>(initialClientId);
+  const [sourceUrl, setSourceUrl] = useState('');
   const [concept, setConcept] = useState('');
   const [count, setCount] = useState(10);
   const [customCount, setCustomCount] = useState('');
@@ -30,9 +42,16 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const canProceed =
+    sourceMode === 'client' ? !!clientId :
+    sourceMode === 'url' ? isValidUrl(sourceUrl) :
+    true; // 'none' can always proceed
+
   function reset() {
     setStep(1);
+    setSourceMode(initialClientId ? 'client' : 'none');
     setClientId(initialClientId);
+    setSourceUrl('');
     setConcept('');
     setCount(10);
     setCustomCount('');
@@ -66,6 +85,7 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
   }
 
   async function handleGenerate(overrides?: { concept?: string; count?: number; referenceIds?: string[] }) {
+    if (!canProceed) return;
     setError('');
     setLoading(true);
 
@@ -80,9 +100,11 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
         count: finalCount,
       };
 
-      if (clientId) {
+      if (sourceMode === 'client' && clientId) {
         body.client_id = clientId;
         if (finalRefs.length > 0) body.reference_video_ids = finalRefs;
+      } else if (sourceMode === 'url') {
+        body.url = sourceUrl.trim();
       }
 
       const res = await fetch('/api/ideas/generate', {
@@ -123,19 +145,80 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
       totalSteps={2}
       currentStep={step}
     >
-      {/* Step 1: Select client */}
+      {/* Step 1: Select source */}
       <div>
         <h2 className="text-lg font-semibold text-text-primary mb-1">Who are the ideas for?</h2>
-        <p className="text-sm text-text-muted mb-5">Select a client or generate without one</p>
+        <p className="text-sm text-text-muted mb-5">Select a client, paste a URL, or use research only</p>
 
-        <ClientPickerButton
-          clients={clients}
-          value={clientId}
-          onChange={setClientId}
-        />
+        {/* Mode toggle */}
+        <div className="flex bg-white/[0.04] rounded-lg p-0.5 gap-0.5 mb-4">
+          <button
+            type="button"
+            onClick={() => { setSourceMode('client'); setSourceUrl(''); }}
+            className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              sourceMode === 'client'
+                ? 'bg-white/[0.08] text-text-primary'
+                : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            Client
+          </button>
+          <button
+            type="button"
+            onClick={() => { setSourceMode('none'); setClientId(null); setSourceUrl(''); }}
+            className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              sourceMode === 'none'
+                ? 'bg-white/[0.08] text-text-primary'
+                : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            No client
+          </button>
+          <button
+            type="button"
+            onClick={() => { setSourceMode('url'); setClientId(null); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              sourceMode === 'url'
+                ? 'bg-white/[0.08] text-text-primary'
+                : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            <Globe size={14} />
+            Website URL
+          </button>
+        </div>
+
+        {sourceMode === 'client' && (
+          <ClientPickerButton
+            clients={clients}
+            value={clientId}
+            onChange={setClientId}
+          />
+        )}
+
+        {sourceMode === 'none' && (
+          <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+            <p className="text-sm text-text-muted">
+              Ideas will be generated using only the research data from this topic search.
+            </p>
+          </div>
+        )}
+
+        {sourceMode === 'url' && (
+          <div className="relative">
+            <LinkIcon size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input
+              type="url"
+              value={sourceUrl}
+              onChange={(e) => setSourceUrl(e.target.value)}
+              placeholder="https://example.com"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:border-purple-500/50 focus:outline-none focus-visible:outline-none focus:ring-1 focus:ring-purple-500/50"
+            />
+          </div>
+        )}
 
         <div className="flex justify-end mt-6">
-          <GlassButton onClick={() => setStep(2)} className="!text-purple-400 !bg-[rgba(168,85,247,0.12)] !border-[rgba(168,85,247,0.25)] hover:!bg-[rgba(168,85,247,0.2)] hover:!border-[rgba(168,85,247,0.4)] hover:!shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_0_20px_rgba(168,85,247,0.15)] active:!bg-[rgba(168,85,247,0.25)] focus-visible:!ring-purple-500">
+          <GlassButton onClick={() => setStep(2)} disabled={!canProceed} className="!text-purple-400 !bg-[rgba(168,85,247,0.12)] !border-[rgba(168,85,247,0.25)] hover:!bg-[rgba(168,85,247,0.2)] hover:!border-[rgba(168,85,247,0.4)] hover:!shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_0_20px_rgba(168,85,247,0.15)] active:!bg-[rgba(168,85,247,0.25)] focus-visible:!ring-purple-500">
             Next &rarr;
           </GlassButton>
         </div>
@@ -189,7 +272,7 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
         </div>
 
         {/* Reference video URL — only when client selected */}
-        {clientId && (
+        {sourceMode === 'client' && clientId && (
           <>
             <label className="text-xs text-text-muted mb-1.5 block">Reference video</label>
             <div className="flex gap-2 mb-2">
@@ -217,6 +300,13 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
               <p className="text-xs text-text-muted mb-4">{referenceIds.length} reference{referenceIds.length !== 1 ? 's' : ''} added</p>
             )}
           </>
+        )}
+
+        {/* URL mode note */}
+        {sourceMode === 'url' && (
+          <p className="text-[11px] text-purple-400/70 mb-4">
+            Scraping may take a few seconds — we&apos;ll analyze the site before generating ideas
+          </p>
         )}
 
         {error && <p className="text-sm text-red-400 mb-4">{error}</p>}
