@@ -16,8 +16,8 @@ const generateSchema = z.object({
   search_id: z.string().uuid().optional(),
   pillar_ids: z.array(z.string().uuid()).optional(),
   ideas_per_pillar: z.number().min(1).max(20).optional(),
-}).refine((d) => d.client_id || d.url, {
-  message: 'Either client_id or url is required',
+}).refine((d) => d.client_id || d.url || d.search_id, {
+  message: 'Either client_id, url, or search_id is required',
 });
 
 export interface GeneratedIdeaResult {
@@ -113,6 +113,40 @@ async function processGeneration({
         return;
       }
       contextBlocks.push(`<brand_from_url>\nSource: ${url}\nSite: ${scraped.title}\n\n${scraped.content}\n</brand_from_url>`);
+    }
+
+    // ── Search-only mode (no client, no url) ──
+    if (search_id && !client_id && !url) {
+      const { data: searchData } = await admin
+        .from('topic_searches')
+        .select('query, summary, trending_topics, serp_data, raw_ai_response')
+        .eq('id', search_id)
+        .single();
+
+      if (searchData) {
+        const searchContext: string[] = [`Search query: ${searchData.query}`];
+        if (searchData.summary) searchContext.push(`Research summary: ${searchData.summary}`);
+
+        if (Array.isArray(searchData.trending_topics)) {
+          const topics = (searchData.trending_topics as { name: string; resonance?: string; sentiment?: string }[])
+            .map((t) => `- ${t.name} (resonance: ${t.resonance ?? 'unknown'}, sentiment: ${t.sentiment ?? 'unknown'})`)
+            .join('\n');
+          searchContext.push(`Trending topics:\n${topics}`);
+        }
+
+        const aiResponse = searchData.raw_ai_response as Record<string, unknown> | null;
+        if (aiResponse?.key_findings) {
+          searchContext.push(`Key findings: ${JSON.stringify(aiResponse.key_findings)}`);
+        }
+        if (aiResponse?.content_breakdown) {
+          searchContext.push(`Content breakdown: ${JSON.stringify(aiResponse.content_breakdown)}`);
+        }
+        if (aiResponse?.action_items) {
+          searchContext.push(`Action items: ${JSON.stringify(aiResponse.action_items)}`);
+        }
+
+        contextBlocks.push(`<research_data>\n${searchContext.join('\n\n')}\n</research_data>`);
+      }
     }
 
     // ── Client-based context gathering ──

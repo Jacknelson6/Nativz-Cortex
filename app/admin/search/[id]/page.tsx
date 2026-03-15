@@ -43,6 +43,13 @@ export default async function AdminSearchResultsPage({
     clientInfo = data || null;
   }
 
+  // Fetch all active clients for the ideas wizard picker
+  const { data: allClients } = await adminClient
+    .from('clients')
+    .select('id, name, logo_url, agency')
+    .eq('is_active', true)
+    .order('name');
+
   // Fetch potential recipients: team (admins) + client contacts (viewers in same org)
   const recipients: Recipient[] = [];
 
@@ -87,11 +94,16 @@ export default async function AdminSearchResultsPage({
     <>
       <div className="px-6 pt-6">
         <Breadcrumbs items={[
-          { label: 'Search History', href: '/admin/search/history' },
+          { label: 'Search History', href: '/admin/search/new?history=true' },
           { label: (search as TopicSearch).query },
         ]} />
       </div>
-      <AdminResultsClient search={search as TopicSearch} clientInfo={clientInfo} recipients={recipients} />
+      <AdminResultsClient
+        search={search as TopicSearch}
+        clientInfo={clientInfo}
+        recipients={recipients}
+        clients={(allClients ?? []).map((c) => ({ id: c.id, name: c.name, logo_url: c.logo_url, agency: c.agency }))}
+      />
     </>
   );
 }

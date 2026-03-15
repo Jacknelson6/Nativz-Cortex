@@ -25,6 +25,8 @@ import { CompetitiveAnalysis } from '@/components/results/competitive-analysis';
 import { ExportPdfButton } from '@/components/results/export-pdf-button';
 import { ShareButton } from '@/components/results/share-button';
 import { SearchProgress } from '@/components/search/search-progress';
+import { SearchIdeasWizard } from '@/components/research/search-ideas-wizard';
+import type { ClientOption } from '@/components/ui/client-picker';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { hasSerp } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse } from '@/lib/types/search';
@@ -34,12 +36,14 @@ interface AdminResultsClientProps {
   search: TopicSearch;
   clientInfo?: { id: string; name: string; slug: string } | null;
   recipients?: Recipient[];
+  clients: ClientOption[];
 }
 
-export function AdminResultsClient({ search, clientInfo, recipients = [] }: AdminResultsClientProps) {
+export function AdminResultsClient({ search, clientInfo, recipients = [], clients }: AdminResultsClientProps) {
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
+  const [showIdeasWizard, setShowIdeasWizard] = useState(false);
   const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
 
   async function handleSend(action: 'approve' | 'reject') {
@@ -94,7 +98,7 @@ export function AdminResultsClient({ search, clientInfo, recipients = [] }: Admi
       {/* Header */}
       <div className="border-b border-nativz-border bg-surface">
         <div className="flex h-14 items-center gap-4 px-6">
-          <Link href="/admin/search/history" className="text-text-muted hover:text-text-secondary transition-colors">
+          <Link href="/admin/search/new?history=true" className="text-text-muted hover:text-text-secondary transition-colors">
             <ArrowLeft size={20} />
           </Link>
           <div className="flex items-center gap-2 text-sm">
@@ -130,12 +134,10 @@ export function AdminResultsClient({ search, clientInfo, recipients = [] }: Admi
                 {formatRelativeTime(search.completed_at)}
               </span>
             )}
-            <Link href={`/admin/ideas?search_id=${search.id}`}>
-              <Button variant="outline" size="sm">
-                <Sparkles size={14} />
-                Create video ideas
-              </Button>
-            </Link>
+            <Button variant="outline" size="sm" onClick={() => setShowIdeasWizard(true)}>
+              <Sparkles size={14} />
+              Create video ideas
+            </Button>
             <ExportPdfButton search={search} clientName={clientInfo?.name} />
             <ShareButton searchId={search.id} />
             {search.approved_at ? (
@@ -238,6 +240,15 @@ export function AdminResultsClient({ search, clientInfo, recipients = [] }: Admi
           await handleSend('approve');
           setShowSendModal(false);
         }}
+      />
+
+      {/* Ideas wizard modal */}
+      <SearchIdeasWizard
+        open={showIdeasWizard}
+        onClose={() => setShowIdeasWizard(false)}
+        searchId={search.id}
+        clientId={search.client_id ?? null}
+        clients={clients}
       />
     </div>
   );
