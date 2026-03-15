@@ -6,7 +6,7 @@ import {
   Sparkles, RefreshCw, Bookmark, Check,
   Loader2, Copy, Download, ChevronDown, ArrowLeft,
   Building2, Search, AlertCircle, Zap, FileText,
-  CheckSquare, Square, Phone, MousePointer, MessageCircle, Ban, Pencil,
+  CheckSquare, Square, Phone, MousePointer, MessageCircle, Ban, Pencil, HelpCircle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -64,6 +64,18 @@ const CTA_PRESETS = [
   { value: 'Call us today', label: 'Call', icon: Phone },
   { value: 'Click the link in bio', label: 'Click the link in bio', icon: MousePointer },
   { value: 'comment', label: 'Comment "[blank]"', icon: MessageCircle, isComment: true },
+] as const;
+
+const HOOK_STRATEGIES = [
+  { id: 'negative', label: 'Negative hook', example: '"Stop doing this...", "This is ruining your..."' },
+  { id: 'curiosity', label: 'Curiosity gap', example: '"You won\'t believe...", "Here\'s what nobody tells you..."' },
+  { id: 'controversial', label: 'Hot take', example: '"Unpopular opinion:", "I don\'t care what anyone says..."' },
+  { id: 'story', label: 'Story-based', example: '"So this happened...", "I made a huge mistake..."' },
+  { id: 'authority', label: 'Authority / proof', example: '"After 10 years in this industry...", "I tested this for 30 days..."' },
+  { id: 'question', label: 'Direct question', example: '"Why are you still...?", "Did you know...?"' },
+  { id: 'listicle', label: 'Listicle / number', example: '"3 things you need to know...", "The #1 reason..."' },
+  { id: 'fomo', label: 'FOMO', example: '"Everyone is doing this except you", "You\'re losing money if..."' },
+  { id: 'tutorial', label: 'Tutorial / how-to', example: '"Here\'s exactly how to...", "Watch me do..."' },
 ] as const;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -241,6 +253,8 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
   const [customCta, setCustomCta] = useState('');
   const [commentWord, setCommentWord] = useState('');
   const [videoLength, setVideoLength] = useState(60);
+  const [customVideoLength, setCustomVideoLength] = useState('');
+  const [selectedHooks, setSelectedHooks] = useState<Set<string>>(new Set());
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   const [showScriptModal, setShowScriptModal] = useState(false);
   const [downloadOptions, setDownloadOptions] = useState({
@@ -397,7 +411,8 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                 reference_video_ids: completedRefIds.length > 0 ? completedRefIds : undefined,
                 cta: effectiveCta || undefined,
                 video_length_seconds: videoLength,
-                target_word_count: Math.round((videoLength / 60) * 140),
+                target_word_count: Math.round((videoLength / 60) * 150),
+                hook_strategies: selectedHooks.size > 0 ? Array.from(selectedHooks) : undefined,
               }),
             });
             if (!res.ok) throw new Error('Failed');
@@ -617,13 +632,13 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
           <>
             <button
               onClick={deselectAll}
-              className="text-[11px] text-text-muted hover:text-text-secondary cursor-pointer"
+              className="text-[11px] text-purple-400 hover:text-purple-300 cursor-pointer"
             >
               Deselect
             </button>
             <button
               onClick={selectAll}
-              className="text-[11px] text-text-muted hover:text-text-secondary cursor-pointer"
+              className="text-[11px] text-purple-400 hover:text-purple-300 cursor-pointer"
             >
               Select all
             </button>
@@ -823,7 +838,15 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
               </div>
 
               {/* CTA selection */}
-              <label className="text-xs text-text-muted mb-2 block">Call-to-action</label>
+              <div className="flex items-center gap-1.5 mb-2">
+                <label className="text-xs text-text-muted">Select a call-to-action</label>
+                <div className="group relative">
+                  <HelpCircle size={12} className="text-text-muted/50 hover:text-text-muted cursor-help" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-3 py-2 rounded-lg bg-background border border-nativz-border text-[11px] text-text-secondary w-52 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity shadow-xl z-10">
+                    A call-to-action tells viewers what to do after watching — like calling, clicking a link, or leaving a comment.
+                  </div>
+                </div>
+              </div>
               <div className="space-y-1.5 mb-5">
                 {CTA_PRESETS.map((preset) => (
                   <button
@@ -886,9 +909,9 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                 {[15, 30, 60, 90].map((sec) => (
                   <button
                     key={sec}
-                    onClick={() => setVideoLength(sec)}
+                    onClick={() => { setVideoLength(sec); setCustomVideoLength(''); }}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                      videoLength === sec
+                      videoLength === sec && !customVideoLength
                         ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
                         : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
                     }`}
@@ -896,10 +919,63 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                     {sec}s
                   </button>
                 ))}
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={5}
+                    max={180}
+                    value={customVideoLength}
+                    onChange={(e) => {
+                      setCustomVideoLength(e.target.value);
+                      const num = parseInt(e.target.value, 10);
+                      if (!isNaN(num) && num >= 5 && num <= 180) setVideoLength(num);
+                    }}
+                    placeholder="#"
+                    className={`w-16 px-3 py-2 rounded-lg text-sm font-medium text-center transition-colors focus:outline-none ${
+                      customVideoLength
+                        ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                        : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
+                    }`}
+                  />
+                  {customVideoLength && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-purple-400/60 pointer-events-none">s</span>}
+                </div>
               </div>
               <p className="text-[11px] text-text-muted mb-5">
-                ~{Math.round((videoLength / 60) * 140)} words at 140 wpm
+                ~{Math.round((videoLength / 60) * 150)} words at 150 wpm
               </p>
+
+              {/* Hook strategies */}
+              <label className="text-xs text-text-muted mb-2 block">Hook style (optional)</label>
+              <div className="grid grid-cols-2 gap-1.5 mb-5">
+                {HOOK_STRATEGIES.map((hook) => (
+                  <button
+                    key={hook.id}
+                    onClick={() => setSelectedHooks((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(hook.id)) next.delete(hook.id);
+                      else next.add(hook.id);
+                      return next;
+                    })}
+                    className={`group/hook relative flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                      selectedHooks.has(hook.id)
+                        ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                        : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
+                    }`}
+                  >
+                    <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-colors ${
+                      selectedHooks.has(hook.id)
+                        ? 'border-purple-400 bg-purple-500/20'
+                        : 'border-white/20 bg-transparent'
+                    }`}>
+                      {selectedHooks.has(hook.id) && <Check size={8} />}
+                    </div>
+                    <span>{hook.label}</span>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2.5 py-1.5 rounded-lg bg-background border border-nativz-border text-[10px] text-text-secondary whitespace-nowrap opacity-0 pointer-events-none group-hover/hook:opacity-100 transition-opacity shadow-xl z-10">
+                      {hook.example}
+                    </div>
+                  </button>
+                ))}
+              </div>
 
               <div className="flex justify-end gap-2">
                 <button

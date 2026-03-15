@@ -15,6 +15,7 @@ const scriptSchema = z.object({
   cta: z.string().optional(),
   video_length_seconds: z.number().min(10).max(180).optional(),
   target_word_count: z.number().min(10).max(500).optional(),
+  hook_strategies: z.array(z.string()).optional(),
 });
 
 export async function POST(req: Request) {
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { client_id, title, why_it_works, content_pillar, reference_video_ids, idea_entry_id, cta, video_length_seconds, target_word_count } = parsed.data;
+  const { client_id, title, why_it_works, content_pillar, reference_video_ids, idea_entry_id, cta, video_length_seconds, target_word_count, hook_strategies } = parsed.data;
   const admin = createAdminClient();
 
   // Gather context
@@ -89,16 +90,32 @@ ${cta ? `Desired CTA: ${cta}` : ''}
 </video_idea>`);
 
   const lengthSeconds = video_length_seconds ?? 60;
-  const wordCount = target_word_count ?? Math.round((lengthSeconds / 60) * 140);
+  const wordCount = target_word_count ?? Math.round((lengthSeconds / 60) * 150);
+
+  const hookStrategyMap: Record<string, string> = {
+    negative: 'Negative hook — open with a pain point, warning, or "stop doing this" framing',
+    curiosity: 'Curiosity gap — tease information the viewer needs to keep watching ("You won\'t believe...", "Here\'s what nobody tells you...")',
+    controversial: 'Hot take / controversial — lead with an unpopular opinion or bold claim that sparks debate',
+    story: 'Story-based — start with a personal anecdote or "so this happened..." narrative hook',
+    authority: 'Authority / proof — establish credibility upfront ("After 10 years...", "I tested this for 30 days...")',
+    question: 'Direct question — open with a pointed question that makes the viewer reflect ("Why are you still...?", "Did you know...?")',
+    listicle: 'Listicle / number — lead with a specific number ("3 things you need to know...", "The #1 reason...")',
+    fomo: 'FOMO — create urgency or exclusion ("Everyone is doing this except you", "You\'re losing money if...")',
+    tutorial: 'Tutorial / how-to — promise actionable instruction ("Here\'s exactly how to...", "Watch me do...")',
+  };
+
+  const hookInstructions = hook_strategies?.length
+    ? `- Use one of these hook styles for the opening: ${hook_strategies.map((h) => hookStrategyMap[h] ?? h).join('; ')}`
+    : '';
 
   const systemPrompt = `You are a professional video script writer for a marketing agency. Write a spoken-word script for the given video idea.
 
 Rules:
 - Write ONLY the words that will be spoken on camera. No stage directions, no shot lists, no pacing notes, no "[cut to]" annotations.
-- The script is for a ${lengthSeconds}-second short-form video. At 140 words per minute, aim for approximately ${wordCount} words.
+- The script is for a ${lengthSeconds}-second short-form video. At 150 words per minute, aim for approximately ${wordCount} words.
 - Match the brand voice and tone
 - Start with a strong hook that grabs attention in the first 3 seconds
-- End with a clear call to action${cta ? ` — the CTA should drive viewers to: ${cta}` : ''}
+${hookInstructions ? `${hookInstructions}\n` : ''}- End with a clear call to action${cta ? ` — the CTA should drive viewers to: ${cta}` : ''}
 ${referenceVideos.length > 0 ? '- Match the style, energy, and delivery cadence of the reference videos' : ''}
 
 Output ONLY the script text. Nothing else — no title, no labels, no formatting markers.`;
