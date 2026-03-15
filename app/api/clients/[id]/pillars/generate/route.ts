@@ -23,6 +23,19 @@ interface GeneratedPillar {
 
 export const maxDuration = 120;
 
+/**
+ * POST /api/clients/[id]/pillars/generate
+ *
+ * Kick off an async AI generation of content pillars for a client. Creates a generation
+ * record immediately and returns its ID, then processes in background via after().
+ * Poll GET /api/clients/[id]/pillars/generate/[generationId] for status.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Client UUID
+ * @body count - Number of pillars to generate (default: 5, min: 1, max: 10)
+ * @body direction - Optional natural language direction to guide generation
+ * @returns {{ id: string, status: 'processing' }} Generation record ID for polling
+ */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }

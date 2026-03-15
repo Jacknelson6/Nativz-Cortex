@@ -29,6 +29,24 @@ async function requireAdmin() {
   return user;
 }
 
+/**
+ * PATCH /api/clients/[id]/contacts/[contactId]
+ *
+ * Update a contact's details for a client. If is_primary is set to true, demotes any
+ * existing primary contact first.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @param contactId - Contact UUID
+ * @body name - Optional contact name
+ * @body email - Optional email (nullable)
+ * @body phone - Optional phone (nullable)
+ * @body role - Optional job title (nullable)
+ * @body project_role - Optional project role (nullable)
+ * @body avatar_url - Optional avatar URL (nullable)
+ * @body is_primary - Optional: if true, demotes existing primary contact
+ * @returns {Contact} Updated contact record
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; contactId: string }> }
@@ -84,6 +102,16 @@ export async function PATCH(
   }
 }
 
+/**
+ * DELETE /api/clients/[id]/contacts/[contactId]
+ *
+ * Permanently delete a contact from a client.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @param contactId - Contact UUID to delete
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; contactId: string }> }

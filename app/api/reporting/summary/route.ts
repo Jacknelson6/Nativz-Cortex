@@ -19,6 +19,19 @@ function calcChange(current: number, previous: number): number {
   return Math.round(((current - previous) / previous) * 100 * 100) / 100;
 }
 
+/**
+ * GET /api/reporting/summary
+ *
+ * Compute a combined analytics summary for a client across all active social profiles.
+ * Compares the requested period against an equal-length prior period to calculate
+ * percentage changes. Returns per-platform breakdowns plus rolled-up combined metrics.
+ *
+ * @auth Required (any authenticated user)
+ * @query clientId - Client UUID (required)
+ * @query start - Period start date YYYY-MM-DD (required)
+ * @query end - Period end date YYYY-MM-DD (required)
+ * @returns {SummaryReport}
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

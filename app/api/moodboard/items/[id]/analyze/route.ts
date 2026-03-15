@@ -51,6 +51,19 @@ const mediapipeSchema = z.object({
   }),
 }).optional();
 
+/**
+ * POST /api/moodboard/items/[id]/analyze
+ *
+ * AI analysis of a moodboard video item. Uses Claude to analyze the transcript, platform
+ * stats, and context to produce hook scoring, pacing analysis, content themes, winning
+ * elements, and improvement areas. Optionally accepts MediaPipe client-side analysis
+ * results to merge with the LLM output for more accurate pacing and hook scores.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Moodboard item UUID (must be type 'video')
+ * @body mediapipeResults - Optional MediaPipe analysis from client (pacing, hook, contentClassification)
+ * @returns {MoodboardItem} Updated item record with VideoAnalysis fields populated
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

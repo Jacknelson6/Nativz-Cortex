@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-// GET: List connected profiles for a client
+/**
+ * GET /api/scheduler/profiles
+ *
+ * List active social profiles connected to a client for use in the post scheduler.
+ * Returns profiles that have been connected via Late OAuth, ordered by platform name.
+ *
+ * @auth Required (any authenticated user)
+ * @query client_id - Client UUID (required)
+ * @returns {{ profiles: { id, platform, username, avatar_url, late_account_id }[] }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

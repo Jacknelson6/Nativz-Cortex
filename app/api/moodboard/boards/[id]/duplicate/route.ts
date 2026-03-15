@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * POST /api/moodboard/boards/[id]/duplicate
+ *
+ * Deep-clone a moodboard board, including all items, notes, edges, tags, and
+ * item-tag associations. Edge node IDs are re-mapped to the new item/note IDs.
+ * The new board is named "[Original Name] (Copy)".
+ *
+ * @auth Required (admin)
+ * @param id - Source board UUID to duplicate
+ * @returns {MoodboardBoard} Newly created board record
+ */
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

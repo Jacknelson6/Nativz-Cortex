@@ -22,6 +22,15 @@ async function verifyAdmin(userId: string) {
   return data?.role === 'admin';
 }
 
+/**
+ * GET /api/shoots/[id]
+ *
+ * Fetch a single shoot event by ID, including the associated client record.
+ *
+ * @auth Required (admin)
+ * @param id - Shoot event UUID
+ * @returns {ShootEvent} Shoot event with client relation
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -56,6 +65,21 @@ export async function GET(
   }
 }
 
+/**
+ * PATCH /api/shoots/[id]
+ *
+ * Update a shoot event's title, client, date, location, notes, or scheduled status.
+ *
+ * @auth Required (admin)
+ * @param id - Shoot event UUID
+ * @body title - Updated title
+ * @body client_id - Updated client UUID (nullable)
+ * @body shoot_date - Updated shoot date string
+ * @body location - Updated location (nullable)
+ * @body notes - Updated notes (nullable)
+ * @body scheduled_status - New status ('scheduled' | 'completed' | 'cancelled')
+ * @returns {ShootEvent} Updated shoot event with client relation
+ */
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -105,6 +129,16 @@ export async function PATCH(
   }
 }
 
+/**
+ * DELETE /api/shoots/[id]
+ *
+ * Soft-cancel a shoot event by setting its scheduled_status to 'cancelled'.
+ * The record is retained in the database.
+ *
+ * @auth Required (admin)
+ * @param id - Shoot event UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

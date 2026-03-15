@@ -9,6 +9,18 @@ const analyzeSchema = z.object({
   url: z.string().url('A valid URL is required'),
 });
 
+/**
+ * POST /api/clients/analyze-url
+ *
+ * Analyze a website URL to auto-populate client onboarding fields. Fetches the website HTML,
+ * extracts a logo (apple-touch-icon, OG image, Twitter card image, Clearbit, or Google favicon),
+ * strips the HTML to plain text, and uses Claude AI to infer industry, target audience,
+ * brand voice, and topic keywords.
+ *
+ * @auth Required (admin)
+ * @body url - Valid website URL to analyze (required)
+ * @returns {{ industry: string, target_audience: string, brand_voice: string, topic_keywords: string[], logo_url: string | null }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

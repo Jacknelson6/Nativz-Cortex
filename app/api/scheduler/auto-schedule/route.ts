@@ -15,6 +15,24 @@ const AutoScheduleSchema = z.object({
   media_ids: z.array(z.string()).optional(),
 });
 
+/**
+ * POST /api/scheduler/auto-schedule
+ *
+ * Automatically schedule all unused media for a client across a date range. AI generates
+ * a unique caption per video using brand context and saved captions. Posts are evenly
+ * spaced based on posts_per_week and distributed across the date range. Each successful
+ * post is linked to platform profiles and media, and media is marked as used.
+ *
+ * @auth Required (any authenticated user)
+ * @body client_id - Client UUID (required)
+ * @body start_date - Start date YYYY-MM-DD (required)
+ * @body end_date - End date YYYY-MM-DD (required)
+ * @body posts_per_week - Posts per week 1-14 (default 3)
+ * @body posting_time - Daily posting time HH:MM (default '12:00')
+ * @body platform_profile_ids - Social profile UUIDs to post to (min 1 required)
+ * @body media_ids - Specific media UUIDs to schedule (optional; defaults to all unused media)
+ * @returns {{ success: true, scheduled: number, errors: number, results: ScheduleResult[] }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

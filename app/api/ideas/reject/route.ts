@@ -12,6 +12,21 @@ const rejectSchema = z.object({
   generation_context: z.record(z.string(), z.unknown()).optional(),
 });
 
+/**
+ * POST /api/ideas/reject
+ *
+ * Record a rejected AI-generated idea for a client. Saves the idea to the rejected_ideas
+ * table so it can be used to improve future generation quality and avoid re-surfacing ideas.
+ *
+ * @auth Required (any authenticated user)
+ * @body client_id - Client UUID the idea was generated for (required)
+ * @body title - Idea title (required)
+ * @body description - Optional idea description
+ * @body hook - Optional hook text
+ * @body content_pillar - Optional content pillar label
+ * @body generation_context - Optional metadata about the generation run (key-value pairs)
+ * @returns {{ success: true }}
+ */
 export async function POST(req: Request) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();

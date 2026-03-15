@@ -14,6 +14,18 @@ const syncSchema = z.object({
     .optional(),
 });
 
+/**
+ * POST /api/reporting/sync
+ *
+ * Manually trigger a social analytics sync for a single client. Defaults to the
+ * last 7 days if no date range is provided. Used for on-demand refreshes from the
+ * admin analytics UI.
+ *
+ * @auth Required (any authenticated user)
+ * @body clientId - Client UUID to sync (required)
+ * @body dateRange - { start: YYYY-MM-DD, end: YYYY-MM-DD } (optional, defaults to last 7 days)
+ * @returns {SyncResult}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

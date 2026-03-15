@@ -1,5 +1,11 @@
 /**
- * GET /api/google/status — Check if user has Google connected
+ * GET /api/google/status
+ *
+ * Check whether the authenticated user has Google connected. Returns the connected email
+ * address if connected, and whether the Google integration is configured at all.
+ *
+ * @auth Required (any authenticated user)
+ * @returns {{ configured: boolean, connected: boolean, email: string | null }}
  */
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';

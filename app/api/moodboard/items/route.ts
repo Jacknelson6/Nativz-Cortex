@@ -154,6 +154,25 @@ async function fetchTikTokMetadata(url: string): Promise<QuickMetadata> {
   return result;
 }
 
+/**
+ * POST /api/moodboard/items
+ *
+ * Add a new item to a moodboard. Fetches quick metadata (thumbnail, title, author,
+ * stats) from the source platform (TikTok, YouTube, Instagram, Facebook, or generic
+ * website) and saves the item immediately. Then auto-triggers background processing:
+ * transcription for videos, insights extraction for websites.
+ *
+ * @auth Required (admin)
+ * @body board_id - Board UUID to add the item to (required)
+ * @body url - Source URL (required)
+ * @body type - 'video' | 'image' | 'website' (required)
+ * @body title - Optional title override
+ * @body position_x - Canvas X position (default 0)
+ * @body position_y - Canvas Y position (default 0)
+ * @body width - Canvas width in pixels (optional)
+ * @body height - Canvas height in pixels (optional)
+ * @returns {MoodboardItem} Created item record
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

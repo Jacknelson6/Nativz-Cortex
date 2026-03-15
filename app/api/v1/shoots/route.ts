@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateApiKey } from '@/lib/api-keys/validate';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/v1/shoots
+ *
+ * List shoot events, optionally filtered by client, status, and date range.
+ * Returns shoots ordered by shoot_date ascending, with client name and slug.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @query client_id - Filter by client UUID (optional)
+ * @query status - Filter by scheduled_status (optional)
+ * @query date_from - ISO date lower bound inclusive (optional)
+ * @query date_to - ISO date upper bound inclusive (optional)
+ * @returns {{ shoots: ShootEvent[] }}
+ */
 export async function GET(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;

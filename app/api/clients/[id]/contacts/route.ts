@@ -29,6 +29,15 @@ async function requireAdmin() {
   return user;
 }
 
+/**
+ * GET /api/clients/[id]/contacts
+ *
+ * List all contacts for a client, ordered by primary status (primary first) then name.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @returns {Contact[]} Array of contact records
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -58,6 +67,23 @@ export async function GET(
   }
 }
 
+/**
+ * POST /api/clients/[id]/contacts
+ *
+ * Create a new contact for a client. If the contact is marked as primary,
+ * any existing primary contact for the client is first demoted.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @body name - Contact name (required, max 200 chars)
+ * @body email - Contact email
+ * @body phone - Contact phone (max 50 chars)
+ * @body role - Contact role/job title (max 100 chars)
+ * @body project_role - Contact's role on the project (max 100 chars)
+ * @body avatar_url - Contact avatar URL
+ * @body is_primary - Whether this is the primary contact (default: false)
+ * @returns {Contact} Created contact record (201)
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

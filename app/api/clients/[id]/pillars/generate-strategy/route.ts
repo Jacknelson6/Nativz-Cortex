@@ -14,6 +14,20 @@ const strategySchema = z.object({
 
 export const maxDuration = 300;
 
+/**
+ * POST /api/clients/[id]/pillars/generate-strategy
+ *
+ * Run the full AI strategy pipeline in background via after(). Generates content pillars,
+ * then video ideas per pillar, then spoken-word scripts — in three sequential phases.
+ * Returns a pipeline run ID for polling. Replaces all existing pillars for the client.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Client UUID
+ * @body direction - Optional natural language direction for generation
+ * @body pillar_count - Number of pillars to generate (default: 5, min: 1, max: 10)
+ * @body ideas_per_pillar - Number of ideas per pillar (default: 5, min: 1, max: 10)
+ * @returns {{ id: string, status: 'processing' }} Pipeline run ID for polling
+ */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },

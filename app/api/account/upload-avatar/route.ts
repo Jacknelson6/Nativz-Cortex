@@ -5,6 +5,16 @@ import { createAdminClient } from '@/lib/supabase/admin';
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_SIZE = 2 * 1024 * 1024; // 2MB
 
+/**
+ * POST /api/account/upload-avatar
+ *
+ * Upload a profile avatar image to Supabase Storage (client-logos bucket).
+ * Accepts JPEG, PNG, or WebP images up to 2 MB. Returns the public URL of the uploaded file.
+ *
+ * @auth Required (any authenticated user)
+ * @body file - Image file (multipart/form-data; JPEG | PNG | WebP; max 2 MB)
+ * @returns {{ url: string }} Public URL of the uploaded avatar
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

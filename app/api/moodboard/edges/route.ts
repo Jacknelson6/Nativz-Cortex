@@ -14,6 +14,15 @@ const createEdgeSchema = z.object({
   color: z.string().max(20).optional().default('#888888'),
 });
 
+/**
+ * GET /api/moodboard/edges
+ *
+ * List all edges (connections) for a moodboard board, ordered oldest first.
+ *
+ * @auth Required (any authenticated user)
+ * @query board_id - Board UUID (required)
+ * @returns {MoodboardEdge[]}
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -46,6 +55,24 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * POST /api/moodboard/edges
+ *
+ * Create a directed edge between two canvas nodes on a moodboard. Edges can
+ * connect any node types (items, notes) by their node ID. Supports label,
+ * line style (solid/dashed/dotted), and color.
+ *
+ * @auth Required (admin)
+ * @body board_id - Board UUID (required)
+ * @body source_node_id - Source node ID string (required)
+ * @body target_node_id - Target node ID string (required)
+ * @body source_handle - Handle identifier on source node (optional)
+ * @body target_handle - Handle identifier on target node (optional)
+ * @body label - Edge label text (optional, max 200 chars)
+ * @body style - Line style: 'solid' | 'dashed' | 'dotted' (default 'solid')
+ * @body color - Hex color string (default '#888888')
+ * @returns {MoodboardEdge} Created edge record
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

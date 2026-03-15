@@ -1,9 +1,17 @@
 /**
  * POST /api/invites/accept
  *
- * Accepts an invite token and creates a new portal user.
- * Body: { token, full_name, email, password }
- * Returns: { success: true }
+ * Accept a portal invite token and register a new viewer account. Creates a Supabase Auth
+ * user (email pre-confirmed) and a users table record with role 'viewer' linked to the
+ * invite's organization. Marks the invite token as used. Rolls back the auth user if the
+ * users table insert fails.
+ *
+ * @auth None (public endpoint)
+ * @body token - Invite token string (required)
+ * @body full_name - New user's full name (required)
+ * @body email - New user's email address (required)
+ * @body password - New user's password (min 8 chars, required)
+ * @returns {{ success: true }}
  */
 
 import { NextRequest, NextResponse } from 'next/server';

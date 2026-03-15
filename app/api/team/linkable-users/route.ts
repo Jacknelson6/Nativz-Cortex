@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/team/linkable-users
+ *
+ * Return all auth user accounts that are not yet linked to a team_members record.
+ * Merges data from both public.users and auth.users (via admin API) so that accounts
+ * created outside the normal invite flow are still discoverable.
+ *
+ * @auth Required (admin)
+ * @returns {{ id: string, full_name: string, email: string }[]} Sorted by name
+ */
 export async function GET(_request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

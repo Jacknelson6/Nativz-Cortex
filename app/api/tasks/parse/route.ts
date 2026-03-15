@@ -8,6 +8,17 @@ const parseTaskSchema = z.object({
   text: z.string().min(1, 'Text is required'),
 });
 
+/**
+ * POST /api/tasks/parse
+ *
+ * Parse a natural language task description using Claude AI and return structured task fields.
+ * Resolves relative dates ("tomorrow", "next Monday"), fuzzy-matches client names and assignee
+ * names against the database, and infers priority and task type from context.
+ *
+ * @auth Required (admin)
+ * @body text - Natural language task description (required)
+ * @returns {{ title: string, due_date: string | null, client_id: string | null, client_name: string | null, assignee_id: string | null, assignee_name: string | null, priority: string | null, task_type: string | null }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

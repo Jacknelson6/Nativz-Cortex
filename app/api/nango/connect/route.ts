@@ -5,7 +5,12 @@ import { createConnectSession, isNangoConfigured } from '@/lib/nango/client';
 
 /**
  * POST /api/nango/connect
- * Returns a Nango connect session token for the frontend OAuth popup.
+ *
+ * Create a Nango connect session and return a short-lived token for the frontend OAuth popup.
+ * Used to initiate any Nango-managed OAuth integration (e.g. Google Calendar).
+ *
+ * @auth Required (admin)
+ * @returns {{ token: string }} Nango connect session token
  */
 export async function POST() {
   try {

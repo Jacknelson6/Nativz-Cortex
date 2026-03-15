@@ -1,8 +1,15 @@
 /**
- * GET /api/vault/search?q=query&limit=10&mode=semantic
+ * GET /api/vault/search
  *
- * Searches the vault using full-text or semantic search.
- * Falls back to full-text if semantic embeddings aren't available.
+ * Search the Obsidian vault using either semantic (pgvector cosine similarity)
+ * or full-text (FTS) search. Automatically falls back to full-text if the
+ * OpenAI API key is not configured.
+ *
+ * @auth Required (any authenticated user)
+ * @query q - Search query string (required)
+ * @query limit - Max results to return (optional, default 10)
+ * @query mode - 'semantic' | 'fts' (optional, default 'semantic')
+ * @returns {{ query: string, mode: string, count: number, results: VaultSearchResult[] }}
  */
 
 import { NextRequest, NextResponse } from 'next/server';

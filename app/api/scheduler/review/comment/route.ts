@@ -9,7 +9,20 @@ const CommentSchema = z.object({
   status: z.enum(['approved', 'changes_requested', 'comment']).default('comment'),
 });
 
-// POST: Add a comment to a review link (public — no auth)
+/**
+ * POST /api/scheduler/review/comment
+ *
+ * Add a review comment to a post review link. Public endpoint — clients use this to
+ * approve, request changes, or leave a general comment without needing an account.
+ * Returns 410 if the review link has expired.
+ *
+ * @auth None (public — review_link_id provides authorization)
+ * @body review_link_id - Post review link UUID (required)
+ * @body author_name - Commenter name (default 'Anonymous')
+ * @body content - Comment text (required)
+ * @body status - 'approved' | 'changes_requested' | 'comment' (default 'comment')
+ * @returns {{ comment: PostReviewComment }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

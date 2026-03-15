@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { fetchHistory, type HistoryItemType } from '@/lib/research/history';
 
+/**
+ * GET /api/research/history
+ *
+ * Fetch paginated research history items (topic searches, idea generations, etc.).
+ * Supports cursor-based pagination.
+ *
+ * @auth Required (any authenticated user)
+ * @query limit - Number of items to return (default: 20, max: 50)
+ * @query type - Filter by item type (HistoryItemType)
+ * @query client_id - Filter by client UUID
+ * @query cursor - Pagination cursor (ISO datetime of last item's created_at)
+ * @returns {{ items: HistoryItem[] }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

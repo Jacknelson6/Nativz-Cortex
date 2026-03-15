@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/notifications
+ *
+ * List notifications for the authenticated admin user, ordered by most recent.
+ * Always returns the total unread count regardless of the unread_only filter.
+ *
+ * @auth Required (admin)
+ * @query unread_only - If 'true', only returns unread notifications
+ * @returns {{ notifications: Notification[], unread_count: number }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

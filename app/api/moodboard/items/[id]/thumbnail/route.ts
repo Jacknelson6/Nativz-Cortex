@@ -20,6 +20,21 @@ const thumbnailSchema = z.object({
   }),
 });
 
+/**
+ * POST /api/moodboard/items/[id]/thumbnail
+ *
+ * Upload a client-side selected thumbnail for a moodboard item. Accepts scored
+ * thumbnail candidates from client-side processing along with the selected frame
+ * as a data URL. Uploads the thumbnail to moodboard-thumbnails storage, stores
+ * candidate metadata (without dataUrls), and updates thumbnail_url on the item.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Moodboard item UUID
+ * @body candidates - Array of up to 10 scored thumbnail candidates (timestampMs, score, reasons, dataUrl)
+ * @body bestTimestampMs - Timestamp of the selected best thumbnail (ms)
+ * @body thumbnailDataUrl - Base64 data URL (data:image/...) of the selected thumbnail
+ * @returns {{ thumbnail_url: string }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

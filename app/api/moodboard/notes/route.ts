@@ -11,6 +11,20 @@ const createNoteSchema = z.object({
   position_y: z.number().optional().default(0),
 });
 
+/**
+ * POST /api/moodboard/notes
+ *
+ * Create a sticky note on a moodboard. Notes are colored canvas annotations
+ * with a position. Also bumps the parent board's updated_at timestamp.
+ *
+ * @auth Required (admin)
+ * @body board_id - Board UUID (required)
+ * @body content - Note text content (optional, max 5000 chars, default '')
+ * @body color - Note color: 'yellow' | 'blue' | 'green' | 'pink' | 'white' (default 'yellow')
+ * @body position_x - Canvas X position (default 0)
+ * @body position_y - Canvas Y position (default 0)
+ * @returns {MoodboardNote} Created note record
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

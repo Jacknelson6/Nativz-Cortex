@@ -7,6 +7,17 @@ const updateCommentSchema = z.object({
   content: z.string().min(1, 'Content is required').max(5000),
 });
 
+/**
+ * PATCH /api/moodboard/comments/[id]
+ *
+ * Edit the content of a moodboard comment. Only the original author can edit
+ * their own comment (enforced server-side by user_id check).
+ *
+ * @auth Required (admin; must be comment author)
+ * @param id - Comment UUID
+ * @body content - Updated comment text, 1–5000 chars (required)
+ * @returns {MoodboardComment} Updated comment with users(full_name, avatar_url)
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -78,6 +89,16 @@ export async function PATCH(
   }
 }
 
+/**
+ * DELETE /api/moodboard/comments/[id]
+ *
+ * Delete a moodboard comment. Admins can delete any comment. Also bumps the
+ * parent board's updated_at timestamp.
+ *
+ * @auth Required (admin)
+ * @param id - Comment UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

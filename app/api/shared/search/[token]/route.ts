@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/shared/search/[token]
+ *
+ * Public endpoint. Resolve a search share token and return the full completed search
+ * results. Returns 410 if the link has expired, 404 if not found or search is not completed.
+ *
+ * @auth None (public)
+ * @param token - Share link token
+ * @returns Complete search record with client_name appended
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ token: string }> }

@@ -1,9 +1,13 @@
 /**
- * GET /api/instagram/demographics?account_id=...
+ * GET /api/instagram/demographics
  *
- * Audience demographics: age/gender breakdown, top cities, top countries.
+ * Fetch audience demographic data for an Instagram Business Account — includes age/gender
+ * breakdown, top cities, and top countries. Requires Meta integration to be configured.
+ *
+ * @auth Required (admin)
+ * @query account_id - Instagram Business Account ID (required)
+ * @returns {{ demographics: AudienceDemographics }}
  */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';

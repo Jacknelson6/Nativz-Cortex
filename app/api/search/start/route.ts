@@ -13,6 +13,23 @@ const searchSchema = z.object({
   search_mode: z.enum(['general', 'client_strategy']).default('general'),
 });
 
+/**
+ * POST /api/search/start
+ *
+ * Create a new topic search record with status 'processing' and return its ID immediately,
+ * without running the AI pipeline. Intended for streaming/async UX patterns where the
+ * actual search processing is triggered separately via /api/search/[id]/process.
+ *
+ * @auth Required (any authenticated user)
+ * @body query - Search query string (required, max 500 chars)
+ * @body source - Content source filter (default: 'all')
+ * @body time_range - Time range filter (default: 'last_3_months')
+ * @body language - Language filter (default: 'all')
+ * @body country - Country filter (default: 'us')
+ * @body client_id - Optional client UUID
+ * @body search_mode - Search mode ('general' | 'client_strategy', default: 'general')
+ * @returns {{ id: string }} UUID of the newly created search record
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

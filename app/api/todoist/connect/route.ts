@@ -10,11 +10,16 @@ const connectSchema = z.object({
 });
 
 /**
- * POST — Save Todoist API key (validates first)
- * DELETE — Disconnect Todoist
- * GET — Get connection status + projects
+ * POST /api/todoist/connect
+ *
+ * Connect Todoist by saving and validating an API key. Pass api_key='_keep' to update
+ * only the project_id without changing the key. Returns available Todoist projects on success.
+ *
+ * @auth Required (any authenticated user)
+ * @body api_key - Todoist API key to validate and save, or '_keep' to only update project
+ * @body project_id - Optional Todoist project ID to sync tasks into
+ * @returns {{ connected: true, projects: { id: string, name: string }[] }}
  */
-
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -77,6 +82,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * DELETE /api/todoist/connect
+ *
+ * Disconnect Todoist by clearing the API key, project ID, and sync timestamp.
+ *
+ * @auth Required (any authenticated user)
+ * @returns {{ disconnected: true }}
+ */
 export async function DELETE() {
   try {
     const supabase = await createServerSupabaseClient();
@@ -102,6 +115,16 @@ export async function DELETE() {
   }
 }
 
+/**
+ * GET /api/todoist/connect
+ *
+ * Check the Todoist connection status for the authenticated user. Fetches available projects
+ * from the Todoist API to validate the stored key. Returns key_invalid=true if the stored
+ * key is no longer valid.
+ *
+ * @auth Required (any authenticated user)
+ * @returns {{ connected: boolean, key_invalid?: boolean, project_id: string | null, synced_at: string | null, projects: { id: string, name: string }[] }}
+ */
 export async function GET() {
   try {
     const supabase = await createServerSupabaseClient();

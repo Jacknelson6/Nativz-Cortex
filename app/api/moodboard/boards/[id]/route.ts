@@ -10,6 +10,15 @@ const updateBoardSchema = z.object({
   archived: z.boolean().optional(),
 });
 
+/**
+ * GET /api/moodboard/boards/[id]
+ *
+ * Fetch a single moodboard board with all its items and notes.
+ *
+ * @auth Required (admin)
+ * @param id - Board UUID
+ * @returns {MoodboardBoard & { items: MoodboardItem[], notes: MoodboardNote[] }}
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -80,6 +89,19 @@ export async function GET(
   }
 }
 
+/**
+ * PATCH /api/moodboard/boards/[id]
+ *
+ * Update a moodboard board's name, description, client association, or archived status.
+ *
+ * @auth Required (admin)
+ * @param id - Board UUID
+ * @body name - Updated board name (optional)
+ * @body description - Updated description (optional)
+ * @body client_id - Updated client UUID or null (optional)
+ * @body archived - Set true to archive, false to unarchive (optional)
+ * @returns {MoodboardBoard} Updated board record
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -154,6 +176,15 @@ export async function PATCH(
   }
 }
 
+/**
+ * DELETE /api/moodboard/boards/[id]
+ *
+ * Permanently delete a moodboard board. Cascades to all items, notes, and comments.
+ *
+ * @auth Required (admin)
+ * @param id - Board UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

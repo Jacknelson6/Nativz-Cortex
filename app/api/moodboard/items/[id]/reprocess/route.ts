@@ -3,6 +3,16 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { processVideoItem } from '@/lib/moodboard/process-video';
 
+/**
+ * POST /api/moodboard/items/[id]/reprocess
+ *
+ * Reset a moodboard video item's analysis data and run the full processing pipeline again.
+ * Clears all analysis fields (hook, transcript, themes, etc.) before re-running processVideoItem().
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Moodboard item UUID (must be type 'video')
+ * @returns {MoodboardItem} Updated item record after reprocessing
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

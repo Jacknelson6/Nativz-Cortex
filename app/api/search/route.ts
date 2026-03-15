@@ -54,6 +54,25 @@ function validateTopicSources(
   };
 }
 
+/**
+ * POST /api/search
+ *
+ * Execute a full AI-powered topic research search. Gathers SERP data from Brave Search,
+ * builds a prompt with optional client context and website content, calls Claude AI,
+ * validates AI-cited URLs against actual SERP data, computes metrics, and persists results.
+ * Supports two modes: general topic research and client-specific brand strategy.
+ * Sends a completion notification to the requesting user when done.
+ *
+ * @auth Required (any authenticated user)
+ * @body query - Search query string (required, max 500 chars)
+ * @body source - Content source filter (default: 'all')
+ * @body time_range - Time range filter (default: 'last_3_months')
+ * @body language - Language filter (default: 'all')
+ * @body country - Country filter (default: 'us')
+ * @body client_id - Optional client UUID to include brand context and memory
+ * @body search_mode - Search mode ('general' | 'client_strategy', default: 'general')
+ * @returns {{ id: string, status: 'completed' | 'failed' }} Search record ID and final status
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

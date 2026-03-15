@@ -1,16 +1,16 @@
 /**
  * POST /api/monday/webhook
  *
- * Monday.com webhook receiver. When a client is created or updated
- * on the Clients board, the profile is synced to the Obsidian vault.
+ * Monday.com webhook receiver. When a client is created or updated on the Clients board,
+ * fetches the full item from Monday.com and syncs its profile to the Obsidian vault.
+ * Echoes the challenge on webhook registration. Skips test clients.
  *
- * Monday.com webhooks send a challenge on first registration — we echo it back.
- *
- * Events handled:
- *   - create_item: New client added
- *   - change_column_values: Client info updated
+ * @auth None (Monday.com webhook)
+ * @body challenge - Echo back if present (webhook registration handshake)
+ * @body event.boardId - Source board ID (only processes MONDAY_CLIENTS_BOARD_ID)
+ * @body event.pulseId - Monday.com item ID of the created/updated client
+ * @returns {{ message: string } | { challenge: string }}
  */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { isVaultConfigured } from '@/lib/vault/github';
 import { isMondayConfigured, mondayQuery, type MondayItem } from '@/lib/monday/client';

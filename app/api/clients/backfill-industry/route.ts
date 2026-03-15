@@ -6,8 +6,14 @@ import { parseAIResponseJSON } from '@/lib/ai/parse';
 
 /**
  * POST /api/clients/backfill-industry
- * One-time backfill: analyze websites for all clients with industry = 'General'
- * and update both the DB and vault profiles.
+ *
+ * One-time admin utility: analyze website content for all active clients whose industry
+ * is 'General' or null, then use Claude AI to infer a specific industry and update the DB.
+ * Skips clients without a website URL. Non-destructive — only updates if AI returns a
+ * specific industry (not 'General').
+ *
+ * @auth Required (admin)
+ * @returns {{ message: string, results: { name: string, industry: string, status: string }[] }}
  */
 export async function POST() {
   try {

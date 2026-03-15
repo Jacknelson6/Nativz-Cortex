@@ -12,6 +12,21 @@ const linkSchema = z.object({
   label: z.string().default('related_to'),
 });
 
+/**
+ * POST /api/clients/[id]/knowledge/links
+ *
+ * Create a directional knowledge link between two entities within a client's knowledge graph.
+ * Links connect entries, contacts, searches, strategies, or idea submissions.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @body source_id - UUID of the source entity (required)
+ * @body source_type - Type of the source: 'entry' | 'contact' | 'search' | 'strategy' | 'idea_submission'
+ * @body target_id - UUID of the target entity (required)
+ * @body target_type - Type of the target: 'entry' | 'contact' | 'search' | 'strategy' | 'idea_submission'
+ * @body label - Relationship label (default: 'related_to')
+ * @returns {{ link: KnowledgeLink }} Created link record (201)
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -63,6 +78,16 @@ export async function POST(
   }
 }
 
+/**
+ * DELETE /api/clients/[id]/knowledge/links
+ *
+ * Permanently delete a knowledge link by its ID.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @query id - Knowledge link UUID to delete (required)
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

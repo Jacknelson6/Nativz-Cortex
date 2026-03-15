@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * DELETE /api/moodboard/tags/[id]
+ *
+ * Permanently delete a tag. Cascades to all moodboard_item_tags associations.
+ *
+ * @auth Required (admin)
+ * @param id - Tag UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

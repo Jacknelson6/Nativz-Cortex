@@ -6,11 +6,15 @@ import { embedAllKnowledgeEntries } from '@/lib/ai/embeddings';
 export const maxDuration = 60;
 
 /**
- * Cron job: auto-import Fyxer meeting recap emails into the knowledge base.
- * Runs every 30 minutes. Uses a service account with domain-wide delegation
- * to access jack@nativz.io's Gmail. Zero AI tokens.
+ * POST /api/cron/fyxer-import
  *
- * Only imports meetings where the title contains a known client name.
+ * Vercel cron job (runs every 30 minutes): import Fyxer meeting recap emails from Gmail
+ * into the knowledge base. Uses a Google service account with domain-wide delegation —
+ * no AI tokens are consumed. Only imports meetings where the title contains a known
+ * client name. Also generates embeddings for any entries missing them.
+ *
+ * @auth Bearer CRON_SECRET (Vercel cron; optional — allows unauthenticated if not set)
+ * @returns {{ success: true, imported: number, skipped: number, errors: string[], embeddings: EmbedResult }}
  */
 export async function POST(request: NextRequest) {
   try {

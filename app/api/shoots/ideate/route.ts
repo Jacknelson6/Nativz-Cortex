@@ -1,12 +1,19 @@
 /**
  * POST /api/shoots/ideate
  *
- * AI-powered shoot ideation: takes shoot context (client, date, notes,
- * videographer details) and generates a full content plan with video ideas,
- * talking points, and shot list.
+ * AI-powered shoot ideation: generate a full content plan with video ideas, hooks,
+ * talking points, and shot lists given client context and videographer notes. If
+ * a mondayItemId is provided, the plan is saved to the shoot_events record and
+ * plan_status is set to 'sent'.
  *
- * When mondayItemId is provided, the plan is saved to shoot_events.plan_data
- * so it can be displayed in the calendar and shoot list.
+ * @auth Required (admin)
+ * @body clientName - Client name for the shoot (required)
+ * @body clientId - Client UUID for brand context lookup (optional)
+ * @body shootDate - Shoot date (YYYY-MM-DD) for context (optional)
+ * @body industry - Client industry override (optional)
+ * @body context - Videographer/team notes to drive ideation (required)
+ * @body mondayItemId - Monday.com item ID to save the plan back to (optional)
+ * @returns {{ plan: ShootPlan, usage: object, estimatedCost: number }}
  */
 
 import { NextRequest, NextResponse } from 'next/server';

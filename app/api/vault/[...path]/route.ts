@@ -2,7 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { readFile, writeFile, listFiles, isVaultConfigured } from '@/lib/vault/github';
 
-/** GET /api/vault/some/path — Read a file or list a directory */
+/**
+ * GET /api/vault/[...path]
+ *
+ * Read a file or list a directory from the GitHub-backed Obsidian vault.
+ * Paths with no file extension or ending in '/' are treated as directory
+ * listings; all other paths return the file content and SHA.
+ *
+ * @auth Required (any authenticated user)
+ * @param path - Catch-all path segments joined as the vault path
+ * @returns Directory: { files: VaultFile[] } | File: { content: string, sha: string }
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
@@ -42,7 +52,17 @@ export async function GET(
   }
 }
 
-/** PUT /api/vault/some/path — Write a file */
+/**
+ * PUT /api/vault/[...path]
+ *
+ * Write (create or update) a file in the GitHub-backed Obsidian vault.
+ *
+ * @auth Required (any authenticated user)
+ * @param path - Catch-all path segments joined as the vault path
+ * @body content - File content string (required)
+ * @body message - Git commit message (optional, defaults to "update <path>")
+ * @returns {{ success: true, sha: string }}
+ */
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },

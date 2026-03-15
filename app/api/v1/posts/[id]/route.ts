@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateApiKey } from '@/lib/api-keys/validate';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/v1/posts/[id]
+ *
+ * Fetch a single scheduled post by UUID with full platform and media details.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @param id - Scheduled post UUID
+ * @returns {{ post: ScheduledPost & { scheduled_post_platforms, scheduled_post_media } }}
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

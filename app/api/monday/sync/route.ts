@@ -16,9 +16,14 @@ import { syncAllMondayClients } from '@/lib/monday/sync';
 export const maxDuration = 60;
 
 /**
- * GET /api/monday/sync?client_name=...
+ * GET /api/monday/sync
  *
- * Fetch a single client's Monday.com data by matching on name.
+ * Fetch a single client's Monday.com data by exact name match. Used to preview
+ * what Monday.com has for a client before syncing.
+ *
+ * @auth Required (admin)
+ * @query client_name - Client name to look up in Monday.com (required, case-insensitive)
+ * @returns Parsed Monday.com client record
  */
 export async function GET(request: NextRequest) {
   try {
@@ -65,6 +70,16 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * POST /api/monday/sync
+ *
+ * Full Monday.com sync: fetch all clients from Monday.com and update their vault profiles.
+ * Preserves vault-owned fields (brand voice, audience, etc.) while updating Monday.com-owned
+ * fields (services, POC, abbreviation). Creates new clients if not found.
+ *
+ * @auth Required (admin; requires both vault and Monday.com to be configured)
+ * @returns {{ message: string, results: SyncResult[] }}
+ */
 export async function POST() {
   try {
     const supabase = await createServerSupabaseClient();

@@ -3,6 +3,16 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { processVideoItem } from '@/lib/moodboard/process-video';
 
+/**
+ * POST /api/moodboard/items/[id]/process
+ *
+ * Run the full video processing pipeline for a moodboard item (transcription + AI analysis).
+ * Only applicable to items with type 'video'. Delegates to processVideoItem() helper.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Moodboard item UUID
+ * @returns {MoodboardItem} Updated item record after processing
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

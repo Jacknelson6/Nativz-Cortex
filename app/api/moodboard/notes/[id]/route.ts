@@ -11,6 +11,21 @@ const updateNoteSchema = z.object({
   width: z.number().optional().nullable(),
 });
 
+/**
+ * PATCH /api/moodboard/notes/[id]
+ *
+ * Update a moodboard sticky note's content, color, or position. Applies only
+ * the provided fields. Also bumps the parent board's updated_at timestamp.
+ *
+ * @auth Required (admin)
+ * @param id - Note UUID
+ * @body content - Note text (optional, max 5000 chars)
+ * @body color - Note color: 'yellow' | 'blue' | 'green' | 'pink' | 'white' (optional)
+ * @body position_x - Canvas X position (optional)
+ * @body position_y - Canvas Y position (optional)
+ * @body width - Note width in pixels (optional, nullable)
+ * @returns {MoodboardNote} Updated note record
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -94,6 +109,16 @@ export async function PATCH(
   }
 }
 
+/**
+ * DELETE /api/moodboard/notes/[id]
+ *
+ * Permanently delete a moodboard sticky note. Also bumps the parent board's
+ * updated_at timestamp.
+ *
+ * @auth Required (admin)
+ * @param id - Note UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

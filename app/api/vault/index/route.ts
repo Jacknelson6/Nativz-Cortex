@@ -1,8 +1,12 @@
 /**
  * POST /api/vault/index
  *
- * Indexes the entire vault into the search database.
- * Call this once to bootstrap, then the webhook handles incremental updates.
+ * Full re-index of the entire GitHub-backed Obsidian vault into the search
+ * database. Use this once to bootstrap search; the webhook handles incremental
+ * updates after that. Max function duration: 60s.
+ *
+ * @auth Required (any authenticated user)
+ * @returns {{ message: string, hasEmbeddings: boolean, results: IndexResult[] }}
  */
 
 import { NextResponse } from 'next/server';

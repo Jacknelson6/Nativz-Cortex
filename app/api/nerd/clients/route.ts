@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/nerd/clients
+ *
+ * List active clients for use by The Nerd AI assistant. Returns name, slug, and agency
+ * for all active clients, ordered alphabetically.
+ *
+ * @auth Required (any authenticated user)
+ * @returns {{ name: string, slug: string, agency: string | null }[]}
+ */
 export async function GET() {
   try {
     const supabase = await createServerSupabaseClient();

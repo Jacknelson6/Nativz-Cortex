@@ -12,6 +12,17 @@ const createTodoSchema = z.object({
   user_id: z.string().uuid().optional(), // admin-only: assign to another user
 });
 
+/**
+ * GET /api/todos
+ *
+ * List personal todos for the authenticated user. Supports optional filters for completion
+ * status and due-today. Results are always scoped to the authenticated user.
+ *
+ * @auth Required (any authenticated user)
+ * @query completed - Filter by completion state: 'true' | 'false' (omit for all)
+ * @query due_today - If 'true', return only todos due today
+ * @returns {Todo[]} Array of todo records ordered by creation date descending
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -55,6 +66,21 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * POST /api/todos
+ *
+ * Create a new todo. Admins may assign a todo to any user via the user_id field;
+ * non-admins are restricted to creating todos for themselves only.
+ *
+ * @auth Required (any authenticated user; admin required to assign to another user)
+ * @body title - Todo title (required)
+ * @body description - Optional notes
+ * @body due_date - Optional due date (ISO date string)
+ * @body client_id - Optional client UUID to associate the todo with
+ * @body priority - Optional priority level: 'low' | 'medium' | 'high'
+ * @body user_id - Admin-only: UUID of the user to assign the todo to
+ * @returns {Todo} Created todo record (201)
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

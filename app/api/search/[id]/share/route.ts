@@ -3,6 +3,15 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import crypto from 'crypto';
 
+/**
+ * GET /api/search/[id]/share
+ *
+ * Check if a search has an active share link and return its details.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Topic search UUID
+ * @returns {{ shared: false } | { shared: true, token: string, url: string, expires_at: string | null }}
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -41,6 +50,16 @@ export async function GET(
   }
 }
 
+/**
+ * POST /api/search/[id]/share
+ *
+ * Create a new public share link for a completed search. Deletes any existing links
+ * before generating a fresh 48-char hex token.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Topic search UUID (must be in 'completed' status)
+ * @returns {{ shared: true, token: string, url: string }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -102,6 +121,15 @@ export async function POST(
   }
 }
 
+/**
+ * DELETE /api/search/[id]/share
+ *
+ * Revoke the public share link for a search by deleting all share records.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Topic search UUID
+ * @returns {{ shared: false }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

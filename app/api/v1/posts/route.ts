@@ -13,6 +13,17 @@ const createPostSchema = z.object({
   media_ids: z.array(z.string()).default([]),
 });
 
+/**
+ * GET /api/v1/posts
+ *
+ * List scheduled posts for a client. Returns posts ordered by scheduled_at
+ * ascending (nulls last). Optionally filtered by status.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @query client_id - Client UUID (required)
+ * @query status - Filter by post status: 'draft' | 'scheduled' | 'published' (optional)
+ * @returns {{ posts: ScheduledPost[] }}
+ */
 export async function GET(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;
@@ -47,6 +58,21 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ posts: posts ?? [] });
 }
 
+/**
+ * POST /api/v1/posts
+ *
+ * Create a scheduled post with optional platform profiles and media links.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @body client_id - Client UUID (required)
+ * @body caption - Post caption text (optional, default '')
+ * @body hashtags - Array of hashtag strings (optional)
+ * @body scheduled_at - ISO 8601 scheduled time (optional)
+ * @body status - 'draft' | 'scheduled' (default 'draft')
+ * @body platform_profile_ids - Array of social profile UUIDs to link (optional)
+ * @body media_ids - Array of media UUIDs to attach in order (optional)
+ * @returns {{ post: ScheduledPost }}
+ */
 export async function POST(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;

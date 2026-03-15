@@ -23,6 +23,17 @@ async function requireAdmin() {
   return user;
 }
 
+/**
+ * POST /api/team/[id]/link
+ *
+ * Link a team_members record to an existing auth user account. Validates that the team
+ * member isn't already linked and that the target user isn't linked to another member.
+ *
+ * @auth Required (admin)
+ * @param id - Team member UUID to link
+ * @body user_id - Auth user UUID to link to (required)
+ * @returns {TeamMember} Updated team member record
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -101,7 +112,15 @@ export async function POST(
   }
 }
 
-// Unlink a team member from their account
+/**
+ * DELETE /api/team/[id]/link
+ *
+ * Unlink a team member from their auth user account, clearing the user_id field.
+ *
+ * @auth Required (admin)
+ * @param id - Team member UUID to unlink
+ * @returns {TeamMember} Updated team member record with user_id cleared
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

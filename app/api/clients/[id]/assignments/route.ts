@@ -25,6 +25,16 @@ async function requireAdmin() {
   return user;
 }
 
+/**
+ * GET /api/clients/[id]/assignments
+ *
+ * List all team member assignments for a client, ordered by lead status (leads first).
+ * Each assignment includes the full team member record.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @returns {ClientAssignment[]} Array of assignments with team_member relation
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -53,6 +63,18 @@ export async function GET(
   }
 }
 
+/**
+ * POST /api/clients/[id]/assignments
+ *
+ * Assign a team member to a client with an optional role and lead designation.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @body team_member_id - Team member UUID to assign (required)
+ * @body role - Role/responsibility on this client account (max 100 chars)
+ * @body is_lead - Whether this is a lead assignment (default: false)
+ * @returns {ClientAssignment} Created assignment with team_member relation (201)
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

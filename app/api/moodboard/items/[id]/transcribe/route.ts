@@ -4,6 +4,17 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { extractTikTokTranscript } from '@/lib/tiktok/scraper';
 import { createCompletion } from '@/lib/ai/client';
 
+/**
+ * POST /api/moodboard/items/[id]/transcribe
+ *
+ * Extract a transcript for a moodboard video item. Supports TikTok (via tikwm + scraper)
+ * and YouTube (via timedtext API). If the item has no title or a generic one, AI generates
+ * a short catchy title from the transcript. Saves transcript, segments, and title.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Moodboard item UUID (must be type 'video')
+ * @returns {MoodboardItem} Updated item record with transcript
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

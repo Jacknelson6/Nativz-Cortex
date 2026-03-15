@@ -9,6 +9,20 @@ const querySchema = z.object({
   end: z.string(),
 });
 
+/**
+ * GET /api/affiliates
+ *
+ * Fetch comprehensive affiliate analytics for a client within a date range. Returns KPIs
+ * (new/total/active affiliates, referrals, revenue, commission, clicks, pending payouts),
+ * snapshot trend data for charts, a ranked list of top affiliates with period performance,
+ * recent referrals, and pending payout details.
+ *
+ * @auth Required (admin)
+ * @query clientId - Client UUID (required)
+ * @query start - Start date in YYYY-MM-DD format (required)
+ * @query end - End date in YYYY-MM-DD format (required)
+ * @returns {{ kpis, snapshots, topAffiliates, recentReferrals, pendingPayouts }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

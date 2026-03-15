@@ -13,6 +13,16 @@ const createSchema = z.object({
   source: z.enum(['manual', 'scraped', 'generated', 'imported']).default('manual'),
 });
 
+/**
+ * GET /api/clients/[id]/knowledge
+ *
+ * List knowledge base entries for a client, optionally filtered by type.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Client UUID
+ * @query type - Filter by entry type (brand_asset | brand_profile | document | web_page | note | idea | meeting_note)
+ * @returns {{ entries: KnowledgeEntry[] }}
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -38,6 +48,21 @@ export async function GET(
   }
 }
 
+/**
+ * POST /api/clients/[id]/knowledge
+ *
+ * Create a new knowledge base entry for a client. Entries are embedded for semantic
+ * search automatically via the createKnowledgeEntry helper.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @body type - Entry type (brand_asset | brand_profile | document | web_page | note | idea | meeting_note)
+ * @body title - Entry title (required)
+ * @body content - Entry content (default: '')
+ * @body metadata - Additional metadata key-value pairs
+ * @body source - How the entry was created (manual | scraped | generated | imported, default: manual)
+ * @returns {{ entry: KnowledgeEntry }} Created knowledge entry (201)
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

@@ -18,6 +18,19 @@ const batchPositionsSchema = z.object({
   })).optional().default([]),
 });
 
+/**
+ * PATCH /api/moodboard/boards/[id]/positions
+ *
+ * Batch-update canvas positions (and optional dimensions) for items and notes
+ * on a board. All updates run in parallel. Returns 207 with error details if
+ * any individual update fails. Also bumps the board's updated_at timestamp.
+ *
+ * @auth Required (admin)
+ * @param id - Board UUID
+ * @body items - Array of { id, position_x, position_y, width?, height? } for items (optional)
+ * @body notes - Array of { id, position_x, position_y, width? } for notes (optional)
+ * @returns {{ success: true }} or {{ success: false, errors: string[] }} with 207
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

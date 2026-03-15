@@ -12,6 +12,15 @@ const createKeySchema = z.object({
   expires_at: z.string().datetime().optional(),
 });
 
+/**
+ * GET /api/api-keys
+ *
+ * List all API keys for the authenticated user. Returns key metadata but NOT the actual
+ * plaintext key (which is only shown once at creation time).
+ *
+ * @auth Required (any authenticated user)
+ * @returns {{ keys: ApiKey[] }} Array of API key metadata records
+ */
 export async function GET() {
   try {
     const supabase = await createServerSupabaseClient();
@@ -38,6 +47,19 @@ export async function GET() {
   }
 }
 
+/**
+ * POST /api/api-keys
+ *
+ * Create a new API key for the authenticated user. Generates a secure random key,
+ * stores only a bcrypt hash and prefix in the database, and returns the plaintext key
+ * once — it cannot be recovered later.
+ *
+ * @auth Required (any authenticated user)
+ * @body name - Human-readable key name (required, max 100 chars)
+ * @body scopes - Array of allowed scope strings (tasks | clients | shoots | scheduler | search | team | calendar; at least one required)
+ * @body expires_at - Optional ISO datetime for key expiration
+ * @returns {{ key: ApiKey & { plaintext: string } }} Key metadata plus the one-time plaintext (201)
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

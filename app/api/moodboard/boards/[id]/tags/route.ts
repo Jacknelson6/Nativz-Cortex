@@ -18,6 +18,15 @@ async function requireAdmin() {
   return { user, adminClient };
 }
 
+/**
+ * GET /api/moodboard/boards/[id]/tags
+ *
+ * List all tags defined on a board, ordered alphabetically by name.
+ *
+ * @auth Required (admin)
+ * @param id - Board UUID
+ * @returns {MoodboardTag[]}
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -45,6 +54,18 @@ export async function GET(
   }
 }
 
+/**
+ * POST /api/moodboard/boards/[id]/tags
+ *
+ * Create a new tag on a board. Returns 409 if a tag with the same name already
+ * exists on this board.
+ *
+ * @auth Required (admin)
+ * @param id - Board UUID
+ * @body name - Tag name, 1–50 chars (required)
+ * @body color - Hex color (#rrggbb, default '#6366f1')
+ * @returns {MoodboardTag} Created tag record
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

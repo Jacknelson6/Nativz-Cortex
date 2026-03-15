@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+/**
+ * POST /api/auth/logout
+ *
+ * Sign out the current user via Supabase Auth. Returns the appropriate redirect path
+ * based on the user's role: admins are sent to /admin/login, viewers to /portal/login.
+ *
+ * @auth None required (no-op if not authenticated)
+ * @returns {{ redirectTo: string }} Redirect path for the client to navigate to
+ */
 export async function POST() {
   try {
     const supabase = await createServerSupabaseClient();

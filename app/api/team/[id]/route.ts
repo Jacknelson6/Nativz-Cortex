@@ -27,6 +27,20 @@ async function requireAdmin() {
   return user;
 }
 
+/**
+ * PATCH /api/team/[id]
+ *
+ * Update a team member's profile fields. At least one field must be provided.
+ *
+ * @auth Required (admin)
+ * @param id - Team member UUID
+ * @body full_name - Updated full name
+ * @body email - Updated email address
+ * @body role - Updated job role/title
+ * @body avatar_url - Updated avatar URL
+ * @body is_active - Updated active status
+ * @returns {TeamMember} Updated team member record
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

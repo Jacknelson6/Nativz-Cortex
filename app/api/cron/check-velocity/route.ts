@@ -3,6 +3,15 @@ import { checkPostVelocity } from '@/lib/reporting/velocity';
 
 export const maxDuration = 120;
 
+/**
+ * GET /api/cron/check-velocity
+ *
+ * Vercel cron job: check post velocity for published posts and flag any with
+ * unusual engagement patterns as trending. Requires CRON_SECRET bearer token.
+ *
+ * @auth Bearer CRON_SECRET (Vercel cron)
+ * @returns {{ message: string, checked: number, trending: number }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');

@@ -9,6 +9,18 @@ const Schema = z.object({
   client_id: z.string().uuid().optional(),
 });
 
+/**
+ * POST /api/scheduler/ai/hashtag-suggestions
+ *
+ * Generate 15-20 hashtag suggestions for a post caption using AI, grouped into
+ * high_volume, niche, and branded categories. Optionally uses client context
+ * (industry + keywords) to tailor suggestions.
+ *
+ * @auth Required (any authenticated user)
+ * @body caption - Post caption to base suggestions on (optional)
+ * @body client_id - Client UUID for industry/keyword context (optional)
+ * @returns {{ hashtags: string[], groups: { high_volume, niche, branded } }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

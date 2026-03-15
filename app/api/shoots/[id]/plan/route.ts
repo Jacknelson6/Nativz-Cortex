@@ -11,6 +11,18 @@ import type { ShootPlan } from '@/lib/types/strategy';
 
 export const maxDuration = 300;
 
+/**
+ * POST /api/shoots/[id]/plan
+ *
+ * Generate an AI shoot plan for a shoot event. Gathers live SERP data for the client's
+ * industry/keywords, pulls client content memory, then uses Claude AI to produce a
+ * structured ShootPlan (shot list, concepts, talking points, etc.). Saves the plan to
+ * the shoot event and syncs it to the Obsidian vault (non-blocking).
+ *
+ * @auth Required (admin)
+ * @param id - Shoot event UUID
+ * @returns {{ shootId: string, status: 'generated', plan: ShootPlan }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -142,6 +154,15 @@ export async function POST(
   }
 }
 
+/**
+ * GET /api/shoots/[id]/plan
+ *
+ * Fetch a shoot event along with its generated plan data and associated client info.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Shoot event UUID
+ * @returns {ShootEvent} Shoot event including plan_data, plan_status, and client relation
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

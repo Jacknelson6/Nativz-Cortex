@@ -3,8 +3,14 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 /**
- * GET /api/social/profiles?clientId=xxx
- * Lists active social profiles for a client.
+ * GET /api/social/profiles
+ *
+ * List active social profiles for a client, ordered by platform name. Used by the
+ * analytics and reporting UIs to enumerate connected accounts.
+ *
+ * @auth Required (any authenticated user)
+ * @query clientId - Client UUID to filter by (required)
+ * @returns {SocialProfile[]}
  */
 export async function GET(request: NextRequest) {
   try {

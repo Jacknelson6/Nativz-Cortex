@@ -18,6 +18,17 @@ async function requireAdmin() {
   return user;
 }
 
+/**
+ * DELETE /api/clients/[id]/assignments/[assignmentId]
+ *
+ * Remove a team member assignment from a client. Validates that the assignment belongs
+ * to the specified client before deleting.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @param assignmentId - Assignment UUID to remove
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; assignmentId: string }> }

@@ -4,6 +4,17 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * GET /api/dashboard/stats
+ *
+ * Fetch comprehensive dashboard statistics including client counts, search counts
+ * (current vs last month), upcoming shoot count, moodboard item count, a list of
+ * upcoming shoots for the next 7 days, recent searches, and a unified activity feed
+ * (searches, shoots, moodboard items, new clients — last 10 events).
+ *
+ * @auth Required (any authenticated user)
+ * @returns {{ stats: { totalClients, activeSearches, activeSearchesLastMonth, upcomingShoots, moodboardItems }, upcomingShootsList, recentSearches, activity: ActivityItem[] }}
+ */
 export async function GET() {
   try {
     const serverClient = await createServerSupabaseClient();

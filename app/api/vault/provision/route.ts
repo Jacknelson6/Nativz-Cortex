@@ -1,9 +1,13 @@
 /**
  * POST /api/vault/provision
  *
- * Reads all client profiles from the vault and creates Supabase records
- * for any that don't already exist. This bridges vault-only clients into
- * Cortex so they can be used for searches, feature flags, etc.
+ * Sync all Obsidian vault client profiles into the Cortex database. Creates
+ * new client records for vault-only clients (assigning them to the Nativz org),
+ * and updates existing records with vault profile data. Idempotent — safe to
+ * re-run. Max function duration: 60s.
+ *
+ * @auth Required (any authenticated user)
+ * @returns {{ message: string, created: string[], updated: string[], errors: string[] }}
  */
 
 import { NextResponse } from 'next/server';

@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/scheduler/connect/callback
+ *
+ * OAuth callback from the Late API after a social account connection. Upserts the
+ * connected social_profile into the DB and redirects back to the scheduler UI.
+ * All parameters are passed as query strings by Late.
+ *
+ * @auth None (OAuth callback — no session required)
+ * @query client_id - Cortex client UUID (required)
+ * @query platform - Platform being connected (required)
+ * @query connected - Confirmed platform from Late (optional)
+ * @query username - Connected account username from Late (optional)
+ * @query profileId - Late account ID (optional)
+ * @returns Redirect to /admin/scheduler
+ */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

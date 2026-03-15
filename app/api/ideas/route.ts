@@ -12,6 +12,16 @@ const ideaSubmissionSchema = z.object({
   category: z.enum(['trending', 'content_idea', 'request', 'trending_topic', 'other']).default('other'),
 });
 
+/**
+ * GET /api/ideas
+ *
+ * List idea submissions. Admins can filter by client; portal users (viewers) see only ideas
+ * for clients in their organization. Returns up to 100 results, ordered by most recent.
+ *
+ * @auth Required (admin or viewer)
+ * @query client_id - (Admin only) Filter by client UUID
+ * @returns {IdeaSubmission[]} Array of idea submissions
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -71,6 +81,22 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * POST /api/ideas
+ *
+ * Submit a new idea. Portal users must specify a client_id and the client must have
+ * the can_submit_ideas feature flag enabled. Syncs the idea to the Obsidian vault
+ * and sends notifications: admins are notified of portal submissions, portal users
+ * are notified of admin-submitted ideas.
+ *
+ * @auth Required (admin or viewer)
+ * @body client_id - Client UUID (required for portal users; optional for admins)
+ * @body title - Idea title (required, max 300 chars)
+ * @body description - Idea description (max 2000 chars)
+ * @body source_url - Source URL that inspired the idea
+ * @body category - Category ('trending' | 'content_idea' | 'request' | 'trending_topic' | 'other', default: 'other')
+ * @returns {IdeaSubmission} Created idea record (201)
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

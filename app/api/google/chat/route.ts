@@ -1,6 +1,13 @@
 /**
- * GET /api/google/chat — List Chat spaces
- * GET /api/google/chat?space=spaces/xxx — List messages in a space
+ * GET /api/google/chat
+ *
+ * List Google Chat spaces for the authenticated user, or list messages in a specific space.
+ * Requires Google to be connected.
+ *
+ * @auth Required (any authenticated user; Google must be connected)
+ * @query space - If provided, list messages in this space (e.g. 'spaces/xxx'); omit to list all spaces
+ * @query pageToken - Optional pagination cursor
+ * @returns Space list or message list response from Google Chat API
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';

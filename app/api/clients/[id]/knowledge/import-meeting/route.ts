@@ -10,6 +10,21 @@ const importMeetingSchema = z.object({
   source: z.string().optional(),
 });
 
+/**
+ * POST /api/clients/[id]/knowledge/import-meeting
+ *
+ * Import a meeting transcript as a structured knowledge entry for a client. Uses AI to
+ * extract key information, action items, and entities from the transcript, then creates
+ * a meeting_note entry with auto-generated embedding.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Client UUID
+ * @body transcript - Raw meeting transcript text (required)
+ * @body meetingDate - Optional ISO date string for the meeting
+ * @body attendees - Optional array of attendee names
+ * @body source - Optional source label (e.g. 'zoom', 'google_meet')
+ * @returns {KnowledgeEntry} The created knowledge entry
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

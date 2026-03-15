@@ -10,6 +10,19 @@ const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(3),
 });
 
+/**
+ * GET /api/reporting/top-posts
+ *
+ * Fetch the top-performing posts for a client within a date range, ranked by total
+ * engagement (likes + comments + shares + saves). Includes social profile username.
+ *
+ * @auth Required (any authenticated user)
+ * @query clientId - Client UUID (required)
+ * @query start - Date range start YYYY-MM-DD (required)
+ * @query end - Date range end YYYY-MM-DD (required)
+ * @query limit - Number of posts to return, 1-50 (default 3)
+ * @returns {{ posts: TopPostItem[], dateRange: { start, end } }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

@@ -28,6 +28,14 @@ async function requireAdmin() {
   return user;
 }
 
+/**
+ * GET /api/team
+ *
+ * List all active team members, ordered by full name.
+ *
+ * @auth Required (admin)
+ * @returns {TeamMember[]} Array of active team member records
+ */
 export async function GET(
   _request: NextRequest,
 ) {
@@ -54,6 +62,21 @@ export async function GET(
   }
 }
 
+/**
+ * POST /api/team
+ *
+ * Create a new team member record. The team_members table is standalone and does not
+ * require a corresponding auth.users entry.
+ *
+ * @auth Required (admin)
+ * @body id - Optional UUID for the team member (auto-generated if omitted)
+ * @body full_name - Team member's full name (required, max 200 chars)
+ * @body email - Email address (used for invite flows)
+ * @body role - Job role/title (max 100 chars)
+ * @body avatar_url - URL to avatar image
+ * @body is_active - Whether the member is active (default: true)
+ * @returns {TeamMember} Created team member record (201)
+ */
 export async function POST(
   request: NextRequest,
 ) {

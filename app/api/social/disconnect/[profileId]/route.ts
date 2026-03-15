@@ -5,8 +5,14 @@ import { getPostingService } from '@/lib/posting';
 
 /**
  * DELETE /api/social/disconnect/[profileId]
- * Deactivates a connected social profile (soft delete).
- * Also disconnects from Late if the profile has a late_account_id.
+ *
+ * Deactivate a connected social profile (soft delete). Clears access tokens and marks
+ * is_active false. Also attempts to disconnect from Late API if the profile has a
+ * late_account_id (non-fatal on failure).
+ *
+ * @auth Required (any authenticated user)
+ * @param profileId - Social profile UUID to disconnect
+ * @returns {{ success: true }}
  */
 export async function DELETE(
   _request: NextRequest,

@@ -10,6 +10,19 @@ const CreateCaptionSchema = z.object({
   hashtags: z.array(z.string()).default([]),
 });
 
+/**
+ * POST /api/scheduler/saved-captions
+ *
+ * Save a caption template (title, text, hashtags) to the client's saved captions
+ * library. Saved captions are used as style reference by AI caption improvement.
+ *
+ * @auth Required (any authenticated user)
+ * @body client_id - Client UUID (required)
+ * @body title - Caption template name (required)
+ * @body caption_text - Caption body text (optional)
+ * @body hashtags - Array of hashtags without # prefix (optional)
+ * @returns {{ caption: SavedCaption }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -49,6 +62,15 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * GET /api/scheduler/saved-captions
+ *
+ * List all saved caption templates for a client, ordered by creation date descending.
+ *
+ * @auth Required (any authenticated user)
+ * @query client_id - Client UUID (required)
+ * @returns {{ captions: SavedCaption[] }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -81,6 +103,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * DELETE /api/scheduler/saved-captions
+ *
+ * Permanently delete a saved caption template by ID.
+ *
+ * @auth Required (any authenticated user)
+ * @query id - Saved caption UUID (required)
+ * @returns {{ success: true }}
+ */
 export async function DELETE(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

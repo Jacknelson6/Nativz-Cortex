@@ -3,6 +3,15 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logActivity } from '@/lib/activity';
 
+/**
+ * GET /api/search/[id]
+ *
+ * Fetch a single topic search record by ID including all results, metrics, and SERP data.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Topic search UUID
+ * @returns {TopicSearch} Full search record
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -33,6 +42,17 @@ export async function GET(
   }
 }
 
+/**
+ * PATCH /api/search/[id]
+ *
+ * Approve or reject a completed search result, controlling whether it is visible
+ * to portal users. Approval is logged in activity.
+ *
+ * @auth Required (admin)
+ * @param id - Topic search UUID
+ * @body action - 'approve' to set approved_at/approved_by; 'reject' to clear them
+ * @returns {{ success: true, action: 'approved' | 'rejected' }}
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -104,6 +124,15 @@ export async function PATCH(
   }
 }
 
+/**
+ * DELETE /api/search/[id]
+ *
+ * Permanently delete a topic search record. Only allowed for searches with status 'failed'.
+ *
+ * @auth Required (admin)
+ * @param id - Topic search UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

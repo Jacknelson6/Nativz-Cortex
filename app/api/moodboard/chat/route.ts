@@ -96,6 +96,24 @@ function buildItemContext(item: Record<string, unknown>): string {
   return parts.join('\n');
 }
 
+/**
+ * POST /api/moodboard/chat
+ *
+ * Stream AI creative strategy chat grounded in selected moodboard content.
+ * Fetches item analysis data (transcripts, hooks, pacing, insights) and
+ * optionally client brand context (via @mention slugs) and sticky note text.
+ * Returns a streaming text/plain response via Server-Sent Events using the
+ * Cortex AI persona backed by Claude Sonnet via OpenRouter.
+ *
+ * @auth Required (any authenticated user)
+ * @body board_id - Board UUID (required)
+ * @body item_ids - Array of item UUIDs to include as context (required, may be empty)
+ * @body messages - Conversation history [{role, content}] — at least 1 message (required)
+ * @body note_contents - Sticky note text strings to include as context (optional)
+ * @body client_slugs - Client slugs to inject brand context via @ mentions (optional)
+ * @body model - OpenRouter model override (optional, default 'anthropic/claude-sonnet-4')
+ * @returns {ReadableStream<string>} Streamed AI text response
+ */
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

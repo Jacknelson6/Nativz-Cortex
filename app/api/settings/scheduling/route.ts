@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/settings/scheduling
+ *
+ * Fetch scheduling link settings for all agencies (nativz and ac).
+ *
+ * @auth Required (admin)
+ * @returns {{ settings: { agency: string, scheduling_link: string | null, updated_at: string }[] }}
+ */
 export async function GET() {
   try {
     const supabase = await createServerSupabaseClient();
@@ -36,6 +44,16 @@ export async function GET() {
   }
 }
 
+/**
+ * PUT /api/settings/scheduling
+ *
+ * Update the scheduling link for a specific agency (nativz or ac).
+ *
+ * @auth Required (admin)
+ * @body agency - Agency identifier: 'nativz' | 'ac' (required)
+ * @body scheduling_link - Scheduling link URL (or null to clear)
+ * @returns {{ success: true }}
+ */
 export async function PUT(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

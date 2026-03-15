@@ -15,6 +15,20 @@ const createTaskSchema = z.object({
   tags: z.array(z.string()).optional(),
 });
 
+/**
+ * GET /api/v1/tasks
+ *
+ * List non-archived tasks. Supports filtering by client, assignee, status,
+ * and due date range. Returns tasks with client and team_member join data.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @query client_id - Filter by client UUID (optional)
+ * @query assignee_id - Filter by team_member UUID (optional)
+ * @query status - Filter by status: 'backlog' | 'in_progress' | 'review' | 'done' (optional)
+ * @query due_date_from - ISO date lower bound inclusive (optional)
+ * @query due_date_to - ISO date upper bound inclusive (optional)
+ * @returns {{ tasks: Task[] }}
+ */
 export async function GET(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;
@@ -48,6 +62,24 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ tasks: tasks ?? [] });
 }
 
+/**
+ * POST /api/v1/tasks
+ *
+ * Create a task. If no assignee_id is provided, auto-assigns to the API key
+ * owner's team_member record.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @body title - Task title (required)
+ * @body description - Task description (optional)
+ * @body status - 'backlog' | 'in_progress' | 'review' | 'done' (default 'backlog')
+ * @body priority - 'low' | 'medium' | 'high' | 'urgent' (default 'low')
+ * @body client_id - Client UUID (optional)
+ * @body assignee_id - Team member UUID (optional, auto-assigned to API key owner if omitted)
+ * @body due_date - ISO date string (optional)
+ * @body task_type - 'content' | 'shoot' | 'edit' | 'paid_media' | 'strategy' | 'other' (default 'other')
+ * @body tags - Array of tag strings (optional)
+ * @returns {{ task: Task }}
+ */
 export async function POST(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;

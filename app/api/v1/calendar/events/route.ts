@@ -13,6 +13,17 @@ const createEventSchema = z.object({
   attendees: z.array(z.object({ email: z.string().email() })).optional(),
 });
 
+/**
+ * GET /api/v1/calendar/events
+ *
+ * Fetch Google Calendar events for the authenticated API key's user via
+ * Nango. Returns events normalized to { id, title, start, end, is_all_day }.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @query start - ISO 8601 date/time lower bound (required)
+ * @query end - ISO 8601 date/time upper bound (required)
+ * @returns {{ events: CalendarEvent[] }}
+ */
 export async function GET(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;
@@ -64,6 +75,20 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * POST /api/v1/calendar/events
+ *
+ * Create a Google Calendar event for the authenticated API key's user via Nango.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @body summary - Event title (required)
+ * @body description - Event description (optional)
+ * @body location - Event location (optional)
+ * @body start - ISO 8601 start dateTime (required)
+ * @body end - ISO 8601 end dateTime (required)
+ * @body attendees - Array of { email } objects (optional)
+ * @returns {{ event: { id, summary } }}
+ */
 export async function POST(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;

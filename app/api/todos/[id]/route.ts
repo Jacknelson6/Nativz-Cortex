@@ -11,6 +11,22 @@ const updateTodoSchema = z.object({
   priority: z.enum(['low', 'medium', 'high']).nullable().optional(),
 });
 
+/**
+ * PATCH /api/todos/[id]
+ *
+ * Update a personal todo. RLS ensures users can only modify their own todos.
+ * Automatically sets completed_at when toggling is_completed.
+ *
+ * @auth Required (any authenticated user; RLS-enforced ownership)
+ * @param id - Todo UUID
+ * @body title - Optional new title
+ * @body description - Optional notes (nullable)
+ * @body is_completed - Optional completion toggle
+ * @body due_date - Optional new due date (nullable)
+ * @body client_id - Optional client association (nullable)
+ * @body priority - Optional priority: 'low' | 'medium' | 'high' (nullable)
+ * @returns {Todo} Updated todo record
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -66,6 +82,15 @@ export async function PATCH(
   }
 }
 
+/**
+ * DELETE /api/todos/[id]
+ *
+ * Permanently delete a personal todo. RLS ensures users can only delete their own todos.
+ *
+ * @auth Required (any authenticated user; RLS-enforced ownership)
+ * @param id - Todo UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

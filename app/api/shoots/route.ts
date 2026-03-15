@@ -4,6 +4,19 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createCalendarEventViaNango, isNangoConfigured } from '@/lib/nango/client';
 
+/**
+ * GET /api/shoots
+ *
+ * List shoot events, ordered by shoot date ascending. Supports filtering by client, status,
+ * and date range. Each result includes the associated client record.
+ *
+ * @auth Required (admin)
+ * @query client_id - Filter by client UUID
+ * @query status - Filter by scheduled_status value
+ * @query date_from - Only return shoots on or after this date (YYYY-MM-DD)
+ * @query date_to - Only return shoots on or before this date (YYYY-MM-DD)
+ * @returns {ShootEvent[]} Array of shoot events with client relation
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -61,6 +74,21 @@ const createShootSchema = z.object({
   client_ids: z.array(z.string().uuid()).min(1, 'At least one client is required'),
 });
 
+/**
+ * POST /api/shoots
+ *
+ * Create shoot events for one or more clients on the same date. Creates one shoot_events
+ * row per client. If Nango (Google Calendar) is configured and the user has a Nango connection,
+ * automatically creates Google Calendar events with client contacts and team member attendees.
+ *
+ * @auth Required (admin)
+ * @body title - Shoot title (required)
+ * @body shoot_date - Shoot date/datetime string (required)
+ * @body location - Shoot location
+ * @body notes - Shoot notes
+ * @body client_ids - Array of client UUIDs (at least one required)
+ * @returns {{ success: true, count: number, calendar: { shootId: string, eventId?: string, error?: string }[] }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

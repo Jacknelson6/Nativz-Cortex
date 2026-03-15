@@ -9,6 +9,16 @@ const createCommentSchema = z.object({
   video_timestamp: z.number().int().min(0).optional().nullable(),
 });
 
+/**
+ * GET /api/moodboard/comments
+ *
+ * List all comments on a moodboard item, ordered oldest first. Includes
+ * commenter name and avatar from the users join.
+ *
+ * @auth Required (admin)
+ * @query item_id - Moodboard item UUID (required)
+ * @returns {MoodboardComment[]} Comments with users(full_name, avatar_url)
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -54,6 +64,18 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * POST /api/moodboard/comments
+ *
+ * Add a comment to a moodboard item. Supports optional video timestamp
+ * for timestamped comments. Also bumps the parent board's updated_at.
+ *
+ * @auth Required (admin)
+ * @body item_id - Moodboard item UUID (required)
+ * @body content - Comment text, 1–5000 chars (required)
+ * @body video_timestamp - Timestamp in seconds for timestamped comments (optional)
+ * @returns {MoodboardComment} Created comment with users(full_name, avatar_url)
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

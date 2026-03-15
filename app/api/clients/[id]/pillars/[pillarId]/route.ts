@@ -14,6 +14,24 @@ const updatePillarSchema = z.object({
   sort_order: z.number().int().min(0).optional(),
 });
 
+/**
+ * PATCH /api/clients/[id]/pillars/[pillarId]
+ *
+ * Update a content pillar's details. Any combination of fields may be provided.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Client UUID
+ * @param pillarId - Content pillar UUID
+ * @body name - Optional pillar name
+ * @body description - Optional description
+ * @body emoji - Optional single emoji
+ * @body example_series - Optional array of recurring series names
+ * @body formats - Optional array of content format strings
+ * @body hooks - Optional array of opening-line hooks
+ * @body frequency - Optional posting frequency description
+ * @body sort_order - Optional integer sort order
+ * @returns {{ pillar: ContentPillar }}
+ */
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string; pillarId: string }> }
@@ -48,6 +66,16 @@ export async function PATCH(
   return NextResponse.json({ pillar });
 }
 
+/**
+ * DELETE /api/clients/[id]/pillars/[pillarId]
+ *
+ * Permanently delete a content pillar for a client.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Client UUID
+ * @param pillarId - Content pillar UUID to delete
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string; pillarId: string }> }

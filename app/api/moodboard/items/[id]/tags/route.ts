@@ -17,6 +17,15 @@ async function requireAdmin() {
   return { user, adminClient };
 }
 
+/**
+ * GET /api/moodboard/items/[id]/tags
+ *
+ * List all tags applied to a moodboard item.
+ *
+ * @auth Required (admin)
+ * @param id - Moodboard item UUID
+ * @returns {MoodboardTag[]}
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -44,6 +53,16 @@ export async function GET(
   }
 }
 
+/**
+ * POST /api/moodboard/items/[id]/tags
+ *
+ * Apply a tag to a moodboard item. Returns 409 if the tag is already applied.
+ *
+ * @auth Required (admin)
+ * @param id - Moodboard item UUID
+ * @body tag_id - Tag UUID to apply (required)
+ * @returns {{ success: true }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -74,6 +93,16 @@ export async function POST(
   }
 }
 
+/**
+ * DELETE /api/moodboard/items/[id]/tags
+ *
+ * Remove a tag from a moodboard item.
+ *
+ * @auth Required (admin)
+ * @param id - Moodboard item UUID
+ * @body tag_id - Tag UUID to remove (required)
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

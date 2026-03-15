@@ -10,6 +10,20 @@ const updateSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters').optional(),
 });
 
+/**
+ * PATCH /api/account
+ *
+ * Update the authenticated user's profile. Can update display name, avatar URL,
+ * job title, and/or password. Password changes go through Supabase Auth;
+ * profile fields are updated in the users table.
+ *
+ * @auth Required (any authenticated user)
+ * @body full_name - Updated display name
+ * @body avatar_url - Updated avatar URL (nullable)
+ * @body job_title - Updated job title (nullable)
+ * @body password - New password (min 6 chars)
+ * @returns {{ success: true }}
+ */
 export async function PATCH(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

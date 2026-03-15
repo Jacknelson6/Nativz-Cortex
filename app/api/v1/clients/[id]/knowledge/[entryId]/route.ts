@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateApiKey } from '@/lib/api-keys/validate';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/v1/clients/[id]/knowledge/[entryId]
+ *
+ * Fetch a single knowledge entry by ID, scoped to the given client.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @param id - Client UUID
+ * @param entryId - Knowledge entry UUID
+ * @returns {{ entry: KnowledgeEntry }}
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; entryId: string }> }

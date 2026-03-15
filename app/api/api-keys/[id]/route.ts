@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * DELETE /api/api-keys/[id]
+ *
+ * Revoke or permanently delete an API key. Only the key's owner can perform this action.
+ * By default, sets is_active=false (revoke). Pass permanent=true to hard-delete the record.
+ *
+ * @auth Required (key owner only)
+ * @param id - API key UUID
+ * @query permanent - If 'true', permanently delete the record; otherwise just revoke (default: false)
+ * @returns {{ revoked: true } | { deleted: true }}
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

@@ -18,6 +18,17 @@ async function requireAdmin() {
   return user;
 }
 
+/**
+ * POST /api/team/[id]/invite
+ *
+ * Generate a team invite token for a team member so they can create their own login account.
+ * Expires any existing unused invite tokens for this member before creating a new one.
+ * The team member must have an email address set and must not already have a linked account.
+ *
+ * @auth Required (admin)
+ * @param id - Team member UUID
+ * @returns {{ token: string, invite_url: string, expires_at: string, member_name: string }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

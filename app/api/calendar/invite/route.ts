@@ -19,6 +19,17 @@ const inviteSchema = z.object({
   contact_id: z.string().uuid('contact_id must be a valid UUID'),
 });
 
+/**
+ * POST /api/calendar/invite
+ *
+ * Generate a calendar invite link for a contact. Creates a calendar_connections record with
+ * a 32-char hex token and 30-day expiry, returning the shareable URL for the client to
+ * connect their Google Calendar.
+ *
+ * @auth Required (admin)
+ * @body contact_id - Contact UUID to generate the invite for (required)
+ * @returns {{ token: string, url: string }} Invite token and full shareable URL
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

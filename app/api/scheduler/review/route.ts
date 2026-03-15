@@ -7,7 +7,16 @@ const CreateReviewLinkSchema = z.object({
   post_id: z.string().uuid(),
 });
 
-// POST: Generate a review link for a post (authenticated)
+/**
+ * POST /api/scheduler/review
+ *
+ * Generate a client review link for a scheduled post. Creates a post_review_links
+ * record and returns the shareable URL.
+ *
+ * @auth Required (any authenticated user)
+ * @body post_id - Scheduled post UUID (required)
+ * @returns {{ link: PostReviewLink, url: string }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -46,7 +55,16 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET: Fetch post data by review token (public — no auth required)
+/**
+ * GET /api/scheduler/review
+ *
+ * Fetch a scheduled post with its review link data by token. Public endpoint used by
+ * the client review page. Returns 410 if the review link has expired.
+ *
+ * @auth None (public — token provides authorization)
+ * @query token - Post review link token (required)
+ * @returns {{ post, comments, review_link_id }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const token = new URL(request.url).searchParams.get('token');

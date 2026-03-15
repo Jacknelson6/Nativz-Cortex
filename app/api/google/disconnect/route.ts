@@ -1,5 +1,11 @@
 /**
- * POST /api/google/disconnect — Remove stored Google tokens
+ * POST /api/google/disconnect
+ *
+ * Remove stored Google OAuth tokens for the authenticated user, disconnecting the
+ * Google integration.
+ *
+ * @auth Required (any authenticated user)
+ * @returns {{ success: true }}
  */
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';

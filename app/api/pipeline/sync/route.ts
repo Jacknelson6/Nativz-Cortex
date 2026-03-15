@@ -62,7 +62,18 @@ function parseMonthLabel(label: string): string | null {
   return `${year}-${String(monthNum).padStart(2, '0')}-01`;
 }
 
-// POST: Sync from Monday.com
+/**
+ * POST /api/pipeline/sync
+ *
+ * Sync the content pipeline from a Monday.com board (board ID 9232769015). Reads all groups
+ * (month buckets) and items, maps column values to pipeline fields, and upserts into the
+ * content_pipeline table by monday_item_id. Supports syncing a specific group via group_id.
+ *
+ * @auth Required (any authenticated user; caller provides the Monday.com API token)
+ * @body api_token - Monday.com API token (required)
+ * @body group_id - Optional: sync only this specific group/month
+ * @returns {{ success: true, synced: number, skipped: number }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

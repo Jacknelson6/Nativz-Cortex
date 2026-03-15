@@ -8,8 +8,16 @@ export const maxDuration = 300;
 const MAX_RETRIES = 3;
 const BATCH_SIZE = 5;
 
-// Vercel cron job — runs every 2 minutes to publish scheduled posts.
-// Configure in vercel.json: schedule "every 2 minutes"
+/**
+ * GET /api/cron/publish-posts
+ *
+ * Vercel cron job (every 2 minutes): publish scheduled posts that are due. Processes up to
+ * 5 posts per run. Implements exponential backoff retry (up to 3 attempts). Sends an in-app
+ * failure notification when all retries are exhausted. Requires CRON_SECRET bearer token.
+ *
+ * @auth Bearer CRON_SECRET (Vercel cron)
+ * @returns {{ message: string, published: number, failed: number }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');

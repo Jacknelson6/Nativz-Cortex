@@ -3,6 +3,16 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
 
+/**
+ * GET /api/pipeline
+ *
+ * List content pipeline items, ordered by client name. If no month is specified, returns
+ * items for the current and next month.
+ *
+ * @auth Required (any authenticated user)
+ * @query month - ISO date string for the first of a month (YYYY-MM-DD) to filter by
+ * @returns {{ items: ContentPipelineItem[] }}
+ */
 // GET: List pipeline items (optionally filtered by month)
 export async function GET(request: NextRequest) {
   try {
@@ -43,6 +53,19 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * POST /api/pipeline
+ *
+ * Create a new content pipeline item for a given client and month.
+ *
+ * @auth Required (any authenticated user)
+ * @body client_id - Optional client UUID to link the pipeline row
+ * @body client_name - Display name for the client (required)
+ * @body month_label - Human-readable month label (e.g. "March 2026")
+ * @body month_date - First day of the month in YYYY-MM-DD format (required)
+ * @body agency - Optional agency name
+ * @returns {ContentPipelineItem} Newly created pipeline item
+ */
 // POST: Create a new pipeline item
 const CreateSchema = z.object({
   client_id: z.string().uuid().optional(),

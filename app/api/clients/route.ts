@@ -15,6 +15,15 @@ const createClientSchema = z.object({
   website_url: z.string().url().nullable().optional(),
 });
 
+/**
+ * GET /api/clients
+ *
+ * List all clients. Admins see all clients; portal users (viewers) see only active clients
+ * belonging to their organization.
+ *
+ * @auth Required (admin or viewer)
+ * @returns {Client[]} Array of client records
+ */
 export async function GET() {
   try {
     const supabase = await createServerSupabaseClient();
@@ -60,6 +69,24 @@ export async function GET() {
   }
 }
 
+/**
+ * POST /api/clients
+ *
+ * Create a new client. Sets default feature flags (can_search, can_view_reports).
+ * The slug must be unique across all clients.
+ *
+ * @auth Required (admin)
+ * @body name - Client display name (required)
+ * @body slug - URL-safe unique identifier, lowercase alphanumeric with hyphens (required)
+ * @body industry - Client industry (required)
+ * @body organization_id - Organization UUID; defaults to creator's organization
+ * @body target_audience - Description of target audience
+ * @body brand_voice - Brand voice description
+ * @body topic_keywords - Array of topic keyword strings
+ * @body logo_url - URL to client logo image
+ * @body website_url - Client website URL
+ * @returns {Client} Created client record (201)
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

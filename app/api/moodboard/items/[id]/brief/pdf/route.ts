@@ -4,6 +4,16 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import ReactPDF from '@react-pdf/renderer';
 import { BriefPDFDocument } from '@/lib/pdf/brief-template';
 
+/**
+ * GET /api/moodboard/items/[id]/brief/pdf
+ *
+ * Generate and download a PDF of the item's replication brief using react-pdf.
+ * Returns 400 if no brief has been generated yet.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Moodboard item UUID
+ * @returns PDF file download (Content-Disposition: attachment)
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

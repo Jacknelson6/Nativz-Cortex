@@ -43,6 +43,18 @@ function validateTopicSources(
   };
 }
 
+/**
+ * POST /api/search/[id]/process
+ *
+ * Execute the full AI research pipeline for a pending search record. Gathers SERP data from
+ * Brave, enriches with client knowledge base context, calls Claude via OpenRouter, validates
+ * AI-cited URLs against actual SERP results, computes metrics, saves results to DB, syncs
+ * to the Obsidian vault, and notifies the user. Only processes searches in 'processing' status.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Topic search UUID in 'processing' status
+ * @returns {{ status: 'completed' }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

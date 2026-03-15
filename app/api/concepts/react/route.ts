@@ -16,6 +16,26 @@ const reactSchema = z.object({
   feedback: z.string().max(2000).optional().nullable(),
 });
 
+/**
+ * POST /api/concepts/react
+ *
+ * Save a client reaction (approve, star, or request revision) to an AI-generated content idea.
+ * Upserts the reaction into content_ideas — updates the existing row if the idea title matches,
+ * otherwise inserts a new record.
+ *
+ * @auth Required (any authenticated user)
+ * @body title - Idea title used to match/create the content_ideas record (required)
+ * @body reaction - Reaction type: 'approved' | 'starred' | 'revision_requested' | null (required)
+ * @body hook - Optional hook text
+ * @body format - Optional video format label
+ * @body virality - Optional virality estimate: 'low' | 'medium' | 'high' | 'viral_potential'
+ * @body why_it_works - Optional explanation text
+ * @body topic_name - Optional topic name label
+ * @body client_id - Optional client UUID (null for generic ideas)
+ * @body search_id - Optional source search UUID
+ * @body feedback - Optional free-text feedback (nullable)
+ * @returns {{ id: string, reaction: string }} Created (201) or updated record ID + reaction
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

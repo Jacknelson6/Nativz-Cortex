@@ -1,7 +1,15 @@
 /**
  * PATCH /api/shoots/[id]/footage
  *
- * Update raw footage status for a shoot event.
+ * Update the raw footage upload status for a shoot event. Sets raw_footage_uploaded
+ * and optionally stores the footage URL. Automatically records raw_footage_uploaded_at
+ * when marking as uploaded.
+ *
+ * @auth Required (admin)
+ * @param id - Shoot event UUID
+ * @body raw_footage_uploaded - Whether footage has been uploaded (required)
+ * @body raw_footage_url - URL to the raw footage (optional)
+ * @returns {{ success: true }}
  */
 
 import { NextRequest, NextResponse } from 'next/server';

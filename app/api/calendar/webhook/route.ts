@@ -2,8 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 /**
- * Nango auth webhook — called when a user completes OAuth via Nango Connect.
- * Upserts a calendar_connections record with the nango_connection_id.
+ * POST /api/calendar/webhook
+ *
+ * Nango auth webhook — called by Nango when a user completes OAuth via Nango Connect.
+ * Only processes auth creation events for the google-calendar provider. Upserts a
+ * calendar_connections record with the nango_connection_id for the end user.
+ *
+ * @auth None (Nango webhook, no user auth)
+ * @body type - Webhook event type (only 'auth' is processed)
+ * @body operation - Operation type (only 'creation' is processed)
+ * @body connectionId - Nango connection ID
+ * @body providerConfigKey - Provider identifier (only 'google-calendar' is processed)
+ * @body endUser.id - User ID to link the connection to
+ * @returns {{ ok: true }}
  */
 export async function POST(request: NextRequest) {
   try {

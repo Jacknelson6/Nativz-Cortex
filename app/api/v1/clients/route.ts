@@ -18,6 +18,14 @@ const onboardSchema = z.object({
   agency: z.string().optional().default(''),
 });
 
+/**
+ * GET /api/v1/clients
+ *
+ * List all clients. Returns a summary projection (no sensitive fields).
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @returns {{ clients: Client[] }}
+ */
 export async function GET(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;
@@ -35,6 +43,27 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ clients: clients ?? [] });
 }
 
+/**
+ * POST /api/v1/clients
+ *
+ * Onboard a new client. Creates the organization, client record, and (if
+ * services includes 'SMM') a Late API social media profile non-blocking.
+ * Handles slug collisions by appending a timestamp suffix.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @body name - Client name (required)
+ * @body website_url - Client website URL (required)
+ * @body industry - Industry/sector (required)
+ * @body target_audience - Target audience description (optional)
+ * @body brand_voice - Brand voice description (optional)
+ * @body topic_keywords - Array of topic keywords (optional)
+ * @body logo_url - Logo URL (optional)
+ * @body poc_name - Point of contact name (optional)
+ * @body poc_email - Point of contact email (optional)
+ * @body services - Array of service types e.g. ['SMM', 'PDR'] (optional)
+ * @body agency - Agency name (optional)
+ * @returns {{ client: Client }}
+ */
 export async function POST(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;

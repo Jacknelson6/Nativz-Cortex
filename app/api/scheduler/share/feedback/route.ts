@@ -12,7 +12,21 @@ const FeedbackSchema = z.object({
   status: z.enum(['approved', 'changes_requested', 'comment']).default('comment'),
 });
 
-/** POST: Submit feedback on a post via a shared calendar link (public — no auth) */
+/**
+ * POST /api/scheduler/share/feedback
+ *
+ * Submit review feedback on a post via a shared calendar link. When a client approves
+ * a draft post, it is automatically promoted to 'scheduled' and synced to Late API.
+ * Public endpoint — no auth required, authorization is via share token.
+ *
+ * @auth None (public — share_token provides authorization)
+ * @body share_token - Calendar review link token (required)
+ * @body post_id - Scheduled post UUID to comment on (required)
+ * @body author_name - Commenter name (required)
+ * @body content - Feedback text (required)
+ * @body status - 'approved' | 'changes_requested' | 'comment' (default 'comment')
+ * @returns {{ comment: PostReviewComment }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

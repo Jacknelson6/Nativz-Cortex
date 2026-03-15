@@ -11,11 +11,15 @@ import type { ShootPlan } from '@/lib/types/strategy';
 export const maxDuration = 300;
 
 /**
- * Vercel cron job — runs daily to auto-generate shoot plans
- * for upcoming shoots (default: 3 days before the shoot date).
+ * GET /api/cron/shoot-planner
  *
- * Configure in vercel.json:
- * { "crons": [{ "path": "/api/cron/shoot-planner", "schedule": "0 8 * * *" }] }
+ * Vercel cron job (runs daily at 8 AM): auto-generate AI shoot plans for upcoming shoots
+ * that are SHOOT_PLAN_DAYS_BEFORE days away (default: 3 days). Gathers SERP data and
+ * client memory to build context, then calls Claude to produce the plan. Syncs results
+ * to the Obsidian vault non-blocking. Requires CRON_SECRET bearer token.
+ *
+ * @auth Bearer CRON_SECRET (Vercel cron)
+ * @returns {{ message: string, processed: number, failed: number, total: number }}
  */
 export async function GET(request: NextRequest) {
   try {

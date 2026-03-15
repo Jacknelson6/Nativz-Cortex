@@ -3,6 +3,16 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import crypto from 'crypto';
 
+/**
+ * GET /api/moodboard/boards/[id]/share
+ *
+ * Get the current share link status for a board. Returns the most recently
+ * created share link with its URL, password protection status, and expiry.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Board UUID
+ * @returns {{ shared: false }} or {{ shared: true, id, token, url, hasPassword, expires_at, created_at }}
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -44,6 +54,19 @@ export async function GET(
   }
 }
 
+/**
+ * POST /api/moodboard/boards/[id]/share
+ *
+ * Create (or replace) a public share link for a board. Replaces any existing
+ * share link. Generates a 48-char hex token; optionally SHA-256 hashes a
+ * password and sets an expiry date.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Board UUID
+ * @body password - Optional plaintext password (SHA-256 hashed before storage)
+ * @body expires_at - Optional ISO 8601 expiry timestamp
+ * @returns {{ shared: true, id, token, url, hasPassword, expires_at, created_at }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -117,6 +140,15 @@ export async function POST(
   }
 }
 
+/**
+ * DELETE /api/moodboard/boards/[id]/share
+ *
+ * Remove all share links for a board, effectively disabling public access.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Board UUID
+ * @returns {{ shared: false }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

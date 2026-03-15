@@ -1,12 +1,12 @@
 /**
  * GET /api/shoots/content-calendar
  *
- * Fetches all items from the Monday.com Content Calendars board,
- * parses them into structured shoot data, and cross-references
- * client names with the Cortex DB.
+ * Fetch all items from the Monday.com Content Calendars board, parse them into
+ * structured shoot data, and cross-reference client names with Cortex DB clients.
+ * Responses are cached in-memory for 10 minutes to reduce Monday.com API round-trips.
  *
- * Responses are cached in-memory for 3 minutes to avoid slow
- * Monday.com API round-trips on every page load.
+ * @auth Required (admin)
+ * @returns {{ groups: unknown[], items: EnrichedContentCalendarItem[] }}
  */
 
 import { NextResponse } from 'next/server';

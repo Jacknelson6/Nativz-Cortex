@@ -1,7 +1,15 @@
 /**
- * GET /api/google/drive?folderId=...&q=...&pageToken=...
+ * GET /api/google/drive
  *
- * List files from Google Drive.
+ * List files from Google Drive for the authenticated user. Supports folder browsing,
+ * search queries, and cursor-based pagination.
+ *
+ * @auth Required (any authenticated user; Google must be connected)
+ * @query folderId - Optional Drive folder ID to list contents of
+ * @query q - Optional search query string
+ * @query pageToken - Optional pagination cursor
+ * @query pageSize - Optional number of results per page
+ * @returns Drive file list response from Google API
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';

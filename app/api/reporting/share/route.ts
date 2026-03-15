@@ -18,6 +18,18 @@ const bodySchema = z.object({
   }),
 });
 
+/**
+ * POST /api/reporting/share
+ *
+ * Create a shareable report link for a client's analytics. Generates a random token
+ * with a 30-day expiry and stores the selected date range and sections configuration.
+ *
+ * @auth Required (any authenticated user)
+ * @body clientId - Client UUID (required)
+ * @body dateRange - { start: YYYY-MM-DD, end: YYYY-MM-DD } (required)
+ * @body sections - { performanceSummary, platformBreakdown, topPosts, topPostsCount } (required)
+ * @returns {{ id: string, token: string, url: string }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

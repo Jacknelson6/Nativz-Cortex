@@ -18,6 +18,21 @@ const updateSchema = z.object({
   abbreviation: z.string().optional(),
 });
 
+/**
+ * POST /api/monday/update
+ *
+ * Update a Monday.com client board item's column values (services, agency, POC, abbreviation).
+ * After updating Monday.com, re-syncs the client's vault profile and revalidates the clients page.
+ *
+ * @auth Required (admin)
+ * @body monday_item_id - Numeric Monday.com item ID (required)
+ * @body services - Optional array of service strings: 'SMM' | 'Paid Media' | 'Affiliates' | 'Editing'
+ * @body agency - Optional agency label
+ * @body poc_name - Optional point-of-contact name
+ * @body poc_email - Optional point-of-contact email
+ * @body abbreviation - Optional client abbreviation
+ * @returns {{ success: true, message?: string }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

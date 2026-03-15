@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * POST /api/team/invite/accept
+ *
+ * Accept a team invite link and create a new admin user account. Validates the token,
+ * creates a Supabase auth user, inserts a users record with admin role, links the
+ * team_members record, and marks the invite as used. Rolls back auth user creation
+ * if the users table insert fails.
+ *
+ * @auth None (public — invite token provides authorization)
+ * @body token - Invite token from the team_invite_tokens table (required)
+ * @body full_name - New user's full name (required)
+ * @body email - New user's email address (required)
+ * @body password - New user's password (min 8 chars) (required)
+ * @returns {{ success: true }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const { token, full_name, email, password } = await request.json();

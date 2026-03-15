@@ -1,8 +1,26 @@
 /**
  * POST /api/shoots/schedule
  *
- * Create a scheduled shoot: save to DB, optionally create
- * a Google Calendar event, and update the Monday item status.
+ * Create a scheduled shoot event: persists to shoot_events, optionally creates a Google
+ * Calendar event via Nango (with invites to team, client, and videographer emails),
+ * and sends an in-app notification to the requesting admin.
+ *
+ * @auth Required (admin)
+ * @body client_name - Client name for the shoot title (required)
+ * @body client_id - Client UUID or null (required)
+ * @body monday_item_id - Monday.com item ID to associate (optional)
+ * @body shoot_date - Shoot date in ISO format YYYY-MM-DD (required)
+ * @body shoot_time - Start time HH:MM (defaults to 09:00 if omitted)
+ * @body location - Shoot location (optional)
+ * @body notes - Shoot notes (optional)
+ * @body agency - 'Nativz' | 'Anderson Collaborative' (required)
+ * @body team_emails - Team member emails to invite (required)
+ * @body client_emails - Client contact emails to invite (required)
+ * @body additional_emails - Additional attendee emails (required)
+ * @body videographer_emails - Videographer emails to invite (required)
+ * @body add_to_calendar - Create Google Calendar event (default true)
+ * @body send_invites - Send calendar invites to attendees (default true)
+ * @returns {{ success: true, shootId: string, googleEventCreated: boolean, invitesSent: boolean, inviteeCount: number }}
  */
 
 import { NextRequest, NextResponse } from 'next/server';

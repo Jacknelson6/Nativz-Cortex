@@ -9,7 +9,17 @@ const PublishDraftsSchema = z.object({
   client_id: z.string().uuid(),
 });
 
-/** POST: Promote all draft posts for a client to scheduled and sync to Late */
+/**
+ * POST /api/scheduler/posts/publish-drafts
+ *
+ * Promote all draft posts with a scheduled date for a client to 'scheduled' status
+ * and sync each to the Late API. Posts without Late-connected profiles are skipped.
+ * Late sync errors per post are logged but non-fatal.
+ *
+ * @auth Required (any authenticated user)
+ * @body client_id - Client UUID whose drafts to promote (required)
+ * @returns {{ published: number, synced: number, message: string }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

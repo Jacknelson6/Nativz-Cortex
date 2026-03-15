@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * POST /api/notifications/mark-all-read
+ *
+ * Mark all unread notifications as read for the authenticated user.
+ * Returns the count of notifications that were marked read.
+ *
+ * @auth Required (any authenticated user)
+ * @returns {{ success: true, count: number }} Number of notifications marked read
+ */
 export async function POST(_request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

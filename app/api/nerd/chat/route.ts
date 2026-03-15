@@ -211,6 +211,20 @@ async function buildKnowledgeSummary(clientId: string): Promise<string> {
 // Handler
 // ---------------------------------------------------------------------------
 
+/**
+ * POST /api/nerd/chat
+ *
+ * Streaming AI chat endpoint for "The Nerd" — an in-house social media strategist AI.
+ * Loads the full client portfolio and team context, then streams a response from Claude
+ * via OpenRouter. Supports tool use with up to 5 sequential tool calls per request.
+ * Write-risk tools emit action_confirmation events; destructive tools are blocked.
+ *
+ * @auth Required (any authenticated user)
+ * @body messages - Conversation history (required, min 1 message)
+ * @body mentions - Optional @mention resolutions from the latest user message
+ * @body actionConfirmation - Optional confirmed/cancelled tool action to execute
+ * @returns SSE stream of JSON lines: { type: 'text' | 'tool_result' | 'action_confirmation' | 'action_result', ... }
+ */
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

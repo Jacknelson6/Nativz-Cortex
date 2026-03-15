@@ -1,9 +1,15 @@
 /**
- * GET /api/instagram/media?account_id=...&limit=25
+ * GET /api/instagram/media
  *
- * Recent media with engagement metrics. Optionally includes per-post insights.
+ * Fetch recent Instagram media posts for a Business Account with engagement metrics.
+ * Optionally fetches per-post insights (slower — makes one extra API call per post).
+ *
+ * @auth Required (admin)
+ * @query account_id - Instagram Business Account ID (required)
+ * @query limit - Max posts to return (default: 25, max: 50)
+ * @query insights - If 'true', fetch per-post insight metrics (default: false)
+ * @returns {{ media: InstagramMedia[] }}
  */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';

@@ -1,8 +1,13 @@
 /**
  * POST /api/shoots/reschedule
  *
- * Updates the shoot date on the Monday.com Content Calendars board.
- * Used by the calendar drag-to-reschedule feature.
+ * Update the shoot date on the Monday.com Content Calendars board and sync the
+ * corresponding shoot_events record. Used by the calendar drag-to-reschedule feature.
+ *
+ * @auth Required (admin)
+ * @body monday_item_id - Numeric Monday.com item ID (required)
+ * @body new_date - New shoot date in YYYY-MM-DD format (required)
+ * @returns {{ success: true }}
  */
 
 import { NextRequest, NextResponse } from 'next/server';

@@ -13,6 +13,23 @@ const updateItemSchema = z.object({
   status: z.enum(['none', 'replicate', 'adapt', 'archived']).optional(),
 });
 
+/**
+ * PATCH /api/moodboard/items/[id]
+ *
+ * Update a moodboard item's position, size, title, replication brief, or curation status.
+ * Also touches the parent board's updated_at.
+ *
+ * @auth Required (admin)
+ * @param id - Moodboard item UUID
+ * @body position_x - Updated canvas X position (optional)
+ * @body position_y - Updated canvas Y position (optional)
+ * @body width - Updated canvas width (optional)
+ * @body height - Updated canvas height (optional)
+ * @body title - Updated item title (optional)
+ * @body replication_brief - Brief for replicating this video (optional)
+ * @body status - 'none' | 'replicate' | 'adapt' | 'archived' (optional)
+ * @returns {MoodboardItem} Updated item record
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -98,6 +115,15 @@ export async function PATCH(
   }
 }
 
+/**
+ * DELETE /api/moodboard/items/[id]
+ *
+ * Permanently delete a moodboard item. Also touches the parent board's updated_at.
+ *
+ * @auth Required (admin)
+ * @param id - Moodboard item UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import crypto from 'crypto';
 
+/**
+ * GET /api/shared/moodboard/[token]
+ *
+ * Public endpoint. Resolve a moodboard share token and return the full board with items,
+ * notes, and edges. Supports optional password protection via query param or header.
+ * Returns 401 if password is required or incorrect, 410 if expired.
+ *
+ * @auth None (public; password-protected boards require x-share-password header or ?password= query)
+ * @param token - Moodboard share token
+ * @query password - Password for password-protected boards (or use x-share-password header)
+ * @returns {{ board, items, notes, edges }}
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }

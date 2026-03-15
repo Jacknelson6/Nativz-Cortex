@@ -1,9 +1,12 @@
 /**
  * POST /api/invites
  *
- * Creates an invite token for a client. Admin only.
- * Body: { client_id: string }
- * Returns: { token, invite_url, expires_at }
+ * Create a portal invite token for a client. The token is used to generate a
+ * join URL that allows a new portal user to register and be linked to the client's organization.
+ *
+ * @auth Required (admin)
+ * @body client_id - Client UUID to create the invite for (required)
+ * @returns {{ token: string, invite_url: string, expires_at: string, client_name: string }}
  */
 
 import { NextRequest, NextResponse } from 'next/server';

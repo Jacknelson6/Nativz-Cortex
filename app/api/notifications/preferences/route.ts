@@ -3,6 +3,15 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_NOTIFICATION_PREFERENCES } from '@/lib/types/notification-preferences';
 
+/**
+ * GET /api/notifications/preferences
+ *
+ * Fetch the authenticated user's notification preferences, merged with defaults
+ * so all preference keys are always present.
+ *
+ * @auth Required (any authenticated user)
+ * @returns {NotificationPreferences} User's notification preference object
+ */
 export async function GET() {
   try {
     const supabase = await createServerSupabaseClient();
@@ -28,6 +37,15 @@ export async function GET() {
   }
 }
 
+/**
+ * PUT /api/notifications/preferences
+ *
+ * Replace the authenticated user's notification preferences with the provided object.
+ *
+ * @auth Required (any authenticated user)
+ * @body The full notification preferences object to save
+ * @returns {{ ok: true }}
+ */
 export async function PUT(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

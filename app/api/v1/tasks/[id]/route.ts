@@ -15,6 +15,15 @@ const updateTaskSchema = z.object({
   tags: z.array(z.string()).optional(),
 });
 
+/**
+ * GET /api/v1/tasks/[id]
+ *
+ * Fetch a single non-archived task by UUID with client and assignee join data.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @param id - Task UUID
+ * @returns {{ task: Task }}
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -39,6 +48,25 @@ export async function GET(
   return NextResponse.json({ task });
 }
 
+/**
+ * PATCH /api/v1/tasks/[id]
+ *
+ * Update a task's fields. Applies only the provided fields. Only non-archived
+ * tasks can be updated.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @param id - Task UUID
+ * @body title - Task title (optional)
+ * @body description - Task description (optional, nullable)
+ * @body status - 'backlog' | 'in_progress' | 'review' | 'done' (optional)
+ * @body priority - 'low' | 'medium' | 'high' | 'urgent' (optional)
+ * @body client_id - Client UUID (optional, nullable)
+ * @body assignee_id - Team member UUID (optional, nullable)
+ * @body due_date - ISO date string (optional, nullable)
+ * @body task_type - Task type enum (optional)
+ * @body tags - Array of tag strings (optional)
+ * @returns {{ task: Task }}
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -71,6 +99,15 @@ export async function PATCH(
   return NextResponse.json({ task });
 }
 
+/**
+ * DELETE /api/v1/tasks/[id]
+ *
+ * Soft-delete a task by setting archived_at. Returns 404 if already archived.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @param id - Task UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

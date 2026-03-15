@@ -20,6 +20,17 @@ interface TaskSuggestion {
   already_imported: boolean;
 }
 
+/**
+ * GET /api/tasks/suggestions
+ *
+ * Fetch task import suggestions from Monday.com (Content Calendars, Content Requests,
+ * and Blog Pipeline boards). Filters out items that are already done. Marks items that
+ * have already been imported to Cortex via their monday_item_id. Returns a warning if
+ * Monday.com is not configured or if any board fetch fails.
+ *
+ * @auth Required (admin)
+ * @returns {{ suggestions: TaskSuggestion[], warnings?: string[] }}
+ */
 export async function GET() {
   try {
     const supabase = await createServerSupabaseClient();

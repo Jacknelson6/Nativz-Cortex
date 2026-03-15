@@ -5,8 +5,14 @@ import { fetchCalendarEventsViaNango, isNangoConfigured } from '@/lib/nango/clie
 
 /**
  * POST /api/shoots/sync
- * Fetches upcoming Google Calendar events via Nango, filters for shoot-related
- * events, and upserts into shoot_events matching on google_event_id.
+ *
+ * Fetch upcoming Google Calendar events (next 90 days) via the user's Nango connection,
+ * filter for shoot-related events by keyword (shoot, film, content day, production),
+ * and upsert into shoot_events matching on google_event_id. Client names are inferred
+ * from the event title by fuzzy matching against active Cortex clients.
+ *
+ * @auth Required (admin with Nango connection)
+ * @returns {{ synced: number, skipped: number, total_calendar_events: number, shoot_events_found: number }}
  */
 export async function POST() {
   try {

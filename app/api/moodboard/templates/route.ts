@@ -47,6 +47,17 @@ const templates: BoardTemplate[] = [
   },
 ];
 
+/**
+ * GET /api/moodboard/templates
+ *
+ * Return the list of built-in board templates. Templates include pre-defined
+ * sticky note layouts for common use cases (competitor analysis, content
+ * inspiration, campaign planning). Used when creating a new board from a
+ * template.
+ *
+ * @auth None (public — no sensitive data)
+ * @returns {BoardTemplate[]}
+ */
 export async function GET() {
   return NextResponse.json(templates);
 }

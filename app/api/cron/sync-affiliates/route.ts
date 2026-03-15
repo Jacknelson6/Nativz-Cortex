@@ -3,6 +3,16 @@ import { syncAllAffiliateClients } from '@/lib/uppromote/sync';
 
 export const maxDuration = 60;
 
+/**
+ * GET /api/cron/sync-affiliates (Vercel cron)
+ * POST /api/cron/sync-affiliates (manual trigger)
+ *
+ * Sync affiliate data from UpPromote for all clients with a configured API key.
+ * Requires CRON_SECRET bearer token if set; otherwise allows unauthenticated access.
+ *
+ * @auth Bearer CRON_SECRET (optional — if CRON_SECRET env var is set)
+ * @returns {{ success: true, synced: number, failed: number, ... }}
+ */
 async function handler(request: NextRequest) {
   try {
     // Optional CRON_SECRET check

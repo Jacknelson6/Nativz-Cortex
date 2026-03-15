@@ -9,6 +9,14 @@ const createTeamMemberSchema = z.object({
   role: z.string().max(100).optional().nullable(),
 });
 
+/**
+ * GET /api/v1/team
+ *
+ * List all active team members, ordered alphabetically by name.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @returns {{ team: TeamMember[] }}
+ */
 export async function GET(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;
@@ -27,6 +35,17 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ team: data ?? [] });
 }
 
+/**
+ * POST /api/v1/team
+ *
+ * Create a new team member record. Returns 409 if the email already exists.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @body full_name - Full name, max 200 chars (required)
+ * @body email - Email address (optional)
+ * @body role - Role/title, max 100 chars (optional)
+ * @returns {{ member: TeamMember }}
+ */
 export async function POST(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;

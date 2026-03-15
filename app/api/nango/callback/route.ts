@@ -9,8 +9,14 @@ const callbackSchema = z.object({
 
 /**
  * POST /api/nango/callback
- * Called by the frontend after nango.auth() popup completes.
- * Stores the Nango connectionId on the user record.
+ *
+ * Called by the frontend after the nango.auth() popup completes OAuth. Stores the Nango
+ * connectionId on the user record and upserts into calendar_connections for backward
+ * compatibility.
+ *
+ * @auth Required (any authenticated user)
+ * @body connectionId - Nango connection ID returned after OAuth completes (required)
+ * @returns {{ ok: true, connectionId: string }}
  */
 export async function POST(request: NextRequest) {
   try {

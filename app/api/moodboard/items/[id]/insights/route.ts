@@ -6,6 +6,17 @@ import { parseAIResponseJSON } from '@/lib/ai/parse';
 import * as cheerio from 'cheerio';
 import type { PageInsights } from '@/lib/types/moodboard';
 
+/**
+ * POST /api/moodboard/items/[id]/insights
+ *
+ * Extract marketing insights from a website moodboard item. Fetches and parses the page
+ * HTML, then uses AI to produce a structured PageInsights object including summary, key
+ * headlines, value propositions, design notes, and actionable insights for the content team.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Moodboard item UUID (must be type 'website')
+ * @returns {MoodboardItem} Updated item record with page_insights and content_themes
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

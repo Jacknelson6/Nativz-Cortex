@@ -1,8 +1,13 @@
 /**
- * GET /api/invites/validate?token=...
+ * GET /api/invites/validate
  *
- * Validates an invite token (public endpoint, no auth required).
- * Returns client name if valid, or an error reason.
+ * Validate a portal invite token (public endpoint — no auth required). Checks that the
+ * token exists, has not been used, and has not expired.
+ *
+ * @auth None
+ * @query token - The invite token string to validate
+ * @returns {{ valid: true, client_name: string }} on success
+ * @returns {{ error: string, reason: 'invalid' | 'used' | 'expired' }} on failure
  */
 
 import { NextRequest, NextResponse } from 'next/server';

@@ -20,6 +20,18 @@ interface GeneratedPillar {
   frequency: string;
 }
 
+/**
+ * POST /api/clients/[id]/pillars/[pillarId]/reroll
+ *
+ * Regenerate a single content pillar in place using AI, preserving its ID and sort order.
+ * Considers sibling pillars to avoid duplication and optionally accepts a direction prompt.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Client UUID
+ * @param pillarId - Content pillar UUID to regenerate
+ * @body direction - Optional natural language direction to guide generation
+ * @returns {{ pillar: ContentPillar }} Updated pillar with new AI-generated content
+ */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string; pillarId: string }> }

@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * DELETE /api/scheduler/media/[id]
+ *
+ * Permanently delete a scheduler media item. Returns 409 if the media is still attached
+ * to any scheduled post — remove it from the post first.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Scheduler media UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

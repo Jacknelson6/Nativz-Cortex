@@ -1,10 +1,14 @@
 /**
  * POST /api/vault/webhook
  *
- * GitHub webhook receiver. When files are pushed to the vault repo,
- * changed markdown files are re-indexed for search.
+ * GitHub push webhook receiver. Re-indexes changed markdown files in the vault
+ * search database on push. Validates the X-Hub-Signature-256 HMAC if
+ * GITHUB_VAULT_WEBHOOK_SECRET is set (skips verification in dev without it).
+ * Handles 'ping' events, ignores non-push events, and removes deleted files
+ * from the vault_documents index.
  *
- * Security: Validates X-Hub-Signature-256 if GITHUB_VAULT_WEBHOOK_SECRET is set.
+ * @auth None (public — GitHub provides authorization via HMAC signature)
+ * @returns {{ message: string, results: IndexResult[] }}
  */
 
 import { NextRequest, NextResponse } from 'next/server';

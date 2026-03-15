@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/activity
+ *
+ * Fetch recent activity log entries. Admins see all activity; portal viewers see only
+ * activity related to clients in their organization.
+ *
+ * @auth Required (any authenticated user)
+ * @query limit - Maximum number of records to return (default: 50, max: 100)
+ * @returns {ActivityLogEntry[]} Array of activity log entries, most recent first
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

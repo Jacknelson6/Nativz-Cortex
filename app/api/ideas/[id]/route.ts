@@ -3,6 +3,16 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/ideas/[id]
+ *
+ * Poll the status of an idea generation job. Returns the generation record including
+ * status, generated ideas (if completed), and any error message.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Idea generation UUID
+ * @returns {{ id: string, status: 'processing' | 'completed' | 'failed', ideas: GeneratedIdeaResult[] | null, error_message: string | null, completed_at: string | null }}
+ */
 // ── GET — poll generation status ──
 export async function GET(
   _request: NextRequest,
@@ -32,6 +42,18 @@ const ideaTriageSchema = z.object({
   admin_notes: z.string().max(2000).optional().nullable(),
 });
 
+/**
+ * PATCH /api/ideas/[id]
+ *
+ * Triage an idea submission — update its status (new, reviewed, accepted, archived)
+ * and/or add admin notes. Records the reviewer's ID and timestamp when status changes.
+ *
+ * @auth Required (admin)
+ * @param id - Idea submission UUID
+ * @body status - New status ('new' | 'reviewed' | 'accepted' | 'archived')
+ * @body admin_notes - Internal admin notes (max 2000 chars)
+ * @returns {IdeaSubmission} Updated idea submission record
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -100,6 +122,15 @@ export async function PATCH(
   }
 }
 
+/**
+ * DELETE /api/ideas/[id]
+ *
+ * Permanently delete an idea submission.
+ *
+ * @auth Required (admin)
+ * @param id - Idea submission UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

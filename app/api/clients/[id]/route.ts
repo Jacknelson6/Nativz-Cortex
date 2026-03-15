@@ -3,6 +3,16 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { syncClientProfileToVault, removeClientFromVault } from '@/lib/vault/sync';
 
+/**
+ * GET /api/clients/[id]
+ *
+ * Fetch a single client's full profile including recent searches, ideas, shoots, moodboards,
+ * portal contacts, strategy, and a knowledge entry summary. Supports lookup by UUID or slug.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Client UUID or slug
+ * @returns {{ client: Client, portalContacts: User[], strategy: ClientStrategy | null, searches: TopicSearch[], recentShoots: ShootEvent[], recentMoodboards: MoodboardBoard[], ideas: IdeaSubmission[], ideaCount: number, knowledgeSummary: { type: string, count: number }[] }}
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -137,6 +147,32 @@ export async function GET(
   }
 }
 
+/**
+ * PATCH /api/clients/[id]
+ *
+ * Update allowed client fields. After update, syncs the client profile to the Obsidian vault
+ * (non-blocking). Only a specific whitelist of fields can be updated.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @body industry - Updated industry
+ * @body target_audience - Updated target audience description
+ * @body brand_voice - Updated brand voice description
+ * @body topic_keywords - Updated topic keywords array
+ * @body feature_flags - Updated feature flag object
+ * @body is_active - Active/inactive status
+ * @body logo_url - Updated logo URL
+ * @body website_url - Updated website URL
+ * @body description - Client description
+ * @body services - Array of service strings
+ * @body health_score - Health score value
+ * @body agency - Agency name
+ * @body google_drive_branding_url - Google Drive branding folder URL
+ * @body google_drive_calendars_url - Google Drive calendars folder URL
+ * @body monthly_boosting_budget - Monthly ad boosting budget
+ * @body preferences - Client preferences object
+ * @returns {Client} Updated client record
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -223,6 +259,16 @@ export async function PATCH(
   }
 }
 
+/**
+ * DELETE /api/clients/[id]
+ *
+ * Permanently delete a client and all related records (searches, ideas, strategies, invite tokens).
+ * Also removes the client folder from the Obsidian vault (non-blocking).
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

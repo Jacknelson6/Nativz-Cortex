@@ -13,6 +13,15 @@ const createPillarSchema = z.object({
   frequency: z.string().optional(),
 });
 
+/**
+ * GET /api/clients/[id]/pillars
+ *
+ * List all content pillars for a client, ordered by sort_order ascending.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Client UUID
+ * @returns {{ pillars: ContentPillar[] }}
+ */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -39,6 +48,23 @@ export async function GET(
   return NextResponse.json({ pillars: pillars ?? [] });
 }
 
+/**
+ * POST /api/clients/[id]/pillars
+ *
+ * Create a new content pillar for a client. The sort_order is automatically set to
+ * append at the end of the existing pillars list.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Client UUID
+ * @body name - Pillar name (required)
+ * @body description - Pillar description
+ * @body emoji - Emoji icon for the pillar
+ * @body example_series - Array of example series/show names
+ * @body formats - Array of video format strings
+ * @body hooks - Array of hook/angle strings
+ * @body frequency - Posting frequency suggestion
+ * @returns {{ pillar: ContentPillar }} Created pillar record
+ */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }

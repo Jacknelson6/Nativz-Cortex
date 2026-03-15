@@ -1,9 +1,12 @@
 /**
  * GET /api/instagram/accounts
  *
- * Discover Instagram Business Accounts linked to the Meta token.
+ * Discover Instagram Business Accounts linked to the configured Meta token. Returns all
+ * accounts accessible to the configured Meta App Access Token.
+ *
+ * @auth Required (admin)
+ * @returns {{ accounts: InstagramAccount[] }}
  */
-
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';

@@ -8,6 +8,18 @@ const ideaSchema = z.object({
   count: z.number().min(1).max(50).default(10),
 });
 
+/**
+ * POST /api/clients/[id]/knowledge/generate-ideas
+ *
+ * Generate AI video ideas for a client based on their knowledge base, brand profile,
+ * and an optional concept prompt.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Client UUID
+ * @body concept - Optional concept or theme to focus ideas around
+ * @body count - Number of ideas to generate (default: 10, min: 1, max: 50)
+ * @returns {{ ideas: VideoIdea[] }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

@@ -8,6 +8,15 @@ export const maxDuration = 30;
 let cachedData: any = null;
 let cachedAt = 0;
 
+/**
+ * GET /api/clients/monday-cache
+ *
+ * Fetch and cache Monday.com client data (5-minute in-memory TTL). Returns all parsed
+ * Monday.com client records for fast access without hitting the Monday.com API on every request.
+ *
+ * @auth Required (admin)
+ * @returns {ParsedMondayClient[]} Array of all parsed Monday.com client records
+ */
 export async function GET() {
   try {
     const supabase = await createServerSupabaseClient();

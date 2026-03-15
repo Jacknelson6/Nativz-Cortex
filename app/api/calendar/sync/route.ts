@@ -4,6 +4,16 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchCalendarEventsViaNango } from '@/lib/nango/client';
 import { identifyShootEvents, matchShootToClient } from '@/lib/google/calendar';
 
+/**
+ * POST /api/calendar/sync
+ *
+ * Sync the authenticated admin's Google Calendar with Cortex. Fetches upcoming events (60 days)
+ * via Nango, identifies shoot events and creates/updates shoot_events records, and pulls
+ * changes to Cortex meetings (time shifts, title changes, cancellations).
+ *
+ * @auth Required (admin)
+ * @returns {{ totalEvents, shoots: { found, created, updated, matched }, meetings: { synced, updated, cancelled } }}
+ */
 export async function POST() {
   try {
     const supabase = await createServerSupabaseClient();

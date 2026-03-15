@@ -30,6 +30,20 @@ async function verifyAdmin(userId: string) {
   return data?.role === 'admin';
 }
 
+/**
+ * GET /api/meetings
+ *
+ * List meetings for the admin dashboard. Supports filtering by client, status, and date range.
+ * When a full date range is specified, also returns recurring meetings whose series started
+ * before the range (so their occurrences within the range are visible).
+ *
+ * @auth Required (admin)
+ * @query client_id - Filter by client UUID
+ * @query date_from - Start of date range (ISO datetime or YYYY-MM-DD)
+ * @query date_to - End of date range (ISO datetime or YYYY-MM-DD; end of day is included)
+ * @query status - Filter by meeting status
+ * @returns {{ meetings: Meeting[] }} Array of meeting records with client relation
+ */
 // ─── GET /api/meetings ────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
@@ -98,6 +112,24 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * POST /api/meetings
+ *
+ * Create a new meeting. If no attendees are provided and a client_id is given,
+ * auto-populates attendees from client contacts and assigned team members.
+ * Creates a Google Calendar event via Nango if the user has a calendar connection (non-fatal).
+ *
+ * @auth Required (admin)
+ * @body client_id - Associated client UUID (nullable)
+ * @body title - Meeting title (required)
+ * @body scheduled_at - ISO datetime string of the meeting start (required)
+ * @body duration_minutes - Duration in minutes (15-480, default: 30)
+ * @body location - Meeting location or video link (nullable)
+ * @body recurrence_rule - iCal RRULE string for recurring meetings (nullable)
+ * @body attendees - Array of { email, name?, role? } objects (auto-populated if empty + client_id given)
+ * @body notes - Meeting notes (nullable)
+ * @returns {{ meeting: Meeting & { google_event_id: string | null } }}
+ */
 // ─── POST /api/meetings ───────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {

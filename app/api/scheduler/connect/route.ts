@@ -51,6 +51,18 @@ async function ensureLateProfile(clientId: string, clientName: string): Promise<
   return lateProfileId;
 }
 
+/**
+ * POST /api/scheduler/connect
+ *
+ * Initiate a Late API social account connection for a client. Creates a Late profile
+ * for the client if one doesn't exist yet, then returns an authorization URL to redirect
+ * the user to for platform OAuth.
+ *
+ * @auth Required (any authenticated user)
+ * @body platform - 'facebook' | 'instagram' | 'tiktok' | 'youtube' (required)
+ * @body client_id - Client UUID (required)
+ * @returns {{ authUrl: string }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

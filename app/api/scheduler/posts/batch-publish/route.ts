@@ -7,7 +7,17 @@ const BatchPublishSchema = z.object({
   post_ids: z.array(z.string().uuid()).min(1),
 });
 
-// POST: Trigger immediate publish for multiple posts
+/**
+ * POST /api/scheduler/posts/batch-publish
+ *
+ * Queue multiple scheduled or draft posts for immediate publishing by setting their
+ * status to 'publishing' and scheduled_at to now. The cron job picks them up on
+ * its next run.
+ *
+ * @auth Required (any authenticated user)
+ * @body post_ids - Array of scheduled post UUIDs to publish (min 1 required)
+ * @returns {{ published: number, message: string }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

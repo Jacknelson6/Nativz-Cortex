@@ -7,6 +7,17 @@ const schema = z.object({
   item_ids: z.array(z.string().uuid()).min(1).max(200),
 });
 
+/**
+ * POST /api/moodboard/items/batch-tags
+ *
+ * Fetch all tags for a batch of moodboard items in a single query. Returns a
+ * map of item_id → MoodboardTag[]. Useful for efficiently loading tag state
+ * for a full board without N+1 queries.
+ *
+ * @auth Required (admin)
+ * @body item_ids - Array of 1–200 moodboard item UUIDs
+ * @returns {Record<string, MoodboardTag[]>} Map of item UUID to tag array
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

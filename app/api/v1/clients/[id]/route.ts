@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateApiKey } from '@/lib/api-keys/validate';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/v1/clients/[id]
+ *
+ * Fetch a single client by UUID or slug, with associated contacts.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @param id - Client UUID or slug
+ * @returns {{ client: Client, contacts: Contact[] }}
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

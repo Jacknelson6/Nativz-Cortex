@@ -18,7 +18,26 @@ const CreatePostSchema = z.object({
   collaborator_handles: z.array(z.string()).default([]),
 });
 
-// POST: Create a new scheduled post
+/**
+ * POST /api/scheduler/posts
+ *
+ * Create a new scheduled post. Persists the post, links platform profiles and media,
+ * then syncs to the Late API if any linked profiles have a late_account_id and the
+ * status is 'scheduled' (not 'draft'). Late sync failures are logged but non-fatal.
+ *
+ * @auth Required (any authenticated user)
+ * @body client_id - Client UUID (required)
+ * @body caption - Post caption text (default '')
+ * @body hashtags - Array of hashtags (default [])
+ * @body scheduled_at - ISO datetime for scheduling, or null for drafts
+ * @body status - 'draft' | 'scheduled' (default 'draft')
+ * @body platform_profile_ids - Social profile UUIDs to publish to
+ * @body media_ids - Scheduler media UUIDs to attach
+ * @body cover_image_url - Cover image URL for video posts (nullable)
+ * @body tagged_people - Instagram tagged people handles
+ * @body collaborator_handles - Instagram collaborator handles
+ * @returns {{ post: ScheduledPost }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -147,7 +166,18 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET: List posts for a client within a date range
+/**
+ * GET /api/scheduler/posts
+ *
+ * List scheduled posts for a client, with associated platforms, media, and review
+ * link status. Returns posts ordered by scheduled_at ascending.
+ *
+ * @auth Required (any authenticated user)
+ * @query client_id - Client UUID to filter by (required)
+ * @query start - Filter posts on or after this datetime (optional)
+ * @query end - Filter posts on or before this datetime (optional)
+ * @returns {{ posts: TransformedScheduledPost[] }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

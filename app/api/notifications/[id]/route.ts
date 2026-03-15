@@ -7,6 +7,16 @@ const updateNotificationSchema = z.object({
   read: z.boolean(),
 });
 
+/**
+ * PATCH /api/notifications/[id]
+ *
+ * Mark a specific notification as read or unread. Only the recipient can update their own notification.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Notification UUID
+ * @body read - Boolean indicating whether to mark read (true) or unread (false)
+ * @returns {Notification} Updated notification record
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

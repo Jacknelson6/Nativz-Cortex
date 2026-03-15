@@ -12,6 +12,16 @@ async function verifyAdmin(userId: string) {
   return data?.role === 'admin';
 }
 
+/**
+ * GET /api/tasks/[id]/activity
+ *
+ * Fetch the activity log for a specific task — field changes, status updates, assignments, etc.
+ * Returns up to 50 entries ordered by most recent.
+ *
+ * @auth Required (admin)
+ * @param id - Task UUID
+ * @returns {TaskActivity[]} Array of task activity records
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

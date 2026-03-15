@@ -32,6 +32,15 @@ async function verifyAdmin(userId: string) {
   return data?.role === 'admin';
 }
 
+/**
+ * GET /api/tasks/[id]
+ *
+ * Fetch a single non-archived task by ID, including associated client and assignee details.
+ *
+ * @auth Required (admin)
+ * @param id - Task UUID
+ * @returns {Task} Task with client and team_member relations
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -67,6 +76,30 @@ export async function GET(
   }
 }
 
+/**
+ * PATCH /api/tasks/[id]
+ *
+ * Update a task. Non-owners can only update tasks they created or are assigned to.
+ * Completing a recurring task advances the due date instead of marking it done.
+ * Field changes are recorded in task activity, new assignees are notified,
+ * and changes are synced to Todoist for connected users.
+ *
+ * @auth Required (admin)
+ * @param id - Task UUID
+ * @body title - Updated title
+ * @body description - Updated description
+ * @body status - New status (backlog | in_progress | review | done)
+ * @body priority - New priority (low | medium | high | urgent)
+ * @body client_id - Updated client UUID
+ * @body assignee_id - Updated assignee team member UUID
+ * @body due_date - Updated due date (YYYY-MM-DD)
+ * @body task_type - Updated type (content | shoot | edit | paid_media | strategy | other)
+ * @body shoot_date - Updated shoot date (YYYY-MM-DD)
+ * @body tags - Updated array of tags
+ * @body monday_item_id - Updated Monday.com item ID
+ * @body monday_board_id - Updated Monday.com board ID
+ * @returns {Task} Updated task with client and team_member relations
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -282,6 +315,16 @@ export async function PATCH(
   }
 }
 
+/**
+ * DELETE /api/tasks/[id]
+ *
+ * Soft-delete (archive) a task by setting archived_at. Non-owners can only delete tasks
+ * they created. If the task has a linked Todoist task, it is also deleted from Todoist.
+ *
+ * @auth Required (admin)
+ * @param id - Task UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

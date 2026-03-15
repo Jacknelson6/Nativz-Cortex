@@ -10,6 +10,18 @@ import type { ContentStrategy } from '@/lib/types/strategy';
 
 export const maxDuration = 300;
 
+/**
+ * POST /api/clients/[id]/strategy
+ *
+ * Generate a full content strategy for a client using AI. Gathers SERP data for the
+ * client's industry and topic keywords, builds a comprehensive onboarding strategy prompt,
+ * calls Claude AI, and saves the resulting strategy (pillars, platform strategy, video ideas,
+ * competitive landscape, next steps, etc.) to the database. Syncs to Obsidian vault (non-blocking).
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @returns {{ strategyId: string, status: 'completed', tokens_used: number, estimated_cost: number }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -157,6 +169,16 @@ export async function POST(
   }
 }
 
+/**
+ * GET /api/clients/[id]/strategy
+ *
+ * Fetch the most recently generated content strategy for a client.
+ * Portal users (viewers) can only access strategies for clients in their organization.
+ *
+ * @auth Required (admin or viewer in client's organization)
+ * @param id - Client UUID
+ * @returns {ClientStrategy} Most recent client strategy record
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

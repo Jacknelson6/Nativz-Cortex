@@ -21,6 +21,21 @@ const createTaskSchema = z.object({
   recurrence_from_completion: z.boolean().optional(),
 });
 
+/**
+ * GET /api/tasks
+ *
+ * List all non-archived tasks for the authenticated admin user. Owners see all tasks;
+ * non-owners see only tasks assigned to them or created by them.
+ *
+ * @auth Required (admin)
+ * @query client_id - Filter by client UUID
+ * @query assignee_id - Filter by team member UUID
+ * @query status - Filter by status (backlog | in_progress | review | done)
+ * @query task_type - Filter by type (content | shoot | edit | paid_media | strategy | other)
+ * @query due_date_from - Filter tasks with due date on or after this date (YYYY-MM-DD)
+ * @query due_date_to - Filter tasks with due date on or before this date (YYYY-MM-DD)
+ * @returns {{ tasks: Task[], is_owner: boolean, my_team_member_id: string | null, todoist_connected: boolean }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -104,6 +119,29 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * POST /api/tasks
+ *
+ * Create a new task. If no assignee is specified, the task is auto-assigned to the creator's
+ * team member record. Newly created tasks are pushed to Todoist for all connected users involved.
+ *
+ * @auth Required (admin)
+ * @body title - Task title (required)
+ * @body description - Task description
+ * @body status - Initial status (backlog | in_progress | review | done), defaults to backlog
+ * @body priority - Priority level (low | medium | high | urgent), defaults to low
+ * @body client_id - Associated client UUID
+ * @body assignee_id - Team member UUID to assign to; defaults to creator
+ * @body due_date - Due date (YYYY-MM-DD)
+ * @body task_type - Type (content | shoot | edit | paid_media | strategy | other), defaults to other
+ * @body shoot_date - Shoot date (YYYY-MM-DD)
+ * @body tags - Array of tag strings
+ * @body monday_item_id - Monday.com item ID for sync
+ * @body monday_board_id - Monday.com board ID for sync
+ * @body recurrence - Recurrence rule string (e.g. "every week")
+ * @body recurrence_from_completion - If true, next recurrence is calculated from completion date
+ * @returns {Task} Created task with client and assignee relations (201)
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

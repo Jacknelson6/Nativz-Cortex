@@ -4,6 +4,18 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { analyzeVideoWithGemini } from '@/lib/ai/gemini';
 import { logUsage, calculateGroqAudioCost } from '@/lib/ai/usage';
 
+/**
+ * POST /api/reference-videos/[id]/process
+ *
+ * Analyze a reference video by running Groq Whisper transcription and Gemini visual
+ * analysis in parallel. Saves transcript, segments, and visual_analysis to the record.
+ * Sets status to 'completed' on success or 'failed' if both steps fail. Logs usage
+ * costs to the ai_usage table.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Reference video UUID
+ * @returns {{ video: ReferenceVideo }}
+ */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },

@@ -3,6 +3,18 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPostingService } from '@/lib/posting';
 
+/**
+ * GET /api/scheduler/analytics
+ *
+ * Fetch post analytics from the Late API for all social profiles linked to a client
+ * that have a late_account_id. Returns analytics merged across all connected accounts.
+ *
+ * @auth Required (any authenticated user)
+ * @query client_id - Client UUID (required)
+ * @query start - Analytics start date (required)
+ * @query end - Analytics end date (required)
+ * @returns {{ analytics: AnalyticsItem[] }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

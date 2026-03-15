@@ -11,6 +11,22 @@ const rescriptSchema = z.object({
   notes: z.string().optional(),
 });
 
+/**
+ * POST /api/moodboard/items/[id]/rescript
+ *
+ * AI-rescript a moodboard video for a specific brand. Uses the item's hook, transcript,
+ * and winning elements as a structural template, then rewrites the spoken word script
+ * for the target brand. Saves the rescript and replication_brief to the item.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Moodboard item UUID
+ * @body client_id - Client UUID for brand voice context (optional)
+ * @body brand_voice - Brand voice override (optional)
+ * @body product - Product or service being promoted (optional)
+ * @body target_audience - Target audience description (optional)
+ * @body notes - Additional adaptation notes (optional)
+ * @returns {{ rescript: { script, client_id, brand_voice, product, target_audience, generated_at } }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

@@ -10,6 +10,16 @@ const createBoardSchema = z.object({
   template_id: z.string().optional(),
 });
 
+/**
+ * GET /api/moodboard/boards
+ *
+ * List all moodboard boards, ordered by updated_at descending. Includes item counts and
+ * up to 4 thumbnail URLs per board for grid previews. Excludes archived boards by default.
+ *
+ * @auth Required (admin)
+ * @query show_archived - Pass 'true' to include archived boards (optional)
+ * @returns {MoodboardBoard[]} Boards with client_name, item_count, and thumbnails
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -92,6 +102,19 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * POST /api/moodboard/boards
+ *
+ * Create a new moodboard board. If a template_id is provided, pre-populates the board
+ * with notes from the selected template.
+ *
+ * @auth Required (admin)
+ * @body name - Board name (required, max 200 chars)
+ * @body description - Board description (optional)
+ * @body client_id - Associated client UUID (optional)
+ * @body template_id - Template ID to pre-populate notes from (optional)
+ * @returns {MoodboardBoard} Created board record
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

@@ -14,6 +14,22 @@ const preferencesSchema = z.object({
   }),
 });
 
+/**
+ * POST /api/clients/preferences
+ *
+ * Update a client's content preferences (tone, topics, competitors, seasonal priorities).
+ * Portal users (viewers) can only update clients in their organization and only if the
+ * client has the can_edit_preferences feature flag enabled.
+ *
+ * @auth Required (admin or viewer)
+ * @body client_id - Client UUID (required)
+ * @body preferences.tone_keywords - Array of tone descriptors (max 20)
+ * @body preferences.topics_lean_into - Array of topics to emphasize (max 30)
+ * @body preferences.topics_avoid - Array of topics to avoid (max 30)
+ * @body preferences.competitor_accounts - Array of competitor account names (max 20)
+ * @body preferences.seasonal_priorities - Array of seasonal content priorities (max 20)
+ * @returns {{ success: true }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

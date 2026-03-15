@@ -5,7 +5,13 @@ import { createConnectSession, isNangoConfigured } from '@/lib/nango/client';
 import { z } from 'zod';
 
 /**
- * GET — Create a Nango connect session and return the token for the frontend popup.
+ * GET /api/calendar/connect
+ *
+ * Create a Nango connect session and return a short-lived token for the frontend OAuth popup.
+ * Used to initiate the Google Calendar OAuth flow via Nango.
+ *
+ * @auth Required (admin)
+ * @returns {{ token: string }} Nango connect session token
  */
 export async function GET() {
   try {
@@ -47,8 +53,14 @@ const confirmSchema = z.object({
 });
 
 /**
- * POST — Called by the frontend after nango.auth() succeeds.
- * Stores the Nango connectionId in our calendar_connections table.
+ * POST /api/calendar/connect
+ *
+ * Confirm a successful Nango OAuth flow by storing the Nango connectionId in the
+ * calendar_connections table. Upserts — updates any existing Google connection for this user.
+ *
+ * @auth Required (admin)
+ * @body connectionId - Nango connection ID returned after OAuth completes (required)
+ * @returns {{ ok: true }}
  */
 export async function POST(request: NextRequest) {
   try {

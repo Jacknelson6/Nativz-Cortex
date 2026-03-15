@@ -4,9 +4,17 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getTikTokMetadata } from '@/lib/tiktok/scraper';
 
 /**
- * Returns a direct (playable) video URL for an item.
- * Needed because platform page URLs (TikTok, IG, etc.) can't be loaded
- * in a <video> element for client-side frame extraction.
+ * GET /api/moodboard/items/[id]/video-url
+ *
+ * Return a direct (playable) video URL for a moodboard item. Platform page
+ * URLs (TikTok, Instagram, etc.) cannot be loaded in a <video> element, so
+ * this endpoint resolves the underlying CDN video URL for client-side use
+ * (e.g. frame extraction, thumbnail selection). Currently supports TikTok;
+ * returns 400 for other platforms without a direct CDN URL.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Moodboard item UUID
+ * @returns {{ videoUrl: string }}
  */
 export async function GET(
   _request: NextRequest,

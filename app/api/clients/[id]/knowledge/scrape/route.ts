@@ -9,6 +9,18 @@ const scrapeSchema = z.object({
   maxDepth: z.number().int().min(1).max(5).optional().default(3),
 });
 
+/**
+ * POST /api/clients/[id]/knowledge/scrape
+ *
+ * Crawl the client's website and create web_page knowledge entries for each discovered page.
+ * Respects the client's configured website_url. Returns 409 if a crawl is already in progress.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID (client must have website_url set)
+ * @body maxPages - Max pages to crawl (default: 50, max: 100)
+ * @body maxDepth - Max link depth to follow (default: 3, max: 5)
+ * @returns {{ message: string, count: number }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

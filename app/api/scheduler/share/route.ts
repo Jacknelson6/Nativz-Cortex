@@ -9,7 +9,18 @@ const CreateShareLinkSchema = z.object({
   label: z.string().min(1).default('Review link'),
 });
 
-/** POST: Create a shareable calendar review link for selected posts */
+/**
+ * POST /api/scheduler/share
+ *
+ * Create a shareable calendar review link for a selected set of posts. Clients use
+ * the generated URL to view and provide feedback on scheduled content without logging in.
+ *
+ * @auth Required (any authenticated user)
+ * @body client_id - Client UUID (required)
+ * @body post_ids - Scheduled post UUIDs to share (min 1 required)
+ * @body label - Label for the review link (default 'Review link')
+ * @returns {{ link: ClientReviewLink, url: string }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -53,7 +64,17 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** GET: Fetch posts for a shared calendar link (public — no auth) */
+/**
+ * GET /api/scheduler/share
+ *
+ * Fetch posts for a shared calendar review link. Public endpoint used by the client
+ * review page. Returns posts enriched with platform info, media thumbnails, and
+ * per-post review status from any existing comments.
+ *
+ * @auth None (public — token provides authorization)
+ * @query token - Calendar review link token (required)
+ * @returns {{ client_name, label, posts: EnrichedPost[] }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const token = new URL(request.url).searchParams.get('token');

@@ -27,6 +27,38 @@ const UpdateSchema = z.object({
   agency: z.string().nullable().optional(),
 }).partial();
 
+/**
+ * PATCH /api/pipeline/[id]
+ *
+ * Update one or more status fields or metadata on a content pipeline item.
+ * Allows setting any combination of the five status tracks plus team assignments,
+ * dates, folder URLs, and notes.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Content pipeline item UUID
+ * @body assignment_status - 'can_assign' | 'assigned' | 'need_shoot'
+ * @body raws_status - 'need_to_schedule' | 'waiting_on_shoot' | 'uploaded'
+ * @body editing_status - 'not_started' | 'editing' | 'edited' | 'em_approved' | 'revising' | 'blocked' | 'scheduled' | 'done'
+ * @body client_approval_status - 'not_sent' | 'waiting_on_approval' | 'client_approved' | 'needs_revision' | 'revised' | 'sent_to_paid_media'
+ * @body boosting_status - 'not_boosting' | 'working_on_it' | 'done'
+ * @body strategist - Strategist name
+ * @body videographer - Videographer name
+ * @body editing_manager - Editing manager name
+ * @body editor - Editor name
+ * @body smm - Social media manager name
+ * @body shoot_date - Shoot date (YYYY-MM-DD)
+ * @body strategy_due_date - Strategy due date
+ * @body raws_due_date - Raws due date
+ * @body smm_due_date - SMM due date
+ * @body calendar_sent_date - Date calendar was sent
+ * @body edited_videos_folder_url - URL to edited videos folder
+ * @body raws_folder_url - URL to raws folder
+ * @body later_calendar_link - Later.com calendar link
+ * @body project_brief_url - Project brief URL
+ * @body notes - General notes
+ * @body agency - Agency override
+ * @returns {ContentPipelineItem} Updated pipeline item
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -65,6 +97,15 @@ export async function PATCH(
   }
 }
 
+/**
+ * DELETE /api/pipeline/[id]
+ *
+ * Permanently delete a content pipeline item.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Content pipeline item UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

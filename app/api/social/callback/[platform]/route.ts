@@ -20,9 +20,18 @@ interface StatePayload {
 }
 
 /**
- * GET /api/social/callback/[platform]?code=xxx&state=xxx
- * OAuth callback — exchanges code for tokens, upserts social_profiles.
- * Redirects back to the client settings page on completion.
+ * GET /api/social/callback/[platform]
+ *
+ * OAuth callback handler for social platform connections. Exchanges the auth code for
+ * access tokens, upserts social_profiles for all connected accounts (Meta: per
+ * Facebook page + linked Instagram), and redirects to the client settings page.
+ * State param must be a base64url-encoded JSON with clientId, platform, and userId.
+ *
+ * @auth None (OAuth callback — authorization is via state param)
+ * @param platform - 'instagram' | 'facebook' | 'tiktok' | 'youtube'
+ * @query code - Authorization code from platform (required)
+ * @query state - Base64url-encoded state payload (required)
+ * @returns Redirect to /admin/clients/[slug]?connected=[platform]
  */
 export async function GET(
   request: NextRequest,

@@ -21,6 +21,31 @@ const onboardSchema = z.object({
   agency: z.string().optional().default(''),
 });
 
+/**
+ * POST /api/clients/onboard
+ *
+ * Full client onboarding flow that provisions across four systems in parallel:
+ * 1. Cortex DB — creates organization + client records
+ * 2. Obsidian Vault — syncs client profile markdown
+ * 3. Monday.com — creates board item with service/agency/POC columns
+ * 4. Late — creates social media scheduling profile (if SMM service included)
+ * Auto-generates a URL-safe slug from the client name (with collision handling).
+ * Returns the outcome for each system independently; only the Cortex DB failure is fatal.
+ *
+ * @auth Required (admin)
+ * @body name - Client display name (required)
+ * @body website_url - Client website URL (required)
+ * @body industry - Industry category (required)
+ * @body target_audience - Target audience description
+ * @body brand_voice - Brand voice description
+ * @body topic_keywords - Array of content topic keywords
+ * @body logo_url - Logo image URL (nullable)
+ * @body poc_name - Point of contact name
+ * @body poc_email - Point of contact email
+ * @body services - Array of service strings (e.g. ['SMM', 'Paid Media', 'Editing', 'Affiliates'])
+ * @body agency - Agency name override
+ * @returns {{ cortex: SystemResult, vault: SystemResult, monday: SystemResult, late: SystemResult }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

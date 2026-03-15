@@ -7,6 +7,17 @@ import type { DateRange } from '@/lib/types/reporting';
 
 export const maxDuration = 300;
 
+/**
+ * GET /api/cron/sync-reporting
+ *
+ * Vercel cron job: sync social analytics for all active clients that have social profiles.
+ * Performs a 90-day backfill for clients with no existing snapshots; otherwise syncs the
+ * last 7 days. Generates analytics notifications after each successful sync. Sends admin
+ * alerts (throttled to once per 24h) if sync errors occur. Requires CRON_SECRET bearer token.
+ *
+ * @auth Bearer CRON_SECRET (Vercel cron)
+ * @returns {{ message: string, synced: number, failed: number, notifications: number }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -115,14 +126,24 @@ export async function GET(request: NextRequest) {
             result.errors,
           );
 
-          // Notify admins about sync errors
-          await notifyAdmins({
-            type: 'sync_failed',
-            title: `Sync issue for ${client.name}`,
-            body: result.errors.join('; ').substring(0, 200),
-            linkPath: `/admin/analytics?client=${client.id}`,
-          });
-          totalNotifications++;
+          // Only notify if no identical sync_failed notification exists in the last 24h
+          const { count: recentCount } = await adminClient
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('type', 'sync_failed')
+            .eq('title', `Sync issue for ${client.name}`)
+            .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+          if ((recentCount ?? 0) === 0) {
+            await notifyAdmins({
+              type: 'sync_failed',
+              title: `Sync issue for ${client.name}`,
+              body: result.errors.join('; ').substring(0, 200),
+              linkPath: `/admin/analytics?client=${client.id}`,
+              clientId: client.id,
+            });
+            totalNotifications++;
+          }
         }
       } catch (err) {
         failedCount++;

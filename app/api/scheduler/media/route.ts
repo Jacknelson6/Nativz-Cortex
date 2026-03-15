@@ -13,7 +13,24 @@ const ConfirmUploadSchema = z.object({
   thumbnail_url: z.string().nullable().optional(),
 });
 
-// POST: Get presigned upload URL or confirm upload
+/**
+ * POST /api/scheduler/media
+ *
+ * Two-action endpoint for media uploads. With action='get-upload-url', returns a
+ * presigned upload URL and public URL from Late. With action='confirm-upload', saves
+ * the media record to scheduler_media after the client has uploaded directly to Late.
+ *
+ * @auth Required (any authenticated user)
+ * @body action - 'get-upload-url' | 'confirm-upload' (required)
+ * @body contentType - MIME type of the file (for get-upload-url)
+ * @body filename - Original filename (for get-upload-url and confirm-upload)
+ * @body client_id - Client UUID (for confirm-upload)
+ * @body public_url - Late public URL of the uploaded file (for confirm-upload)
+ * @body file_size_bytes - File size in bytes (for confirm-upload)
+ * @body mime_type - MIME type (for confirm-upload)
+ * @body thumbnail_url - Thumbnail URL (for confirm-upload, optional)
+ * @returns {{ uploadUrl, publicUrl }} | SchedulerMedia record
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -70,7 +87,17 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET: List media for a client
+/**
+ * GET /api/scheduler/media
+ *
+ * List scheduler media for a client, ordered by creation date descending. Optionally
+ * filters to only show media not yet attached to any post.
+ *
+ * @auth Required (any authenticated user)
+ * @query client_id - Client UUID to filter by (required)
+ * @query unused - Pass 'true' to return only unused media (optional)
+ * @returns {{ media: SchedulerMedia[] }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

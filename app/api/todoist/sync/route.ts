@@ -2,14 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { syncTodoist } from '@/lib/todoist/sync';
+import { createNotification } from '@/lib/notifications';
 
 // Debounce: skip sync if last sync was less than 60s ago
 const SYNC_COOLDOWN_MS = 60_000;
 
 /**
- * POST — Trigger a full Todoist ↔ Cortex sync
- * Query params:
- *   ?auto=true — skip if synced recently (for page-load auto-sync)
+ * POST /api/todoist/sync
+ *
+ * Trigger a full bidirectional sync between Todoist and Cortex tasks for the authenticated user.
+ * Auto-sync mode (auto=true) skips the sync if the user was synced within the last 60 seconds.
+ * Sends a notification if the sync encounters errors.
+ *
+ * @auth Required (any authenticated user; must have Todoist connected)
+ * @query auto - If 'true', skip sync if last sync was less than 60 seconds ago (default: false)
+ * @returns {{ pulled: number, pushed: number, errors: string[], skipped?: boolean }}
  */
 export async function POST(request: NextRequest) {
   try {
@@ -44,6 +51,17 @@ export async function POST(request: NextRequest) {
       data.todoist_api_key,
       data.todoist_project_id ?? undefined,
     );
+
+    // Notify the user if sync had errors
+    if (result.errors.length > 0) {
+      await createNotification({
+        userId: user.id,
+        type: 'sync_failed',
+        title: 'Todoist sync issue',
+        body: result.errors.join('; ').substring(0, 200),
+        linkPath: '/admin/tasks',
+      });
+    }
 
     return NextResponse.json(result);
   } catch (error) {

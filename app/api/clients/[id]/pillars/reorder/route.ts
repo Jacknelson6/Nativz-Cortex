@@ -7,6 +7,17 @@ const reorderSchema = z.object({
   pillar_ids: z.array(z.string().uuid()),
 });
 
+/**
+ * POST /api/clients/[id]/pillars/reorder
+ *
+ * Update the sort_order of content pillars by providing the desired array of pillar IDs.
+ * The index of each ID in the array becomes its new sort_order.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Client UUID
+ * @body pillar_ids - Ordered array of pillar UUIDs (required)
+ * @returns {{ success: true }}
+ */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }

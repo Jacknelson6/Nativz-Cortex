@@ -1,5 +1,12 @@
 /**
- * GET /api/google — Start OAuth flow (redirects to Google consent screen)
+ * GET /api/google
+ *
+ * Initiate the Google OAuth flow. Generates a CSRF token, stores it in a cookie, and
+ * redirects the user to Google's consent screen. On completion, Google redirects to
+ * /api/google/callback.
+ *
+ * @auth Required (any authenticated user)
+ * @returns Redirect to Google OAuth consent screen
  */
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';

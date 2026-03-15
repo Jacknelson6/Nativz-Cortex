@@ -16,7 +16,26 @@ const UpdatePostSchema = z.object({
   collaborator_handles: z.array(z.string()).optional(),
 });
 
-// PUT: Update a scheduled post
+/**
+ * PUT /api/scheduler/posts/[id]
+ *
+ * Update a scheduled post's fields, platform links, and/or media attachments.
+ * When media is replaced, old media items are unmarked as used. Platform links
+ * are replaced atomically (delete then insert) if platform_profile_ids is provided.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Scheduled post UUID
+ * @body caption - Updated caption (optional)
+ * @body hashtags - Updated hashtags array (optional)
+ * @body scheduled_at - Updated schedule datetime or null (optional)
+ * @body status - 'draft' | 'scheduled' (optional)
+ * @body platform_profile_ids - Replace platform profile links (optional)
+ * @body media_ids - Replace media attachments (optional)
+ * @body cover_image_url - Updated cover image URL (optional)
+ * @body tagged_people - Updated tagged people (optional)
+ * @body collaborator_handles - Updated collaborator handles (optional)
+ * @returns {{ post: ScheduledPost }}
+ */
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -113,7 +132,17 @@ export async function PUT(
   }
 }
 
-// DELETE: Delete a scheduled post
+/**
+ * DELETE /api/scheduler/posts/[id]
+ *
+ * Delete a scheduled post. Attempts to remove the post from Late API first if a
+ * late_post_id exists (non-fatal on failure), unmarks attached media as used, then
+ * deletes the post record (cascades to platforms, media links, and review links).
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Scheduled post UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

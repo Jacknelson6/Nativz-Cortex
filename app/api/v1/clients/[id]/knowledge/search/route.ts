@@ -9,6 +9,20 @@ const searchSchema = z.object({
   limit: z.number().min(1).max(50).default(20),
 });
 
+/**
+ * POST /api/v1/clients/[id]/knowledge/search
+ *
+ * Full-text search over a client's knowledge entries using the
+ * search_knowledge_entries Postgres RPC. Returns matching entries with
+ * metadata included.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @param id - Client UUID
+ * @body query - Search string (required, min 1 char)
+ * @body type - Filter by entry type (optional)
+ * @body limit - Max results to return, 1–50 (default 20)
+ * @returns {{ results: KnowledgeEntry[], total: number }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

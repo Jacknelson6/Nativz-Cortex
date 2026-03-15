@@ -13,6 +13,19 @@ const requestSchema = z.object({
   existing_ideas: z.array(z.string()).default([]),
 });
 
+/**
+ * POST /api/search/[id]/generate-ideas
+ *
+ * Generate 4 additional video ideas for a specific trending topic within a search.
+ * Avoids duplicating any existing ideas provided in the request. Appends the new ideas
+ * to the search's raw_ai_response for the matching topic.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Topic search UUID
+ * @body topic_name - Name of the trending topic to generate ideas for (required)
+ * @body existing_ideas - Array of existing idea titles to avoid repeating (default: [])
+ * @returns {{ ideas: VideoIdea[] }} 4 new video ideas
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

@@ -9,6 +9,18 @@ const Schema = z.object({
   client_id: z.string().uuid().optional(),
 });
 
+/**
+ * POST /api/scheduler/ai/improve-caption
+ *
+ * Improve an existing caption or generate a new one from scratch using AI. Uses client
+ * brand voice, saved captions/CTAs, and target audience for context. Returns only the
+ * final caption text (no markdown formatting).
+ *
+ * @auth Required (any authenticated user)
+ * @body caption - Caption to improve; omit or leave blank to generate from scratch
+ * @body client_id - Client UUID for brand context and saved captions (optional)
+ * @returns {{ improved_caption: string }}
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();

@@ -13,6 +13,21 @@ const createSchema = z.object({
   source: z.enum(['manual', 'scraped', 'generated', 'imported']).default('manual'),
 });
 
+/**
+ * GET /api/v1/clients/[id]/knowledge
+ *
+ * List knowledge entries for a client. Supports full-text search via the
+ * search_knowledge_entries RPC, filtering by type, and optionally including
+ * entity metadata and knowledge graph links.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @param id - Client UUID
+ * @query type - Filter by entry type: 'brand_asset' | 'brand_profile' | 'document' | 'web_page' | 'note' | 'idea' | 'meeting_note' (optional)
+ * @query search - Full-text search query (optional)
+ * @query include_links - Include knowledge graph links (optional, default false)
+ * @query include_entities - Include entity metadata on results (optional, default false)
+ * @returns {{ entries: KnowledgeEntry[], links?: KnowledgeLink[] }}
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -79,6 +94,21 @@ export async function GET(
   }
 }
 
+/**
+ * POST /api/v1/clients/[id]/knowledge
+ *
+ * Create a new knowledge entry for a client. Triggers automatic embedding
+ * generation for semantic search.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @param id - Client UUID
+ * @body type - Entry type: 'brand_asset' | 'brand_profile' | 'document' | 'web_page' | 'note' | 'idea' | 'meeting_note' (required)
+ * @body title - Entry title (required)
+ * @body content - Entry content text (optional, default '')
+ * @body metadata - Arbitrary metadata object (optional)
+ * @body source - Source type: 'manual' | 'scraped' | 'generated' | 'imported' (default 'manual')
+ * @returns {{ entry: KnowledgeEntry }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

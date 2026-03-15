@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/reporting/shared/[token]
+ *
+ * Public endpoint to resolve a report share token and return the configured analytics
+ * data. Assembles platform summary, per-platform breakdowns, and ranked top posts based
+ * on the sections stored when the link was created. Returns 410 if the link has expired.
+ *
+ * @auth None (public — token provides authorization)
+ * @param token - Report share token from the report_links table
+ * @returns {{ clientName, agency, logoUrl, dateRange, sections, summary, topPosts }}
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ token: string }> },

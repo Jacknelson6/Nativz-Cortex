@@ -10,6 +10,19 @@ const createSchema = z.object({
   platform: z.string().optional(),
 });
 
+/**
+ * POST /api/reference-videos
+ *
+ * Create a new reference video record for a client with status 'pending'. The video
+ * will be analyzed by `/api/reference-videos/[id]/process` after creation.
+ *
+ * @auth Required (any authenticated user)
+ * @body client_id - Client UUID (required)
+ * @body url - Video URL (optional)
+ * @body title - Video title (optional)
+ * @body platform - Platform name e.g. 'tiktok', 'instagram' (optional)
+ * @returns {{ video: ReferenceVideo }}
+ */
 export async function POST(req: Request) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -43,6 +56,16 @@ export async function POST(req: Request) {
   return NextResponse.json({ video: data });
 }
 
+/**
+ * GET /api/reference-videos
+ *
+ * List reference videos, optionally filtered by client. Returns up to 50 videos
+ * ordered by creation date descending.
+ *
+ * @auth Required (any authenticated user)
+ * @query client_id - Filter by client UUID (optional)
+ * @returns {{ videos: ReferenceVideo[] }}
+ */
 export async function GET(req: Request) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();

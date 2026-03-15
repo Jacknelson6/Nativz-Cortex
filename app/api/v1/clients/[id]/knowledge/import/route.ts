@@ -12,6 +12,24 @@ const importSchema = z.object({
   source: z.string().optional(),
 });
 
+/**
+ * POST /api/v1/clients/[id]/knowledge/import
+ *
+ * Import content into a client's knowledge base. For 'meeting_note' type,
+ * uses the meeting importer which extracts linked entities and updates brand
+ * profile. For 'note' and 'document' types, creates a basic knowledge entry.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @param id - Client UUID
+ * @body content - Text content to import (required)
+ * @body type - Entry type: 'meeting_note' | 'note' | 'document' (default 'note')
+ * @body title - Entry title (optional, auto-generated if not provided)
+ * @body metadata - Arbitrary metadata object (optional)
+ * @body meeting_date - ISO date string for meeting notes (optional)
+ * @body attendees - Array of attendee names (optional)
+ * @body source - Source identifier string (optional)
+ * @returns {{ entry: { id, title, type }, linked_entries?: string[] }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

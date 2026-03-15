@@ -97,6 +97,17 @@ async function getVideoUrl(item: { url: string; platform: string | null; metadat
   return null;
 }
 
+/**
+ * POST /api/moodboard/items/[id]/extract-frames
+ *
+ * Download a TikTok video and extract frames every 3 seconds using ffmpeg,
+ * scaled to 360x640 (9:16 portrait). Uploads frames to the moodboard-frames
+ * storage bucket and saves VideoFrame[] to the item record.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Moodboard item UUID (must be type 'video' and platform 'tiktok')
+ * @returns {MoodboardItem} Updated item record with frames array
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

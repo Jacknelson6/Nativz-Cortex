@@ -1,5 +1,15 @@
 /**
- * GET /api/google/callback — OAuth callback handler
+ * GET /api/google/callback
+ *
+ * Google OAuth callback handler. Validates the CSRF state, exchanges the authorization code
+ * for tokens, extracts the user's email from the id_token, and stores the tokens. Redirects
+ * to /admin/settings with a success or error query param.
+ *
+ * @auth None (OAuth callback — state param used to identify user)
+ * @query code - Authorization code from Google
+ * @query state - CSRF state string in format userId:csrfToken
+ * @query error - Set by Google if the user denied access
+ * @returns Redirect to /admin/settings?google=connected or ?google=error
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { exchangeCode, storeTokens } from '@/lib/google/auth';

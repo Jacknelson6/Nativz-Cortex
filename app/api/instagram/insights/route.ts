@@ -1,9 +1,14 @@
 /**
- * GET /api/instagram/insights?account_id=...&period=day|week|days_28
+ * GET /api/instagram/insights
  *
- * Account-level insights: reach, impressions, engagement, etc.
+ * Fetch account-level Instagram insights (reach, impressions, engagement) for a Business
+ * Account over a given period. Requires Meta integration to be configured.
+ *
+ * @auth Required (admin)
+ * @query account_id - Instagram Business Account ID (required)
+ * @query period - Aggregation period: 'day' | 'week' | 'days_28' (default: 'days_28')
+ * @returns {{ insights: AccountInsights }}
  */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';

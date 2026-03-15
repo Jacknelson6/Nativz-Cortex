@@ -8,9 +8,16 @@ import { getTikTokAuthUrl } from '@/lib/social-auth/tiktok';
 const platformSchema = z.enum(['instagram', 'facebook', 'tiktok', 'youtube']);
 
 /**
- * GET /api/social/connect/[platform]?clientId=xxx
- * Redirects to the platform's OAuth consent screen.
- * State param carries clientId + platform for the callback.
+ * GET /api/social/connect/[platform]
+ *
+ * Initiate a social platform OAuth flow by redirecting to the platform's consent screen.
+ * Encodes clientId, platform, and userId into a base64url state param for the callback.
+ * Supports instagram, facebook, tiktok, and youtube.
+ *
+ * @auth Required (any authenticated user)
+ * @param platform - 'instagram' | 'facebook' | 'tiktok' | 'youtube'
+ * @query clientId - Client UUID to associate the connection with (required)
+ * @returns Redirect to platform OAuth consent screen
  */
 export async function GET(
   request: NextRequest,

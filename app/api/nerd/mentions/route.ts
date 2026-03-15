@@ -2,7 +2,15 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-/** GET /api/nerd/mentions — Returns clients + team members for @mention autocomplete */
+/**
+ * GET /api/nerd/mentions
+ *
+ * Return all active clients and team members for @mention autocomplete in The Nerd chat.
+ * Returns both entities in a single response to minimize round-trips.
+ *
+ * @auth Required (any authenticated user)
+ * @returns {{ clients: MentionClient[], team: MentionTeamMember[] }}
+ */
 export async function GET() {
   try {
     const supabase = await createServerSupabaseClient();

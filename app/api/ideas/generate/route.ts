@@ -29,6 +29,26 @@ export interface GeneratedIdeaResult {
 
 export const maxDuration = 120;
 
+/**
+ * POST /api/ideas/generate
+ *
+ * Start an asynchronous AI idea generation job. Returns a generation ID immediately;
+ * the actual generation runs in the background via Next.js `after()`. Supports three modes:
+ * client-based (uses brand profile, strategy, past searches), URL-based (scrapes website),
+ * and search-based (uses research SERP data). For pillar-based generation, makes one AI
+ * call per pillar to produce focused, on-pillar ideas.
+ *
+ * @auth Required (any authenticated user)
+ * @body client_id - Client UUID for brand context (required unless url or search_id provided)
+ * @body url - Website URL to scrape for brand context (alternative to client_id)
+ * @body concept - Optional concept direction to guide generation
+ * @body count - Number of ideas to generate (1-200, default: 10)
+ * @body reference_video_ids - Array of reference video UUIDs to inspire style
+ * @body search_id - Topic search UUID to ground ideas in research data
+ * @body pillar_ids - Array of content pillar UUIDs for pillar-based generation
+ * @body ideas_per_pillar - Number of ideas per pillar (1-20, required with pillar_ids)
+ * @returns {{ id: string, status: 'processing' }} Generation record ID for polling
+ */
 export async function POST(req: Request) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();

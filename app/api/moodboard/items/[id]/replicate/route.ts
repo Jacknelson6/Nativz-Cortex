@@ -10,6 +10,20 @@ const replicateSchema = z.object({
   notes: z.string().optional(),
 });
 
+/**
+ * POST /api/moodboard/items/[id]/replicate
+ *
+ * Generate a full production-ready replication brief for a moodboard video item. The brief
+ * includes concept adaptation, a rewritten hook, scene-by-scene script outline, shot list,
+ * music direction, caption suggestions, pacing notes, and CTA. Saves to replication_brief.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Moodboard item UUID
+ * @body format - Target format (e.g. 'TikTok', 'Instagram Reel') (required)
+ * @body client_id - Client UUID for brand context (optional)
+ * @body notes - Adaptation notes (optional)
+ * @returns {{ brief: string }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

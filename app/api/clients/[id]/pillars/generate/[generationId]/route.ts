@@ -2,6 +2,17 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/clients/[id]/pillars/generate/[generationId]
+ *
+ * Poll the status of a pillar generation job. When status is 'completed', also returns
+ * all current pillars for the client so the UI can display results immediately.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Client UUID
+ * @param generationId - Generation job UUID
+ * @returns {{ generation: PillarGeneration, pillars: ContentPillar[] | null }}
+ */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string; generationId: string }> }

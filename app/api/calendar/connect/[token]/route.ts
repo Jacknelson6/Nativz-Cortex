@@ -6,7 +6,16 @@ const connectSchema = z.object({
   nango_connection_id: z.string().min(1, 'nango_connection_id is required'),
 });
 
-// GET — public, no auth. Returns metadata about the invite for display on the connect page.
+/**
+ * GET /api/calendar/connect/[token]
+ *
+ * Public endpoint. Returns display metadata for a calendar invite link so the connect
+ * page can show the contact's name and expiry information before the OAuth flow begins.
+ *
+ * @auth None (public)
+ * @param token - Invite token from the calendar_connections row
+ * @returns {{ contact_name: string, message: string, expires_at: string }}
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ token: string }> },
@@ -43,7 +52,17 @@ export async function GET(
   }
 }
 
-// POST — public, no auth. Activates the invite with a Nango connection ID.
+/**
+ * POST /api/calendar/connect/[token]
+ *
+ * Public endpoint. Activates a calendar invite by linking the provided Nango connection ID
+ * to the calendar_connections row identified by the token.
+ *
+ * @auth None (public)
+ * @param token - Invite token from the calendar_connections row
+ * @body nango_connection_id - Nango connection ID obtained after the OAuth flow (required)
+ * @returns {{ success: true }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> },

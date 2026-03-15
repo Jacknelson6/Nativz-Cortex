@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * POST /api/scheduler/webhooks
+ *
+ * Receive Late API webhooks and update scheduled post statuses accordingly.
+ * Handles post.published, post.failed, post.scheduled, post.partial_publish,
+ * account.connected, and account.disconnected events. Verifies LATE_WEBHOOK_SECRET
+ * header if configured.
+ *
+ * @auth Bearer LATE_WEBHOOK_SECRET (optional — if LATE_WEBHOOK_SECRET env var is set)
+ * @returns {{ received: true }}
+ */
 export async function POST(request: NextRequest) {
   try {
     // Verify webhook signature if secret is configured

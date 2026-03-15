@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/moodboard/boards/[id]/search
+ *
+ * Full-text search for items within a board. Searches across title, transcript,
+ * concept_summary, hook, and author_name using case-insensitive ILIKE. Returns
+ * matching item IDs for the client to highlight/filter.
+ *
+ * @auth Required (admin)
+ * @param id - Board UUID
+ * @query q - Search query string (required)
+ * @returns {{ item_ids: string[] }}
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

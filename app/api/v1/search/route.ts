@@ -9,10 +9,29 @@ const searchSchema = z.object({
   search_mode: z.enum(['quick', 'deep']).optional().default('quick'),
 });
 
+/**
+ * GET /api/v1/search
+ *
+ * Not implemented — use POST to trigger a search.
+ *
+ * @returns 405 Method Not Allowed
+ */
 export async function GET() {
   return NextResponse.json({ error: 'Use POST to trigger a search' }, { status: 405 });
 }
 
+/**
+ * POST /api/v1/search
+ *
+ * Create a topic search record for a client in 'pending' status. The actual
+ * search processing is handled asynchronously by the background worker.
+ *
+ * @auth API key (Bearer token via Authorization header)
+ * @body client_id - Client UUID (required)
+ * @body query - Search query string (required)
+ * @body search_mode - 'quick' | 'deep' (default 'quick')
+ * @returns {{ search: { id, query, status, search_mode, created_at } }}
+ */
 export async function POST(request: NextRequest) {
   const auth = await validateApiKey(request);
   if ('error' in auth) return auth.error;

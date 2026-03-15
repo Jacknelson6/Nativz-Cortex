@@ -9,6 +9,18 @@ const updateEdgeSchema = z.object({
   color: z.string().max(20).optional(),
 });
 
+/**
+ * PUT /api/moodboard/edges/[id]
+ *
+ * Update an edge's label, line style, or color. Applies only the provided fields.
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Edge UUID
+ * @body label - Edge label text (optional, nullable, max 200 chars)
+ * @body style - Line style: 'solid' | 'dashed' | 'dotted' (optional)
+ * @body color - Hex color string (optional, max 20 chars)
+ * @returns {MoodboardEdge} Updated edge record
+ */
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -56,6 +68,15 @@ export async function PUT(
   }
 }
 
+/**
+ * DELETE /api/moodboard/edges/[id]
+ *
+ * Permanently delete a canvas edge (connection between two nodes).
+ *
+ * @auth Required (any authenticated user)
+ * @param id - Edge UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

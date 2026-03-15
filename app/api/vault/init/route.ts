@@ -6,7 +6,14 @@ import { syncClientProfileToVault, syncDashboardToVault } from '@/lib/vault/sync
 
 /**
  * POST /api/vault/init
- * Initialize the vault with folder structure, templates, and current client data.
+ *
+ * Bootstrap the GitHub-backed Obsidian vault. Creates the 5 standard Obsidian
+ * templates (research, idea, client profile, shoot prep, meeting prep) only if
+ * they don't already exist. Then syncs all active clients to Clients/<Name>/_profile.md
+ * and updates the Dashboard MOC. Safe to re-run — skips existing files.
+ *
+ * @auth Required (any authenticated user)
+ * @returns {{ success: true, created: string[] }} List of files created
  */
 export async function POST() {
   try {

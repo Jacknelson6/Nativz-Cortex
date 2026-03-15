@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/team/invite/validate
+ *
+ * Validate a team invite token before the user fills out the accept form. Returns
+ * metadata about the invite (email, member name and role) so the UI can pre-populate
+ * fields. Includes a machine-readable `reason` field on error for UI branching.
+ *
+ * @auth None (public — token provides authorization)
+ * @query token - Invite token from the team_invite_tokens table (required)
+ * @returns {{ valid: true, email: string, member_name: string, member_role: string }}
+ */
 export async function GET(request: NextRequest) {
   try {
     const token = request.nextUrl.searchParams.get('token');

@@ -39,6 +39,15 @@ async function getNangoConnectionId(userId: string): Promise<string | null> {
   return data?.nango_connection_id ?? null;
 }
 
+/**
+ * GET /api/meetings/[id]
+ *
+ * Fetch a single meeting by ID with its associated client record.
+ *
+ * @auth Required (admin)
+ * @param id - Meeting UUID
+ * @returns {{ meeting: Meeting }} Meeting with client relation
+ */
 // ─── GET /api/meetings/[id] ───────────────────────────────────────────────────
 
 export async function GET(
@@ -78,6 +87,25 @@ export async function GET(
   }
 }
 
+/**
+ * PATCH /api/meetings/[id]
+ *
+ * Update a meeting's fields. If the meeting has a linked Google Calendar event,
+ * changes are synced to Google Calendar via Nango (non-fatal on failure).
+ *
+ * @auth Required (admin)
+ * @param id - Meeting UUID
+ * @body title - Updated meeting title
+ * @body client_id - Updated client UUID
+ * @body scheduled_at - Updated start datetime (ISO string)
+ * @body duration_minutes - Updated duration in minutes (15-480)
+ * @body location - Updated location (nullable)
+ * @body recurrence_rule - Updated iCal RRULE string (nullable)
+ * @body attendees - Updated attendee list ({ email, name?, role? }[])
+ * @body notes - Updated notes (nullable)
+ * @body status - Updated status ('scheduled' | 'completed' | 'cancelled')
+ * @returns {{ meeting: Meeting }} Updated meeting with client relation
+ */
 // ─── PATCH /api/meetings/[id] ─────────────────────────────────────────────────
 
 export async function PATCH(
@@ -169,6 +197,16 @@ export async function PATCH(
   }
 }
 
+/**
+ * DELETE /api/meetings/[id]
+ *
+ * Soft-cancel a meeting by setting its status to 'cancelled'. If the meeting has a linked
+ * Google Calendar event, it is also cancelled via Nango (non-fatal on failure).
+ *
+ * @auth Required (admin)
+ * @param id - Meeting UUID
+ * @returns {{ success: true }}
+ */
 // ─── DELETE /api/meetings/[id] ────────────────────────────────────────────────
 
 export async function DELETE(

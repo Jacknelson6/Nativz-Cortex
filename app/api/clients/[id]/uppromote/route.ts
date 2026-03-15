@@ -9,6 +9,17 @@ const bodySchema = z.object({
   api_key: z.string().min(1, 'API key is required'),
 });
 
+/**
+ * POST /api/clients/[id]/uppromote
+ *
+ * Connect an UpPromote affiliate integration for a client. Validates the API key against
+ * UpPromote, saves it to the client record, and triggers an initial non-blocking affiliate sync.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @body api_key - UpPromote API key to validate and save (required)
+ * @returns {{ success: true, message: string }}
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -61,6 +72,15 @@ export async function POST(
   }
 }
 
+/**
+ * DELETE /api/clients/[id]/uppromote
+ *
+ * Disconnect the UpPromote integration for a client by clearing the stored API key.
+ *
+ * @auth Required (admin)
+ * @param id - Client UUID
+ * @returns {{ success: true }}
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
