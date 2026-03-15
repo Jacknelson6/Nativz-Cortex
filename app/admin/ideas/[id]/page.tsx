@@ -36,6 +36,20 @@ export default async function IdeaGenerationResultsPage({
     searchQuery = search?.query ?? null;
   }
 
+  // Fetch saved scripts for this generation's ideas
+  const ideaTitles = ((generation.ideas ?? []) as { title: string }[]).map((i) => i.title);
+  const scriptMap: Record<string, string> = {};
+  if (ideaTitles.length > 0 && generation.client_id) {
+    const { data: scripts } = await admin
+      .from('idea_scripts')
+      .select('title, script_text')
+      .eq('client_id', generation.client_id)
+      .in('title', ideaTitles);
+    for (const s of scripts ?? []) {
+      if (s.title && s.script_text) scriptMap[s.title] = s.script_text;
+    }
+  }
+
   return (
     <div className="p-6">
       <div className="max-w-5xl mx-auto">
@@ -43,6 +57,7 @@ export default async function IdeaGenerationResultsPage({
           generation={generation}
           clientName={(client as { name: string })?.name ?? 'Unknown'}
           searchQuery={searchQuery}
+          savedScripts={scriptMap}
         />
       </div>
     </div>

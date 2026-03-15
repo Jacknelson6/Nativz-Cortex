@@ -55,6 +55,7 @@ interface IdeasResultsClientProps {
   generation: Generation;
   clientName: string;
   searchQuery: string | null;
+  savedScripts?: Record<string, string>;
 }
 
 // ── CTA Options ─────────────────────────────────────────────────────────────
@@ -243,10 +244,15 @@ function IdeaResultCard({
 
 // ── Results Client ──────────────────────────────────────────────────────────
 
-export function IdeasResultsClient({ generation: initialGeneration, clientName, searchQuery }: IdeasResultsClientProps) {
+export function IdeasResultsClient({ generation: initialGeneration, clientName, searchQuery, savedScripts = {} }: IdeasResultsClientProps) {
   const [generation, setGeneration] = useState(initialGeneration);
   const [ideas, setIdeas] = useState<GeneratedIdea[]>(
-    (initialGeneration.ideas ?? []).map((i: GeneratedIdea) => ({ ...i, saved: false, selected: false })),
+    (initialGeneration.ideas ?? []).map((i: GeneratedIdea) => ({
+      ...i,
+      saved: false,
+      selected: false,
+      script: savedScripts[i.title] ?? undefined,
+    })),
   );
   const selectionMode = true; // Always show checkboxes
   const [ctaType, setCtaType] = useState('');
@@ -620,39 +626,22 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
         </div>
       </div>
 
-      {/* Selection bar */}
+      {/* Action bar */}
       <div className="rounded-xl border border-nativz-border bg-surface p-3 flex items-center gap-3 flex-wrap">
-        {/* Label — always visible */}
+        {/* Selection status */}
         <span className="text-xs font-medium text-text-secondary">
           {selectedCount > 0
-            ? `${selectedCount} selected for scripts`
-            : 'Select ideas to generate scripts'}
+            ? `${selectedCount} idea${selectedCount !== 1 ? 's' : ''} selected`
+            : 'Select ideas for bulk actions'}
         </span>
 
-        {/* Actions */}
         {selectedCount > 0 ? (
-          <>
-            <button
-              onClick={deselectAll}
-              className="text-[11px] text-purple-400 hover:text-purple-300 cursor-pointer"
-            >
-              Deselect
-            </button>
-            <button
-              onClick={selectAll}
-              className="text-[11px] text-purple-400 hover:text-purple-300 cursor-pointer"
-            >
-              Select all
-            </button>
-            <div className="h-5 w-px bg-nativz-border" />
-            <button
-              onClick={() => setShowScriptModal(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 px-3 py-1.5 text-xs font-medium text-purple-400 hover:bg-purple-500/20 transition-colors cursor-pointer"
-            >
-              <FileText size={12} />
-              Generate scripts ({selectedCount})
-            </button>
-          </>
+          <button
+            onClick={deselectAll}
+            className="text-[11px] text-purple-400 hover:text-purple-300 cursor-pointer"
+          >
+            Deselect
+          </button>
         ) : (
           <button
             onClick={selectAll}
@@ -664,21 +653,28 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
 
         <div className="flex-1" />
 
-        {/* Batch actions */}
+        {/* Unified actions row */}
+        <button
+          onClick={() => selectedCount > 0 ? setShowScriptModal(true) : (selectAll(), setTimeout(() => setShowScriptModal(true), 50))}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 px-3 py-1.5 text-xs font-medium text-purple-400 hover:bg-purple-500/20 transition-colors cursor-pointer"
+        >
+          <FileText size={12} />
+          Generate scripts{selectedCount > 0 ? ` (${selectedCount})` : ''}
+        </button>
         <button
           onClick={handleSaveAll}
           disabled={ideas.every((i) => i.saved) || !generation.client_id}
           className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover disabled:opacity-40 cursor-pointer transition-colors"
         >
           <Bookmark size={12} />
-          Save all
+          Save{selectedCount > 0 ? ` (${selectedCount})` : ' all'}
         </button>
         <button
           onClick={handleCopySelected}
           className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover cursor-pointer transition-colors"
         >
           <Copy size={12} />
-          Copy{selectionMode && selectedCount > 0 ? ` (${selectedCount})` : ' all'}
+          Copy{selectedCount > 0 ? ` (${selectedCount})` : ' all'}
         </button>
         <div className="relative">
           <button

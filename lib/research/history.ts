@@ -62,7 +62,7 @@ export async function fetchHistory({
   if (!type || type === 'ideas') {
     let query = supabase
       .from('idea_generations')
-      .select('id, concept, count, status, created_at, client_id, clients(name)')
+      .select('id, concept, count, status, created_at, client_id, search_id, clients(name)')
       .gt('count', 1) // Exclude re-roll generations (count=1)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -72,13 +72,31 @@ export async function fetchHistory({
 
     const { data: generations } = await query;
 
+    // Batch-fetch search queries for generations linked to a search
+    const searchIds = (generations ?? [])
+      .map((g) => g.search_id)
+      .filter((id): id is string => !!id);
+    const searchQueryMap: Record<string, string> = {};
+    if (searchIds.length > 0) {
+      const { data: searches } = await supabase
+        .from('topic_searches')
+        .select('id, query')
+        .in('id', searchIds);
+      for (const s of searches ?? []) {
+        searchQueryMap[s.id] = s.query;
+      }
+    }
+
     for (const g of generations ?? []) {
       const client = Array.isArray(g.clients) ? g.clients[0] : g.clients;
-      const concept = g.concept ? `"${g.concept}"` : '';
+      const count = g.count ?? 10;
+      const concept = g.concept ?? 'video';
+      const searchQuery = g.search_id ? searchQueryMap[g.search_id] : null;
+      const title = `${count} ${concept} ideas${searchQuery ? ` from ${searchQuery} research` : ''}`;
       items.push({
         id: g.id,
         type: 'ideas',
-        title: `${g.count ?? 10} video ideas${concept ? ` — ${concept}` : ''}`,
+        title,
         status: g.status,
         clientName: (client as { name: string } | null)?.name ?? null,
         clientId: g.client_id,
