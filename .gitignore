@@ -47,9 +47,7 @@ next-env.d.ts
 # scratch files and debug artifacts
 /scratch/
 /logs_llm/
-vectors.db
-vectors.db-shm
-vectors.db-wal
+.data/
 
 # worktrees
 .worktrees/
