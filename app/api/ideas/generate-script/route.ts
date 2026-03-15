@@ -13,6 +13,8 @@ const scriptSchema = z.object({
   reference_video_ids: z.array(z.string().uuid()).optional(),
   idea_entry_id: z.string().uuid().optional(),
   cta: z.string().optional(),
+  video_length_seconds: z.number().min(10).max(180).optional(),
+  target_word_count: z.number().min(10).max(500).optional(),
 });
 
 export async function POST(req: Request) {
@@ -26,7 +28,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { client_id, title, why_it_works, content_pillar, reference_video_ids, idea_entry_id, cta } = parsed.data;
+  const { client_id, title, why_it_works, content_pillar, reference_video_ids, idea_entry_id, cta, video_length_seconds, target_word_count } = parsed.data;
   const admin = createAdminClient();
 
   // Gather context
@@ -86,11 +88,14 @@ ${content_pillar ? `Content pillar: ${content_pillar}` : ''}
 ${cta ? `Desired CTA: ${cta}` : ''}
 </video_idea>`);
 
+  const lengthSeconds = video_length_seconds ?? 60;
+  const wordCount = target_word_count ?? Math.round((lengthSeconds / 60) * 140);
+
   const systemPrompt = `You are a professional video script writer for a marketing agency. Write a spoken-word script for the given video idea.
 
 Rules:
 - Write ONLY the words that will be spoken on camera. No stage directions, no shot lists, no pacing notes, no "[cut to]" annotations.
-- The script should be for a short-form video (30-90 seconds spoken)
+- The script is for a ${lengthSeconds}-second short-form video. At 140 words per minute, aim for approximately ${wordCount} words.
 - Match the brand voice and tone
 - Start with a strong hook that grabs attention in the first 3 seconds
 - End with a clear call to action${cta ? ` — the CTA should drive viewers to: ${cta}` : ''}

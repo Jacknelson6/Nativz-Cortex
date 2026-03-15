@@ -6,7 +6,7 @@ import {
   Sparkles, RefreshCw, Bookmark, Check,
   Loader2, Copy, Download, ChevronDown, ArrowLeft,
   Building2, Search, AlertCircle, Zap, FileText,
-  CheckSquare, Square,
+  CheckSquare, Square, Phone, MousePointer, MessageCircle, Ban, Pencil,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -60,10 +60,10 @@ interface IdeasResultsClientProps {
 // ── CTA Options ─────────────────────────────────────────────────────────────
 
 const CTA_PRESETS = [
-  { value: '', label: 'No CTA' },
-  { value: 'Call us today', label: 'Call' },
-  { value: 'Click the link in bio', label: 'Click the link in bio' },
-  { value: 'comment', label: 'Comment "[blank]"', isComment: true },
+  { value: '', label: 'No CTA', icon: Ban },
+  { value: 'Call us today', label: 'Call', icon: Phone },
+  { value: 'Click the link in bio', label: 'Click the link in bio', icon: MousePointer },
+  { value: 'comment', label: 'Comment "[blank]"', icon: MessageCircle, isComment: true },
 ] as const;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -240,6 +240,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
   const [ctaType, setCtaType] = useState('');
   const [customCta, setCustomCta] = useState('');
   const [commentWord, setCommentWord] = useState('');
+  const [videoLength, setVideoLength] = useState(60);
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   const [showScriptModal, setShowScriptModal] = useState(false);
   const [downloadOptions, setDownloadOptions] = useState({
@@ -395,6 +396,8 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                 content_pillar: idea.content_pillar,
                 reference_video_ids: completedRefIds.length > 0 ? completedRefIds : undefined,
                 cta: effectiveCta || undefined,
+                video_length_seconds: videoLength,
+                target_word_count: Math.round((videoLength / 60) * 140),
               }),
             });
             if (!res.ok) throw new Error('Failed');
@@ -832,6 +835,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                         : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
                     }`}
                   >
+                    <preset.icon size={14} className="shrink-0" />
                     {'isComment' in preset ? (
                       <span className="flex-1">
                         Comment &ldquo;
@@ -859,6 +863,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                       : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
                   }`}
                 >
+                  <Pencil size={14} className="shrink-0" />
                   {ctaType === 'custom' ? (
                     <input
                       type="text"
@@ -874,6 +879,27 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                   )}
                 </button>
               </div>
+
+              {/* Video length */}
+              <label className="text-xs text-text-muted mb-2 block">Video length</label>
+              <div className="flex items-center gap-2 mb-1.5">
+                {[15, 30, 60, 90].map((sec) => (
+                  <button
+                    key={sec}
+                    onClick={() => setVideoLength(sec)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                      videoLength === sec
+                        ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                        : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
+                    }`}
+                  >
+                    {sec}s
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-text-muted mb-5">
+                ~{Math.round((videoLength / 60) * 140)} words at 140 wpm
+              </p>
 
               <div className="flex justify-end gap-2">
                 <button
