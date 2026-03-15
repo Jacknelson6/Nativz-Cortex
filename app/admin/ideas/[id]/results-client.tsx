@@ -6,7 +6,7 @@ import {
   Sparkles, RefreshCw, Bookmark, Check,
   Loader2, Copy, Download, ChevronDown, ArrowLeft,
   Building2, Search, AlertCircle, Zap, FileText,
-  CheckSquare, Square, Phone, MousePointer, MapPin,
+  CheckSquare, Square,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -60,10 +60,10 @@ interface IdeasResultsClientProps {
 // ── CTA Options ─────────────────────────────────────────────────────────────
 
 const CTA_PRESETS = [
-  { value: '', label: 'Default CTA', icon: null },
-  { value: 'Call us today', label: 'Call', icon: Phone },
-  { value: 'Click the link in bio', label: 'Click link', icon: MousePointer },
-  { value: 'Visit our website', label: 'Visit', icon: MapPin },
+  { value: '', label: 'No CTA' },
+  { value: 'Call us today', label: 'Call' },
+  { value: 'Click the link in bio', label: 'Click the link in bio' },
+  { value: 'comment', label: 'Comment "[blank]"', isComment: true },
 ] as const;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -239,7 +239,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
   const selectionMode = true; // Always show checkboxes
   const [ctaType, setCtaType] = useState('');
   const [customCta, setCustomCta] = useState('');
-  const [showCtaDropdown, setShowCtaDropdown] = useState(false);
+  const [commentWord, setCommentWord] = useState('');
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   const [showScriptModal, setShowScriptModal] = useState(false);
   const [downloadOptions, setDownloadOptions] = useState({
@@ -250,7 +250,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
   const [pillars, setPillars] = useState<PillarInfo[]>([]);
   const completedRefIds = (generation.reference_video_ids ?? []) as string[];
   const selectedCount = ideas.filter((i) => i.selected).length;
-  const effectiveCta = ctaType === 'custom' ? customCta : ctaType;
+  const effectiveCta = ctaType === 'custom' ? customCta : ctaType === 'comment' ? `Comment "${commentWord || 'YES'}"` : ctaType;
   const hasPillars = (generation.pillar_ids?.length ?? 0) > 0;
 
   // ── Fetch pillar info when pillar-based generation ──
@@ -600,60 +600,17 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
         </div>
       </div>
 
-      {/* CTA selector + selection bar */}
+      {/* Selection bar */}
       <div className="rounded-xl border border-nativz-border bg-surface p-3 flex items-center gap-3 flex-wrap">
-        {/* CTA Dropdown */}
-        <div className="relative">
-          <button
-            onClick={() => setShowCtaDropdown(!showCtaDropdown)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border bg-background px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer"
-          >
-            CTA: {ctaType === 'custom' ? customCta || 'Custom' : ctaType || 'Default'}
-            <ChevronDown size={10} />
-          </button>
-          {showCtaDropdown && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowCtaDropdown(false)} />
-              <div className="absolute top-full left-0 mt-1 z-50 bg-surface border border-nativz-border rounded-xl shadow-xl p-2 min-w-[200px] space-y-0.5">
-                {CTA_PRESETS.map((preset) => (
-                  <button
-                    key={preset.label}
-                    onClick={() => { setCtaType(preset.value); setShowCtaDropdown(false); }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
-                      ctaType === preset.value ? 'bg-purple-500/10 text-purple-400' : 'text-text-secondary hover:bg-surface-hover'
-                    }`}
-                  >
-                    {preset.icon && <preset.icon size={12} />}
-                    {preset.label}
-                  </button>
-                ))}
-                <div className="border-t border-nativz-border pt-1 mt-1">
-                  <div className="px-3 py-1">
-                    <input
-                      type="text"
-                      value={customCta}
-                      onChange={(e) => { setCustomCta(e.target.value); setCtaType('custom'); }}
-                      placeholder="Custom CTA..."
-                      className="w-full bg-transparent text-xs text-text-primary placeholder:text-text-muted/50 outline-none"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="h-5 w-px bg-nativz-border" />
-
-        {/* Selection info */}
-        <span className="text-xs text-text-muted">
+        {/* Label — always visible */}
+        <span className="text-xs font-medium text-text-secondary">
           {selectedCount > 0
             ? `${selectedCount} selected for scripts`
             : 'Select ideas to generate scripts'}
         </span>
 
-        {selectedCount > 0 && (
+        {/* Actions */}
+        {selectedCount > 0 ? (
           <>
             <button
               onClick={deselectAll}
@@ -676,12 +633,10 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
               Generate scripts ({selectedCount})
             </button>
           </>
-        )}
-
-        {selectedCount === 0 && (
+        ) : (
           <button
             onClick={selectAll}
-            className="text-[11px] text-text-muted hover:text-text-secondary cursor-pointer"
+            className="text-[11px] text-purple-400 hover:text-purple-300 cursor-pointer"
           >
             Select all
           </button>
@@ -864,34 +819,60 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                 ))}
               </div>
 
-              {/* CTA selection inside modal */}
-              <label className="text-xs text-text-muted mb-1.5 block">Call-to-action for scripts</label>
-              <div className="flex flex-wrap gap-1.5 mb-5">
+              {/* CTA selection */}
+              <label className="text-xs text-text-muted mb-2 block">Call-to-action</label>
+              <div className="space-y-1.5 mb-5">
                 {CTA_PRESETS.map((preset) => (
                   <button
                     key={preset.label}
-                    onClick={() => setCtaType(preset.value)}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                    onClick={() => { setCtaType(preset.value); if (!('isComment' in preset)) setCommentWord(''); }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-left transition-colors cursor-pointer ${
                       ctaType === preset.value
-                        ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                        ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
                         : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
                     }`}
                   >
-                    {preset.icon && <preset.icon size={10} />}
-                    {preset.label}
+                    {'isComment' in preset ? (
+                      <span className="flex-1">
+                        Comment &ldquo;
+                        <input
+                          type="text"
+                          value={commentWord}
+                          onChange={(e) => { e.stopPropagation(); setCommentWord(e.target.value); setCtaType('comment'); }}
+                          onClick={(e) => { e.stopPropagation(); setCtaType('comment'); }}
+                          placeholder="YES"
+                          className="bg-transparent border-b border-purple-500/40 text-purple-400 placeholder:text-purple-400/40 outline-none w-16 text-center text-sm font-medium"
+                        />
+                        &rdquo;
+                      </span>
+                    ) : (
+                      <span>{preset.label}</span>
+                    )}
                   </button>
                 ))}
-                <input
-                  type="text"
-                  value={customCta}
-                  onChange={(e) => { setCustomCta(e.target.value); setCtaType('custom'); }}
-                  placeholder="Custom CTA..."
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors focus:outline-none ${
+                {/* Custom CTA */}
+                <button
+                  onClick={() => setCtaType('custom')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-left transition-colors cursor-pointer ${
                     ctaType === 'custom'
-                      ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30 w-36'
-                      : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08] w-28'
+                      ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                      : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
                   }`}
-                />
+                >
+                  {ctaType === 'custom' ? (
+                    <input
+                      type="text"
+                      value={customCta}
+                      onChange={(e) => setCustomCta(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder="Type custom CTA..."
+                      autoFocus
+                      className="bg-transparent text-purple-400 placeholder:text-purple-400/40 outline-none w-full text-sm"
+                    />
+                  ) : (
+                    <span>Custom</span>
+                  )}
+                </button>
               </div>
 
               <div className="flex justify-end gap-2">
