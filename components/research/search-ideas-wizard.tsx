@@ -152,40 +152,29 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
 
         {/* Mode toggle */}
         <div className="flex bg-white/[0.04] rounded-lg p-0.5 gap-0.5 mb-4">
-          <button
-            type="button"
-            onClick={() => { setSourceMode('client'); setSourceUrl(''); }}
-            className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-              sourceMode === 'client'
-                ? 'bg-white/[0.08] text-text-primary'
-                : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            Client
-          </button>
-          <button
-            type="button"
-            onClick={() => { setSourceMode('none'); setClientId(null); setSourceUrl(''); }}
-            className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-              sourceMode === 'none'
-                ? 'bg-white/[0.08] text-text-primary'
-                : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            No client
-          </button>
-          <button
-            type="button"
-            onClick={() => { setSourceMode('url'); setClientId(null); }}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-              sourceMode === 'url'
-                ? 'bg-white/[0.08] text-text-primary'
-                : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            <Globe size={14} />
-            Website URL
-          </button>
+          {([
+            { mode: 'client' as const, label: 'Client', icon: null },
+            { mode: 'none' as const, label: 'No client', icon: null },
+            { mode: 'url' as const, label: 'URL', icon: <Globe size={14} className="shrink-0" /> },
+          ]).map(({ mode, label, icon }) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => {
+                setSourceMode(mode);
+                if (mode !== 'client') setClientId(null);
+                if (mode !== 'url') setSourceUrl('');
+              }}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+                sourceMode === mode
+                  ? 'bg-white/[0.08] text-text-primary'
+                  : 'text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              {icon}
+              {label}
+            </button>
+          ))}
         </div>
 
         {sourceMode === 'client' && (
