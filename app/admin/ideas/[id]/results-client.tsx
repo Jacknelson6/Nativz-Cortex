@@ -747,6 +747,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
             className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover cursor-pointer transition-colors"
           >
             <Download size={12} />
+            Download{selectedCount > 0 ? ` (${selectedCount})` : ' all'}
             <ChevronDown size={10} />
           </button>
           {showDownloadOptions && (
