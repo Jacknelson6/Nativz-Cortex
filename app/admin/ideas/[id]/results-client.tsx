@@ -54,6 +54,7 @@ interface PillarInfo {
 interface IdeasResultsClientProps {
   generation: Generation;
   clientName: string;
+  agency?: string | null;
   searchQuery: string | null;
   savedScripts?: Record<string, string>;
 }
@@ -239,7 +240,7 @@ function IdeaResultCard({
 
 // ── Results Client ──────────────────────────────────────────────────────────
 
-export function IdeasResultsClient({ generation: initialGeneration, clientName, searchQuery, savedScripts = {} }: IdeasResultsClientProps) {
+export function IdeasResultsClient({ generation: initialGeneration, clientName, agency, searchQuery, savedScripts = {} }: IdeasResultsClientProps) {
   const [generation, setGeneration] = useState(initialGeneration);
   const [ideas, setIdeas] = useState<GeneratedIdea[]>(
     (initialGeneration.ideas ?? []).map((i: GeneratedIdea) => ({
@@ -531,6 +532,59 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
     }
   };
 
+  // ── Replace all ──
+  const handleReplaceAll = async () => {
+    const toReplace = selectedCount > 0
+      ? ideas.map((idea, i) => idea.selected ? i : -1).filter((i) => i >= 0)
+      : ideas.map((_, i) => i);
+
+    for (const index of toReplace) {
+      handleReplace(index);
+    }
+    toast.success(`Replacing ${toReplace.length} idea${toReplace.length !== 1 ? 's' : ''}...`);
+  };
+
+  // ── Export PDF ──
+  const [exporting, setExporting] = useState(false);
+  const handleExportPdf = async () => {
+    setExporting(true);
+    try {
+      const { pdf } = await import('@react-pdf/renderer');
+      const { IdeasPdfDocument } = await import('@/lib/pdf/ideas-template');
+
+      const blob = await pdf(
+        IdeasPdfDocument({
+          ideas: ideas.map((i) => ({
+            title: i.title,
+            why_it_works: normalizeReasons(i.why_it_works),
+            content_pillar: i.content_pillar,
+            script: i.script,
+          })),
+          clientName,
+          agency: agency ?? null,
+          concept: generation.concept,
+          searchQuery,
+          includeScripts: downloadOptions.scripts,
+        })
+      ).toBlob();
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${clientName.replace(/[^a-zA-Z0-9]/g, '_')}_video_ideas.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('PDF exported');
+    } catch (err) {
+      console.error('PDF export error:', err);
+      toast.error('Failed to export PDF');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // ── Save ──
   const handleSave = async (index: number) => {
     const idea = ideas[index];
@@ -695,6 +749,13 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
           Generate scripts{selectedCount > 0 ? ` (${selectedCount})` : ' (all)'}
         </button>
         <button
+          onClick={handleReplaceAll}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover cursor-pointer transition-colors"
+        >
+          <RefreshCw size={12} />
+          Replace{selectedCount > 0 ? ` (${selectedCount})` : ' all'}
+        </button>
+        <button
           onClick={handleSaveAll}
           disabled={ideas.every((i) => i.saved) || !generation.client_id}
           className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover disabled:opacity-40 cursor-pointer transition-colors"
@@ -741,45 +802,14 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
             </>
           )}
         </div>
-        <div className="relative">
-          <button
-            onClick={() => setShowDownloadOptions(!showDownloadOptions)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover cursor-pointer transition-colors"
-          >
-            <Download size={12} />
-            Download{selectedCount > 0 ? ` (${selectedCount})` : ' all'}
-            <ChevronDown size={10} />
-          </button>
-          {showDownloadOptions && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowDownloadOptions(false)} />
-              <div className="absolute top-full right-0 mt-1 z-50 bg-surface border border-nativz-border rounded-xl shadow-xl p-3 min-w-[200px] space-y-2">
-                <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide">Include in download</p>
-                {([
-                  ['titles', 'Titles'] as const,
-                  ['whyItWorks', 'Why it works'] as const,
-                  ...(ideas.some((i) => i.script) ? [['scripts', 'Scripts'] as const] : []),
-                ]).map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={downloadOptions[key]}
-                      onChange={(e) => setDownloadOptions((prev) => ({ ...prev, [key]: e.target.checked }))}
-                      className="rounded border-nativz-border"
-                    />
-                    {label}
-                  </label>
-                ))}
-                <button
-                  onClick={handleDownload}
-                  className="w-full mt-2 rounded-lg bg-purple-500 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 cursor-pointer"
-                >
-                  Download .txt
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        <button
+          onClick={handleExportPdf}
+          disabled={exporting}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover cursor-pointer transition-colors disabled:opacity-40"
+        >
+          {exporting ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+          {exporting ? 'Exporting...' : 'Export PDF'}
+        </button>
       </div>
 
       {/* Idea cards — pillar-grouped or flat */}

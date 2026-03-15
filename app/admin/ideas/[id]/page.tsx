@@ -17,7 +17,7 @@ export default async function IdeaGenerationResultsPage({
 
   const { data: generation, error } = await admin
     .from('idea_generations')
-    .select('*, clients(id, name)')
+    .select('*, clients(id, name, agency)')
     .eq('id', id)
     .single();
 
@@ -56,6 +56,7 @@ export default async function IdeaGenerationResultsPage({
         <IdeasResultsClient
           generation={generation}
           clientName={(client as { name: string })?.name ?? 'Unknown'}
+          agency={(client as { agency?: string })?.agency ?? null}
           searchQuery={searchQuery}
           savedScripts={scriptMap}
         />
