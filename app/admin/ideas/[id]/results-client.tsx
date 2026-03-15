@@ -411,7 +411,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                 reference_video_ids: completedRefIds.length > 0 ? completedRefIds : undefined,
                 cta: effectiveCta || undefined,
                 video_length_seconds: videoLength,
-                target_word_count: Math.round((videoLength / 60) * 150),
+                target_word_count: Math.round((videoLength / 60) * 130),
                 hook_strategies: selectedHooks.size > 0 ? Array.from(selectedHooks) : undefined,
               }),
             });
@@ -539,7 +539,8 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
 
   // ── Copy selected/all ──
   const handleCopySelected = async () => {
-    const toCopy = selectionMode ? ideas.filter((i) => i.selected) : ideas;
+    const selected = ideas.filter((i) => i.selected);
+    const toCopy = selected.length > 0 ? selected : ideas;
     const text = toCopy.map((i) => {
       const reasons = normalizeReasons(i.why_it_works);
       let out = `${i.title}\n${reasons.map((r) => `  • ${r}`).join('\n')}\n  Pillar: ${i.content_pillar}`;
@@ -552,7 +553,8 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
 
   // ── Download ──
   const handleDownload = () => {
-    const toCopy = selectionMode ? ideas.filter((i) => i.selected) : ideas;
+    const selected = ideas.filter((i) => i.selected);
+    const toCopy = selected.length > 0 ? selected : ideas;
     const lines: string[] = [];
     for (const idea of toCopy) {
       if (downloadOptions.titles) lines.push(idea.title);
@@ -941,7 +943,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                 </div>
               </div>
               <p className="text-[11px] text-text-muted mb-5">
-                ~{Math.round((videoLength / 60) * 150)} words at 150 wpm
+                ~{Math.round((videoLength / 60) * 130)} words at ~130 wpm
               </p>
 
               {/* Hook strategies */}

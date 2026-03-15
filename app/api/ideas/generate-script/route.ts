@@ -90,7 +90,7 @@ ${cta ? `Desired CTA: ${cta}` : ''}
 </video_idea>`);
 
   const lengthSeconds = video_length_seconds ?? 60;
-  const wordCount = target_word_count ?? Math.round((lengthSeconds / 60) * 150);
+  const wordCount = target_word_count ?? Math.round((lengthSeconds / 60) * 130);
 
   const hookStrategyMap: Record<string, string> = {
     negative: 'Negative hook — open with a pain point, warning, or "stop doing this" framing',
@@ -112,7 +112,7 @@ ${cta ? `Desired CTA: ${cta}` : ''}
 
 Rules:
 - Write ONLY the words that will be spoken on camera. No stage directions, no shot lists, no pacing notes, no "[cut to]" annotations.
-- The script is for a ${lengthSeconds}-second short-form video. At 150 words per minute, aim for approximately ${wordCount} words.
+- The script is for a ${lengthSeconds}-second short-form video. Write EXACTLY ${wordCount} words (±10%). Do NOT exceed ${Math.round(wordCount * 1.1)} words. Count carefully — shorter is better than longer.
 - Match the brand voice and tone
 - Start with a strong hook that grabs attention in the first 3 seconds
 ${hookInstructions ? `${hookInstructions}\n` : ''}- End with a clear call to action${cta ? ` — the CTA should drive viewers to: ${cta}` : ''}
