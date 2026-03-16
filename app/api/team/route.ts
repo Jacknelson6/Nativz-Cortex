@@ -28,6 +28,22 @@ async function requireAdmin() {
   return user;
 }
 
+async function requireSuperAdmin() {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
+
+  const adminClient = createAdminClient();
+  const { data: userData } = await adminClient
+    .from('users')
+    .select('role, is_super_admin')
+    .eq('id', user.id)
+    .single();
+
+  if (!userData || userData.role !== 'admin' || !userData.is_super_admin) return null;
+  return user;
+}
+
 /**
  * GET /api/team
  *
@@ -68,7 +84,7 @@ export async function GET(
  * Create a new team member record. The team_members table is standalone and does not
  * require a corresponding auth.users entry.
  *
- * @auth Required (admin)
+ * @auth Required (super_admin)
  * @body id - Optional UUID for the team member (auto-generated if omitted)
  * @body full_name - Team member's full name (required, max 200 chars)
  * @body email - Email address (used for invite flows)
@@ -81,8 +97,8 @@ export async function POST(
   request: NextRequest,
 ) {
   try {
-    const user = await requireAdmin();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const user = await requireSuperAdmin();
+    if (!user) return NextResponse.json({ error: 'Super admin access required' }, { status: 403 });
 
     const body = await request.json();
     const parsed = createTeamMemberSchema.safeParse(body);

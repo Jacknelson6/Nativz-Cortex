@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Building2, Plus } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
@@ -10,10 +11,19 @@ export default async function AdminClientsPage() {
   try {
     const adminClient = createAdminClient();
 
+    // Check super admin status
+    const supabase = await createServerSupabaseClient();
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    let isSuperAdmin = false;
+    if (currentUser) {
+      const { data: sa } = await adminClient.from('users').select('is_super_admin').eq('id', currentUser.id).single();
+      isSuperAdmin = sa?.is_super_admin === true;
+    }
+
     // Fetch all clients from DB
     const { data: dbClients, error: dbError } = await adminClient
       .from('clients')
-      .select('id, name, slug, industry, is_active, logo_url, services, agency, health_score')
+      .select('id, name, slug, industry, is_active, logo_url, services, agency, health_score, organization_id')
       .order('name');
 
     if (dbError) {
@@ -33,6 +43,7 @@ export default async function AdminClientsPage() {
       services: (c.services as string[]) ?? [],
       agency: c.agency ?? null,
       healthScore: c.health_score ?? null,
+      organizationId: c.organization_id ?? null,
     }));
 
     return (
@@ -42,12 +53,14 @@ export default async function AdminClientsPage() {
             <h1 className="text-2xl font-semibold text-text-primary">Clients</h1>
             <p className="text-sm text-text-muted mt-0.5">Manage your client roster and brand profiles</p>
           </div>
-          <Link href="/admin/clients/onboard">
-            <Button size="sm">
-              <Plus size={14} />
-              Onboard
-            </Button>
-          </Link>
+          {isSuperAdmin && (
+            <Link href="/admin/clients/onboard">
+              <Button size="sm">
+                <Plus size={14} />
+                Onboard
+              </Button>
+            </Link>
+          )}
         </div>
 
         {clients.length === 0 ? (

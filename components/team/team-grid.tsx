@@ -30,6 +30,7 @@ interface TeamGridProps {
   assignmentsByMember: Record<string, ClientInfo[]>;
   todoCountByUser: Record<string, number>;
   integrationsByUser: Record<string, { todoist: boolean; calendar: boolean }>;
+  isSuperAdmin?: boolean;
 }
 
 function getInitials(name: string): string {
@@ -46,6 +47,7 @@ export function TeamGrid({
   assignmentsByMember,
   todoCountByUser,
   integrationsByUser,
+  isSuperAdmin = false,
 }: TeamGridProps) {
   const [members, setMembers] = useState<TeamMember[]>(initialMembers);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -128,10 +130,12 @@ export function TeamGrid({
             {members.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <Button size="sm" onClick={() => setDialogOpen(true)}>
-          <Plus size={14} />
-          Add member
-        </Button>
+        {isSuperAdmin && (
+          <Button size="sm" onClick={() => setDialogOpen(true)}>
+            <Plus size={14} />
+            Add member
+          </Button>
+        )}
       </div>
 
       {/* Search */}

@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { PageError } from '@/components/shared/page-error';
 import { TeamGrid } from '@/components/team/team-grid';
 
@@ -27,7 +28,20 @@ function normalizeClient(c: Assignment['clients']): { name: string; slug: string
 
 export default async function TeamPage() {
   try {
-    const supabase = createAdminClient();
+    const admin = createAdminClient();
+
+    // Check if current user is super admin
+    const supabase = await createServerSupabaseClient();
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    let isSuperAdmin = false;
+    if (currentUser) {
+      const { data: currentUserData } = await admin
+        .from('users')
+        .select('is_super_admin')
+        .eq('id', currentUser.id)
+        .single();
+      isSuperAdmin = currentUserData?.is_super_admin === true;
+    }
 
     const [teamRes, assignmentsRes, todosRes, usersRes] = await Promise.all([
       supabase
@@ -84,6 +98,7 @@ export default async function TeamPage() {
           assignmentsByMember={assignmentsByMember}
           todoCountByUser={todoCountByUser}
           integrationsByUser={integrationsByUser}
+          isSuperAdmin={isSuperAdmin}
         />
       </div>
     );
