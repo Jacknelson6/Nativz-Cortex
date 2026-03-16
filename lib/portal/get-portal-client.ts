@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { cookies } from 'next/headers';
 import type { ClientPreferences } from '@/lib/types/database';
 
 interface FeatureFlags {
@@ -33,7 +34,45 @@ export async function getPortalClient(): Promise<PortalClientResult | null> {
 
   const adminClient = createAdminClient();
 
-  // Single query: join users + clients to avoid waterfall
+  // Check for impersonation cookie (admin viewing as client)
+  const cookieStore = await cookies();
+  const impersonateOrgId = cookieStore.get('x-impersonate-org')?.value;
+
+  if (impersonateOrgId) {
+    // Verify user is an admin before allowing impersonation
+    const { data: adminUser } = await adminClient
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (adminUser?.role === 'admin') {
+      // Use impersonated org instead of user's own
+      const { data: clients } = await adminClient
+        .from('clients')
+        .select('id, name, slug, industry, feature_flags, preferences')
+        .eq('organization_id', impersonateOrgId)
+        .eq('is_active', true)
+        .limit(1);
+
+      const client = clients?.[0];
+      if (!client) return null;
+
+      const flags = (client.feature_flags as FeatureFlags) || {
+        can_search: true,
+        can_view_reports: true,
+        can_edit_preferences: false,
+        can_submit_ideas: false,
+      };
+
+      return {
+        client: { ...client, feature_flags: flags, preferences: client.preferences as ClientPreferences | null },
+        organizationId: impersonateOrgId,
+      };
+    }
+  }
+
+  // Normal flow: get org from user's record
   const { data: userData } = await adminClient
     .from('users')
     .select('organization_id')

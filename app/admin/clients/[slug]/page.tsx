@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ClientProfileForm } from '@/components/clients/client-profile-form';
+import { ImpersonateButton } from '@/components/clients/impersonate-button';
 import type { ClientStrategy } from '@/lib/types/strategy';
 
 export default async function AdminClientProfilePage({
@@ -118,16 +119,23 @@ export default async function AdminClientProfilePage({
     .sort((a, b) => b.count - a.count);
 
   return (
-    <ClientProfileForm
-      client={client}
-      portalContacts={contacts || []}
-      strategy={(strategyData as ClientStrategy) ?? null}
-      searches={searchData || []}
-      recentShoots={shoots || []}
-      recentMoodboards={moodboards || []}
-      ideas={ideasData || []}
-      ideaCount={ideasCount ?? 0}
-      knowledgeSummary={knowledgeSummary}
-    />
+    <>
+      {dbClient.organization_id && (
+        <div className="flex justify-end px-6 pt-4 -mb-4">
+          <ImpersonateButton organizationId={dbClient.organization_id} clientSlug={slug} />
+        </div>
+      )}
+      <ClientProfileForm
+        client={client}
+        portalContacts={contacts || []}
+        strategy={(strategyData as ClientStrategy) ?? null}
+        searches={searchData || []}
+        recentShoots={shoots || []}
+        recentMoodboards={moodboards || []}
+        ideas={ideasData || []}
+        ideaCount={ideasCount ?? 0}
+        knowledgeSummary={knowledgeSummary}
+      />
+    </>
   );
 }

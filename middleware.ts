@@ -102,14 +102,30 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Impersonation detection
+  const isImpersonating = request.cookies.has('x-impersonate-org');
+
+  // If admin navigates to an admin route while impersonating, clear impersonation cookies
+  if (pathname.startsWith('/admin') && isImpersonating && role === 'admin') {
+    supabaseResponse.cookies.delete('x-impersonate-org');
+    supabaseResponse.cookies.delete('x-impersonate-slug');
+    return supabaseResponse;
+  }
+
   // Admin routes — only admins
   if (pathname.startsWith('/admin') && role !== 'admin') {
     return NextResponse.redirect(new URL('/portal/dashboard', request.url));
   }
 
-  // Portal routes — viewers (and admins can also access portal for testing)
-  if (pathname.startsWith('/portal') && role !== 'viewer' && role !== 'admin') {
-    return NextResponse.redirect(new URL('/admin/login', request.url));
+  // Portal routes — viewers, or admins impersonating a client
+  if (pathname.startsWith('/portal')) {
+    if (role === 'admin' && isImpersonating) {
+      // Admin impersonating — allow portal access
+      return supabaseResponse;
+    }
+    if (role !== 'viewer' && role !== 'admin') {
+      return NextResponse.redirect(new URL('/admin/login', request.url));
+    }
   }
 
   return supabaseResponse;

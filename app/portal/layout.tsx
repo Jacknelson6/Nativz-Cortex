@@ -4,6 +4,7 @@ import { unstable_cache } from 'next/cache';
 import { PortalSidebar } from '@/components/layout/portal-sidebar';
 import { PortalHeader } from '@/components/layout/portal-header';
 import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
+import { ImpersonationBanner } from '@/components/portal/impersonation-banner';
 import type { FeatureFlags } from '@/lib/portal/get-portal-client';
 
 const getCachedPortalUser = unstable_cache(
@@ -71,12 +72,15 @@ export default async function PortalLayout({
   }
 
   return (
-    <SidebarProvider>
-      <PortalSidebar userName={userName} avatarUrl={avatarUrl} featureFlags={featureFlags} />
-      <SidebarInset>
-        <PortalHeader />
-        {children}
-      </SidebarInset>
-    </SidebarProvider>
+    <>
+      <ImpersonationBanner />
+      <SidebarProvider>
+        <PortalSidebar userName={userName} avatarUrl={avatarUrl} featureFlags={featureFlags} />
+        <SidebarInset>
+          <PortalHeader />
+          {children}
+        </SidebarInset>
+      </SidebarProvider>
+    </>
   );
 }
