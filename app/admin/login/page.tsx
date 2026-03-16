@@ -1,15 +1,10 @@
 'use client';
 
-import { useState, Suspense } from 'react';
-import dynamic from 'next/dynamic';
+import { useState } from 'react';
 import Image from 'next/image';
 import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-
-const LoginScene = dynamic(() => import('@/components/login/login-scene').then((m) => ({ default: m.LoginScene })), {
-  ssr: false,
-});
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
@@ -42,27 +37,35 @@ export default function AdminLoginPage() {
 
   return (
     <div className="fixed inset-0 z-50 flex bg-[#050510] overflow-hidden">
-      {/* Left — WebGL animation + branding */}
-      <div className="relative hidden lg:flex lg:w-[480px] xl:w-[520px] flex-col">
-        {/* Particle animation */}
-        <Suspense fallback={null}>
-          <LoginScene />
-        </Suspense>
+      {/* Left — gradient + branding */}
+      <div className="relative hidden lg:flex lg:w-[480px] xl:w-[520px] flex-col overflow-hidden">
+        {/* Gradient background */}
+        <div className="absolute inset-0 bg-[#050510]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#046BD2]/20 via-transparent to-[#8B5CF6]/10" />
+        <div className="absolute -top-40 -left-40 h-80 w-80 rounded-full bg-[#046BD2]/15 blur-[100px]" />
+        <div className="absolute -bottom-20 -right-20 h-60 w-60 rounded-full bg-[#8B5CF6]/10 blur-[80px]" />
+        <div className="absolute top-1/3 right-1/4 h-40 w-40 rounded-full bg-[#046BD2]/8 blur-[60px]" />
 
-        {/* Branding overlay */}
-        <div className="relative z-10 flex flex-1 flex-col justify-end p-10">
+        {/* Grid pattern overlay */}
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+            backgroundSize: '40px 40px',
+          }}
+        />
+
+        {/* Branding — centered */}
+        <div className="relative z-10 flex flex-1 flex-col items-center justify-center p-10">
           <Image
             src="/nativz-logo.svg"
             alt="Nativz"
             width={120}
             height={45}
-            className="h-8 w-auto mb-4"
+            className="h-8 w-auto mb-5"
           />
-          <p className="text-xl font-semibold text-white/90 leading-snug">
+          <p className="text-xl font-semibold text-white/90 leading-snug text-center">
             Content intelligence<br />for creators.
-          </p>
-          <p className="text-sm text-white/40 mt-2">
-            AI-powered topic research, video ideas, and scripts
           </p>
         </div>
 
