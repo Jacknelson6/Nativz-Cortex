@@ -104,7 +104,7 @@ export function SidebarProvider({ defaultOpen = true, children }: SidebarProvide
   return (
     <SidebarContext.Provider value={{ state, open, setOpen, openMobile, setOpenMobile, toggleSidebar }}>
       <div
-        className="flex min-h-screen w-full"
+        className="flex h-screen w-full overflow-hidden"
         style={{
           '--sidebar-width': SIDEBAR_WIDTH,
           '--sidebar-width-icon': SIDEBAR_WIDTH_ICON,
@@ -132,6 +132,7 @@ export function Sidebar({ children, className = '', ...props }: SidebarProps) {
       {/* Desktop sidebar */}
       <aside
         data-state={state}
+        suppressHydrationWarning
         className={`sticky top-0 h-screen hidden md:flex flex-col border-r border-nativz-border bg-surface shrink-0 transition-[width] duration-200 ease-out overflow-hidden ${className}`}
         style={{ width: open ? 'var(--sidebar-width)' : 'var(--sidebar-width-icon)' }}
         {...props}
@@ -250,7 +251,8 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
     return (
       <button
         ref={ref}
-        data-active={isActive || undefined}
+        data-active={isActive ? true : undefined}
+        suppressHydrationWarning
         className={`relative flex w-full items-center rounded-lg text-sm transition-colors min-h-[40px] cursor-pointer ${
           open ? 'gap-2.5 px-2.5' : 'justify-center px-0'
         } ${
