@@ -614,8 +614,10 @@ export async function POST(req: NextRequest) {
 
             if (!continueRes.ok) {
               const errText = await continueRes.text();
-              console.error('OpenRouter continue error:', errText);
-              controller.enqueue(encoder.encode(JSON.stringify({ type: 'text', content: '\n\nI encountered an error processing the tool results. Please try again.' }) + '\n'));
+              console.error('OpenRouter continue error:', continueRes.status, errText);
+              let errDetail = '';
+              try { errDetail = JSON.parse(errText)?.error?.message ?? ''; } catch { /* */ }
+              controller.enqueue(encoder.encode(JSON.stringify({ type: 'text', content: `\n\nI ran into an issue processing results${errDetail ? `: ${errDetail}` : ''}. Try asking a simpler question or start a new conversation.` }) + '\n'));
               break;
             }
 
