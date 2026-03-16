@@ -33,9 +33,24 @@ interface ServiceData {
   requests: number;
 }
 
+interface ModelData {
+  service: string;
+  totalTokens: number;
+  costUsd: number;
+  requests: number;
+}
+
+interface FeatureData {
+  model: string;
+  totalTokens: number;
+  costUsd: number;
+  requests: number;
+}
+
 interface UsageSummary {
   byService: Record<string, ServiceData>;
-  byFeature: Record<string, ServiceData>;
+  byModel: Record<string, ModelData>;
+  byFeature: Record<string, FeatureData>;
   total: { totalTokens: number; costUsd: number; requests: number };
   daily: { date: string; costUsd: number; requests: number }[];
 }
@@ -68,6 +83,26 @@ function formatTokens(n: number): string {
 
 function formatNumber(n: number): string {
   return n.toLocaleString();
+}
+
+const MODEL_LABELS: Record<string, string> = {
+  'openrouter/hunter-alpha': 'Hunter Alpha',
+  'openrouter/healer-alpha': 'Healer Alpha',
+  'anthropic/claude-sonnet-4-5': 'Claude Sonnet 4.5',
+  'anthropic/claude-sonnet-4.5': 'Claude Sonnet 4.5',
+  'gemini-2.5-flash-preview-05-20': 'Gemini 2.5 Flash',
+  'gemini-embedding-001': 'Gemini Embedding',
+  'whisper-large-v3': 'Whisper Large v3',
+  'whisper-large-v3-turbo': 'Whisper Large v3 Turbo',
+  'brave-search': 'Brave Search',
+};
+
+function modelLabel(model: string): string {
+  return MODEL_LABELS[model] ?? model;
+}
+
+function serviceColor(service: string): string {
+  return SERVICE_META[service]?.color ?? 'text-text-muted';
 }
 
 const PRESETS = [
@@ -259,6 +294,64 @@ export function UsageDashboard() {
             )}
           </div>
 
+          {/* Model breakdown */}
+          <Card>
+            <h2 className="text-sm font-semibold text-text-primary mb-4">
+              Usage by model
+            </h2>
+            {Object.keys(data.byModel).length === 0 ? (
+              <p className="text-sm text-text-muted py-4 text-center">
+                No model data for this period
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-nativz-border text-text-muted text-xs">
+                      <th className="text-left pb-2 font-medium">Model</th>
+                      <th className="text-left pb-2 font-medium">Service</th>
+                      <th className="text-right pb-2 font-medium">Requests</th>
+                      <th className="text-right pb-2 font-medium">Tokens</th>
+                      <th className="text-right pb-2 font-medium">Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(data.byModel)
+                      .sort(([, a], [, b]) => b.requests - a.requests)
+                      .map(([model, stats]) => (
+                        <tr
+                          key={model}
+                          className="border-b border-nativz-border/50 last:border-0"
+                        >
+                          <td className="py-2.5 text-text-primary font-medium">
+                            {modelLabel(model)}
+                          </td>
+                          <td className="py-2.5">
+                            <span className={`text-xs ${serviceColor(stats.service)}`}>
+                              {SERVICE_META[stats.service]?.label ?? stats.service}
+                            </span>
+                          </td>
+                          <td className="py-2.5 text-right text-text-secondary">
+                            {formatNumber(stats.requests)}
+                          </td>
+                          <td className="py-2.5 text-right text-text-secondary">
+                            {formatTokens(stats.totalTokens)}
+                          </td>
+                          <td className="py-2.5 text-right text-text-primary font-medium">
+                            {stats.costUsd === 0 ? (
+                              <span className="text-emerald-400">Free</span>
+                            ) : (
+                              formatCost(stats.costUsd)
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+
           {/* Daily cost chart */}
           <Card>
             <h2 className="text-sm font-semibold text-text-primary mb-4">
@@ -326,6 +419,7 @@ export function UsageDashboard() {
                   <thead>
                     <tr className="border-b border-nativz-border text-text-muted text-xs">
                       <th className="text-left pb-2 font-medium">Feature</th>
+                      <th className="text-left pb-2 font-medium">Model</th>
                       <th className="text-right pb-2 font-medium">Requests</th>
                       <th className="text-right pb-2 font-medium">Tokens</th>
                       <th className="text-right pb-2 font-medium">Cost</th>
@@ -333,7 +427,7 @@ export function UsageDashboard() {
                   </thead>
                   <tbody>
                     {Object.entries(data.byFeature)
-                      .sort(([, a], [, b]) => b.costUsd - a.costUsd)
+                      .sort(([, a], [, b]) => b.requests - a.requests)
                       .map(([feature, stats]) => (
                         <tr
                           key={feature}
@@ -342,6 +436,9 @@ export function UsageDashboard() {
                           <td className="py-2.5 text-text-secondary">
                             {feature.replace(/_/g, ' ')}
                           </td>
+                          <td className="py-2.5 text-text-muted text-xs">
+                            {modelLabel(stats.model)}
+                          </td>
                           <td className="py-2.5 text-right text-text-secondary">
                             {formatNumber(stats.requests)}
                           </td>
@@ -349,7 +446,11 @@ export function UsageDashboard() {
                             {formatTokens(stats.totalTokens)}
                           </td>
                           <td className="py-2.5 text-right text-text-primary font-medium">
-                            {formatCost(stats.costUsd)}
+                            {stats.costUsd === 0 ? (
+                              <span className="text-emerald-400">Free</span>
+                            ) : (
+                              formatCost(stats.costUsd)
+                            )}
                           </td>
                         </tr>
                       ))}

@@ -76,7 +76,8 @@ export async function getUsageSummary(
   to: string,
 ): Promise<{
   byService: Record<string, { totalTokens: number; costUsd: number; requests: number }>;
-  byFeature: Record<string, { totalTokens: number; costUsd: number; requests: number }>;
+  byModel: Record<string, { service: string; totalTokens: number; costUsd: number; requests: number }>;
+  byFeature: Record<string, { model: string; totalTokens: number; costUsd: number; requests: number }>;
   total: { totalTokens: number; costUsd: number; requests: number };
   daily: { date: string; costUsd: number; requests: number }[];
 }> {
@@ -92,7 +93,8 @@ export async function getUsageSummary(
   const entries = logs ?? [];
 
   const byService: Record<string, { totalTokens: number; costUsd: number; requests: number }> = {};
-  const byFeature: Record<string, { totalTokens: number; costUsd: number; requests: number }> = {};
+  const byModel: Record<string, { service: string; totalTokens: number; costUsd: number; requests: number }> = {};
+  const byFeature: Record<string, { model: string; totalTokens: number; costUsd: number; requests: number }> = {};
   const dailyMap: Record<string, { costUsd: number; requests: number }> = {};
   let totalTokens = 0;
   let totalCost = 0;
@@ -107,11 +109,20 @@ export async function getUsageSummary(
     byService[log.service].costUsd += cost;
     byService[log.service].requests += 1;
 
-    // By feature
-    if (!byFeature[log.feature]) byFeature[log.feature] = { totalTokens: 0, costUsd: 0, requests: 0 };
+    // By model
+    const modelKey = log.model || 'unknown';
+    if (!byModel[modelKey]) byModel[modelKey] = { service: log.service, totalTokens: 0, costUsd: 0, requests: 0 };
+    byModel[modelKey].totalTokens += tokens;
+    byModel[modelKey].costUsd += cost;
+    byModel[modelKey].requests += 1;
+
+    // By feature (track primary model used)
+    if (!byFeature[log.feature]) byFeature[log.feature] = { model: modelKey, totalTokens: 0, costUsd: 0, requests: 0 };
     byFeature[log.feature].totalTokens += tokens;
     byFeature[log.feature].costUsd += cost;
     byFeature[log.feature].requests += 1;
+    // Keep the most-used model for this feature (last seen is fine for display)
+    byFeature[log.feature].model = modelKey;
 
     // Daily
     const day = log.created_at.split('T')[0];
@@ -127,6 +138,7 @@ export async function getUsageSummary(
 
   return {
     byService,
+    byModel,
     byFeature,
     total: { totalTokens, costUsd: totalCost, requests: entries.length },
     daily,
