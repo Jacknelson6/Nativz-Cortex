@@ -95,8 +95,8 @@ export function AssistantMessage({
         {/* Tool results */}
         {message.toolResults && message.toolResults.length > 0 && (
           <div className="mb-3">
-            {message.toolResults.map((tr) => (
-              <ToolCard key={tr.toolCallId} toolName={tr.toolName} result={tr.result} />
+            {message.toolResults.map((tr, i) => (
+              <ToolCard key={`${tr.toolCallId}-${i}`} toolName={tr.toolName} result={tr.result} />
             ))}
           </div>
         )}
