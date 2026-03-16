@@ -5,6 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { buildTopicResearchPrompt } from '@/lib/prompts/topic-research';
 import { buildClientStrategyPrompt } from '@/lib/prompts/client-strategy';
 import { gatherSerpData } from '@/lib/brave/client';
+import { gatherPlatformData, formatPlatformContext } from '@/lib/search/platform-router';
+import type { SearchPlatform } from '@/lib/types/search';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
@@ -25,6 +27,8 @@ const searchSchema = z.object({
   country: z.string().default('us'),
   client_id: z.string().uuid().nullable().optional(),
   search_mode: z.enum(['general', 'client_strategy']).default('general'),
+  platforms: z.array(z.enum(['web', 'reddit', 'youtube', 'tiktok'])).default(['web']),
+  volume: z.enum(['quick', 'deep']).default('quick'),
 });
 
 /**
@@ -92,7 +96,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { query, source, time_range, language, country, client_id, search_mode } = parsed.data;
+    const { query, source, time_range, language, country, client_id, search_mode, platforms, volume } = parsed.data;
+    const isV2 = platforms.length > 1 || platforms.includes('reddit');
 
     // Use admin client for DB operations (bypasses RLS)
     const adminClient = createAdminClient();
@@ -148,6 +153,9 @@ export async function POST(request: NextRequest) {
         search_mode,
         status: 'processing',
         created_by: user.id,
+        platforms,
+        search_version: isV2 ? 2 : 1,
+        volume,
       })
       .select()
       .single();
@@ -161,15 +169,35 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      // Step 1: Gather SERP data from Brave Search API
-      const serpData = await gatherSerpData(query, {
-        timeRange: time_range,
-        country,
-        language,
-        source,
-      });
+      // Step 1: Gather data — v2 uses platform router, v1 uses Brave only
+      let serpData: BraveSerpData;
+      let platformContext = '';
 
-      // Step 2: Build prompt with Brave results as context
+      if (isV2) {
+        const platformResults = await gatherPlatformData(
+          query,
+          platforms as SearchPlatform[],
+          time_range,
+          volume as 'quick' | 'deep',
+        );
+        serpData = platformResults.braveSerpData ?? { webResults: [], discussions: [], videos: [] };
+        platformContext = formatPlatformContext(platformResults.sources, platformResults.platformStats);
+
+        // Store raw platform data for future re-analysis
+        await adminClient
+          .from('topic_searches')
+          .update({ platform_data: { stats: platformResults.platformStats, sourceCount: platformResults.sources.length } })
+          .eq('id', search.id);
+      } else {
+        serpData = await gatherSerpData(query, {
+          timeRange: time_range,
+          country,
+          language,
+          source,
+        });
+      }
+
+      // Step 2: Build prompt with data context
       let prompt: string;
       if (search_mode === 'client_strategy' && clientContext) {
         prompt = buildClientStrategyPrompt({
@@ -199,10 +227,19 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Step 3: Call Claude via OpenRouter (no webSearch — Brave replaces it)
+      // Inject platform data into prompt for v2 searches
+      if (isV2 && platformContext) {
+        prompt = prompt.replace(
+          '</research_data>',
+          `\n\n<platform_data>\n${platformContext}\n</platform_data>\n</research_data>`,
+        );
+      }
+
+      // Step 3: Call AI (Hunter Alpha via OpenRouter)
       const aiResult = await createCompletion({
         messages: [{ role: 'user', content: prompt }],
         maxTokens: 16000,
+        feature: 'topic_search',
       });
 
       const rawAiResponse = parseAIResponseJSON<TopicSearchAIResponse>(aiResult.text);

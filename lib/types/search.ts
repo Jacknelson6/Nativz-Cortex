@@ -4,12 +4,70 @@ import type { BraveSerpData } from '@/lib/brave/types';
 
 export type SearchMode = 'general' | 'client_strategy';
 
+// ── v2 Multi-platform types ────────────────────────────────────────────────
+
+export type SearchPlatform = 'reddit' | 'youtube' | 'tiktok' | 'web';
+export type SearchVolume = 'quick' | 'deep';
+
+export const PLATFORM_OPTIONS: { value: SearchPlatform; label: string; icon: string; available: boolean }[] = [
+  { value: 'web', label: 'Web & news', icon: '🌐', available: true },
+  { value: 'reddit', label: 'Reddit', icon: '💬', available: true },
+  { value: 'youtube', label: 'YouTube', icon: '▶️', available: false },
+  { value: 'tiktok', label: 'TikTok', icon: '🎵', available: false },
+];
+
+export interface PlatformSource {
+  platform: SearchPlatform;
+  id: string;
+  url: string;
+  title: string;
+  content: string;
+  author: string;
+  subreddit?: string;
+  engagement: {
+    views?: number;
+    likes?: number;
+    comments?: number;
+    shares?: number;
+    score?: number;
+  };
+  createdAt: string;
+  comments: PlatformComment[];
+}
+
+export interface PlatformComment {
+  id: string;
+  text: string;
+  author: string;
+  likes: number;
+  createdAt: string;
+}
+
+export interface PlatformBreakdown {
+  platform: SearchPlatform;
+  post_count: number;
+  comment_count: number;
+  avg_sentiment: number;
+  top_subreddits?: string[];
+  top_channels?: string[];
+  top_hashtags?: string[];
+}
+
+export interface ConversationTheme {
+  theme: string;
+  post_count: number;
+  sentiment: number;
+  platforms: SearchPlatform[];
+  representative_quotes: string[];
+}
+
 // Source citation attached to a trending topic
 export interface TopicSource {
   url: string;
   title: string;
   type: 'web' | 'discussion' | 'video';
   relevance: string;
+  platform?: SearchPlatform;
 }
 
 // NEW metrics shape — derived from SERP data + AI analysis
@@ -68,6 +126,11 @@ export interface TopicSearch {
   created_by: string | null;
   created_at: string;
   completed_at: string | null;
+  // v2 fields
+  platforms?: SearchPlatform[];
+  search_version?: number;
+  platform_data?: Record<string, PlatformSource[]>;
+  volume?: SearchVolume;
 }
 
 // Content pillar for client strategy mode
@@ -108,6 +171,9 @@ export interface TopicSearchAIResponse {
   content_pillars?: ContentPillar[];
   niche_performance_insights?: NicheInsights;
   brand_alignment_notes?: string;
+  // v2 additions
+  platform_breakdown?: PlatformBreakdown[];
+  conversation_themes?: ConversationTheme[];
 }
 
 // Legacy AI response for old searches

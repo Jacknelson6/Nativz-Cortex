@@ -8,8 +8,9 @@ import { FilterChip } from './filter-chip';
 import { ClientSelector } from './client-selector';
 import {
   TIME_RANGE_OPTIONS,
+  PLATFORM_OPTIONS,
 } from '@/lib/types/search';
-import type { SearchMode } from '@/lib/types/search';
+import type { SearchMode, SearchPlatform, SearchVolume } from '@/lib/types/search';
 
 interface SearchFormProps {
   redirectPrefix?: string;
@@ -34,6 +35,8 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
   const country = 'us';
   const [clientId, setClientId] = useState<string | null>(fixedClientId ?? null);
   const [searchMode, setSearchMode] = useState<SearchMode>(fixedClientId ? 'client_strategy' : 'general');
+  const [platforms, setPlatforms] = useState<Set<SearchPlatform>>(new Set(['web']));
+  const [volume, setVolume] = useState<SearchVolume>('quick');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -68,6 +71,8 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
           country,
           client_id: clientId,
           search_mode: clientId ? searchMode : 'general',
+          platforms: Array.from(platforms),
+          volume,
         }),
       });
 
@@ -138,6 +143,59 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
           options={TIME_RANGE_OPTIONS}
           onChange={setTimeRange}
         />
+        <div className="h-4 w-px bg-nativz-border" />
+
+        {/* Platform checkboxes */}
+        {PLATFORM_OPTIONS.filter((p) => p.available).map((p) => (
+          <button
+            key={p.value}
+            type="button"
+            onClick={() => {
+              if (p.value === 'web') return; // web always on
+              setPlatforms((prev) => {
+                const next = new Set(prev);
+                if (next.has(p.value)) next.delete(p.value);
+                else next.add(p.value);
+                return next;
+              });
+            }}
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+              platforms.has(p.value)
+                ? 'bg-accent-surface text-accent-text'
+                : p.value === 'web'
+                  ? 'bg-accent-surface/50 text-accent-text/60 cursor-default'
+                  : 'bg-surface text-text-muted hover:bg-surface-hover hover:text-text-secondary border border-nativz-border'
+            }`}
+          >
+            <span className="text-[11px]">{p.icon}</span>
+            {p.label}
+          </button>
+        ))}
+
+        <div className="h-4 w-px bg-nativz-border" />
+
+        {/* Volume toggle */}
+        <div className="flex items-center gap-1 rounded-lg bg-surface-hover p-0.5">
+          <button
+            type="button"
+            onClick={() => setVolume('quick')}
+            className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              volume === 'quick' ? 'bg-surface text-text-primary shadow-sm' : 'text-text-muted'
+            }`}
+          >
+            Quick
+          </button>
+          <button
+            type="button"
+            onClick={() => setVolume('deep')}
+            className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              volume === 'deep' ? 'bg-surface text-text-primary shadow-sm' : 'text-text-muted'
+            }`}
+          >
+            Deep
+          </button>
+        </div>
+
         {!hideClientSelector && (
           <>
             <div className="h-4 w-px bg-nativz-border" />
