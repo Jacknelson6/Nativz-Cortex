@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Search, FileText, Settings, Palette, Lightbulb, PanelLeftClose } from 'lucide-react';
+import { LayoutDashboard, Search, FileText, Settings, Lightbulb, PanelLeftClose, Bell, Telescope, Calendar, Microscope, Brain, Sliders } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import {
@@ -20,11 +20,16 @@ import {
 } from './sidebar';
 import type { FeatureFlags } from '@/lib/portal/get-portal-client';
 
-const ALL_NAV_ITEMS = [
+const ALL_NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; flag: string | null }[] = [
   { href: '/portal/dashboard', label: 'Dashboard', icon: LayoutDashboard, flag: null },
-  { href: '/portal/reports', label: 'Reports', icon: FileText, flag: 'can_view_reports' as const },
-  { href: '/portal/preferences', label: 'Preferences', icon: Palette, flag: 'can_edit_preferences' as const },
-  { href: '/portal/ideas', label: 'Ideas', icon: Lightbulb, flag: 'can_submit_ideas' as const },
+  { href: '/portal/notifications', label: 'Notifications', icon: Bell, flag: 'can_view_notifications' },
+  { href: '/portal/search/new', label: 'Research', icon: Telescope, flag: 'can_search' },
+  { href: '/portal/ideas', label: 'Ideas', icon: Lightbulb, flag: 'can_submit_ideas' },
+  { href: '/portal/calendar', label: 'Calendar', icon: Calendar, flag: 'can_view_calendar' },
+  { href: '/portal/analyze', label: 'Analyze', icon: Microscope, flag: 'can_view_analyze' },
+  { href: '/portal/knowledge', label: 'Knowledge', icon: Brain, flag: 'can_view_knowledge' },
+  { href: '/portal/reports', label: 'Reports', icon: FileText, flag: 'can_view_reports' },
+  { href: '/portal/preferences', label: 'Preferences', icon: Sliders, flag: 'can_edit_preferences' },
   { href: '/portal/settings', label: 'Settings', icon: Settings, flag: null },
 ];
 
@@ -38,11 +43,10 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags }: PortalSideb
   const pathname = usePathname();
   const { open, toggleSidebar } = useSidebar();
 
-  const canSearch = featureFlags?.can_search !== false;
-
+  const flags = featureFlags as Record<string, boolean> | undefined;
   const navItems = ALL_NAV_ITEMS.filter((item) => {
     if (!item.flag) return true;
-    return featureFlags?.[item.flag] !== false;
+    return flags?.[item.flag] !== false;
   });
 
   return (
@@ -69,7 +73,7 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags }: PortalSideb
           )}
         </Link>
 
-        {canSearch && (
+        {featureFlags?.can_search !== false && (
           <Link href="/portal/search/new">
             {open ? (
               <Button shape="pill" className="w-full">
