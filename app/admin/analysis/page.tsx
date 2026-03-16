@@ -158,15 +158,15 @@ export default function MoodboardPage() {
   }
 
   return (
-    <div className="p-6 space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Video analysis</h1>
-        <p className="text-sm text-text-muted mt-0.5">Analyze individual videos or build visual moodboards</p>
-      </div>
+    <div className="p-6 space-y-12">
+      {/* Header + Cards — centered like research page */}
+      <div className="flex flex-col items-center justify-center pt-8">
+        <div className="w-full max-w-3xl">
+          <div className="text-center mb-10">
+            <h1 className="text-3xl font-bold text-white">What would you like to analyze?</h1>
+          </div>
 
-      {/* Two action cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-3xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Quick analyze */}
         <SpotlightCard spotlightColor="rgba(168, 85, 247, 0.15)" className="p-6">
           <div className="flex flex-col items-center text-center">
@@ -223,6 +223,8 @@ export default function MoodboardPage() {
             </div>
           </button>
         </SpotlightCard>
+          </div>
+        </div>
       </div>
 
       {/* Boards section */}
