@@ -405,7 +405,7 @@ export async function POST(req: NextRequest) {
         'X-Title': 'Nativz Cortex - The Nerd',
       },
       body: JSON.stringify({
-        model: process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4-5',
+        model: 'openrouter/hunter-alpha',
         messages: apiMessages,
         stream: true,
         max_tokens: 8192,
@@ -604,7 +604,7 @@ export async function POST(req: NextRequest) {
                 'X-Title': 'Nativz Cortex - The Nerd',
               },
               body: JSON.stringify({
-                model: process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4-5',
+                model: 'openrouter/hunter-alpha',
                 messages: currentMessages,
                 stream: true,
                 max_tokens: 8192,
