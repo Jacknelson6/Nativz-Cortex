@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 
@@ -11,6 +11,7 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
   async function handleLogin(e: React.FormEvent) {
@@ -125,18 +126,34 @@ export default function AdminLoginPage() {
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm text-white/60 mb-1.5">
-                  Password
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label htmlFor="password" className="text-sm text-white/60">
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="text-white/30 hover:text-white/60 transition-colors cursor-pointer"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   required
                   className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#046BD2]/50 focus:outline-none focus:ring-1 focus:ring-[#046BD2]/50 transition-colors"
                 />
+              </div>
+
+              <div className="text-right">
+                <a href="mailto:Jack@nativz.io?subject=Cortex%20password%20reset" className="text-xs text-[#046BD2]/70 hover:text-[#046BD2] transition-colors">
+                  Forgot password?
+                </a>
               </div>
 
               {error && (
@@ -154,12 +171,6 @@ export default function AdminLoginPage() {
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-6 text-center">
-          <p className="text-[11px] text-white/20">
-            Nativz Cortex
-          </p>
-        </div>
       </div>
     </div>
   );
