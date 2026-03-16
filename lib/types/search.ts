@@ -33,6 +33,7 @@ export interface PlatformSource {
   };
   createdAt: string;
   comments: PlatformComment[];
+  transcript?: string | null;
 }
 
 export interface PlatformComment {

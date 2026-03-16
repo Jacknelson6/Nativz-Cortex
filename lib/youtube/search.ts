@@ -18,6 +18,7 @@ export interface YouTubeVideo {
   likeCount: number;
   commentCount: number;
   top_comments: YouTubeComment[];
+  transcript: string | null;
 }
 
 export interface YouTubeComment {
@@ -190,7 +191,34 @@ async function fetchVideoComments(
 }
 
 /**
- * Full YouTube data gathering — search + stats + comments.
+ * Fetch YouTube captions/transcript for a video via the timedtext API.
+ * Free — no quota cost.
+ */
+async function fetchTranscript(videoId: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) },
+    );
+    if (!res.ok) return null;
+    const xml = await res.text();
+    const textMatches = xml.match(/<text[^>]*>([^<]*)<\/text>/g);
+    if (!textMatches) return null;
+    const text = textMatches
+      .map((m) => {
+        const content = m.replace(/<[^>]*>/g, '');
+        return content.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+      })
+      .join(' ')
+      .trim();
+    return text || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Full YouTube data gathering — search + stats + comments + transcripts.
  * This is the main entry point for the platform router.
  *
  * Quota cost: ~127 units for 25 videos (search: 100, details: 1, comments: 25×1)
@@ -234,7 +262,18 @@ export async function gatherYouTubeData(
     }),
   );
 
-  // Step 4: Assemble final results
+  // Step 4: Fetch transcripts for top videos (free — no quota cost)
+  const transcriptCount = volume === 'deep' ? 15 : 8;
+  const topForTranscripts = videosWithDetails.slice(0, transcriptCount);
+  const transcriptMap = new Map<string, string>();
+  await Promise.allSettled(
+    topForTranscripts.map(async (v) => {
+      const transcript = await fetchTranscript(v.id);
+      if (transcript) transcriptMap.set(v.id, transcript);
+    }),
+  );
+
+  // Step 5: Assemble final results
   const videos: YouTubeVideo[] = videosWithDetails.map((v) => ({
     id: v.id,
     title: v.details.title,
@@ -247,6 +286,7 @@ export async function gatherYouTubeData(
     likeCount: v.details.likeCount,
     commentCount: v.details.commentCount,
     top_comments: commentsMap.get(v.id) ?? [],
+    transcript: transcriptMap.get(v.id) ?? null,
   }));
 
   return { videos, totalResults };

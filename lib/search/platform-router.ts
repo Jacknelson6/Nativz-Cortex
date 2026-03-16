@@ -136,6 +136,7 @@ export async function gatherPlatformData(
               likes: c.likeCount,
               createdAt: c.publishedAt,
             })),
+            transcript: vid.transcript,
           }));
 
           allSources.push(...ytSources);
@@ -184,6 +185,7 @@ export async function gatherPlatformData(
               likes: c.diggCount,
               createdAt: new Date(c.createTime * 1000).toISOString(),
             })),
+            transcript: vid.transcript,
           }));
 
           allSources.push(...ttSources);
@@ -322,6 +324,11 @@ export function formatPlatformContext(
       const sub = s.subreddit ? ` (r/${s.subreddit})` : '';
 
       let entry = `- ${s.title}${sub}${engStr}\n  ${s.content.slice(0, 300)}`;
+
+      // Include transcript snippet if available
+      if (s.transcript) {
+        entry += `\n  Transcript: "${s.transcript.slice(0, 300)}${s.transcript.length > 300 ? '...' : ''}"`;
+      }
 
       // Include top comments
       if (s.comments.length > 0) {
