@@ -65,7 +65,7 @@ export default function AdminLoginPage() {
             className="h-8 w-auto mb-5"
           />
           <p className="text-xl font-semibold text-white/90 leading-snug text-center">
-            Content intelligence<br />for creators.
+            State of the art<br />content intelligence.
           </p>
         </div>
 
