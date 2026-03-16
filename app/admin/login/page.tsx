@@ -126,31 +126,31 @@ export default function AdminLoginPage() {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="password" className="text-sm text-white/60">
-                    Password
-                  </label>
+                <label htmlFor="password" className="block text-sm text-white/60 mb-1.5">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    required
+                    className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-3 pr-11 text-sm text-white placeholder:text-white/25 focus:border-[#046BD2]/50 focus:outline-none focus:ring-1 focus:ring-[#046BD2]/50 transition-colors"
+                  />
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    className="text-white/30 hover:text-white/60 transition-colors cursor-pointer"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors cursor-pointer"
                     tabIndex={-1}
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  required
-                  className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#046BD2]/50 focus:outline-none focus:ring-1 focus:ring-[#046BD2]/50 transition-colors"
-                />
               </div>
 
-              <div className="text-right">
+              <div className="text-center">
                 <a href="mailto:Jack@nativz.io?subject=Cortex%20password%20reset" className="text-xs text-[#046BD2]/70 hover:text-[#046BD2] transition-colors">
                   Forgot password?
                 </a>
