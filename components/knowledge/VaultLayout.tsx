@@ -178,6 +178,7 @@ export function VaultLayout({
           <KnowledgeGraph
             data={initialGraphData}
             onNodeContextMenu={handleContextMenu}
+            onNodeClick={handleSelectEntry}
             selectedNodeId={selectedEntryId}
             hoveredEntryId={hoveredEntryId}
             searchQuery={searchQuery}

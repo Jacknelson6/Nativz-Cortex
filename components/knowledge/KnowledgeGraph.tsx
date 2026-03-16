@@ -111,12 +111,13 @@ function buildGraphData(data: KnowledgeGraphData): { nodes: GraphNode[]; edges: 
 interface KnowledgeGraphProps {
   data: KnowledgeGraphData;
   onNodeContextMenu?: (entryId: string, x: number, y: number) => void;
+  onNodeClick?: (entryId: string) => void;
   selectedNodeId?: string | null;
   hoveredEntryId?: string | null;
   searchQuery?: string;
 }
 
-export function KnowledgeGraph({ data, onNodeContextMenu, selectedNodeId, hoveredEntryId, searchQuery }: KnowledgeGraphProps) {
+export function KnowledgeGraph({ data, onNodeContextMenu, onNodeClick, selectedNodeId, hoveredEntryId, searchQuery }: KnowledgeGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const nodesRef = useRef<GraphNode[]>([]);
@@ -133,9 +134,21 @@ export function KnowledgeGraph({ data, onNodeContextMenu, selectedNodeId, hovere
   const lastMouseRef = useRef({ x: 0, y: 0 });
   const adjacencyRef = useRef(new Map<string, Set<string>>());
   const initialFitDone = useRef(false);
+  const mouseDownPosRef = useRef({ x: 0, y: 0 });
+  const nodeSizeRef = useRef(3);
+  const spacingRef = useRef(1);
 
   const [, setRenderTick] = useState(0);
   const [visibleTypes, setVisibleTypes] = useState<Set<string>>(new Set());
+  const [nodeSize, setNodeSize] = useState(3);
+  const [spacing, setSpacing] = useState(1);
+
+  // Keep refs in sync
+  useEffect(() => { nodeSizeRef.current = nodeSize; }, [nodeSize]);
+  useEffect(() => {
+    spacingRef.current = spacing;
+    alphaRef.current = Math.max(alphaRef.current, 0.5);
+  }, [spacing]);
 
   // All types present in the graph
   const allTypes = useMemo(() => {
@@ -252,8 +265,9 @@ export function KnowledgeGraph({ data, onNodeContextMenu, selectedNodeId, hovere
 
       // ── Force simulation step ──
       if (alpha > 0.005) {
-        const repulsion = 15000 * alpha;
-        const springLength = 350;
+        const spacingValue = spacingRef.current;
+        const repulsion = 15000 * alpha * spacingValue;
+        const springLength = 350 * spacingValue;
         const springStrength = 0.0008 * alpha;
         const centerPull = 0.001 * alpha;
         const nodeMap = new Map(nodes.map((n) => [n.id, n]));
@@ -426,7 +440,7 @@ export function KnowledgeGraph({ data, onNodeContextMenu, selectedNodeId, hovere
         const isSearchMatch = hasSearch && node.label.toLowerCase().includes(searchLower);
         const isDimmed = isHighlightMode && !isHovered && !isNeighbor;
 
-        const baseRadius = 3 + Math.sqrt(node.connectionCount) * 1.5;
+        const baseRadius = (3 + Math.sqrt(node.connectionCount) * 1.5) * (nodeSizeRef.current / 3);
         let drawRadius = baseRadius;
         if (isHovered) drawRadius = baseRadius + 3;
         if (isSelected) drawRadius = baseRadius + 2;
@@ -532,6 +546,7 @@ export function KnowledgeGraph({ data, onNodeContextMenu, selectedNodeId, hovere
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return; // Only handle left click
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
     const node = findNodeAt(e.clientX, e.clientY);
     if (node) {
       // Start dragging the node
@@ -553,11 +568,24 @@ export function KnowledgeGraph({ data, onNodeContextMenu, selectedNodeId, hovere
     }
   }, [findNodeAt, onNodeContextMenu]);
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    const wasDraggingNode = draggingNodeRef.current !== null;
     draggingNodeRef.current = null;
+    const wasPanning = isPanningRef.current;
     isPanningRef.current = false;
     if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
-  }, []);
+
+    // Click detection: if mouse hasn't moved more than 5px, treat as click
+    const dx = e.clientX - mouseDownPosRef.current.x;
+    const dy = e.clientY - mouseDownPosRef.current.y;
+    const didMove = Math.sqrt(dx * dx + dy * dy) > 5;
+    if (!didMove && !wasPanning) {
+      const node = findNodeAt(e.clientX, e.clientY);
+      if (node?.entryId && onNodeClick) {
+        onNodeClick(node.entryId);
+      }
+    }
+  }, [findNodeAt, onNodeClick]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -619,6 +647,10 @@ export function KnowledgeGraph({ data, onNodeContextMenu, selectedNodeId, hovere
             visibleTypes={visibleTypes}
             allTypes={allTypes}
             onToggleType={handleToggleType}
+            nodeSize={nodeSize}
+            onNodeSizeChange={setNodeSize}
+            spacing={spacing}
+            onSpacingChange={setSpacing}
           />
         </>
       )}
