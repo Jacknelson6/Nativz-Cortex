@@ -36,6 +36,8 @@ const chatSchema = z.object({
     arguments: z.record(z.string(), z.unknown()),
     confirmed: z.boolean(),
   }).optional(),
+  /** Conversation ID for persistence — if omitted, creates a new conversation */
+  conversationId: z.string().uuid().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -239,7 +241,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Invalid request', details: parsed.error.flatten() }), { status: 400 });
     }
 
-    const { messages, mentions, actionConfirmation } = parsed.data;
+    const { messages, mentions, actionConfirmation, conversationId } = parsed.data;
 
     // --- Handle action confirmation (execute a pending write tool) ---
     if (actionConfirmation) {
@@ -343,6 +345,36 @@ export async function POST(req: NextRequest) {
       portfolioContext += `\n\n# @Mentions in current message\n${mentionContext}`;
     }
 
+    // --- Resolve or create conversation for persistence ---
+    let activeConvoId = conversationId ?? null;
+
+    if (!activeConvoId) {
+      // Create a new conversation
+      const { data: newConvo } = await admin
+        .from('nerd_conversations')
+        .insert({ user_id: user.id, title: 'New conversation' })
+        .select('id')
+        .single();
+      activeConvoId = newConvo?.id ?? null;
+    } else {
+      // Touch updated_at
+      await admin
+        .from('nerd_conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', activeConvoId)
+        .eq('user_id', user.id);
+    }
+
+    // Save the latest user message
+    const latestUserMsg = messages.filter((m) => m.role === 'user').pop();
+    if (activeConvoId && latestUserMsg) {
+      await admin.from('nerd_messages').insert({
+        conversation_id: activeConvoId,
+        role: 'user',
+        content: latestUserMsg.content,
+      });
+    }
+
     // --- Build API messages ---
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
@@ -383,18 +415,30 @@ export async function POST(req: NextRequest) {
 
     if (!openRouterRes.ok) {
       const errText = await openRouterRes.text();
-      console.error('OpenRouter error:', errText);
-      return new Response(JSON.stringify({ error: 'AI service error' }), { status: 502 });
+      console.error('OpenRouter error:', openRouterRes.status, errText);
+      // Return the actual error details to help debug
+      let detail = 'AI service error';
+      try {
+        const errJson = JSON.parse(errText);
+        detail = errJson?.error?.message || errJson?.error || detail;
+      } catch { /* not JSON */ }
+      return new Response(JSON.stringify({ error: detail }), { status: 502 });
     }
 
     // --- Stream response, handling tool calls ---
     const encoder = new TextEncoder();
+    const convoIdForStream = activeConvoId;
+    const userIdForStream = user.id;
+    const isFirstMessage = !conversationId; // New conversation — needs title generation
+
     const readable = new ReadableStream({
       async start(controller) {
         let currentMessages = [...apiMessages];
         let response = openRouterRes;
         let toolCallCount = 0;
         const MAX_TOOL_CALLS = 5;
+        let fullAssistantText = '';
+        const allToolResults: Array<{ toolName: string; result: ToolResult }> = [];
 
         async function processStream(res: Response): Promise<{
           textContent: string;
@@ -428,6 +472,7 @@ export async function POST(req: NextRequest) {
                 // Text content
                 if (delta.content) {
                   textContent += delta.content;
+                  fullAssistantText += delta.content;
                   controller.enqueue(encoder.encode(JSON.stringify({ type: 'text', content: delta.content }) + '\n'));
                 }
 
@@ -530,6 +575,9 @@ export async function POST(req: NextRequest) {
                 }
               }
 
+              // Track for persistence
+              allToolResults.push({ toolName, result });
+
               // Send tool result to frontend
               controller.enqueue(encoder.encode(JSON.stringify({
                 type: 'tool_result',
@@ -577,6 +625,31 @@ export async function POST(req: NextRequest) {
           console.error('Stream error:', err);
           controller.enqueue(encoder.encode(JSON.stringify({ type: 'text', content: '\n\nConnection lost. Please try again.' }) + '\n'));
         } finally {
+          // Persist assistant response + emit conversation ID
+          if (convoIdForStream) {
+            // Send conversation ID to frontend so it can track the active conversation
+            controller.enqueue(encoder.encode(JSON.stringify({
+              type: 'conversation',
+              conversationId: convoIdForStream,
+            }) + '\n'));
+
+            // Save assistant message
+            const persistAdmin = createAdminClient();
+            if (fullAssistantText || allToolResults.length > 0) {
+              await persistAdmin.from('nerd_messages').insert({
+                conversation_id: convoIdForStream,
+                role: 'assistant',
+                content: fullAssistantText,
+                tool_results: allToolResults.length > 0 ? allToolResults : null,
+              }).then(() => {});
+            }
+
+            // Auto-generate title for new conversations
+            if (isFirstMessage && latestUserMsg) {
+              generateTitle(convoIdForStream, latestUserMsg.content, fullAssistantText).catch(() => {});
+            }
+          }
+
           controller.close();
         }
       },
@@ -592,5 +665,40 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('Nerd chat error:', err);
     return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500 });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auto-generate conversation title from first exchange
+// ---------------------------------------------------------------------------
+
+async function generateTitle(conversationId: string, userMessage: string, assistantResponse: string) {
+  try {
+    const { createCompletion } = await import('@/lib/ai/client');
+    const result = await createCompletion({
+      messages: [
+        {
+          role: 'system',
+          content: 'Generate a short conversation title (3-6 words max) for this chat. Return ONLY the title, no quotes, no punctuation at the end.',
+        },
+        {
+          role: 'user',
+          content: `User: ${userMessage.slice(0, 200)}\nAssistant: ${assistantResponse.slice(0, 200)}`,
+        },
+      ],
+      maxTokens: 20,
+      feature: 'nerd_title',
+    });
+
+    const title = result.text.trim().replace(/^["']|["']$/g, '').slice(0, 100);
+    if (title) {
+      const admin = createAdminClient();
+      await admin
+        .from('nerd_conversations')
+        .update({ title })
+        .eq('id', conversationId);
+    }
+  } catch (err) {
+    console.error('Title generation error:', err);
   }
 }
