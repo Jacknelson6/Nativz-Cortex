@@ -39,7 +39,7 @@ export function TagPicker({ boardId, itemId, itemTags, boardTags, onTagsChange, 
   async function toggleTag(tag: MoodboardTag) {
     const isAdded = itemTagIds.has(tag.id);
     try {
-      const res = await fetch(`/api/moodboard/items/${itemId}/tags`, {
+      const res = await fetch(`/api/analysis/items/${itemId}/tags`, {
         method: isAdded ? 'DELETE' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tag_id: tag.id }),
@@ -54,7 +54,7 @@ export function TagPicker({ boardId, itemId, itemTags, boardTags, onTagsChange, 
   async function createTag() {
     if (!newName.trim()) return;
     try {
-      const res = await fetch(`/api/moodboard/boards/${boardId}/tags`, {
+      const res = await fetch(`/api/analysis/boards/${boardId}/tags`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName.trim(), color: newColor }),

@@ -33,11 +33,13 @@ export function ContentWizard({
   const [step, setStep] = useState<WizardStep>(1);
   const [path, setPath] = useState<WizardPath>(null);
   const [clientId, setClientId] = useState('');
+  const [brandUrl, setBrandUrl] = useState('');
   const [pillars, setPillars] = useState<Pillar[]>([]);
   const [strategyModalOpen, setStrategyModalOpen] = useState(false);
 
   const clientOptions = clients.map((c) => ({ value: c.id, label: c.name }));
   const selectedClient = clients.find((c) => c.id === clientId);
+  const hasContext = !!clientId || !!brandUrl.trim();
 
   const handleSelectPath = (selected: 'pillars' | 'ideas') => {
     setPath(selected);
@@ -74,29 +76,46 @@ export function ContentWizard({
             <p className="text-sm text-text-secondary max-w-md mx-auto">
               Generate content pillars and video ideas powered by AI brand context
             </p>
-            <div className="flex justify-center pt-2">
+            <div className="flex flex-col items-center gap-3 pt-2">
               <div className="w-56">
                 <ComboSelect
                   options={clientOptions}
                   value={clientId}
-                  onChange={setClientId}
+                  onChange={(v) => { setClientId(v); if (v) setBrandUrl(''); }}
                   placeholder="Select client..."
                   searchable
                   accent="purple"
                 />
               </div>
+              {!clientId && (
+                <>
+                  <span className="text-[11px] text-text-muted/50 uppercase tracking-wider">or paste url</span>
+                  <div className="w-72">
+                    <div className="flex items-center gap-2 rounded-lg border border-nativz-border bg-background px-3 py-2">
+                      <Link2 size={14} className="text-text-muted shrink-0" />
+                      <input
+                        type="text"
+                        value={brandUrl}
+                        onChange={(e) => setBrandUrl(e.target.value)}
+                        placeholder="https://example.com"
+                        className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
           <PathSelector
             onSelectPath={handleSelectPath}
             onFullStrategy={() => setStrategyModalOpen(true)}
-            disabled={!clientId}
+            disabled={!hasContext}
           />
 
-          {!clientId && (
+          {!hasContext && (
             <p className="text-center text-xs text-text-muted/60 pt-2">
-              Select a client above to get started
+              Select a client or paste a URL to get started
             </p>
           )}
         </>
@@ -131,9 +150,10 @@ export function ContentWizard({
       )}
 
       {/* Step 2: Idea generation (no duplicate header/client) */}
-      {step === 2 && path === 'ideas' && clientId && (
+      {step === 2 && path === 'ideas' && hasContext && (
         <IdeaConfigStep
           clientId={clientId}
+          brandUrl={brandUrl}
           clients={clients}
           onIdeasSaved={onIdeasSaved}
           initialSearchId={initialSearchId}
@@ -212,11 +232,13 @@ function CountSelector({ value, onChange }: { value: number; onChange: (n: numbe
 
 function IdeaConfigStep({
   clientId,
+  brandUrl,
   clients,
   onIdeasSaved,
   initialSearchId,
 }: {
   clientId: string;
+  brandUrl?: string;
   clients: { id: string; name: string }[];
   onIdeasSaved: () => void;
   initialSearchId?: string | null;
@@ -269,7 +291,7 @@ function IdeaConfigStep({
   }, [clientId, referenceVideos]);
 
   const handleGenerate = useCallback(async () => {
-    if (!clientId) return;
+    if (!clientId && !brandUrl?.trim()) return;
     const hasPending = referenceVideos.some((v) => v.status === 'pending');
     if (hasPending) await processReferences();
 
@@ -279,7 +301,8 @@ function IdeaConfigStep({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          client_id: clientId,
+          client_id: clientId || undefined,
+          url: !clientId && brandUrl ? brandUrl.trim() : undefined,
           concept: concept.trim() || undefined,
           count,
           reference_video_ids: completedRefIds.length > 0 ? completedRefIds : undefined,
@@ -296,7 +319,7 @@ function IdeaConfigStep({
       toast.error(err instanceof Error ? err.message : 'Failed to generate ideas');
       setGenerating(false);
     }
-  }, [clientId, concept, count, referenceVideos, completedRefIds, processReferences, initialSearchId, router]);
+  }, [clientId, brandUrl, concept, count, referenceVideos, completedRefIds, processReferences, initialSearchId, router]);
 
   return (
     <div className="space-y-5">

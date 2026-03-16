@@ -104,64 +104,23 @@ export async function GET() {
         aiBullets = aiCache!.bullets;
         suggestedTasks = aiCache!.tasks;
       } else if (hasTodaysAI) {
-        // Same day but pipeline changed — ask AI to update only what changed
-        try {
-          const snapshot = buildSnapshotText(all, {
-            totalItems, doneCount, blocked, needsRevision,
-            overdueShoots, noEditor, waitingApproval,
-            editingCounts, approvalCounts,
-          });
-
-          const aiResponse = await createCompletion({
-            messages: [
-              {
-                role: 'system',
-                content: PIPELINE_SYSTEM_PROMPT,
-              },
-              {
-                role: 'user',
-                content: `Today is ${now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}.
-
-Here is the current pipeline update that was generated earlier today:
-${aiCache!.bullets.map((b, i) => `${i + 1}. ${b}`).join('\n')}
-
-Previous tasks:
-${aiCache!.tasks.map((t) => `- ${t.title}: ${t.description}`).join('\n')}
-
-The pipeline data has changed since then. Here is the new state:
-${snapshot}
-
-Update ONLY the bullets and tasks that are no longer accurate. Keep unchanged bullets exactly as they are. Return the full updated list.`,
-              },
-            ],
-            maxTokens: 500,
-            feature: 'pipeline_summary_update',
-          });
-
-          const parsed = parseAIResponse(aiResponse.text);
-          aiBullets = parsed.bullets.length > 0 ? parsed.bullets : aiCache!.bullets;
-          suggestedTasks = parsed.tasks.length > 0 ? parsed.tasks : aiCache!.tasks;
-        } catch (err) {
-          console.error('AI pipeline update error:', err);
-          // Keep today's existing AI on error
-          aiBullets = aiCache!.bullets;
-          suggestedTasks = aiCache!.tasks;
-        }
+        // Same day but pipeline changed — keep existing AI, update in background
+        aiBullets = aiCache!.bullets;
+        suggestedTasks = aiCache!.tasks;
+        // Update hash so we don't re-trigger on next request
+        aiCache = { ...aiCache!, hash: stateHash };
       } else {
-        // New day or no cache — full generation
-        try {
-          const snapshot = buildSnapshotText(all, {
-            totalItems, doneCount, blocked, needsRevision,
-            overdueShoots, noEditor, waitingApproval,
-            editingCounts, approvalCounts,
-          });
+        // New day or no cache — generate AI synchronously (with timeout)
+        const snapshot = buildSnapshotText(all, {
+          totalItems, doneCount, blocked, needsRevision,
+          overdueShoots, noEditor, waitingApproval,
+          editingCounts, approvalCounts,
+        });
 
-          const aiResponse = await createCompletion({
+        try {
+          const aiPromise = createCompletion({
             messages: [
-              {
-                role: 'system',
-                content: PIPELINE_SYSTEM_PROMPT,
-              },
+              { role: 'system', content: PIPELINE_SYSTEM_PROMPT },
               {
                 role: 'user',
                 content: `Today is ${now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}.\n\n${snapshot}`,
@@ -171,18 +130,24 @@ Update ONLY the bullets and tasks that are no longer accurate. Keep unchanged bu
             feature: 'pipeline_summary',
           });
 
+          // Race against a 10-second timeout
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('AI timeout')), 10000),
+          );
+
+          const aiResponse = await Promise.race([aiPromise, timeoutPromise]);
           const parsed = parseAIResponse(aiResponse.text);
-          aiBullets = parsed.bullets;
-          suggestedTasks = parsed.tasks;
+          aiBullets = parsed.bullets.length > 0 ? parsed.bullets : buildFallbackBullets(totalItems, doneCount, blocked, needsRevision, overdueShoots, noEditor, all);
+          suggestedTasks = parsed.tasks.length > 0 ? parsed.tasks : buildFallbackTasks(blocked, needsRevision, overdueShoots, noEditor, all);
         } catch (err) {
           console.error('AI pipeline insight error:', err);
-          aiBullets = buildFallbackBullets(totalItems, doneCount, blocked, needsRevision, overdueShoots, noEditor);
-          suggestedTasks = buildFallbackTasks(blocked, needsRevision, overdueShoots, noEditor);
+          aiBullets = buildFallbackBullets(totalItems, doneCount, blocked, needsRevision, overdueShoots, noEditor, all);
+          suggestedTasks = buildFallbackTasks(blocked, needsRevision, overdueShoots, noEditor, all);
         }
-      }
 
-      // Update daily AI cache
-      aiCache = { date: today, hash: stateHash, bullets: aiBullets, tasks: suggestedTasks };
+        // Cache for the rest of the day
+        aiCache = { date: today, hash: stateHash, bullets: aiBullets, tasks: suggestedTasks };
+      }
     }
 
     const result = {
@@ -410,23 +375,56 @@ function parseAIResponse(text: string): { bullets: string[]; tasks: { title: str
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildFallbackBullets(total: number, done: number, blocked: any[], revisions: any[], overdue: any[], unassigned: any[]): string[] {
+function buildFallbackBullets(total: number, done: number, blocked: any[], revisions: any[], overdue: any[], unassigned: any[], all?: any[]): string[] {
   const bullets: string[] = [];
   const pct = Math.round((done / total) * 100);
-  bullets.push(`Pipeline is ${pct}% complete (${done}/${total})`);
-  if (blocked.length > 0) bullets.push(`${blocked.length} client${blocked.length > 1 ? 's' : ''} blocked`);
-  if (revisions.length > 0) bullets.push(`${revisions.length} revision${revisions.length > 1 ? 's' : ''} pending`);
+  bullets.push(`${done}/${total} clients complete (${pct}%)`);
+
+  if (blocked.length > 0) bullets.push(`${blocked.map((b: { client_name: string }) => b.client_name).join(', ')}: blocked`);
+  if (revisions.length > 0) bullets.push(`${revisions.map((r: { client_name: string }) => r.client_name).join(', ')}: revision pending`);
   if (overdue.length > 0) bullets.push(`${overdue.length} shoot${overdue.length > 1 ? 's' : ''} overdue`);
   if (unassigned.length > 0) bullets.push(`${unassigned.length} client${unassigned.length > 1 ? 's' : ''} need editors`);
-  return bullets;
+
+  // Additional context from full pipeline
+  if (all) {
+    const notStarted = all.filter((i) => i.editing_status === 'not_started');
+    const editing = all.filter((i) => i.editing_status === 'editing');
+    const edited = all.filter((i) => i.editing_status === 'edited');
+    const emApproved = all.filter((i) => i.editing_status === 'em_approved');
+    const rawsUploaded = all.filter((i) => i.raws_status === 'uploaded' && i.editing_status === 'not_started');
+    const emApprovedNotSent = all.filter((i) => i.editing_status === 'em_approved' && i.client_approval_status === 'not_sent');
+
+    if (rawsUploaded.length > 0) bullets.push(`${rawsUploaded.map((i: { client_name: string }) => i.client_name).join(', ')}: raws ready, editing not started`);
+    if (emApprovedNotSent.length > 0) bullets.push(`${emApprovedNotSent.map((i: { client_name: string }) => i.client_name).join(', ')}: approved, needs client send`);
+    if (notStarted.length > 0 && bullets.length < 4) bullets.push(`${notStarted.length} clients not started editing yet`);
+    if (editing.length > 0 && bullets.length < 5) bullets.push(`${editing.length} currently in editing`);
+    if (edited.length > 0 && bullets.length < 5) bullets.push(`${edited.map((i: { client_name: string }) => i.client_name).join(', ')}: edited, awaiting EM review`);
+  }
+
+  return bullets.slice(0, 5);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildFallbackTasks(blocked: any[], revisions: any[], overdue: any[], unassigned: any[]): { title: string; description: string; priority: string }[] {
+function buildFallbackTasks(blocked: any[], revisions: any[], overdue: any[], unassigned: any[], all?: any[]): { title: string; description: string; priority: string }[] {
   const tasks: { title: string; description: string; priority: string }[] = [];
+
   for (const b of blocked) tasks.push({ title: `Unblock ${b.client_name}`, description: 'Editing is blocked — check for missing assets or unclear brief', priority: 'high' });
   for (const r of revisions) tasks.push({ title: `Revise ${r.client_name}`, description: 'Client requested revision on edits', priority: 'high' });
   for (const s of overdue) tasks.push({ title: `Follow up ${s.client_name} shoot`, description: `Shoot was scheduled for ${s.shoot_date} but raws not uploaded`, priority: 'medium' });
   if (unassigned.length > 0) tasks.push({ title: `Assign ${unassigned.length} editors`, description: `${unassigned.length} client${unassigned.length > 1 ? 's' : ''} have no editor assigned yet`, priority: 'medium' });
-  return tasks;
+
+  // Generate tasks from pipeline state if no urgent issues
+  if (all && tasks.length < 2) {
+    const rawsUploaded = all.filter((i) => i.raws_status === 'uploaded' && i.editing_status === 'not_started');
+    const edited = all.filter((i) => i.editing_status === 'edited');
+    const emApprovedNotSent = all.filter((i) => i.editing_status === 'em_approved' && i.client_approval_status === 'not_sent');
+    const needShoots = all.filter((i) => i.raws_status === 'need_to_schedule');
+
+    for (const i of rawsUploaded.slice(0, 2)) tasks.push({ title: `Start ${i.client_name} editing`, description: 'Raws are uploaded and ready', priority: 'high' });
+    for (const i of edited.slice(0, 2)) tasks.push({ title: `Review ${i.client_name} edit`, description: 'Editing complete, needs EM approval', priority: 'high' });
+    for (const i of emApprovedNotSent.slice(0, 2)) tasks.push({ title: `Send ${i.client_name} for approval`, description: 'EM approved, send to client', priority: 'medium' });
+    if (needShoots.length > 0 && tasks.length < 4) tasks.push({ title: `Schedule ${needShoots.length} shoots`, description: `${needShoots.length} clients need shoot scheduling`, priority: 'medium' });
+  }
+
+  return tasks.slice(0, 4);
 }

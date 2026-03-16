@@ -72,7 +72,7 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
     e.stopPropagation();
     setReprocessing(true);
     try {
-      await fetch(`/api/moodboard/items/${item.id}/reprocess`, { method: 'POST' });
+      await fetch(`/api/analysis/items/${item.id}/reprocess`, { method: 'POST' });
     } catch { /* ignore */ }
     finally { setReprocessing(false); }
   };

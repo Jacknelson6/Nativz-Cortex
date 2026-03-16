@@ -59,7 +59,7 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
     toast.info('Analyzing hook...', { duration: 3000 });
 
     // Fire-and-forget
-    fetch(`/api/moodboard/items/${itemId}/analyze`, { method: 'POST' })
+    fetch(`/api/analysis/items/${itemId}/analyze`, { method: 'POST' })
       .then(async (res) => {
         if (!res.ok) {
           const body = await res.json().catch(() => ({ error: 'Unknown error' }));
@@ -82,7 +82,7 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
     setExtractingFrames(true);
     toast.info('Extracting frames...', { duration: 3000 });
 
-    fetch(`/api/moodboard/items/${itemId}/extract-frames`, { method: 'POST' })
+    fetch(`/api/analysis/items/${itemId}/extract-frames`, { method: 'POST' })
       .then(async (res) => {
         if (!res.ok) {
           const data = await res.json();
@@ -104,7 +104,7 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
     setTranscribeFailed(false);
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const res = await fetch(`/api/moodboard/items/${item.id}/transcribe`, { method: 'POST' });
+        const res = await fetch(`/api/analysis/items/${item.id}/transcribe`, { method: 'POST' });
         if (res.ok) {
           const updated = await res.json();
           setItem(updated);
@@ -180,7 +180,7 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
               <Play size={12} /> Watch video
             </a>
             <button
-              onClick={() => window.open(`/api/moodboard/items/${item.id}/analysis/pdf`, '_blank')}
+              onClick={() => window.open(`/api/analysis/items/${item.id}/analysis/pdf`, '_blank')}
               className="cursor-pointer inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors"
             >
               <Download size={12} /> Export PDF
@@ -614,7 +614,7 @@ function BriefSection({ item, onReplicate, onCopy, copied }: {
   item: MoodboardItem; onReplicate: (item: MoodboardItem) => void; onCopy: (t: string) => void; copied: boolean;
 }) {
   const handleDownloadPDF = () => {
-    window.open(`/api/moodboard/items/${item.id}/brief/pdf`, '_blank');
+    window.open(`/api/analysis/items/${item.id}/brief/pdf`, '_blank');
   };
 
   if (!item.replication_brief) {

@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Share2,
   Handshake,
+  Clapperboard,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import {
@@ -62,6 +63,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/pipeline', label: 'Pipeline', icon: Workflow },
       { href: '/admin/scheduler', label: 'Scheduler', icon: Send },
       { href: '/admin/search/new', label: 'Research', icon: Telescope },
+      { href: '/admin/analysis', label: 'Video analysis', icon: Clapperboard },
     ],
   },
   {
@@ -102,6 +104,16 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
   const pathname = usePathname();
   const { open } = useSidebar();
   const [showNativz, setShowNativz] = useState(true);
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
+
+  function toggleMenu(href: string) {
+    setExpandedMenus((prev) => {
+      const next = new Set(prev);
+      if (next.has(href)) next.delete(href);
+      else next.add(href);
+      return next;
+    });
+  }
 
   return (
     <Sidebar>
@@ -157,37 +169,44 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
 
                 if (item.children && open) {
                   const childActive = item.children.some((c) => isActivePath(pathname, c.href));
+                  const isExpanded = childActive || active || expandedMenus.has(item.href);
                   return (
                     <SidebarMenuItem key={item.href}>
-                      <Link href={item.children[0].href}>
-                        <SidebarMenuButton isActive={active || childActive} tooltip={item.label}>
-                          <item.icon size={18} className="shrink-0" />
-                          <span className="truncate">{item.label}</span>
-                          <ChevronRight size={14} className={`ml-auto shrink-0 transition-transform duration-200 ${childActive || active ? 'rotate-90' : ''}`} />
-                        </SidebarMenuButton>
-                      </Link>
-                      {(childActive || active) && (
-                        <ul className="ml-6 mt-0.5 space-y-0.5 border-l border-nativz-border pl-2">
-                          {item.children.map((child) => {
-                            const cActive = isActivePath(pathname, child.href);
-                            return (
-                              <li key={child.href}>
-                                <Link
-                                  href={child.href}
-                                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-                                    cActive
-                                      ? 'text-accent-text bg-accent-surface'
-                                      : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
-                                  }`}
-                                >
-                                  <child.icon size={14} className="shrink-0" />
-                                  <span className="truncate">{child.label}</span>
-                                </Link>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
+                      <SidebarMenuButton isActive={active || childActive} tooltip={item.label} onClick={() => toggleMenu(item.href)}>
+                        <item.icon size={18} className="shrink-0" />
+                        <span className="truncate">{item.label}</span>
+                        <ChevronRight size={14} className={`ml-auto shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                      </SidebarMenuButton>
+                      <div
+                        className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+                        style={{
+                          gridTemplateRows: isExpanded ? '1fr' : '0fr',
+                          opacity: isExpanded ? 1 : 0,
+                        }}
+                      >
+                        <div className="overflow-hidden">
+                          <ul className="ml-6 mt-0.5 space-y-0.5 border-l border-nativz-border pl-2 pb-0.5">
+                            {item.children.map((child) => {
+                              const cActive = isActivePath(pathname, child.href);
+                              return (
+                                <li key={child.href}>
+                                  <Link
+                                    href={child.href}
+                                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                                      cActive
+                                        ? 'text-accent-text bg-accent-surface'
+                                        : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
+                                    }`}
+                                  >
+                                    <child.icon size={14} className="shrink-0" />
+                                    <span className="truncate">{child.label}</span>
+                                  </Link>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      </div>
                     </SidebarMenuItem>
                   );
                 }

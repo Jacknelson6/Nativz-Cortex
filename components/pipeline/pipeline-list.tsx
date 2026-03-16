@@ -36,7 +36,7 @@ function isEditingDone(editingStatus: string): boolean {
 
 export function PipelineList({ items, teamMembers, onUpdate, onSelect, onDelete }: PipelineListProps) {
   return (
-    <div className="overflow-auto">
+    <div className="flex-1 overflow-auto">
       <table className="w-full border-collapse">
         <thead>
           <tr className="sticky top-0 bg-background z-10 border-b border-nativz-border">

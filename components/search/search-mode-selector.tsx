@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, Search, Sparkles, TrendingUp } from 'lucide-react';
 import { GlassButton } from '@/components/ui/glass-button';
+import { ClientLogo } from '@/components/clients/client-logo';
 import { createClient } from '@/lib/supabase/client';
 
 interface ClientOption {
@@ -428,15 +429,7 @@ function ClientPickerModal({
                       : 'border-white/[0.06] bg-white/[0.03] text-white/70 hover:border-white/[0.12] hover:bg-white/[0.06]'
                   }`}
                 >
-                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden ${
-                    client.id === value ? 'bg-accent/20' : 'bg-white/[0.04]'
-                  }`}>
-                    {client.logo_url ? (
-                      <img src={client.logo_url} alt={client.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <Building2 size={14} className={client.id === value ? 'text-accent-text' : 'text-white/40'} />
-                    )}
-                  </div>
+                  <ClientLogo src={client.logo_url} name={client.name} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-white/90">{client.name}</p>
                     {client.agency && (

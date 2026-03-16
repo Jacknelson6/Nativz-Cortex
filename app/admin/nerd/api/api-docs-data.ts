@@ -1081,7 +1081,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   // ─── 12. Analyze (Video Analysis) ───
   {
     method: 'GET',
-    path: '/api/moodboard/boards',
+    path: '/api/analysis/boards',
     description: 'List all analysis boards.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1089,7 +1089,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/boards',
+    path: '/api/analysis/boards',
     description: 'Create a new analysis board.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1098,7 +1098,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/boards/[id]',
+    path: '/api/analysis/boards/[id]',
     description: 'Get a board with all items, notes, edges, and tags.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1106,7 +1106,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'PATCH',
-    path: '/api/moodboard/boards/[id]',
+    path: '/api/analysis/boards/[id]',
     description: 'Update a board\'s name, description, or client association.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1115,7 +1115,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'DELETE',
-    path: '/api/moodboard/boards/[id]',
+    path: '/api/analysis/boards/[id]',
     description: 'Delete a board and all its items.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1123,7 +1123,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/boards/[id]/share',
+    path: '/api/analysis/boards/[id]/share',
     description: 'Create a shareable link with optional password and expiry.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1132,7 +1132,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/boards/[id]/duplicate',
+    path: '/api/analysis/boards/[id]/duplicate',
     description: 'Duplicate a board with all items.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1140,7 +1140,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/boards/[id]/search',
+    path: '/api/analysis/boards/[id]/search',
     description: 'Full-text search items within a board.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1149,7 +1149,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'PATCH',
-    path: '/api/moodboard/boards/[id]/positions',
+    path: '/api/analysis/boards/[id]/positions',
     description: 'Batch-update canvas positions of items and notes within a board.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1158,7 +1158,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/boards/[id]/tags',
+    path: '/api/analysis/boards/[id]/tags',
     description: 'Get tags on a board.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1166,7 +1166,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'PATCH',
-    path: '/api/moodboard/boards/[id]/tags',
+    path: '/api/analysis/boards/[id]/tags',
     description: 'Manage tags on a board.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1175,7 +1175,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/items',
+    path: '/api/analysis/items',
     description: 'List items, optionally filtered by board.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1184,7 +1184,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/items',
+    path: '/api/analysis/items',
     description: 'Create a new item (video or website). For TikTok URLs, auto-fetches metadata.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1193,7 +1193,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/items/[id]',
+    path: '/api/analysis/items/[id]',
     description: 'Get a single analysis item.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1201,7 +1201,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'PATCH',
-    path: '/api/moodboard/items/[id]',
+    path: '/api/analysis/items/[id]',
     description: 'Update item fields.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1210,7 +1210,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'DELETE',
-    path: '/api/moodboard/items/[id]',
+    path: '/api/analysis/items/[id]',
     description: 'Delete an analysis board item.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1218,7 +1218,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/items/[id]/process',
+    path: '/api/analysis/items/[id]/process',
     description: 'Full video processing pipeline: download, extract frames, transcribe, generate AI analysis.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1226,7 +1226,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/items/[id]/reprocess',
+    path: '/api/analysis/items/[id]/reprocess',
     description: 'Re-run the full video processing pipeline (overwriting existing results).',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1234,7 +1234,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/items/[id]/analyze',
+    path: '/api/analysis/items/[id]/analyze',
     description: 'Run AI analysis on an item (visual breakdown, hook analysis, engagement patterns).',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1242,7 +1242,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/items/[id]/insights',
+    path: '/api/analysis/items/[id]/insights',
     description: 'Generate or regenerate AI creative insights for an item.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1250,7 +1250,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/items/[id]/transcribe',
+    path: '/api/analysis/items/[id]/transcribe',
     description: 'Transcribe the audio of a video item.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1258,7 +1258,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/items/[id]/extract-frames',
+    path: '/api/analysis/items/[id]/extract-frames',
     description: 'Extract frame thumbnails from a video item using ffmpeg.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1266,7 +1266,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/items/[id]/thumbnail',
+    path: '/api/analysis/items/[id]/thumbnail',
     description: 'Get (or generate) a thumbnail for an item.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1274,7 +1274,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/items/[id]/video-url',
+    path: '/api/analysis/items/[id]/video-url',
     description: 'Get a pre-signed or proxied URL for streaming a video item.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1282,7 +1282,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/items/[id]/rescript',
+    path: '/api/analysis/items/[id]/rescript',
     description: 'Generate a new script adapted from a video item\'s transcript for a specific brand.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1291,7 +1291,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/items/[id]/replicate',
+    path: '/api/analysis/items/[id]/replicate',
     description: 'Generate a content strategy for replicating a video item\'s style.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1300,7 +1300,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/items/[id]/tags',
+    path: '/api/analysis/items/[id]/tags',
     description: 'Get tags on an analysis board item.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1308,7 +1308,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/items/[id]/tags',
+    path: '/api/analysis/items/[id]/tags',
     description: 'Add tags to an analysis board item.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1317,7 +1317,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/items/batch-tags',
+    path: '/api/analysis/items/batch-tags',
     description: 'Apply tags to multiple items at once.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1326,7 +1326,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/items/[id]/analysis/pdf',
+    path: '/api/analysis/items/[id]/analysis/pdf',
     description: 'Generate and stream a PDF analysis report for an item.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1334,7 +1334,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/items/[id]/brief/pdf',
+    path: '/api/analysis/items/[id]/brief/pdf',
     description: 'Generate and stream a PDF creative brief for an item.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1342,7 +1342,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/chat',
+    path: '/api/analysis/chat',
     description: 'AI chat (Cortex AI) with analysis item context. Returns SSE stream.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1352,7 +1352,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/notes',
+    path: '/api/analysis/notes',
     description: 'List sticky notes on a board.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1360,7 +1360,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/notes',
+    path: '/api/analysis/notes',
     description: 'Create a sticky note on a board.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1369,7 +1369,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'PATCH',
-    path: '/api/moodboard/notes/[id]',
+    path: '/api/analysis/notes/[id]',
     description: 'Update a sticky note.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1378,7 +1378,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'DELETE',
-    path: '/api/moodboard/notes/[id]',
+    path: '/api/analysis/notes/[id]',
     description: 'Delete a sticky note.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1386,7 +1386,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/edges',
+    path: '/api/analysis/edges',
     description: 'List connection edges between items on a board.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1394,7 +1394,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/edges',
+    path: '/api/analysis/edges',
     description: 'Create a connection edge between items on a board.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1403,7 +1403,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'PATCH',
-    path: '/api/moodboard/edges/[id]',
+    path: '/api/analysis/edges/[id]',
     description: 'Update an edge.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1412,7 +1412,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'DELETE',
-    path: '/api/moodboard/edges/[id]',
+    path: '/api/analysis/edges/[id]',
     description: 'Delete an edge.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1420,7 +1420,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/comments',
+    path: '/api/analysis/comments',
     description: 'List comments on board items.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1428,7 +1428,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'POST',
-    path: '/api/moodboard/comments',
+    path: '/api/analysis/comments',
     description: 'Create a comment on a board item.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1437,7 +1437,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'PATCH',
-    path: '/api/moodboard/comments/[id]',
+    path: '/api/analysis/comments/[id]',
     description: 'Update a comment.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1445,7 +1445,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'DELETE',
-    path: '/api/moodboard/comments/[id]',
+    path: '/api/analysis/comments/[id]',
     description: 'Delete a comment.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1453,7 +1453,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'PATCH',
-    path: '/api/moodboard/tags/[id]',
+    path: '/api/analysis/tags/[id]',
     description: 'Update a tag definition.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1462,7 +1462,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'DELETE',
-    path: '/api/moodboard/tags/[id]',
+    path: '/api/analysis/tags/[id]',
     description: 'Delete a tag definition.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',
@@ -1470,7 +1470,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   },
   {
     method: 'GET',
-    path: '/api/moodboard/templates',
+    path: '/api/analysis/templates',
     description: 'List available board templates.',
     auth: 'Required (admin)',
     section: 'Analyze (Video Analysis)',

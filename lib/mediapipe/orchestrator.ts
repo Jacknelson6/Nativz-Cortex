@@ -113,7 +113,7 @@ export async function runAndPersistAnalysis(
 
     // Send analysis results to the analyze endpoint
     const analyzeRes = await fetch(
-      `/api/moodboard/items/${itemId}/analyze`,
+      `/api/analysis/items/${itemId}/analyze`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -137,7 +137,7 @@ export async function runAndPersistAnalysis(
     // Send thumbnail results
     if (result.thumbnails.candidates.length > 0) {
       const thumbnailRes = await fetch(
-        `/api/moodboard/items/${itemId}/thumbnail`,
+        `/api/analysis/items/${itemId}/thumbnail`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

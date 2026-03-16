@@ -112,7 +112,7 @@ export const moodboardTools: ToolDefinition[] = [
           success: true,
           data: items ?? [],
           cardType: 'moodboard' as const,
-          link: { href: `/admin/moodboard/${board_id}`, label: 'View moodboard' },
+          link: { href: `/admin/analysis/${board_id}`, label: 'View analysis' },
         };
       } catch (err) {
         return {

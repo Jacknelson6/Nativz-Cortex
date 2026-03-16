@@ -213,6 +213,7 @@ export async function checkPostVelocity(): Promise<{
           title: `${clientName} — ${platform} post is picking up speed`,
           body: post.thumbnailUrl ?? undefined,
           linkPath: post.platformPostUrl ?? `/admin/analytics?client=${clientId}`,
+          clientId,
         });
 
         trending++;

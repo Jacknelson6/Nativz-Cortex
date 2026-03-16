@@ -8,14 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { formatRelativeTime } from '@/lib/utils/format';
 import type { HistoryItem, HistoryItemType } from '@/lib/research/history';
 
-interface ClientOption {
-  id: string;
-  name: string;
-}
-
 interface HistoryFeedProps {
   items: HistoryItem[];
-  clients: ClientOption[];
+  clients?: { id: string; name: string }[];
   onViewAll?: () => void;
 }
 
@@ -38,13 +33,18 @@ function TypeIcon({ type }: { type: HistoryItemType }) {
   return <Search size={14} className="text-text-muted shrink-0" />;
 }
 
-export function HistoryFeed({ items, clients, onViewAll }: HistoryFeedProps) {
+export function HistoryFeed({ items, onViewAll }: HistoryFeedProps) {
   const [typeFilter, setTypeFilter] = useState<HistoryItemType | null>(null);
-  const [clientFilter, setClientFilter] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const filtered = items.filter((item) => {
     if (typeFilter && item.type !== typeFilter) return false;
-    if (clientFilter && item.clientId !== clientFilter) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchesTitle = item.title.toLowerCase().includes(q);
+      const matchesClient = item.clientName?.toLowerCase().includes(q);
+      if (!matchesTitle && !matchesClient) return false;
+    }
     return true;
   });
 
@@ -86,16 +86,16 @@ export function HistoryFeed({ items, clients, onViewAll }: HistoryFeedProps) {
           ))}
         </div>
 
-        <select
-          value={clientFilter ?? ''}
-          onChange={(e) => setClientFilter(e.target.value || null)}
-          className="ml-auto rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-xs text-text-muted focus:outline-none focus:border-accent"
-        >
-          <option value="">All clients</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
+        <div className="ml-auto relative">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="rounded-lg border border-white/[0.08] bg-white/[0.04] pl-8 pr-3 py-1.5 text-xs text-text-primary placeholder-text-muted focus:outline-none focus:border-accent w-[180px]"
+          />
+        </div>
       </div>
 
       {/* Items */}

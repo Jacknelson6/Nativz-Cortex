@@ -8,6 +8,10 @@ interface FeatureFlags {
   can_view_reports: boolean;
   can_edit_preferences: boolean;
   can_submit_ideas: boolean;
+  can_view_notifications: boolean;
+  can_view_calendar: boolean;
+  can_view_analyze: boolean;
+  can_view_knowledge: boolean;
 }
 
 interface PortalClient {
@@ -58,11 +62,16 @@ export async function getPortalClient(): Promise<PortalClientResult | null> {
       const client = clients?.[0];
       if (!client) return null;
 
-      const flags = (client.feature_flags as FeatureFlags) || {
+      const flags: FeatureFlags = {
         can_search: true,
         can_view_reports: true,
-        can_edit_preferences: false,
-        can_submit_ideas: false,
+        can_edit_preferences: true,
+        can_submit_ideas: true,
+        can_view_notifications: true,
+        can_view_calendar: false,
+        can_view_analyze: false,
+        can_view_knowledge: true,
+        ...(client.feature_flags as Partial<FeatureFlags> ?? {}),
       };
 
       return {

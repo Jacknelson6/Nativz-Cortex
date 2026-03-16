@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import {
   Search,
-  UserPlus,
+  Microscope,
+  Calendar,
+  Sparkles,
   BotMessageSquare,
   ArrowUpRight,
 } from 'lucide-react';
@@ -71,28 +73,61 @@ export default async function AdminDashboardPage() {
         </div>
 
         {/* Quick actions */}
-        <div className="grid grid-cols-3 gap-3 auto-rows-[160px]">
+        <div className="grid grid-cols-[1fr_1fr_1fr_1fr_minmax(200px,1.2fr)] gap-3 auto-rows-[140px]">
           <BentoTile
-            href="/admin/clients/onboard"
-            icon={<UserPlus size={20} className="text-accent-text" />}
-            label="Onboard client"
-            description="Add a new client to Cortex"
-            accentColor="#046bd2"
+            href="/admin/analysis"
+            icon={<Microscope size={20} className="text-purple-400" />}
+            label="Analyze video"
+            description="AI-powered video breakdown"
+            accentColor="#8b5cf6"
+          />
+          <BentoTile
+            href="/admin/scheduler"
+            icon={<Calendar size={20} className="text-purple-400" />}
+            label="Schedule content"
+            description="Plan and publish content"
+            accentColor="#8b5cf6"
+          />
+          <BentoTile
+            href="/admin/ideas"
+            icon={<Sparkles size={20} className="text-purple-400" />}
+            label="Generate strategy"
+            description="Content ideas and scripts"
+            accentColor="#8b5cf6"
           />
           <BentoTile
             href="/admin/search/new"
-            icon={<Search size={20} className="text-accent-text" />}
-            label="Research"
-            description="Search what people are saying about a topic"
-            accentColor="#046bd2"
-          />
-          <BentoTile
-            href="/admin/nerd"
-            icon={<BotMessageSquare size={20} style={{ color: '#a78bfa' }} />}
-            label="Talk to the nerd"
-            description="Ask anything about your data"
+            icon={<Search size={20} className="text-purple-400" />}
+            label="Research topic"
+            description="Social listening and trends"
             accentColor="#8b5cf6"
           />
+          {/* The Nerd — special AI agent block */}
+          <Link href="/admin/nerd" className="group block">
+            <div className="relative h-full overflow-hidden rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/[0.08] via-surface to-blue-500/[0.06] transition-all duration-300 hover:shadow-[0_0_30px_rgba(4,107,210,0.15)] hover:-translate-y-0.5 hover:border-accent/50">
+              {/* Animated gradient orbs */}
+              <div className="absolute -top-10 -right-10 h-32 w-32 rounded-full bg-accent/10 blur-2xl transition-all duration-700 group-hover:bg-accent/20 group-hover:scale-125" />
+              <div className="absolute -bottom-8 -left-8 h-24 w-24 rounded-full bg-blue-500/10 blur-2xl transition-all duration-700 group-hover:bg-blue-500/15 group-hover:scale-110" />
+              <div className="relative flex h-full flex-col justify-between p-5">
+                <div className="flex items-start justify-between">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 ring-1 ring-accent/20">
+                    <BotMessageSquare size={20} className="text-accent-text" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+                    </span>
+                    <span className="text-[10px] font-medium text-accent-text/80 uppercase tracking-wider">AI</span>
+                  </div>
+                </div>
+                <div className="mt-auto pt-4">
+                  <h3 className="text-sm font-semibold text-text-primary">Talk to the Nerd</h3>
+                  <p className="text-xs text-text-muted mt-0.5">Your AI agent with full Cortex access</p>
+                </div>
+              </div>
+            </div>
+          </Link>
         </div>
 
         {/* Tasks + Notifications */}

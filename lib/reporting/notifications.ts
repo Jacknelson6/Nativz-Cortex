@@ -111,6 +111,7 @@ export async function generateAnalyticsNotifications(
                   title: `${clientName} — ${multiplier}x average engagement`,
                   body: post.thumbnail_url ?? null,
                   linkPath: post.post_url ?? `/admin/analytics?client=${clientId}`,
+                  clientId,
                 });
                 notificationCount++;
               }
@@ -224,6 +225,7 @@ export async function generateAnalyticsNotifications(
               type: 'engagement_spike',
               title: `${clientName} — ${platform} engagement +${pctIncrease}%`,
               linkPath: `/admin/analytics?client=${clientId}`,
+              clientId,
             });
             notificationCount++;
           }
@@ -278,6 +280,7 @@ export async function generateAnalyticsNotifications(
               type: 'follower_milestone',
               title: `${clientName} — ${snapshot.platform} hit ${label} followers`,
               linkPath: `/admin/analytics?client=${clientId}`,
+              clientId,
             });
             notificationCount++;
           }

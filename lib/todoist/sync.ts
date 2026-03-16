@@ -176,8 +176,9 @@ export async function syncTodoist(
       }
 
       // New from Todoist — create in Cortex (assigned to creator)
-      // Use upsert with todoist_task_id to prevent duplicates
-      const { error } = await admin.from('tasks').upsert({
+      // Use insert (not upsert) — the partial unique index on todoist_task_id
+      // is incompatible with PostgREST's ON CONFLICT clause
+      const { error } = await admin.from('tasks').insert({
         title: tt.content,
         description: tt.description || null,
         status: tt.checked ? 'done' : 'backlog',
@@ -189,7 +190,7 @@ export async function syncTodoist(
         created_by: userId,
         assignee_id: assigneeId,
         task_type: 'other',
-      }, { onConflict: 'todoist_task_id' });
+      });
 
       if (error) {
         result.errors.push(`Import ${tt.content}: ${error.message}`);
@@ -213,7 +214,13 @@ export async function syncTodoist(
     for (const [todoistId, cortex] of cortexByTodoistId) {
       if (!todoistById.has(todoistId)) {
         // Todoist task was deleted — archive in Cortex
-        await admin.from('tasks').update({ archived_at: new Date().toISOString() }).eq('id', cortex.id);
+        const { error: archiveError } = await admin
+          .from('tasks')
+          .update({ archived_at: new Date().toISOString() })
+          .eq('id', cortex.id);
+        if (archiveError) {
+          result.errors.push(`Archive ${cortex.title}: ${archiveError.message}`);
+        }
       }
     }
 

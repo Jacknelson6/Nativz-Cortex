@@ -126,7 +126,7 @@ export async function GET() {
         id: m.id,
         description: `Moodboard item added: "${m.title || 'Untitled'}"`,
         created_at: m.created_at,
-        link: `/admin/moodboard`,
+        link: `/admin/analysis`,
       });
     }
     for (const c of recentClients.data || []) {

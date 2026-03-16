@@ -58,3 +58,6 @@ next-env.d.ts
 
 # screenshots
 *.png
+vectors.db
+vectors.db-shm
+vectors.db-wal

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Building2, Search } from 'lucide-react';
 import { lockScroll, unlockScroll } from '@/lib/utils/scroll-lock';
+import { ClientLogo } from '@/components/clients/client-logo';
 
 export interface ClientOption {
   id: string;
@@ -169,15 +170,7 @@ export function ClientPickerModal({
                       : 'border-white/[0.06] bg-white/[0.03] text-white/70 hover:border-white/[0.12] hover:bg-white/[0.06]'
                   }`}
                 >
-                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden ${
-                    client.id === value ? 'bg-purple-500/20' : 'bg-white/[0.04]'
-                  }`}>
-                    {client.logo_url ? (
-                      <img src={client.logo_url} alt={client.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <Building2 size={14} className={client.id === value ? 'text-purple-400' : 'text-white/40'} />
-                    )}
-                  </div>
+                  <ClientLogo src={client.logo_url} name={client.name} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-white/90">{client.name}</p>
                     {client.agency && (

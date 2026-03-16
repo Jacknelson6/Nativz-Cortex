@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, Building2, Save, Sparkles,
+  ArrowLeft, Building2, Save, Sparkles, Loader2,
   Clock, Pencil, X, Settings2, ExternalLink, DollarSign,
   BookOpen, Lightbulb, Wand2, Plug,
 } from 'lucide-react';
@@ -13,7 +13,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { ImageUpload } from '@/components/ui/image-upload';
-import { GlowButton } from '@/components/ui/glow-button';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { AgencyBadge } from '@/components/clients/agency-badge';
 import { ClientContactsCard } from '@/components/clients/client-contacts-card';
@@ -23,6 +22,7 @@ import { KnowledgeThumbnail } from '@/components/knowledge/KnowledgeThumbnail';
 import { ProfileField, SectionLabel } from './client-profile-fields';
 import { ClientActivityCards } from './client-activity-cards';
 import { PortalAccessCard, DangerZone } from './client-settings-section';
+import { ImpersonateButton } from './impersonate-button';
 import type { ClientStrategy } from '@/lib/types/strategy';
 import type { ClientPreferences } from '@/lib/types/database';
 
@@ -33,6 +33,7 @@ export interface ClientProfileData {
   name: string;
   slug: string;
   industry: string;
+  organization_id: string | null;
   logo_url: string | null;
   website_url: string | null;
   target_audience: string | null;
@@ -218,6 +219,9 @@ export function ClientProfileForm({
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="truncate text-2xl font-semibold text-text-primary">{clientName}</h1>
                 <AgencyBadge agency={agency} />
+                {client.organization_id && (
+                  <ImpersonateButton organizationId={client.organization_id} clientSlug={slug} />
+                )}
               </div>
               <p className="truncate text-sm text-text-muted mt-0.5">
                 {industry || 'General'}
@@ -305,10 +309,10 @@ export function ClientProfileForm({
                   Cancel
                 </Button>
                 {websiteUrl.trim() && (
-                  <GlowButton onClick={handleGenerateAI} disabled={analyzing} loading={analyzing} type="button">
-                    {!analyzing && <Sparkles size={14} />}
+                  <Button variant="outline" size="sm" onClick={handleGenerateAI} disabled={analyzing} type="button">
+                    {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                     {analyzing ? 'Analyzing...' : 'Generate with AI'}
-                  </GlowButton>
+                  </Button>
                 )}
                 <Button type="submit" size="sm" disabled={saving}>
                   <Save size={14} />
@@ -425,9 +429,6 @@ export function ClientProfileForm({
         </Card>
         <ClientContactsCard clientId={clientId} clientName={clientName} vaultContacts={[]} portalContacts={portalContacts} />
       </div>
-
-      {/* Content strategy */}
-      <ClientStrategyCard clientId={clientId} clientName={clientName} initialStrategy={initialStrategy} />
 
       {/* Activity */}
       <SectionLabel icon={Clock} label="Activity" />

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, Sparkles } from 'lucide-react';
 import { SpotlightCard } from '@/components/ui/spotlight-card';
 import { ResearchWizard } from './research-wizard';
@@ -18,9 +18,17 @@ interface ResearchHubProps {
 
 export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [researchOpen, setResearchOpen] = useState(false);
   const [strategyOpen, setStrategyOpen] = useState(false);
-  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(searchParams.get('history') === 'true');
+
+  // Open history modal when ?history=true is in the URL
+  useEffect(() => {
+    if (searchParams.get('history') === 'true') {
+      setHistoryModalOpen(true);
+    }
+  }, [searchParams]);
   const [optimisticItems, setOptimisticItems] = useState<HistoryItem[]>([]);
   const prevHistoryRef = useRef(historyItems);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);

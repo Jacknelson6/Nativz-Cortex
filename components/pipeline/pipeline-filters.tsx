@@ -107,11 +107,12 @@ export function PipelineFilters({
   onAgencyFilter,
   search,
   onSearch,
+  isOwner,
 }: PipelineFiltersProps) {
   return (
     <div className="px-6 py-2 border-b border-nativz-border bg-background flex items-center gap-2 flex-wrap">
-      {/* My clients toggle */}
-      <button
+      {/* My clients toggle — hidden for owners who see everything by default */}
+      {!isOwner && <button
         onClick={() => onMyClientsToggle(!myClientsOnly)}
         className={`
           flex items-center gap-1.5 h-7 px-3 rounded-full text-xs font-medium border
@@ -124,7 +125,7 @@ export function PipelineFilters({
       >
         <User className="w-3 h-3" />
         My clients
-      </button>
+      </button>}
 
       {/* Status filter */}
       <Dropdown

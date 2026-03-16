@@ -90,6 +90,15 @@ export default async function AdminSearchResultsPage({
     }
   }
 
+  // Fetch idea generations linked to this search
+  const { data: linkedGenerations } = await adminClient
+    .from('idea_generations')
+    .select('id, concept, count, status, created_at')
+    .eq('search_id', id)
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(5);
+
   return (
     <>
       <div className="px-6 pt-6">
@@ -103,6 +112,12 @@ export default async function AdminSearchResultsPage({
         clientInfo={clientInfo}
         recipients={recipients}
         clients={(allClients ?? []).map((c) => ({ id: c.id, name: c.name, logo_url: c.logo_url, agency: c.agency }))}
+        linkedIdeas={(linkedGenerations ?? []).map((g) => ({
+          id: g.id,
+          concept: g.concept,
+          count: g.count,
+          createdAt: g.created_at,
+        }))}
       />
     </>
   );

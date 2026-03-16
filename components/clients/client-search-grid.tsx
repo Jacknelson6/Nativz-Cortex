@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Building2, Search, UserX, LayoutGrid, List, Trash2, Loader2, X } from 'lucide-react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Building2, Search, UserX, LayoutGrid, List, Trash2, Loader2, X, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { HealthBadge } from '@/components/clients/health-badge';
 import { AgencyBadge } from '@/components/clients/agency-badge';
+import { ClientLogo } from '@/components/clients/client-logo';
 import { ClientProfileForm } from '@/components/clients/client-profile-form';
 import type { ClientProfileFormProps } from '@/components/clients/client-profile-form';
 import { formatRelativeTime } from '@/lib/utils/format';
@@ -23,6 +25,7 @@ interface ClientItem {
   logoUrl?: string | null;
   healthScore?: string | null;
   lastActivityAt?: string | null;
+  organizationId?: string | null;
 }
 
 const STANDARD_SERVICES = ['SMM', 'Paid Media', 'Affiliates', 'Editing'] as const;
@@ -122,15 +125,42 @@ function ClientCard({
     onDelete(client.dbId);
   }
 
-  const deleteButton = client.dbId && (
-    <button
-      onClick={handleDelete}
-      disabled={deleting}
-      className="opacity-0 group-hover:opacity-100 transition-opacity rounded-md p-1.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 cursor-pointer"
-      title={`Delete ${client.name}`}
-    >
-      {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-    </button>
+  function handleImpersonate(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!client.organizationId) return;
+    fetch('/api/impersonate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ organization_id: client.organizationId, client_slug: client.slug }),
+    })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => { window.location.href = data.redirect; })
+      .catch(() => toast.error('Failed to impersonate'));
+  }
+
+  const actionButtons = (
+    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      {client.organizationId && (
+        <button
+          onClick={handleImpersonate}
+          className="rounded-md p-1.5 text-text-muted hover:text-accent-text hover:bg-accent-surface/20 cursor-pointer"
+          title={`View as ${client.name}`}
+        >
+          <Eye size={14} />
+        </button>
+      )}
+      {client.dbId && (
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="rounded-md p-1.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 cursor-pointer"
+          title={`Delete ${client.name}`}
+        >
+          {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+        </button>
+      )}
+    </div>
   );
 
   if (listView) {
@@ -141,15 +171,7 @@ function ClientCard({
             className={`flex items-center gap-3 rounded-lg border border-nativz-border-light px-4 py-3 hover:bg-surface-hover transition-colors animate-stagger-in ${dimmed ? 'opacity-50 hover:opacity-80' : ''}`}
             style={{ animationDelay: `${i * 30}ms` }}
           >
-            {client.logoUrl ? (
-              <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-white flex items-center justify-center">
-                <img src={client.logoUrl} alt={client.name} className="h-full w-full object-cover" />
-              </div>
-            ) : (
-              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
-                {client.abbreviation || <Building2 size={16} />}
-              </div>
-            )}
+            <ClientLogo src={client.logoUrl} name={client.name} abbreviation={client.abbreviation} size="sm" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <p className="text-sm font-medium text-text-primary truncate">{client.name}</p>
@@ -167,7 +189,7 @@ function ClientCard({
               </div>
             )}
             <HealthBadge healthScore={client.healthScore} />
-            {deleteButton}
+            {actionButtons}
           </div>
         </div>
         {confirmDialog}
@@ -183,15 +205,7 @@ function ClientCard({
           spotlightColor={dimmed ? 'rgba(100, 100, 120, 0.1)' : 'rgba(4, 107, 210, 0.12)'}
         >
           <div className="relative flex items-start gap-3">
-            {client.logoUrl ? (
-              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-white flex items-center justify-center">
-                <img src={client.logoUrl} alt={client.name} className="h-full w-full object-cover" />
-              </div>
-            ) : (
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${dimmed ? 'bg-surface-hover text-text-muted' : 'bg-accent-surface text-accent-text'}`}>
-                {client.abbreviation || <Building2 size={20} />}
-              </div>
-            )}
+            <ClientLogo src={client.logoUrl} name={client.name} abbreviation={client.abbreviation} size="md" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <p className="text-sm font-medium text-text-primary truncate">{client.name}</p>
@@ -210,7 +224,7 @@ function ClientCard({
               )}
             </div>
             <div className="absolute -top-1 -right-1">
-              {deleteButton}
+              {actionButtons}
             </div>
           </div>
         </SpotlightCard>
@@ -317,11 +331,23 @@ function ClientDetailModal({ slug, onClose }: { slug: string; onClose: () => voi
 type AgencyFilter = 'all' | 'nativz' | 'ac';
 
 export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[] }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [allClients, setAllClients] = useState(() =>
     rawClients.map((c) => ({ ...c, services: normalizeServices(c.services) })),
   );
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(
+    searchParams.get('client'),
+  );
+
+  // Sync URL param → modal state
+  useEffect(() => {
+    const clientParam = searchParams.get('client');
+    if (clientParam && clientParam !== selectedSlug) {
+      setSelectedSlug(clientParam);
+    }
+  }, [searchParams]);
 
   const [query, setQuery] = useState('');
   const [agencyFilter, setAgencyFilter] = useState<AgencyFilter>('all');
@@ -466,7 +492,14 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
 
       {/* Client detail slide-over */}
       {selectedSlug && (
-        <ClientDetailModal slug={selectedSlug} onClose={() => setSelectedSlug(null)} />
+        <ClientDetailModal slug={selectedSlug} onClose={() => {
+          setSelectedSlug(null);
+          // Clear URL param without navigation
+          const params = new URLSearchParams(searchParams.toString());
+          params.delete('client');
+          const qs = params.toString();
+          router.replace(`/admin/clients${qs ? `?${qs}` : ''}`, { scroll: false });
+        }} />
       )}
     </>
   );

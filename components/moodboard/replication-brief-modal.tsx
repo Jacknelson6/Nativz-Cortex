@@ -47,7 +47,7 @@ export function ReplicationBriefModal({ item, clientId, onClose, onSaved }: Resc
     toast.info('Generating rescript...', { duration: 3000 });
 
     // Fire-and-forget
-    fetch(`/api/moodboard/items/${itemId}/rescript`, {
+    fetch(`/api/analysis/items/${itemId}/rescript`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

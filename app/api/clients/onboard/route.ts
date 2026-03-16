@@ -6,6 +6,8 @@ import { syncClientProfileToVault } from '@/lib/vault/sync';
 import { createMondayItem } from '@/lib/monday/client';
 import { logActivity } from '@/lib/activity';
 import { createLateProfile } from '@/lib/posting/late';
+import { crawlClientWebsite } from '@/lib/knowledge/scraper';
+import { generateBrandProfile } from '@/lib/knowledge/brand-profile';
 
 const onboardSchema = z.object({
   name: z.string().min(1, 'Client name is required'),
@@ -222,9 +224,30 @@ export async function POST(request: NextRequest) {
 
     // Log activity (non-blocking)
     if (response.cortex.success && 'clientId' in response.cortex) {
-      logActivity(user.id, 'client_created', 'client', response.cortex.clientId as string, {
+      const clientId = response.cortex.clientId as string;
+
+      logActivity(user.id, 'client_created', 'client', clientId, {
         client_name: data.name,
       }).catch(() => {});
+
+      // 5. Build knowledge graph from website (non-blocking background job)
+      // Scrapes website → creates knowledge entries → generates brand profile → embeds for semantic search
+      if (data.website_url) {
+        (async () => {
+          try {
+            await crawlClientWebsite({
+              clientId,
+              startUrl: data.website_url,
+              maxPages: 30,
+              maxDepth: 2,
+              createdBy: user.id,
+            });
+            await generateBrandProfile(clientId, user.id);
+          } catch (err) {
+            console.error('Knowledge graph build failed (non-blocking):', err);
+          }
+        })();
+      }
     }
 
     return NextResponse.json(response);

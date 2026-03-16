@@ -220,7 +220,7 @@ export function AiChatPanel({ boardId, items, notes, onClose }: AiChatPanelProps
     const noteContents = notes.filter(n => n.content).map(n => n.content);
 
     try {
-      const res = await fetch('/api/moodboard/chat', {
+      const res = await fetch('/api/analysis/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

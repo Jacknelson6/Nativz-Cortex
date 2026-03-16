@@ -32,14 +32,22 @@ import { hasSerp } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse } from '@/lib/types/search';
 import type { Recipient } from './page';
 
+interface LinkedIdea {
+  id: string;
+  concept: string | null;
+  count: number;
+  createdAt: string;
+}
+
 interface AdminResultsClientProps {
   search: TopicSearch;
   clientInfo?: { id: string; name: string; slug: string } | null;
   recipients?: Recipient[];
   clients: ClientOption[];
+  linkedIdeas?: LinkedIdea[];
 }
 
-export function AdminResultsClient({ search, clientInfo, recipients = [], clients }: AdminResultsClientProps) {
+export function AdminResultsClient({ search, clientInfo, recipients = [], clients, linkedIdeas = [] }: AdminResultsClientProps) {
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
@@ -169,6 +177,32 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
 
       {/* Content */}
       <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+        {/* Linked ideas banner */}
+        {linkedIdeas.length > 0 && (
+          <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/10 shrink-0">
+                <Sparkles size={16} className="text-purple-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-text-primary">
+                  {linkedIdeas.length === 1 ? 'Video ideas generated from this research' : `${linkedIdeas.length} idea sets generated from this research`}
+                </p>
+                <p className="text-xs text-text-muted mt-0.5">
+                  {linkedIdeas.map((g) => `${g.count} ideas${g.concept ? ` — "${g.concept}"` : ''}`).join(' · ')}
+                </p>
+              </div>
+              <Link
+                href={`/admin/ideas/${linkedIdeas[0].id}`}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-400 hover:bg-purple-500/20 transition-colors shrink-0"
+              >
+                <Sparkles size={12} />
+                View ideas
+              </Link>
+            </div>
+          </div>
+        )}
+
         {aiResponse?.brand_alignment_notes ? (
           <ExecutiveSummary summary={aiResponse.brand_alignment_notes} variant="brand" />
         ) : (

@@ -155,10 +155,12 @@ export function VaultLayout({
   return (
     <div className="flex flex-col h-[calc(100vh-56px)]">
       <VaultHeader
+        clientId={clientId}
         clientName={clientName}
         clientSlug={clientSlug}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        onEntriesChanged={() => window.location.reload()}
       />
 
       <div className="flex flex-1 min-h-0">

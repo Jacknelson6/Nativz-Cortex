@@ -47,7 +47,7 @@ export function CreateBoardModal({ open, onClose, onCreated }: CreateBoardModalP
       if (data) setClients(data);
 
       try {
-        const res = await fetch('/api/moodboard/templates');
+        const res = await fetch('/api/analysis/templates');
         if (res.ok) {
           const t = await res.json();
           setTemplates(t);
@@ -71,7 +71,7 @@ export function CreateBoardModal({ open, onClose, onCreated }: CreateBoardModalP
 
     setLoading(true);
     try {
-      const res = await fetch('/api/moodboard/boards', {
+      const res = await fetch('/api/analysis/boards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

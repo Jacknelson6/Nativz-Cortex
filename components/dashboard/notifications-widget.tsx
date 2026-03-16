@@ -20,6 +20,7 @@ import {
   Users,
   RefreshCcw,
   Zap,
+  X,
 } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { Card } from '@/components/ui/card';
@@ -82,6 +83,7 @@ export function NotificationsWidget() {
         );
         setNotifications(normalized);
         setUnreadCount(data.unread_count ?? 0);
+        sessionStorage.setItem('notifications-widget', JSON.stringify({ notifications: normalized, unreadCount: data.unread_count ?? 0 }));
       }
     } catch {
       /* ignore */
@@ -91,6 +93,18 @@ export function NotificationsWidget() {
   }, []);
 
   useEffect(() => {
+    // Load from cache instantly
+    const cached = sessionStorage.getItem('notifications-widget');
+    if (cached) {
+      try {
+        const { notifications: n, unreadCount: u } = JSON.parse(cached);
+        if (n) setNotifications(n);
+        if (u !== undefined) setUnreadCount(u);
+        setLoading(false);
+      } catch { /* ignore */ }
+    }
+
+    // Then refresh in background
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 60000);
     return () => clearInterval(interval);
@@ -107,6 +121,15 @@ export function NotificationsWidget() {
     } catch {
       /* ignore */
     }
+  }
+
+  async function handleDelete(e: React.MouseEvent, notif: Notification) {
+    e.stopPropagation();
+    setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+    if (!notif.is_read) setUnreadCount((c) => Math.max(0, c - 1));
+    try {
+      await fetch(`/api/notifications/${notif.id}`, { method: 'DELETE' });
+    } catch { /* ignore */ }
   }
 
   async function handleClick(notif: Notification) {
@@ -178,42 +201,67 @@ export function NotificationsWidget() {
         ) : (
           <div>
             {notifications.map((notif) => (
-              <button
+              <div
                 key={notif.id}
-                type="button"
-                onClick={() => handleClick(notif)}
-                className={`flex w-full items-start gap-3 px-2 py-2.5 text-left rounded-lg transition-colors hover:bg-surface-hover ${
+                className={`group flex w-full items-start gap-3 px-2 py-2.5 text-left rounded-lg transition-colors hover:bg-surface-hover ${
                   !notif.is_read ? 'bg-accent-surface/20' : ''
                 }`}
               >
-                {/* Thumbnail for post notifications, icon for everything else */}
-                {notif.body && notif.body.startsWith('http') ? (
-                  <img
-                    src={notif.body}
-                    alt=""
-                    className="mt-0.5 h-9 w-9 shrink-0 rounded-md object-cover"
-                  />
-                ) : (
-                  <div className="mt-0.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleClick(notif)}
+                  className="flex items-start gap-2 flex-1 min-w-0 text-left"
+                >
+                  {/* Thumbnail with error fallback */}
+                  {notif.body && notif.body.startsWith('http') ? (
+                    <img
+                      src={notif.body}
+                      alt=""
+                      className="mt-0.5 h-9 w-9 shrink-0 rounded-md object-cover bg-surface-elevated"
+                      onError={(e) => {
+                        // Replace broken image with icon
+                        const el = e.currentTarget;
+                        el.style.display = 'none';
+                        const icon = el.parentElement?.querySelector('[data-fallback-icon]');
+                        if (icon) (icon as HTMLElement).style.display = '';
+                      }}
+                    />
+                  ) : null}
+                  {/* Fallback icon (or primary icon if no thumbnail) */}
+                  <div
+                    className="mt-0.5 shrink-0"
+                    data-fallback-icon
+                    style={notif.body?.startsWith('http') ? { display: 'none' } : undefined}
+                  >
                     {TYPE_ICON[notif.type] || <Bell size={14} className="text-text-muted" />}
                   </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p
-                    className={`text-sm leading-snug truncate ${
-                      !notif.is_read ? 'font-medium text-text-primary' : 'text-text-secondary'
-                    }`}
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={`text-sm leading-snug truncate ${
+                        !notif.is_read ? 'font-medium text-text-primary' : 'text-text-secondary'
+                      }`}
+                    >
+                      {notif.title}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-text-muted/60">
+                      {formatRelativeTime(notif.created_at)}
+                    </p>
+                  </div>
+                </button>
+                <div className="flex items-center gap-1 shrink-0 mt-1">
+                  {!notif.is_read && (
+                    <span className="h-2 w-2 rounded-full bg-accent" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => handleDelete(e, notif)}
+                    className="h-5 w-5 flex items-center justify-center rounded text-text-muted/0 group-hover:text-text-muted hover:!text-red-400 transition-colors cursor-pointer"
+                    title="Delete notification"
                   >
-                    {notif.title}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-text-muted/60">
-                    {formatRelativeTime(notif.created_at)}
-                  </p>
+                    <X size={12} />
+                  </button>
                 </div>
-                {!notif.is_read && (
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
-                )}
-              </button>
+              </div>
             ))}
           </div>
         )}

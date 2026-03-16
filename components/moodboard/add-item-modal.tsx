@@ -65,7 +65,7 @@ export function AddItemModal({ open, onClose, boardId, onItemAdded }: AddItemMod
 
       console.log('Adding item:', { url: trimmed, type: itemType, linkType });
 
-      const res = await fetch('/api/moodboard/items', {
+      const res = await fetch('/api/analysis/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

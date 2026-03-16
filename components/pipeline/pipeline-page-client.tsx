@@ -553,6 +553,7 @@ export default function PipelinePageClient({
 
       {/* Detail Panel */}
       <PipelineDetailPanel
+        key={selectedItem?.id}
         item={selectedItem}
         onClose={() => setSelectedItem(null)}
         onUpdate={handleUpdate}

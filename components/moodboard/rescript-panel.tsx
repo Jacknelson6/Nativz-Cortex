@@ -54,7 +54,7 @@ export function RescriptPanel({ item, onClose, onSaved }: RescriptPanelProps) {
   async function handleGenerate() {
     setStep('generating');
     try {
-      const res = await fetch(`/api/moodboard/items/${item.id}/rescript`, {
+      const res = await fetch(`/api/analysis/items/${item.id}/rescript`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

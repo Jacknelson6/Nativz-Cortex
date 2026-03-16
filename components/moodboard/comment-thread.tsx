@@ -44,7 +44,7 @@ export function CommentThread({ itemId, itemType, onClose, onCountChange }: Comm
 
   async function fetchComments() {
     try {
-      const res = await fetch(`/api/moodboard/comments?item_id=${itemId}`);
+      const res = await fetch(`/api/analysis/comments?item_id=${itemId}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setComments(data);
@@ -62,7 +62,7 @@ export function CommentThread({ itemId, itemType, onClose, onCountChange }: Comm
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/moodboard/comments', {
+      const res = await fetch('/api/analysis/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -92,7 +92,7 @@ export function CommentThread({ itemId, itemType, onClose, onCountChange }: Comm
 
   async function handleDelete(commentId: string) {
     try {
-      const res = await fetch(`/api/moodboard/comments/${commentId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/analysis/comments/${commentId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
       setComments((prev) => prev.filter((c) => c.id !== commentId));
       onCountChange(comments.length - 1);

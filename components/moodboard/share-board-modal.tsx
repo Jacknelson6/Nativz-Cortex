@@ -36,7 +36,7 @@ export function ShareBoardModal({ boardId, open, onClose }: ShareBoardModalProps
   async function fetchShareInfo() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/moodboard/boards/${boardId}/share`);
+      const res = await fetch(`/api/analysis/boards/${boardId}/share`);
       const data = await res.json();
       setShareInfo(data);
       if (data.expires_at) {
@@ -56,7 +56,7 @@ export function ShareBoardModal({ boardId, open, onClose }: ShareBoardModalProps
       if (password) body.password = password;
       if (expiresAt) body.expires_at = new Date(expiresAt).toISOString();
 
-      const res = await fetch(`/api/moodboard/boards/${boardId}/share`, {
+      const res = await fetch(`/api/analysis/boards/${boardId}/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -75,7 +75,7 @@ export function ShareBoardModal({ boardId, open, onClose }: ShareBoardModalProps
   async function handleRevoke() {
     setSaving(true);
     try {
-      await fetch(`/api/moodboard/boards/${boardId}/share`, { method: 'DELETE' });
+      await fetch(`/api/analysis/boards/${boardId}/share`, { method: 'DELETE' });
       setShareInfo({ shared: false });
       setPassword('');
       setExpiresAt('');

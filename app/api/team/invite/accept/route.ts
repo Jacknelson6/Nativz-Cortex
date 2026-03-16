@@ -18,7 +18,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
  */
 export async function POST(request: NextRequest) {
   try {
-    const { token, full_name, email, password } = await request.json();
+    const { token, full_name, email, password, role, alias_emails } = await request.json();
 
     if (!token || !full_name || !email || !password) {
       return NextResponse.json(
@@ -91,10 +91,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to set up account' }, { status: 500 });
     }
 
-    // Link team member to the new auth user
+    // Link team member and sync any updated fields (name, role, alias emails)
+    const teamUpdate: Record<string, unknown> = {
+      user_id: userId,
+      full_name,
+      updated_at: new Date().toISOString(),
+    };
+    if (role) teamUpdate.role = role;
+    if (Array.isArray(alias_emails) && alias_emails.length > 0) {
+      teamUpdate.alias_emails = alias_emails.filter((e: string) => e.trim());
+    }
+
     const { error: linkError } = await adminClient
       .from('team_members')
-      .update({ user_id: userId, updated_at: new Date().toISOString() })
+      .update(teamUpdate)
       .eq('id', invite.team_member_id);
 
     if (linkError) {

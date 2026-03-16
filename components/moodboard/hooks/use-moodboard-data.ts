@@ -92,9 +92,18 @@ export function useMoodboardData(boardId: string) {
       }
       return { ...rest, data: structuredClone(cleanData) };
     });
+    const cloneableEdges = edges.map(({ data, ...rest }) => {
+      const cleanData: Record<string, unknown> = {};
+      if (data) {
+        for (const [k, v] of Object.entries(data)) {
+          if (typeof v !== 'function') cleanData[k] = v;
+        }
+      }
+      return { ...rest, data: Object.keys(cleanData).length > 0 ? structuredClone(cleanData) : undefined };
+    });
     const entry: HistoryEntry = {
       nodes: cloneableNodes,
-      edges: structuredClone(edges),
+      edges: cloneableEdges,
     };
     historyIndexRef.current++;
     historyRef.current = historyRef.current.slice(0, historyIndexRef.current);
@@ -110,13 +119,13 @@ export function useMoodboardData(boardId: string) {
   const fetchBoard = useCallback(async () => {
     try {
       const [boardRes, edgesRes] = await Promise.all([
-        fetch(`/api/moodboard/boards/${boardId}`),
-        fetch(`/api/moodboard/edges?board_id=${boardId}`),
+        fetch(`/api/analysis/boards/${boardId}`),
+        fetch(`/api/analysis/edges?board_id=${boardId}`),
       ]);
 
       if (!boardRes.ok) {
         toast.error('Board not found');
-        router.push('/admin/moodboard');
+        router.push('/admin/analysis');
         return;
       }
       const data = await boardRes.json();
@@ -139,7 +148,7 @@ export function useMoodboardData(boardId: string) {
   // Fetch board tags
   const fetchBoardTags = useCallback(async () => {
     try {
-      const res = await fetch(`/api/moodboard/boards/${boardId}/tags`);
+      const res = await fetch(`/api/analysis/boards/${boardId}/tags`);
       if (res.ok) setBoardTags(await res.json());
     } catch { /* ignore */ }
   }, [boardId]);
@@ -148,7 +157,7 @@ export function useMoodboardData(boardId: string) {
   const fetchAllItemTags = useCallback(async (itemList: MoodboardItem[]) => {
     if (itemList.length === 0) { setItemTagsMap({}); return; }
     try {
-      const res = await fetch('/api/moodboard/items/batch-tags', {
+      const res = await fetch('/api/analysis/items/batch-tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ item_ids: itemList.map(i => i.id) }),
@@ -209,7 +218,7 @@ export function useMoodboardData(boardId: string) {
     }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/moodboard/boards/${boardId}/search?q=${encodeURIComponent(filters.searchQuery)}`);
+        const res = await fetch(`/api/analysis/boards/${boardId}/search?q=${encodeURIComponent(filters.searchQuery)}`);
         if (res.ok) {
           const data = await res.json();
           setSearchMatchIds(new Set(data.item_ids));
@@ -222,7 +231,7 @@ export function useMoodboardData(boardId: string) {
   // Edge handlers
   const handleDeleteEdge = useCallback(async (dbId: string) => {
     try {
-      await fetch(`/api/moodboard/edges/${dbId}`, { method: 'DELETE' });
+      await fetch(`/api/analysis/edges/${dbId}`, { method: 'DELETE' });
       setDbEdges((prev) => prev.filter((e) => e.id !== dbId));
       setEdges((prev) => prev.filter((e) => e.data?.dbId !== dbId));
     } catch {
@@ -232,7 +241,7 @@ export function useMoodboardData(boardId: string) {
 
   const handleUpdateEdge = useCallback(async (dbId: string, data: { label?: string | null; style?: string; color?: string }) => {
     try {
-      const res = await fetch(`/api/moodboard/edges/${dbId}`, {
+      const res = await fetch(`/api/analysis/edges/${dbId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -266,7 +275,7 @@ export function useMoodboardData(boardId: string) {
   // Item CRUD
   async function handleDeleteItem(id: string) {
     try {
-      await fetch(`/api/moodboard/items/${id}`, { method: 'DELETE' });
+      await fetch(`/api/analysis/items/${id}`, { method: 'DELETE' });
       setItems((prev) => prev.filter((i) => i.id !== id));
       toast.success('Item removed');
     } catch {
@@ -277,7 +286,7 @@ export function useMoodboardData(boardId: string) {
   async function handleExtractInsights(item: MoodboardItem) {
     toast.info('Extracting insights...');
     try {
-      const res = await fetch(`/api/moodboard/items/${item.id}/insights`, { method: 'POST' });
+      const res = await fetch(`/api/analysis/items/${item.id}/insights`, { method: 'POST' });
       if (!res.ok) throw new Error();
       const updated = await res.json();
       setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
@@ -295,7 +304,7 @@ export function useMoodboardData(boardId: string) {
     });
 
     try {
-      const res = await fetch('/api/moodboard/notes', {
+      const res = await fetch('/api/analysis/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -314,7 +323,7 @@ export function useMoodboardData(boardId: string) {
 
   async function handleUpdateNote(id: string, content: string) {
     try {
-      await fetch(`/api/moodboard/notes/${id}`, {
+      await fetch(`/api/analysis/notes/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
@@ -327,7 +336,7 @@ export function useMoodboardData(boardId: string) {
 
   async function handleDeleteNote(id: string) {
     try {
-      await fetch(`/api/moodboard/notes/${id}`, { method: 'DELETE' });
+      await fetch(`/api/analysis/notes/${id}`, { method: 'DELETE' });
       setNotes((prev) => prev.filter((n) => n.id !== id));
     } catch {
       toast.error('Failed to delete note');
@@ -336,7 +345,7 @@ export function useMoodboardData(boardId: string) {
 
   async function handleNoteColorChange(id: string, color: StickyNoteColor) {
     try {
-      await fetch(`/api/moodboard/notes/${id}`, {
+      await fetch(`/api/analysis/notes/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ color }),
@@ -422,7 +431,7 @@ export function useMoodboardData(boardId: string) {
     connectHandledRef.current = true;
 
     try {
-      const res = await fetch('/api/moodboard/edges', {
+      const res = await fetch('/api/analysis/edges', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -465,7 +474,7 @@ export function useMoodboardData(boardId: string) {
     if (!targetNodeId || targetNodeId === source.nodeId) return;
 
     try {
-      const res = await fetch('/api/moodboard/edges', {
+      const res = await fetch('/api/analysis/edges', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -531,7 +540,7 @@ export function useMoodboardData(boardId: string) {
     toast.info(`Adding ${itemType}...`, { duration: 2000 });
 
     try {
-      const res = await fetch('/api/moodboard/items', {
+      const res = await fetch('/api/analysis/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -581,7 +590,7 @@ export function useMoodboardData(boardId: string) {
       const itemType = linkTypeToItemType(linkType);
 
       try {
-        const res = await fetch('/api/moodboard/items', {
+        const res = await fetch('/api/analysis/items', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -610,7 +619,7 @@ export function useMoodboardData(boardId: string) {
    */
   async function triggerMediaPipeAnalysis(itemId: string, durationSeconds: number) {
     try {
-      const res = await fetch(`/api/moodboard/items/${itemId}/video-url`);
+      const res = await fetch(`/api/analysis/items/${itemId}/video-url`);
       if (!res.ok) return;
       const { videoUrl } = await res.json();
       if (!videoUrl) return;
@@ -671,7 +680,7 @@ export function useMoodboardData(boardId: string) {
       }));
 
     try {
-      await fetch(`/api/moodboard/boards/${boardId}/positions`, {
+      await fetch(`/api/analysis/boards/${boardId}/positions`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: itemPositions, notes: notePositions }),
@@ -742,7 +751,7 @@ export function useMoodboardData(boardId: string) {
         const item = items.find((i) => `item-${i.id}` === node.id);
         if (item) {
           try {
-            await fetch('/api/moodboard/items', {
+            await fetch('/api/analysis/items', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -759,7 +768,7 @@ export function useMoodboardData(boardId: string) {
         const note = notes.find((n) => `note-${n.id}` === node.id);
         if (note) {
           try {
-            const res = await fetch('/api/moodboard/notes', {
+            const res = await fetch('/api/analysis/notes', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -816,7 +825,7 @@ export function useMoodboardData(boardId: string) {
       return;
     }
     try {
-      await fetch(`/api/moodboard/boards/${boardId}`, {
+      await fetch(`/api/analysis/boards/${boardId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: nameInput.trim() }),

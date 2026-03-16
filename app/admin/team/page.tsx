@@ -44,19 +44,19 @@ export default async function TeamPage() {
     }
 
     const [teamRes, assignmentsRes, todosRes, usersRes] = await Promise.all([
-      supabase
+      admin
         .from('team_members')
         .select('*')
         .eq('is_active', true)
         .order('full_name'),
-      supabase
+      admin
         .from('client_assignments')
         .select('team_member_id, client_id, role, clients(name, slug)'),
-      supabase
+      admin
         .from('todos')
         .select('user_id')
         .eq('is_completed', false),
-      supabase
+      admin
         .from('users')
         .select('id, todoist_api_key, nango_connection_id'),
     ]);

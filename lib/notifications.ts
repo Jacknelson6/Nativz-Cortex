@@ -70,22 +70,64 @@ function isNotificationAllowed(
   }
 }
 
-/** Notify all admin users (respects per-user notification preferences) */
+/**
+ * Notify admin users. If clientId is provided, only notifies:
+ * - Team members assigned to that client (via client_assignments)
+ * - Owners (is_owner = true, always see everything)
+ * If no clientId, notifies all admins (broadcast).
+ */
 export async function notifyAdmins(params: {
   type: NotificationType;
   title: string;
   body?: string;
   linkPath?: string;
+  clientId?: string;
 }) {
   const admin = createAdminClient();
-  const { data: admins } = await admin
+
+  let recipientIds: string[] = [];
+
+  if (params.clientId) {
+    // Scoped: get team members assigned to this client + owners
+    const [assignmentsResult, ownersResult] = await Promise.all([
+      admin
+        .from('client_assignments')
+        .select('team_members!inner(user_id)')
+        .eq('client_id', params.clientId),
+      admin
+        .from('users')
+        .select('id')
+        .eq('role', 'admin')
+        .eq('is_owner', true),
+    ]);
+
+    const assignedUserIds = new Set<string>();
+    for (const row of assignmentsResult.data ?? []) {
+      const tm = row.team_members as unknown as { user_id: string | null };
+      if (tm?.user_id) assignedUserIds.add(tm.user_id);
+    }
+    for (const owner of ownersResult.data ?? []) {
+      assignedUserIds.add(owner.id);
+    }
+    recipientIds = Array.from(assignedUserIds);
+  } else {
+    // Broadcast: all admins
+    const { data: admins } = await admin
+      .from('users')
+      .select('id')
+      .eq('role', 'admin');
+    recipientIds = (admins ?? []).map((u) => u.id);
+  }
+
+  if (recipientIds.length === 0) return;
+
+  // Load preferences and filter
+  const { data: usersWithPrefs } = await admin
     .from('users')
     .select('id, notification_preferences')
-    .eq('role', 'admin');
+    .in('id', recipientIds);
 
-  if (!admins?.length) return;
-
-  const rows = admins
+  const rows = (usersWithPrefs ?? [])
     .filter((u) => {
       const prefs: NotificationPreferences = {
         ...DEFAULT_NOTIFICATION_PREFERENCES,
@@ -107,4 +149,47 @@ export async function notifyAdmins(params: {
 
   const { error } = await admin.from('notifications').insert(rows);
   if (error) console.error('Failed to create admin notifications:', error);
+}
+
+/**
+ * Notify portal users in a specific organization (client-facing notifications).
+ */
+export async function notifyOrganization(params: {
+  organizationId: string;
+  type: NotificationType;
+  title: string;
+  body?: string;
+  linkPath?: string;
+}) {
+  const admin = createAdminClient();
+  const { data: portalUsers } = await admin
+    .from('users')
+    .select('id, notification_preferences')
+    .eq('organization_id', params.organizationId)
+    .eq('role', 'viewer');
+
+  if (!portalUsers?.length) return;
+
+  const rows = portalUsers
+    .filter((u) => {
+      const prefs: NotificationPreferences = {
+        ...DEFAULT_NOTIFICATION_PREFERENCES,
+        ...(u.notification_preferences ?? {}),
+      };
+      return isNotificationAllowed(prefs, params.type);
+    })
+    .map((u) => ({
+      recipient_user_id: u.id,
+      type: params.type,
+      title: params.title,
+      body: params.body ?? null,
+      link_path: params.linkPath ?? null,
+      is_read: false,
+      email_sent: false,
+    }));
+
+  if (rows.length === 0) return;
+
+  const { error } = await admin.from('notifications').insert(rows);
+  if (error) console.error('Failed to create org notifications:', error);
 }

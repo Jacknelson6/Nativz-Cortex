@@ -179,8 +179,9 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 
   "big_movers": [
     {
-      "name": "Brand, creator, or company name",
+      "name": "Specific real name — for brands use the company name, for creators use their actual handle/name (e.g. '@dermdoctor', 'Hyram Yarbro') NOT generic labels like 'TikTok Skinfluencers'",
       "type": "brand | creator | product | company",
+      "url": "Website URL for brands/companies (e.g. https://example.com), or social profile URL for creators (e.g. https://tiktok.com/@handle). Use the real URL from search data when available. null if unknown.",
       "why": "1 sentence — why they're dominating the conversation right now",
       "tactics": [
         "Specific tactic or strategy they're using (bulleted, 3-5 items)"

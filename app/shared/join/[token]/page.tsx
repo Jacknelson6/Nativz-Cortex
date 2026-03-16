@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -21,7 +21,10 @@ export default function TeamJoinPage() {
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [role, setRole] = useState('');
   const [password, setPassword] = useState('');
+  const [aliasEmails, setAliasEmails] = useState<string[]>([]);
+  const [newAlias, setNewAlias] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -39,10 +42,11 @@ export default function TeamJoinPage() {
         }
         const data = await res.json();
         setMemberName(data.member_name);
-        setMemberRole(data.member_role);
+        setMemberRole(data.member_role || '');
         setPrefillEmail(data.email);
         setEmail(data.email);
         setFullName(data.member_name);
+        setRole(data.member_role || '');
         setStatus('valid');
       } catch {
         setStatus('invalid');
@@ -50,6 +54,17 @@ export default function TeamJoinPage() {
     }
     validateToken();
   }, [params.token]);
+
+  function addAlias() {
+    const trimmed = newAlias.trim().toLowerCase();
+    if (!trimmed || aliasEmails.includes(trimmed) || trimmed === email.toLowerCase()) return;
+    setAliasEmails((prev) => [...prev, trimmed]);
+    setNewAlias('');
+  }
+
+  function removeAlias(idx: number) {
+    setAliasEmails((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -65,6 +80,8 @@ export default function TeamJoinPage() {
           full_name: fullName.trim(),
           email: email.trim(),
           password,
+          role: role.trim() || undefined,
+          alias_emails: aliasEmails.length > 0 ? aliasEmails : undefined,
         }),
       });
 
@@ -169,6 +186,14 @@ export default function TeamJoinPage() {
                   required
                 />
                 <Input
+                  id="role"
+                  label="Role"
+                  type="text"
+                  placeholder="e.g. Editor, SMM, Videographer"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                />
+                <Input
                   id="email"
                   label="Email"
                   type="email"
@@ -177,6 +202,49 @@ export default function TeamJoinPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
+
+                {/* Alias emails */}
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                    Alias emails <span className="text-text-muted font-normal">(optional)</span>
+                  </label>
+                  {aliasEmails.length > 0 && (
+                    <div className="space-y-1.5 mb-2">
+                      {aliasEmails.map((alias, i) => (
+                        <div key={i} className="flex items-center gap-2 rounded-lg border border-nativz-border bg-background px-3 py-1.5">
+                          <span className="text-sm text-text-primary flex-1 truncate">{alias}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeAlias(i)}
+                            className="p-0.5 rounded text-text-muted hover:text-red-400 cursor-pointer"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="email"
+                      value={newAlias}
+                      onChange={(e) => setNewAlias(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAlias(); } }}
+                      placeholder="Add another email..."
+                      className="flex-1 rounded-lg border border-nativz-border bg-background px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={addAlias}
+                      disabled={!newAlias.trim()}
+                      className="p-1.5 rounded-lg border border-nativz-border text-text-muted hover:text-text-primary hover:bg-surface-hover disabled:opacity-40 cursor-pointer transition-colors"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-text-muted mt-1">Additional emails for calendar invites, notifications, etc.</p>
+                </div>
+
                 <Input
                   id="password"
                   label="Password"

@@ -1,10 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { LinkIcon, Send, Check, Copy, UserCheck, Unlink } from 'lucide-react';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 interface LinkableUser {
@@ -36,20 +34,9 @@ export function AccountActions({ memberId, memberEmail, linkedUserId, linkedUser
     setLoadingUsers(true);
     try {
       const res = await fetch('/api/team/linkable-users');
-      if (res.ok) {
-        const data = await res.json();
-        setLinkableUsers(data);
-      }
-    } catch {
-      toast.error('Failed to load users');
-    } finally {
-      setLoadingUsers(false);
-    }
-  }
-
-  function handleShowLink() {
-    setShowLinkDropdown(true);
-    fetchLinkableUsers();
+      if (res.ok) setLinkableUsers(await res.json());
+    } catch { toast.error('Failed to load users'); }
+    finally { setLoadingUsers(false); }
   }
 
   async function handleLink(userId: string, userName: string) {
@@ -60,41 +47,27 @@ export function AccountActions({ memberId, memberEmail, linkedUserId, linkedUser
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId }),
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? 'Failed to link');
-      }
-
+      if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to link');
       setIsLinked(true);
       setCurrentLinkedName(userName);
       setShowLinkDropdown(false);
       toast.success('Account linked');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to link account');
-    } finally {
-      setLinking(false);
-    }
+      toast.error(err instanceof Error ? err.message : 'Failed to link');
+    } finally { setLinking(false); }
   }
 
   async function handleUnlink() {
     setUnlinking(true);
     try {
       const res = await fetch(`/api/team/${memberId}/link`, { method: 'DELETE' });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? 'Failed to unlink');
-      }
-
+      if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to unlink');
       setIsLinked(false);
       setCurrentLinkedName(null);
       toast.success('Account unlinked');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to unlink');
-    } finally {
-      setUnlinking(false);
-    }
+    } finally { setUnlinking(false); }
   }
 
   async function handleInvite() {
@@ -102,18 +75,12 @@ export function AccountActions({ memberId, memberEmail, linkedUserId, linkedUser
     try {
       const res = await fetch(`/api/team/${memberId}/invite`, { method: 'POST' });
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error ?? 'Failed to create invite');
-      }
-
+      if (!res.ok) throw new Error(data.error ?? 'Failed to create invite');
       setInviteUrl(data.invite_url);
       toast.success('Invite link created');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send invite');
-    } finally {
-      setInviting(false);
-    }
+    } finally { setInviting(false); }
   }
 
   async function handleCopy() {
@@ -125,114 +92,104 @@ export function AccountActions({ memberId, memberEmail, linkedUserId, linkedUser
   }
 
   return (
-    <Card>
-      <h2 className="text-base font-semibold text-text-primary flex items-center gap-2 mb-4">
-        <UserCheck size={16} className="text-blue-400" />
-        Cortex account
-      </h2>
+    <div className="rounded-lg border border-nativz-border/50 p-3">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-[10px] font-medium text-text-muted uppercase tracking-wider flex items-center gap-1">
+          <UserCheck size={10} />
+          Cortex account
+        </h3>
+        {isLinked ? (
+          <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">Linked</span>
+        ) : (
+          <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full">No account</span>
+        )}
+      </div>
 
       {isLinked ? (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Badge variant="success">Linked</Badge>
-            {currentLinkedName && (
-              <span className="text-sm text-text-secondary">{currentLinkedName}</span>
-            )}
-          </div>
-          <p className="text-xs text-text-muted">
-            This team member can sign in and access the admin dashboard.
-          </p>
-          <Button
-            variant="ghost"
-            size="sm"
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-text-secondary">
+            {currentLinkedName ?? 'Linked account'}
+          </span>
+          <button
             onClick={handleUnlink}
             disabled={unlinking}
-            className="text-red-400 hover:text-red-300"
+            className="text-[10px] text-red-400/60 hover:text-red-400 transition-colors cursor-pointer"
           >
-            <Unlink size={13} />
-            {unlinking ? 'Unlinking...' : 'Unlink account'}
-          </Button>
+            <Unlink size={11} />
+          </button>
         </div>
       ) : (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Badge variant="warning">No account</Badge>
-          </div>
-          <p className="text-xs text-text-muted">
-            Link an existing account or send an invite to create one.
-          </p>
-
-          <div className="flex flex-col gap-2">
-            {/* Link existing */}
-            {!showLinkDropdown ? (
-              <Button variant="outline" size="sm" onClick={handleShowLink}>
-                <LinkIcon size={13} />
-                Link existing account
-              </Button>
-            ) : (
-              <div className="rounded-lg border border-nativz-border p-3 space-y-2">
-                <p className="text-xs font-medium text-text-secondary">Select an account to link</p>
-                {loadingUsers ? (
-                  <p className="text-xs text-text-muted">Loading...</p>
-                ) : linkableUsers.length === 0 ? (
-                  <p className="text-xs text-text-muted">No available accounts to link</p>
-                ) : (
-                  <div className="space-y-1 max-h-40 overflow-y-auto">
-                    {linkableUsers.map((u) => (
-                      <button
-                        key={u.id}
-                        onClick={() => handleLink(u.id, u.full_name)}
-                        disabled={linking}
-                        className="w-full text-left px-2.5 py-2 rounded-md hover:bg-surface-elevated transition-colors text-sm"
-                      >
-                        <span className="text-text-primary font-medium">{u.full_name}</span>
-                        <span className="text-text-muted text-xs ml-2">{u.email}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <Button variant="ghost" size="sm" onClick={() => setShowLinkDropdown(false)}>
-                  Cancel
-                </Button>
-              </div>
-            )}
-
-            {/* Send invite */}
-            {!inviteUrl ? (
-              <Button
-                variant="outline"
-                size="sm"
+        <div className="space-y-2">
+          {!showLinkDropdown && !inviteUrl && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowLinkDropdown(true); fetchLinkableUsers(); }}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-nativz-border/60 px-2.5 py-1.5 text-[11px] text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer"
+              >
+                <LinkIcon size={11} />
+                Link existing
+              </button>
+              <button
                 onClick={handleInvite}
                 disabled={inviting || !memberEmail}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-nativz-border/60 px-2.5 py-1.5 text-[11px] text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer disabled:opacity-40"
               >
-                <Send size={13} />
-                {inviting ? 'Creating invite...' : 'Generate invite link'}
-              </Button>
-            ) : (
-              <div className="rounded-lg border border-nativz-border p-3 space-y-2">
-                <p className="text-xs font-medium text-text-secondary">Share this link with the team member</p>
-                <div className="flex items-center gap-2">
-                  <input
-                    readOnly
-                    value={inviteUrl}
-                    className="flex-1 rounded-md border border-nativz-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary font-mono truncate"
-                  />
-                  <Button variant="outline" size="sm" onClick={handleCopy}>
-                    {copied ? <Check size={13} /> : <Copy size={13} />}
-                  </Button>
-                </div>
-                <p className="text-[10px] text-text-muted">Expires in 7 days</p>
-              </div>
-            )}
+                <Send size={11} />
+                {inviting ? 'Creating...' : 'Invite'}
+              </button>
+            </div>
+          )}
 
-            {!memberEmail && (
-              <p className="text-[10px] text-amber-400">
-                Add an email address to this member before sending an invite.
-              </p>
-            )}
-          </div>
+          {showLinkDropdown && (
+            <div className="rounded-lg border border-nativz-border/50 p-2 space-y-1">
+              <p className="text-[10px] text-text-muted mb-1">Select account</p>
+              {loadingUsers ? (
+                <p className="text-[10px] text-text-muted/50 py-1">Loading...</p>
+              ) : linkableUsers.length === 0 ? (
+                <p className="text-[10px] text-text-muted/50 py-1">No available accounts</p>
+              ) : (
+                <div className="max-h-32 overflow-y-auto space-y-0.5">
+                  {linkableUsers.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => handleLink(u.id, u.full_name)}
+                      disabled={linking}
+                      className="w-full text-left px-2 py-1.5 rounded-md hover:bg-surface-hover transition-colors text-xs cursor-pointer"
+                    >
+                      <span className="text-text-primary">{u.full_name}</span>
+                      <span className="text-text-muted/50 ml-1.5">{u.email}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button onClick={() => setShowLinkDropdown(false)} className="text-[10px] text-text-muted hover:text-text-secondary cursor-pointer mt-1">
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {inviteUrl && (
+            <div className="rounded-lg border border-nativz-border/50 p-2 space-y-1.5">
+              <p className="text-[10px] text-text-muted">Share this link</p>
+              <div className="flex items-center gap-1.5">
+                <input
+                  readOnly
+                  value={inviteUrl}
+                  className="flex-1 rounded-md border border-nativz-border/50 bg-surface-elevated px-2 py-1 text-[10px] text-text-primary font-mono truncate"
+                />
+                <Button variant="outline" size="sm" onClick={handleCopy} className="h-6 px-2">
+                  {copied ? <Check size={11} /> : <Copy size={11} />}
+                </Button>
+              </div>
+              <p className="text-[9px] text-text-muted/40">Expires in 7 days</p>
+            </div>
+          )}
+
+          {!memberEmail && !showLinkDropdown && (
+            <p className="text-[9px] text-amber-400/60">Add an email to send invites</p>
+          )}
         </div>
       )}
-    </Card>
+    </div>
   );
 }

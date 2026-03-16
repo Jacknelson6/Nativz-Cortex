@@ -90,6 +90,7 @@ export interface NicheInsights {
 export interface BigMover {
   name: string;
   type: 'brand' | 'creator' | 'product' | 'company';
+  url: string | null;
   why: string;
   tactics: string[];
   takeaway: string;

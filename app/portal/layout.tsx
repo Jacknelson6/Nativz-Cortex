@@ -20,8 +20,12 @@ const getCachedPortalUser = unstable_cache(
     let featureFlags: FeatureFlags = {
       can_search: true,
       can_view_reports: true,
-      can_edit_preferences: false,
-      can_submit_ideas: false,
+      can_edit_preferences: true,
+      can_submit_ideas: true,
+      can_view_notifications: true,
+      can_view_calendar: false,
+      can_view_analyze: false,
+      can_view_knowledge: true,
     };
 
     if (userData.organization_id) {
@@ -60,8 +64,12 @@ export default async function PortalLayout({
   let featureFlags: FeatureFlags = {
     can_search: true,
     can_view_reports: true,
-    can_edit_preferences: false,
-    can_submit_ideas: false,
+    can_edit_preferences: true,
+    can_submit_ideas: true,
+    can_view_notifications: true,
+    can_view_calendar: false,
+    can_view_analyze: false,
+    can_view_knowledge: true,
   };
 
   if (user) {
