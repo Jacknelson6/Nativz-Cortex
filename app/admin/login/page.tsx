@@ -1,11 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+
+const LoginScene = dynamic(() => import('@/components/login/login-scene').then((m) => ({ default: m.LoginScene })), {
+  ssr: false,
+});
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
@@ -39,7 +44,7 @@ export default function AdminLoginPage() {
   return (
     <div className="fixed inset-0 z-50 flex overflow-hidden">
       {/* Left — login form */}
-      <div className="flex flex-1 items-center justify-center bg-background px-6">
+      <div className="relative z-10 flex flex-1 items-center justify-center bg-background px-6">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center">
             <div className="mx-auto mb-4 flex items-center justify-center">
@@ -92,19 +97,15 @@ export default function AdminLoginPage() {
         </div>
       </div>
 
-      {/* Right — Dallas skyline with blue overlay */}
-      <div className="relative hidden lg:block lg:flex-1">
-        <Image
-          src="/dallas-skyline.jpg"
-          alt="Dallas skyline at night"
-          fill
-          className="object-cover"
-          priority
-        />
-        {/* Blue gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#046BD2]/70 via-[#046BD2]/50 to-[#0a0a14]/80" />
+      {/* Right — WebGL particle animation */}
+      <div className="relative hidden lg:block lg:flex-1 bg-[#050510]">
+        <Suspense fallback={null}>
+          <LoginScene />
+        </Suspense>
+        {/* Gradient fade into left panel */}
+        <div className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-background to-transparent z-[1]" />
         {/* Bottom text */}
-        <div className="absolute bottom-8 left-8 right-8">
+        <div className="absolute bottom-8 left-8 right-8 z-[1]">
           <p className="text-2xl font-bold text-white/90">
             Content intelligence for creators
           </p>
