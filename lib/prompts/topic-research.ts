@@ -126,9 +126,11 @@ ${countryFilter ? `- ${countryFilter}` : ''}
 ${clientBlock}
 ${prefsBlock}${knowledgeBlock}${websiteBlock}${config.clientMemoryBlock ? `\n## CLIENT CONTENT HISTORY\nUse the following history to avoid repeating past research and to build on what has worked.\n\n${config.clientMemoryBlock}\n` : ''}
 ## REAL SEARCH DATA
-The following data was gathered from live web searches. Use it as the basis for your analysis. Do NOT make up information — base all insights on this data.
+The following data was gathered from live web searches and social platforms. Use it as the basis for your analysis. Do NOT make up information — base all insights on this data.
 
+<research_data>
 ${serpBlock}
+</research_data>
 
 ## WHAT TO ANALYZE
 Based on the search data above:
@@ -182,6 +184,26 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
     }
   ],
 
+  "platform_breakdown": [
+    {
+      "platform": "reddit | youtube | tiktok | web",
+      "post_count": 0,
+      "comment_count": 0,
+      "avg_sentiment": 0.0,
+      "top_subreddits": ["subreddit1", "subreddit2"]
+    }
+  ],
+
+  "conversation_themes": [
+    {
+      "theme": "A recurring conversation thread across platforms",
+      "post_count": 0,
+      "sentiment": 0.0,
+      "platforms": ["reddit", "web"],
+      "representative_quotes": ["Actual quote from the data", "Another real quote"]
+    }
+  ],
+
   "trending_topics": [
     {
       "name": "Specific sub-topic or angle",
@@ -194,7 +216,8 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
           "url": "EXACT_URL_FROM_SEARCH_DATA",
           "title": "Title of the source",
           "type": "web | discussion | video",
-          "relevance": "Brief note on why this source is relevant to this sub-topic"
+          "relevance": "Brief note on why this source is relevant to this sub-topic",
+          "platform": "reddit | youtube | tiktok | web"
         }
       ],
       "video_ideas": [
@@ -219,6 +242,9 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 }
 
 ## IMPORTANT GUIDELINES
+- If <platform_data> is present, include "platform_breakdown" with one entry per platform found in the data. Include top_subreddits for Reddit data, top_channels for YouTube, top_hashtags for TikTok. Omit the field entirely if only web data exists.
+- If <platform_data> is present, include "conversation_themes" — 3-5 recurring threads that appear across multiple sources. Each must have real "representative_quotes" from the actual data. Omit if only web data.
+- When generating video ideas, reference actual high-performing content from the platform data. If Reddit posts show high engagement on a topic, the video idea should address that proven interest.
 - Include 3-5 big_movers — the brands, creators, companies, or products generating the most conversation in this space. For each, explain WHY they're making noise, list 3-5 specific tactics they use, and give a 1-sentence takeaway on how to replicate their success. Base this on the search data — who appears most frequently? Who gets the most engagement?
 - Include 5-8 emotions that sum to approximately 100%
 - Include 3-5 items each for intentions (viewer motivations — why people watch, e.g. "To learn something new", "For entertainment", "To stay informed", "To feel inspired"), categories, and formats

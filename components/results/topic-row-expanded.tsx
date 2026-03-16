@@ -32,6 +32,13 @@ const SOURCE_TYPE_ICON: Record<string, React.ReactNode> = {
   video: <Video size={12} className="text-purple-400 shrink-0" />,
 };
 
+const PLATFORM_BADGE: Record<string, { label: string; className: string }> = {
+  reddit: { label: 'Reddit', className: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
+  youtube: { label: 'YouTube', className: 'bg-red-500/10 text-red-400 border-red-500/20' },
+  tiktok: { label: 'TikTok', className: 'bg-pink-500/10 text-pink-400 border-pink-500/20' },
+  web: { label: 'Web', className: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+};
+
 const VIRALITY_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple'> = {
   low: 'default',
   medium: 'info',
@@ -97,9 +104,16 @@ function SourceLink({ source }: { source: TopicSource }) {
     >
       {SOURCE_TYPE_ICON[source.type] || SOURCE_TYPE_ICON.web}
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-text-secondary truncate group-hover:text-accent-text transition-colors text-xs">
-          {source.title}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p className="font-medium text-text-secondary truncate group-hover:text-accent-text transition-colors text-xs">
+            {source.title}
+          </p>
+          {source.platform && source.platform !== 'web' && PLATFORM_BADGE[source.platform] && (
+            <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-medium border ${PLATFORM_BADGE[source.platform].className}`}>
+              {PLATFORM_BADGE[source.platform].label}
+            </span>
+          )}
+        </div>
         {source.relevance && (
           <p className="text-xs text-text-muted mt-0.5 line-clamp-1">{source.relevance}</p>
         )}
