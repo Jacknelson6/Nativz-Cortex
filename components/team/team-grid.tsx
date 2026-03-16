@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Users, Briefcase, ListTodo, Mail, Plus, Loader2, CheckSquare, Calendar } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Users, Briefcase, ListTodo, Mail, Plus, Loader2, CheckSquare, Calendar, Search } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -56,8 +56,19 @@ export function TeamGrid({
     role: '',
   });
 
+  const [searchQuery, setSearchQuery] = useState('');
   // Modal state
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+
+  const filteredMembers = useMemo(() => {
+    if (!searchQuery.trim()) return members;
+    const q = searchQuery.toLowerCase();
+    return members.filter((m) =>
+      m.full_name.toLowerCase().includes(q) ||
+      (m.role?.toLowerCase().includes(q)) ||
+      (m.email?.toLowerCase().includes(q))
+    );
+  }, [members, searchQuery]);
 
   async function handleAdd() {
     if (!form.full_name.trim()) {
@@ -123,6 +134,20 @@ export function TeamGrid({
         </Button>
       </div>
 
+      {/* Search */}
+      {members.length > 0 && (
+        <div className="relative max-w-sm">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by name or role..."
+            className="w-full rounded-lg border border-nativz-border bg-transparent pl-9 pr-4 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text transition-colors"
+          />
+        </div>
+      )}
+
       {/* Grid */}
       {members.length === 0 ? (
         <Card>
@@ -138,9 +163,13 @@ export function TeamGrid({
             }
           />
         </Card>
+      ) : filteredMembers.length === 0 ? (
+        <p className="text-sm text-text-muted text-center py-8">
+          No team members match &ldquo;{searchQuery}&rdquo;
+        </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {members.map((member) => {
+          {filteredMembers.map((member) => {
             const clients = assignmentsByMember[member.id] ?? [];
             const openTodos = member.user_id ? (todoCountByUser[member.user_id] ?? 0) : 0;
             const integrations = member.user_id ? integrationsByUser[member.user_id] : null;
@@ -200,37 +229,6 @@ export function TeamGrid({
                     )}
                   </div>
 
-                  {/* Integration badges */}
-                  {integrations && (integrations.todoist || integrations.calendar) && (
-                    <div className="mt-3 flex items-center gap-1.5">
-                      {integrations.todoist && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-400" title="Todoist connected">
-                          <CheckSquare size={9} />
-                          Todoist
-                        </span>
-                      )}
-                      {integrations.calendar && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400" title="Google Calendar connected">
-                          <Calendar size={9} />
-                          Calendar
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {clients.length > 0 ? (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {clients.map((client) => (
-                        <Badge key={client.slug} variant="info">
-                          {client.name}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-4 text-xs text-text-muted/50">
-                      No clients assigned
-                    </p>
-                  )}
                 </Card>
               </button>
             );
