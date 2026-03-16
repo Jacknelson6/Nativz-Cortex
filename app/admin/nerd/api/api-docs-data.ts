@@ -4,11 +4,77 @@ export interface ApiEndpoint {
   description: string;
   auth: string;
   section: string;
+  sectionSlug: string;
   body?: string;
   query?: string;
   response?: string;
   useWhen?: string;
 }
+
+export interface ApiSection {
+  slug: string;
+  title: string;
+  icon: string;
+  description: string;
+}
+
+export const API_SECTIONS: ApiSection[] = [
+  { slug: 'auth', title: 'Auth & Account', icon: 'Shield', description: 'Authentication, logout, profile management, and avatar uploads.' },
+  { slug: 'api-keys', title: 'API Keys', icon: 'Key', description: 'Create, list, and revoke API keys for external access.' },
+  { slug: 'search', title: 'Search & Research', icon: 'Search', description: 'Topic research pipeline — start searches, process results, share findings.' },
+  { slug: 'clients', title: 'Clients & Onboarding', icon: 'Building2', description: 'Client CRUD, onboarding, URL analysis, contacts, assignments, and preferences.' },
+  { slug: 'pillars', title: 'Content Pillars', icon: 'Layers', description: 'AI-generated content pillars, reordering, and full strategy pipelines.' },
+  { slug: 'knowledge', title: 'Knowledge Base', icon: 'Brain', description: 'Knowledge entries, semantic search, brand profiles, website scraping, meeting imports.' },
+  { slug: 'ideas', title: 'Ideas & Content', icon: 'Lightbulb', description: 'Video idea generation, script writing, concept reactions, and saved ideas.' },
+  { slug: 'reference-videos', title: 'Reference Videos', icon: 'Video', description: 'Upload and process reference videos for AI analysis.' },
+  { slug: 'tasks', title: 'Tasks & Todos', icon: 'CheckSquare', description: 'Task management, search, natural language parsing, Todoist sync.' },
+  { slug: 'pipeline', title: 'Pipeline', icon: 'GitBranch', description: 'Content production pipeline — status tracking, smart advancement, team assignments.' },
+  { slug: 'shoots', title: 'Shoots & Calendar', icon: 'Camera', description: 'Shoot scheduling, AI planning, Google Calendar integration.' },
+  { slug: 'analyze', title: 'Analyze', icon: 'Microscope', description: 'Video analysis boards — items, processing, AI insights, scripts, PDFs, chat.' },
+  { slug: 'nerd', title: 'The Nerd AI', icon: 'Bot', description: 'AI assistant with tool-calling capabilities and @mention context.' },
+  { slug: 'scheduler', title: 'Scheduler', icon: 'Calendar', description: 'Social media scheduling, publishing, auto-schedule, captions, reviews.' },
+  { slug: 'reporting', title: 'Reporting & Analytics', icon: 'BarChart3', description: 'Social analytics, top posts, Instagram insights, Meta ads, affiliates.' },
+  { slug: 'google', title: 'Google Workspace', icon: 'Globe', description: 'Google Calendar, Drive, Chat, and OAuth connections.' },
+  { slug: 'team', title: 'Team & Meetings', icon: 'Users', description: 'Team members, invites, workload, meetings.' },
+  { slug: 'notifications', title: 'Notifications', icon: 'Bell', description: 'Notification management and preference settings.' },
+  { slug: 'vault', title: 'Vault', icon: 'Database', description: 'Obsidian vault — search, indexing, file read/write, webhooks.' },
+  { slug: 'dashboard', title: 'Dashboard', icon: 'LayoutDashboard', description: 'Dashboard stats, overview, activity log, AI usage.' },
+  { slug: 'invites', title: 'Portal Invites', icon: 'UserPlus', description: 'Client portal invite generation, validation, and acceptance.' },
+  { slug: 'settings', title: 'Settings', icon: 'Settings', description: 'Scheduling and notification preferences.' },
+  { slug: 'monday', title: 'Monday.com', icon: 'Workflow', description: 'Monday.com webhooks, sync, and board updates.' },
+  { slug: 'todoist', title: 'Todoist', icon: 'ListTodo', description: 'Todoist connection and bidirectional task sync.' },
+  { slug: 'v1', title: 'External API (v1)', icon: 'Plug', description: 'API key-authenticated endpoints for external agents and scripts.' },
+  { slug: 'cron', title: 'Cron Jobs', icon: 'Clock', description: 'Internal scheduled jobs for analytics sync, publishing, and monitoring.' },
+];
+
+const SECTION_TO_SLUG: Record<string, string> = {
+  'Auth & Account': 'auth',
+  'API Keys': 'api-keys',
+  'Search & Research': 'search',
+  'Clients & Onboarding': 'clients',
+  'Content Pillars': 'pillars',
+  'Knowledge Base': 'knowledge',
+  'Ideas & Content Generation': 'ideas',
+  'Reference Videos': 'reference-videos',
+  'Tasks & Todos': 'tasks',
+  'Pipeline (Content Production)': 'pipeline',
+  'Shoots & Calendar': 'shoots',
+  'Analyze (Video Analysis)': 'analyze',
+  'The Nerd AI': 'nerd',
+  'Social Media & Scheduler': 'scheduler',
+  'Reporting & Analytics': 'reporting',
+  'Google Workspace': 'google',
+  'Team & Meetings': 'team',
+  'Notifications': 'notifications',
+  'Vault': 'vault',
+  'Dashboard': 'dashboard',
+  'Portal Invites': 'invites',
+  'Settings': 'settings',
+  'Monday.com Integration': 'monday',
+  'Todoist Integration': 'todoist',
+  'External API (v1)': 'v1',
+  'Cron Jobs': 'cron',
+};
 
 export const SECTIONS = [
   'Auth & Account',
@@ -39,7 +105,10 @@ export const SECTIONS = [
   'Cron Jobs',
 ] as const;
 
-export const API_ENDPOINTS: ApiEndpoint[] = [
+// Endpoints are defined without sectionSlug, then mapped below
+interface RawEndpoint extends Omit<ApiEndpoint, 'sectionSlug'> {}
+
+const RAW_ENDPOINTS: RawEndpoint[] = [
   // ─── 1. Auth & Account ───
   {
     method: 'POST',
@@ -2526,3 +2595,8 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     response: '{ imported: number }',
   },
 ];
+
+export const API_ENDPOINTS: ApiEndpoint[] = RAW_ENDPOINTS.map((ep) => ({
+  ...ep,
+  sectionSlug: SECTION_TO_SLUG[ep.section] ?? 'auth',
+}));
