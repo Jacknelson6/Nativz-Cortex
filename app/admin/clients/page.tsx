@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { Building2, Sparkles } from 'lucide-react';
+import { Building2, Plus } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { GlowButton } from '@/components/ui/glow-button';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import { ClientSearchGrid } from '@/components/clients/client-search-grid';
@@ -43,10 +43,10 @@ export default async function AdminClientsPage() {
             <p className="text-sm text-text-muted mt-0.5">Manage your client roster and brand profiles</p>
           </div>
           <Link href="/admin/clients/onboard">
-            <GlowButton>
-              <Sparkles size={14} />
+            <Button size="sm">
+              <Plus size={14} />
               Onboard
-            </GlowButton>
+            </Button>
           </Link>
         </div>
 
@@ -57,10 +57,10 @@ export default async function AdminClientsPage() {
             description="Add your first client to start running searches for them."
             action={
               <Link href="/admin/clients/onboard">
-                <GlowButton>
-                  <Sparkles size={14} />
+                <Button size="sm">
+                  <Plus size={14} />
                   Onboard client
-                </GlowButton>
+                </Button>
               </Link>
             }
           />
