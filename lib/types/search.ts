@@ -12,8 +12,8 @@ export type SearchVolume = 'quick' | 'deep';
 export const PLATFORM_OPTIONS: { value: SearchPlatform; label: string; icon: string; available: boolean }[] = [
   { value: 'web', label: 'Web & news', icon: '🌐', available: true },
   { value: 'reddit', label: 'Reddit', icon: '💬', available: true },
-  { value: 'youtube', label: 'YouTube', icon: '▶️', available: false },
-  { value: 'tiktok', label: 'TikTok', icon: '🎵', available: false },
+  { value: 'youtube', label: 'YouTube', icon: '▶️', available: true },
+  { value: 'tiktok', label: 'TikTok', icon: '🎵', available: true },
 ];
 
 export interface PlatformSource {

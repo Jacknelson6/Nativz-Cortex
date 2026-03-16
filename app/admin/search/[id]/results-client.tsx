@@ -247,6 +247,18 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
                         <span className="text-[10px] text-text-secondary">{pb.top_subreddits.slice(0, 3).map((s: string) => `r/${s}`).join(', ')}</span>
                       </div>
                     )}
+                    {pb.top_channels && pb.top_channels.length > 0 && (
+                      <div className="pt-1">
+                        <span className="text-[10px] text-text-muted">Top: </span>
+                        <span className="text-[10px] text-text-secondary">{pb.top_channels.slice(0, 3).join(', ')}</span>
+                      </div>
+                    )}
+                    {pb.top_hashtags && pb.top_hashtags.length > 0 && (
+                      <div className="pt-1">
+                        <span className="text-[10px] text-text-muted">Top: </span>
+                        <span className="text-[10px] text-text-secondary">{pb.top_hashtags.slice(0, 3).map((h: string) => `#${h}`).join(', ')}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

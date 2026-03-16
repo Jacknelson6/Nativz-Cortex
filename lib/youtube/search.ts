@@ -1,0 +1,253 @@
+// lib/youtube/search.ts — YouTube Data API v3 search + comment fetching
+//
+// Quota: 10,000 units/day free
+// - search.list = 100 units per call
+// - videos.list = 1 unit per call
+// - commentThreads.list = 1 unit per call
+// A typical search (25 videos + stats + comments) = ~127 units = ~78 searches/day
+
+export interface YouTubeVideo {
+  id: string;
+  title: string;
+  description: string;
+  channelTitle: string;
+  channelId: string;
+  publishedAt: string;
+  thumbnailUrl: string;
+  viewCount: number;
+  likeCount: number;
+  commentCount: number;
+  top_comments: YouTubeComment[];
+}
+
+export interface YouTubeComment {
+  id: string;
+  text: string;
+  likeCount: number;
+  authorName: string;
+  publishedAt: string;
+}
+
+export interface YouTubeSearchResult {
+  videos: YouTubeVideo[];
+  totalResults: number;
+}
+
+const API_BASE = 'https://www.googleapis.com/youtube/v3';
+
+function getApiKey(): string | null {
+  return process.env.YOUTUBE_API_KEY || null;
+}
+
+function mapTimeRange(timeRange: string): string {
+  const now = new Date();
+  switch (timeRange) {
+    case 'last_7_days': return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    case 'last_30_days': return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    case 'last_3_months': return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    case 'last_6_months': return new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString();
+    case 'last_year': return new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString();
+    default: return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  }
+}
+
+/**
+ * Search YouTube for videos matching a query.
+ * Cost: 100 quota units per search call.
+ */
+async function searchVideos(
+  query: string,
+  timeRange: string,
+  maxResults: number = 25,
+): Promise<{ videoIds: string[]; totalResults: number }> {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('YOUTUBE_API_KEY not configured');
+
+  const publishedAfter = mapTimeRange(timeRange);
+  const params = new URLSearchParams({
+    part: 'snippet',
+    q: query,
+    type: 'video',
+    order: 'relevance',
+    maxResults: String(Math.min(maxResults, 50)),
+    publishedAfter,
+    relevanceLanguage: 'en',
+    key: apiKey,
+  });
+
+  const res = await fetch(`${API_BASE}/search?${params}`, {
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error('YouTube search failed:', res.status, err);
+    throw new Error(`YouTube search failed: ${res.status}`);
+  }
+
+  const data = await res.json();
+  const videoIds = (data.items ?? [])
+    .map((item: { id?: { videoId?: string } }) => item.id?.videoId)
+    .filter(Boolean) as string[];
+
+  return { videoIds, totalResults: data.pageInfo?.totalResults ?? videoIds.length };
+}
+
+/**
+ * Fetch video details (stats) for a batch of video IDs.
+ * Cost: 1 quota unit per call (up to 50 IDs per call).
+ */
+async function fetchVideoDetails(
+  videoIds: string[],
+): Promise<Map<string, { viewCount: number; likeCount: number; commentCount: number; title: string; description: string; channelTitle: string; channelId: string; publishedAt: string; thumbnailUrl: string }>> {
+  const apiKey = getApiKey();
+  if (!apiKey) return new Map();
+
+  const params = new URLSearchParams({
+    part: 'snippet,statistics',
+    id: videoIds.join(','),
+    key: apiKey,
+  });
+
+  const res = await fetch(`${API_BASE}/videos?${params}`, {
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!res.ok) return new Map();
+  const data = await res.json();
+
+  const map = new Map<string, { viewCount: number; likeCount: number; commentCount: number; title: string; description: string; channelTitle: string; channelId: string; publishedAt: string; thumbnailUrl: string }>();
+
+  for (const item of data.items ?? []) {
+    const stats = item.statistics ?? {};
+    const snippet = item.snippet ?? {};
+    map.set(item.id, {
+      viewCount: parseInt(stats.viewCount ?? '0', 10),
+      likeCount: parseInt(stats.likeCount ?? '0', 10),
+      commentCount: parseInt(stats.commentCount ?? '0', 10),
+      title: snippet.title ?? '',
+      description: (snippet.description ?? '').slice(0, 1000),
+      channelTitle: snippet.channelTitle ?? '',
+      channelId: snippet.channelId ?? '',
+      publishedAt: snippet.publishedAt ?? '',
+      thumbnailUrl: snippet.thumbnails?.medium?.url ?? snippet.thumbnails?.default?.url ?? '',
+    });
+  }
+
+  return map;
+}
+
+/**
+ * Fetch top comment threads for a video.
+ * Cost: 1 quota unit per call.
+ */
+async function fetchVideoComments(
+  videoId: string,
+  maxResults: number = 10,
+): Promise<YouTubeComment[]> {
+  const apiKey = getApiKey();
+  if (!apiKey) return [];
+
+  try {
+    const params = new URLSearchParams({
+      part: 'snippet',
+      videoId,
+      order: 'relevance',
+      maxResults: String(maxResults),
+      textFormat: 'plainText',
+      key: apiKey,
+    });
+
+    const res = await fetch(`${API_BASE}/commentThreads?${params}`, {
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!res.ok) return []; // Comments may be disabled
+    const data = await res.json();
+
+    return (data.items ?? []).map((item: {
+      id: string;
+      snippet: {
+        topLevelComment: {
+          snippet: {
+            textDisplay: string;
+            likeCount: number;
+            authorDisplayName: string;
+            publishedAt: string;
+          };
+        };
+      };
+    }) => ({
+      id: item.id,
+      text: item.snippet.topLevelComment.snippet.textDisplay.slice(0, 500),
+      likeCount: item.snippet.topLevelComment.snippet.likeCount ?? 0,
+      authorName: item.snippet.topLevelComment.snippet.authorDisplayName ?? '',
+      publishedAt: item.snippet.topLevelComment.snippet.publishedAt ?? '',
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Full YouTube data gathering — search + stats + comments.
+ * This is the main entry point for the platform router.
+ *
+ * Quota cost: ~127 units for 25 videos (search: 100, details: 1, comments: 25×1)
+ */
+export async function gatherYouTubeData(
+  query: string,
+  timeRange: string,
+  volume: 'quick' | 'deep' = 'quick',
+): Promise<YouTubeSearchResult> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    console.warn('YouTube search skipped — YOUTUBE_API_KEY not configured');
+    return { videos: [], totalResults: 0 };
+  }
+
+  const maxResults = volume === 'deep' ? 50 : 25;
+  const commentLimit = volume === 'deep' ? 10 : 5;
+
+  // Step 1: Search for video IDs
+  const { videoIds, totalResults } = await searchVideos(query, timeRange, maxResults);
+  if (videoIds.length === 0) return { videos: [], totalResults: 0 };
+
+  // Step 2: Fetch video details (stats) — single batched call
+  const detailsMap = await fetchVideoDetails(videoIds);
+
+  // Step 3: Fetch comments for top videos (by view count)
+  const videosWithDetails = videoIds
+    .map((id) => ({ id, details: detailsMap.get(id) }))
+    .filter((v): v is { id: string; details: NonNullable<typeof v.details> } => !!v.details)
+    .sort((a, b) => b.details.viewCount - a.details.viewCount);
+
+  // Fetch comments for top 10-20 most viewed videos
+  const commentFetchCount = volume === 'deep' ? 20 : 10;
+  const topForComments = videosWithDetails.slice(0, commentFetchCount);
+
+  const commentsMap = new Map<string, YouTubeComment[]>();
+  await Promise.all(
+    topForComments.map(async (v) => {
+      const comments = await fetchVideoComments(v.id, commentLimit);
+      commentsMap.set(v.id, comments);
+    }),
+  );
+
+  // Step 4: Assemble final results
+  const videos: YouTubeVideo[] = videosWithDetails.map((v) => ({
+    id: v.id,
+    title: v.details.title,
+    description: v.details.description,
+    channelTitle: v.details.channelTitle,
+    channelId: v.details.channelId,
+    publishedAt: v.details.publishedAt,
+    thumbnailUrl: v.details.thumbnailUrl,
+    viewCount: v.details.viewCount,
+    likeCount: v.details.likeCount,
+    commentCount: v.details.commentCount,
+    top_comments: commentsMap.get(v.id) ?? [],
+  }));
+
+  return { videos, totalResults };
+}

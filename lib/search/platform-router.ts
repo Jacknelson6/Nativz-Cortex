@@ -2,6 +2,8 @@
 
 import type { SearchPlatform, SearchVolume, PlatformSource, PlatformComment } from '@/lib/types/search';
 import { gatherRedditData } from '@/lib/reddit/client';
+import { gatherYouTubeData } from '@/lib/youtube/search';
+import { gatherTikTokData } from '@/lib/tiktok/search';
 import { gatherSerpData } from '@/lib/brave/client';
 import type { BraveSerpData } from '@/lib/brave/types';
 
@@ -13,6 +15,8 @@ export interface PlatformResults {
     postCount: number;
     commentCount: number;
     topSubreddits?: string[];
+    topChannels?: string[];
+    topHashtags?: string[];
   }[];
 }
 
@@ -105,14 +109,97 @@ export async function gatherPlatformData(
     );
   }
 
-  // YouTube — Phase 2 (placeholder)
+  // YouTube
   if (platforms.includes('youtube')) {
-    platformStats.push({ platform: 'youtube', postCount: 0, commentCount: 0 });
+    promises.push(
+      (async () => {
+        try {
+          const ytData = await gatherYouTubeData(query, timeRange, volume);
+
+          const ytSources: PlatformSource[] = ytData.videos.map((vid) => ({
+            platform: 'youtube' as const,
+            id: vid.id,
+            url: `https://www.youtube.com/watch?v=${vid.id}`,
+            title: vid.title,
+            content: vid.description,
+            author: vid.channelTitle,
+            engagement: {
+              views: vid.viewCount,
+              likes: vid.likeCount,
+              comments: vid.commentCount,
+            },
+            createdAt: vid.publishedAt,
+            comments: vid.top_comments.map((c): PlatformComment => ({
+              id: c.id,
+              text: c.text,
+              author: c.authorName,
+              likes: c.likeCount,
+              createdAt: c.publishedAt,
+            })),
+          }));
+
+          allSources.push(...ytSources);
+
+          const totalComments = ytSources.reduce((sum, s) => sum + s.comments.length, 0);
+          const topChannels = [...new Set(ytData.videos.map((v) => v.channelTitle))].slice(0, 10);
+          platformStats.push({
+            platform: 'youtube',
+            postCount: ytSources.length,
+            commentCount: totalComments,
+            topChannels,
+          });
+        } catch (err) {
+          console.error('YouTube search failed:', err);
+          platformStats.push({ platform: 'youtube', postCount: 0, commentCount: 0 });
+        }
+      })(),
+    );
   }
 
-  // TikTok — Phase 3 (placeholder)
+  // TikTok (via Apify)
   if (platforms.includes('tiktok')) {
-    platformStats.push({ platform: 'tiktok', postCount: 0, commentCount: 0 });
+    promises.push(
+      (async () => {
+        try {
+          const ttData = await gatherTikTokData(query, timeRange, volume);
+
+          const ttSources: PlatformSource[] = ttData.videos.map((vid) => ({
+            platform: 'tiktok' as const,
+            id: vid.id,
+            url: `https://www.tiktok.com/@${vid.author.uniqueId}/video/${vid.id}`,
+            title: vid.desc.slice(0, 100),
+            content: vid.desc,
+            author: vid.author.nickname || vid.author.uniqueId,
+            engagement: {
+              views: vid.stats.playCount,
+              likes: vid.stats.diggCount,
+              comments: vid.stats.commentCount,
+              shares: vid.stats.shareCount,
+            },
+            createdAt: new Date(vid.createTime * 1000).toISOString(),
+            comments: vid.top_comments.map((c): PlatformComment => ({
+              id: `tt-${vid.id}-${c.createTime}`,
+              text: c.text,
+              author: c.user,
+              likes: c.diggCount,
+              createdAt: new Date(c.createTime * 1000).toISOString(),
+            })),
+          }));
+
+          allSources.push(...ttSources);
+
+          platformStats.push({
+            platform: 'tiktok',
+            postCount: ttSources.length,
+            commentCount: 0,
+            topHashtags: ttData.topHashtags,
+          });
+        } catch (err) {
+          console.error('TikTok search failed:', err);
+          platformStats.push({ platform: 'tiktok', postCount: 0, commentCount: 0 });
+        }
+      })(),
+    );
   }
 
   // Execute all platform fetches in parallel
@@ -209,7 +296,11 @@ export function formatPlatformContext(
     const header = `## ${label} (${stat.postCount} posts${stat.commentCount > 0 ? `, ${stat.commentCount} comments` : ''})`;
     const subInfo = stat.topSubreddits?.length
       ? `Top subreddits: ${stat.topSubreddits.slice(0, 5).map((s) => `r/${s}`).join(', ')}`
-      : '';
+      : stat.topChannels?.length
+        ? `Top channels: ${stat.topChannels.slice(0, 5).join(', ')}`
+        : stat.topHashtags?.length
+          ? `Top hashtags: ${stat.topHashtags.slice(0, 5).map((h) => `#${h}`).join(', ')}`
+          : '';
 
     // Sort by engagement and take top items for the prompt
     const sorted = [...platformSources].sort((a, b) => {
