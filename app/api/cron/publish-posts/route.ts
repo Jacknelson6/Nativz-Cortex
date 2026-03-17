@@ -243,5 +243,5 @@ async function sendFailureNotification(
   });
 
   // TODO: Send actual email via Resend/SendGrid when email service is configured
-  console.log(`[PUBLISH FAILURE] Would email ${creator.email}: Post ${post.id} for ${client?.name} failed. Reason: ${post.failure_reason}`);
+  console.log(`[PUBLISH FAILURE] userId=${post.created_by} postId=${post.id} clientId=${post.client_id} reason=${post.failure_reason}`);
 }

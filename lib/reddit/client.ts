@@ -55,7 +55,7 @@ export async function searchReddit(
   const subredditCounts: Record<string, number> = {};
 
   // Fetch multiple pages if deep mode (limit > 50)
-  const pages = Math.ceil(Math.min(limit, 100) / 25);
+  const pages = Math.ceil(Math.min(limit, 250) / 25);
   let after: string | null = null;
 
   for (let page = 0; page < pages; page++) {
@@ -174,20 +174,28 @@ export async function gatherRedditData(
   timeRange: string,
   volume: 'quick' | 'deep' = 'quick',
 ): Promise<RedditSearchResult & { postsWithComments: (RedditPost & { top_comments: RedditComment[] })[] }> {
-  const limit = volume === 'deep' ? 100 : 50;
+  const limit = volume === 'deep' ? 200 : 50;
   const result = await searchReddit(query, timeRange, limit);
 
-  // Fetch comments for top 10 most engaging posts (by score + comments)
+  // Fetch comments for top engaging posts (by score + comments)
   const topPosts = [...result.posts]
     .sort((a, b) => (b.score + b.num_comments) - (a.score + a.num_comments))
-    .slice(0, volume === 'deep' ? 15 : 8);
+    .slice(0, volume === 'deep' ? 30 : 8);
 
-  const postsWithComments = await Promise.all(
-    topPosts.map(async (post) => {
-      const top_comments = await fetchTopComments(post.permalink, 5);
-      return { ...post, top_comments };
-    }),
-  );
+  // Batch comment fetches to respect Reddit's ~60 req/min unauthenticated rate limit
+  const postsWithComments: (RedditPost & { top_comments: RedditComment[] })[] = [];
+  const batchSize = 8;
+  for (let i = 0; i < topPosts.length; i += batchSize) {
+    const batch = topPosts.slice(i, i + batchSize);
+    const results = await Promise.all(
+      batch.map(async (post) => {
+        const top_comments = await fetchTopComments(post.permalink, 5);
+        return { ...post, top_comments };
+      }),
+    );
+    postsWithComments.push(...results);
+    if (i + batchSize < topPosts.length) await new Promise((r) => setTimeout(r, 500));
+  }
 
   // Merge: posts with comments first, then remaining posts without comments
   const commentedIds = new Set(postsWithComments.map((p) => p.id));

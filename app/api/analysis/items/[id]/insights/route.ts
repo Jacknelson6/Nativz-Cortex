@@ -47,6 +47,19 @@ export async function POST(
       .update({ status: 'processing' })
       .eq('id', id);
 
+    // Validate URL to prevent SSRF against internal/private networks
+    try {
+      const parsed = new URL(item.url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        return NextResponse.json({ error: 'Invalid URL protocol' }, { status: 400 });
+      }
+      if (/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0|\[::1\])/.test(parsed.hostname)) {
+        return NextResponse.json({ error: 'Private/internal URLs not allowed' }, { status: 400 });
+      }
+    } catch {
+      return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
+    }
+
     try {
       // Fetch the webpage
       const pageRes = await fetch(item.url, {

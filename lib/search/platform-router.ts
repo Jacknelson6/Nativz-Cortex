@@ -190,10 +190,11 @@ export async function gatherPlatformData(
 
           allSources.push(...ttSources);
 
+          const totalComments = ttSources.reduce((sum, s) => sum + s.comments.length, 0);
           platformStats.push({
             platform: 'tiktok',
             postCount: ttSources.length,
-            commentCount: 0,
+            commentCount: totalComments,
             topHashtags: ttData.topHashtags,
           });
         } catch (err) {
@@ -286,6 +287,10 @@ export function formatPlatformContext(
     byPlatform[key].push(source);
   }
 
+  // Scale items per platform inversely with platform count to stay within token budget
+  const activePlatforms = stats.filter((s) => (byPlatform[s.platform]?.length ?? 0) > 0).length;
+  const itemsPerPlatform = activePlatforms <= 1 ? 60 : activePlatforms === 2 ? 40 : 25;
+
   for (const stat of stats) {
     const platformSources = byPlatform[stat.platform] ?? [];
     if (platformSources.length === 0) continue;
@@ -311,8 +316,7 @@ export function formatPlatformContext(
       return bEng - aEng;
     });
 
-    // Take top 30 for the prompt (to stay within token budget)
-    const topItems = sorted.slice(0, 30);
+    const topItems = sorted.slice(0, itemsPerPlatform);
 
     const items = topItems.map((s) => {
       const eng: string[] = [];

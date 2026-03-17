@@ -29,6 +29,7 @@ export async function middleware(request: NextRequest) {
 
   // Public routes — no auth needed
   if (
+    pathname === '/api/health' ||
     pathname.startsWith('/api/v1/') ||
     pathname.startsWith('/portal/join/') ||
     pathname.startsWith('/api/social/') ||
@@ -37,10 +38,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/cron/') ||
     pathname.startsWith('/api/scheduler/webhooks') ||
     pathname.startsWith('/api/scheduler/connect/callback') ||
-    pathname.startsWith('/api/calendar/webhook') ||
     pathname.startsWith('/api/monday/webhook') ||
     pathname.startsWith('/api/vault/webhook') ||
-    pathname.startsWith('/api/nango/callback') ||
     pathname.startsWith('/api/google/callback')
   ) {
     return supabaseResponse;
@@ -48,8 +47,8 @@ export async function middleware(request: NextRequest) {
 
   // Login pages don't require auth
   if (pathname === '/admin/login' || pathname === '/portal/login') {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
+    const { data: { user: loginUser } } = await supabase.auth.getUser();
+    if (loginUser) {
       if (pathname === '/admin/login') {
         return NextResponse.redirect(new URL('/admin/dashboard', request.url));
       }
@@ -63,10 +62,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/admin/login', request.url));
   }
 
-  // Use getSession() for fast local JWT check (no network call).
-  // Actual auth validation happens via getUser() in page/API routes.
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user ?? null;
+  // Use getUser() for server-side JWT verification (validates with Supabase auth server).
+  const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
     if (pathname.startsWith('/admin')) {

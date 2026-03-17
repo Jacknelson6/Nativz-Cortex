@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, Clock, Send, Undo2, Building2, Check, Plus, X, Mail, Users, User, Sparkles } from 'lucide-react';
+import { PlatformBadgeSearch, PLATFORM_CONFIG } from '@/components/search/platform-icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -29,7 +30,7 @@ import { SearchIdeasWizard } from '@/components/research/search-ideas-wizard';
 import type { ClientOption } from '@/components/ui/client-picker';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { hasSerp } from '@/lib/types/search';
-import type { TopicSearch, TopicSearchAIResponse } from '@/lib/types/search';
+import type { TopicSearch, TopicSearchAIResponse, SearchPlatform } from '@/lib/types/search';
 import type { Recipient } from './page';
 
 interface LinkedIdea {
@@ -220,11 +221,13 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
           <div className="rounded-xl border border-nativz-border bg-surface p-5">
             <h3 className="text-sm font-semibold text-text-primary mb-3">Platform breakdown</h3>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {aiResponse.platform_breakdown.map((pb) => (
+              {aiResponse.platform_breakdown.map((pb) => {
+                const config = PLATFORM_CONFIG[pb.platform];
+                return (
                 <div key={pb.platform} className="rounded-lg bg-background p-3 border border-nativz-border/50">
                   <div className="flex items-center gap-1.5 mb-2">
-                    <span className="text-xs">{pb.platform === 'reddit' ? '💬' : pb.platform === 'youtube' ? '▶️' : pb.platform === 'tiktok' ? '🎵' : '🌐'}</span>
-                    <span className="text-xs font-medium text-text-primary capitalize">{pb.platform}</span>
+                    <PlatformBadgeSearch platform={pb.platform} />
+                    <span className="text-xs font-medium text-text-primary">{config?.label ?? pb.platform}</span>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-[11px]">
@@ -261,7 +264,8 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -277,8 +281,8 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
                     <span className="text-sm font-medium text-text-primary">{theme.theme}</span>
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] text-text-muted">{theme.post_count} posts</span>
-                      {theme.platforms.map((p: string) => (
-                        <span key={p} className="text-[10px]">{p === 'reddit' ? '💬' : p === 'youtube' ? '▶️' : p === 'tiktok' ? '🎵' : '🌐'}</span>
+                      {theme.platforms.map((p) => (
+                        <PlatformBadgeSearch key={p} platform={p} size="sm" />
                       ))}
                     </div>
                   </div>

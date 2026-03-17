@@ -27,6 +27,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ challenge: body.challenge });
     }
 
+    // Verify Monday.com webhook signing secret
+    const webhookSecret = process.env.MONDAY_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const authHeader = request.headers.get('authorization');
+      if (authHeader !== webhookSecret) {
+        console.warn('[monday-webhook] Invalid authorization header');
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    } else {
+      console.warn('[monday-webhook] MONDAY_WEBHOOK_SECRET not set — skipping signature verification');
+    }
+
     if (!isVaultConfigured() || !isMondayConfigured()) {
       return NextResponse.json({ error: 'Not configured' }, { status: 503 });
     }
@@ -42,11 +54,11 @@ export async function POST(request: NextRequest) {
     }
 
     const itemId = String(event.pulseId || event.itemId);
-    if (!itemId) {
-      return NextResponse.json({ message: 'No item ID' });
+    if (!itemId || !/^\d+$/.test(itemId)) {
+      return NextResponse.json({ message: 'Invalid or missing item ID' });
     }
 
-    // Fetch the full item from Monday.com
+    // Fetch the full item from Monday.com (using validated numeric ID)
     const data = await mondayQuery<{
       items: MondayItem[];
     }>(`

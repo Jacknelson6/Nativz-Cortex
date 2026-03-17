@@ -1013,7 +1013,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   {
     method: 'POST',
     path: '/api/shoots/sync',
-    description: 'Sync upcoming Google Calendar events via Nango, filter for shoot events, upsert into shoot_events.',
+    description: 'Sync upcoming Google Calendar events via Google OAuth, filter for shoot events, upsert into shoot_events.',
     auth: 'Required (admin)',
     section: 'Shoots & Calendar',
     response: '{ synced: number }',
@@ -1029,7 +1029,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   {
     method: 'GET',
     path: '/api/calendar/events',
-    description: 'Fetch Google Calendar events for the current user via Nango (2-min cache).',
+    description: 'Fetch Google Calendar events for the current user via Google OAuth (2-min cache).',
     auth: 'Required (user)',
     section: 'Shoots & Calendar',
     query: 'days_ahead?: number, calendars?: comma-separated calendar IDs',
@@ -1909,22 +1909,6 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
     query: 'folderId?, q? (search query), pageToken?, pageSize?',
     response: '{ files: [...], nextPageToken? }',
   },
-  {
-    method: 'GET',
-    path: '/api/nango/connect',
-    description: 'Initiate Nango OAuth connection for Google Calendar.',
-    auth: 'Required (user)',
-    section: 'Google Workspace',
-    response: 'Redirect URL',
-  },
-  {
-    method: 'GET',
-    path: '/api/nango/callback',
-    description: 'Nango OAuth callback handler.',
-    auth: 'Required (user)',
-    section: 'Google Workspace',
-    response: 'Redirects to settings page',
-  },
 
   // ─── 17. Team & Meetings ───
   {
@@ -2529,7 +2513,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   {
     method: 'GET',
     path: '/api/v1/calendar/events',
-    description: 'Fetch Google Calendar events for the API key owner\'s Nango connection.',
+    description: 'Fetch Google Calendar events for the API key owner via Google OAuth.',
     auth: 'API key (scope: calendar)',
     section: 'External API (v1)',
     query: 'start: ISO8601, end: ISO8601',
@@ -2538,7 +2522,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   {
     method: 'POST',
     path: '/api/v1/calendar/events',
-    description: 'Create a Google Calendar event via Nango for the API key owner.',
+    description: 'Create a Google Calendar event via Google OAuth for the API key owner.',
     auth: 'API key (scope: calendar)',
     section: 'External API (v1)',
     body: '{ summary, description?, location?, start, end, attendees?: [{email}] }',

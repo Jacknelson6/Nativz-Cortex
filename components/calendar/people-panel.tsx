@@ -16,7 +16,6 @@ interface CalendarConnection {
   display_color: string;
   connection_type: 'team' | 'client';
   is_active: boolean;
-  nango_connection_id: string | null;
 }
 
 interface PeoplePanelProps {

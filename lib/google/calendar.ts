@@ -1,6 +1,5 @@
 /**
  * Shoot event identification and client matching logic.
- * Calendar event fetching is handled by Nango (see lib/nango/client.ts).
  */
 
 export interface ParsedShootEvent {

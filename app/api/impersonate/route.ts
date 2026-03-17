@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logActivity } from '@/lib/activity';
 
 const impersonateSchema = z.object({
   organization_id: z.string().uuid(),
@@ -56,13 +57,20 @@ export async function POST(request: Request) {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 3600, // 1 hour safety bound
   });
 
   cookieStore.set('x-impersonate-slug', client_slug, {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 3600,
   });
+
+  // Audit log: impersonation started
+  await logActivity(user.id, 'impersonation_start', 'impersonation', organization_id, { client_slug });
 
   return NextResponse.json({ success: true, redirect: '/portal/dashboard' });
 }
@@ -76,8 +84,14 @@ export async function DELETE() {
   }
 
   const cookieStore = await cookies();
+  const orgId = cookieStore.get('x-impersonate-org')?.value;
   cookieStore.delete('x-impersonate-org');
   cookieStore.delete('x-impersonate-slug');
+
+  // Audit log: impersonation ended
+  if (orgId) {
+    await logActivity(user.id, 'impersonation_end', 'impersonation', orgId);
+  }
 
   return NextResponse.json({ success: true });
 }

@@ -4,7 +4,8 @@
 // - search.list = 100 units per call
 // - videos.list = 1 unit per call
 // - commentThreads.list = 1 unit per call
-// A typical search (25 videos + stats + comments) = ~127 units = ~78 searches/day
+// Quick search (25 videos) = ~136 units (~73 searches/day)
+// Deep search (100 videos, 2 search pages) = ~342 units (~29 searches/day)
 
 export interface YouTubeVideo {
   id: string;
@@ -54,7 +55,7 @@ function mapTimeRange(timeRange: string): string {
 
 /**
  * Search YouTube for videos matching a query.
- * Cost: 100 quota units per search call.
+ * Cost: 100 quota units per search call. Paginates for >50 results.
  */
 async function searchVideos(
   query: string,
@@ -65,74 +66,96 @@ async function searchVideos(
   if (!apiKey) throw new Error('YOUTUBE_API_KEY not configured');
 
   const publishedAfter = mapTimeRange(timeRange);
-  const params = new URLSearchParams({
-    part: 'snippet',
-    q: query,
-    type: 'video',
-    order: 'relevance',
-    maxResults: String(Math.min(maxResults, 50)),
-    publishedAfter,
-    relevanceLanguage: 'en',
-    key: apiKey,
-  });
+  const allVideoIds: string[] = [];
+  let totalResults = 0;
+  let pageToken: string | undefined;
+  const pages = Math.ceil(Math.min(maxResults, 150) / 50);
 
-  const res = await fetch(`${API_BASE}/search?${params}`, {
-    signal: AbortSignal.timeout(10000),
-  });
+  for (let page = 0; page < pages; page++) {
+    const params = new URLSearchParams({
+      part: 'snippet',
+      q: query,
+      type: 'video',
+      order: 'relevance',
+      maxResults: String(Math.min(maxResults - allVideoIds.length, 50)),
+      publishedAfter,
+      relevanceLanguage: 'en',
+      key: apiKey,
+    });
+    if (pageToken) params.set('pageToken', pageToken);
 
-  if (!res.ok) {
-    const err = await res.text();
-    console.error('YouTube search failed:', res.status, err);
-    throw new Error(`YouTube search failed: ${res.status}`);
+    const res = await fetch(`${API_BASE}/search?${params}`, {
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('YouTube search failed:', res.status, err);
+      if (page === 0) throw new Error(`YouTube search failed: ${res.status}`);
+      break;
+    }
+
+    const data = await res.json();
+    const videoIds = (data.items ?? [])
+      .map((item: { id?: { videoId?: string } }) => item.id?.videoId)
+      .filter(Boolean) as string[];
+
+    allVideoIds.push(...videoIds);
+    totalResults = data.pageInfo?.totalResults ?? allVideoIds.length;
+    pageToken = data.nextPageToken;
+
+    if (!pageToken || allVideoIds.length >= maxResults) break;
   }
 
-  const data = await res.json();
-  const videoIds = (data.items ?? [])
-    .map((item: { id?: { videoId?: string } }) => item.id?.videoId)
-    .filter(Boolean) as string[];
-
-  return { videoIds, totalResults: data.pageInfo?.totalResults ?? videoIds.length };
+  return { videoIds: allVideoIds, totalResults };
 }
+
+type VideoDetails = { viewCount: number; likeCount: number; commentCount: number; title: string; description: string; channelTitle: string; channelId: string; publishedAt: string; thumbnailUrl: string };
 
 /**
  * Fetch video details (stats) for a batch of video IDs.
  * Cost: 1 quota unit per call (up to 50 IDs per call).
+ * Batches into chunks of 50 for >50 IDs.
  */
 async function fetchVideoDetails(
   videoIds: string[],
-): Promise<Map<string, { viewCount: number; likeCount: number; commentCount: number; title: string; description: string; channelTitle: string; channelId: string; publishedAt: string; thumbnailUrl: string }>> {
+): Promise<Map<string, VideoDetails>> {
   const apiKey = getApiKey();
   if (!apiKey) return new Map();
 
-  const params = new URLSearchParams({
-    part: 'snippet,statistics',
-    id: videoIds.join(','),
-    key: apiKey,
-  });
+  const map = new Map<string, VideoDetails>();
 
-  const res = await fetch(`${API_BASE}/videos?${params}`, {
-    signal: AbortSignal.timeout(10000),
-  });
-
-  if (!res.ok) return new Map();
-  const data = await res.json();
-
-  const map = new Map<string, { viewCount: number; likeCount: number; commentCount: number; title: string; description: string; channelTitle: string; channelId: string; publishedAt: string; thumbnailUrl: string }>();
-
-  for (const item of data.items ?? []) {
-    const stats = item.statistics ?? {};
-    const snippet = item.snippet ?? {};
-    map.set(item.id, {
-      viewCount: parseInt(stats.viewCount ?? '0', 10),
-      likeCount: parseInt(stats.likeCount ?? '0', 10),
-      commentCount: parseInt(stats.commentCount ?? '0', 10),
-      title: snippet.title ?? '',
-      description: (snippet.description ?? '').slice(0, 1000),
-      channelTitle: snippet.channelTitle ?? '',
-      channelId: snippet.channelId ?? '',
-      publishedAt: snippet.publishedAt ?? '',
-      thumbnailUrl: snippet.thumbnails?.medium?.url ?? snippet.thumbnails?.default?.url ?? '',
+  // YouTube videos.list accepts max 50 IDs per call
+  for (let i = 0; i < videoIds.length; i += 50) {
+    const chunk = videoIds.slice(i, i + 50);
+    const params = new URLSearchParams({
+      part: 'snippet,statistics',
+      id: chunk.join(','),
+      key: apiKey,
     });
+
+    const res = await fetch(`${API_BASE}/videos?${params}`, {
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!res.ok) continue;
+    const data = await res.json();
+
+    for (const item of data.items ?? []) {
+      const stats = item.statistics ?? {};
+      const snippet = item.snippet ?? {};
+      map.set(item.id, {
+        viewCount: parseInt(stats.viewCount ?? '0', 10),
+        likeCount: parseInt(stats.likeCount ?? '0', 10),
+        commentCount: parseInt(stats.commentCount ?? '0', 10),
+        title: snippet.title ?? '',
+        description: (snippet.description ?? '').slice(0, 1000),
+        channelTitle: snippet.channelTitle ?? '',
+        channelId: snippet.channelId ?? '',
+        publishedAt: snippet.publishedAt ?? '',
+        thumbnailUrl: snippet.thumbnails?.medium?.url ?? snippet.thumbnails?.default?.url ?? '',
+      });
+    }
   }
 
   return map;
@@ -221,7 +244,7 @@ async function fetchTranscript(videoId: string): Promise<string | null> {
  * Full YouTube data gathering — search + stats + comments + transcripts.
  * This is the main entry point for the platform router.
  *
- * Quota cost: ~127 units for 25 videos (search: 100, details: 1, comments: 25×1)
+ * Quota cost: ~136 units for quick (25 videos), ~342 for deep (100 videos)
  */
 export async function gatherYouTubeData(
   query: string,
@@ -234,7 +257,7 @@ export async function gatherYouTubeData(
     return { videos: [], totalResults: 0 };
   }
 
-  const maxResults = volume === 'deep' ? 50 : 25;
+  const maxResults = volume === 'deep' ? 100 : 25;
   const commentLimit = volume === 'deep' ? 10 : 5;
 
   // Step 1: Search for video IDs
@@ -250,12 +273,12 @@ export async function gatherYouTubeData(
     .filter((v): v is { id: string; details: NonNullable<typeof v.details> } => !!v.details)
     .sort((a, b) => b.details.viewCount - a.details.viewCount);
 
-  // Fetch comments for top 10-20 most viewed videos
-  const commentFetchCount = volume === 'deep' ? 20 : 10;
+  // Fetch comments for top most viewed videos
+  const commentFetchCount = volume === 'deep' ? 40 : 10;
   const topForComments = videosWithDetails.slice(0, commentFetchCount);
 
   const commentsMap = new Map<string, YouTubeComment[]>();
-  await Promise.all(
+  await Promise.allSettled(
     topForComments.map(async (v) => {
       const comments = await fetchVideoComments(v.id, commentLimit);
       commentsMap.set(v.id, comments);
@@ -263,7 +286,7 @@ export async function gatherYouTubeData(
   );
 
   // Step 4: Fetch transcripts for top videos (free — no quota cost)
-  const transcriptCount = volume === 'deep' ? 15 : 8;
+  const transcriptCount = volume === 'deep' ? 25 : 8;
   const topForTranscripts = videosWithDetails.slice(0, transcriptCount);
   const transcriptMap = new Map<string, string>();
   await Promise.allSettled(

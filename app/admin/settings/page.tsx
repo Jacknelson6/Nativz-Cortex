@@ -30,7 +30,6 @@ interface UserData {
   email: string;
   avatar_url: string | null;
   job_title: string | null;
-  nango_connection_id: string | null;
   todoist_api_key: string | null;
   todoist_project_id: string | null;
   todoist_synced_at: string | null;
@@ -74,7 +73,7 @@ export default function AdminSettingsPage() {
 
       const { data } = await supabase
         .from('users')
-        .select('full_name, email, avatar_url, job_title, nango_connection_id')
+        .select('full_name, email, avatar_url, job_title')
         .eq('id', authUser.id)
         .single();
 

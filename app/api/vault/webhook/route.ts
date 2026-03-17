@@ -38,7 +38,13 @@ async function verifySignature(
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 
-  return signature === `sha256=${hex}`;
+  // Constant-time comparison to prevent timing attacks
+  const expected = encoder.encode(`sha256=${hex}`);
+  const actual = encoder.encode(signature);
+  if (expected.byteLength !== actual.byteLength) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.byteLength; i++) diff |= expected[i] ^ actual[i];
+  return diff === 0;
 }
 
 interface PushEvent {

@@ -61,7 +61,6 @@ App users with role-based access.
 | `organization_id` | uuid | Links viewer to their client org |
 | `full_name` | text | Display name |
 | `avatar_url` | text | Profile image URL |
-| `nango_connection_id` | text | Nango OAuth connection ID for Google Calendar |
 
 ### `invite_tokens`
 Portal invite links for client onboarding.

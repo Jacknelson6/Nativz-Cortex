@@ -93,7 +93,7 @@ export async function gatherTikTokData(
     return { videos: [], topHashtags: [], totalResults: 0 };
   }
 
-  const maxResults = volume === 'deep' ? 50 : 20;
+  const maxResults = volume === 'deep' ? 100 : 20;
 
   try {
     // Step 1: Search via Apify actor
@@ -142,6 +142,12 @@ export async function gatherTikTokData(
         console.error('Apify TikTok run failed:', status);
         return { videos: [], topHashtags: [], totalResults: 0 };
       }
+    }
+
+    // If polling timed out without SUCCEEDED, don't fetch from an incomplete run
+    if (Date.now() - startTime >= maxWait) {
+      console.error('Apify TikTok run timed out after', maxWait / 1000, 'seconds');
+      return { videos: [], topHashtags: [], totalResults: 0 };
     }
 
     // Fetch results
@@ -198,18 +204,20 @@ export async function gatherTikTokData(
     }
 
     // Step 3: Enrich with comments + transcripts (parallel, batched)
-    const commentBatchSize = volume === 'deep' ? 10 : 5;
-    const transcriptBatchSize = volume === 'deep' ? 8 : 4;
+    const commentBatchSize = volume === 'deep' ? 15 : 5;
+    const transcriptBatchSize = volume === 'deep' ? 15 : 4;
 
     // Sort by engagement for prioritizing enrichment
     const sorted = [...baseVideos].sort((a, b) =>
       (b.stats.playCount + b.stats.diggCount) - (a.stats.playCount + a.stats.diggCount),
     );
 
-    // Fetch comments for all videos (batched to avoid rate limits)
+    // Fetch comments for top videos (batched to avoid rate limits)
+    const commentFetchCount = volume === 'deep' ? 40 : 20;
+    const topForComments = sorted.slice(0, commentFetchCount);
     const commentsMap = new Map<string, TikTokComment[]>();
-    for (let i = 0; i < sorted.length; i += commentBatchSize) {
-      const batch = sorted.slice(i, i + commentBatchSize);
+    for (let i = 0; i < topForComments.length; i += commentBatchSize) {
+      const batch = topForComments.slice(i, i + commentBatchSize);
       const results = await Promise.allSettled(
         batch.map(async (v) => {
           const comments = await fetchTikTokComments(v.tiktokUrl, 10);
@@ -220,7 +228,7 @@ export async function gatherTikTokData(
         if (r.status === 'fulfilled') commentsMap.set(r.value.id, r.value.comments);
       }
       // Small delay between batches
-      if (i + commentBatchSize < sorted.length) await new Promise((r) => setTimeout(r, 300));
+      if (i + commentBatchSize < topForComments.length) await new Promise((r) => setTimeout(r, 300));
     }
 
     // Fetch transcripts for top videos only (expensive)

@@ -5,6 +5,14 @@ import { Handle, Position, type NodeProps } from 'reactflow';
 import { X, Bold, Italic, Underline, AlignCenter, AlignLeft } from 'lucide-react';
 import type { MoodboardNote, StickyNoteColor } from '@/lib/types/moodboard';
 
+// Sanitize HTML to allow only safe formatting tags (prevents stored XSS)
+function sanitizeHtml(html: string): string {
+  const ALLOWED = /^(b|i|u|br|p|strong|em|div|span|center)$/i;
+  return html
+    .replace(/<\/?([a-z][a-z0-9]*)\b[^>]*>/gi, (tag, name) => ALLOWED.test(name) ? tag.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '') : '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+}
+
 interface StickyNodeData {
   note: MoodboardNote;
   onUpdate: (id: string, content: string) => void;
@@ -201,7 +209,7 @@ export const StickyNode = memo(function StickyNode({ data }: NodeProps<StickyNod
           }}
           className={`nodrag nowheel nopan w-full bg-transparent text-sm font-medium outline-none min-h-[40px] ${centered ? 'text-center' : 'text-left'}`}
           style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-          dangerouslySetInnerHTML={{ __html: note.content || '' }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(note.content || '') }}
         />
       ) : (
         <button
@@ -210,7 +218,7 @@ export const StickyNode = memo(function StickyNode({ data }: NodeProps<StickyNod
           style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
         >
           {note.content ? (
-            <span dangerouslySetInnerHTML={{ __html: note.content }} />
+            <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(note.content) }} />
           ) : (
             <span className="opacity-50">Click to edit...</span>
           )}

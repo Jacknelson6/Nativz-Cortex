@@ -2,7 +2,42 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createCalendarEventViaNango, isNangoConfigured } from '@/lib/nango/client';
+import { getValidToken } from '@/lib/google/auth';
+
+// ─── Google Calendar create helper ────────────────────────────────────────────
+
+interface CalendarEventInput {
+  summary: string;
+  description?: string;
+  location?: string;
+  start: { dateTime: string };
+  end: { dateTime: string };
+  attendees?: { email: string }[];
+}
+
+async function createCalendarEvent(
+  accessToken: string,
+  eventData: CalendarEventInput,
+): Promise<{ id: string }> {
+  const res = await fetch(
+    'https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(eventData),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Google Calendar create failed: ${err}`);
+  }
+
+  return res.json();
+}
 
 /**
  * GET /api/shoots
@@ -78,8 +113,8 @@ const createShootSchema = z.object({
  * POST /api/shoots
  *
  * Create shoot events for one or more clients on the same date. Creates one shoot_events
- * row per client. If Nango (Google Calendar) is configured and the user has a Nango connection,
- * automatically creates Google Calendar events with client contacts and team member attendees.
+ * row per client. If Google Calendar is connected via OAuth, automatically creates
+ * Google Calendar events with client contacts and team member attendees.
  *
  * @auth Required (admin)
  * @body title - Shoot title (required)
@@ -139,81 +174,71 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create shoot events' }, { status: 500 });
     }
 
-    // --- Send Google Calendar invites via Nango ---
+    // --- Send Google Calendar invites via Google OAuth ---
     let calendarResults: { shootId: string; eventId?: string; error?: string }[] = [];
 
-    if (isNangoConfigured() && inserted && inserted.length > 0) {
-      // Get current user's Nango connection ID
-      const { data: calUser } = await adminClient
-        .from('users')
-        .select('nango_connection_id')
-        .eq('id', user.id)
-        .single();
+    const accessToken = await getValidToken(user.id);
+    if (accessToken && inserted && inserted.length > 0) {
+      calendarResults = await Promise.all(
+        inserted.map(async (shoot) => {
+          try {
+            // Fetch primary contacts for this client
+            const { data: contacts } = await adminClient
+              .from('contacts')
+              .select('email')
+              .eq('client_id', shoot.client_id)
+              .eq('is_primary', true);
 
-      const connectionId = calUser?.nango_connection_id;
+            // Fetch assigned team members for this client
+            const { data: assignments } = await adminClient
+              .from('client_assignments')
+              .select('team_member_id, team_members(email)')
+              .eq('client_id', shoot.client_id);
 
-      if (connectionId) {
-        calendarResults = await Promise.all(
-          inserted.map(async (shoot) => {
-            try {
-              // Fetch primary contacts for this client
-              const { data: contacts } = await adminClient
-                .from('contacts')
-                .select('email')
-                .eq('client_id', shoot.client_id)
-                .eq('is_primary', true);
-
-              // Fetch assigned team members for this client
-              const { data: assignments } = await adminClient
-                .from('client_assignments')
-                .select('team_member_id, team_members(email)')
-                .eq('client_id', shoot.client_id);
-
-              // Build attendees list (deduplicated)
-              const emailSet = new Set<string>();
-              for (const c of contacts ?? []) {
-                if (c.email) emailSet.add(c.email);
-              }
-              for (const a of assignments ?? []) {
-                const tm = a.team_members as unknown as { email: string } | null;
-                if (tm?.email) emailSet.add(tm.email);
-              }
-
-              const attendees = [...emailSet].map((email) => ({ email }));
-
-              // Build start/end times — use shoot_date as all-day or with time
-              const shootDate = new Date(shoot.shoot_date);
-              const startDateTime = shootDate.toISOString();
-              const endDate = new Date(shootDate.getTime() + 2 * 60 * 60 * 1000); // 2hr default
-              const endDateTime = endDate.toISOString();
-
-              const calEvent = await createCalendarEventViaNango(connectionId, {
-                summary: shoot.title,
-                description: shoot.notes || undefined,
-                location: shoot.location || undefined,
-                start: { dateTime: startDateTime },
-                end: { dateTime: endDateTime },
-                attendees: attendees.length > 0 ? attendees : undefined,
-              });
-
-              // Update shoot with Google Calendar event ID
-              await adminClient
-                .from('shoot_events')
-                .update({
-                  google_event_id: calEvent.id,
-                  google_calendar_event_created: true,
-                  invitees: attendees,
-                })
-                .eq('id', shoot.id);
-
-              return { shootId: shoot.id, eventId: calEvent.id };
-            } catch (err) {
-              console.error(`Calendar invite failed for shoot ${shoot.id}:`, err);
-              return { shootId: shoot.id, error: String(err) };
+            // Build attendees list (deduplicated)
+            const emailSet = new Set<string>();
+            for (const c of contacts ?? []) {
+              if (c.email) emailSet.add(c.email);
             }
-          }),
-        );
-      }
+            for (const a of assignments ?? []) {
+              const tm = a.team_members as unknown as { email: string } | null;
+              if (tm?.email) emailSet.add(tm.email);
+            }
+
+            const attendees = [...emailSet].map((email) => ({ email }));
+
+            // Build start/end times — use shoot_date as all-day or with time
+            const shootDate = new Date(shoot.shoot_date);
+            const startDateTime = shootDate.toISOString();
+            const endDate = new Date(shootDate.getTime() + 2 * 60 * 60 * 1000); // 2hr default
+            const endDateTime = endDate.toISOString();
+
+            const calEvent = await createCalendarEvent(accessToken, {
+              summary: shoot.title,
+              description: shoot.notes || undefined,
+              location: shoot.location || undefined,
+              start: { dateTime: startDateTime },
+              end: { dateTime: endDateTime },
+              attendees: attendees.length > 0 ? attendees : undefined,
+            });
+
+            // Update shoot with Google Calendar event ID
+            await adminClient
+              .from('shoot_events')
+              .update({
+                google_event_id: calEvent.id,
+                google_calendar_event_created: true,
+                invitees: attendees,
+              })
+              .eq('id', shoot.id);
+
+            return { shootId: shoot.id, eventId: calEvent.id };
+          } catch (err) {
+            console.error(`Calendar invite failed for shoot ${shoot.id}:`, err);
+            return { shootId: shoot.id, error: String(err) };
+          }
+        }),
+      );
     }
 
     return NextResponse.json({

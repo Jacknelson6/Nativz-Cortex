@@ -2,7 +2,7 @@
  * POST /api/shoots/schedule
  *
  * Create a scheduled shoot event: persists to shoot_events, optionally creates a Google
- * Calendar event via Nango (with invites to team, client, and videographer emails),
+ * Calendar event via Google OAuth (with invites to team, client, and videographer emails),
  * and sends an in-app notification to the requesting admin.
  *
  * @auth Required (admin)
@@ -27,8 +27,43 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isNangoConfigured, createCalendarEventViaNango } from '@/lib/nango/client';
+import { getValidToken } from '@/lib/google/auth';
 import { createNotification } from '@/lib/notifications/create';
+
+// ─── Google Calendar create helper ────────────────────────────────────────────
+
+interface CalendarEventInput {
+  summary: string;
+  description?: string;
+  location?: string;
+  start: { dateTime: string; timeZone?: string };
+  end: { dateTime: string; timeZone?: string };
+  attendees?: { email: string }[];
+}
+
+async function createCalendarEvent(
+  accessToken: string,
+  eventData: CalendarEventInput,
+): Promise<{ id: string }> {
+  const res = await fetch(
+    'https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(eventData),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Google Calendar create failed: ${err}`);
+  }
+
+  return res.json();
+}
 
 const scheduleSchema = z.object({
   client_name: z.string().min(1),
@@ -98,17 +133,11 @@ export async function POST(request: NextRequest) {
     let googleEventId: string | null = null;
 
     // Create Google Calendar event if requested
-    if (data.add_to_calendar && isNangoConfigured()) {
+    if (data.add_to_calendar) {
       try {
-        // Get user's Nango connection
-        const { data: connection } = await adminClient
-          .from('calendar_connections')
-          .select('nango_connection_id')
-          .eq('user_id', user.id)
-          .single();
-
-        if (connection?.nango_connection_id) {
-          const event = await createCalendarEventViaNango(connection.nango_connection_id, {
+        const accessToken = await getValidToken(user.id);
+        if (accessToken) {
+          const event = await createCalendarEvent(accessToken, {
             summary: `${data.client_name} Content Shoot`,
             description: data.notes || '',
             location: data.location || '',

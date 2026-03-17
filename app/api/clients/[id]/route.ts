@@ -27,6 +27,13 @@ export async function GET(
 
     const adminClient = createAdminClient();
 
+    // Role-based access control: viewers can only access their own org's clients
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role, organization_id')
+      .eq('id', user.id)
+      .single();
+
     // Fetch client — support both UUID (id) and slug
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     const { data: dbClient } = await adminClient
@@ -37,6 +44,11 @@ export async function GET(
 
     if (!dbClient) {
       return NextResponse.json({ error: 'Client not found' }, { status: 404 });
+    }
+
+    // Enforce tenant isolation: viewers can only access clients in their org
+    if (userData?.role === 'viewer' && dbClient.organization_id !== userData.organization_id) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     const clientId = dbClient.id;

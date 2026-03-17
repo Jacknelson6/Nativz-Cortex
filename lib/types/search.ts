@@ -9,11 +9,11 @@ export type SearchMode = 'general' | 'client_strategy';
 export type SearchPlatform = 'reddit' | 'youtube' | 'tiktok' | 'web';
 export type SearchVolume = 'quick' | 'deep';
 
-export const PLATFORM_OPTIONS: { value: SearchPlatform; label: string; icon: string; available: boolean }[] = [
-  { value: 'web', label: 'Web & news', icon: '🌐', available: true },
-  { value: 'reddit', label: 'Reddit', icon: '💬', available: true },
-  { value: 'youtube', label: 'YouTube', icon: '▶️', available: true },
-  { value: 'tiktok', label: 'TikTok', icon: '🎵', available: true },
+export const PLATFORM_OPTIONS: { value: SearchPlatform; label: string; available: boolean }[] = [
+  { value: 'web', label: 'Web & news', available: true },
+  { value: 'reddit', label: 'Reddit', available: true },
+  { value: 'youtube', label: 'YouTube', available: true },
+  { value: 'tiktok', label: 'TikTok', available: true },
 ];
 
 export interface PlatformSource {

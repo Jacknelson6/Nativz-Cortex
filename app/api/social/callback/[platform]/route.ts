@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { encrypt } from '@/lib/crypto';
 import {
   exchangeMetaCode,
   getMetaPages,
@@ -161,6 +162,13 @@ async function upsertProfile(
 ) {
   const { clientId, platform, result, pageAccessToken, pageId } = opts;
 
+  // Encrypt token values before storing
+  const encryptedAccessToken = encrypt(result.tokens.accessToken);
+  const rawRefreshToken = result.tokens.refreshToken ?? null;
+  const encryptedRefreshToken = rawRefreshToken ? encrypt(rawRefreshToken) : null;
+  const rawPageAccessToken = pageAccessToken ?? result.tokens.pageAccessToken ?? null;
+  const encryptedPageAccessToken = rawPageAccessToken ? encrypt(rawPageAccessToken) : null;
+
   const { error } = await admin.from('social_profiles').upsert(
     {
       client_id: clientId,
@@ -168,10 +176,10 @@ async function upsertProfile(
       platform_user_id: result.profile.platformUserId,
       username: result.profile.username,
       avatar_url: result.profile.avatarUrl ?? null,
-      access_token: result.tokens.accessToken,
-      refresh_token: result.tokens.refreshToken ?? null,
+      access_token: encryptedAccessToken,
+      refresh_token: encryptedRefreshToken,
       token_expires_at: result.tokens.expiresAt?.toISOString() ?? null,
-      page_access_token: pageAccessToken ?? result.tokens.pageAccessToken ?? null,
+      page_access_token: encryptedPageAccessToken,
       page_id: pageId ?? result.tokens.pageId ?? null,
       is_active: true,
       updated_at: new Date().toISOString(),

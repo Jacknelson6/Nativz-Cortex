@@ -1,0 +1,421 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  Presentation, Plus, MoreHorizontal, Clock, Trash2, Archive, ArchiveRestore,
+  Copy, Pencil, FileText, ListOrdered, BarChart3, ChevronRight,
+} from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/shared/empty-state';
+import { toast } from 'sonner';
+import { useConfirm } from '@/components/ui/confirm-dialog';
+
+interface PresentationItem {
+  id: string;
+  title: string;
+  description: string | null;
+  type: 'slides' | 'tier_list' | 'social_audit';
+  client_id: string | null;
+  client_name: string | null;
+  slides: { title: string; body: string; image_url?: string | null }[];
+  tiers: { id: string; name: string; color: string }[];
+  tier_items: { id: string; title: string; thumbnail_url?: string | null; tier_id?: string | null }[];
+  status: 'draft' | 'ready' | 'archived';
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+const DEFAULT_TIERS = [
+  { id: 's', name: 'S', color: '#ff7f7f' },
+  { id: 'a', name: 'A', color: '#ffbf7f' },
+  { id: 'b', name: 'B', color: '#ffdf7f' },
+  { id: 'c', name: 'C', color: '#ffff7f' },
+  { id: 'd', name: 'D', color: '#bfff7f' },
+  { id: 'e', name: 'E', color: '#7fbfff' },
+  { id: 'f', name: 'F', color: '#7f7fff' },
+];
+
+export default function PresentationsPage() {
+  const router = useRouter();
+  const [presentations, setPresentations] = useState<PresentationItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirm({
+    title: 'Delete presentation',
+    description: 'This will permanently delete this presentation. This action cannot be undone.',
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
+
+  const fetchPresentations = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/presentations');
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setPresentations(data);
+    } catch {
+      toast.error('Failed to load presentations');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPresentations();
+  }, [fetchPresentations]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!menuOpenId) return;
+    function handleClick() { setMenuOpenId(null); }
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [menuOpenId]);
+
+  async function handleCreate(type: 'slides' | 'tier_list' | 'social_audit') {
+    try {
+      const titles: Record<string, string> = {
+        slides: 'Untitled presentation',
+        tier_list: 'Untitled tier list',
+        social_audit: 'Social audit',
+      };
+      const body: Record<string, unknown> = {
+        title: titles[type],
+        type,
+      };
+      if (type === 'slides') {
+        body.slides = [{ title: '', body: '' }];
+      } else if (type === 'tier_list') {
+        body.tiers = DEFAULT_TIERS;
+        body.tier_items = [];
+      } else if (type === 'social_audit') {
+        body.audit_data = { profiles: [], competitors: [], projections: {}, step: 'wizard' };
+      }
+
+      const res = await fetch('/api/presentations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      router.push(`/admin/presentations/${data.id}`);
+    } catch {
+      toast.error('Failed to create presentation');
+    }
+  }
+
+  async function handleDelete(id: string) {
+    const ok = await confirmDelete();
+    if (!ok) return;
+    try {
+      const res = await fetch(`/api/presentations/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      toast.success('Presentation deleted');
+      setPresentations((prev) => prev.filter((p) => p.id !== id));
+    } catch {
+      toast.error('Failed to delete presentation');
+    }
+    setMenuOpenId(null);
+  }
+
+  async function handleDuplicate(p: PresentationItem) {
+    try {
+      const res = await fetch('/api/presentations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `${p.title} (copy)`,
+          description: p.description,
+          type: p.type,
+          client_id: p.client_id,
+          slides: p.slides,
+          tiers: p.tiers,
+          tier_items: p.tier_items,
+          tags: p.tags,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Duplicated');
+      fetchPresentations();
+    } catch {
+      toast.error('Failed to duplicate');
+    }
+    setMenuOpenId(null);
+  }
+
+  async function handleArchive(p: PresentationItem) {
+    const newStatus = p.status === 'archived' ? 'draft' : 'archived';
+    try {
+      const res = await fetch(`/api/presentations/${p.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(newStatus === 'archived' ? 'Archived' : 'Unarchived');
+      fetchPresentations();
+    } catch {
+      toast.error('Failed to update');
+    }
+    setMenuOpenId(null);
+  }
+
+  function formatDate(dateStr: string) {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diff = now.getTime() - d.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days} days ago`;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  const typeConfig = {
+    slides: { icon: FileText, label: 'Slides', accent: 'rgba(4, 107, 210, 0.15)', iconColor: 'text-accent-text' },
+    tier_list: { icon: ListOrdered, label: 'Tier list', accent: 'rgba(168, 85, 247, 0.15)', iconColor: 'text-purple-400' },
+    social_audit: { icon: BarChart3, label: 'Social audit', accent: 'rgba(16, 185, 129, 0.15)', iconColor: 'text-emerald-400' },
+  };
+
+  const active = presentations.filter((p) => p.status !== 'archived');
+  const archived = presentations.filter((p) => p.status === 'archived');
+
+  return (
+    <div className="p-6 space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Presentations</h1>
+          <p className="text-sm text-text-muted mt-1">Sales tools, tier lists, and client presentations</p>
+        </div>
+        <Button onClick={() => setShowCreate(!showCreate)}>
+          <Plus size={14} />
+          New
+        </Button>
+      </div>
+
+      {/* Create modal */}
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowCreate(false)} />
+          <div className="relative w-full max-w-xl rounded-2xl border border-white/[0.06] bg-surface shadow-2xl animate-modal-pop-in p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">Create new presentation</h2>
+              <button onClick={() => setShowCreate(false)} className="cursor-pointer rounded-lg p-1.5 text-white/40 hover:bg-white/[0.06] hover:text-white/60 transition-colors">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <p className="text-sm text-text-muted -mt-2">Choose a presentation type to get started</p>
+            <div className="grid grid-cols-1 gap-2">
+              {[
+                { type: 'slides' as const, label: 'Slide deck', desc: 'Create a presentation with slides, images, and speaker notes', icon: FileText, color: 'rgba(4, 107, 210, 0.15)', iconColor: 'text-accent-text', bgColor: 'bg-accent-surface' },
+                { type: 'tier_list' as const, label: 'Tier list', desc: 'Rank content with drag-and-drop tiers for visual demos on calls', icon: ListOrdered, color: 'rgba(168, 85, 247, 0.15)', iconColor: 'text-purple-400', bgColor: 'bg-purple-500/10' },
+                { type: 'social_audit' as const, label: 'Social audit', desc: 'Before & after analysis with real social data and growth projections', icon: BarChart3, color: 'rgba(16, 185, 129, 0.15)', iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10' },
+              ].map(({ type, label, desc, icon: Icon, iconColor, bgColor }) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => { setShowCreate(false); handleCreate(type); }}
+                  className="cursor-pointer flex items-center gap-4 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-4 text-left hover:bg-white/[0.05] hover:border-white/[0.12] transition-all hover:scale-[1.01] active:scale-[0.99]"
+                >
+                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${bgColor} shrink-0`}>
+                    <Icon size={20} className={iconColor} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-white">{label}</h3>
+                    <p className="text-xs text-text-muted mt-0.5">{desc}</p>
+                  </div>
+                  <ChevronRight size={16} className="text-text-muted shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="h-40 animate-pulse">
+              <div className="h-full flex flex-col justify-between p-4">
+                <div className="space-y-2">
+                  <div className="h-4 w-2/3 rounded bg-surface-hover" />
+                  <div className="h-3 w-1/3 rounded bg-surface-hover" />
+                </div>
+                <div className="h-3 w-1/2 rounded bg-surface-hover" />
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Active presentations */}
+      {!loading && active.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {active.map((p, i) => {
+            const tc = typeConfig[p.type] ?? typeConfig.slides;
+            const TypeIcon = tc.icon;
+            const itemCount = p.type === 'tier_list'
+              ? (p.tier_items ?? []).length
+              : (p.slides ?? []).length;
+            const itemLabel = p.type === 'tier_list' ? 'items' : 'slides';
+
+            return (
+              <div
+                key={p.id}
+                className="animate-stagger-in min-w-0"
+                style={{ animationDelay: `${i * 40}ms` }}
+              >
+                <div className="relative group rounded-xl border border-nativz-border bg-surface shadow-card hover:shadow-elevated transition-all duration-300 hover:border-transparent hover:ring-1 hover:ring-accent/40">
+                  {/* Tier list color bar */}
+                  {p.type === 'tier_list' && (p.tiers ?? []).length > 0 && (
+                    <div className="h-1.5 flex overflow-hidden rounded-t-xl">
+                      {(p.tiers ?? []).map((tier: { id: string; color: string }) => (
+                        <div key={tier.id} className="flex-1" style={{ backgroundColor: tier.color + '80' }} />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Top row: icon + badges + ellipsis (always visible) */}
+                  <div className="flex items-center gap-2 px-4 pt-4 pb-1">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg shrink-0" style={{ backgroundColor: tc.accent }}>
+                      <TypeIcon size={16} className={tc.iconColor} />
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <span className="rounded-full bg-white/5 border border-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-text-muted whitespace-nowrap">
+                        {tc.label}
+                      </span>
+                    </div>
+                    <div className="relative shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpenId(menuOpenId === p.id ? null : p.id);
+                        }}
+                        className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
+                      >
+                        <MoreHorizontal size={16} />
+                      </button>
+
+                      {menuOpenId === p.id && (
+                        <div className="absolute right-0 top-full z-20 mt-1 min-w-[140px] rounded-lg border border-nativz-border bg-surface py-1 shadow-dropdown animate-fade-in">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); router.push(`/admin/presentations/${p.id}`); }}
+                            className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors"
+                          >
+                            <Pencil size={12} /> Edit
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDuplicate(p); }}
+                            className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors"
+                          >
+                            <Copy size={12} /> Duplicate
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleArchive(p); }}
+                            className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors"
+                          >
+                            {p.status === 'archived' ? <ArchiveRestore size={12} /> : <Archive size={12} />}
+                            {p.status === 'archived' ? 'Unarchive' : 'Archive'}
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDelete(p.id); }}
+                            className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-red-400 hover:bg-surface-hover transition-colors"
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Clickable content area */}
+                  <button
+                    onClick={() => router.push(`/admin/presentations/${p.id}`)}
+                    className="cursor-pointer w-full text-left px-4 pb-4 pt-1 space-y-2"
+                  >
+                    <h3 className="text-base font-semibold text-text-primary truncate group-hover:text-accent-text transition-colors">
+                      {p.title}
+                    </h3>
+                    <div className="flex items-center gap-3 text-[11px] text-text-muted">
+                      {p.client_name && (
+                        <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-purple-400 font-medium">
+                          {p.client_name}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1">
+                        <Presentation size={10} />
+                        {itemCount} {itemLabel}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock size={10} />
+                        {formatDate(p.updated_at)}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Archived */}
+      {!loading && archived.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wide">Archived</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {archived.map((p) => (
+              <div key={p.id} className="relative group rounded-xl border border-nativz-border/50 bg-surface/50 overflow-hidden">
+                <button
+                  onClick={() => router.push(`/admin/presentations/${p.id}`)}
+                  className="cursor-pointer w-full text-left p-4 space-y-2 opacity-60 hover:opacity-80 transition-opacity"
+                >
+                  <h3 className="text-sm font-semibold text-text-primary truncate">{p.title}</h3>
+                  <div className="flex items-center gap-2 text-[11px] text-text-muted">
+                    <span className="uppercase font-bold">{typeConfig[p.type]?.label ?? 'Slides'}</span>
+                    <span>{formatDate(p.updated_at)}</span>
+                  </div>
+                </button>
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => handleArchive(p)}
+                    className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors"
+                    title="Unarchive"
+                  >
+                    <ArchiveRestore size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty */}
+      {!loading && presentations.length === 0 && (
+        <EmptyState
+          icon={<Presentation size={32} />}
+          title="No presentations yet"
+          description="Create slide decks, tier lists, and other visual tools to close more sales."
+          action={
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus size={14} />
+              Create your first presentation
+            </Button>
+          }
+        />
+      )}
+
+      {confirmDeleteDialog}
+    </div>
+  );
+}

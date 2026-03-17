@@ -1,5 +1,5 @@
 /**
- * Google OAuth 2.0 — native implementation (no Nango dependency).
+ * Google OAuth 2.0 — native implementation.
  *
  * Env vars required:
  *   GOOGLE_CLIENT_ID
@@ -13,6 +13,7 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { encrypt, decryptToken } from '@/lib/crypto';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -156,14 +157,18 @@ export async function storeTokens(
   const supabase = createAdminClient();
   const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
+  // Encrypt token values before storing
+  const encryptedAccessToken = encrypt(accessToken);
+  const encryptedRefreshToken = encrypt(refreshToken);
+
   const { error } = await supabase
     .from('google_tokens')
     .upsert(
       {
         user_id: userId,
         email,
-        access_token: accessToken,
-        refresh_token: refreshToken,
+        access_token: encryptedAccessToken,
+        refresh_token: encryptedRefreshToken,
         expires_at: expiresAt,
         updated_at: new Date().toISOString(),
       },
@@ -187,21 +192,28 @@ export async function getValidToken(userId: string): Promise<string | null> {
 
   if (!row) return null;
 
+  // Decrypt tokens — handles both plaintext (pre-migration) and encrypted values
+  const storedAccessToken = decryptToken(row.access_token);
+  const storedRefreshToken = decryptToken(row.refresh_token);
+
   // Check if token is still valid (with 5 min buffer to stay ahead of cron cycles)
   const expiresAt = new Date(row.expires_at).getTime();
   if (Date.now() < expiresAt - 5 * 60_000) {
-    return row.access_token;
+    return storedAccessToken;
   }
 
   // Refresh
   try {
-    const { access_token, expires_in } = await refreshAccessToken(row.refresh_token);
+    const { access_token, expires_in } = await refreshAccessToken(storedRefreshToken);
     const newExpiresAt = new Date(Date.now() + expires_in * 1000).toISOString();
+
+    // Encrypt the new access token before storing
+    const encryptedNewToken = encrypt(access_token);
 
     await supabase
       .from('google_tokens')
       .update({
-        access_token,
+        access_token: encryptedNewToken,
         expires_at: newExpiresAt,
         updated_at: new Date().toISOString(),
       })

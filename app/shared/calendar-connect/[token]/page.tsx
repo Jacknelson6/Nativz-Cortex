@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Calendar, CheckCircle2, AlertCircle, Loader2, Shield } from 'lucide-react';
 import Image from 'next/image';
-import Nango from '@nangohq/frontend';
 import { Button } from '@/components/ui/button';
 
 type PageState = 'loading' | 'ready' | 'connecting' | 'success' | 'error' | 'expired';
@@ -41,41 +40,10 @@ export default function CalendarConnectPage() {
       });
   }, [token]);
 
-  async function handleConnect() {
+  function handleConnect() {
     setState('connecting');
-    try {
-      // Get a Nango session token for the public connect flow
-      // For client connections, we use the invite token approach
-      const nangoPublicKey = process.env.NEXT_PUBLIC_NANGO_PUBLIC_KEY;
-      if (!nangoPublicKey) {
-        throw new Error('Calendar integration not configured');
-      }
-
-      const nango = new Nango({ publicKey: nangoPublicKey });
-      const result = await nango.auth('google-calendar', `client-${token}`);
-
-      // Activate the connection
-      const res = await fetch(`/api/calendar/connect/${token}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nango_connection_id: result.connectionId }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? 'Failed to activate connection');
-      }
-
-      setState('success');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Connection failed';
-      if (msg.includes('closed') || msg.includes('cancelled')) {
-        setState('ready'); // User cancelled — go back to ready
-      } else {
-        setState('error');
-        setErrorMsg(msg);
-      }
-    }
+    // Redirect to Google OAuth flow with the invite token as state
+    window.location.href = `/api/google/connect?scope=calendar&invite_token=${token}`;
   }
 
   return (
@@ -140,7 +108,7 @@ export default function CalendarConnectPage() {
           {state === 'connecting' && (
             <div className="flex flex-col items-center gap-3 py-8">
               <Loader2 size={28} className="animate-spin text-accent-text" />
-              <p className="text-sm text-text-muted">Connecting to Google Calendar...</p>
+              <p className="text-sm text-text-muted">Redirecting to Google...</p>
             </div>
           )}
 

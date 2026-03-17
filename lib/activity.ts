@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 
-type EntityType = 'search' | 'client' | 'idea' | 'shoot' | 'report';
+type EntityType = 'search' | 'client' | 'idea' | 'shoot' | 'report' | 'api_key' | 'user' | 'impersonation';
 
 export async function logActivity(
   actorId: string,

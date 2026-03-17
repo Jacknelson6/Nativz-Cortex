@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getPostingService } from '@/lib/posting';
 import { z } from 'zod';
 import type { SocialPlatform } from '@/lib/posting/types';
+import { signState } from '@/lib/scheduler/oauth-state';
 
 const LATE_API_BASE = 'https://getlate.dev/api/v1';
 
@@ -91,7 +92,12 @@ export async function POST(request: NextRequest) {
     );
 
     const service = getPostingService();
-    const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/scheduler/connect/callback?client_id=${parsed.data.client_id}&platform=${parsed.data.platform}`;
+    const stateToken = await signState({
+      client_id: parsed.data.client_id,
+      platform: parsed.data.platform,
+      ts: Date.now(),
+    });
+    const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/scheduler/connect/callback?state=${stateToken}`;
     const result = await service.connectProfile({
       platform: parsed.data.platform as SocialPlatform,
       callbackUrl,

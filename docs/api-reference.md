@@ -635,7 +635,7 @@ Update raw footage upload status for a shoot.
 **Response:** Updated shoot event
 
 ### `POST /api/shoots/sync`
-Sync upcoming Google Calendar events via Nango, filter for shoot-related events, and upsert into `shoot_events`.
+Sync upcoming Google Calendar events via Google OAuth, filter for shoot-related events, and upsert into `shoot_events`.
 **Auth:** Required (admin)
 **Response:** `{ synced: number }`
 
@@ -645,7 +645,7 @@ Fetch shoot data from Monday.com Content Calendars board (cached 10 min).
 **Response:** Array of parsed shoot items
 
 ### `GET /api/calendar/events`
-Fetch Google Calendar events for the current user via Nango (2-min cache).
+Fetch Google Calendar events for the current user via Google OAuth (2-min cache).
 **Auth:** Required (user)
 **Query:** `days_ahead?: number, calendars?: comma-separated calendar IDs`
 **Response:** `[{ name, color, connection_type, events: CalendarEvent[] }]`
@@ -1167,16 +1167,6 @@ List files from Google Drive.
 **Query:** `folderId?, q? (search query), pageToken?, pageSize?`
 **Response:** `{ files: [...], nextPageToken? }`
 
-### `GET /api/nango/connect`
-Initiate Nango OAuth connection for Google Calendar.
-**Auth:** Required (user)
-**Response:** Redirect URL
-
-### `GET /api/nango/callback`
-Nango OAuth callback handler.
-**Auth:** Required (user)
-**Response:** Redirects to settings page
-
 ---
 
 ## 17. Team & Meetings
@@ -1555,13 +1545,13 @@ Create a topic search record (returns ID, doesn't run the pipeline).
 **Response:** `{ search: { id, query, status, search_mode, created_at } }`
 
 ### `GET /api/v1/calendar/events`
-Fetch Google Calendar events for the API key owner's Nango connection.
+Fetch Google Calendar events for the API key owner via Google OAuth.
 **Auth:** API key (scope: `calendar`)
 **Query:** `start: ISO8601, end: ISO8601`
 **Response:** `{ events: CalendarEvent[] }`
 
 ### `POST /api/v1/calendar/events`
-Create a Google Calendar event via Nango for the API key owner.
+Create a Google Calendar event via Google OAuth for the API key owner.
 **Auth:** API key (scope: `calendar`)
 **Body:** `{ summary, description?, location?, start, end, attendees?: [{email}] }`
 **Response:** `{ event: GoogleCalendarEvent }`

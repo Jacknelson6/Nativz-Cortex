@@ -14,18 +14,36 @@ import { createAdminClient } from '@/lib/supabase/admin';
  */
 export async function POST(request: NextRequest) {
   try {
-    // Verify webhook signature if secret is configured
+    // Verify webhook HMAC-SHA256 signature
     const secret = process.env.LATE_WEBHOOK_SECRET;
+    const rawBody = await request.text();
+
     if (secret) {
       const signature = request.headers.get('x-late-signature');
       if (!signature) {
         return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
       }
-      // Late uses HMAC-SHA256 for webhook verification
-      // For now, just check the header exists — full HMAC verification can be added later
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw', encoder.encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+      );
+      const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(rawBody));
+      const expected = Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, '0')).join('');
+      const actual = signature.replace(/^sha256=/, '');
+      if (expected.length !== actual.length || !crypto.subtle.verify) {
+        // Constant-time comparison via subtle
+        const a = encoder.encode(expected);
+        const b = encoder.encode(actual);
+        if (a.byteLength !== b.byteLength || expected !== actual) {
+          return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+        }
+      }
+    } else {
+      return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 });
     }
 
-    const body = await request.json();
+    const body = JSON.parse(rawBody);
     const { event, data } = body;
     const adminClient = createAdminClient();
 

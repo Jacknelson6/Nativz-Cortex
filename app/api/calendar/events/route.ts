@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { fetchCalendarEventsViaNango, isNangoConfigured } from '@/lib/nango/client';
+import { getValidToken } from '@/lib/google/auth';
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
 
@@ -43,6 +43,45 @@ interface CalendarResult {
   color: string;
   connection_type: string;
   events: CalendarEvent[];
+}
+
+// ─── Google Calendar fetch helper ─────────────────────────────────────────────
+
+interface GoogleCalendarEvent {
+  id: string;
+  summary?: string;
+  start: { dateTime?: string; date?: string };
+  end: { dateTime?: string; date?: string };
+  location?: string;
+  description?: string;
+  status: string;
+}
+
+async function fetchCalendarEvents(
+  accessToken: string,
+  timeMin: string,
+  timeMax: string,
+): Promise<GoogleCalendarEvent[]> {
+  const params = new URLSearchParams({
+    timeMin,
+    timeMax,
+    singleEvents: 'true',
+    orderBy: 'startTime',
+    maxResults: '250',
+  });
+
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Google Calendar API error: ${err}`);
+  }
+
+  const data = await res.json();
+  return data.items ?? [];
 }
 
 // ─── Zod validation ───────────────────────────────────────────────────────────
@@ -105,18 +144,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!isNangoConfigured()) {
-      return NextResponse.json(
-        { error: 'Google Calendar integration is not configured' },
-        { status: 503 },
-      );
-    }
-
     // ── Fetch calendar_connections rows ───────────────────────────────────────
     const adminClient = createAdminClient();
     const { data: connections, error: connError } = await adminClient
       .from('calendar_connections')
-      .select('id, nango_connection_id, connection_type, display_name, display_color')
+      .select('id, user_id, connection_type, display_name, display_color')
       .in('id', connectionIds)
       .eq('is_active', true);
 
@@ -129,11 +161,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ calendars: {} });
     }
 
-    // Compute how many days ahead the requested range spans (min 1)
-    const startMs = new Date(start).getTime();
-    const endMs = new Date(end).getTime();
-    const daysAhead = Math.max(1, Math.ceil((endMs - startMs) / (24 * 60 * 60 * 1000)));
-
     // ── Fetch events in parallel (Promise.allSettled) ──────────────────────────
     const results = await Promise.allSettled(
       connections.map(async (conn) => {
@@ -144,14 +171,13 @@ export async function GET(request: NextRequest) {
           return { connectionId: conn.id, result: cached };
         }
 
-        if (!conn.nango_connection_id) {
-          throw new Error(`No nango_connection_id for connection ${conn.id}`);
+        // Get a valid Google OAuth token for the connection's user
+        const accessToken = await getValidToken(conn.user_id);
+        if (!accessToken) {
+          throw new Error(`No valid Google token for connection ${conn.id}`);
         }
 
-        const rawEvents = await fetchCalendarEventsViaNango(
-          conn.nango_connection_id,
-          daysAhead,
-        );
+        const rawEvents = await fetchCalendarEvents(accessToken, start, end);
 
         const isClient = conn.connection_type === 'client';
 

@@ -2,11 +2,50 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import {
-  updateCalendarEventViaNango,
-  deleteCalendarEventViaNango,
-  isNangoConfigured,
-} from '@/lib/nango/client';
+import { getValidToken } from '@/lib/google/auth';
+
+// ─── Google Calendar helpers ──────────────────────────────────────────────────
+
+async function updateCalendarEvent(
+  accessToken: string,
+  eventId: string,
+  updateData: Record<string, unknown>,
+): Promise<void> {
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}?sendUpdates=all`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updateData),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Google Calendar update failed: ${err}`);
+  }
+}
+
+async function deleteCalendarEvent(
+  accessToken: string,
+  eventId: string,
+): Promise<void> {
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}?sendUpdates=all`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+
+  if (!res.ok && res.status !== 410) {
+    const err = await res.text();
+    throw new Error(`Google Calendar delete failed: ${err}`);
+  }
+}
 
 // ─── Zod schemas ──────────────────────────────────────────────────────────────
 
@@ -30,13 +69,6 @@ async function verifyAdmin(userId: string) {
   const adminClient = createAdminClient();
   const { data } = await adminClient.from('users').select('role').eq('id', userId).single();
   return data?.role === 'admin';
-}
-
-async function getNangoConnectionId(userId: string): Promise<string | null> {
-  if (!isNangoConfigured()) return null;
-  const adminClient = createAdminClient();
-  const { data } = await adminClient.from('users').select('nango_connection_id').eq('id', userId).single();
-  return data?.nango_connection_id ?? null;
 }
 
 /**
@@ -91,7 +123,7 @@ export async function GET(
  * PATCH /api/meetings/[id]
  *
  * Update a meeting's fields. If the meeting has a linked Google Calendar event,
- * changes are synced to Google Calendar via Nango (non-fatal on failure).
+ * changes are synced to Google Calendar via OAuth (non-fatal on failure).
  *
  * @auth Required (admin)
  * @param id - Meeting UUID
@@ -159,8 +191,8 @@ export async function PATCH(
 
     // Sync update to Google Calendar
     if (existing?.google_event_id) {
-      const connectionId = await getNangoConnectionId(user.id);
-      if (connectionId) {
+      const accessToken = await getValidToken(user.id);
+      if (accessToken) {
         try {
           const updateData: Record<string, unknown> = {};
           if (parsed.data.title) updateData.summary = parsed.data.title;
@@ -178,11 +210,7 @@ export async function PATCH(
           }
 
           if (Object.keys(updateData).length > 0) {
-            await updateCalendarEventViaNango(
-              connectionId,
-              existing.google_event_id,
-              updateData as Parameters<typeof updateCalendarEventViaNango>[2],
-            );
+            await updateCalendarEvent(accessToken, existing.google_event_id, updateData);
           }
         } catch (err) {
           console.error('Google Calendar update failed:', err);
@@ -201,7 +229,7 @@ export async function PATCH(
  * DELETE /api/meetings/[id]
  *
  * Soft-cancel a meeting by setting its status to 'cancelled'. If the meeting has a linked
- * Google Calendar event, it is also cancelled via Nango (non-fatal on failure).
+ * Google Calendar event, it is also cancelled via Google OAuth (non-fatal on failure).
  *
  * @auth Required (admin)
  * @param id - Meeting UUID
@@ -243,10 +271,10 @@ export async function DELETE(
 
     // Cancel on Google Calendar
     if (meeting?.google_event_id) {
-      const connectionId = await getNangoConnectionId(user.id);
-      if (connectionId) {
+      const accessToken = await getValidToken(user.id);
+      if (accessToken) {
         try {
-          await deleteCalendarEventViaNango(connectionId, meeting.google_event_id);
+          await deleteCalendarEvent(accessToken, meeting.google_event_id);
         } catch (err) {
           console.error('Google Calendar delete failed:', err);
         }

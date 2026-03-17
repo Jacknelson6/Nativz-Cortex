@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import Nango from '@nangohq/frontend';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { GlassButton } from '@/components/ui/glass-button';
@@ -16,26 +15,11 @@ interface ConnectionStatus {
 export function ConnectCalendar() {
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
 
   useEffect(() => {
     checkStatus();
-    prefetchSessionToken();
   }, []);
-
-  async function prefetchSessionToken() {
-    try {
-      const res = await fetch('/api/calendar/connect');
-      if (res.ok) {
-        const { token } = await res.json();
-        setSessionToken(token);
-      }
-    } catch {
-      // Will retry in handleConnect if needed
-    }
-  }
 
   async function checkStatus() {
     try {
@@ -52,54 +36,9 @@ export function ConnectCalendar() {
     }
   }
 
-  async function handleConnect() {
-    setConnecting(true);
-    try {
-      // Use pre-fetched token, or fetch one if not available
-      let token = sessionToken;
-      if (!token) {
-        const res = await fetch('/api/calendar/connect');
-        if (!res.ok) {
-          const data = await res.json();
-          toast.error(data.error || 'Could not start calendar auth');
-          return;
-        }
-        const data = await res.json();
-        token = data.token;
-      }
-
-      // Open Nango OAuth popup (must happen in the synchronous part of the click handler)
-      const nango = new Nango({ connectSessionToken: token! });
-      const result = await nango.auth('google-calendar');
-
-      // Store the connectionId in our DB immediately (no webhook dependency)
-      const confirmRes = await fetch('/api/calendar/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ connectionId: result.connectionId }),
-      });
-
-      if (!confirmRes.ok) {
-        toast.error('Connected to Google but failed to save. Try reconnecting.');
-        return;
-      }
-
-      toast.success('Google Calendar connected — syncing events...');
-      setSessionToken(null); // Token is consumed, clear it
-      await handleSync();
-      setStatus({ connected: true, lastSynced: new Date().toISOString() });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Connection failed';
-      if (message.includes('closed') || message.includes('cancelled')) {
-        toast.error('Calendar connection was cancelled');
-      } else {
-        toast.error('Failed to connect calendar. Try again.');
-      }
-    } finally {
-      setConnecting(false);
-      // Pre-fetch a fresh token for next connection attempt
-      prefetchSessionToken();
-    }
+  function handleConnect() {
+    // Redirect to Google OAuth flow via our native auth endpoint
+    window.location.href = '/api/google/connect?scope=calendar';
   }
 
   async function handleSync() {
@@ -113,7 +52,7 @@ export function ConnectCalendar() {
       }
       const data = await res.json();
       toast.success(
-        `Synced! Found ${data.shootsFound} shoots (${data.created} new, ${data.matched} matched to clients)`
+        `Synced! Found ${data.shoots?.found ?? 0} shoots (${data.shoots?.created ?? 0} new, ${data.shoots?.matched ?? 0} matched to clients)`
       );
       setStatus({ connected: true, lastSynced: new Date().toISOString() });
     } catch {
@@ -163,15 +102,15 @@ export function ConnectCalendar() {
               {syncing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
               {syncing ? 'Syncing...' : 'Sync now'}
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleConnect} disabled={connecting}>
+            <Button variant="ghost" size="sm" onClick={handleConnect}>
               <Calendar size={12} />
               Reconnect
             </Button>
           </div>
         ) : (
-          <GlassButton onClick={handleConnect} disabled={connecting} className="shrink-0">
-            {connecting ? <Loader2 size={14} className="animate-spin" /> : <Calendar size={14} />}
-            {connecting ? 'Connecting...' : 'Connect'}
+          <GlassButton onClick={handleConnect} className="shrink-0">
+            <Calendar size={14} />
+            Connect
           </GlassButton>
         )}
       </div>

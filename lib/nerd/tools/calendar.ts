@@ -24,7 +24,7 @@ export const calendarTools: ToolDefinition[] = [
         // Fetch active calendar connections
         const { data: connections, error: connError } = await supabase
           .from('calendar_connections')
-          .select('id, nango_connection_id, connection_type, display_name, is_active')
+          .select('id, connection_type, display_name, is_active')
           .eq('is_active', true);
 
         if (connError) {

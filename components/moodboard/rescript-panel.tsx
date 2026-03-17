@@ -90,6 +90,8 @@ export function RescriptPanel({ item, onClose, onSaved }: RescriptPanelProps) {
 
   async function handleExportPDF() {
     if (!rescript) return;
+    // HTML-escape to prevent XSS from AI-generated content
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     // Build a printable HTML and open in new window for PDF
     const html = `
       <html><head><title>Rescript - ${item.title || 'Video'}</title>
@@ -100,12 +102,12 @@ export function RescriptPanel({ item, onClose, onSaved }: RescriptPanelProps) {
         .hook { background: #faf5ff; padding: 12px; margin: 8px 0; border-radius: 8px; }
         .tag { display: inline-block; background: #ede9fe; color: #6366f1; padding: 2px 10px; border-radius: 12px; margin: 4px; font-size: 14px; }
       </style></head><body>
-      <h1>✍️ Rescript: ${item.title || 'Video'}</h1>
-      <h2>Adapted Script</h2><pre style="white-space:pre-wrap">${rescript.adapted_script}</pre>
-      <h2>Shot List</h2>${rescript.shot_list.map(s => `<div class="shot"><strong>#${s.number}</strong> [${s.timing}] ${s.description}${s.notes ? ` — <em>${s.notes}</em>` : ''}</div>`).join('')}
-      <h2>Hook Alternatives</h2>${rescript.hook_alternatives.map((h, i) => `<div class="hook"><strong>Option ${i + 1}:</strong> ${h}</div>`).join('')}
-      <h2>Hashtags</h2><div>${rescript.hashtags.map(t => `<span class="tag">#${t}</span>`).join('')}</div>
-      <h2>Posting Strategy</h2><p>${rescript.posting_strategy}</p>
+      <h1>✍️ Rescript: ${esc(item.title || 'Video')}</h1>
+      <h2>Adapted Script</h2><pre style="white-space:pre-wrap">${esc(rescript.adapted_script)}</pre>
+      <h2>Shot List</h2>${rescript.shot_list.map(s => `<div class="shot"><strong>#${s.number}</strong> [${esc(s.timing)}] ${esc(s.description)}${s.notes ? ` — <em>${esc(s.notes)}</em>` : ''}</div>`).join('')}
+      <h2>Hook Alternatives</h2>${rescript.hook_alternatives.map((h, i) => `<div class="hook"><strong>Option ${i + 1}:</strong> ${esc(h)}</div>`).join('')}
+      <h2>Hashtags</h2><div>${rescript.hashtags.map(t => `<span class="tag">#${esc(t)}</span>`).join('')}</div>
+      <h2>Posting Strategy</h2><p>${esc(rescript.posting_strategy)}</p>
       </body></html>
     `;
     const w = window.open('', '_blank');

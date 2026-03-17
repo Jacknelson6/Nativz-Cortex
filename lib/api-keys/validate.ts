@@ -69,7 +69,7 @@ export async function validateApiKey(
 
   // Rate limit
   if (!checkRateLimit(key.id)) {
-    return { error: NextResponse.json({ error: 'Rate limit exceeded (100/min)' }, { status: 429 }) };
+    return { error: NextResponse.json({ error: 'Rate limit exceeded (30/min per instance)' }, { status: 429 }) };
   }
 
   // Update last_used_at (fire-and-forget)

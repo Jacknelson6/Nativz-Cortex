@@ -18,6 +18,7 @@ import {
   Share2,
   Handshake,
   Clapperboard,
+  Presentation,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import {
@@ -64,6 +65,12 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/scheduler', label: 'Scheduler', icon: Send },
       { href: '/admin/search/new', label: 'Research', icon: Telescope },
       { href: '/admin/analysis', label: 'Video analysis', icon: Clapperboard },
+    ],
+  },
+  {
+    label: 'Present',
+    items: [
+      { href: '/admin/presentations', label: 'Presentations', icon: Presentation },
     ],
   },
   {

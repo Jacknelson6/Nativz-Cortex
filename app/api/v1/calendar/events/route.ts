@@ -1,8 +1,76 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateApiKey } from '@/lib/api-keys/validate';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { fetchCalendarEventsViaNango, createCalendarEventViaNango, isNangoConfigured } from '@/lib/nango/client';
+import { getValidToken } from '@/lib/google/auth';
+
+// ─── Google Calendar helpers ──────────────────────────────────────────────────
+
+interface GoogleCalendarEvent {
+  id: string;
+  summary?: string;
+  start: { dateTime?: string; date?: string };
+  end: { dateTime?: string; date?: string };
+}
+
+async function fetchCalendarEvents(
+  accessToken: string,
+  timeMin: string,
+  timeMax: string,
+): Promise<GoogleCalendarEvent[]> {
+  const params = new URLSearchParams({
+    timeMin,
+    timeMax,
+    singleEvents: 'true',
+    orderBy: 'startTime',
+    maxResults: '250',
+  });
+
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Google Calendar API error: ${err}`);
+  }
+
+  const data = await res.json();
+  return data.items ?? [];
+}
+
+interface CalendarEventInput {
+  summary: string;
+  description?: string;
+  location?: string;
+  start: { dateTime: string };
+  end: { dateTime: string };
+  attendees?: { email: string }[];
+}
+
+async function createCalendarEvent(
+  accessToken: string,
+  eventData: CalendarEventInput,
+): Promise<{ id: string }> {
+  const res = await fetch(
+    'https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(eventData),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Google Calendar create failed: ${err}`);
+  }
+
+  return res.json();
+}
 
 const createEventSchema = z.object({
   summary: z.string().min(1),
@@ -17,7 +85,7 @@ const createEventSchema = z.object({
  * GET /api/v1/calendar/events
  *
  * Fetch Google Calendar events for the authenticated API key's user via
- * Nango. Returns events normalized to { id, title, start, end, is_all_day }.
+ * Google OAuth. Returns events normalized to { id, title, start, end, is_all_day }.
  *
  * @auth API key (Bearer token via Authorization header)
  * @query start - ISO 8601 date/time lower bound (required)
@@ -36,29 +104,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'start and end query params are required' }, { status: 400 });
   }
 
-  if (!isNangoConfigured()) {
-    return NextResponse.json({ error: 'Calendar integration not configured' }, { status: 503 });
-  }
-
-  const admin = createAdminClient();
-
-  // Get user's Nango connection
-  const { data: userData } = await admin
-    .from('users')
-    .select('nango_connection_id')
-    .eq('id', auth.ctx.userId)
-    .single();
-
-  if (!userData?.nango_connection_id) {
+  const accessToken = await getValidToken(auth.ctx.userId);
+  if (!accessToken) {
     return NextResponse.json({ error: 'No calendar connected for this user' }, { status: 404 });
   }
 
-  const startMs = new Date(start).getTime();
-  const endMs = new Date(end).getTime();
-  const daysAhead = Math.max(1, Math.ceil((endMs - startMs) / (24 * 60 * 60 * 1000)));
-
   try {
-    const rawEvents = await fetchCalendarEventsViaNango(userData.nango_connection_id, daysAhead);
+    const rawEvents = await fetchCalendarEvents(accessToken, start, end);
 
     const events = rawEvents.map((e) => ({
       id: e.id,
@@ -78,7 +130,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/v1/calendar/events
  *
- * Create a Google Calendar event for the authenticated API key's user via Nango.
+ * Create a Google Calendar event via Google OAuth for the API key owner.
  *
  * @auth API key (Bearer token via Authorization header)
  * @body summary - Event title (required)
@@ -101,23 +153,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
   }
 
-  if (!isNangoConfigured()) {
-    return NextResponse.json({ error: 'Calendar integration not configured' }, { status: 503 });
-  }
-
-  const admin = createAdminClient();
-  const { data: userData } = await admin
-    .from('users')
-    .select('nango_connection_id')
-    .eq('id', auth.ctx.userId)
-    .single();
-
-  if (!userData?.nango_connection_id) {
+  const accessToken = await getValidToken(auth.ctx.userId);
+  if (!accessToken) {
     return NextResponse.json({ error: 'No calendar connected for this user' }, { status: 404 });
   }
 
   try {
-    const event = await createCalendarEventViaNango(userData.nango_connection_id, {
+    const event = await createCalendarEvent(accessToken, {
       summary: parsed.data.summary,
       description: parsed.data.description,
       location: parsed.data.location,

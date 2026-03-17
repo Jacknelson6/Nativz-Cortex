@@ -36,7 +36,7 @@ Detailed docs live in `docs/` — read only when needed for the current task:
 Do these at the start of every session:
 
 1. Run `git status` — if there are uncommitted changes, ask the user whether to commit, stash, or discard them before starting new work. Don't silently ignore dirty state.
-2. Read **`TODO.md`** — Current status, what's done, what's left, priorities
+2. Read **`todo.md`** — Current status, what's done, what's left, priorities
 3. Reference **`docs/detail-design-patterns.md`** when implementing any UI component
 
 ## Memory System
@@ -58,3 +58,8 @@ This project uses **Ars Contexta** (`~/.claude/plugins/arscontexta/`). Key comma
 - Admin: `createAdminClient()` (service role); Portal: scope by `organization_id`
 - Charts: always `'use client'`
 - See `docs/conventions.md` for full list
+
+## Large Data Files (skip unless directly relevant)
+
+- **`app/admin/nerd/api/api-docs-data.ts`** (2,600 lines) — Static API endpoint catalog for the docs viewer. Pure data, not logic. Only read when editing the API docs UI.
+- **`docs/api-reference.md`** (1,594 lines) — Auto-generated API reference. Only read when verifying API documentation accuracy.

@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Loader2 } from 'lucide-react';
+import { Search, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FilterChip } from './filter-chip';
 import { ClientSelector } from './client-selector';
+import { PLATFORM_CONFIG } from './platform-icon';
 import {
   TIME_RANGE_OPTIONS,
   PLATFORM_OPTIONS,
@@ -40,8 +41,17 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [platformAvailability, setPlatformAvailability] = useState<Record<string, boolean>>({});
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch platform availability (which API keys are configured)
+  useEffect(() => {
+    fetch('/api/search/platforms')
+      .then((r) => r.ok ? r.json() : {})
+      .then(setPlatformAvailability)
+      .catch(() => {});
+  }, []);
 
   // Rotate placeholder examples (Pattern #16)
   useEffect(() => {
@@ -146,31 +156,47 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
         <div className="h-4 w-px bg-nativz-border" />
 
         {/* Platform checkboxes */}
-        {PLATFORM_OPTIONS.filter((p) => p.available).map((p) => (
-          <button
-            key={p.value}
-            type="button"
-            onClick={() => {
-              if (p.value === 'web') return; // web always on
-              setPlatforms((prev) => {
-                const next = new Set(prev);
-                if (next.has(p.value)) next.delete(p.value);
-                else next.add(p.value);
-                return next;
-              });
-            }}
-            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
-              platforms.has(p.value)
-                ? 'bg-accent-surface text-accent-text'
-                : p.value === 'web'
-                  ? 'bg-accent-surface/50 text-accent-text/60 cursor-default'
-                  : 'bg-surface text-text-muted hover:bg-surface-hover hover:text-text-secondary border border-nativz-border'
-            }`}
-          >
-            <span className="text-[11px]">{p.icon}</span>
-            {p.label}
-          </button>
-        ))}
+        {PLATFORM_OPTIONS.filter((p) => p.available).map((p) => {
+          const config = PLATFORM_CONFIG[p.value];
+          const Icon = config.icon;
+          const isConfigured = platformAvailability[p.value] !== false;
+          const isActive = platforms.has(p.value);
+          const isWeb = p.value === 'web';
+
+          return (
+            <button
+              key={p.value}
+              type="button"
+              title={!isConfigured ? `${p.label} — API key not configured` : undefined}
+              onClick={() => {
+                if (isWeb) return;
+                if (!isConfigured) return;
+                setPlatforms((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(p.value)) next.delete(p.value);
+                  else next.add(p.value);
+                  return next;
+                });
+              }}
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                !isConfigured
+                  ? 'bg-surface text-text-muted/40 border border-nativz-border/50 cursor-not-allowed'
+                  : isActive
+                    ? 'bg-accent-surface text-accent-text'
+                    : isWeb
+                      ? 'bg-accent-surface/50 text-accent-text/60 cursor-default'
+                      : 'bg-surface text-text-muted hover:bg-surface-hover hover:text-text-secondary border border-nativz-border cursor-pointer'
+              }`}
+            >
+              {!isConfigured ? (
+                <AlertCircle size={12} className="text-amber-500/60" />
+              ) : (
+                <Icon size={12} className={isActive ? config.color : ''} />
+              )}
+              {p.label}
+            </button>
+          );
+        })}
 
         <div className="h-4 w-px bg-nativz-border" />
 

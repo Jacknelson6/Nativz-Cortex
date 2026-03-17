@@ -15,68 +15,21 @@ export function GoogleCalendarSection({
   connected: boolean;
   onConnectionChange: (connected: boolean) => void;
 }) {
-  const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
 
-  async function handleConnect() {
-    setConnecting(true);
-    try {
-      const res = await fetch('/api/nango/connect', { method: 'POST' });
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || 'Could not start calendar auth');
-        return;
-      }
-      const { token } = await res.json();
-
-      const { default: Nango } = await import('@nangohq/frontend');
-      const nango = new Nango({ connectSessionToken: token });
-      const result = await nango.auth('google-calendar');
-
-      const callbackRes = await fetch('/api/nango/callback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ connectionId: result.connectionId }),
-      });
-
-      if (!callbackRes.ok) {
-        toast.error('Connected to Google but failed to save. Try reconnecting.');
-        return;
-      }
-
-      toast.success('Google Calendar connected');
-      onConnectionChange(true);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Connection failed';
-      if (message.includes('closed') || message.includes('cancelled')) {
-        toast.error('Calendar connection was cancelled');
-      } else {
-        toast.error('Failed to connect calendar. Try again.');
-      }
-    } finally {
-      setConnecting(false);
-    }
+  function handleConnect() {
+    // Redirect to Google OAuth flow via our native auth endpoint
+    window.location.href = '/api/google/connect?scope=calendar';
   }
 
   async function handleDisconnect() {
     setDisconnecting(true);
     try {
-      const res = await fetch('/api/nango/callback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ connectionId: '' }),
-      });
-
+      const res = await fetch('/api/google/disconnect', { method: 'POST' });
       if (!res.ok) {
         toast.error('Failed to disconnect calendar.');
         return;
       }
-
-      await fetch('/api/account', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nango_connection_id: null }),
-      });
 
       toast.success('Google Calendar disconnected');
       onConnectionChange(false);
@@ -135,13 +88,9 @@ export function GoogleCalendarSection({
               </Button>
             </>
           ) : (
-            <Button onClick={handleConnect} disabled={connecting} size="sm">
-              {connecting ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Calendar size={14} />
-              )}
-              {connecting ? 'Connecting...' : 'Connect Google Calendar'}
+            <Button onClick={handleConnect} size="sm">
+              <Calendar size={14} />
+              Connect Google Calendar
             </Button>
           )}
         </div>

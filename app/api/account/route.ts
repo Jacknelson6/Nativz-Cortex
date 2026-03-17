@@ -7,7 +7,7 @@ const updateSchema = z.object({
   full_name: z.string().min(1).optional(),
   avatar_url: z.string().nullable().optional(),
   job_title: z.string().nullable().optional(),
-  password: z.string().min(6, 'Password must be at least 6 characters').optional(),
+  password: z.string().min(8, 'Password must be at least 8 characters').optional(),
 });
 
 /**

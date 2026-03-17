@@ -17,7 +17,6 @@ type TodoRow = {
 type UserIntegration = {
   id: string;
   todoist_api_key: string | null;
-  nango_connection_id: string | null;
 };
 
 function normalizeClient(c: Assignment['clients']): { name: string; slug: string } | null {
@@ -58,7 +57,7 @@ export default async function TeamPage() {
         .eq('is_completed', false),
       admin
         .from('users')
-        .select('id, todoist_api_key, nango_connection_id'),
+        .select('id, todoist_api_key'),
     ]);
 
     const members = teamRes.data ?? [];
@@ -71,7 +70,7 @@ export default async function TeamPage() {
     for (const u of userIntegrations) {
       integrationsByUser[u.id] = {
         todoist: !!u.todoist_api_key,
-        calendar: !!u.nango_connection_id,
+        calendar: false, // TODO: Check google_tokens table for calendar connection status
       };
     }
 
