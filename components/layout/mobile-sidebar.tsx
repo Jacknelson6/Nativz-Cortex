@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import Image from 'next/image';
 import { X } from 'lucide-react';
 import { useSidebar } from './sidebar-provider';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 interface MobileSidebarProps {
   children: React.ReactNode;
@@ -11,6 +12,7 @@ interface MobileSidebarProps {
 
 export function MobileSidebar({ children }: MobileSidebarProps) {
   const { isOpen, close } = useSidebar();
+  const { mode } = useBrandMode();
 
   // Lock body scroll when open
   useEffect(() => {
@@ -53,17 +55,12 @@ export function MobileSidebar({ children }: MobileSidebarProps) {
         }`}
       >
         <div className="flex h-16 items-center justify-between border-b border-nativz-border px-4">
-          <div className="flex flex-col items-start -space-y-0.5">
-            <Image
-              src="/nativz-logo.svg"
-              alt="Nativz"
-              width={80}
-              height={30}
-              className="h-6 w-auto"
-            />
-            <span className="text-[11px] font-semibold text-text-secondary tracking-[0.25em] uppercase pl-0.5">
-              Cortex
-            </span>
+          <div className="flex items-center">
+            {mode === 'nativz' ? (
+              <Image src="/nativz-logo.svg" alt="Nativz" width={100} height={38} className="h-8 w-auto" />
+            ) : (
+              <img src="/anderson-logo-dark.svg" alt="Anderson Collaborative" className="h-8 w-auto" />
+            )}
           </div>
           <button
             onClick={close}

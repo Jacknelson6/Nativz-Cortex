@@ -60,7 +60,7 @@ export function NicheInsights({ insights }: NicheInsightsProps) {
         {/* Competitor gaps */}
         <div className="rounded-lg border border-nativz-border-light p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Target size={14} className="text-purple-400" />
+            <Target size={14} className="text-accent2-text" />
             <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Competitor gaps</p>
           </div>
           <ul className="space-y-1.5">

@@ -5,6 +5,7 @@ import { Plus, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import type { MoodboardTag } from '@/lib/types/moodboard';
 
+// Tag colors are stored as hex in DB and applied via inline style — must remain raw hex
 const TAG_COLORS = [
   '#6366f1', '#ec4899', '#f59e0b', '#10b981',
   '#3b82f6', '#8b5cf6', '#ef4444', '#06b6d4',

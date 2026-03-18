@@ -34,7 +34,7 @@ export function AgencyBadge({ agency, className }: AgencyBadgeProps) {
 
   if (lower === 'internal') {
     return (
-      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border border-purple-500/30 bg-purple-500/15 text-purple-400 ${className || ''}`}>
+      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border border-accent2/30 bg-accent2-surface text-accent2-text ${className || ''}`}>
         Internal
       </span>
     );

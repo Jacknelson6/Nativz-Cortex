@@ -110,7 +110,7 @@ export function OnboardStrategy({ clientId, clientName, onNext, onBack }: Onboar
   return (
     <div className="animate-fade-slide-in">
       <div className="text-center mb-8">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[rgba(139,92,246,0.1)] text-[#8B5CF6] text-xs font-medium mb-4">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent2-surface text-accent2-text text-xs font-medium mb-4">
           <Brain size={12} />
           AI strategy engine
         </div>
@@ -129,7 +129,7 @@ export function OnboardStrategy({ clientId, clientName, onNext, onBack }: Onboar
             className="h-full rounded-full transition-all duration-300 ease-out"
             style={{
               width: `${progress}%`,
-              background: `linear-gradient(90deg, #046BD2, #8B5CF6)`,
+              background: `linear-gradient(90deg, var(--accent), var(--accent2))`,
             }}
           />
         </div>
@@ -154,7 +154,7 @@ export function OnboardStrategy({ clientId, clientName, onNext, onBack }: Onboar
                   </div>
                 ) : (
                   <div className="flex h-5 w-5 items-center justify-center">
-                    <Loader2 size={14} className="animate-spin text-[#8B5CF6]" />
+                    <Loader2 size={14} className="animate-spin text-accent2-text" />
                   </div>
                 )}
                 <span className={`text-sm transition-colors ${

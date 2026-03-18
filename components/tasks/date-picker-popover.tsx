@@ -228,7 +228,7 @@ export const DatePickerPopover = forwardRef<HTMLDivElement, DatePickerPopoverPro
   const shortcuts = [
     { label: 'Tomorrow', icon: Sun, hint: shortDay(tomorrow), value: toDateStr(tomorrow), color: 'text-amber-400' },
     { label: 'This weekend', icon: Sofa, hint: shortDay(thisWeekend), value: toDateStr(thisWeekend), color: 'text-blue-400' },
-    { label: 'Next week', icon: CalendarClock, hint: shortDate(nextMonday), value: toDateStr(nextMonday), color: 'text-purple-400' },
+    { label: 'Next week', icon: CalendarClock, hint: shortDate(nextMonday), value: toDateStr(nextMonday), color: 'text-accent2-text' },
     { label: 'No date', icon: Circle, hint: '', value: '', color: 'text-text-muted' },
   ];
 

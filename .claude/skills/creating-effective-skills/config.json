@@ -1,0 +1,11 @@
+{
+  "preferences": {
+    "preferred_categories": [],
+    "distribution_method": null,
+    "default_skill_location": ".claude/skills",
+    "auto_log_creations": true,
+    "auto_update_gotchas": true
+  },
+  "setup_complete": false,
+  "_note": "This config is populated on first use. Claude will ask for your preferences."
+}

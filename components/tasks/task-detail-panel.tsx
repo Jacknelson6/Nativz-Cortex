@@ -206,7 +206,7 @@ function activityIcon(action: string) {
     case 'status_change':
       return <ArrowRight size={14} className="text-blue-400" />;
     case 'comment':
-      return <MessageSquare size={14} className="text-purple-400" />;
+      return <MessageSquare size={14} className="text-accent2-text" />;
     case 'completed':
       return <CheckCircle2 size={14} className="text-emerald-400" />;
     case 'assigned':

@@ -1,12 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Search, Link as LinkIcon, Loader2 } from 'lucide-react';
+import { Building2, Search, Link as LinkIcon, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { WizardShell } from './wizard-shell';
 import { GlassButton } from '@/components/ui/glass-button';
 import { ClientPickerButton, type ClientOption } from '@/components/ui/client-picker';
+import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
+import { PLATFORM_OPTIONS } from '@/lib/types/search';
+import type { SearchPlatform, SearchVolume } from '@/lib/types/search';
 
 interface ResearchWizardProps {
   open: boolean;
@@ -23,8 +26,19 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
   const [inputMode, setInputMode] = useState<'client' | 'url'>('client');
   const [url, setUrl] = useState('');
   const [topicQuery, setTopicQuery] = useState('');
+  const [platforms, setPlatforms] = useState<Set<SearchPlatform>>(new Set(['web']));
+  const [volume, setVolume] = useState<SearchVolume>('quick');
+  const [platformAvailability, setPlatformAvailability] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Fetch platform availability (which API keys are configured)
+  useEffect(() => {
+    fetch('/api/search/platforms')
+      .then((r) => r.ok ? r.json() : {})
+      .then(setPlatformAvailability)
+      .catch(() => {});
+  }, []);
 
   const selectedClient = clients.find((c) => c.id === clientId);
   const isBrand = mode === 'client_strategy';
@@ -40,6 +54,8 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
     setInputMode('client');
     setUrl('');
     setTopicQuery('');
+    setPlatforms(new Set(['web']));
+    setVolume('quick');
     setLoading(false);
     setError('');
   }
@@ -66,6 +82,8 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
         country: 'us',
         client_id: isBrand && inputMode === 'client' ? clientId : null,
         search_mode: mode,
+        platforms: Array.from(platforms),
+        volume,
       };
 
       const res = await fetch('/api/search/start', {
@@ -81,10 +99,6 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
         return;
       }
 
-      // Kick off processing (fire and forget)
-      fetch(`/api/search/${data.id}/process`, { method: 'POST' }).catch(() => {});
-
-      toast.success('Research started');
       onStarted?.({
         id: data.id,
         query,
@@ -92,7 +106,9 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
         clientName: selectedClient?.name ?? null,
       });
       handleClose();
-      router.refresh();
+
+      // Navigate to the processing page which triggers the search and shows progress
+      router.push(`/admin/search/${data.id}/processing`);
     } catch {
       setError('Something went wrong. Try again.');
       setLoading(false);
@@ -207,11 +223,84 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
         </div>
       </div>
 
-      {/* Step 2: Confirm + run */}
+      {/* Step 2: Platforms + confirm */}
       <div>
-        <h2 className="text-lg font-semibold text-text-primary mb-1">Ready to go</h2>
-        <p className="text-sm text-text-muted mb-6">{summaryLabel}</p>
+        <h2 className="text-lg font-semibold text-text-primary mb-1">Configure search</h2>
+        <p className="text-sm text-text-muted mb-5">{summaryLabel}</p>
 
+        {/* Platform toggles */}
+        <div className="mb-4">
+          <span className="block text-xs font-medium text-text-muted mb-2">Platforms</span>
+          <div className="flex flex-wrap gap-1.5">
+            {PLATFORM_OPTIONS.filter((p) => p.available).map((p) => {
+              const config = PLATFORM_CONFIG[p.value];
+              const Icon = config.icon;
+              const isConfigured = platformAvailability[p.value] !== false;
+              const isActive = platforms.has(p.value);
+              const isWeb = p.value === 'web';
+
+              return (
+                <button
+                  key={p.value}
+                  type="button"
+                  title={!isConfigured ? `${p.label} — API key not configured` : undefined}
+                  onClick={() => {
+                    if (isWeb || !isConfigured) return;
+                    setPlatforms((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(p.value)) next.delete(p.value);
+                      else next.add(p.value);
+                      return next;
+                    });
+                  }}
+                  className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    !isConfigured
+                      ? 'bg-white/[0.03] text-text-muted/40 border border-white/[0.06] cursor-not-allowed'
+                      : isActive
+                        ? 'bg-accent-surface text-accent-text'
+                        : isWeb
+                          ? 'bg-accent-surface/50 text-accent-text/60 cursor-default'
+                          : 'bg-white/[0.04] text-text-muted hover:bg-white/[0.08] hover:text-text-secondary border border-white/[0.06] cursor-pointer'
+                  }`}
+                >
+                  {!isConfigured ? (
+                    <AlertCircle size={12} className="text-amber-500/60" />
+                  ) : (
+                    <Icon size={12} className={isActive ? config.color : ''} />
+                  )}
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Volume toggle */}
+        <div className="mb-5">
+          <span className="block text-xs font-medium text-text-muted mb-2">Depth</span>
+          <div className="flex items-center gap-1 rounded-lg bg-white/[0.04] p-0.5 w-fit">
+            <button
+              type="button"
+              onClick={() => setVolume('quick')}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                volume === 'quick' ? 'bg-white/[0.08] text-text-primary shadow-sm' : 'text-text-muted'
+              }`}
+            >
+              Quick
+            </button>
+            <button
+              type="button"
+              onClick={() => setVolume('deep')}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                volume === 'deep' ? 'bg-white/[0.08] text-text-primary shadow-sm' : 'text-text-muted'
+              }`}
+            >
+              Deep
+            </button>
+          </div>
+        </div>
+
+        {/* Summary card */}
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 mb-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-surface">
@@ -224,6 +313,8 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
               <p className="text-xs text-text-muted">
                 {isBrand ? 'Brand intelligence analysis' : 'Topic research'}
                 {clientId && !isBrand && selectedClient ? ` · ${selectedClient.name}` : ''}
+                {platforms.size > 1 ? ` · ${platforms.size} platforms` : ''}
+                {volume === 'deep' ? ' · Deep' : ''}
               </p>
             </div>
           </div>

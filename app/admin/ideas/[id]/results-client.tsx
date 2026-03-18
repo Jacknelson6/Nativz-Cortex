@@ -101,7 +101,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
         </p>
         <Link
           href="/admin/search/new"
-          className="mt-4 inline-flex items-center gap-1.5 text-sm text-purple-400 hover:text-purple-300"
+          className="mt-4 inline-flex items-center gap-1.5 text-sm text-accent2-text hover:text-accent2-text"
         >
           <ArrowLeft size={14} />
           Back to research
@@ -119,17 +119,17 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <motion.div
-          className="flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-500/10 border border-purple-500/20 mb-4"
+          className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent2-surface border border-purple-500/20 mb-4"
           animate={{ scale: [1, 1.05, 1] }}
           transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
         >
-          <Sparkles size={28} className="text-purple-400" />
+          <Sparkles size={28} className="text-accent2-text" />
         </motion.div>
         <p className="text-sm font-medium text-text-secondary">Generating ideas...</p>
         <p className="text-xs text-text-muted mt-1">This usually takes 10-30 seconds</p>
         <Link
           href={returnHref}
-          className="mt-4 inline-flex items-center gap-1.5 text-sm text-purple-400 hover:text-purple-300 transition-colors"
+          className="mt-4 inline-flex items-center gap-1.5 text-sm text-accent2-text hover:text-accent2-text transition-colors"
         >
           <ArrowLeft size={14} />
           Return back to research
@@ -142,7 +142,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
               animate={{ opacity: [0.3, 0.6, 0.3] }}
               transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: i * 0.3 }}
             >
-              <div className="h-4 rounded bg-purple-500/10 w-3/4" />
+              <div className="h-4 rounded bg-accent2-surface w-3/4" />
               <div className="h-3 rounded bg-purple-500/5 w-full" />
               <div className="h-3 rounded bg-purple-500/5 w-2/3" />
             </motion.div>
@@ -466,8 +466,8 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
         </Link>
 
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10">
-            <Sparkles size={20} className="text-purple-400" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent2-surface">
+            <Sparkles size={20} className="text-accent2-text" />
           </div>
           <div>
             <h1 className="text-xl font-semibold text-text-primary">
@@ -502,14 +502,14 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
         {selectedCount > 0 ? (
           <button
             onClick={deselectAll}
-            className="text-[11px] text-purple-400 hover:text-purple-300 cursor-pointer"
+            className="text-[11px] text-accent2-text hover:text-accent2-text cursor-pointer"
           >
             Deselect
           </button>
         ) : (
           <button
             onClick={selectAll}
-            className="text-[11px] text-purple-400 hover:text-purple-300 cursor-pointer"
+            className="text-[11px] text-accent2-text hover:text-accent2-text cursor-pointer"
           >
             Select all
           </button>
@@ -520,7 +520,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
         {/* Unified actions row */}
         <button
           onClick={() => selectedCount > 0 ? setShowScriptModal(true) : (selectAll(), setTimeout(() => setShowScriptModal(true), 50))}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 px-3 py-1.5 text-xs font-medium text-purple-400 hover:bg-purple-500/20 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-accent2-surface border border-accent2/30 px-3 py-1.5 text-xs font-medium text-accent2-text hover:bg-accent2-surface transition-colors cursor-pointer"
         >
           <FileText size={12} />
           Generate scripts{selectedCount > 0 ? ` (${selectedCount})` : ' (all)'}
@@ -571,7 +571,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                 ))}
                 <button
                   onClick={handleCopySelected}
-                  className="w-full mt-2 rounded-lg bg-purple-500 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 cursor-pointer"
+                  className="w-full mt-2 rounded-lg bg-accent2 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 cursor-pointer"
                 >
                   Copy to clipboard
                 </button>
@@ -601,7 +601,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
               <div key={pillar.id}>
                 <div className="flex items-center gap-2 mb-3 pb-2 border-b border-purple-500/20">
                   {pillar.emoji && <span className="text-base">{pillar.emoji}</span>}
-                  <h3 className="text-sm font-semibold text-purple-400">{pillar.name}</h3>
+                  <h3 className="text-sm font-semibold text-accent2-text">{pillar.name}</h3>
                   <span className="text-[11px] text-text-muted">{pillarIdeas.length} ideas</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -691,8 +691,8 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
               transition={{ type: 'spring', duration: 0.35, bounce: 0.15 }}
             >
               <div className="flex items-center gap-3 mb-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10">
-                  <FileText size={20} className="text-purple-400" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent2-surface">
+                  <FileText size={20} className="text-accent2-text" />
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-text-primary">Generate scripts</h2>
@@ -703,7 +703,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
               <div className="rounded-xl border border-nativz-border bg-background p-3 mb-4 max-h-48 overflow-y-auto space-y-1.5">
                 {ideas.filter((i) => i.selected).map((idea, i) => (
                   <div key={i} className="flex items-start gap-2 text-xs text-text-secondary">
-                    <Check size={12} className="mt-0.5 text-purple-400 shrink-0" />
+                    <Check size={12} className="mt-0.5 text-accent2-text shrink-0" />
                     <span className="line-clamp-1">{idea.title}</span>
                   </div>
                 ))}
@@ -726,7 +726,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                     onClick={() => { setCtaType(preset.value); if (!('isComment' in preset)) setCommentWord(''); }}
                     className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-left transition-colors cursor-pointer ${
                       ctaType === preset.value
-                        ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                        ? 'bg-accent2-surface text-accent2-text border border-accent2/30'
                         : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
                     }`}
                   >
@@ -740,7 +740,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                           onChange={(e) => { e.stopPropagation(); setCommentWord(e.target.value); setCtaType('comment'); }}
                           onClick={(e) => { e.stopPropagation(); setCtaType('comment'); }}
                           placeholder="YES"
-                          className="bg-transparent border-b border-purple-500/40 text-purple-400 placeholder:text-purple-400/40 outline-none w-16 text-center text-sm font-medium"
+                          className="bg-transparent border-b border-accent2/40 text-accent2-text placeholder:text-accent2-text/40 outline-none w-16 text-center text-sm font-medium"
                         />
                         &rdquo;
                       </span>
@@ -754,7 +754,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                   onClick={() => setCtaType('custom')}
                   className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-left transition-colors cursor-pointer ${
                     ctaType === 'custom'
-                      ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                      ? 'bg-accent2-surface text-accent2-text border border-accent2/30'
                       : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
                   }`}
                 >
@@ -767,7 +767,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                       onClick={(e) => e.stopPropagation()}
                       placeholder="Type custom CTA..."
                       autoFocus
-                      className="bg-transparent text-purple-400 placeholder:text-purple-400/40 outline-none w-full text-sm"
+                      className="bg-transparent text-accent2-text placeholder:text-accent2-text/40 outline-none w-full text-sm"
                     />
                   ) : (
                     <span>Custom</span>
@@ -784,7 +784,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                     onClick={() => { setVideoLength(sec); setCustomVideoLength(''); }}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
                       videoLength === sec && !customVideoLength
-                        ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                        ? 'bg-accent2-surface text-accent2-text border border-accent2/30'
                         : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
                     }`}
                   >
@@ -805,11 +805,11 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                     placeholder="#"
                     className={`w-16 px-3 py-2 rounded-lg text-sm font-medium text-center transition-colors focus:outline-none ${
                       customVideoLength
-                        ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                        ? 'bg-accent2-surface text-accent2-text border border-accent2/30'
                         : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
                     }`}
                   />
-                  {customVideoLength && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-purple-400/60 pointer-events-none">s</span>}
+                  {customVideoLength && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-accent2-text/60 pointer-events-none">s</span>}
                 </div>
               </div>
               <p className="text-[11px] text-text-muted mb-5">
@@ -830,13 +830,13 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                     })}
                     className={`group/hook relative flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-left transition-colors cursor-pointer ${
                       selectedHooks.has(hook.id)
-                        ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                        ? 'bg-accent2-surface text-accent2-text border border-accent2/30'
                         : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
                     }`}
                   >
                     <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-colors ${
                       selectedHooks.has(hook.id)
-                        ? 'border-purple-400 bg-purple-500/20'
+                        ? 'border-purple-400 bg-accent2-surface'
                         : 'border-white/20 bg-transparent'
                     }`}>
                       {selectedHooks.has(hook.id) && <Check size={8} />}
@@ -863,7 +863,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                     deselectAll();
                   }}
                   disabled={ideas.some((i) => i.selected && i.scriptLoading)}
-                  className="rounded-xl bg-purple-500/15 border border-purple-500/30 px-5 py-2.5 text-sm font-medium text-purple-400 hover:bg-purple-500/25 transition-colors disabled:opacity-40 cursor-pointer"
+                  className="rounded-xl bg-accent2-surface border border-accent2/30 px-5 py-2.5 text-sm font-medium text-accent2-text hover:bg-purple-500/25 transition-colors disabled:opacity-40 cursor-pointer"
                 >
                   Generate {selectedCount} script{selectedCount !== 1 ? 's' : ''}
                 </button>

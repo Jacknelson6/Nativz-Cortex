@@ -28,7 +28,7 @@ export function ActionItems({ aiResponse, topics }: ActionItemsProps) {
   const viralIdeas = allVideoIdeas.filter((v: VideoIdea) => v.virality === 'viral_potential' || v.virality === 'high');
   if (viralIdeas.length > 0) {
     recommendations.push({
-      icon: <Target size={14} className="text-purple-400" />,
+      icon: <Target size={14} className="text-accent2-text" />,
       text: `Produce "${viralIdeas[0].title}" (${viralIdeas[0].format}) — high virality potential`,
       priority: 'high',
     });

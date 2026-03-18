@@ -24,7 +24,7 @@ interface AnalyzeItem {
 const TYPE_ICON = {
   video: <Video size={14} className="text-blue-400" />,
   image: <ImageIcon size={14} className="text-emerald-400" />,
-  website: <Globe size={14} className="text-purple-400" />,
+  website: <Globe size={14} className="text-accent2-text" />,
 };
 
 interface PortalAnalyzeItemGridProps {

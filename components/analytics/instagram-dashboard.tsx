@@ -42,6 +42,7 @@ interface Account {
   username: string;
 }
 
+// Chart colors — Recharts requires raw hex values, not CSS variables
 const CHART_COLORS = ['#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe'];
 
 export function InstagramDashboard() {
@@ -248,6 +249,7 @@ export function InstagramDashboard() {
                     fontSize: 12,
                   }}
                 />
+                {/* Recharts requires raw hex — these map to indigo/purple/blue theme colors */}
                 <Bar dataKey="likes" fill="#6366f1" name="Likes" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="comments" fill="#8b5cf6" name="Comments" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="reach" fill="#a5b4fc" name="Reach" radius={[4, 4, 0, 0]} />

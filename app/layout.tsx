@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { Toaster } from 'sonner';
 import './globals.css';
+import { BrandModeProvider } from '@/components/layout/brand-mode-provider';
 
 const jakarta = Plus_Jakarta_Sans({
   variable: '--font-geist-sans',
@@ -31,13 +32,14 @@ export default function RootLayout({
         <meta name="theme-color" content="#0f1117" />
       </head>
       <body className={`${jakarta.variable} antialiased`}>
-        {children}
+        <BrandModeProvider>
+          {children}
+        </BrandModeProvider>
         <Toaster
           position="bottom-right"
           richColors
-          theme="dark"
           toastOptions={{
-            className: '!bg-zinc-900/90 !backdrop-blur-xl !border-white/10 !text-zinc-100',
+            className: '!bg-surface/90 !backdrop-blur-xl !border-nativz-border !text-text-primary',
           }}
         />
       </body>

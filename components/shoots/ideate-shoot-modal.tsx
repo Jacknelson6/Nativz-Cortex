@@ -102,8 +102,8 @@ export function IdeateShootModal({ open, onClose, onGenerated, shoot }: IdeateSh
       {/* Custom header */}
       <div className="-mt-2 mb-4 pb-4 border-b border-nativz-border pr-8">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/15">
-            <Sparkles size={18} className="text-purple-400" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent2-surface">
+            <Sparkles size={18} className="text-accent2-text" />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-text-primary">

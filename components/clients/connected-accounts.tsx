@@ -66,7 +66,7 @@ const PLATFORMS: {
 }[] = [
   { key: 'instagram', label: 'Instagram', icon: <InstagramIcon />, bg: 'bg-pink-500/10' },
   { key: 'facebook', label: 'Facebook', icon: <FacebookIcon />, bg: 'bg-blue-500/10' },
-  { key: 'tiktok', label: 'TikTok', icon: <TikTokIcon />, bg: 'bg-purple-500/10' },
+  { key: 'tiktok', label: 'TikTok', icon: <TikTokIcon />, bg: 'bg-accent2-surface' },
   { key: 'youtube', label: 'YouTube', icon: <YouTubeIcon />, bg: 'bg-red-500/10' },
 ];
 

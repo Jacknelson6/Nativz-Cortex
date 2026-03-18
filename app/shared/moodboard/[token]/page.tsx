@@ -156,6 +156,7 @@ function SharedMoodboardCanvas() {
     setEdges(flowEdges);
   }, [boardData, setNodes, setEdges]);
 
+  // MiniMap nodeColor requires raw hex — CSS variables not supported in canvas
   const minimapNodeColor = useCallback((node: Node) => {
     if (node.type === 'videoNode') return '#3b82f6';
     if (node.type === 'imageNode') return '#22c55e';

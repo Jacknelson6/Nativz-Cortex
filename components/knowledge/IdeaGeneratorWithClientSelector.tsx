@@ -91,7 +91,7 @@ export function IdeaGeneratorWithClientSelector({ clients }: IdeaGeneratorWithCl
               max={50}
               value={count}
               onChange={(e) => setCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-              className="w-full sm:w-24 rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)] transition-colors"
+              className="w-full sm:w-24 rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_var(--focus-ring)] transition-colors"
             />
           </div>
         </div>
@@ -111,7 +111,7 @@ export function IdeaGeneratorWithClientSelector({ clients }: IdeaGeneratorWithCl
               }
             }}
             placeholder="e.g. summer fitness tips, behind the scenes, product launches…"
-            className="w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)] transition-colors"
+            className="w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_var(--focus-ring)] transition-colors"
           />
         </div>
 

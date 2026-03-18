@@ -65,7 +65,7 @@ const SERVICE_META: Record<
 > = {
   openrouter: { label: 'OpenRouter / Claude', icon: Zap, color: 'text-blue-400' },
   groq: { label: 'Groq / Whisper', icon: Mic, color: 'text-green-400' },
-  gemini: { label: 'Google AI / Gemini', icon: Eye, color: 'text-purple-400' },
+  gemini: { label: 'Google AI / Gemini', icon: Eye, color: 'text-accent2-text' },
   brave: { label: 'Brave Search', icon: Search, color: 'text-orange-400' },
 };
 

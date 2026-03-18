@@ -37,7 +37,7 @@ export function PriorityCheckbox({
         <path
           d="M6 10.5L8.5 13L14 7.5"
           fill="none"
-          stroke={checked ? '#fff' : 'transparent'}
+          stroke={checked ? 'var(--background)' : 'transparent'}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"

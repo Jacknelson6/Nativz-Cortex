@@ -15,6 +15,16 @@
   --accent-surface: rgba(4, 107, 210, 0.12);
   --accent-text: #5ba3e6;
 
+  /* Secondary accent (Ideas/AI/Creative) — purple in Nativz */
+  --accent2: #8b5cf6;
+  --accent2-hover: #7c3aed;
+  --accent2-surface: rgba(139, 92, 246, 0.12);
+  --accent2-text: #a78bfa;
+  --accent2-ring: rgba(139, 92, 246, 0.25);
+
+  /* Focus ring glow */
+  --focus-ring: rgba(4, 107, 210, 0.15);
+
   /* Shadow depth tokens */
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -27,6 +37,103 @@
   --duration-fast: 150ms;
   --duration-normal: 250ms;
   --duration-slow: 400ms;
+}
+
+/* ── View Transition: polygon-gradient mask reveal ── */
+::view-transition-group(root) {
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+::view-transition-new(root) {
+  mask: url('/transition-mask.svg') top left / 0 no-repeat;
+  mask-origin: content-box;
+  animation: brand-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+::view-transition-old(root) {
+  animation: brand-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  z-index: -1;
+  transform-origin: top left;
+}
+
+@keyframes brand-reveal {
+  to {
+    mask-size: 200vmax;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Anderson Collaborative — Official Design Tokens
+   Source: AC 2023 Style Guide + Rough Style Guide PDFs
+   #36D1C2 teal · #00161F navy · #FEF9F6 off-white
+   #B3BEC9 silver · #E54B4B red · #617792 blue-gray
+   ═══════════════════════════════════════════════════════════ */
+[data-brand-mode="anderson"] {
+  /* Backgrounds — cool off-white */
+  --background: #F4F6F8;
+  --foreground: #00161F;
+  --surface: #FFFFFF;
+  --surface-hover: #EDF0F3;
+  --border: #D6DCE2;
+  --border-light: #E4E8EC;
+
+  /* Text hierarchy — muted is blue-gray, not silver */
+  --text-primary: #00161F;
+  --text-secondary: #617792;
+  --text-muted: #617792;
+
+  /* Accent — teal primary */
+  --accent: #36D1C2;
+  --accent-hover: #2BB5A8;
+  --accent-surface: rgba(54, 209, 194, 0.10);
+  --accent-text: #1A9E91;
+
+  /* Secondary accent — teal (same as primary in AC, no purple) */
+  --accent2: #2BB5A8;
+  --accent2-hover: #239E93;
+  --accent2-surface: rgba(43, 181, 168, 0.12);
+  --accent2-text: #36D1C2;
+  --accent2-ring: rgba(54, 209, 194, 0.25);
+
+  /* Focus ring glow */
+  --focus-ring: rgba(54, 209, 194, 0.15);
+
+  /* Error — AC red */
+  --error: #E54B4B;
+
+  /* Shadows — lighter for light theme */
+  --shadow-card: 0 1px 3px rgba(0, 22, 31, 0.06), 0 1px 2px rgba(0, 22, 31, 0.04);
+  --shadow-card-hover: 0 4px 12px rgba(0, 22, 31, 0.08), 0 2px 4px rgba(0, 22, 31, 0.04);
+  --shadow-elevated: 0 8px 24px rgba(0, 22, 31, 0.10), 0 4px 8px rgba(0, 22, 31, 0.06);
+  --shadow-dropdown: 0 4px 16px rgba(0, 22, 31, 0.10), 0 0 1px rgba(0, 22, 31, 0.08);
+}
+
+/* Anderson mode — scrollbar & element overrides */
+[data-brand-mode="anderson"] {
+  scrollbar-color: #B3BEC9 transparent;
+}
+[data-brand-mode="anderson"] ::-webkit-scrollbar-thumb {
+  background: #B3BEC9;
+}
+[data-brand-mode="anderson"] ::-webkit-scrollbar-thumb:hover {
+  background: #617792;
+}
+[data-brand-mode="anderson"] .glow-btn::before,
+[data-brand-mode="anderson"] .glow-btn::after {
+  background: conic-gradient(
+    from var(--glow-angle),
+    rgba(54, 209, 194, 0.9),
+    rgba(43, 181, 168, 0.7),
+    rgba(54, 209, 194, 0.9),
+    rgba(43, 181, 168, 0.7),
+    rgba(54, 209, 194, 0.9)
+  );
+}
+[data-brand-mode="anderson"] .btn-shimmer:hover {
+  box-shadow: 0 0 20px rgba(54, 209, 194, 0.3), 0 0 40px rgba(54, 209, 194, 0.12);
+}
+[data-brand-mode="anderson"] .btn-shimmer:active {
+  box-shadow: 0 0 24px rgba(54, 209, 194, 0.4), 0 0 48px rgba(54, 209, 194, 0.16);
 }
 
 @theme inline {
@@ -43,6 +150,10 @@
   --color-accent-hover: var(--accent-hover);
   --color-accent-surface: var(--accent-surface);
   --color-accent-text: var(--accent-text);
+  --color-accent2: var(--accent2);
+  --color-accent2-hover: var(--accent2-hover);
+  --color-accent2-surface: var(--accent2-surface);
+  --color-accent2-text: var(--accent2-text);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
@@ -401,7 +512,7 @@ dialog:not([open]) {
 
 /* Moodboard canvas area — recessed workspace feel */
 .moodboard-canvas-area {
-  background: #0a0c12;
+  background: var(--background);
   box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 .moodboard-canvas-area .react-flow__pane {
@@ -462,6 +573,11 @@ dialog:not([open]) {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
   .animate-stagger-in,
   .animate-fade-in,

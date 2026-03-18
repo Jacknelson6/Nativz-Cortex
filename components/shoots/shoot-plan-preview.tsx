@@ -110,7 +110,7 @@ export function ShootPlanPreview({ plan, clientName }: { plan: ShootPlanData; cl
                   className="cursor-pointer w-full flex items-center justify-between gap-3 p-2.5 text-left"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-500/15 text-[9px] font-bold text-purple-400">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent2-surface text-[9px] font-bold text-accent2-text">
                       {i + 1}
                     </span>
                     <div className="min-w-0">
@@ -162,7 +162,7 @@ export function ShootPlanPreview({ plan, clientName }: { plan: ShootPlanData; cl
                         <ul className="space-y-0.5">
                           {idea.shotList.map((shot, si) => (
                             <li key={si} className="flex items-start gap-1.5 text-xs text-text-secondary">
-                              <span className="text-purple-400 mt-0.5">-</span>
+                              <span className="text-accent2-text mt-0.5">-</span>
                               {shot}
                             </li>
                           ))}

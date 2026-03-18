@@ -97,10 +97,10 @@ export function RescriptPanel({ item, onClose, onSaved }: RescriptPanelProps) {
       <html><head><title>Rescript - ${item.title || 'Video'}</title>
       <style>
         body { font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; color: #222; line-height: 1.6; }
-        h1 { color: #6366f1; } h2 { color: #7c3aed; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
-        .shot { background: #f9fafb; padding: 12px; margin: 8px 0; border-radius: 8px; border-left: 3px solid #6366f1; }
+        h1 { color: var(--accent2, #6366f1); } h2 { color: var(--accent2, #7c3aed); border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
+        .shot { background: #f9fafb; padding: 12px; margin: 8px 0; border-radius: 8px; border-left: 3px solid var(--accent2, #6366f1); }
         .hook { background: #faf5ff; padding: 12px; margin: 8px 0; border-radius: 8px; }
-        .tag { display: inline-block; background: #ede9fe; color: #6366f1; padding: 2px 10px; border-radius: 12px; margin: 4px; font-size: 14px; }
+        .tag { display: inline-block; background: #ede9fe; color: var(--accent2, #6366f1); padding: 2px 10px; border-radius: 12px; margin: 4px; font-size: 14px; }
       </style></head><body>
       <h1>✍️ Rescript: ${esc(item.title || 'Video')}</h1>
       <h2>Adapted Script</h2><pre style="white-space:pre-wrap">${esc(rescript.adapted_script)}</pre>
@@ -249,7 +249,7 @@ export function RescriptPanel({ item, onClose, onSaved }: RescriptPanelProps) {
               {rescript.shot_list.length > 0 && (
                 <section>
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-text-primary mb-2">
-                    <Target size={14} className="text-purple-400" />
+                    <Target size={14} className="text-accent2-text" />
                     Shot List
                   </h3>
                   <div className="space-y-2">

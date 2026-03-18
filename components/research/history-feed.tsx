@@ -28,8 +28,8 @@ const TYPE_BADGE_CONFIG: Record<HistoryItemType, { variant: 'purple' | 'default'
 };
 
 function TypeIcon({ type }: { type: HistoryItemType }) {
-  if (type === 'ideas') return <Sparkles size={14} className="text-purple-400 shrink-0" />;
-  if (type === 'brand_intel') return <Building2 size={14} className="text-purple-400 shrink-0" />;
+  if (type === 'ideas') return <Sparkles size={14} className="text-accent2-text shrink-0" />;
+  if (type === 'brand_intel') return <Building2 size={14} className="text-accent2-text shrink-0" />;
   return <Search size={14} className="text-text-muted shrink-0" />;
 }
 

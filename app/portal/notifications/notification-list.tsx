@@ -29,7 +29,7 @@ interface Notification {
 const TYPE_ICON: Record<string, React.ReactNode> = {
   post_top_performer: <Flame size={16} className="text-orange-400" />,
   engagement_spike: <TrendingUp size={16} className="text-emerald-400" />,
-  follower_milestone: <Users size={16} className="text-purple-400" />,
+  follower_milestone: <Users size={16} className="text-accent2-text" />,
   post_trending: <Zap size={16} className="text-yellow-400" />,
   report_published: <FileText size={16} className="text-accent-text" />,
   concepts_ready: <FileText size={16} className="text-emerald-400" />,

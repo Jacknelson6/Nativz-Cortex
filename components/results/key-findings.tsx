@@ -29,7 +29,7 @@ const CLASSIFIERS: { keywords: string[]; icon: LucideIcon; color: string; label:
   { keywords: ['pain point', 'frustrat', 'complain', 'struggle', 'difficult', 'confus', 'sticker shock', 'expensive', 'cost'], icon: AlertTriangle, color: 'text-amber-400', label: 'Pain point' },
   { keywords: ['opportunit', 'suggest', 'potential', 'significant', 'chance', 'gap'], icon: Target, color: 'text-emerald-400', label: 'Opportunity' },
   { keywords: ['audience', 'user', 'homeowner', 'consumer', 'viewer', 'diy', 'people', 'customer'], icon: Users, color: 'text-blue-400', label: 'Audience' },
-  { keywords: ['trend', 'growing', 'rising', 'momentum', 'surge', 'popular', 'viral'], icon: TrendingUp, color: 'text-purple-400', label: 'Trend' },
+  { keywords: ['trend', 'growing', 'rising', 'momentum', 'surge', 'popular', 'viral'], icon: TrendingUp, color: 'text-accent2-text', label: 'Trend' },
   { keywords: ['discussion', 'reddit', 'forum', 'comment', 'conversation', 'talk'], icon: MessageCircle, color: 'text-teal-400', label: 'Discussion' },
   { keywords: ['data', 'metric', 'stat', 'percent', 'number', '%', 'rate', 'engagement'], icon: BarChart3, color: 'text-indigo-400', label: 'Data point' },
 ];

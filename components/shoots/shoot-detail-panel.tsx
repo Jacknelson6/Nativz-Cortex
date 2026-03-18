@@ -92,7 +92,7 @@ export function ShootDetailPanel({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-[10px] text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
+                className="h-7 text-[10px] text-accent2-text hover:text-accent2-text hover:bg-accent2-surface"
                 onClick={() => onIdeate(shoot)}
               >
                 <Sparkles size={12} />

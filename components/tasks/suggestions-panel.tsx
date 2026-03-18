@@ -47,7 +47,7 @@ const BOARD_LABELS: Record<string, { label: string; icon: React.ReactNode; color
   content_request: {
     label: 'Content request',
     icon: <FileText size={12} />,
-    color: 'bg-purple-500/15 text-purple-400 ring-purple-500/20',
+    color: 'bg-accent2-surface text-accent2-text ring-accent2/20',
   },
   blog: {
     label: 'Blog pipeline',

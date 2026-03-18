@@ -28,7 +28,7 @@ function clientColor(name: string): string {
   const colors = [
     'bg-blue-500/80',
     'bg-emerald-500/80',
-    'bg-purple-500/80',
+    'bg-accent2',
     'bg-amber-500/80',
     'bg-pink-500/80',
     'bg-cyan-500/80',

@@ -20,6 +20,7 @@ import { NotificationPreferencesSection } from '@/components/settings/notificati
 import { SchedulingLinksSection } from '@/components/settings/scheduling-links-section';
 import { TodoistSection } from '@/components/settings/todoist-section';
 import { ApiKeysSection } from '@/components/settings/api-keys-section';
+import { TrustPolicyModal } from '@/components/settings/trust-policy-modal';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -102,24 +103,40 @@ export default function AdminSettingsPage() {
     fetchUser();
   }, []);
 
-  // Intersection observer for active section
+  // Scroll-driven active section tracking
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setActiveSection(entry.target.id);
-          }
-        }
-      },
-      { rootMargin: '-20% 0px -60% 0px' }
-    );
+    const scrollContainer = document.querySelector('[data-settings-scroll]');
+    if (!scrollContainer) return;
 
-    for (const section of SECTIONS) {
-      const el = sectionRefs.current[section.id];
-      if (el) observer.observe(el);
+    function handleScroll() {
+      const container = scrollContainer!;
+      const scrollTop = container.scrollTop;
+      const containerHeight = container.clientHeight;
+
+      // If scrolled to the very bottom, highlight the last section
+      if (container.scrollHeight - scrollTop - containerHeight < 40) {
+        setActiveSection(SECTIONS[SECTIONS.length - 1].id);
+        return;
+      }
+
+      // Find the section whose top is closest to (but above) 20% from the top
+      const threshold = scrollTop + containerHeight * 0.2;
+      let current: string = SECTIONS[0].id;
+      for (const section of SECTIONS) {
+        const el = sectionRefs.current[section.id];
+        if (el && el.offsetTop <= threshold) {
+          current = section.id;
+        }
+      }
+      setActiveSection(current);
     }
-    return () => observer.disconnect();
+
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll(); // set initial state
+
+    return () => {
+      scrollContainer.removeEventListener('scroll', handleScroll);
+    };
   }, [loading]);
 
   function scrollToSection(id: string) {
@@ -227,7 +244,7 @@ export default function AdminSettingsPage() {
       </nav>
 
       {/* Main content */}
-      <div className="flex-1 overflow-y-auto min-w-0">
+      <div className="flex-1 overflow-y-auto min-w-0" data-settings-scroll>
       <div className="max-w-2xl mx-auto p-6 space-y-10">
         {/* Mobile header */}
         <div className="lg:hidden">
@@ -357,11 +374,16 @@ export default function AdminSettingsPage() {
                 />
               </div>
             </Card>
-            <Button type="submit" variant="secondary" disabled={changingPassword || !newPassword}>
-              <KeyRound size={16} />
-              {changingPassword ? 'Changing...' : 'Change password'}
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button type="submit" variant="secondary" disabled={changingPassword || !newPassword}>
+                <KeyRound size={16} />
+                {changingPassword ? 'Changing...' : 'Change password'}
+              </Button>
+            </div>
           </form>
+          <div className="mt-2">
+            <TrustPolicyModal />
+          </div>
         </div>
 
 

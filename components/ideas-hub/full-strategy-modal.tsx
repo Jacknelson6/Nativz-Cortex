@@ -76,8 +76,8 @@ export function FullStrategyModal({ open, onClose, clients }: FullStrategyModalP
         {/* Header */}
         <div className="space-y-1 mb-6">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
-              <Sparkles size={16} className="text-purple-400" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent2-surface">
+              <Sparkles size={16} className="text-accent2-text" />
             </div>
             <h2 className="text-lg font-semibold text-text-primary">Full strategy</h2>
           </div>
@@ -113,14 +113,14 @@ export function FullStrategyModal({ open, onClose, clients }: FullStrategyModalP
                 }
               }}
               placeholder="e.g. focus on Q2 product launches…"
-              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-colors"
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent2/50 focus:ring-1 focus:ring-accent2/50 transition-colors"
             />
           </div>
 
           <button
             onClick={handleGenerate}
             disabled={generating || !clientId}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-purple-500 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-accent2 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
           >
             {generating ? (
               <>

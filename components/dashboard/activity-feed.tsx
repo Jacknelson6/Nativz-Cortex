@@ -28,7 +28,7 @@ type ActivityEvent = {
 const actionIcons: Record<string, React.ReactNode> = {
   search_completed: <Search size={14} className="text-blue-400" />,
   search_started: <Search size={14} className="text-blue-400/60" />,
-  shoot_scheduled: <Camera size={14} className="text-purple-400" />,
+  shoot_scheduled: <Camera size={14} className="text-accent2-text" />,
   shoot_completed: <Camera size={14} className="text-emerald-400" />,
   client_created: <UserPlus size={14} className="text-emerald-400" />,
   report_approved: <CheckCircle2 size={14} className="text-emerald-400" />,
@@ -38,7 +38,7 @@ const actionIcons: Record<string, React.ReactNode> = {
 
 const entityIcons: Record<string, React.ReactNode> = {
   search: <Search size={14} className="text-blue-400" />,
-  shoot: <Camera size={14} className="text-purple-400" />,
+  shoot: <Camera size={14} className="text-accent2-text" />,
   client: <UserPlus size={14} className="text-emerald-400" />,
   idea: <FileText size={14} className="text-amber-400" />,
   report: <CheckCircle2 size={14} className="text-emerald-400" />,

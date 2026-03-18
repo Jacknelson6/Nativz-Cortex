@@ -4,10 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { buildTopicResearchPrompt } from '@/lib/prompts/topic-research';
 import { buildClientStrategyPrompt } from '@/lib/prompts/client-strategy';
 import { gatherSerpData } from '@/lib/brave/client';
+import { gatherPlatformData, formatPlatformContext } from '@/lib/search/platform-router';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
-import type { TopicSearchAIResponse } from '@/lib/types/search';
+import type { TopicSearchAIResponse, SearchPlatform } from '@/lib/types/search';
 import type { BraveSerpData } from '@/lib/brave/types';
 import type { ClientPreferences } from '@/lib/types/database';
 import { syncSearchToVault } from '@/lib/vault/sync';
@@ -112,14 +113,39 @@ export async function POST(
       }
     }
 
+    // Read platforms/volume from the search record (stored by /api/search/start)
+    const platforms: string[] = search.platforms ?? ['web'];
+    const volume: string = search.volume ?? 'quick';
+    const isV2 = platforms.length > 1 || platforms.includes('reddit');
+
     try {
-      // Step 1: Gather SERP data from Brave Search API
-      const serpData = await gatherSerpData(search.query, {
-        timeRange: search.time_range,
-        country: search.country,
-        language: search.language,
-        source: search.source,
-      });
+      // Step 1: Gather data — v2 uses platform router, v1 uses Brave only
+      let serpData: BraveSerpData;
+      let platformContext = '';
+
+      if (isV2) {
+        const platformResults = await gatherPlatformData(
+          search.query,
+          platforms as SearchPlatform[],
+          search.time_range,
+          volume as 'quick' | 'deep',
+        );
+        serpData = platformResults.braveSerpData ?? { webResults: [], discussions: [], videos: [] };
+        platformContext = formatPlatformContext(platformResults.sources, platformResults.platformStats);
+
+        // Store raw platform data for future re-analysis
+        await adminClient
+          .from('topic_searches')
+          .update({ platform_data: { stats: platformResults.platformStats, sourceCount: platformResults.sources.length } })
+          .eq('id', id);
+      } else {
+        serpData = await gatherSerpData(search.query, {
+          timeRange: search.time_range,
+          country: search.country,
+          language: search.language,
+          source: search.source,
+        });
+      }
 
       // Step 1b: Fetch knowledge base context for client searches
       let clientKnowledgeBlock: string | null = null;
@@ -199,10 +225,19 @@ export async function POST(
         });
       }
 
+      // Step 2b: Inject platform data into prompt for v2 searches
+      if (isV2 && platformContext) {
+        prompt = prompt.replace(
+          '</research_data>',
+          `\n\n<platform_data>\n${platformContext}\n</platform_data>\n</research_data>`,
+        );
+      }
+
       // Step 3: Call Claude via OpenRouter
       const aiResult = await createCompletion({
         messages: [{ role: 'user', content: prompt }],
         maxTokens: 16000,
+        feature: 'topic_search',
       });
 
       const rawAiResponse = parseAIResponseJSON<TopicSearchAIResponse>(aiResult.text);

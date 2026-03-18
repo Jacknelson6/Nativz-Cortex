@@ -88,7 +88,7 @@ export function PillarList({ pillars, clientId, onPillarsChange }: PillarListPro
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-colors"
+            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent2/50 focus:ring-1 focus:ring-accent2/50 transition-colors"
             placeholder="Pillar name"
             autoFocus
             onKeyDown={(e) => {
@@ -102,7 +102,7 @@ export function PillarList({ pillars, clientId, onPillarsChange }: PillarListPro
             type="text"
             value={newDescription}
             onChange={(e) => setNewDescription(e.target.value)}
-            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-colors"
+            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent2/50 focus:ring-1 focus:ring-accent2/50 transition-colors"
             placeholder="Description (optional)"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && newName.trim() && !saving) {
@@ -115,7 +115,7 @@ export function PillarList({ pillars, clientId, onPillarsChange }: PillarListPro
             <button
               onClick={handleAddManual}
               disabled={!newName.trim() || saving}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent2 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-40"
             >
               <Check size={12} />
               Add pillar
@@ -136,7 +136,7 @@ export function PillarList({ pillars, clientId, onPillarsChange }: PillarListPro
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-nativz-border/60 bg-transparent px-4 py-3.5 text-xs text-text-muted hover:border-purple-500/40 hover:text-purple-400 transition-colors cursor-pointer"
+          className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-nativz-border/60 bg-transparent px-4 py-3.5 text-xs text-text-muted hover:border-accent2/40 hover:text-accent2-text transition-colors cursor-pointer"
         >
           <Plus size={14} />
           Add pillar manually

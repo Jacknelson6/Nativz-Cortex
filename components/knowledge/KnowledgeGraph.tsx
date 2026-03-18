@@ -1,27 +1,74 @@
 'use client';
 
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { Plus, Minus, Maximize2, Play, Pause } from 'lucide-react';
+import Graph from 'graphology';
+import forceAtlas2 from 'graphology-layout-forceatlas2';
 import type { KnowledgeGraphData } from '@/lib/knowledge/types';
-import { GraphControls } from './GraphControls';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Sigma and FA2 worker need browser APIs — imported dynamically in useEffect
 
-interface GraphNode {
-  id: string;
-  label: string;
-  type: string;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  entryId?: string;
-  connectionCount: number;
-}
+// Custom dark-themed hover renderer for Sigma
+function drawDarkNodeHover(
+  context: CanvasRenderingContext2D,
+  data: { x: number; y: number; size: number; label?: string | null; color: string },
+  settings: { labelFont: string; labelSize: number; labelWeight: string },
+) {
+  const size = settings.labelSize;
+  const font = settings.labelFont;
+  const weight = settings.labelWeight;
 
-interface GraphEdge {
-  source: string;
-  target: string;
-  label?: string;
+  context.font = `${weight} ${size}px ${font}`;
+
+  context.beginPath();
+  context.arc(data.x, data.y, data.size + 3, 0, Math.PI * 2);
+  context.closePath();
+  context.fillStyle = data.color;
+  context.globalAlpha = 0.15;
+  context.fill();
+  context.globalAlpha = 1;
+
+  if (typeof data.label === 'string') {
+    const textWidth = context.measureText(data.label).width;
+    const boxWidth = Math.round(textWidth + 10);
+    const boxHeight = Math.round(size + 6);
+    const radius = Math.max(data.size, size / 2) + 3;
+    const xStart = data.x + radius;
+    const yCenter = data.y;
+
+    context.fillStyle = 'rgba(10, 14, 26, 0.92)';
+    context.shadowOffsetX = 0;
+    context.shadowOffsetY = 2;
+    context.shadowBlur = 8;
+    context.shadowColor = 'rgba(0, 0, 0, 0.5)';
+
+    const r = 4;
+    context.beginPath();
+    context.moveTo(xStart + r, yCenter - boxHeight / 2);
+    context.lineTo(xStart + boxWidth - r, yCenter - boxHeight / 2);
+    context.quadraticCurveTo(xStart + boxWidth, yCenter - boxHeight / 2, xStart + boxWidth, yCenter - boxHeight / 2 + r);
+    context.lineTo(xStart + boxWidth, yCenter + boxHeight / 2 - r);
+    context.quadraticCurveTo(xStart + boxWidth, yCenter + boxHeight / 2, xStart + boxWidth - r, yCenter + boxHeight / 2);
+    context.lineTo(xStart + r, yCenter + boxHeight / 2);
+    context.quadraticCurveTo(xStart, yCenter + boxHeight / 2, xStart, yCenter + boxHeight / 2 - r);
+    context.lineTo(xStart, yCenter - boxHeight / 2 + r);
+    context.quadraticCurveTo(xStart, yCenter - boxHeight / 2, xStart + r, yCenter - boxHeight / 2);
+    context.closePath();
+    context.fill();
+
+    context.shadowOffsetX = 0;
+    context.shadowOffsetY = 0;
+    context.shadowBlur = 0;
+    context.shadowColor = 'transparent';
+
+    context.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    context.lineWidth = 0.5;
+    context.stroke();
+
+    context.fillStyle = '#f1f5f9';
+    context.textBaseline = 'middle';
+    context.fillText(data.label, xStart + 5, yCenter);
+  }
 }
 
 // ── Colors ───────────────────────────────────────────────────────────────────
@@ -41,69 +88,71 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 const DEFAULT_COLOR = '#64748b';
-
-function hexToRgb(hex: string): [number, number, number] {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return [r, g, b];
-}
+const DIMMED_COLOR = '#1a1d2e';
+const BG_COLOR = '#0a0e1a';
 
 // ── Build graph data ─────────────────────────────────────────────────────────
 
-function buildGraphData(data: KnowledgeGraphData): { nodes: GraphNode[]; edges: GraphEdge[] } {
-  const nodes: GraphNode[] = [];
-  const edges: GraphEdge[] = [];
+function buildGraphologyGraph(data: KnowledgeGraphData, nodeSize: number): Graph {
+  const graph = new Graph();
+  const scale = Math.sqrt(data.entries.length + data.externalNodes.length) * 10;
 
+  // Count connections
+  const connectionCounts = new Map<string, number>();
+  for (const link of data.links) {
+    const sourceId = link.source_type === 'entry' ? `entry-${link.source_id}` : `${link.source_type}-${link.source_id}`;
+    const targetId = link.target_type === 'entry' ? `entry-${link.target_id}` : `${link.target_type}-${link.target_id}`;
+    connectionCounts.set(sourceId, (connectionCounts.get(sourceId) ?? 0) + 1);
+    connectionCounts.set(targetId, (connectionCounts.get(targetId) ?? 0) + 1);
+  }
+
+  // Add entry nodes
   for (const entry of data.entries) {
-    nodes.push({
-      id: `entry-${entry.id}`,
+    const id = `entry-${entry.id}`;
+    const count = connectionCounts.get(id) ?? 0;
+    graph.addNode(id, {
       label: entry.title,
-      type: entry.type,
-      x: (Math.random() - 0.5) * 2000,
-      y: (Math.random() - 0.5) * 2000,
-      vx: 0,
-      vy: 0,
+      size: Math.max(3, 2 + Math.sqrt(count) * 1.5) * (nodeSize / 3),
+      color: TYPE_COLORS[entry.type] ?? DEFAULT_COLOR,
+      kind: entry.type,
       entryId: entry.id,
-      connectionCount: 0,
+      x: (Math.random() - 0.5) * scale,
+      y: (Math.random() - 0.5) * scale,
     });
   }
 
+  // Add external nodes
   for (const ext of data.externalNodes) {
-    nodes.push({
-      id: `${ext.type}-${ext.id}`,
+    const id = `${ext.type}-${ext.id}`;
+    if (graph.hasNode(id)) continue;
+    const count = connectionCounts.get(id) ?? 0;
+    graph.addNode(id, {
       label: ext.title,
-      type: ext.type,
-      x: (Math.random() - 0.5) * 2000,
-      y: (Math.random() - 0.5) * 2000,
-      vx: 0,
-      vy: 0,
-      connectionCount: 0,
+      size: Math.max(3, 2 + Math.sqrt(count) * 1.5) * (nodeSize / 3),
+      color: TYPE_COLORS[ext.type] ?? DEFAULT_COLOR,
+      kind: ext.type,
+      x: (Math.random() - 0.5) * scale,
+      y: (Math.random() - 0.5) * scale,
     });
   }
 
+  // Add edges
   const seenEdges = new Set<string>();
   for (const link of data.links) {
     const sourceId = link.source_type === 'entry' ? `entry-${link.source_id}` : `${link.source_type}-${link.source_id}`;
     const targetId = link.target_type === 'entry' ? `entry-${link.target_id}` : `${link.target_type}-${link.target_id}`;
-    // Deduplicate bidirectional edges — only keep one per pair
-    const edgeKey = [sourceId, targetId].sort().join('::');
-    if (seenEdges.has(edgeKey)) continue;
-    seenEdges.add(edgeKey);
-    edges.push({ source: sourceId, target: targetId, label: link.label ?? undefined });
+    if (!graph.hasNode(sourceId) || !graph.hasNode(targetId)) continue;
+    if (sourceId === targetId) continue;
+    const key = [sourceId, targetId].sort().join('::');
+    if (seenEdges.has(key)) continue;
+    seenEdges.add(key);
+    graph.addEdge(sourceId, targetId, {
+      size: 0.4,
+      color: 'rgba(140,140,160,0.5)',
+    });
   }
 
-  // Count connections
-  const connectionCounts = new Map<string, number>();
-  for (const edge of edges) {
-    connectionCounts.set(edge.source, (connectionCounts.get(edge.source) ?? 0) + 1);
-    connectionCounts.set(edge.target, (connectionCounts.get(edge.target) ?? 0) + 1);
-  }
-  for (const node of nodes) {
-    node.connectionCount = connectionCounts.get(node.id) ?? 0;
-  }
-
-  return { nodes, edges };
+  return graph;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -117,40 +166,24 @@ interface KnowledgeGraphProps {
   searchQuery?: string;
 }
 
-export function KnowledgeGraph({ data, onNodeContextMenu, onNodeClick, selectedNodeId, hoveredEntryId, searchQuery }: KnowledgeGraphProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+export function KnowledgeGraph({
+  data,
+  onNodeClick,
+  selectedNodeId,
+  searchQuery,
+}: KnowledgeGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const nodesRef = useRef<GraphNode[]>([]);
-  const edgesRef = useRef<GraphEdge[]>([]);
-  const zoomRef = useRef(1);
-  const panRef = useRef({ x: 0, y: 0 });
-  const hoveredRef = useRef<string | null>(null);
-  const externalHoveredRef = useRef<string | null>(null);
-  const alphaRef = useRef(1);
-  const frameRef = useRef(0);
-  const sizeRef = useRef({ w: 0, h: 0 });
-  const isPanningRef = useRef(false);
-  const draggingNodeRef = useRef<GraphNode | null>(null);
-  const lastMouseRef = useRef({ x: 0, y: 0 });
-  const adjacencyRef = useRef(new Map<string, Set<string>>());
-  const initialFitDone = useRef(false);
-  const mouseDownPosRef = useRef({ x: 0, y: 0 });
-  const nodeSizeRef = useRef(3);
-  const spacingRef = useRef(1);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sigmaRef = useRef<InstanceType<any> | null>(null);
+  const graphRef = useRef<Graph | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fa2Ref = useRef<InstanceType<any> | null>(null);
 
-  const [, setRenderTick] = useState(0);
   const [visibleTypes, setVisibleTypes] = useState<Set<string>>(new Set());
   const [nodeSize, setNodeSize] = useState(3);
-  const [spacing, setSpacing] = useState(1);
+  const [layoutRunning, setLayoutRunning] = useState(false);
+  const [ready, setReady] = useState(false);
 
-  // Keep refs in sync
-  useEffect(() => { nodeSizeRef.current = nodeSize; }, [nodeSize]);
-  useEffect(() => {
-    spacingRef.current = spacing;
-    alphaRef.current = Math.max(alphaRef.current, 0.5);
-  }, [spacing]);
-
-  // All types present in the graph
   const allTypes = useMemo(() => {
     const types = new Set<string>();
     for (const entry of data.entries) types.add(entry.type);
@@ -158,461 +191,273 @@ export function KnowledgeGraph({ data, onNodeContextMenu, onNodeClick, selectedN
     return Array.from(types).sort();
   }, [data]);
 
-  // Initialize visible types
   useEffect(() => {
     setVisibleTypes(new Set(allTypes));
   }, [allTypes]);
 
-  // Sync external hover from file explorer
-  useEffect(() => {
-    externalHoveredRef.current = hoveredEntryId ? `entry-${hoveredEntryId}` : null;
-  }, [hoveredEntryId]);
+  const isEmpty = data.entries.length === 0 && data.externalNodes.length === 0;
 
-  // Build graph data when data changes
-  useEffect(() => {
-    const built = buildGraphData(data);
-    nodesRef.current = built.nodes;
-    edgesRef.current = built.edges;
-    alphaRef.current = 1;
-    initialFitDone.current = false;
+  // ── Build graph + Sigma renderer ──────────────────────────────────────────
 
-    // Build adjacency map
-    const adj = new Map<string, Set<string>>();
-    for (const edge of built.edges) {
-      if (!adj.has(edge.source)) adj.set(edge.source, new Set());
-      if (!adj.has(edge.target)) adj.set(edge.target, new Set());
-      adj.get(edge.source)!.add(edge.target);
-      adj.get(edge.target)!.add(edge.source);
+  useEffect(() => {
+    if (!containerRef.current || isEmpty) return;
+
+    setReady(false);
+    let cancelled = false;
+
+    async function init() {
+      const [{ default: Sigma }, { default: FA2Layout }, { NodeCircleProgram, createNodeCompoundProgram, drawDiscNodeLabel }] = await Promise.all([
+        import('sigma'),
+        import('graphology-layout-forceatlas2/worker'),
+        import('sigma/rendering'),
+      ]);
+
+      if (cancelled || !containerRef.current) return;
+
+      // Clean up previous
+      if (fa2Ref.current) { fa2Ref.current.kill(); fa2Ref.current = null; }
+      if (sigmaRef.current) { sigmaRef.current.kill(); sigmaRef.current = null; }
+
+      const graph = buildGraphologyGraph(data, nodeSize);
+
+      // Pre-cluster with synchronous FA2
+      const sensibleSettings = forceAtlas2.inferSettings(graph);
+      forceAtlas2.assign(graph, {
+        iterations: 200,
+        settings: {
+          ...sensibleSettings,
+          gravity: 1,
+          scalingRatio: 10,
+          barnesHutOptimize: graph.order > 200,
+          strongGravityMode: true,
+          slowDown: 1,
+        },
+      });
+
+      graphRef.current = graph;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const DarkNodeProgram = createNodeCompoundProgram([NodeCircleProgram], drawDiscNodeLabel, drawDarkNodeHover as any);
+
+      const renderer = new Sigma(graph, containerRef.current!, {
+        renderEdgeLabels: false,
+        labelFont: 'system-ui, -apple-system, sans-serif',
+        labelSize: 12,
+        labelWeight: '500',
+        labelColor: { color: '#f1f5f9' },
+        labelRenderedSizeThreshold: 6,
+        defaultNodeColor: DEFAULT_COLOR,
+        defaultEdgeColor: 'rgba(140,140,160,0.5)',
+        stagePadding: 60,
+        enableEdgeEvents: true,
+        defaultNodeType: 'dark',
+        nodeProgramClasses: {
+          dark: DarkNodeProgram,
+        },
+      });
+
+      sigmaRef.current = renderer;
+
+      // FA2 worker for on-demand layout
+      const fa2 = new FA2Layout(graph, {
+        settings: {
+          ...sensibleSettings,
+          gravity: 1,
+          scalingRatio: 10,
+          barnesHutOptimize: graph.order > 200,
+          strongGravityMode: true,
+          slowDown: 2,
+        },
+      });
+      fa2Ref.current = fa2;
+      setLayoutRunning(false);
+      setReady(true);
+
+      // Node click
+      renderer.on('clickNode', ({ node }: { node: string }) => {
+        const entryId = graph.getNodeAttribute(node, 'entryId') as string | undefined;
+        if (entryId && onNodeClick) onNodeClick(entryId);
+      });
     }
-    adjacencyRef.current = adj;
-  }, [data]);
 
-  // Fit to view
-  const fitToView = useCallback(() => {
-    const nodes = nodesRef.current;
-    if (nodes.length === 0) return;
+    init();
 
-    const w = sizeRef.current.w;
-    const h = sizeRef.current.h;
-    if (w === 0 || h === 0) return;
+    return () => {
+      cancelled = true;
+      if (fa2Ref.current) { fa2Ref.current.kill(); fa2Ref.current = null; }
+      if (sigmaRef.current) { sigmaRef.current.kill(); sigmaRef.current = null; }
+      graphRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, isEmpty]);
 
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const node of nodes) {
-      if (node.x < minX) minX = node.x;
-      if (node.x > maxX) maxX = node.x;
-      if (node.y < minY) minY = node.y;
-      if (node.y > maxY) maxY = node.y;
-    }
+  // ── Update node sizes ────────────────────────────────────────────────────
 
-    const graphW = maxX - minX || 100;
-    const graphH = maxY - minY || 100;
-    const padding = 80;
-    const scaleX = (w - padding * 2) / graphW;
-    const scaleY = (h - padding * 2) / graphH;
-    const newZoom = Math.min(scaleX, scaleY, 2);
-
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-
-    zoomRef.current = newZoom;
-    panRef.current = { x: -centerX * newZoom, y: -centerY * newZoom };
-  }, []);
-
-  // Resize canvas
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
+    const graph = graphRef.current;
+    if (!graph) return;
+    graph.forEachNode((nodeId) => {
+      const count = graph.degree(nodeId);
+      graph.setNodeAttribute(nodeId, 'size', Math.max(3, 2 + Math.sqrt(count) * 1.5) * (nodeSize / 3));
+    });
+  }, [nodeSize]);
 
-    function resize() {
-      const dpr = window.devicePixelRatio || 1;
-      const w = container!.clientWidth;
-      const h = container!.clientHeight;
-      canvas!.width = w * dpr;
-      canvas!.height = h * dpr;
-      canvas!.style.width = `${w}px`;
-      canvas!.style.height = `${h}px`;
-      sizeRef.current = { w, h };
-    }
+  // ── Reducers for hover, selection, search, type visibility ───────────────
 
-    resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, []);
-
-  // Main animation loop
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const renderer = sigmaRef.current;
+    const graph = graphRef.current;
+    if (!renderer || !graph) return;
 
-    let running = true;
-    let frameCount = 0;
+    let hoveredNode: string | null = null;
+    const selectedGraphId = selectedNodeId ? `entry-${selectedNodeId}` : null;
 
-    function tick() {
-      if (!running) return;
-      frameCount++;
-      const nodes = nodesRef.current;
-      const edges = edgesRef.current;
-      const alpha = alphaRef.current;
+    function updateReducers() {
+      const searchLower = (searchQuery ?? '').toLowerCase();
+      const hasSearch = searchLower.length > 0;
+      const hoveredNeighbors = hoveredNode ? new Set(graph!.neighbors(hoveredNode)) : null;
 
-      if (nodes.length === 0) {
-        frameRef.current = requestAnimationFrame(tick);
-        return;
-      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      renderer!.setSetting('nodeReducer', (node: string, attrs: any) => {
+        const res = { ...attrs };
+        const kind = graph!.getNodeAttribute(node, 'kind') as string;
 
-      // ── Force simulation step ──
-      if (alpha > 0.005) {
-        const spacingValue = spacingRef.current;
-        const repulsion = 15000 * alpha * spacingValue;
-        const springLength = 350 * spacingValue;
-        const springStrength = 0.0008 * alpha;
-        const centerPull = 0.001 * alpha;
-        const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+        if (!visibleTypes.has(kind)) { res.hidden = true; return res; }
 
-        // Repulsion (Coulomb)
-        for (let i = 0; i < nodes.length; i++) {
-          for (let j = i + 1; j < nodes.length; j++) {
-            const a = nodes[i];
-            const b = nodes[j];
-            let dx = a.x - b.x;
-            let dy = a.y - b.y;
-            let dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 1) dist = 1;
-            const force = repulsion / (dist * dist);
-            const fx = (dx / dist) * force;
-            const fy = (dy / dist) * force;
-            a.vx += fx;
-            a.vy += fy;
-            b.vx -= fx;
-            b.vy -= fy;
+        if (hoveredNeighbors) {
+          if (node !== hoveredNode && !hoveredNeighbors.has(node)) {
+            res.color = DIMMED_COLOR;
+            res.label = '';
+            return res;
+          }
+          if (node === hoveredNode) { res.highlighted = true; res.zIndex = 2; }
+        }
+
+        if (selectedGraphId === node) { res.highlighted = true; res.zIndex = 2; }
+
+        if (hasSearch) {
+          const label = (attrs.label ?? '') as string;
+          if (label.toLowerCase().includes(searchLower)) {
+            res.highlighted = true;
+            res.zIndex = 1;
+          } else if (!hoveredNeighbors) {
+            res.color = DIMMED_COLOR;
+            res.label = '';
           }
         }
 
-        // Spring attraction along edges (toward rest length)
-        for (const edge of edges) {
-          const a = nodeMap.get(edge.source);
-          const b = nodeMap.get(edge.target);
-          if (!a || !b) continue;
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const displacement = dist - springLength;
-          const force = displacement * springStrength;
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-          a.vx += fx;
-          a.vy += fy;
-          b.vx -= fx;
-          b.vy -= fy;
-        }
+        return res;
+      });
 
-        // Center gravity
-        for (const node of nodes) {
-          node.vx -= node.x * centerPull;
-          node.vy -= node.y * centerPull;
-        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      renderer!.setSetting('edgeReducer', (edge: string, attrs: any) => {
+        const res = { ...attrs };
+        const source = graph!.source(edge);
+        const target = graph!.target(edge);
+        const sourceKind = graph!.getNodeAttribute(source, 'kind') as string;
+        const targetKind = graph!.getNodeAttribute(target, 'kind') as string;
 
-        // Apply velocity with heavy damping + NaN guard
-        for (const node of nodes) {
-          node.vx *= 0.6;
-          node.vy *= 0.6;
-          node.x += node.vx;
-          node.y += node.vy;
-          if (!isFinite(node.x)) node.x = (Math.random() - 0.5) * 200;
-          if (!isFinite(node.y)) node.y = (Math.random() - 0.5) * 200;
-          if (!isFinite(node.vx)) node.vx = 0;
-          if (!isFinite(node.vy)) node.vy = 0;
-        }
+        if (!visibleTypes.has(sourceKind) || !visibleTypes.has(targetKind)) { res.hidden = true; return res; }
 
-        // Cool down — settle to a gentle ambient drift
-        alphaRef.current = alpha * 0.985;
-        if (alphaRef.current < 0.008) alphaRef.current = 0.008;
-      }
+        const isHoverEdge = hoveredNode && (source === hoveredNode || target === hoveredNode);
+        const isSelectedEdge = selectedGraphId && (source === selectedGraphId || target === selectedGraphId);
 
-      // Fit to view on first stabilization
-      if (!initialFitDone.current && frameCount > 60) {
-        fitToView();
-        initialFitDone.current = true;
-      }
-
-      // ── Render ──
-      const dpr = window.devicePixelRatio || 1;
-      const w = sizeRef.current.w;
-      const h = sizeRef.current.h;
-      const zoom = zoomRef.current;
-      const pan = panRef.current;
-      const hoveredId = hoveredRef.current ?? externalHoveredRef.current;
-
-      ctx!.clearRect(0, 0, w * dpr, h * dpr);
-      ctx!.save();
-      ctx!.scale(dpr, dpr);
-      ctx!.translate(w / 2 + pan.x, h / 2 + pan.y);
-      ctx!.scale(zoom, zoom);
-
-      const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-      const adj = adjacencyRef.current;
-      const hoverNeighbors = hoveredId ? adj.get(hoveredId) ?? new Set() : new Set<string>();
-      const isHighlightMode = hoveredId !== null;
-      const searchLower = (searchQuery ?? '').toLowerCase();
-      const hasSearch = searchLower.length > 0;
-
-      // ── Draw edges ──
-      for (const edge of edges) {
-        const a = nodeMap.get(edge.source);
-        const b = nodeMap.get(edge.target);
-        if (!a || !b) continue;
-
-        // Type visibility filter
-        if (!visibleTypes.has(a.type) || !visibleTypes.has(b.type)) continue;
-
-        const isConnectedToHover =
-          hoveredId === a.id || hoveredId === b.id;
-        const isDimmed = isHighlightMode && !isConnectedToHover;
-
-        // Edge style by label
-        let baseAlpha: number;
-        let dashed = false;
-        if (edge.label === 'wikilink') {
-          baseAlpha = 0.3;
-        } else if (edge.label === 'generated_from') {
-          baseAlpha = 0.2;
-          dashed = true;
+        if (isHoverEdge) {
+          res.hidden = false;
+          res.color = 'rgba(160,165,180,0.6)';
+          res.size = 0.8;
+        } else if (isSelectedEdge && !hoveredNeighbors) {
+          res.hidden = false;
+          res.color = 'rgba(140,145,160,0.4)';
+          res.size = 0.6;
         } else {
-          baseAlpha = 0.15;
+          res.hidden = true;
         }
 
-        let edgeAlpha = baseAlpha;
+        return res;
+      });
 
-        if (isDimmed) edgeAlpha = 0.03;
-        if (isConnectedToHover) edgeAlpha = Math.min(baseAlpha * 2.5, 0.8);
-
-        // Gradient
-        const colorA = TYPE_COLORS[a.type] ?? DEFAULT_COLOR;
-        const colorB = TYPE_COLORS[b.type] ?? DEFAULT_COLOR;
-        const [rA, gA, bA] = hexToRgb(colorA);
-        const [rB, gB, bB] = hexToRgb(colorB);
-
-        if (!isFinite(a.x) || !isFinite(a.y) || !isFinite(b.x) || !isFinite(b.y)) continue;
-        const grad = ctx!.createLinearGradient(a.x, a.y, b.x, b.y);
-        grad.addColorStop(0, `rgba(${rA},${gA},${bA},${edgeAlpha})`);
-        grad.addColorStop(1, `rgba(${rB},${gB},${bB},${edgeAlpha})`);
-
-        ctx!.strokeStyle = grad;
-        ctx!.lineWidth = isConnectedToHover ? 1.5 : 0.6;
-
-        if (dashed) {
-          ctx!.setLineDash([4, 4]);
-        } else {
-          ctx!.setLineDash([]);
-        }
-
-        // Curved bezier
-        const midX = (a.x + b.x) / 2;
-        const midY = (a.y + b.y) / 2;
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const curvature = Math.min(dist * 0.15, 30);
-        const cpX = midX + (-dy / dist) * curvature;
-        const cpY = midY + (dx / dist) * curvature;
-
-        ctx!.beginPath();
-        ctx!.moveTo(a.x, a.y);
-        ctx!.quadraticCurveTo(cpX, cpY, b.x, b.y);
-        ctx!.stroke();
-      }
-
-      ctx!.setLineDash([]);
-
-      // ── Draw nodes ──
-      for (const node of nodes) {
-        // Type visibility filter
-        if (!visibleTypes.has(node.type)) continue;
-
-        const color = TYPE_COLORS[node.type] ?? DEFAULT_COLOR;
-        const [r, g, b] = hexToRgb(color);
-        const isHovered = hoveredId === node.id;
-        const isSelected = selectedNodeId ? `entry-${selectedNodeId}` === node.id : false;
-        const isNeighbor = hoveredId ? hoverNeighbors.has(node.id) : false;
-        const isSearchMatch = hasSearch && node.label.toLowerCase().includes(searchLower);
-        const isDimmed = isHighlightMode && !isHovered && !isNeighbor;
-
-        const baseRadius = (3 + Math.sqrt(node.connectionCount) * 1.5) * (nodeSizeRef.current / 3);
-        let drawRadius = baseRadius;
-        if (isHovered) drawRadius = baseRadius + 3;
-        if (isSelected) drawRadius = baseRadius + 2;
-        if (isSearchMatch) drawRadius = baseRadius + 1.5;
-
-        let nodeAlpha = isDimmed ? 0.1 : 1;
-
-        // Glow
-        if (isHovered || isSelected || isSearchMatch) {
-          ctx!.shadowBlur = isHovered ? 16 : 10;
-          ctx!.shadowColor = color;
-        }
-
-        ctx!.fillStyle = `rgba(${r},${g},${b},${nodeAlpha})`;
-        ctx!.beginPath();
-        ctx!.arc(node.x, node.y, drawRadius, 0, Math.PI * 2);
-        ctx!.fill();
-
-        ctx!.shadowBlur = 0;
-
-        // Label
-        const showLabel = isHovered || isSelected || isSearchMatch;
-        if (showLabel && !isDimmed) {
-          ctx!.font = '10px system-ui, sans-serif';
-          ctx!.textAlign = 'center';
-          // Text shadow for readability
-          ctx!.fillStyle = 'rgba(0,0,0,0.6)';
-          ctx!.fillText(node.label.slice(0, 40), node.x + 0.5, node.y - drawRadius - 5.5);
-          ctx!.fillStyle = `rgba(255,255,255,${isDimmed ? 0.1 : 0.9})`;
-          ctx!.fillText(node.label.slice(0, 40), node.x, node.y - drawRadius - 6);
-        }
-      }
-
-      ctx!.restore();
-      frameRef.current = requestAnimationFrame(tick);
+      renderer!.refresh({ skipIndexation: true });
     }
 
-    frameRef.current = requestAnimationFrame(tick);
-    return () => {
-      running = false;
-      cancelAnimationFrame(frameRef.current);
-    };
-  }, [data, selectedNodeId, searchQuery, visibleTypes, fitToView]);
+    renderer.on('enterNode', ({ node }: { node: string }) => {
+      hoveredNode = node;
+      containerRef.current!.style.cursor = 'pointer';
+      updateReducers();
+    });
 
-  // ── Mouse interactions ──
+    renderer.on('leaveNode', () => {
+      hoveredNode = null;
+      containerRef.current!.style.cursor = 'grab';
+      updateReducers();
+    });
 
-  const findNodeAt = useCallback((cx: number, cy: number): GraphNode | null => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    const w = sizeRef.current.w;
-    const h = sizeRef.current.h;
-    const zoom = zoomRef.current;
-    const pan = panRef.current;
-    const gx = (cx - rect.left - w / 2 - pan.x) / zoom;
-    const gy = (cy - rect.top - h / 2 - pan.y) / zoom;
+    updateReducers();
+  }, [visibleTypes, selectedNodeId, searchQuery]);
 
-    let closest: GraphNode | null = null;
-    let closestDist = 15 / zoom;
+  // ── Camera: focus on selected node ───────────────────────────────────────
 
-    for (const node of nodesRef.current) {
-      if (!visibleTypes.has(node.type)) continue;
-      const dx = node.x - gx;
-      const dy = node.y - gy;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < closestDist) {
-        closest = node;
-        closestDist = dist;
+  useEffect(() => {
+    const renderer = sigmaRef.current;
+    const graph = graphRef.current;
+    if (!renderer || !graph || !selectedNodeId) return;
+    const graphId = `entry-${selectedNodeId}`;
+    if (graph.hasNode(graphId)) {
+      const pos = renderer.getNodeDisplayData(graphId);
+      if (pos) {
+        renderer.getCamera().animate({ x: pos.x, y: pos.y, ratio: 0.3 }, { duration: 400 });
       }
     }
-    return closest;
-  }, [visibleTypes]);
+  }, [selectedNodeId]);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    // Dragging a node
-    if (draggingNodeRef.current) {
-      const zoom = zoomRef.current;
-      const dx = (e.clientX - lastMouseRef.current.x) / zoom;
-      const dy = (e.clientY - lastMouseRef.current.y) / zoom;
-      lastMouseRef.current = { x: e.clientX, y: e.clientY };
-      draggingNodeRef.current.x += dx;
-      draggingNodeRef.current.y += dy;
-      draggingNodeRef.current.vx = 0;
-      draggingNodeRef.current.vy = 0;
-      return;
-    }
-    if (isPanningRef.current) {
-      const dx = e.clientX - lastMouseRef.current.x;
-      const dy = e.clientY - lastMouseRef.current.y;
-      lastMouseRef.current = { x: e.clientX, y: e.clientY };
-      panRef.current = {
-        x: panRef.current.x + dx,
-        y: panRef.current.y + dy,
-      };
-      return;
-    }
-    const node = findNodeAt(e.clientX, e.clientY);
-    hoveredRef.current = node?.id ?? null;
-    if (canvasRef.current) {
-      canvasRef.current.style.cursor = node ? 'pointer' : 'grab';
-    }
-  }, [findNodeAt]);
+  // ── Controls ─────────────────────────────────────────────────────────────
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return; // Only handle left click
-    mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
-    const node = findNodeAt(e.clientX, e.clientY);
-    if (node) {
-      // Start dragging the node
-      draggingNodeRef.current = node;
-      lastMouseRef.current = { x: e.clientX, y: e.clientY };
-      if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
-      return;
-    }
-    isPanningRef.current = true;
-    lastMouseRef.current = { x: e.clientX, y: e.clientY };
-    if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
-  }, [findNodeAt]);
-
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    const node = findNodeAt(e.clientX, e.clientY);
-    if (node && node.entryId && onNodeContextMenu) {
-      e.preventDefault();
-      onNodeContextMenu(node.entryId, e.clientX, e.clientY);
-    }
-  }, [findNodeAt, onNodeContextMenu]);
-
-  const handleMouseUp = useCallback((e: React.MouseEvent) => {
-    const wasDraggingNode = draggingNodeRef.current !== null;
-    draggingNodeRef.current = null;
-    const wasPanning = isPanningRef.current;
-    isPanningRef.current = false;
-    if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
-
-    // Click detection: if mouse hasn't moved more than 5px, treat as click
-    const dx = e.clientX - mouseDownPosRef.current.x;
-    const dy = e.clientY - mouseDownPosRef.current.y;
-    const didMove = Math.sqrt(dx * dx + dy * dy) > 5;
-    if (!didMove && !wasPanning) {
-      const node = findNodeAt(e.clientX, e.clientY);
-      if (node?.entryId && onNodeClick) {
-        onNodeClick(node.entryId);
-      }
-    }
-  }, [findNodeAt, onNodeClick]);
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const factor = e.deltaY > 0 ? 0.92 : 1.08;
-    zoomRef.current = Math.max(0.1, Math.min(5, zoomRef.current * factor));
+  const handleZoomIn = useCallback(() => {
+    const r = sigmaRef.current;
+    if (!r) return;
+    const c = r.getCamera();
+    c.animate({ ratio: c.getState().ratio / 1.3 }, { duration: 200 });
   }, []);
 
-  const handleDoubleClick = useCallback(() => {
-    fitToView();
-  }, [fitToView]);
+  const handleZoomOut = useCallback(() => {
+    const r = sigmaRef.current;
+    if (!r) return;
+    const c = r.getCamera();
+    c.animate({ ratio: c.getState().ratio * 1.3 }, { duration: 200 });
+  }, []);
+
+  const handleFitToView = useCallback(() => {
+    sigmaRef.current?.getCamera().animate({ x: 0.5, y: 0.5, ratio: 1 }, { duration: 300 });
+  }, []);
+
+  const handleToggleLayout = useCallback(() => {
+    const fa2 = fa2Ref.current;
+    if (!fa2) return;
+    if (fa2.isRunning()) {
+      fa2.stop();
+      setLayoutRunning(false);
+    } else {
+      fa2.start();
+      setLayoutRunning(true);
+      setTimeout(() => {
+        if (fa2.isRunning()) { fa2.stop(); setLayoutRunning(false); }
+      }, 5000);
+    }
+  }, []);
 
   const handleToggleType = useCallback((type: string) => {
     setVisibleTypes((prev) => {
       const next = new Set(prev);
-      if (next.has(type)) {
-        next.delete(type);
-      } else {
-        next.add(type);
-      }
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
       return next;
     });
   }, []);
 
-  const isEmpty = data.entries.length === 0 && data.externalNodes.length === 0;
+  const sliderClassName = 'w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent-text';
 
   return (
-    <div ref={containerRef} className="relative w-full h-full bg-[#0d0f1a]">
+    <div className="relative w-full h-full" style={{ backgroundColor: BG_COLOR }}>
       {isEmpty ? (
         <div className="flex items-center justify-center h-full">
           <div className="text-center max-w-sm">
@@ -624,34 +469,62 @@ export function KnowledgeGraph({ data, onNodeContextMenu, onNodeClick, selectedN
         </div>
       ) : (
         <>
-          <canvas
-            ref={canvasRef}
-            onMouseMove={handleMouseMove}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onWheel={handleWheel}
-            onDoubleClick={handleDoubleClick}
-            onContextMenu={handleContextMenu}
-            className="block w-full h-full"
-            style={{ cursor: 'grab' }}
+          {!ready && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center" style={{ backgroundColor: BG_COLOR }}>
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-6 w-6 border-2 border-accent-text/30 border-t-accent-text rounded-full animate-spin" />
+                <p className="text-xs text-text-muted">Building graph layout...</p>
+              </div>
+            </div>
+          )}
+
+          <div
+            ref={containerRef}
+            className="w-full h-full"
+            style={{ cursor: 'grab', backgroundColor: BG_COLOR }}
           />
-          <GraphControls
-            onZoomIn={() => {
-              zoomRef.current = Math.min(5, zoomRef.current * 1.2);
-            }}
-            onZoomOut={() => {
-              zoomRef.current = Math.max(0.1, zoomRef.current * 0.8);
-            }}
-            onFit={fitToView}
-            visibleTypes={visibleTypes}
-            allTypes={allTypes}
-            onToggleType={handleToggleType}
-            nodeSize={nodeSize}
-            onNodeSizeChange={setNodeSize}
-            spacing={spacing}
-            onSpacingChange={setSpacing}
-          />
+
+          {/* Controls */}
+          <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-10">
+            {allTypes.length > 0 && (
+              <div className="bg-surface/80 backdrop-blur-sm border border-nativz-border rounded-lg p-2.5 space-y-1.5 max-h-[280px] overflow-y-auto">
+                {allTypes.map((type) => {
+                  const color = TYPE_COLORS[type] ?? DEFAULT_COLOR;
+                  const visible = visibleTypes.has(type);
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => handleToggleType(type)}
+                      className={`cursor-pointer flex items-center gap-2 w-full text-left transition-opacity ${visible ? 'opacity-100' : 'opacity-30'}`}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                      <span className="text-[10px] text-text-secondary capitalize">{type.replace(/_/g, ' ')}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="bg-surface/80 backdrop-blur-sm border border-nativz-border rounded-lg p-2.5">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider block mb-1.5">Node size</label>
+              <input type="range" min="1" max="8" step="0.5" value={nodeSize} onChange={(e) => setNodeSize(parseFloat(e.target.value))} className={sliderClassName} />
+            </div>
+
+            <div className="bg-surface/80 backdrop-blur-sm border border-nativz-border rounded-lg p-1 flex flex-col gap-0.5">
+              <button onClick={handleZoomIn} className="cursor-pointer p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors" title="Zoom in"><Plus size={14} /></button>
+              <button onClick={handleZoomOut} className="cursor-pointer p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors" title="Zoom out"><Minus size={14} /></button>
+              <div className="h-px bg-nativz-border mx-1" />
+              <button onClick={handleFitToView} className="cursor-pointer p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors" title="Fit to view"><Maximize2 size={14} /></button>
+              <div className="h-px bg-nativz-border mx-1" />
+              <button
+                onClick={handleToggleLayout}
+                className={`cursor-pointer p-1.5 rounded-md transition-colors ${layoutRunning ? 'text-accent-text bg-accent-surface/30 hover:bg-accent-surface/50' : 'text-text-muted hover:text-text-primary hover:bg-surface-hover'}`}
+                title={layoutRunning ? 'Stop layout' : 'Run ForceAtlas2 layout'}
+              >
+                {layoutRunning ? <Pause size={14} /> : <Play size={14} />}
+              </button>
+            </div>
+          </div>
         </>
       )}
     </div>

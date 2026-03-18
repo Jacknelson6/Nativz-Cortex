@@ -18,7 +18,7 @@ const TYPE_STYLES: Record<string, { border: string; bg: string; icon: React.Elem
   brand_asset: { border: 'border-blue-500', bg: 'bg-blue-500/10', icon: Palette, label: 'Brand asset' },
   web_page: { border: 'border-green-500', bg: 'bg-green-500/10', icon: Globe, label: 'Web page' },
   note: { border: 'border-yellow-500', bg: 'bg-yellow-500/10', icon: StickyNote, label: 'Note' },
-  document: { border: 'border-purple-500', bg: 'bg-purple-500/10', icon: FileText, label: 'Document' },
+  document: { border: 'border-purple-500', bg: 'bg-accent2-surface', icon: FileText, label: 'Document' },
   contact: { border: 'border-orange-500', bg: 'bg-orange-500/10', icon: User, label: 'Contact' },
   search: { border: 'border-teal-500', bg: 'bg-teal-500/10', icon: Search, label: 'Search' },
   strategy: { border: 'border-red-500', bg: 'bg-red-500/10', icon: Target, label: 'Strategy' },

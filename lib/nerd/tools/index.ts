@@ -10,6 +10,7 @@ import { notificationTools } from './notifications';
 import { analyticsTools } from './analytics';
 import { affiliateTools } from './affiliates';
 import { knowledgeTools } from './knowledge';
+import { agencyKnowledgeTools } from './agency-knowledge';
 import { fyxerTools } from './fyxer';
 
 /** Register all tool domains. Call once at startup. */
@@ -25,5 +26,6 @@ export function registerAllTools() {
   registerTools(analyticsTools);
   registerTools(affiliateTools);
   registerTools(knowledgeTools);
+  registerTools(agencyKnowledgeTools);
   registerTools(fyxerTools);
 }

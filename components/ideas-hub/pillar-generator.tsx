@@ -35,7 +35,7 @@ function PillarCountSelector({ value, onChange }: { value: number; onChange: (n:
               onClick={() => onChange(n)}
               className={`h-9 min-w-[2.25rem] rounded-lg px-2 text-sm font-medium transition-all cursor-pointer ${
                 value === n
-                  ? 'bg-purple-500 text-white shadow-sm'
+                  ? 'bg-accent2 text-white shadow-sm'
                   : 'border border-nativz-border bg-surface text-text-secondary hover:bg-surface-hover'
               }`}
             >
@@ -50,7 +50,7 @@ function PillarCountSelector({ value, onChange }: { value: number; onChange: (n:
           <Plus size={14} />
         </button>
         {!presets.includes(value) && (
-          <span className="ml-1 text-sm font-medium text-purple-400 tabular-nums">{value}</span>
+          <span className="ml-1 text-sm font-medium text-accent2-text tabular-nums">{value}</span>
         )}
       </div>
     </div>
@@ -142,7 +142,7 @@ export function PillarGenerator({ clientId, pillars, onPillarsChange, onNext }: 
           <button
             onClick={handleGenerate}
             disabled={generating}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-purple-500 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent2 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
           >
             {generating ? (
               <>
@@ -162,7 +162,7 @@ export function PillarGenerator({ clientId, pillars, onPillarsChange, onNext }: 
       {/* Loading state */}
       {generating && pillars.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12">
-          <Loader2 size={28} className="animate-spin text-purple-400 mb-3" />
+          <Loader2 size={28} className="animate-spin text-accent2-text mb-3" />
           <p className="text-sm text-text-muted">{pollMessage ?? 'Generating pillars...'}</p>
           <p className="text-[11px] text-text-muted/60 mt-1">This usually takes 15-30 seconds</p>
         </div>
@@ -200,7 +200,7 @@ export function PillarGenerator({ clientId, pillars, onPillarsChange, onNext }: 
         <div className="flex items-center justify-center pt-2">
           <button
             onClick={onNext}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-purple-500 px-8 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent2 px-8 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity cursor-pointer"
           >
             Generate ideas from pillars
             <ArrowRight size={16} />

@@ -35,7 +35,7 @@ function IdeasPerPillarSelector({ value, onChange }: { value: number; onChange: 
               onClick={() => onChange(n)}
               className={`h-9 min-w-[2.25rem] rounded-lg px-2 text-sm font-medium transition-all cursor-pointer ${
                 value === n
-                  ? 'bg-purple-500 text-white shadow-sm'
+                  ? 'bg-accent2 text-white shadow-sm'
                   : 'border border-nativz-border bg-surface text-text-secondary hover:bg-surface-hover'
               }`}
             >
@@ -50,7 +50,7 @@ function IdeasPerPillarSelector({ value, onChange }: { value: number; onChange: 
           <Plus size={14} />
         </button>
         {!presets.includes(value) && (
-          <span className="ml-1 text-sm font-medium text-purple-400 tabular-nums">{value}</span>
+          <span className="ml-1 text-sm font-medium text-accent2-text tabular-nums">{value}</span>
         )}
       </div>
     </div>
@@ -108,9 +108,9 @@ export function PillarIdeaConfig({ clientId, pillars, initialSearchId }: PillarI
 
           <div className="flex items-end pb-1">
             <p className="text-sm text-text-secondary">
-              <span className="text-purple-400 font-medium">{ideasPerPillar}</span> ideas{' '}
+              <span className="text-accent2-text font-medium">{ideasPerPillar}</span> ideas{' '}
               <span className="text-text-muted">&times;</span>{' '}
-              <span className="text-purple-400 font-medium">{pillars.length}</span> pillar{pillars.length !== 1 ? 's' : ''}{' '}
+              <span className="text-accent2-text font-medium">{pillars.length}</span> pillar{pillars.length !== 1 ? 's' : ''}{' '}
               <span className="text-text-muted">=</span>{' '}
               <span className="text-text-primary font-semibold">{totalIdeas}</span> total ideas
             </p>
@@ -146,7 +146,7 @@ export function PillarIdeaConfig({ clientId, pillars, initialSearchId }: PillarI
               }
             }}
             placeholder="e.g. summer fitness tips, behind the scenes, product launches…"
-            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-colors"
+            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent2/50 focus:ring-1 focus:ring-accent2/50 transition-colors"
           />
         </div>
 
@@ -165,7 +165,7 @@ export function PillarIdeaConfig({ clientId, pillars, initialSearchId }: PillarI
           <button
             onClick={handleGenerate}
             disabled={generating || pillars.length === 0}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-purple-500 px-8 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent2 px-8 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
           >
             {generating ? (
               <>

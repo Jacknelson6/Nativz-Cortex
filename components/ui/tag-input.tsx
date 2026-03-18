@@ -70,7 +70,7 @@ export function TagInput({
       )}
       <div
         onClick={() => inputRef.current?.focus()}
-        className={`flex flex-wrap items-center gap-1.5 rounded-lg border bg-surface px-2.5 py-2 transition-colors focus-within:border-accent focus-within:ring-1 focus-within:ring-accent focus-within:shadow-[0_0_0_3px_rgba(4,107,210,0.15)] ${
+        className={`flex flex-wrap items-center gap-1.5 rounded-lg border bg-surface px-2.5 py-2 transition-colors focus-within:border-accent focus-within:ring-1 focus-within:ring-accent focus-within:shadow-[0_0_0_3px_var(--focus-ring)] ${
           error ? 'border-red-500' : 'border-nativz-border'
         }`}
       >

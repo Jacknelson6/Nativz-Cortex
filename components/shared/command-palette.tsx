@@ -285,7 +285,7 @@ export function CommandPalette() {
               </span>
             )}
             {parsedTask.priority && (
-              <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-xs text-purple-400">
+              <span className="rounded-full bg-accent2-surface px-2 py-0.5 text-xs text-accent2-text">
                 {parsedTask.priority}
               </span>
             )}

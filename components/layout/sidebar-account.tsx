@@ -112,13 +112,13 @@ export function SidebarAccount({
           collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3 py-2.5'
         } ${
           open
-            ? 'border-accent/30 bg-accent-surface shadow-[0_0_12px_rgba(4,107,210,0.15)]'
+            ? 'border-accent/30 bg-accent-surface shadow-[0_0_12px_var(--accent-surface)]'
             : 'border-transparent hover:border-nativz-border hover:bg-surface-hover'
         }`}
       >
         {/* Avatar */}
         <div className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-shadow duration-300 ${
-          open ? 'shadow-[0_0_10px_rgba(4,107,210,0.3)]' : 'group-hover:shadow-[0_0_8px_rgba(4,107,210,0.2)]'
+          open ? 'shadow-[0_0_10px_var(--accent-surface)]' : 'group-hover:shadow-[0_0_8px_var(--accent-surface)]'
         }`}>
           {avatarUrl ? (
             <Image

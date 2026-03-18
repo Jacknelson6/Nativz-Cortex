@@ -62,12 +62,12 @@ export function MentionAutocomplete({
           } ${idx === 0 ? 'rounded-t-xl' : ''} ${idx === filtered.length - 1 ? 'rounded-b-xl' : ''}`}
         >
           <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-            option.type === 'client' ? 'bg-blue-500/15' : 'bg-purple-500/15'
+            option.type === 'client' ? 'bg-blue-500/15' : 'bg-accent2-surface'
           }`}>
             {option.type === 'client' ? (
               <Building2 size={13} className="text-blue-400" />
             ) : (
-              <User size={13} className="text-purple-400" />
+              <User size={13} className="text-accent2-text" />
             )}
           </div>
           <div className="min-w-0 flex-1 text-left">

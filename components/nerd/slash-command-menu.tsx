@@ -38,7 +38,7 @@ export function SlashCommandMenu({ query, commands, onSelect }: SlashCommandMenu
               {cmd.type === 'direct' ? (
                 <Command size={13} className="text-accent-text" />
               ) : (
-                <Zap size={13} className="text-purple-400" />
+                <Zap size={13} className="text-accent2-text" />
               )}
             </div>
             <div className="min-w-0 flex-1">

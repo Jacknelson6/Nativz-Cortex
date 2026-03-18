@@ -182,8 +182,8 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
         {linkedIdeas.length > 0 && (
           <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/10 shrink-0">
-                <Sparkles size={16} className="text-purple-400" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent2-surface shrink-0">
+                <Sparkles size={16} className="text-accent2-text" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-text-primary">
@@ -195,7 +195,7 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
               </div>
               <Link
                 href={`/admin/ideas/${linkedIdeas[0].id}`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-400 hover:bg-purple-500/20 transition-colors shrink-0"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-accent2-surface px-3 py-1.5 text-xs font-medium text-accent2-text hover:bg-accent2-surface transition-colors shrink-0"
               >
                 <Sparkles size={12} />
                 View ideas
@@ -480,7 +480,7 @@ function SendReportModal({
         {/* Custom email */}
         <div>
           <div className="flex items-center gap-2 mb-2.5">
-            <Mail size={14} className="text-purple-400" />
+            <Mail size={14} className="text-accent2-text" />
             <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide">Custom email</h3>
           </div>
           <div className="flex gap-2">

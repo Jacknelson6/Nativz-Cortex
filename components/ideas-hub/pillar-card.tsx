@@ -88,7 +88,7 @@ export function PillarCard({ pillar, clientId, onUpdate, onDelete, index }: Pill
       {/* Re-roll overlay */}
       {rerolling && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-surface/80 backdrop-blur-sm">
-          <Loader2 size={20} className="animate-spin text-purple-400" />
+          <Loader2 size={20} className="animate-spin text-accent2-text" />
         </div>
       )}
 
@@ -100,7 +100,7 @@ export function PillarCard({ pillar, clientId, onUpdate, onDelete, index }: Pill
               type="text"
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm font-semibold text-text-primary focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-colors"
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm font-semibold text-text-primary focus:outline-none focus:border-accent2/50 focus:ring-1 focus:ring-accent2/50 transition-colors"
               placeholder="Pillar name"
               autoFocus
             />
@@ -108,13 +108,13 @@ export function PillarCard({ pillar, clientId, onUpdate, onDelete, index }: Pill
               value={editDescription}
               onChange={(e) => setEditDescription(e.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-colors resize-none"
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent2/50 focus:ring-1 focus:ring-accent2/50 transition-colors resize-none"
               placeholder="Description (optional)"
             />
             <div className="flex items-center gap-2">
               <button
                 onClick={handleSaveEdit}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-accent2 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity cursor-pointer"
               >
                 <Check size={12} />
                 Save
@@ -164,7 +164,7 @@ export function PillarCard({ pillar, clientId, onUpdate, onDelete, index }: Pill
                 <button
                   onClick={handleReroll}
                   disabled={rerolling}
-                  className="p-1.5 rounded-lg text-text-muted hover:text-purple-400 hover:bg-purple-500/10 transition-colors cursor-pointer disabled:opacity-40"
+                  className="p-1.5 rounded-lg text-text-muted hover:text-accent2-text hover:bg-accent2-surface transition-colors cursor-pointer disabled:opacity-40"
                   title="Re-roll"
                 >
                   <RefreshCw size={13} />
@@ -186,7 +186,7 @@ export function PillarCard({ pillar, clientId, onUpdate, onDelete, index }: Pill
                 value={pillar.direction ?? ''}
                 onChange={(e) => onUpdate({ ...pillar, direction: e.target.value })}
                 placeholder="Direction for this pillar (optional)…"
-                className="w-full rounded-lg border border-nativz-border bg-background px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted/40 focus:outline-none focus-visible:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-colors"
+                className="w-full rounded-lg border border-nativz-border bg-background px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted/40 focus:outline-none focus-visible:outline-none focus:border-accent2/50 focus:ring-1 focus:ring-accent2/50 transition-colors"
               />
             </div>
 

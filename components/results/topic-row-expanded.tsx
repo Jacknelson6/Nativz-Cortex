@@ -30,7 +30,7 @@ interface TopicRowExpandedProps {
 const SOURCE_TYPE_ICON: Record<string, React.ReactNode> = {
   web: <Globe size={12} className="text-blue-400 shrink-0" />,
   discussion: <MessageCircle size={12} className="text-emerald-400 shrink-0" />,
-  video: <Video size={12} className="text-purple-400 shrink-0" />,
+  video: <Video size={12} className="text-accent2-text shrink-0" />,
 };
 
 function getPlatformBadge(platform: string): { label: string; className: string } | null {
@@ -234,7 +234,7 @@ function VideoIdeaListItem({
               {idea.format.replace(/_/g, ' ')}
             </span>
             <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${
-              idea.virality === 'viral_potential' ? 'text-purple-400' :
+              idea.virality === 'viral_potential' ? 'text-accent2-text' :
               idea.virality === 'high' ? 'text-emerald-400' :
               idea.virality === 'medium' ? 'text-blue-400' :
               'text-text-muted'

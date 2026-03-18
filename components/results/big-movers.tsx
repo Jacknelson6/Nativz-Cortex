@@ -7,14 +7,14 @@ import type { BigMover } from '@/lib/types/search';
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
   brand: <Store size={14} className="text-orange-400" />,
-  creator: <User size={14} className="text-purple-400" />,
+  creator: <User size={14} className="text-accent2-text" />,
   product: <Package size={14} className="text-emerald-400" />,
   company: <Building2 size={14} className="text-blue-400" />,
 };
 
 const TYPE_COLOR: Record<string, string> = {
   brand: 'text-orange-400 bg-orange-500/10',
-  creator: 'text-purple-400 bg-purple-500/10',
+  creator: 'text-accent2-text bg-accent2-surface',
   product: 'text-emerald-400 bg-emerald-500/10',
   company: 'text-blue-400 bg-blue-500/10',
 };

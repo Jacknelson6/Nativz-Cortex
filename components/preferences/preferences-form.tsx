@@ -135,7 +135,7 @@ export function PreferencesForm({
 
       <Card>
         <div className="flex items-center gap-2.5 mb-1">
-          <CalendarDays size={16} className="text-purple-400" />
+          <CalendarDays size={16} className="text-accent2-text" />
           <h2 className="text-base font-semibold text-text-primary">Seasonal priorities</h2>
         </div>
         <p className="text-sm text-text-muted mb-4">Current campaigns, seasonal themes, or upcoming focuses.</p>

@@ -103,7 +103,7 @@ export const WebsiteNode = memo(function WebsiteNode({ data }: NodeProps<Website
           {!hasInsights && (
             <button
               onClick={(e) => { e.stopPropagation(); onExtractInsights(item); }}
-              className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-purple-400 hover:bg-purple-500/10 transition-colors"
+              className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-accent2-text hover:bg-accent2-surface transition-colors"
             >
               <Sparkles size={11} />
               Extract insights

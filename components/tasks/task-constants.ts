@@ -4,14 +4,14 @@ export const PRIORITY_RING: Record<string, string> = {
   urgent: '#ef4444',
   high: '#f97316',
   medium: '#3b82f6',
-  low: 'rgba(255,255,255,0.2)',
+  low: 'var(--border)',
 };
 
 export const PRIORITY_FILL: Record<string, string> = {
   urgent: '#ef4444',
   high: '#f97316',
   medium: '#3b82f6',
-  low: 'rgba(255,255,255,0.15)',
+  low: 'var(--surface-hover)',
 };
 
 export const PRIORITY_OPTIONS = [

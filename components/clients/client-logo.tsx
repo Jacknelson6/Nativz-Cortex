@@ -49,7 +49,7 @@ function getColor(name: string): string {
   }
   const colors = [
     'bg-blue-500/15 text-blue-400',
-    'bg-purple-500/15 text-purple-400',
+    'bg-accent2-surface text-accent2-text',
     'bg-emerald-500/15 text-emerald-400',
     'bg-amber-500/15 text-amber-400',
     'bg-rose-500/15 text-rose-400',

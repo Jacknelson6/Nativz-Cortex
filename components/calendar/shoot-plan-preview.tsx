@@ -148,7 +148,7 @@ export function ShootPlanPreview({ shootId }: ShootPlanPreviewProps) {
       {(plan.content_calendar ?? []).length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <Calendar size={14} className="text-[#8B5CF6]" />
+            <Calendar size={14} className="text-accent2-text" />
             <h3 className="text-base font-semibold text-text-primary">Content calendar</h3>
           </div>
           <Card padding="sm">

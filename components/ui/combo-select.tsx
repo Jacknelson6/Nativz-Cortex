@@ -94,8 +94,8 @@ export function ComboSelect({
           onClick={() => setOpen(!open)}
           className={`flex items-center justify-between w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors cursor-pointer ${
             accent === 'purple'
-              ? 'hover:border-purple-500/50 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:shadow-[0_0_0_3px_rgba(168,85,247,0.15)]'
-              : 'hover:border-accent/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)]'
+              ? 'hover:border-accent2/50 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:shadow-[0_0_0_3px_var(--accent2-surface)]'
+              : 'hover:border-accent/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_var(--focus-ring)]'
           }`}
         >
           <span className={selected ? '' : 'text-text-muted'}>{selected?.label ?? placeholder}</span>
@@ -138,13 +138,13 @@ export function ComboSelect({
                     className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm text-left transition-colors cursor-pointer ${
                       isSelected
                         ? accent === 'purple'
-                          ? 'text-purple-400 bg-purple-500/10'
+                          ? 'text-accent2-text bg-accent2-surface'
                           : 'text-accent-text bg-accent-surface/10'
                         : 'text-text-primary hover:bg-surface-hover'
                     }`}
                   >
                     <span className="w-4 shrink-0 flex items-center justify-center">
-                      {isSelected && <Check size={14} className={accent === 'purple' ? 'text-purple-400' : 'text-accent-text'} />}
+                      {isSelected && <Check size={14} className={accent === 'purple' ? 'text-accent2-text' : 'text-accent-text'} />}
                     </span>
                     <span className="truncate">{opt.label}</span>
                   </button>

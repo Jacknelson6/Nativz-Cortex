@@ -120,7 +120,7 @@ export function OnboardReview({ clientId, clientName }: OnboardReviewProps) {
               key={i}
               className="absolute left-1/2 top-0 w-1.5 h-1.5 rounded-full"
               style={{
-                backgroundColor: i % 3 === 0 ? '#046BD2' : i % 3 === 1 ? '#8B5CF6' : '#10B981',
+                backgroundColor: i % 3 === 0 ? 'var(--accent)' : i % 3 === 1 ? 'var(--accent2)' : '#10B981',
                 animation: `confetti-burst 1.5s ease-out ${i * 0.08}s forwards`,
                 transform: `rotate(${i * 30}deg) translateY(0)`,
                 opacity: 0,

@@ -207,7 +207,7 @@ function MoodboardCanvas() {
         >
           <Background
             variant={BackgroundVariant.Dots}
-            color="rgba(255,255,255,0.12)"
+            color="var(--text-muted)"
             gap={20}
             size={1}
           />

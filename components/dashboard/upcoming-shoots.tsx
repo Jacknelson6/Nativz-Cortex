@@ -39,7 +39,7 @@ export function UpcomingShoots({ initialShoots }: { initialShoots?: Shoot[] }) {
     <Card>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-semibold text-text-primary flex items-center gap-2">
-          <Calendar size={16} className="text-purple-400" />
+          <Calendar size={16} className="text-accent2-text" />
           Upcoming shoots
         </h2>
         <Link
@@ -75,11 +75,11 @@ export function UpcomingShoots({ initialShoots }: { initialShoots?: Shoot[] }) {
                 key={shoot.id}
                 className="flex items-center gap-3 rounded-lg border border-nativz-border px-3 py-2.5 hover:bg-surface-elevated transition-colors"
               >
-                <div className="flex flex-col items-center justify-center rounded-lg bg-purple-500/10 px-2 py-1 min-w-[40px]">
-                  <span className="text-sm font-bold text-purple-400 leading-none">
+                <div className="flex flex-col items-center justify-center rounded-lg bg-accent2-surface px-2 py-1 min-w-[40px]">
+                  <span className="text-sm font-bold text-accent2-text leading-none">
                     {shootDate.getDate()}
                   </span>
-                  <span className="text-[8px] font-medium text-purple-400/60 uppercase">
+                  <span className="text-[8px] font-medium text-accent2-text/60 uppercase">
                     {shootDate.toLocaleDateString('en-US', { month: 'short' })}
                   </span>
                 </div>

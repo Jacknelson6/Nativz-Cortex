@@ -100,7 +100,7 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
       <div className="flex flex-col items-center justify-center pt-8">
         <div className="w-full max-w-3xl">
           <div className="text-center mb-10">
-            <h1 className="text-3xl font-bold text-white">What would you like to research today?</h1>
+            <h1 className="text-3xl font-bold text-foreground">What would you like to research today?</h1>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -134,15 +134,15 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
                 className="w-full text-left cursor-pointer"
               >
                 <div className="flex flex-col items-center text-center">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 mb-3">
-                    <Sparkles size={18} className="text-purple-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent2-surface mb-3">
+                    <Sparkles size={18} className="text-accent2-text" />
                   </div>
                   <h2 className="text-base font-semibold text-text-primary mb-1">Strategize</h2>
                   <p className="text-sm text-text-muted mb-5">
                     Generate content ideas powered by AI + knowledge
                   </p>
-                  <div className="w-full rounded-xl bg-purple-500/10 border border-purple-500/25 py-2.5 text-center">
-                    <span className="text-sm font-semibold text-purple-400">Generate strategy</span>
+                  <div className="w-full rounded-xl bg-accent2-surface border border-purple-500/25 py-2.5 text-center">
+                    <span className="text-sm font-semibold text-accent2-text">Generate strategy</span>
                   </div>
                 </div>
               </button>

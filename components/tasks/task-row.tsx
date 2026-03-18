@@ -64,7 +64,7 @@ function TaskRowMenu({
         onClose={onClose}
       />
       {/* Delete button appended below the picker */}
-      <div className="w-[280px] mt-1 rounded-xl border border-white/[0.08] bg-surface/80 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] px-2 py-1.5">
+      <div className="w-[280px] mt-1 rounded-xl border border-nativz-border bg-surface/80 backdrop-blur-xl shadow-dropdown px-2 py-1.5">
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); onClose(); }}
           className="flex items-center gap-2.5 w-full px-2 py-1.5 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"

@@ -180,7 +180,7 @@ export default function PresentationsPage() {
 
   const typeConfig = {
     slides: { icon: FileText, label: 'Slides', accent: 'rgba(4, 107, 210, 0.15)', iconColor: 'text-accent-text' },
-    tier_list: { icon: ListOrdered, label: 'Tier list', accent: 'rgba(168, 85, 247, 0.15)', iconColor: 'text-purple-400' },
+    tier_list: { icon: ListOrdered, label: 'Tier list', accent: 'rgba(168, 85, 247, 0.15)', iconColor: 'text-accent2-text' },
     social_audit: { icon: BarChart3, label: 'Social audit', accent: 'rgba(16, 185, 129, 0.15)', iconColor: 'text-emerald-400' },
   };
 
@@ -192,7 +192,7 @@ export default function PresentationsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Presentations</h1>
+          <h1 className="text-2xl font-bold text-foreground">Presentations</h1>
           <p className="text-sm text-text-muted mt-1">Sales tools, tier lists, and client presentations</p>
         </div>
         <Button onClick={() => setShowCreate(!showCreate)}>
@@ -205,10 +205,10 @@ export default function PresentationsPage() {
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowCreate(false)} />
-          <div className="relative w-full max-w-xl rounded-2xl border border-white/[0.06] bg-surface shadow-2xl animate-modal-pop-in p-6 space-y-5">
+          <div className="relative w-full max-w-xl rounded-2xl border border-nativz-border bg-surface shadow-2xl animate-modal-pop-in p-6 space-y-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">Create new presentation</h2>
-              <button onClick={() => setShowCreate(false)} className="cursor-pointer rounded-lg p-1.5 text-white/40 hover:bg-white/[0.06] hover:text-white/60 transition-colors">
+              <h2 className="text-lg font-semibold text-text-primary">Create new presentation</h2>
+              <button onClick={() => setShowCreate(false)} className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors">
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -216,20 +216,20 @@ export default function PresentationsPage() {
             <div className="grid grid-cols-1 gap-2">
               {[
                 { type: 'slides' as const, label: 'Slide deck', desc: 'Create a presentation with slides, images, and speaker notes', icon: FileText, color: 'rgba(4, 107, 210, 0.15)', iconColor: 'text-accent-text', bgColor: 'bg-accent-surface' },
-                { type: 'tier_list' as const, label: 'Tier list', desc: 'Rank content with drag-and-drop tiers for visual demos on calls', icon: ListOrdered, color: 'rgba(168, 85, 247, 0.15)', iconColor: 'text-purple-400', bgColor: 'bg-purple-500/10' },
+                { type: 'tier_list' as const, label: 'Tier list', desc: 'Rank content with drag-and-drop tiers for visual demos on calls', icon: ListOrdered, color: 'rgba(168, 85, 247, 0.15)', iconColor: 'text-accent2-text', bgColor: 'bg-accent2-surface' },
                 { type: 'social_audit' as const, label: 'Social audit', desc: 'Before & after analysis with real social data and growth projections', icon: BarChart3, color: 'rgba(16, 185, 129, 0.15)', iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10' },
               ].map(({ type, label, desc, icon: Icon, iconColor, bgColor }) => (
                 <button
                   key={type}
                   type="button"
                   onClick={() => { setShowCreate(false); handleCreate(type); }}
-                  className="cursor-pointer flex items-center gap-4 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-4 text-left hover:bg-white/[0.05] hover:border-white/[0.12] transition-all hover:scale-[1.01] active:scale-[0.99]"
+                  className="cursor-pointer flex items-center gap-4 rounded-xl border border-nativz-border bg-surface px-4 py-4 text-left hover:bg-surface-hover hover:border-nativz-border/80 transition-all hover:scale-[1.01] active:scale-[0.99]"
                 >
                   <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${bgColor} shrink-0`}>
                     <Icon size={20} className={iconColor} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-semibold text-white">{label}</h3>
+                    <h3 className="text-sm font-semibold text-text-primary">{label}</h3>
                     <p className="text-xs text-text-muted mt-0.5">{desc}</p>
                   </div>
                   <ChevronRight size={16} className="text-text-muted shrink-0" />
@@ -290,7 +290,7 @@ export default function PresentationsPage() {
                       <TypeIcon size={16} className={tc.iconColor} />
                     </div>
                     <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                      <span className="rounded-full bg-white/5 border border-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-text-muted whitespace-nowrap">
+                      <span className="rounded-full bg-surface-hover border border-nativz-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-text-muted whitespace-nowrap">
                         {tc.label}
                       </span>
                     </div>
@@ -347,7 +347,7 @@ export default function PresentationsPage() {
                     </h3>
                     <div className="flex items-center gap-3 text-[11px] text-text-muted">
                       {p.client_name && (
-                        <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-purple-400 font-medium">
+                        <span className="rounded-full bg-accent2-surface px-2 py-0.5 text-accent2-text font-medium">
                           {p.client_name}
                         </span>
                       )}

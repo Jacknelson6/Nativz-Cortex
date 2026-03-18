@@ -348,7 +348,7 @@ export function ClientProfileForm({
                     {['SMM', 'Paid Media', 'Editing', 'Affiliates'].map((svc) => {
                       const active = services.includes(svc);
                       return (
-                        <button key={svc} type="button" onClick={() => setServices((prev) => active ? prev.filter((s) => s !== svc) : [...prev, svc])} className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all cursor-pointer ${active ? 'bg-accent/15 text-accent-text border border-accent/30 shadow-[0_0_8px_rgba(4,107,210,0.15)]' : 'bg-surface-hover text-text-muted border border-nativz-border hover:border-nativz-border-light hover:text-text-secondary'}`}>
+                        <button key={svc} type="button" onClick={() => setServices((prev) => active ? prev.filter((s) => s !== svc) : [...prev, svc])} className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all cursor-pointer ${active ? 'bg-accent/15 text-accent-text border border-accent/30 shadow-[0_0_8px_var(--focus-ring)]' : 'bg-surface-hover text-text-muted border border-nativz-border hover:border-nativz-border-light hover:text-text-secondary'}`}>
                           {svc}
                         </button>
                       );

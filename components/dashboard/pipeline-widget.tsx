@@ -208,8 +208,8 @@ export function PipelineWidget() {
           {summary.aiBullets.length > 0 && (
             <div>
               <div className="flex items-center gap-1.5 mb-2">
-                <Sparkles size={11} className="text-purple-400" />
-                <span className="text-[10px] font-medium text-purple-400 uppercase tracking-wide">Update</span>
+                <Sparkles size={11} className="text-accent2-text" />
+                <span className="text-[10px] font-medium text-accent2-text uppercase tracking-wide">Update</span>
               </div>
               <ul className="space-y-1.5">
                 {summary.aiBullets.map((bullet, i) => {

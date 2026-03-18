@@ -11,6 +11,8 @@ const searchSchema = z.object({
   country: z.string().default('us'),
   client_id: z.string().uuid().nullable().optional(),
   search_mode: z.enum(['general', 'client_strategy']).default('general'),
+  platforms: z.array(z.enum(['web', 'reddit', 'youtube', 'tiktok'])).default(['web']),
+  volume: z.enum(['quick', 'deep']).default('quick'),
 });
 
 /**
@@ -49,7 +51,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { query, source, time_range, language, country, client_id, search_mode } = parsed.data;
+    const { query, source, time_range, language, country, client_id, search_mode, platforms, volume } = parsed.data;
+    const isV2 = platforms.length > 1 || platforms.includes('reddit');
 
     const adminClient = createAdminClient();
 
@@ -63,6 +66,9 @@ export async function POST(request: NextRequest) {
         country,
         client_id: client_id || null,
         search_mode,
+        platforms,
+        volume,
+        search_version: isV2 ? 2 : 1,
         status: 'processing',
         created_by: user.id,
       })

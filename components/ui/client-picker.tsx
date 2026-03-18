@@ -36,7 +36,7 @@ export function ClientPickerButton({
         <button
           type="button"
           onClick={() => onChange(null)}
-          className="flex w-full items-center gap-2.5 rounded-xl border border-purple-500/40 bg-purple-500/10 px-4 py-3 text-sm font-medium text-purple-400 hover:bg-purple-500/15 transition-colors"
+          className="flex w-full items-center gap-2.5 rounded-xl border border-accent2/40 bg-accent2-surface px-4 py-3 text-sm font-medium text-accent2-text hover:bg-accent2-surface transition-colors"
         >
           <Building2 size={16} />
           <span className="flex-1 text-left">{selected.name}</span>
@@ -145,7 +145,7 @@ export function ClientPickerModal({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search clients..."
-              className="w-full rounded-lg border border-white/10 bg-white/[0.04] pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:border-purple-500/50 focus:outline-none focus:ring-1 focus:ring-purple-500/50 transition-colors"
+              className="w-full rounded-lg border border-white/10 bg-white/[0.04] pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:border-accent2/50 focus:outline-none focus:ring-1 focus:ring-accent2/50 transition-colors"
             />
           </div>
         </div>
@@ -166,7 +166,7 @@ export function ClientPickerModal({
                   onClick={() => onSelect(client.id)}
                   className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-3 text-left text-sm transition-all hover:scale-[1.02] active:scale-[0.98] ${
                     client.id === value
-                      ? 'border-purple-500/50 bg-purple-500/10 text-purple-400 font-medium shadow-[0_0_12px_rgba(168,85,247,0.15)]'
+                      ? 'border-accent2/50 bg-accent2-surface text-accent2-text font-medium shadow-[0_0_12px_var(--accent2-surface)]'
                       : 'border-white/[0.06] bg-white/[0.03] text-white/70 hover:border-white/[0.12] hover:bg-white/[0.06]'
                   }`}
                 >

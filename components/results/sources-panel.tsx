@@ -88,7 +88,7 @@ export function SourcesPanel({ serpData }: SourcesPanelProps) {
         />
         <SourceTypeSection
           title="Videos"
-          icon={<Video size={14} className="text-purple-400" />}
+          icon={<Video size={14} className="text-accent2-text" />}
           items={videoItems}
         />
       </div>

@@ -54,13 +54,13 @@ export function CompetitiveAnalysis({ nicheInsights }: CompetitiveAnalysisProps)
         {nicheInsights.audience_hooks && nicheInsights.audience_hooks.length > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-2.5">
-              <Sparkles size={14} className="text-purple-400" />
+              <Sparkles size={14} className="text-accent2-text" />
               <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide">Audience hooks</h4>
             </div>
             <div className="space-y-1.5">
               {nicheInsights.audience_hooks.map((hook, i) => (
                 <div key={i} className="flex items-start gap-2 text-sm text-text-secondary">
-                  <span className="text-purple-400 mt-0.5">•</span>
+                  <span className="text-accent2-text mt-0.5">•</span>
                   <span>{hook}</span>
                 </div>
               ))}

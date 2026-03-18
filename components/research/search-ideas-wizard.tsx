@@ -141,7 +141,7 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
     <WizardShell
       open={open}
       onClose={handleClose}
-      accentColor="#a855f7"
+      accentColor="var(--accent2)"
       totalSteps={2}
       currentStep={step}
     >
@@ -201,13 +201,13 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
               value={sourceUrl}
               onChange={(e) => setSourceUrl(e.target.value)}
               placeholder="https://example.com"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:border-purple-500/50 focus:outline-none focus-visible:outline-none focus:ring-1 focus:ring-purple-500/50"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:border-accent2/50 focus:outline-none focus-visible:outline-none focus:ring-1 focus:ring-accent2/50"
             />
           </div>
         )}
 
         <div className="flex justify-end mt-6">
-          <GlassButton onClick={() => setStep(2)} disabled={!canProceed} className="!text-purple-400 !bg-[rgba(168,85,247,0.12)] !border-[rgba(168,85,247,0.25)] hover:!bg-[rgba(168,85,247,0.2)] hover:!border-[rgba(168,85,247,0.4)] hover:!shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_0_20px_rgba(168,85,247,0.15)] active:!bg-[rgba(168,85,247,0.25)] focus-visible:!ring-purple-500">
+          <GlassButton onClick={() => setStep(2)} disabled={!canProceed} className="!text-accent2-text !bg-[var(--accent2-surface)] !border-[var(--accent2-ring)] hover:!bg-[var(--accent2-ring)] hover:!border-[var(--accent2-ring)] hover:!shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_0_20px_var(--accent2-surface)] active:!bg-[var(--accent2-ring)] focus-visible:!ring-purple-500">
             Next &rarr;
           </GlassButton>
         </div>
@@ -225,7 +225,7 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
           value={concept}
           onChange={(e) => setConcept(e.target.value)}
           placeholder='e.g. "franchise growth", "behind the scenes"'
-          className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 px-4 text-sm text-white placeholder-white/40 focus:border-purple-500/50 focus:outline-none focus-visible:outline-none focus:ring-1 focus:ring-purple-500/50 mb-4"
+          className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 px-4 text-sm text-white placeholder-white/40 focus:border-accent2/50 focus:outline-none focus-visible:outline-none focus:ring-1 focus:ring-accent2/50 mb-4"
         />
 
         {/* Count presets */}
@@ -238,7 +238,7 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
               onClick={() => { setCount(n); setCustomCount(''); }}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 count === n && !customCount
-                  ? 'bg-purple-500/20 text-purple-400'
+                  ? 'bg-accent2-surface text-accent2-text'
                   : 'bg-white/[0.04] text-text-muted hover:bg-white/[0.08]'
               }`}
             >
@@ -254,7 +254,7 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
             placeholder="#"
             className={`w-16 px-3 py-2 rounded-lg text-sm font-medium text-center transition-colors focus:outline-none ${
               customCount
-                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                ? 'bg-accent2-surface text-accent2-text border border-accent2/30'
                 : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
             }`}
           />
@@ -272,7 +272,7 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
                   value={referenceUrl}
                   onChange={(e) => setReferenceUrl(e.target.value)}
                   placeholder="Paste a video URL"
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm text-white placeholder-white/40 focus:border-purple-500/50 focus:outline-none focus-visible:outline-none focus:ring-1 focus:ring-purple-500/50"
+                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm text-white placeholder-white/40 focus:border-accent2/50 focus:outline-none focus-visible:outline-none focus:ring-1 focus:ring-accent2/50"
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReference(); } }}
                 />
               </div>
@@ -293,7 +293,7 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
 
         {/* URL mode note */}
         {sourceMode === 'url' && (
-          <p className="text-[11px] text-purple-400/70 mb-4">
+          <p className="text-[11px] text-accent2-text/70 mb-4">
             Scraping may take a few seconds — we&apos;ll analyze the site before generating ideas
           </p>
         )}
@@ -313,11 +313,11 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
               type="button"
               onClick={() => handleGenerate({ concept: '', count: 10, referenceIds: [] })}
               disabled={loading}
-              className="rounded-xl border border-purple-500/30 px-5 py-2.5 text-sm font-medium text-purple-400 hover:bg-purple-500/10 transition-colors disabled:opacity-40"
+              className="rounded-xl border border-accent2/30 px-5 py-2.5 text-sm font-medium text-accent2-text hover:bg-accent2-surface transition-colors disabled:opacity-40"
             >
               Skip &amp; generate
             </button>
-            <GlassButton onClick={() => handleGenerate()} loading={loading} disabled={loading} className="!bg-[rgba(168,85,247,0.12)] !border-[rgba(168,85,247,0.25)] !text-purple-400 hover:!bg-[rgba(168,85,247,0.2)]">
+            <GlassButton onClick={() => handleGenerate()} loading={loading} disabled={loading} className="!bg-[var(--accent2-surface)] !border-[var(--accent2-ring)] !text-accent2-text hover:!bg-[var(--accent2-ring)]">
               {loading ? <><Loader2 size={16} className="animate-spin" /> Generating...</> : error ? 'Retry' : 'Generate'}
             </GlassButton>
           </div>

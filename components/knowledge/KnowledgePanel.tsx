@@ -28,7 +28,7 @@ const TYPE_BADGE_COLORS: Record<string, string> = {
   brand_asset: 'bg-blue-500/20 text-blue-400',
   web_page: 'bg-green-500/20 text-green-400',
   note: 'bg-yellow-500/20 text-yellow-400',
-  document: 'bg-purple-500/20 text-purple-400',
+  document: 'bg-accent2-surface text-accent2-text',
   contact: 'bg-orange-500/20 text-orange-400',
   search: 'bg-teal-500/20 text-teal-400',
   strategy: 'bg-red-500/20 text-red-400',

@@ -115,7 +115,7 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={PLACEHOLDER_EXAMPLES[placeholderIndex]}
-            className="w-full rounded-xl border border-nativz-border bg-surface py-3 pl-10 pr-4 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_rgba(4,107,210,0.15)]"
+            className="w-full rounded-xl border border-nativz-border bg-surface py-3 pl-10 pr-4 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_var(--focus-ring)]"
             disabled={loading}
           />
         </div>

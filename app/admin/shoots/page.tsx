@@ -526,7 +526,7 @@ export default function AdminShootsPage() {
                                   className={`
                                     cursor-pointer w-full text-left rounded-md px-1.5 py-1 text-[10px] font-medium
                                     ${event.planData
-                                      ? 'bg-purple-500/15 border border-purple-500/25 text-purple-300'
+                                      ? 'bg-accent2-surface border border-purple-500/25 text-accent2-text'
                                       : 'bg-white/[0.08] border border-white/10 text-white/80'
                                     }
                                     hover:bg-white/[0.12] hover:border-white/15 transition-colors
@@ -548,7 +548,7 @@ export default function AdminShootsPage() {
                                   )}
                                   <span className="truncate">{event.clientName}</span>
                                   {event.planData && (
-                                    <Sparkles size={9} className="shrink-0 text-purple-400 ml-auto" />
+                                    <Sparkles size={9} className="shrink-0 text-accent2-text ml-auto" />
                                   )}
                                 </button>
                               </div>

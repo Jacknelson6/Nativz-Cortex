@@ -396,7 +396,7 @@ export default function NerdPage() {
         ) : messages.length === 0 ? (
           <>
             <div className="flex flex-1 flex-col items-center justify-center px-6">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-gradient-to-b from-surface to-[#0d0d14] shadow-[0_0_24px_rgba(4,107,210,0.1)] mb-5">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-nativz-border bg-gradient-to-b from-surface to-background shadow-[0_0_24px_rgba(4,107,210,0.1)] mb-5">
                 <BotMessageSquare size={24} className="text-accent-text" />
               </div>
 
@@ -417,7 +417,7 @@ export default function NerdPage() {
                 ))}
                 <button
                   onClick={() => setShowCapabilities(true)}
-                  className="rounded-xl border border-purple-500/20 bg-purple-500/[0.04] px-4 py-2.5 text-sm text-purple-400 hover:text-purple-300 hover:border-purple-500/30 hover:bg-purple-500/[0.08] transition-all duration-200 cursor-pointer flex items-center gap-1.5"
+                  className="rounded-xl border border-purple-500/20 bg-purple-500/[0.04] px-4 py-2.5 text-sm text-accent2-text hover:text-accent2-text hover:border-accent2/30 hover:bg-purple-500/[0.08] transition-all duration-200 cursor-pointer flex items-center gap-1.5"
                 >
                   <Sparkles size={14} />
                   What can I do?
@@ -432,7 +432,7 @@ export default function NerdPage() {
         ) : (
           <>
             <Conversation className="px-4 md:px-6">
-              <div className="mx-auto max-w-3xl divide-y divide-white/[0.04]">
+              <div className="mx-auto max-w-3xl divide-y divide-nativz-border/50">
                 {messages.map((msg, index) => {
                   const isLast = index === messages.length - 1;
                   if (msg.role === 'assistant') {
@@ -531,7 +531,7 @@ function CapabilitiesModal({
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-nativz-border">
                 <div className="flex items-center gap-2">
-                  <Sparkles size={16} className="text-purple-400" />
+                  <Sparkles size={16} className="text-accent2-text" />
                   <h2 className="text-sm font-semibold text-text-primary">What The Nerd can do</h2>
                 </div>
                 <button onClick={onClose} className="text-text-muted hover:text-text-secondary transition-colors cursor-pointer">
@@ -558,7 +558,7 @@ function CapabilitiesModal({
                     </div>
                     <div className="space-y-1">
                       {directCmds.map((cmd) => (
-                        <div key={cmd.name} className="flex items-center gap-3 rounded-lg px-2.5 py-2 bg-white/[0.02]">
+                        <div key={cmd.name} className="flex items-center gap-3 rounded-lg px-2.5 py-2 bg-surface-hover/50">
                           <code className="text-xs text-accent-text font-mono">/{cmd.name}</code>
                           <span className="text-xs text-text-muted">{cmd.description}</span>
                         </div>
@@ -571,13 +571,13 @@ function CapabilitiesModal({
                 {aiCmds.length > 0 && (
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
-                      <Zap size={11} className="text-purple-400" />
+                      <Zap size={11} className="text-accent2-text" />
                       <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide">AI-powered commands</p>
                     </div>
                     <div className="space-y-1">
                       {aiCmds.map((cmd) => (
-                        <div key={cmd.name} className="flex items-center gap-3 rounded-lg px-2.5 py-2 bg-white/[0.02]">
-                          <code className="text-xs text-purple-400 font-mono">/{cmd.name}</code>
+                        <div key={cmd.name} className="flex items-center gap-3 rounded-lg px-2.5 py-2 bg-surface-hover/50">
+                          <code className="text-xs text-accent2-text font-mono">/{cmd.name}</code>
                           <span className="text-xs text-text-muted flex-1">{cmd.description}</span>
                           {cmd.example && (
                             <span className="text-[10px] text-text-muted/40 font-mono hidden sm:block">{cmd.example}</span>

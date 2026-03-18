@@ -83,6 +83,7 @@ function LabeledEdgeComponent({
   }, [data, edgeStyle]);
 
   const cycleColor = useCallback(() => {
+    // Edge colors are stored as hex in DB and used in SVG stroke — must remain raw hex
     const colors = ['#888888', '#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7'];
     const currentIdx = colors.indexOf(edgeColor);
     const nextColor = colors[(currentIdx + 1) % colors.length];

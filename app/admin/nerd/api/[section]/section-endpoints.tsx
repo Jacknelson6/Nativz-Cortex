@@ -10,14 +10,14 @@ const METHOD_COLORS: Record<string, string> = {
   GET: 'text-emerald-400 bg-emerald-500/10',
   POST: 'text-blue-400 bg-blue-500/10',
   PATCH: 'text-amber-400 bg-amber-500/10',
-  PUT: 'text-purple-400 bg-purple-500/10',
+  PUT: 'text-accent2-text bg-accent2-surface',
   DELETE: 'text-red-400 bg-red-500/10',
 };
 
 function AuthIcon({ auth }: { auth: string }) {
   if (auth.startsWith('Public')) return <Globe size={12} className="text-emerald-400" />;
   if (auth.includes('API key')) return <Zap size={12} className="text-amber-400" />;
-  if (auth.includes('Cron')) return <Zap size={12} className="text-purple-400" />;
+  if (auth.includes('Cron')) return <Zap size={12} className="text-accent2-text" />;
   return <Lock size={12} className="text-text-muted" />;
 }
 

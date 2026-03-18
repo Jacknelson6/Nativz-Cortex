@@ -155,7 +155,7 @@ export function AffiliatesDashboard() {
           {dataLoading ? (
             <Skeleton className="h-72" />
           ) : snapshots.length > 1 ? (
-            <TrendChart snapshots={snapshots} />
+            <TrendChart snapshots={snapshots} dateRange={dateRange} />
           ) : snapshots.length === 1 ? (
             <div className="rounded-xl border border-nativz-border bg-surface p-5">
               <p className="text-sm text-text-muted text-center py-8">
@@ -242,16 +242,31 @@ function KpiCards({ kpis }: { kpis: AffiliateKpis }) {
 // Trend Chart
 // ---------------------------------------------------------------------------
 
-function TrendChart({ snapshots }: { snapshots: SnapshotPoint[] }) {
-  const chartData = snapshots.map((s, i) => {
-    const prev = i > 0 ? snapshots[i - 1] : null;
-    const dailyAffiliates = prev ? Math.max(0, s.total_affiliates - prev.total_affiliates) : 0;
+function TrendChart({ snapshots, dateRange }: { snapshots: SnapshotPoint[]; dateRange: { start: string; end: string } }) {
+  // Build a lookup of existing snapshot data by date
+  const snapshotMap = new Map(snapshots.map((s) => [s.snapshot_date, s]));
+
+  // Generate every day in the date range so the chart always shows the full period
+  const allDays: string[] = [];
+  const cursor = new Date(dateRange.start + 'T00:00:00');
+  const endDate = new Date(dateRange.end + 'T00:00:00');
+  while (cursor <= endDate) {
+    allDays.push(cursor.toISOString().split('T')[0]);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  const chartData = allDays.map((date, i) => {
+    const s = snapshotMap.get(date);
+    const prevDate = i > 0 ? allDays[i - 1] : null;
+    const prev = prevDate ? snapshotMap.get(prevDate) : null;
+
+    const dailyAffiliates = s && prev ? Math.max(0, s.total_affiliates - prev.total_affiliates) : 0;
 
     return {
-      date: s.snapshot_date,
+      date,
       affiliates: dailyAffiliates,
-      revenue: Number(s.daily_revenue) || 0,
-      sales: Number(s.daily_sales_count) || 0,
+      revenue: s ? (Number(s.daily_revenue) || 0) : 0,
+      sales: s ? (Number(s.daily_sales_count) || 0) : 0,
     };
   }).slice(1); // Drop first day (no previous to diff against)
 

@@ -37,7 +37,7 @@ export function OnboardProgress({ currentStep, completedSteps }: OnboardProgress
                   ${isComplete
                     ? 'bg-accent text-white shadow-[0_0_12px_rgba(4,107,210,0.4)]'
                     : isCurrent
-                      ? 'bg-accent/20 text-accent border-2 border-accent shadow-[0_0_16px_rgba(4,107,210,0.25)]'
+                      ? 'bg-accent/20 text-accent border-2 border-accent shadow-[0_0_16px_var(--accent-surface)]'
                       : 'bg-surface-hover text-text-muted border border-nativz-border'
                   }
                 `}

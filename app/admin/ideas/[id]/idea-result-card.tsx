@@ -26,21 +26,21 @@ function ReplaceSkeleton() {
   return (
     <div className="rounded-xl border border-purple-500/20 bg-surface p-4 flex flex-col items-center justify-center min-h-[160px] space-y-3">
       <motion.div
-        className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10"
+        className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent2-surface"
         animate={{ scale: [1, 1.1, 1] }}
         transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
       >
-        <Sparkles size={18} className="text-purple-400" />
+        <Sparkles size={18} className="text-accent2-text" />
       </motion.div>
       <div className="flex items-center gap-2">
-        <Loader2 size={12} className="animate-spin text-purple-400" />
-        <span className="text-xs text-purple-400/70">Replacing idea...</span>
+        <Loader2 size={12} className="animate-spin text-accent2-text" />
+        <span className="text-xs text-accent2-text/70">Replacing idea...</span>
       </div>
       <div className="w-full space-y-2 pt-2">
         {[0.8, 0.6, 0.7].map((w, i) => (
           <motion.div
             key={i}
-            className="h-2.5 rounded bg-purple-500/10 mx-auto"
+            className="h-2.5 rounded bg-accent2-surface mx-auto"
             style={{ width: `${w * 100}%` }}
             animate={{ opacity: [0.2, 0.5, 0.2] }}
             transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.2 }}
@@ -81,8 +81,8 @@ export function IdeaResultCard({
       transition={{ duration: 0.3, delay: index * 0.03 }}
       className={`group rounded-xl border bg-surface p-4 space-y-3 transition-all cursor-pointer ${
         idea.selected
-          ? 'border-purple-500/40 bg-purple-500/[0.03]'
-          : 'border-nativz-border hover:border-purple-500/30'
+          ? 'border-accent2/40 bg-purple-500/[0.03]'
+          : 'border-nativz-border hover:border-accent2/30'
       }`}
       onClick={() => selectionMode && onToggleSelect(index)}
     >
@@ -91,10 +91,10 @@ export function IdeaResultCard({
           {selectionMode && (
             <button
               onClick={(e) => { e.stopPropagation(); onToggleSelect(index); }}
-              className="mt-0.5 shrink-0 text-text-muted hover:text-purple-400 transition-colors"
+              className="mt-0.5 shrink-0 text-text-muted hover:text-accent2-text transition-colors"
             >
               {idea.selected ? (
-                <CheckSquare size={16} className="text-purple-400" />
+                <CheckSquare size={16} className="text-accent2-text" />
               ) : (
                 <Square size={16} />
               )}
@@ -129,7 +129,7 @@ export function IdeaResultCard({
       <ul className="space-y-1.5">
         {reasons.map((reason, i) => (
           <li key={i} className="flex items-start gap-2">
-            <Zap size={10} className="mt-1 text-purple-400 shrink-0" />
+            <Zap size={10} className="mt-1 text-accent2-text shrink-0" />
             <span className="text-xs text-text-secondary leading-relaxed">{reason}</span>
           </li>
         ))}
@@ -150,7 +150,7 @@ export function IdeaResultCard({
                 navigator.clipboard.writeText(idea.script!);
                 toast.success('Script copied');
               }}
-              className="text-[10px] text-purple-400 hover:text-purple-300 cursor-pointer"
+              className="text-[10px] text-accent2-text hover:text-accent2-text cursor-pointer"
             >
               Copy
             </button>
@@ -160,7 +160,7 @@ export function IdeaResultCard({
       )}
       {idea.scriptLoading && (
         <div className="flex items-center gap-2 pt-2 border-t border-nativz-border">
-          <Loader2 size={12} className="animate-spin text-purple-400" />
+          <Loader2 size={12} className="animate-spin text-accent2-text" />
           <span className="text-xs text-text-muted">Writing script...</span>
         </div>
       )}

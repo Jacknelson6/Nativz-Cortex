@@ -19,8 +19,10 @@ import {
   Handshake,
   Clapperboard,
   Presentation,
+  Brain,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import {
   Sidebar,
   SidebarHeader,
@@ -87,6 +89,7 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/analytics/affiliates', label: 'Affiliates', icon: Handshake },
         ],
       },
+      { href: '/admin/knowledge', label: 'Knowledge', icon: Brain },
     ],
   },
 ];
@@ -110,7 +113,7 @@ interface AdminSidebarProps {
 export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
   const pathname = usePathname();
   const { open } = useSidebar();
-  const [showNativz, setShowNativz] = useState(true);
+  const { mode, toggleMode } = useBrandMode();
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
 
   function toggleMenu(href: string) {
@@ -124,37 +127,29 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
 
   return (
     <Sidebar>
-      {/* Logo — click toggles between Nativz+Cortex and just Cortex */}
+      {/* Logo — click toggles brand mode (Nativz ↔ Anderson Collaborative) */}
       <SidebarHeader>
         <button
           type="button"
-          onClick={() => setShowNativz((v) => !v)}
-          className={`flex w-full items-center justify-center hover:opacity-80 transition-all duration-200 mb-3 cursor-pointer ${
-            open ? 'flex-col -space-y-0.5' : ''
-          }`}
+          onClick={(e) => toggleMode(e)}
+          aria-label={`Switch to ${mode === 'nativz' ? 'Anderson Collaborative' : 'Nativz'} mode`}
+          className="flex w-full items-center justify-center hover:opacity-80 transition-all duration-200 mb-3 cursor-pointer"
         >
-          {showNativz ? (
-            <>
-              <Image
-                src="/nativz-logo.svg"
-                alt="Nativz"
-                width={open ? 90 : 28}
-                height={open ? 34 : 10}
-                className={`${open ? 'h-7 w-auto' : 'h-5 w-auto'} transition-opacity duration-200`}
-                priority
-              />
-              {open && (
-                <span className="text-[10px] font-bold text-text-secondary tracking-[0.3em] uppercase">
-                  Cortex
-                </span>
-              )}
-            </>
+          {mode === 'nativz' ? (
+            <Image
+              src="/nativz-logo.svg"
+              alt="Nativz"
+              width={open ? 120 : 28}
+              height={open ? 46 : 10}
+              className={`${open ? 'h-9 w-auto' : 'h-5 w-auto'} transition-opacity duration-200`}
+              priority
+            />
           ) : (
-            <span className={`font-bold tracking-[0.2em] uppercase transition-opacity duration-200 ${
-              open ? 'text-lg text-text-primary' : 'text-[10px] text-text-secondary'
-            }`}>
-              Cortex
-            </span>
+            <img
+              src="/anderson-logo-dark.svg"
+              alt="Anderson Collaborative"
+              className={`${open ? 'h-9 w-auto' : 'h-5 w-auto'} transition-opacity duration-200`}
+            />
           )}
         </button>
 
@@ -248,7 +243,7 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
             <div
               className="absolute w-[300%] h-[50%] opacity-70 group-hover/nerd:opacity-100 bottom-[-11px] right-[-250%] rounded-full z-0 transition-opacity duration-300"
               style={{
-                background: 'radial-gradient(circle, #5ba3e6, transparent 10%)',
+                background: 'radial-gradient(circle, var(--accent-text), transparent 10%)',
                 animation: 'star-movement-bottom 6s linear infinite alternate',
               }}
             />
@@ -256,17 +251,17 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
             <div
               className="absolute w-[300%] h-[50%] opacity-70 group-hover/nerd:opacity-100 top-[-10px] left-[-250%] rounded-full z-0 transition-opacity duration-300"
               style={{
-                background: 'radial-gradient(circle, #046bd2, transparent 10%)',
+                background: 'radial-gradient(circle, var(--accent), transparent 10%)',
                 animation: 'star-movement-top 6s linear infinite alternate',
               }}
             />
 
             <div
-              className={`relative z-[1] flex items-center border border-white/[0.06] bg-gradient-to-b from-surface to-[#0d0d14] transition-all duration-200 group-hover/nerd:shadow-[0_0_20px_rgba(4,107,210,0.2)] ${
+              className={`relative z-[1] flex items-center border border-nativz-border bg-surface transition-all duration-200 group-hover/nerd:shadow-[0_0_20px_var(--accent-surface)] ${
                 open ? 'gap-2.5 rounded-xl px-3 py-2.5' : 'justify-center rounded-lg px-2 py-2.5'
               } ${
                 isActivePath(pathname, '/admin/nerd')
-                  ? 'border-accent/30 shadow-[0_0_16px_rgba(4,107,210,0.15)]'
+                  ? 'border-accent/30 shadow-[0_0_16px_var(--accent-surface)]'
                   : 'group-hover/nerd:border-accent/25'
               }`}
             >
