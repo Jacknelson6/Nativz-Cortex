@@ -589,3 +589,33 @@ dialog:not([open]) {
     animation: none;
   }
 }
+
+/* ── Inline analysis panel (standalone video page) ──
+   Neutralizes the VideoAnalysisPanel modal positioning so it
+   renders as a static, full-width embedded panel. */
+.inline-analysis > .fixed {
+  position: static !important;
+  inset: auto !important;
+  z-index: auto !important;
+  padding: 0 !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  pointer-events: auto !important;
+}
+
+/* Hide the backdrop overlay (first fixed child) */
+.inline-analysis > .fixed:first-child {
+  display: none !important;
+}
+
+/* The inner panel card — remove modal constraints */
+.inline-analysis > .fixed > div {
+  pointer-events: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+  width: 100% !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  animation: none !important;
+}

@@ -3,6 +3,56 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * GET /api/analysis/items/[id]
+ *
+ * Fetch a single moodboard item by ID.
+ *
+ * @auth Required (admin)
+ * @param id - Moodboard item UUID
+ * @returns {MoodboardItem} Full item record
+ */
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createServerSupabaseClient();
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const adminClient = createAdminClient();
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || userData.role !== 'admin') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
+    const { data: item, error: fetchError } = await adminClient
+      .from('moodboard_items')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !item) {
+      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(item);
+  } catch (error) {
+    console.error('GET /api/analysis/items/[id] error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
 const updateItemSchema = z.object({
   position_x: z.number().optional(),
   position_y: z.number().optional(),

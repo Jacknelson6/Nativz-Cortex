@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getTikTokMetadata } from '@/lib/tiktok/scraper';
+import { getInstagramVideoUrl } from '@/lib/instagram/scraper';
 
 /**
  * GET /api/analysis/items/[id]/video-url
@@ -44,6 +45,8 @@ export async function GET(
     if (item.platform === 'tiktok') {
       const meta = await getTikTokMetadata(item.url);
       videoUrl = meta?.video_url ?? null;
+    } else if (item.platform === 'instagram') {
+      videoUrl = await getInstagramVideoUrl(item.url);
     }
 
     // For non-platform URLs (direct mp4 links, etc.), the page URL may itself be playable

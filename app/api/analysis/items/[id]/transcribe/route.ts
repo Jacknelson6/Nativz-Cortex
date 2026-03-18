@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { extractTikTokTranscript } from '@/lib/tiktok/scraper';
+import { extractInstagramTranscript } from '@/lib/instagram/scraper';
 import { createCompletion } from '@/lib/ai/client';
 
 /**
@@ -52,6 +53,10 @@ export async function POST(
       const result = await extractTikTokTranscript(item.url, videoUrl);
       transcript = result.text;
       segments = result.segments;
+    } else if (item.platform === 'instagram') {
+      const result = await extractInstagramTranscript(item.url);
+      transcript = result.text;
+      segments = result.segments;
     } else if (item.platform === 'youtube') {
       // Fetch YouTube captions
       const videoId = extractYouTubeId(item.url);
@@ -65,7 +70,7 @@ export async function POST(
     }
 
     // Auto-generate title from transcript using AI
-    const needsTitle = !item.title || item.title === 'Untitled video' || item.title === 'TikTok video';
+    const needsTitle = !item.title || item.title === 'Untitled video' || item.title === 'TikTok video' || item.title === 'Instagram video' || item.title === 'Instagram reel';
     let generatedTitle: string | null = null;
     if (needsTitle && transcript) {
       try {

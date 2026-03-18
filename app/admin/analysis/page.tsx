@@ -92,10 +92,11 @@ export default function MoodboardPage() {
         body: JSON.stringify({ board_id: boardId, url, type: itemType }),
       });
       if (!itemRes.ok) throw new Error('Failed to add video');
+      const createdItem = await itemRes.json();
 
       toast.success('Analyzing video...');
       setQuickUrl('');
-      router.push(`/admin/analysis/${boardId}`);
+      router.push(`/admin/analysis/video/${createdItem.id}`);
     } catch {
       toast.error('Failed to analyze video');
     } finally {

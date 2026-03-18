@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getTikTokMetadata } from '@/lib/tiktok/scraper';
+import { getInstagramVideoUrl } from '@/lib/instagram/scraper';
 import Ffmpeg from 'fluent-ffmpeg';
 import { writeFile, readFile, unlink, mkdir, readdir, rmdir } from 'fs/promises';
 import { join } from 'path';
@@ -91,6 +92,10 @@ async function getVideoUrl(item: { url: string; platform: string | null; metadat
   if (platform === 'tiktok') {
     const meta = await getTikTokMetadata(item.url);
     return meta?.video_url ?? null;
+  }
+
+  if (platform === 'instagram') {
+    return getInstagramVideoUrl(item.url);
   }
 
   // For other platforms, we don't have a reliable way to get direct video URLs

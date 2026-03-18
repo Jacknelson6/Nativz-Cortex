@@ -27,7 +27,7 @@ const PLATFORM_COLORS: Record<string, string> = {
   twitter: 'bg-sky-500 text-white',
 };
 
-type PanelView = 'transcript' | 'hook' | 'replicate' | 'frames';
+type PanelView = 'transcript' | 'hook' | 'replicate';
 
 export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: VideoAnalysisPanelProps) {
   const [item, setItem] = useState(initialItem);
@@ -90,7 +90,7 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
         }
         const updated = await res.json();
         setItem(updated);
-        setView('frames');
+        setView('transcript');
         toast.success('Frames extracted', { duration: 5000 });
       })
       .catch((err) => {
@@ -201,6 +201,9 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
               setSearchQuery={setSearchQuery}
               onCopy={handleCopy}
               copied={copied}
+              hasFrames={hasFrames}
+              extractingFrames={extractingFrames}
+              onExtractFrames={handleExtractFrames}
             />
           )}
 
@@ -216,21 +219,16 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
           {view === 'replicate' && (
             <BriefSection item={item} onReplicate={onReplicate} onCopy={handleCopy} copied={copied} />
           )}
-
-          {view === 'frames' && (
-            <FramesSection item={item} extracting={extractingFrames} onExtract={handleExtractFrames} />
-          )}
         </div>
 
         {/* Pinned bottom buttons */}
         {(isTranscribed || transcribeFailed) && (
           <div className="shrink-0 border-t border-nativz-border px-5 py-3">
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {([
                 { key: 'transcript' as PanelView, icon: <FileText size={14} className="shrink-0" />, label: 'Transcript', onClick: () => setView('transcript'), disabled: false },
                 { key: 'hook' as PanelView, icon: analyzing ? <Loader2 size={14} className="shrink-0 animate-spin" /> : <Target size={14} className="shrink-0" />, label: 'Hook', onClick: () => { setView('hook'); if (!isAnalyzed && !analyzing) handleAnalyze(); }, disabled: false },
                 { key: 'replicate' as PanelView, icon: <Sparkles size={14} className="shrink-0" />, label: 'Rescript', onClick: () => setView('replicate'), disabled: false },
-                { key: 'frames' as PanelView, icon: extractingFrames ? <Loader2 size={14} className="shrink-0 animate-spin" /> : <ImageIcon size={14} className="shrink-0" />, label: 'Frames', onClick: () => setView('frames'), disabled: false },
               ]).map((btn) => (
                 <button
                   key={btn.key}
@@ -256,9 +254,10 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
 }
 
 // ─── Transcript View ─────────────────────────────────────────
-function TranscriptView({ item, isTranscribed, transcribing, transcribeFailed, onTranscribe, searchQuery, setSearchQuery, onCopy, copied }: {
+function TranscriptView({ item, isTranscribed, transcribing, transcribeFailed, onTranscribe, searchQuery, setSearchQuery, onCopy, copied, hasFrames, extractingFrames, onExtractFrames }: {
   item: MoodboardItem; isTranscribed: boolean; transcribing: boolean; transcribeFailed: boolean; onTranscribe: () => void;
   searchQuery: string; setSearchQuery: (q: string) => void; onCopy: (t: string) => void; copied: boolean;
+  hasFrames: boolean; extractingFrames: boolean; onExtractFrames: () => void;
 }) {
   if (!isTranscribed) {
     return (
@@ -287,7 +286,18 @@ function TranscriptView({ item, isTranscribed, transcribing, transcribeFailed, o
     );
   }
 
-  return <TranscriptSection item={item} searchQuery={searchQuery} setSearchQuery={setSearchQuery} onCopy={onCopy} copied={copied} />;
+  return (
+    <TranscriptSection
+      item={item}
+      searchQuery={searchQuery}
+      setSearchQuery={setSearchQuery}
+      onCopy={onCopy}
+      copied={copied}
+      hasFrames={hasFrames}
+      extractingFrames={extractingFrames}
+      onExtractFrames={onExtractFrames}
+    />
+  );
 }
 
 // ─── Hook View ───────────────────────────────────────────────
@@ -427,10 +437,12 @@ function HookView({ item, isAnalyzed, analyzing, onAnalyze }: {
 }
 
 // ─── Transcript Section ─────────────────────────────────────
-function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied }: {
+function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied, hasFrames, extractingFrames, onExtractFrames }: {
   item: MoodboardItem; searchQuery: string; setSearchQuery: (q: string) => void; onCopy: (t: string) => void; copied: boolean;
+  hasFrames: boolean; extractingFrames: boolean; onExtractFrames: () => void;
 }) {
   const segments: TranscriptSegment[] = item.transcript_segments ?? [];
+  const frames = item.frames ?? [];
   const hasSegments = segments.length > 0;
 
   const filteredSegments = useMemo(() => {
@@ -447,21 +459,118 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied }
     return item.transcript.replace(regex, '<<<HIGHLIGHT>>>$1<<<ENDHIGHLIGHT>>>');
   }, [item.transcript, searchQuery]);
 
+  // Build a map of frame index to insert BEFORE a given segment index
+  const frameInsertMap = useMemo(() => {
+    if (!hasFrames || !hasSegments) return new Map<number, number[]>();
+    const map = new Map<number, number[]>();
+    const usedFrames = new Set<number>();
+
+    for (let fi = 0; fi < frames.length; fi++) {
+      const frameTs = frames[fi].timestamp;
+      // Find the first segment that starts at or after the frame timestamp
+      let bestIdx = filteredSegments.length; // default: after all segments
+      for (let si = 0; si < filteredSegments.length; si++) {
+        if (filteredSegments[si].start >= frameTs) {
+          bestIdx = si;
+          break;
+        }
+      }
+      if (!usedFrames.has(fi)) {
+        const existing = map.get(bestIdx) ?? [];
+        existing.push(fi);
+        map.set(bestIdx, existing);
+        usedFrames.add(fi);
+      }
+    }
+    return map;
+  }, [hasFrames, hasSegments, frames, filteredSegments]);
+
+  // Content classification from mediapipe
+  const contentClassification = item.mediapipe_analysis?.contentClassification;
+
   if (!item.transcript && !hasSegments) {
+    // No transcript — show frames grid if available, otherwise empty state
+    if (hasFrames) {
+      return (
+        <div className="space-y-3">
+          {contentClassification && (
+            <div className="rounded-lg border border-nativz-border bg-surface-hover/20 p-3">
+              <ContentBreakdown
+                classification={contentClassification}
+                videoDurationMs={(item.duration ?? 30) * 1000}
+              />
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-2">
+            {frames.map((frame, i) => (
+              <div key={i} className="relative rounded-md overflow-hidden border border-nativz-border">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={frame.url} alt={frame.label} className="w-full aspect-[9/16] object-cover" />
+                <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-mono text-center py-0.5">
+                  {frame.label}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
     return <p className="text-sm text-text-muted text-center py-4">No transcript available</p>;
   }
 
+  /** Render an inline frame card */
+  const renderFrameCard = (frameIndex: number) => {
+    const frame = frames[frameIndex];
+    const transcriptText = segments.length > 0
+      ? getTranscriptAtTimestamp(segments, frame.timestamp, 3)
+      : '';
+    return (
+      <div key={`frame-${frameIndex}`} className="flex gap-3 rounded-lg border border-nativz-border bg-surface-hover/20 p-2 my-2 hover:border-accent/30 transition-colors">
+        <div className="relative shrink-0 w-[72px] rounded-md overflow-hidden border border-nativz-border">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={frame.url} alt={frame.label} className="w-full aspect-[9/16] object-cover" />
+          <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-mono text-center py-0.5">
+            {frame.label}
+          </div>
+        </div>
+        <div className="flex-1 min-w-0 py-0.5">
+          <p className="text-[10px] font-medium text-text-muted mb-1">
+            {frame.label}{frameIndex < frames.length - 1 ? ` – ${frames[frameIndex + 1].label}` : '+'}
+          </p>
+          {transcriptText ? (
+            <p className="text-xs text-text-secondary leading-relaxed line-clamp-3">{transcriptText}</p>
+          ) : (
+            <p className="text-[10px] text-text-muted italic">No transcript at this point</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-3">
-      <div className="relative">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-        <input
-          type="text"
-          placeholder="Search transcript..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 rounded-lg border border-nativz-border bg-surface-hover/30 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
-        />
+      {/* Search bar + extract frames button */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input
+            type="text"
+            placeholder="Search transcript..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-nativz-border bg-surface-hover/30 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+          />
+        </div>
+        {!hasFrames && (
+          <button
+            onClick={onExtractFrames}
+            disabled={extractingFrames}
+            className="cursor-pointer shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-nativz-border text-xs text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors disabled:opacity-50"
+          >
+            {extractingFrames ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />}
+            Extract frames
+          </button>
+        )}
       </div>
 
       {item.hook && (
@@ -471,17 +580,49 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied }
         </div>
       )}
 
+      {/* Content classification (shown when frames are available) */}
+      {hasFrames && contentClassification && (
+        <div className="rounded-lg border border-nativz-border bg-surface-hover/20 p-3">
+          <ContentBreakdown
+            classification={contentClassification}
+            videoDurationMs={(item.duration ?? 30) * 1000}
+          />
+        </div>
+      )}
+
+      {/* Inline CTA for frames when not yet extracted */}
+      {!hasFrames && !extractingFrames && hasSegments && (
+        <div className="flex items-center gap-2 rounded-lg border border-dashed border-nativz-border bg-surface-hover/10 px-3 py-2">
+          <ImageIcon size={12} className="text-text-muted shrink-0" />
+          <p className="text-[11px] text-text-muted flex-1">Extract frames to see visual timeline alongside transcript</p>
+        </div>
+      )}
+
+      {extractingFrames && (
+        <div className="flex items-center gap-2 rounded-lg border border-accent/20 bg-accent-surface/30 px-3 py-2">
+          <Loader2 size={12} className="animate-spin text-accent-text shrink-0" />
+          <p className="text-[11px] text-text-muted">Extracting frames...</p>
+        </div>
+      )}
+
       {hasSegments ? (
-        <div className="space-y-1 overflow-y-auto">
+        <div className="space-y-0 overflow-y-auto">
+          {/* Frames that appear before the first segment */}
+          {hasFrames && (frameInsertMap.get(0) ?? []).map(fi => renderFrameCard(fi))}
+
           {filteredSegments.map((seg, i) => (
-            <div key={i} className="flex gap-2 rounded p-1.5 hover:bg-surface-hover/50 transition-colors">
-              <span className="text-[10px] text-accent-text font-mono shrink-0 pt-0.5 w-10 text-right">
-                {formatTimestamp(seg.start)}
-              </span>
-              <p className="text-sm text-text-secondary">
-                {searchQuery ? highlightText(seg.text, searchQuery) : seg.text}
-              </p>
-            </div>
+            <React.Fragment key={i}>
+              <div className="flex gap-2 rounded p-1.5 hover:bg-surface-hover/50 transition-colors">
+                <span className="text-[10px] text-accent-text font-mono shrink-0 pt-0.5 w-10 text-right">
+                  {formatTimestamp(seg.start)}
+                </span>
+                <p className="text-sm text-text-secondary">
+                  {searchQuery ? highlightText(seg.text, searchQuery) : seg.text}
+                </p>
+              </div>
+              {/* Insert any frames that appear before the next segment */}
+              {hasFrames && (frameInsertMap.get(i + 1) ?? []).map(fi => renderFrameCard(fi))}
+            </React.Fragment>
           ))}
           {filteredSegments.length === 0 && searchQuery && (
             <p className="text-sm text-text-muted text-center py-4">No matches found</p>
