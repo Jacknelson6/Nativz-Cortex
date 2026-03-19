@@ -12,7 +12,7 @@ export default async function AdminSearchProcessingPage({
 
   const { data: search, error } = await supabase
     .from('topic_searches')
-    .select('id, query, status')
+    .select('id, query, status, volume, platforms')
     .eq('id', id)
     .single();
 
@@ -25,5 +25,13 @@ export default async function AdminSearchProcessingPage({
     redirect(`/admin/search/${id}`);
   }
 
-  return <SearchProcessing searchId={id} query={search.query} redirectPrefix="/admin" />;
+  return (
+    <SearchProcessing
+      searchId={id}
+      query={search.query}
+      redirectPrefix="/admin"
+      volume={(search.volume as string) ?? 'medium'}
+      platforms={(search.platforms as string[]) ?? ['web']}
+    />
+  );
 }

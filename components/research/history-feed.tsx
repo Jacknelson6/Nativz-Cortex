@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Search, Sparkles, Building2, Clock, Loader2 } from 'lucide-react';
+import { Search, Sparkles, Building2, Clock, Loader2, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatRelativeTime } from '@/lib/utils/format';
@@ -12,6 +13,7 @@ interface HistoryFeedProps {
   items: HistoryItem[];
   clients?: { id: string; name: string }[];
   onViewAll?: () => void;
+  onItemDeleted?: (id: string) => void;
 }
 
 const TYPE_FILTERS: { label: string; value: HistoryItemType | null }[] = [
@@ -33,11 +35,34 @@ function TypeIcon({ type }: { type: HistoryItemType }) {
   return <Search size={14} className="text-text-muted shrink-0" />;
 }
 
-export function HistoryFeed({ items, onViewAll }: HistoryFeedProps) {
+export function HistoryFeed({ items, onViewAll, onItemDeleted }: HistoryFeedProps) {
   const [typeFilter, setTypeFilter] = useState<HistoryItemType | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+
+  async function handleDelete(e: React.MouseEvent, item: HistoryItem) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDeletingId(item.id);
+    try {
+      const endpoint = item.type === 'ideas'
+        ? `/api/ideas/runs/${item.id}`
+        : `/api/search/${item.id}`;
+      const res = await fetch(endpoint, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+      setHiddenIds(prev => new Set(prev).add(item.id));
+      onItemDeleted?.(item.id);
+      toast.success('Removed from history');
+    } catch {
+      toast.error('Failed to delete');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const filtered = items.filter((item) => {
+    if (hiddenIds.has(item.id)) return false;
     if (typeFilter && item.type !== typeFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -111,7 +136,7 @@ export function HistoryFeed({ items, onViewAll }: HistoryFeedProps) {
             const content = (
               <Card
                 interactive
-                className={`flex items-center justify-between py-3 px-4 animate-stagger-in ${isProcessing ? 'opacity-70' : ''}`}
+                className={`group flex items-center justify-between py-3 px-4 animate-stagger-in ${isProcessing ? 'opacity-70' : ''}`}
                 style={{ animationDelay: `${index * 30}ms` }}
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -135,13 +160,24 @@ export function HistoryFeed({ items, onViewAll }: HistoryFeedProps) {
                     </div>
                   </div>
                 </div>
-                {isProcessing && (
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Loader2 size={14} className="animate-spin text-text-muted" />
-                    <Badge variant="default" className="text-[10px] px-1.5 py-0">Processing</Badge>
-                  </div>
-                )}
-                {item.status === 'failed' && <Badge variant="danger">Failed</Badge>}
+                <div className="flex items-center gap-2 shrink-0">
+                  {isProcessing && (
+                    <>
+                      <Loader2 size={14} className="animate-spin text-text-muted" />
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0">Processing</Badge>
+                    </>
+                  )}
+                  {item.status === 'failed' && <Badge variant="danger">Failed</Badge>}
+                  <button
+                    type="button"
+                    onClick={(e) => handleDelete(e, item)}
+                    disabled={deletingId === item.id}
+                    className="opacity-0 group-hover:opacity-100 rounded-md p-1 text-text-muted/30 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                    title="Remove"
+                  >
+                    {deletingId === item.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                  </button>
+                </div>
               </Card>
             );
 
