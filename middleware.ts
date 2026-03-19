@@ -82,7 +82,12 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/scheduler/connect/callback') ||
     pathname.startsWith('/api/monday/webhook') ||
     pathname.startsWith('/api/vault/webhook') ||
-    pathname.startsWith('/api/google/callback')
+    pathname.startsWith('/api/google/callback') ||
+    pathname.startsWith('/api/team/invite/validate') ||
+    pathname.startsWith('/api/team/invite/accept') ||
+    pathname.startsWith('/api/invites/validate') ||
+    pathname.startsWith('/api/invites/accept') ||
+    pathname.startsWith('/api/invites/link')
   ) {
     if (pathname.startsWith('/api/')) {
       setCorsHeaders(supabaseResponse, requestOrigin);
