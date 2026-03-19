@@ -33,11 +33,11 @@ export default async function AdminSearchResultsPage({
   const adminClient = createAdminClient();
 
   // Fetch client info if attached
-  let clientInfo: { id: string; name: string; slug: string } | null = null;
+  let clientInfo: { id: string; name: string; slug: string; industry: string } | null = null;
   if (search.client_id) {
     const { data } = await adminClient
       .from('clients')
-      .select('id, name, slug')
+      .select('id, name, slug, industry')
       .eq('id', search.client_id)
       .single();
     clientInfo = data || null;

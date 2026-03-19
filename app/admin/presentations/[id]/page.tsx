@@ -8,6 +8,7 @@ import type { PresentationData } from './types';
 import { SlideEditor } from './slide-editor';
 import { TierListEditor } from './tier-list-editor';
 import { SocialAuditEditor } from './social-audit-editor';
+import { BenchmarksEditor } from './benchmarks-editor';
 
 // ─── Router page ─────────────────────────────────────────────────────────────
 
@@ -91,6 +92,7 @@ export default function PresentationEditorPage() {
           slides: presentation.slides,
           tiers: presentation.tiers,
           tier_items: presentation.tier_items,
+          audit_data: presentation.audit_data,
           status: presentation.status,
           tags: presentation.tags,
         }),
@@ -113,6 +115,20 @@ export default function PresentationEditorPage() {
   }
 
   if (!presentation) return null;
+
+  if (presentation.type === 'benchmarks') {
+    return (
+      <BenchmarksEditor
+        presentation={presentation}
+        saving={saving}
+        clients={clients}
+        update={update}
+        onSave={handleManualSave}
+        onBack={() => router.push('/admin/presentations')}
+        onPresent={() => router.push(`/admin/presentations/${id}/present`)}
+      />
+    );
+  }
 
   if (presentation.type === 'social_audit') {
     return (

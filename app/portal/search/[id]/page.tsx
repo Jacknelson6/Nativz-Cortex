@@ -15,6 +15,7 @@ import { NicheInsights } from '@/components/results/niche-insights';
 import { SourcesPanel } from '@/components/results/sources-panel';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
+import { BenchmarkRecommendations } from '@/components/search/benchmark-recommendations';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 import { hasSerp } from '@/lib/types/search';
@@ -43,16 +44,18 @@ export default async function PortalSearchResultsPage({
   }
 
   // Verify org scoping: search's client must belong to user's org
+  let clientIndustry: string | null = null;
   if (search.client_id) {
     const { data: clientData } = await adminClient
       .from('clients')
-      .select('id, organization_id')
+      .select('id, organization_id, industry')
       .eq('id', search.client_id)
       .single();
 
     if (!clientData || clientData.organization_id !== result.organizationId) {
       notFound();
     }
+    clientIndustry = clientData?.industry ?? null;
   } else {
     // No client attached — portal users shouldn't see unattached searches
     notFound();
@@ -168,6 +171,11 @@ export default async function PortalSearchResultsPage({
               <NicheInsights insights={aiResponse.niche_performance_insights} />
             )}
           </div>
+        )}
+
+        {/* Benchmark ad format recommendations */}
+        {clientIndustry && (
+          <BenchmarkRecommendations industry={clientIndustry} />
         )}
 
         {/* Sources panel — only for new searches with SERP data */}

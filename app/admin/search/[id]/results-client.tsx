@@ -32,6 +32,7 @@ import type { ClientOption } from '@/components/ui/client-picker';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { hasSerp } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse, SearchPlatform } from '@/lib/types/search';
+import { BenchmarkRecommendations } from '@/components/search/benchmark-recommendations';
 import type { Recipient } from './page';
 
 interface LinkedIdea {
@@ -43,7 +44,7 @@ interface LinkedIdea {
 
 interface AdminResultsClientProps {
   search: TopicSearch;
-  clientInfo?: { id: string; name: string; slug: string } | null;
+  clientInfo?: { id: string; name: string; slug: string; industry?: string } | null;
   recipients?: Recipient[];
   clients: ClientOption[];
   linkedIdeas?: LinkedIdea[];
@@ -342,6 +343,11 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
         {/* Big movers — who's making noise in this space */}
         {aiResponse?.big_movers && aiResponse.big_movers.length > 0 && (
           <BigMovers movers={aiResponse.big_movers} />
+        )}
+
+        {/* Benchmark ad format recommendations */}
+        {clientInfo?.industry && (
+          <BenchmarkRecommendations industry={clientInfo.industry} />
         )}
 
         {/* Platform sources with TikTok embeds */}

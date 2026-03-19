@@ -30,7 +30,7 @@ const tierItemSchema = z.object({
 const createSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   description: z.string().max(2000).optional().nullable(),
-  type: z.enum(['slides', 'tier_list', 'social_audit']).default('slides'),
+  type: z.enum(['slides', 'tier_list', 'social_audit', 'benchmarks']).default('slides'),
   audit_data: z.record(z.string(), z.unknown()).optional(),
   client_id: z.string().uuid().optional().nullable(),
   slides: z.array(slideSchema).optional(),

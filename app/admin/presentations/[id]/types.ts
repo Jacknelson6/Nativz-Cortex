@@ -51,16 +51,23 @@ export interface AuditData {
   timeline_months?: number;
 }
 
+export interface BenchmarkConfig {
+  visible_sections: string[];
+  section_order: string[];
+  active_vertical_filter: string | null;
+}
+
 export interface PresentationData {
   id: string;
   title: string;
   description: string | null;
-  type: 'slides' | 'tier_list' | 'social_audit';
+  type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks';
   client_id: string | null;
   slides: Slide[];
   tiers: TierDef[];
   tier_items: TierItem[];
   audit_data: AuditData;
+  benchmark_config?: BenchmarkConfig;
   status: 'draft' | 'ready' | 'archived';
   tags: string[];
 }

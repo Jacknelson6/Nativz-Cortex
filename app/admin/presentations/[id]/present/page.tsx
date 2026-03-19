@@ -4,6 +4,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { BENCHMARK_SECTIONS } from '@/lib/benchmarks/sections';
+import { BenchmarkCard } from '@/lib/benchmarks/charts/benchmark-card';
+import { SpendTierTable } from '@/lib/benchmarks/charts/spend-tier-table';
+import { PortfolioBreakdown } from '@/lib/benchmarks/charts/portfolio-breakdown';
+import { SpendAllocation } from '@/lib/benchmarks/charts/spend-allocation';
+import { TestingHeatmap } from '@/lib/benchmarks/charts/testing-heatmap';
+import { Top25Comparison } from '@/lib/benchmarks/charts/top25-comparison';
+import { VisualStylesTable } from '@/lib/benchmarks/charts/visual-styles-table';
+import { VisualStylesVertical } from '@/lib/benchmarks/charts/visual-styles-vertical';
+import { HooksHeadlinesTable } from '@/lib/benchmarks/charts/hooks-headlines-table';
+import { AssetTypesTable } from '@/lib/benchmarks/charts/asset-types-table';
+import type { BenchmarkConfig } from '../types';
 
 interface Slide {
   title: string;
@@ -11,12 +23,26 @@ interface Slide {
   image_url?: string | null;
 }
 
+const CHART_COMPONENTS: Record<string, React.ComponentType<{ activeFilter?: string | null }>> = {
+  'CH-003': SpendTierTable,
+  'CH-005': PortfolioBreakdown,
+  'CH-006': SpendAllocation,
+  'CH-007': TestingHeatmap,
+  'CH-008': Top25Comparison,
+  'CH-009': VisualStylesTable,
+  'CH-010': VisualStylesVertical,
+  'CH-011': HooksHeadlinesTable,
+  'CH-012': AssetTypesTable,
+};
+
 export default function PresentModePage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
 
+  const [presentationType, setPresentationType] = useState<string>('slides');
   const [slides, setSlides] = useState<Slide[]>([]);
+  const [benchmarkConfig, setBenchmarkConfig] = useState<BenchmarkConfig | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -26,7 +52,18 @@ export default function PresentModePage() {
         const res = await fetch(`/api/presentations/${id}`);
         if (!res.ok) throw new Error();
         const data = await res.json();
-        setSlides(data.slides ?? []);
+        setPresentationType(data.type ?? 'slides');
+
+        if (data.type === 'benchmarks') {
+          const config = data.audit_data as BenchmarkConfig | undefined;
+          setBenchmarkConfig(config ?? {
+            visible_sections: ['CH-003', 'CH-005', 'CH-006', 'CH-007', 'CH-008', 'CH-009', 'CH-010', 'CH-011', 'CH-012'],
+            section_order: ['CH-003', 'CH-005', 'CH-006', 'CH-007', 'CH-008', 'CH-009', 'CH-010', 'CH-011', 'CH-012'],
+            active_vertical_filter: null,
+          });
+        } else {
+          setSlides(data.slides ?? []);
+        }
       } catch {
         toast.error('Failed to load presentation');
         router.push(`/admin/presentations/${id}`);
@@ -37,9 +74,19 @@ export default function PresentModePage() {
     load();
   }, [id, router]);
 
+  // Compute benchmark slides
+  const benchmarkSlides = benchmarkConfig
+    ? benchmarkConfig.section_order
+        .filter((sid) => benchmarkConfig.visible_sections.includes(sid))
+        .map((sid) => BENCHMARK_SECTIONS.find((s) => s.id === sid))
+        .filter(Boolean)
+    : [];
+
+  const totalSlides = presentationType === 'benchmarks' ? benchmarkSlides.length : slides.length;
+
   const goNext = useCallback(() => {
-    setCurrentIndex((i) => Math.min(i + 1, slides.length - 1));
-  }, [slides.length]);
+    setCurrentIndex((i) => Math.min(i + 1, totalSlides - 1));
+  }, [totalSlides]);
 
   const goPrev = useCallback(() => {
     setCurrentIndex((i) => Math.max(i - 1, 0));
@@ -67,13 +114,83 @@ export default function PresentModePage() {
     );
   }
 
-  if (slides.length === 0) {
+  if (totalSlides === 0) {
     return (
       <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
-        <p className="text-white/60">No slides in this presentation</p>
+        <p className="text-white/60">
+          {presentationType === 'benchmarks'
+            ? 'No benchmark sections visible'
+            : 'No slides in this presentation'}
+        </p>
       </div>
     );
   }
+
+  // ─── Benchmarks present mode ────────────────────────────────────────────────
+
+  if (presentationType === 'benchmarks') {
+    const section = benchmarkSlides[currentIndex]!;
+    const ChartComponent = CHART_COMPONENTS[section.id];
+
+    return (
+      <div className="fixed inset-0 z-50 bg-[#0a0a0f] flex flex-col">
+        {/* Close button */}
+        <button
+          onClick={exit}
+          className="cursor-pointer absolute top-4 right-4 z-10 rounded-full p-2 text-white/30 hover:text-white/70 hover:bg-white/10 transition-colors"
+        >
+          <X size={20} />
+        </button>
+
+        {/* Section content */}
+        <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
+          <div className="max-w-[1100px] w-full animate-fade-in">
+            <BenchmarkCard section={section}>
+              {ChartComponent && (
+                <ChartComponent activeFilter={benchmarkConfig?.active_vertical_filter ?? null} />
+              )}
+            </BenchmarkCard>
+          </div>
+        </div>
+
+        {/* Navigation bar */}
+        <div className="flex items-center justify-between px-6 py-4">
+          <button
+            onClick={goPrev}
+            disabled={currentIndex === 0}
+            className="cursor-pointer flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-white/50 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+          >
+            <ChevronLeft size={16} />
+            Previous
+          </button>
+
+          {/* Progress */}
+          <div className="flex items-center gap-1.5">
+            {benchmarkSlides.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentIndex(i)}
+                className={`cursor-pointer h-1.5 rounded-full transition-all ${
+                  i === currentIndex ? 'w-6 bg-accent-text' : 'w-1.5 bg-white/20 hover:bg-white/40'
+                }`}
+              />
+            ))}
+          </div>
+
+          <button
+            onClick={goNext}
+            disabled={currentIndex === totalSlides - 1}
+            className="cursor-pointer flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-white/50 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+          >
+            Next
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Slides present mode (original) ─────────────────────────────────────────
 
   const slide = slides[currentIndex];
 
