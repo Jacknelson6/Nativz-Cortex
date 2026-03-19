@@ -202,9 +202,12 @@ export function TeamGrid({
             const integrations = member.user_id ? integrationsByUser[member.user_id] : null;
 
             return (
-              <button
+              <div
                 key={member.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedMember(member)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedMember(member); }}
                 className="text-left cursor-pointer"
               >
                 <Card className="group relative overflow-hidden transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5 hover:border-accent/30">
@@ -270,7 +273,7 @@ export function TeamGrid({
                   </div>
 
                 </Card>
-              </button>
+              </div>
             );
           })}
         </div>
