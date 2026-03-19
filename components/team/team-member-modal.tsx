@@ -4,14 +4,15 @@ import { useState, useEffect } from 'react';
 import {
   Briefcase,
   Mail,
-  Building2,
   ListTodo,
   Loader2,
   Plus,
   Pencil,
   Check,
   X,
-  AtSign,
+  Send,
+  Copy,
+  Crown,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
@@ -77,8 +78,11 @@ export function TeamMemberModal({
   const [addingTask, setAddingTask] = useState(false);
   const [aliasEmails, setAliasEmails] = useState<string[]>([]);
   const [newAlias, setNewAlias] = useState('');
-  const [showAddAlias, setShowAddAlias] = useState(false);
+  const [showAddEmail, setShowAddEmail] = useState(false);
   const [savingAlias, setSavingAlias] = useState(false);
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!member) return;
@@ -89,8 +93,9 @@ export function TeamMemberModal({
     });
     setAliasEmails(member.alias_emails ?? []);
     setEditing(false);
-    setShowAddAlias(false);
+    setShowAddEmail(false);
     setNewAlias('');
+    setInviteUrl(null);
 
     setLoadingTasks(true);
     fetch(`/api/tasks?assignee_id=${member.id}&status=backlog,in_progress,review`)
@@ -168,9 +173,9 @@ export function TeamMemberModal({
       });
       if (!res.ok) throw new Error('Failed to update');
       setAliasEmails(updated);
-      toast.success('Alias emails updated');
+      toast.success('Emails updated');
     } catch {
-      toast.error('Failed to update alias emails');
+      toast.error('Failed to update emails');
     } finally {
       setSavingAlias(false);
     }
@@ -182,6 +187,10 @@ export function TeamMemberModal({
       toast.error('Enter a valid email');
       return;
     }
+    if (trimmed === member!.email?.toLowerCase()) {
+      toast.error('That\'s already the primary email');
+      return;
+    }
     if (aliasEmails.includes(trimmed)) {
       toast.error('Already added');
       return;
@@ -189,12 +198,35 @@ export function TeamMemberModal({
     const updated = [...aliasEmails, trimmed];
     saveAliasEmails(updated);
     setNewAlias('');
-    setShowAddAlias(false);
+    setShowAddEmail(false);
   }
 
   function handleRemoveAlias(email: string) {
     const updated = aliasEmails.filter(e => e !== email);
     saveAliasEmails(updated);
+  }
+
+  async function handleSendInvite() {
+    setSendingInvite(true);
+    try {
+      const res = await fetch(`/api/team/${member!.id}/invite`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to send invite');
+      setInviteUrl(data.invite_url);
+      toast.success('Invite sent to ' + (member!.email ?? 'team member'));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send invite');
+    } finally {
+      setSendingInvite(false);
+    }
+  }
+
+  function handleCopyInvite() {
+    if (!inviteUrl) return;
+    navigator.clipboard.writeText(inviteUrl);
+    setCopied(true);
+    toast.success('Copied to clipboard');
+    setTimeout(() => setCopied(false), 2000);
   }
 
   const priorityColors: Record<string, string> = {
@@ -204,7 +236,7 @@ export function TeamMemberModal({
     low: 'bg-gray-400',
   };
 
-  const taskCount = tasks.length || todoCount;
+  const hasAccount = !!member.user_id;
 
   return (
     <Dialog open={!!member} onClose={onClose} title="">
@@ -235,55 +267,6 @@ export function TeamMemberModal({
                   placeholder="Full name"
                   autoFocus
                 />
-                <input
-                  value={form.email}
-                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                  className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-1.5 text-sm text-text-primary"
-                  placeholder="Email"
-                />
-
-                {/* Alias emails inline editor */}
-                <div className="rounded-lg border border-nativz-border/50 p-2 space-y-1.5">
-                  <p className="text-[10px] font-medium text-text-muted uppercase tracking-wider flex items-center gap-1">
-                    <AtSign size={9} />
-                    Alias emails
-                  </p>
-                  {aliasEmails.length > 0 && (
-                    <div className="space-y-0.5">
-                      {aliasEmails.map((alias) => (
-                        <div key={alias} className="flex items-center gap-1.5 group">
-                          <Mail size={9} className="text-text-muted/40 shrink-0" />
-                          <span className="text-[11px] text-text-secondary flex-1 truncate">{alias}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveAlias(alias)}
-                            className="opacity-0 group-hover:opacity-100 text-text-muted/40 hover:text-red-400 transition-all cursor-pointer p-0.5"
-                          >
-                            <X size={9} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      value={newAlias}
-                      onChange={(e) => setNewAlias(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddAlias(); } }}
-                      placeholder="Add alias email..."
-                      className="flex-1 rounded-md border border-nativz-border/40 bg-transparent px-2 py-1 text-[11px] text-text-primary placeholder:text-text-muted/40"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddAlias}
-                      disabled={!newAlias.trim() || savingAlias}
-                      className="text-[10px] text-accent-text hover:underline disabled:opacity-40 cursor-pointer"
-                    >
-                      {savingAlias ? '...' : 'Add'}
-                    </button>
-                  </div>
-                </div>
-
                 <input
                   value={form.role}
                   onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
@@ -317,36 +300,29 @@ export function TeamMemberModal({
                     {member.role}
                   </p>
                 )}
-                {member.email && (
-                  <p className="text-[11px] text-text-muted/60 flex items-center gap-1 mt-1 truncate">
-                    <Mail size={10} className="shrink-0" />
-                    {member.email}
-                  </p>
-                )}
               </>
             )}
           </div>
-
         </div>
 
-        {/* Alias emails */}
+        {/* ── Emails section (primary + aliases + invite) ────────────────── */}
         {!editing && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <h3 className="text-[10px] font-medium text-text-muted uppercase tracking-wider flex items-center gap-1">
-                <AtSign size={10} />
-                Alias emails
+                <Mail size={10} />
+                Emails
               </h3>
               <button
-                onClick={() => setShowAddAlias(!showAddAlias)}
+                onClick={() => setShowAddEmail(!showAddEmail)}
                 className="text-[10px] text-accent-text hover:underline cursor-pointer flex items-center gap-0.5"
               >
                 <Plus size={10} />
-                Add alias
+                Add email
               </button>
             </div>
 
-            {showAddAlias && (
+            {showAddEmail && (
               <div className="flex items-center gap-2 mb-2">
                 <input
                   value={newAlias}
@@ -362,32 +338,81 @@ export function TeamMemberModal({
               </div>
             )}
 
-            {aliasEmails.length === 0 ? (
-              <p className="text-[11px] text-text-muted/40 py-2 text-center">No alias emails</p>
-            ) : (
-              <div className="space-y-0.5">
-                {aliasEmails.map((alias) => (
-                  <div
-                    key={alias}
-                    className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-surface-hover transition-colors group"
+            <div className="space-y-0.5">
+              {/* Primary email */}
+              {member.email && (
+                <div className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-surface-hover transition-colors">
+                  <Mail size={10} className="text-accent-text/60 shrink-0" />
+                  <span className="text-xs text-text-secondary truncate flex-1">{member.email}</span>
+                  <span className="text-[9px] text-accent-text/60 bg-accent-surface rounded-full px-1.5 py-0.5 shrink-0">Primary</span>
+                </div>
+              )}
+
+              {/* Alias emails */}
+              {aliasEmails.map((alias) => (
+                <div
+                  key={alias}
+                  className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-surface-hover transition-colors group"
+                >
+                  <Mail size={10} className="text-text-muted/40 shrink-0" />
+                  <span className="text-xs text-text-secondary truncate flex-1">{alias}</span>
+                  <button
+                    onClick={() => handleRemoveAlias(alias)}
+                    disabled={savingAlias}
+                    className="opacity-0 group-hover:opacity-100 text-text-muted/40 hover:text-red-400 transition-all cursor-pointer p-0.5"
                   >
-                    <Mail size={10} className="text-text-muted/40 shrink-0" />
-                    <span className="text-xs text-text-secondary truncate flex-1">{alias}</span>
-                    <button
-                      onClick={() => handleRemoveAlias(alias)}
-                      disabled={savingAlias}
-                      className="opacity-0 group-hover:opacity-100 text-text-muted/40 hover:text-red-400 transition-all cursor-pointer p-0.5"
-                    >
-                      <X size={10} />
-                    </button>
-                  </div>
-                ))}
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+
+              {!member.email && aliasEmails.length === 0 && (
+                <p className="text-[11px] text-text-muted/40 py-2 text-center">No emails</p>
+              )}
+            </div>
+
+            {/* Invite action — show if no account yet and has email */}
+            {!hasAccount && member.email && !inviteUrl && (
+              <button
+                onClick={handleSendInvite}
+                disabled={sendingInvite}
+                className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-accent/30 bg-accent-surface/20 px-3 py-2 text-[11px] text-accent-text hover:bg-accent-surface/40 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {sendingInvite ? (
+                  <><Loader2 size={11} className="animate-spin" /> Sending invite...</>
+                ) : (
+                  <><Send size={11} /> Send invite to {member.email}</>
+                )}
+              </button>
+            )}
+
+            {/* Invite URL display */}
+            {inviteUrl && (
+              <div className="mt-2 rounded-lg border border-nativz-border/50 p-2.5 space-y-1.5">
+                <div className="flex items-center gap-1">
+                  <Check size={10} className="text-emerald-400" />
+                  <p className="text-[10px] text-emerald-400 font-medium">Invite sent</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    readOnly
+                    value={inviteUrl}
+                    className="flex-1 rounded-md border border-nativz-border/50 bg-surface-hover/50 px-2 py-1 text-[10px] text-text-primary font-mono truncate"
+                  />
+                  <button
+                    onClick={handleCopyInvite}
+                    className="shrink-0 rounded-md p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
+                  >
+                    {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                  </button>
+                </div>
+                <p className="text-[9px] text-text-muted/40">Expires in 7 days</p>
               </div>
             )}
           </div>
         )}
 
-        {/* Open tasks */}
+        {/* ── Open tasks ─────────────────────────────────────────────── */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <h3 className="text-[10px] font-medium text-text-muted uppercase tracking-wider flex items-center gap-1">
@@ -445,7 +470,7 @@ export function TeamMemberModal({
           )}
         </div>
 
-        {/* Account linking */}
+        {/* ── Account linking ────────────────────────────────────────── */}
         <AccountActions
           memberId={member.id}
           memberEmail={member.email}
