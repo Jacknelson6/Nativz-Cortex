@@ -2,14 +2,22 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 // ---------------------------------------------------------------------------
-// CORS configuration
+// CORS configuration — dynamic origin to support localhost + production
 // ---------------------------------------------------------------------------
-function getAllowedOrigin(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-}
+const ALLOWED_ORIGINS = new Set([
+  'https://cortex.nativz.io',
+  'http://localhost:3000',
+  'http://localhost:3001',
+]);
 
-function setCorsHeaders(response: NextResponse): void {
-  const origin = getAllowedOrigin();
+function setCorsHeaders(response: NextResponse, requestOrigin?: string | null): void {
+  // Allow the request's origin if it's in our allowlist, or any *.vercel.app preview
+  let origin = 'https://cortex.nativz.io';
+  if (requestOrigin) {
+    if (ALLOWED_ORIGINS.has(requestOrigin) || requestOrigin.endsWith('.vercel.app')) {
+      origin = requestOrigin;
+    }
+  }
   response.headers.set('Access-Control-Allow-Origin', origin);
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key');
@@ -25,6 +33,7 @@ function setRateLimitHeaders(response: NextResponse): void {
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const requestOrigin = request.headers.get('origin');
 
   // -----------------------------------------------------------------------
   // CORS: handle preflight OPTIONS requests for API routes
@@ -32,7 +41,7 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/api/')) {
     if (request.method === 'OPTIONS') {
       const preflightResponse = new NextResponse(null, { status: 204 });
-      setCorsHeaders(preflightResponse);
+      setCorsHeaders(preflightResponse, requestOrigin);
       return preflightResponse;
     }
   }
@@ -76,7 +85,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/google/callback')
   ) {
     if (pathname.startsWith('/api/')) {
-      setCorsHeaders(supabaseResponse);
+      setCorsHeaders(supabaseResponse, requestOrigin);
       setRateLimitHeaders(supabaseResponse);
     }
     return supabaseResponse;
@@ -173,7 +182,7 @@ export async function middleware(request: NextRequest) {
   // Attach CORS + rate-limit headers to all API responses
   // -----------------------------------------------------------------------
   if (pathname.startsWith('/api/')) {
-    setCorsHeaders(supabaseResponse);
+    setCorsHeaders(supabaseResponse, requestOrigin);
     setRateLimitHeaders(supabaseResponse);
   }
 
