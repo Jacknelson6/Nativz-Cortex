@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus, Sparkles, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, Sparkles, Loader2, Globe } from 'lucide-react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Input, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ImageUpload } from '@/components/ui/image-upload';
+import { OnboardWizard } from '@/components/brand-dna/onboard-wizard';
 
 function slugify(name: string): string {
   return name
@@ -23,6 +24,7 @@ export default function AdminNewClientPage() {
   const [error, setError] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
   const [shakeButton, setShakeButton] = useState(false);
+  const [brandDnaOpen, setBrandDnaOpen] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
@@ -137,6 +139,30 @@ export default function AdminNewClientPage() {
           <p className="text-sm text-text-muted">Create a new client to run searches for</p>
         </div>
       </div>
+
+      {/* Brand DNA onboarding option */}
+      <Card interactive className="cursor-pointer" onClick={() => setBrandDnaOpen(true)}>
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-surface shrink-0">
+            <Globe size={22} className="text-accent-text" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-text-primary">Brand DNA onboarding</p>
+            <p className="text-xs text-text-muted">
+              Drop a website URL — AI crawls and builds a full brand guideline automatically
+            </p>
+          </div>
+          <span className="text-[10px] font-medium text-accent-text bg-accent-surface rounded-full px-2 py-0.5">Recommended</span>
+        </div>
+      </Card>
+
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-px bg-nativz-border" />
+        <span className="text-[10px] text-text-muted uppercase tracking-wider">or add manually</span>
+        <div className="flex-1 h-px bg-nativz-border" />
+      </div>
+
+      <OnboardWizard open={brandDnaOpen} onClose={() => setBrandDnaOpen(false)} />
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic info */}

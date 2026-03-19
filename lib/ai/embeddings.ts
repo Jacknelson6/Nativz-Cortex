@@ -72,6 +72,92 @@ export async function generateEmbedding(text: string): Promise<number[] | null> 
   }
 }
 
+const GEMINI_MULTIMODAL_EMBEDDING_MODEL = 'gemini-embedding-exp-03-07';
+
+/**
+ * Generate a multimodal embedding for text + image.
+ * Uses Gemini's multimodal embedding model. Falls back to text-only if image fails.
+ * Output MUST be 768 dimensions to match the existing embedding column.
+ */
+export async function generateMultimodalEmbedding(
+  text: string,
+  imageUrl: string,
+): Promise<number[] | null> {
+  const apiKey = process.env.GOOGLE_AI_STUDIO_KEY;
+  if (!apiKey) {
+    console.error('GOOGLE_AI_STUDIO_KEY not configured');
+    return null;
+  }
+
+  try {
+    // Fetch image and convert to base64
+    const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(10_000) });
+    if (!imgRes.ok) {
+      console.warn(`Image fetch failed for ${imageUrl}, falling back to text-only`);
+      return generateEmbedding(text);
+    }
+
+    const contentType = imgRes.headers.get('content-type') ?? 'image/png';
+    const buffer = await imgRes.arrayBuffer();
+
+    // Skip images > 2MB to stay within serverless limits
+    if (buffer.byteLength > 2 * 1024 * 1024) {
+      console.warn(`Image too large (${Math.round(buffer.byteLength / 1024)}KB), falling back to text-only`);
+      return generateEmbedding(text);
+    }
+
+    const base64 = Buffer.from(buffer).toString('base64');
+
+    const res = await fetch(
+      `${GEMINI_API_URL}/${GEMINI_MULTIMODAL_EMBEDDING_MODEL}:embedContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: `models/${GEMINI_MULTIMODAL_EMBEDDING_MODEL}`,
+          content: {
+            parts: [
+              { text: text.slice(0, 5_000) },
+              { inline_data: { mime_type: contentType, data: base64 } },
+            ],
+          },
+          outputDimensionality: EMBEDDING_DIMS,
+        }),
+      },
+    );
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.warn(`Multimodal embedding error ${res.status}: ${err.slice(0, 200)}, falling back to text-only`);
+      return generateEmbedding(text);
+    }
+
+    const data = await res.json();
+    const values: number[] = data?.embedding?.values;
+
+    // Dimension guard — must match existing text embeddings
+    if (!values || values.length !== EMBEDDING_DIMS) {
+      console.warn(`Multimodal embedding returned ${values?.length ?? 0} dims (need ${EMBEDDING_DIMS}), falling back to text-only`);
+      return generateEmbedding(text);
+    }
+
+    await logUsage({
+      service: 'gemini',
+      model: GEMINI_MULTIMODAL_EMBEDDING_MODEL,
+      feature: 'knowledge_multimodal_embedding',
+      inputTokens: Math.ceil(text.length / 4) + Math.ceil(buffer.byteLength / 1024),
+      outputTokens: 0,
+      totalTokens: Math.ceil(text.length / 4) + Math.ceil(buffer.byteLength / 1024),
+      costUsd: 0,
+    }).catch(() => {});
+
+    return values;
+  } catch (error) {
+    console.warn('generateMultimodalEmbedding error, falling back to text-only:', error);
+    return generateEmbedding(text);
+  }
+}
+
 /**
  * Generate embeddings for multiple texts in a single API call.
  */

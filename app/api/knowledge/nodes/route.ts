@@ -3,15 +3,16 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { writeNodeToGitHub } from '@/lib/knowledge/github-sync';
+import { ALLOWED_NODE_KINDS, slugifyNodeId } from '@/lib/knowledge/graph-queries';
 
 const createSchema = z.object({
   id: z.string().optional(),
-  kind: z.string().min(1),
-  title: z.string().min(1),
+  kind: z.enum(ALLOWED_NODE_KINDS),
+  title: z.string().min(3).max(200),
   domain: z.array(z.string()).default([]),
   tags: z.array(z.string()).default([]),
   connections: z.array(z.string()).default([]),
-  content: z.string().default(''),
+  content: z.string().min(50, 'Content must be at least 50 characters — no stubs'),
   metadata: z.record(z.string(), z.unknown()).default({}),
   client_id: z.string().uuid().nullable().default(null),
 });
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
     const domainParam = searchParams.get('domain');
     const clientIdParam = searchParams.get('client_id');
     const qParam = searchParams.get('q');
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '100', 10), 500);
+    const limit = Math.min(parseInt(searchParams.get('limit') ?? '2000', 10), 5000);
     const offset = parseInt(searchParams.get('offset') ?? '0', 10);
 
     const admin = createAdminClient();
@@ -134,8 +135,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const slug = parsed.data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    const nodeId = parsed.data.id || `${parsed.data.kind}:${slug}`;
+    const nodeId = parsed.data.id || slugifyNodeId(parsed.data.kind, parsed.data.title);
 
     const { data, error } = await admin
       .from('knowledge_nodes')

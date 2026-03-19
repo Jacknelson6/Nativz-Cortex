@@ -23,12 +23,21 @@ function vaultPath(clientName: string, entry: KnowledgeEntry): string {
 
   const subfolders: Record<KnowledgeEntryType, string | null> = {
     brand_profile: null,
+    brand_guideline: null,
     brand_asset: 'Assets',
     web_page: 'Web',
     document: 'Documents',
     note: 'Notes',
     idea: 'Ideas',
     meeting_note: 'Meetings',
+    // Brand DNA sub-types
+    visual_identity: 'Brand DNA',
+    verbal_identity: 'Brand DNA',
+    target_audience: 'Brand DNA',
+    competitive_positioning: 'Brand DNA',
+    product_catalog: 'Brand DNA',
+    brand_logo: 'Brand DNA/Logos',
+    brand_screenshot: 'Brand DNA/Screenshots',
   };
 
   const subfolder = subfolders[entry.type];

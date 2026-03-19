@@ -2,8 +2,12 @@
 
 ## UI & Styling
 
-- Dark theme with card-based layout: `bg-surface` cards on `bg-background`, blue accent (`accent-text`) for active states and CTAs
-- Brand colors: blue (`#046BD2` / `rgba(4, 107, 210, ...)`) and purple (`#8B5CF6` / `rgba(139, 92, 246, ...)`)
+- Card-based layout: `bg-surface` cards on `bg-background`, accent colors for active states and CTAs
+- **Brand mode toggle**: click sidebar logo to switch between Nativz (dark/blue) and Anderson Collaborative (light/teal)
+- **Never hardcode colors** — use CSS variable tokens: `--accent`, `--accent2`, `--background`, `--surface`, `--text-primary`, `--text-secondary`, `--text-muted`, `--focus-ring`
+- Primary accent: `accent` / `accent-text` / `accent-surface` (blue in Nativz, teal in AC)
+- Secondary accent: `accent2` / `accent2-text` / `accent2-surface` (purple in Nativz, teal in AC)
+- Focus rings: `focus:shadow-[0_0_0_3px_var(--focus-ring)]`
 - All UI copy uses **sentence case** (only capitalize first word + proper nouns)
 - Glass buttons (`components/ui/glass-button.tsx`) for primary search actions
 - Glow buttons (`components/ui/glow-button.tsx`) for settings CTAs

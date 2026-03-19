@@ -98,21 +98,24 @@ interface GraphData {
 // ── Colors ───────────────────────────────────────────────────────────────────
 
 const TYPE_COLORS: Record<string, string> = {
-  skill: '#38bdf8',
-  sop: '#22c55e',
-  pattern: '#a78bfa',
-  methodology: '#f59e0b',
-  moc: '#f472b6',
-  template: '#64748b',
-  agent: '#fb923c',
-  project: '#2dd4bf',
-  industry: '#818cf8',
-  mcp: '#e879f9',
-  client: '#fb7185',
-  workflow: '#a3e635',
-  meeting_note: '#2dd4bf',
-  note: '#a78bfa',
-  document: '#a78bfa',
+  domain: '#f59e0b',           // Gold — top-level navigation
+  playbook: '#38bdf8',         // Blue — consolidated knowledge
+  client: '#22c55e',           // Green — client source of truth
+  meeting: '#a78bfa',          // Purple — meeting notes
+  asset: '#64748b',            // Slate — docs, templates, projects
+  insight: '#f472b6',          // Pink — industry insights
+  // Brand DNA types (from client_knowledge_entries)
+  'web-page': '#06b6d4',      // Cyan — scraped website pages
+  'brand-profile': '#f59e0b', // Gold — brand profile
+  'brand-guideline': '#eab308', // Yellow — brand DNA guideline
+  // Brand DNA sub-types
+  'visual-identity': '#06b6d4',   // Cyan
+  'verbal-identity': '#f97316',   // Orange
+  'brand-logo': '#eab308',        // Gold
+  'brand-screenshot': '#14b8a6',  // Teal
+  'product-catalog': '#22c55e',   // Green
+  'target-audience': '#ec4899',   // Pink
+  'competitive-positioning': '#ef4444', // Red
 };
 
 const DEFAULT_COLOR = '#64748b';
@@ -192,19 +195,26 @@ export function AgencyKnowledgeGraph({
       const graph = new Graph();
 
       // Add nodes with random initial positions
+      // Pre-compute connection counts in O(n+m) instead of O(n*m)
+      const connectionCounts = new Map<string, number>();
+      for (const edge of data.edges) {
+        connectionCounts.set(edge.source, (connectionCounts.get(edge.source) ?? 0) + 1);
+        connectionCounts.set(edge.target, (connectionCounts.get(edge.target) ?? 0) + 1);
+      }
+
       const nodeIds = new Set<string>();
       const scale = Math.sqrt(data.nodes.length) * 10;
       for (const node of data.nodes) {
         if (nodeIds.has(node.id)) continue;
         nodeIds.add(node.id);
 
-        const connectionCount = data.edges.filter(
-          (e) => e.source === node.id || e.target === node.id,
-        ).length;
+        const connectionCount = connectionCounts.get(node.id) ?? 0;
+        const kindSizeMultiplier = node.kind === 'domain' ? 4 : node.kind === 'playbook' ? 2.5 : 1;
+        const baseSize = Math.max(3, 2 + Math.sqrt(connectionCount) * 1.5) * (nodeSize / 3) * kindSizeMultiplier;
 
         graph.addNode(node.id, {
           label: node.title,
-          size: Math.max(3, 2 + Math.sqrt(connectionCount) * 1.5) * (nodeSize / 3),
+          size: baseSize,
           color: TYPE_COLORS[node.kind] ?? DEFAULT_COLOR,
           kind: node.kind,
           x: (Math.random() - 0.5) * scale,
@@ -254,7 +264,7 @@ export function AgencyKnowledgeGraph({
         labelSize: 12,
         labelWeight: '500',
         labelColor: { color: '#f1f5f9' },
-        labelRenderedSizeThreshold: 6,
+        labelRenderedSizeThreshold: 100,  // Hide all labels — only show on hover
         defaultNodeColor: DEFAULT_COLOR,
         defaultEdgeColor: 'rgba(140,140,160,0.5)',
         stagePadding: 60,
@@ -313,12 +323,14 @@ export function AgencyKnowledgeGraph({
     const graph = graphRef.current;
     if (!graph) return;
 
-    graph.forEachNode((nodeId, attrs) => {
+    graph.forEachNode((nodeId) => {
       const connectionCount = graph.degree(nodeId);
+      const kind = graph.getNodeAttribute(nodeId, 'kind') as string;
+      const kindMul = kind === 'domain' ? 4 : kind === 'playbook' ? 2.5 : 1;
       graph.setNodeAttribute(
         nodeId,
         'size',
-        Math.max(3, 2 + Math.sqrt(connectionCount) * 1.5) * (nodeSize / 3),
+        Math.max(3, 2 + Math.sqrt(connectionCount) * 1.5) * (nodeSize / 3) * kindMul,
       );
     });
   }, [nodeSize]);

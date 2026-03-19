@@ -1,5 +1,6 @@
 import type { BraveSerpData } from '@/lib/brave/types';
 import type { ClientPreferences } from '@/lib/types/database';
+import type { BrandContext } from '@/lib/knowledge/brand-context';
 import { formatBrandPreferencesBlock, hasPreferences } from './brand-context';
 
 interface ClientStrategyConfig {
@@ -24,6 +25,8 @@ interface ClientStrategyConfig {
   clientMemoryBlock?: string | null;
   /** Structured knowledge base context (brand profile, entities, meetings) */
   clientKnowledgeBlock?: string | null;
+  /** Unified brand context from Brand DNA (takes precedence over clientContext/brandPreferences) */
+  brandDNA?: BrandContext | null;
 }
 
 const TIME_RANGE_LABELS: Record<string, string> = {
@@ -87,8 +90,13 @@ export function buildClientStrategyPrompt(config: ClientStrategyConfig): string 
     ? `- Core topics: ${ctx.topicKeywords.join(', ')}`
     : '- Core topics: Not specified';
 
-  // Build brand preferences block if available
-  const prefsBlock = hasPreferences(config.brandPreferences)
+  // Brand DNA takes precedence over legacy clientContext/brandPreferences
+  const brandDNABlock = config.brandDNA
+    ? `\n## BRAND DNA\n${config.brandDNA.toPromptBlock()}\n`
+    : '';
+
+  // Build brand preferences block if available (skip if Brand DNA is present)
+  const prefsBlock = !config.brandDNA && hasPreferences(config.brandPreferences)
     ? '\n' + formatBrandPreferencesBlock(
         config.brandPreferences,
         ctx.name,
@@ -101,12 +109,25 @@ export function buildClientStrategyPrompt(config: ClientStrategyConfig): string 
     ? `\n## CLIENT KNOWLEDGE BASE\nThe following is structured data from ${ctx.name}'s knowledge vault. Use it to inform all recommendations with specific brand details.\n\n${config.clientKnowledgeBlock}\n`
     : '';
 
-  // Website content block (from Cloudflare crawl)
-  const websiteBlock = config.websiteContent?.length
+  // Website content block (skip if Brand DNA is present — it already includes website data)
+  const websiteBlock = !config.brandDNA && config.websiteContent?.length
     ? `\n## CLIENT WEBSITE CONTENT\nThe following was crawled from ${ctx.name}'s website. Use it to deeply understand their brand, products, services, and messaging style.\n\n${config.websiteContent.map((p) => `### ${p.url}\n${p.content}`).join('\n\n')}\n`
     : '';
 
   const serpBlock = formatSerpDataBlock(config.serpData);
+
+  // When Brand DNA is available, use it as the primary brand profile section
+  const brandProfileSection = config.brandDNA
+    ? `${brandDNABlock}`
+    : `
+## CLIENT BRAND PROFILE
+- Brand: ${ctx.name}
+- Industry: ${ctx.industry}
+- Website: ${ctx.websiteUrl || 'Not provided'}
+- Target audience: ${ctx.targetAudience || 'General'}
+- Brand voice: ${ctx.brandVoice || 'Not specified'}
+${keywordsLine}
+${prefsBlock}`;
 
   return `# CLIENT STRATEGY — SHORT-FORM VIDEO CONTENT RESEARCH
 
@@ -121,15 +142,7 @@ You are an expert short-form video strategist specializing in TikTok, Instagram 
 - ${sourceFilter}
 ${langFilter ? `- ${langFilter}` : ''}
 ${countryFilter ? `- ${countryFilter}` : ''}
-
-## CLIENT BRAND PROFILE
-- Brand: ${ctx.name}
-- Industry: ${ctx.industry}
-- Website: ${ctx.websiteUrl || 'Not provided'}
-- Target audience: ${ctx.targetAudience || 'General'}
-- Brand voice: ${ctx.brandVoice || 'Not specified'}
-${keywordsLine}
-${prefsBlock}${knowledgeBlock}${websiteBlock}${config.clientMemoryBlock ? `\n## CLIENT CONTENT HISTORY\nUse the following history to avoid repeating past research, differentiate new ideas, and build on what has worked for ${ctx.name}.\n\n${config.clientMemoryBlock}\n` : ''}
+${brandProfileSection}${knowledgeBlock}${websiteBlock}${config.clientMemoryBlock ? `\n## CLIENT CONTENT HISTORY\nUse the following history to avoid repeating past research, differentiate new ideas, and build on what has worked for ${ctx.name}.\n\n${config.clientMemoryBlock}\n` : ''}
 ## REAL SEARCH DATA
 The following data was gathered from live web searches. Use it as the basis for your analysis. Do NOT make up information — base all insights on this data.
 

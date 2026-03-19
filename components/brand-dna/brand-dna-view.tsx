@@ -1,0 +1,147 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { RefreshCw, Upload, Clock, Sparkles, Globe, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { BrandDNACards } from './brand-dna-cards';
+import { CompletenessBadge } from './completeness-badge';
+import { OnboardWizard } from './onboard-wizard';
+import { BrandDNAProgress } from './brand-dna-progress';
+import { formatRelativeTime } from '@/lib/utils/format';
+
+interface BrandDNAViewProps {
+  clientId: string;
+  clientName: string;
+  clientSlug: string;
+  websiteUrl: string;
+  brandDnaStatus: string;
+  guideline: {
+    id: string;
+    content: string;
+    metadata: unknown;
+    created_at: string;
+    updated_at: string;
+  } | null;
+}
+
+export function BrandDNAView({
+  clientId,
+  clientName,
+  clientSlug,
+  websiteUrl,
+  brandDnaStatus,
+  guideline,
+}: BrandDNAViewProps) {
+  const router = useRouter();
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const metadata = (guideline?.metadata as Record<string, unknown>) ?? null;
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/brand-dna/refresh`, { method: 'POST' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? 'Refresh failed');
+      }
+      toast.success('Re-crawl started — check back in a minute');
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Refresh failed');
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/admin/clients/${clientSlug}`}
+            className="text-text-muted hover:text-text-secondary transition-colors"
+          >
+            <ArrowLeft size={20} />
+          </Link>
+          <div>
+            <h1 className="text-xl font-semibold text-text-primary">Brand DNA</h1>
+            <p className="text-sm text-text-muted">{clientName}</p>
+          </div>
+          {metadata && <CompletenessBadge metadata={metadata} size="md" />}
+        </div>
+        <div className="flex items-center gap-2">
+          {guideline && (
+            <>
+              <span className="text-xs text-text-muted flex items-center gap-1">
+                <Clock size={12} />
+                {formatRelativeTime(guideline.updated_at ?? guideline.created_at)}
+              </span>
+              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                Refresh
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Brand DNA content or empty state */}
+      {brandDnaStatus === 'generating' ? (
+        <div className="rounded-xl border border-nativz-border bg-surface p-8">
+          <BrandDNAProgress clientId={clientId} onComplete={() => router.refresh()} />
+        </div>
+      ) : guideline && metadata ? (
+        <>
+          {/* Bento grid cards */}
+          <BrandDNACards
+            metadata={metadata}
+            clientId={clientId}
+            editable
+            onEditSection={(section) => {
+              toast.info(`Edit ${section} — coming soon`);
+            }}
+          />
+
+          {/* Full guideline document */}
+          <div className="rounded-xl border border-nativz-border bg-surface p-6">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Full brand guideline</h3>
+            <div className="prose prose-invert prose-sm max-w-none text-text-secondary">
+              <pre className="whitespace-pre-wrap text-xs leading-relaxed font-sans">
+                {guideline.content}
+              </pre>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-surface mb-4">
+            <Sparkles size={28} className="text-accent-text" />
+          </div>
+          <h2 className="text-lg font-semibold text-text-primary mb-2">No Brand DNA yet</h2>
+          <p className="text-sm text-text-muted mb-6 max-w-md">
+            Generate a comprehensive brand guideline from {clientName}&apos;s website.
+            This becomes the source of truth for all AI-powered content generation.
+          </p>
+          <Button onClick={() => setGenerateOpen(true)}>
+            <Globe size={14} />
+            Generate Brand DNA
+          </Button>
+        </div>
+      )}
+
+      {/* Generate wizard for existing clients */}
+      <OnboardWizard
+        open={generateOpen}
+        onClose={() => { setGenerateOpen(false); router.refresh(); }}
+        existingClientId={clientId}
+        existingClientName={clientName}
+      />
+    </div>
+  );
+}

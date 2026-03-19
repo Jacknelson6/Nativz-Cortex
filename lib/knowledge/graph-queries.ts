@@ -31,22 +31,23 @@ export interface KnowledgeNode {
   created_by: string | null;
 }
 
-export type KnowledgeNodeKind =
-  | 'skill'
-  | 'sop'
-  | 'pattern'
-  | 'methodology'
-  | 'moc'
-  | 'template'
-  | 'agent'
-  | 'project'
-  | 'client'
-  | 'mcp'
-  | 'industry'
-  | 'workflow'
-  | 'meeting_note'
-  | 'note'
-  | 'document';
+/**
+ * Allowed node kinds in the knowledge graph.
+ * Old kinds (skill, pattern, methodology, template, sop, moc, agent, etc.)
+ * are deprecated — consolidate into playbooks instead.
+ */
+export const ALLOWED_NODE_KINDS = ['domain', 'playbook', 'client', 'meeting', 'asset', 'insight'] as const;
+export type KnowledgeNodeKind = (typeof ALLOWED_NODE_KINDS)[number];
+
+/** Slugify a title for use in node IDs. Consistent across all code paths. */
+export function slugifyNodeId(kind: string, title: string): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .substring(0, 80);
+  return `${kind}:${slug}`;
+}
 
 // ---------------------------------------------------------------------------
 // List nodes with filters

@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { getBrandProfile, getKnowledgeEntries } from '@/lib/knowledge/queries';
+import { getBrandContext } from '@/lib/knowledge/brand-context';
 
 const generateSchema = z.object({
   count: z.number().min(1).max(10).default(5),
@@ -99,7 +100,18 @@ async function processGeneration({
   const admin = createAdminClient();
 
   try {
-    // Fetch brand context in parallel
+    // Try Brand DNA first for unified context
+    let brandDNABlock: string | null = null;
+    try {
+      const brandDNA = await getBrandContext(clientId);
+      if (brandDNA.fromGuideline) {
+        brandDNABlock = brandDNA.toPromptBlock();
+      }
+    } catch {
+      // Non-blocking — fall back to legacy
+    }
+
+    // Fetch remaining context in parallel
     const [clientRecord, brandProfile, knowledgeEntries, existingPillars] = await Promise.all([
       admin
         .from('clients')
@@ -107,8 +119,8 @@ async function processGeneration({
         .eq('id', clientId)
         .maybeSingle()
         .then(({ data }) => data),
-      getBrandProfile(clientId),
-      getKnowledgeEntries(clientId),
+      brandDNABlock ? Promise.resolve(null) : getBrandProfile(clientId),
+      brandDNABlock ? Promise.resolve([]) : getKnowledgeEntries(clientId),
       admin
         .from('content_pillars')
         .select('name')
@@ -119,28 +131,34 @@ async function processGeneration({
     // Build context blocks
     const contextBlocks: string[] = [];
 
-    if (clientRecord) {
-      contextBlocks.push(
-        `<brand>
+    if (brandDNABlock) {
+      // Brand DNA provides comprehensive brand context
+      contextBlocks.push(brandDNABlock);
+    } else {
+      // Legacy fallback
+      if (clientRecord) {
+        contextBlocks.push(
+          `<brand>
 Name: ${clientRecord.name ?? ''}
 Industry: ${clientRecord.industry ?? ''}
 Target audience: ${clientRecord.target_audience ?? ''}
 Brand voice: ${clientRecord.brand_voice ?? ''}
 Topic keywords: ${Array.isArray(clientRecord.topic_keywords) ? (clientRecord.topic_keywords as string[]).join(', ') : clientRecord.topic_keywords ?? ''}
 </brand>`
-      );
-    }
+        );
+      }
 
-    if (brandProfile) {
-      contextBlocks.push(`<brand_profile>\n${brandProfile.content ?? ''}\n</brand_profile>`);
-    }
+      if (brandProfile) {
+        contextBlocks.push(`<brand_profile>\n${brandProfile.content ?? ''}\n</brand_profile>`);
+      }
 
-    if (knowledgeEntries.length > 0) {
-      const summaries = knowledgeEntries
-        .slice(0, 20)
-        .map((e) => `- [${e.type}] ${e.title}: ${(e.content ?? '').slice(0, 200)}`)
-        .join('\n');
-      contextBlocks.push(`<knowledge_base>\n${summaries}\n</knowledge_base>`);
+      if (knowledgeEntries.length > 0) {
+        const summaries = knowledgeEntries
+          .slice(0, 20)
+          .map((e) => `- [${e.type}] ${e.title}: ${(e.content ?? '').slice(0, 200)}`)
+          .join('\n');
+        contextBlocks.push(`<knowledge_base>\n${summaries}\n</knowledge_base>`);
+      }
     }
 
     const existingNames = existingPillars.map((p) => p.name as string);

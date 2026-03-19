@@ -1,5 +1,6 @@
 import type { BraveSerpData } from '@/lib/brave/types';
 import type { ClientPreferences } from '@/lib/types/database';
+import type { BrandContext } from '@/lib/knowledge/brand-context';
 import { formatBrandPreferencesBlock, hasPreferences } from './brand-context';
 
 interface TopicResearchConfig {
@@ -23,6 +24,8 @@ interface TopicResearchConfig {
   websiteContent?: { url: string; content: string }[] | null;
   /** Past research, content logs, strategy — from getClientMemory() */
   clientMemoryBlock?: string | null;
+  /** Unified brand context from Brand DNA (takes precedence over clientContext/brandPreferences) */
+  brandDNA?: BrandContext | null;
 }
 
 const TIME_RANGE_LABELS: Record<string, string> = {
@@ -81,7 +84,12 @@ export function buildTopicResearchPrompt(config: TopicResearchConfig): string {
     ? `Focus on content from or relevant to ${config.country}.`
     : '';
 
-  const clientBlock = config.clientContext
+  // Brand DNA takes precedence over legacy clientContext/brandPreferences
+  const brandDNABlock = config.brandDNA
+    ? `\n## BRAND DNA\n${config.brandDNA.toPromptBlock()}\n`
+    : '';
+
+  const clientBlock = !config.brandDNA && config.clientContext
     ? `
 ## CLIENT CONTEXT (use to tailor recommendations)
 - Brand: ${config.clientContext.name}
@@ -90,8 +98,8 @@ export function buildTopicResearchPrompt(config: TopicResearchConfig): string {
 - Brand voice: ${config.clientContext.brandVoice || 'Not specified'}${config.clientContext.websiteUrl ? `\n- Website: ${config.clientContext.websiteUrl}` : ''}${config.clientContext.topicKeywords && config.clientContext.topicKeywords.length > 0 ? `\n- Core topics: ${config.clientContext.topicKeywords.join(', ')}` : ''}`
     : '';
 
-  // Build brand preferences block if available
-  const prefsBlock = hasPreferences(config.brandPreferences) && config.clientContext
+  // Build brand preferences block if available (skip if Brand DNA is present — it includes preferences)
+  const prefsBlock = !config.brandDNA && hasPreferences(config.brandPreferences) && config.clientContext
     ? '\n' + formatBrandPreferencesBlock(
         config.brandPreferences,
         config.clientContext.name,
@@ -123,7 +131,7 @@ You are an expert short-form video strategist specializing in TikTok, Instagram 
 - ${sourceFilter}
 ${langFilter ? `- ${langFilter}` : ''}
 ${countryFilter ? `- ${countryFilter}` : ''}
-${clientBlock}
+${brandDNABlock}${clientBlock}
 ${prefsBlock}${knowledgeBlock}${websiteBlock}${config.clientMemoryBlock ? `\n## CLIENT CONTENT HISTORY\nUse the following history to avoid repeating past research and to build on what has worked.\n\n${config.clientMemoryBlock}\n` : ''}
 ## REAL SEARCH DATA
 The following data was gathered from live web searches and social platforms. Use it as the basis for your analysis. Do NOT make up information — base all insights on this data.

@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { getKnowledgeEntries, getBrandProfile } from '@/lib/knowledge/queries';
+import { getBrandContext } from '@/lib/knowledge/brand-context';
 
 export interface GeneratedIdea {
   title: string;
@@ -64,9 +65,23 @@ export async function generateVideoIdeas(config: {
   // Build context blocks
   const contextBlocks: string[] = [];
 
-  if (clientRecord) {
-    contextBlocks.push(
-      `<brand>
+  // Try Brand DNA first — unified brand context takes precedence
+  let hasBrandDNA = false;
+  try {
+    const brandDNA = await getBrandContext(clientId);
+    if (brandDNA.fromGuideline) {
+      contextBlocks.push(brandDNA.toPromptBlock());
+      hasBrandDNA = true;
+    }
+  } catch {
+    // Non-blocking — fall back to legacy context assembly
+  }
+
+  // Legacy fallback: assemble from client fields + brand profile
+  if (!hasBrandDNA) {
+    if (clientRecord) {
+      contextBlocks.push(
+        `<brand>
 Name: ${clientRecord.name ?? ''}
 Industry: ${clientRecord.industry ?? ''}
 Target audience: ${clientRecord.target_audience ?? ''}
@@ -74,15 +89,16 @@ Brand voice: ${clientRecord.brand_voice ?? ''}
 Topic keywords: ${Array.isArray(clientRecord.topic_keywords) ? (clientRecord.topic_keywords as string[]).join(', ') : clientRecord.topic_keywords ?? ''}
 Preferences: ${clientRecord.preferences ? JSON.stringify(clientRecord.preferences) : 'none'}
 </brand>`
-    );
-  }
+      );
+    }
 
-  if (brandProfile) {
-    contextBlocks.push(
-      `<brand_profile>
+    if (brandProfile) {
+      contextBlocks.push(
+        `<brand_profile>
 ${brandProfile.content ?? ''}
 </brand_profile>`
-    );
+      );
+    }
   }
 
   // Structured entities from knowledge base

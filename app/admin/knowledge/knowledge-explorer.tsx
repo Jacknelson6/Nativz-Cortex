@@ -58,39 +58,27 @@ interface ClientOption {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const KIND_COLORS: Record<string, string> = {
-  skill: '#38bdf8',
-  sop: '#22c55e',
-  pattern: '#a78bfa',
-  methodology: '#f59e0b',
-  moc: '#f472b6',
-  template: '#64748b',
-  agent: '#fb923c',
-  project: '#2dd4bf',
-  industry: '#818cf8',
-  mcp: '#e879f9',
-  client: '#fb7185',
-  workflow: '#a3e635',
-  meeting_note: '#2dd4bf',
-  note: '#a78bfa',
-  document: '#a78bfa',
+  domain: '#f59e0b',
+  playbook: '#38bdf8',
+  client: '#22c55e',
+  meeting: '#a78bfa',
+  asset: '#64748b',
+  insight: '#f472b6',
+  'web-page': '#06b6d4',
+  'brand-profile': '#f59e0b',
+  'brand-guideline': '#eab308',
 };
 
 const KIND_BADGE_COLORS: Record<string, string> = {
-  skill: 'bg-sky-500/15 text-sky-400',
-  sop: 'bg-green-500/15 text-green-400',
-  pattern: 'bg-purple-500/15 text-purple-400',
-  methodology: 'bg-amber-500/15 text-amber-400',
-  moc: 'bg-pink-500/15 text-pink-400',
-  template: 'bg-slate-500/15 text-slate-400',
-  agent: 'bg-orange-500/15 text-orange-400',
-  project: 'bg-teal-500/15 text-teal-400',
-  industry: 'bg-indigo-500/15 text-indigo-400',
-  mcp: 'bg-fuchsia-500/15 text-fuchsia-400',
-  client: 'bg-rose-500/15 text-rose-400',
-  workflow: 'bg-lime-500/15 text-lime-400',
-  meeting_note: 'bg-teal-500/15 text-teal-400',
-  note: 'bg-purple-500/15 text-purple-400',
-  document: 'bg-purple-500/15 text-purple-400',
+  domain: 'bg-amber-500/15 text-amber-400',
+  playbook: 'bg-sky-500/15 text-sky-400',
+  client: 'bg-green-500/15 text-green-400',
+  meeting: 'bg-purple-500/15 text-purple-400',
+  asset: 'bg-slate-500/15 text-slate-400',
+  insight: 'bg-pink-500/15 text-pink-400',
+  'web-page': 'bg-cyan-500/15 text-cyan-400',
+  'brand-profile': 'bg-amber-500/15 text-amber-400',
+  'brand-guideline': 'bg-yellow-500/15 text-yellow-400',
 };
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -156,8 +144,8 @@ export function KnowledgeExplorer() {
 
     try {
       const [nodesRes, graphRes] = await Promise.all([
-        fetch(`/api/knowledge/nodes?limit=500${qs ? '&' + qs : ''}`),
-        fetch(`/api/knowledge/graph?limit=500${qs ? '&' + qs : ''}`),
+        fetch(`/api/knowledge/nodes?limit=4000${qs ? '&' + qs : ''}`),
+        fetch(`/api/knowledge/graph?limit=4000${qs ? '&' + qs : ''}`),
       ]);
 
       if (nodesRes.ok) {

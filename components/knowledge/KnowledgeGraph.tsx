@@ -74,17 +74,26 @@ function drawDarkNodeHover(
 // ── Colors ───────────────────────────────────────────────────────────────────
 
 const TYPE_COLORS: Record<string, string> = {
+  // Client knowledge entry types
   brand_profile: '#f59e0b',
-  web_page: '#38bdf8',
+  brand_guideline: '#eab308',
+  web_page: '#06b6d4',
   note: '#a78bfa',
-  document: '#a78bfa',
+  document: '#64748b',
   idea: '#f472b6',
   idea_submission: '#f472b6',
   brand_asset: '#f59e0b',
   contact: '#fb923c',
   search: '#2dd4bf',
   strategy: '#f59e0b',
-  meeting_note: '#2dd4bf',
+  meeting_note: '#a78bfa',
+  // Knowledge node types (from merged agency graph)
+  domain: '#f59e0b',
+  playbook: '#38bdf8',
+  client: '#22c55e',
+  meeting: '#a78bfa',
+  asset: '#64748b',
+  insight: '#f472b6',
 };
 
 const DEFAULT_COLOR = '#64748b';
