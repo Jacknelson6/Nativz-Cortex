@@ -3,12 +3,14 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildTopicResearchPrompt } from '@/lib/prompts/topic-research';
 import { buildClientStrategyPrompt } from '@/lib/prompts/client-strategy';
+import { buildNarrativePrompt } from '@/lib/prompts/narrative-prompt';
 import { gatherSerpData } from '@/lib/brave/client';
 import { gatherPlatformData, formatPlatformContext } from '@/lib/search/platform-router';
+import { computeAnalytics } from '@/lib/search/analytics-engine';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
-import type { TopicSearchAIResponse, SearchPlatform } from '@/lib/types/search';
+import type { TopicSearchAIResponse, SearchPlatform, TrendingTopic, TopicSource } from '@/lib/types/search';
 import type { BraveSerpData } from '@/lib/brave/types';
 import type { ClientPreferences } from '@/lib/types/database';
 import { syncSearchToVault } from '@/lib/vault/sync';
@@ -47,14 +49,12 @@ function validateTopicSources(
 /**
  * POST /api/search/[id]/process
  *
- * Execute the full AI research pipeline for a pending search record. Gathers SERP data from
- * Brave, enriches with client knowledge base context, calls Claude via OpenRouter, validates
- * AI-cited URLs against actual SERP results, computes metrics, saves results to DB, syncs
- * to the Obsidian vault, and notifies the user. Only processes searches in 'processing' status.
- *
- * @auth Required (any authenticated user)
- * @param id - Topic search UUID in 'processing' status
- * @returns {{ status: 'completed' }}
+ * Hybrid pipeline:
+ * 1. Gather data from all platforms in parallel
+ * 2. Compute structured analytics in code (sentiment, emotions, topics, breakdown)
+ * 3. Call LLM ONLY for narrative summary + video ideas (smaller, simpler JSON)
+ * 4. Merge code-computed structure with LLM narrative
+ * 5. Save results
  */
 export async function POST(
   request: NextRequest,
@@ -113,25 +113,29 @@ export async function POST(
       }
     }
 
-    // Read platforms/volume from the search record (stored by /api/search/start)
+    // Read platforms/volume from the search record
     const platforms: string[] = search.platforms ?? ['web'];
-    const volume: string = search.volume ?? 'quick';
+    const volume: string = search.volume ?? 'medium';
     const isV2 = platforms.length > 1 || platforms.includes('reddit');
 
     try {
-      // Step 1: Gather data — v2 uses platform router, v1 uses Brave only
+      // ── Step 1: Gather data ────────────────────────────────────────────────
       let serpData: BraveSerpData;
       let platformContext = '';
+      let platformSources: import('@/lib/types/search').PlatformSource[] = [];
+      let platformStats: { platform: SearchPlatform; postCount: number; commentCount: number; topSubreddits?: string[]; topChannels?: string[]; topHashtags?: string[] }[] = [];
 
       if (isV2) {
         const platformResults = await gatherPlatformData(
           search.query,
           platforms as SearchPlatform[],
           search.time_range,
-          volume as 'quick' | 'deep',
+          volume as 'light' | 'medium' | 'deep',
         );
         serpData = platformResults.braveSerpData ?? { webResults: [], discussions: [], videos: [] };
         platformContext = formatPlatformContext(platformResults.sources, platformResults.platformStats);
+        platformSources = platformResults.sources;
+        platformStats = platformResults.platformStats;
 
         // Store raw platform data for future re-analysis
         await adminClient
@@ -147,7 +151,10 @@ export async function POST(
         });
       }
 
-      // Step 1b: Fetch knowledge base context for client searches
+      // ── Step 2: Compute analytics in code (no LLM) ────────────────────────
+      const analytics = computeAnalytics(platformSources, serpData, platformStats, search.query);
+
+      // ── Step 3: Fetch knowledge base context for client searches ───────────
       let clientKnowledgeBlock: string | null = null;
       if (search.client_id) {
         try {
@@ -162,7 +169,6 @@ export async function POST(
             parts.push(`### Brand Profile\n${brandProfile.content.substring(0, 2000)}`);
           }
 
-          // Extract structured entities
           const products = new Set<string>();
           const people = new Set<string>();
           const faqs: string[] = [];
@@ -183,7 +189,6 @@ export async function POST(
           if (people.size > 0) parts.push(`### Key People\n${[...people].join(', ')}`);
           if (faqs.length > 0) parts.push(`### FAQs\n${faqs.slice(0, 5).join('\n\n')}`);
 
-          // Recent meeting insights
           const meetings = entries.filter((e) => e.type === 'meeting_note').slice(0, 3);
           if (meetings.length > 0) {
             parts.push(`### Recent Meeting Insights\n${meetings.map((m) => `- ${m.title}: ${m.content.substring(0, 200)}...`).join('\n')}`);
@@ -193,77 +198,93 @@ export async function POST(
             clientKnowledgeBlock = parts.join('\n\n');
           }
         } catch {
-          // Non-blocking — knowledge enrichment is optional
+          // Non-blocking
         }
       }
 
-      // Step 2: Build prompt with Brave results as context
-      let prompt: string;
-      if (search.search_mode === 'client_strategy' && clientContext) {
-        prompt = buildClientStrategyPrompt({
-          query: search.query,
-          source: search.source,
-          timeRange: search.time_range,
-          language: search.language,
-          country: search.country,
-          serpData,
-          clientContext,
-          brandPreferences,
-          clientKnowledgeBlock,
-        });
-      } else {
-        prompt = buildTopicResearchPrompt({
-          query: search.query,
-          source: search.source,
-          timeRange: search.time_range,
-          language: search.language,
-          country: search.country,
-          serpData,
-          clientContext,
-          brandPreferences,
-          clientKnowledgeBlock,
-        });
-      }
-
-      // Step 2b: Inject platform data into prompt for v2 searches
-      if (isV2 && platformContext) {
-        prompt = prompt.replace(
-          '</research_data>',
-          `\n\n<platform_data>\n${platformContext}\n</platform_data>\n</research_data>`,
-        );
-      }
-
-      // Step 3: Call Claude via OpenRouter
-      const aiResult = await createCompletion({
-        messages: [{ role: 'user', content: prompt }],
-        maxTokens: 16000,
-        feature: 'topic_search',
+      // ── Step 4: Call LLM for narrative + video ideas only ──────────────────
+      const timeLabel = search.time_range.replace(/_/g, ' ').replace('last ', 'last ');
+      const narrativePrompt = buildNarrativePrompt({
+        query: search.query,
+        timeRange: timeLabel,
+        analytics,
+        clientName: clientContext?.name,
+        clientIndustry: clientContext?.industry,
+        brandVoice: clientContext?.brandVoice,
       });
 
-      const rawAiResponse = parseAIResponseJSON<TopicSearchAIResponse>(aiResult.text);
+      const aiResult = await createCompletion({
+        messages: [{ role: 'user', content: narrativePrompt }],
+        maxTokens: 8000, // Much smaller — only narrative + video ideas
+        feature: 'topic_search',
+        userId: user.id,
+        userEmail: user.email ?? undefined,
+      });
 
-      // Step 4: Validate AI-cited URLs against actual SERP data
+      // Parse the simplified LLM response
+      let narrative: { summary: string; topics: { name: string; posts_overview: string; comments_overview: string; video_ideas: TopicSearchAIResponse['trending_topics'][0]['video_ideas'] }[] };
+      try {
+        narrative = parseAIResponseJSON(aiResult.text);
+      } catch {
+        // If LLM JSON still fails, use a minimal fallback
+        narrative = {
+          summary: aiResult.text.substring(0, 500),
+          topics: [],
+        };
+      }
+
+      // ── Step 5: Merge code-computed analytics + LLM narrative ──────────────
       const serpUrls = buildSerpUrlSet(serpData);
-      const aiResponse = validateTopicSources(rawAiResponse, serpUrls);
 
-      // Step 5: Compute real metrics from SERP data + AI sentiment + topics
+      // Build trending topics by merging code-extracted topics with LLM narratives
+      const trendingTopics: TrendingTopic[] = analytics.extracted_topics.map(topic => {
+        // Find matching LLM topic by name
+        const llmTopic = narrative.topics.find(t =>
+          t.name.toLowerCase() === topic.name.toLowerCase()
+        );
+
+        return {
+          name: topic.name,
+          resonance: computeResonance(topic.frequency, topic.totalEngagement),
+          sentiment: topic.avgSentiment,
+          posts_overview: llmTopic?.posts_overview ?? `Found in ${topic.frequency} sources across ${Array.from(topic.platforms).join(', ')} with ${topic.totalEngagement.toLocaleString()} total engagement.`,
+          comments_overview: llmTopic?.comments_overview ?? `Sentiment is ${topic.avgSentiment > 0.2 ? 'positive' : topic.avgSentiment < -0.2 ? 'negative' : 'mixed'} based on comment analysis.`,
+          sources: topic.sources.filter(s => serpUrls.has(s.url) || s.platform !== 'web'),
+          video_ideas: llmTopic?.video_ideas ?? [],
+        };
+      });
+
+      // Assemble the full AI response in the existing format (backward compatible)
+      const aiResponse: TopicSearchAIResponse = {
+        summary: narrative.summary || `Analysis of "${search.query}" across ${platformSources.length} sources.`,
+        overall_sentiment: analytics.overall_sentiment,
+        conversation_intensity: analytics.conversation_intensity,
+        emotions: analytics.emotions,
+        content_breakdown: analytics.content_breakdown,
+        trending_topics: trendingTopics,
+        big_movers: analytics.big_movers,
+        platform_breakdown: analytics.platform_breakdown,
+        conversation_themes: analytics.conversation_themes,
+      };
+
+      // ── Step 6: Compute display metrics ────────────────────────────────────
       const metrics = computeMetricsFromSerp(
         serpData,
-        aiResponse.overall_sentiment ?? 0,
-        aiResponse.conversation_intensity ?? 'moderate',
-        aiResponse.trending_topics ?? []
+        analytics.overall_sentiment,
+        analytics.conversation_intensity,
+        trendingTopics,
       );
 
-      // Step 6: Update with results
+      // ── Step 7: Save results ───────────────────────────────────────────────
       const { error: updateError } = await adminClient
         .from('topic_searches')
         .update({
           status: 'completed',
-          summary: aiResponse.summary ?? '',
+          summary: aiResponse.summary,
           metrics,
-          emotions: aiResponse.emotions ?? [],
-          content_breakdown: aiResponse.content_breakdown ?? null,
-          trending_topics: aiResponse.trending_topics ?? [],
+          emotions: aiResponse.emotions,
+          content_breakdown: aiResponse.content_breakdown,
+          trending_topics: aiResponse.trending_topics,
           serp_data: serpData,
           raw_ai_response: aiResponse,
           tokens_used: aiResult.usage.totalTokens,
@@ -276,16 +297,16 @@ export async function POST(
         console.error('Error updating search with results:', updateError);
       }
 
-      // Sync to Obsidian vault (non-blocking)
+      // Sync to vault (non-blocking)
       syncSearchToVault(
         {
           ...search,
           status: 'completed',
-          summary: aiResponse.summary ?? '',
+          summary: aiResponse.summary,
           metrics,
-          emotions: aiResponse.emotions ?? [],
-          content_breakdown: aiResponse.content_breakdown ?? null,
-          trending_topics: aiResponse.trending_topics ?? [],
+          emotions: aiResponse.emotions,
+          content_breakdown: aiResponse.content_breakdown,
+          trending_topics: aiResponse.trending_topics,
           raw_ai_response: aiResponse,
           serp_data: serpData,
           tokens_used: aiResult.usage.totalTokens,
@@ -293,7 +314,7 @@ export async function POST(
           completed_at: new Date().toISOString(),
         },
         clientContext?.name,
-      ).catch(() => {}); // Never fail the response
+      ).catch(() => {});
 
       // Notify user
       createNotification({
@@ -306,7 +327,7 @@ export async function POST(
 
       return NextResponse.json({ status: 'completed' });
     } catch (aiError) {
-      console.error('AI processing error:', aiError);
+      console.error('Processing error:', aiError);
 
       await adminClient
         .from('topic_searches')
@@ -330,4 +351,12 @@ export async function POST(
     console.error('POST /api/search/[id]/process error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
+}
+
+function computeResonance(frequency: number, engagement: number): 'low' | 'medium' | 'high' | 'viral' {
+  const score = frequency * 2 + Math.log10(Math.max(engagement, 1));
+  if (score > 20) return 'viral';
+  if (score > 12) return 'high';
+  if (score > 6) return 'medium';
+  return 'low';
 }
