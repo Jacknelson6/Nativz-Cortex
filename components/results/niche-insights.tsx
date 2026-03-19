@@ -66,7 +66,7 @@ export function NicheInsights({ insights }: NicheInsightsProps) {
           <ul className="space-y-1.5">
             {competitorGaps.map((gap, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-text-muted">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-purple-400" />
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent2" />
                 {gap}
               </li>
             ))}

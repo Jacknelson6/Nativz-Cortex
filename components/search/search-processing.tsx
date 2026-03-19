@@ -30,7 +30,7 @@ const TIME_ESTIMATES: Record<string, { label: string }> = {
 const DEPTH_LABELS: Record<string, { label: string; color: string }> = {
   light: { label: 'Light', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
   medium: { label: 'Medium', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-  deep: { label: 'Deep', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+  deep: { label: 'Deep', color: 'bg-accent2/10 text-accent2-text border-accent2/20' },
   quick: { label: 'Light', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
 };
 

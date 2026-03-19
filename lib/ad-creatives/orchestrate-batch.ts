@@ -8,6 +8,7 @@ import { assembleImagePrompt } from './assemble-prompt';
 import { generateAdImage } from './generate-image';
 import { generateAdCopy } from './generate-copy';
 import { compositeAd } from './composite-ad';
+import { qaCheckAd } from './qa-check';
 import { ASPECT_RATIOS } from './types';
 import type {
   AdGenerationBatch,
@@ -106,38 +107,59 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
       MAX_CONCURRENCY,
       async (item) => {
         try {
-          // Assemble full prompt — Gemini renders text matching the template layout
-          const prompt = assembleImagePrompt({
-            brandContext,
-            promptSchema: item.promptSchema,
-            productService: config.productService,
-            offer: config.offer || null,
-            onScreenText: item.onScreenText,
-            aspectRatio: config.aspectRatio,
-          });
+          const MAX_QA_RETRIES = 2;
+          let imageBuffer: Buffer | null = null;
+          let qaResult = { passed: true, issues: [] as { type: string; description: string }[], extractedText: [] as string[], confidence: 0 };
 
-          // Generate full ad image (with text, matching template layout)
-          const baseImageBuffer = await generateAdImage({
-            prompt,
-            referenceImageUrl: item.referenceImageUrl ?? undefined,
-            productImageUrls: productImageUrls.length > 0 ? productImageUrls : undefined,
-            aspectRatio: config.aspectRatio,
-          });
-
-          // Post-processing: composite ONLY the logo for pixel-perfect branding
-          let imageBuffer: Buffer;
-          if (logoUrl) {
-            imageBuffer = await compositeAd({
-              baseImage: baseImageBuffer,
-              textOverlay: null,
-              logoUrl,
-              logoPosition: 'bottom-left',
-              width: dimensions.width,
-              height: dimensions.height,
+          for (let attempt = 0; attempt <= MAX_QA_RETRIES; attempt++) {
+            const prompt = assembleImagePrompt({
+              brandContext,
+              promptSchema: item.promptSchema,
+              productService: config.productService,
+              offer: config.offer || null,
+              onScreenText: item.onScreenText,
+              aspectRatio: config.aspectRatio,
             });
-          } else {
-            imageBuffer = baseImageBuffer;
+
+            const baseImageBuffer = await generateAdImage({
+              prompt,
+              referenceImageUrl: item.referenceImageUrl ?? undefined,
+              productImageUrls: productImageUrls.length > 0 ? productImageUrls : undefined,
+              aspectRatio: config.aspectRatio,
+            });
+
+            if (logoUrl) {
+              imageBuffer = await compositeAd({
+                baseImage: baseImageBuffer,
+                textOverlay: null,
+                logoUrl,
+                logoPosition: 'bottom-left',
+                width: dimensions.width,
+                height: dimensions.height,
+              });
+            } else {
+              imageBuffer = baseImageBuffer;
+            }
+
+            // QA: verify text is about the right brand, not copied from reference
+            qaResult = await qaCheckAd({
+              imageBuffer,
+              intendedText: item.onScreenText,
+              offer: config.offer || null,
+              brandName: brandContext.clientName,
+              productService: config.productService,
+              expectedWidth: dimensions.width,
+              expectedHeight: dimensions.height,
+            });
+
+            if (qaResult.passed) break;
+
+            console.warn(
+              `[orchestrate-batch] QA failed (attempt ${attempt + 1}): ${qaResult.issues.map(i => i.description).join('; ')}`,
+            );
           }
+
+          if (!imageBuffer) throw new Error('No image generated');
 
           // Upload to Supabase Storage
           const creativeId = crypto.randomUUID();
@@ -175,7 +197,12 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
             product_service: config.productService,
             offer: config.offer ?? '',
             is_favorite: false,
-            metadata: {},
+            metadata: {
+              model: 'gemini-3.1-flash-image-preview',
+              qa_passed: qaResult.passed,
+              qa_score: qaResult.confidence,
+              qa_issues: qaResult.issues.length > 0 ? qaResult.issues : undefined,
+            },
           });
 
           if (insertError) {

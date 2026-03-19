@@ -334,7 +334,7 @@ export function AiChatPanel({ boardId, items, notes, onClose }: AiChatPanelProps
         <div className="px-5 pt-5 pb-3 border-b border-nativz-border shrink-0">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-accent2 flex items-center justify-center">
                 <Sparkles size={16} className="text-white" />
               </div>
               <div>
@@ -360,7 +360,7 @@ export function AiChatPanel({ boardId, items, notes, onClose }: AiChatPanelProps
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center px-6">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-600/20 border border-blue-500/20 flex items-center justify-center mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500/20 to-accent2/20 border border-blue-500/20 flex items-center justify-center mb-4">
                 <Sparkles size={20} className="text-blue-400" />
               </div>
               <p className="text-sm font-medium text-text-secondary mb-1">Chat with your content</p>
@@ -467,7 +467,7 @@ export function AiChatPanel({ boardId, items, notes, onClose }: AiChatPanelProps
               onClick={handleSend}
               disabled={!input.trim() || streaming}
               size="sm"
-              className="h-10 w-10 p-0 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:opacity-30"
+              className="h-10 w-10 p-0 rounded-xl bg-gradient-to-r from-blue-600 to-accent2 hover:from-blue-500 hover:to-accent2 disabled:opacity-30"
             >
               {streaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </Button>

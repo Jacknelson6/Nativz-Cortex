@@ -127,18 +127,19 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
     setGenerating(true);
 
     try {
-      const body = {
+      const body: Record<string, unknown> = {
         templateIds: Array.from(selectedTemplateIds),
         templateSource: 'kandy' as const,
         productService: productService.trim(),
         offer: offer.trim(),
-        onScreenText:
-          copyMode === 'ai'
-            ? 'ai_generate'
-            : { headline, subheadline, cta },
+        onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
         aspectRatio,
         numVariations,
       };
+
+      if (copyMode === 'manual') {
+        body.manualText = { headline, subheadline, cta };
+      }
 
       const res = await fetch(`/api/clients/${clientId}/ad-creatives/generate`, {
         method: 'POST',

@@ -89,14 +89,17 @@ export function assembleImagePrompt(config: AssemblePromptConfig): string {
       `- Position: ${promptSchema.ctaStyle.position}`
   );
 
-  // On-screen text — Gemini renders these matching the template layout
+  // On-screen text — these are the ONLY words allowed on the image
   sections.push(
-    `EXACT TEXT TO RENDER ON THE IMAGE:\n` +
+    `THE ONLY TEXT ALLOWED ON THIS IMAGE (render these EXACTLY as written):\n` +
       `- Headline: "${onScreenText.headline}"\n` +
       `- Subheadline: "${onScreenText.subheadline}"\n` +
       `- CTA button text: "${onScreenText.cta}"` +
       (offer ? `\n- Offer text: "${offer}"` : '') +
-      `\n- Do NOT render any brand name or logo — the logo will be added separately in post-processing`
+      `\n\nDo NOT render any brand name or logo — the logo will be added in post-processing.` +
+      `\nDo NOT copy or reproduce ANY text from the reference image — it belongs to a different brand.` +
+      `\nIf the reference image has callout labels, replace them with feature descriptions relevant to "${productService}".` +
+      `\nEvery single word on this image must be about ${brandContext.clientName} and ${productService} — nothing else.`
   );
 
   return sections.join('\n\n');

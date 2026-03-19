@@ -24,7 +24,7 @@ const VIRALITY_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'dang
 };
 
 const VIRALITY_BORDER: Record<string, string> = {
-  viral_potential: 'border-l-purple-500',
+  viral_potential: 'border-l-accent2',
   high: 'border-l-blue-500',
 };
 

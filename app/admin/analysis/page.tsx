@@ -259,7 +259,7 @@ export default function MoodboardPage() {
                   <div className={`absolute -inset-px rounded-xl bg-gradient-to-r transition-all duration-500 -z-10 blur-sm ${
                     isAC
                       ? 'from-teal-500/0 via-teal-400/0 to-teal-500/0 group-hover:from-teal-500/20 group-hover:via-teal-400/20 group-hover:to-teal-500/20'
-                      : 'from-blue-500/0 via-purple-500/0 to-blue-500/0 group-hover:from-blue-500/20 group-hover:via-purple-500/20 group-hover:to-blue-500/20'
+                      : 'from-blue-500/0 via-accent2/0 to-blue-500/0 group-hover:from-blue-500/20 group-hover:via-accent2/20 group-hover:to-blue-500/20'
                   }`} />
 
                   <button

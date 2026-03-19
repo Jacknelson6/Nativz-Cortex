@@ -141,7 +141,7 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
                   <p className="text-sm text-text-muted mb-5">
                     Generate content ideas powered by AI + knowledge
                   </p>
-                  <div className="w-full rounded-xl bg-accent2-surface border border-purple-500/25 py-2.5 text-center">
+                  <div className="w-full rounded-xl bg-accent2-surface border border-accent2/25 py-2.5 text-center">
                     <span className="text-sm font-semibold text-accent2-text">Generate strategy</span>
                   </div>
                 </div>

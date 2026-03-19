@@ -388,7 +388,7 @@ export function SocialAuditEditor({
                 {competitor && (
                   <div className="px-6 py-4 border-t border-nativz-border bg-white/[0.02]">
                     <div className="flex items-center gap-2 mb-3">
-                      <div className="w-2 h-2 rounded-full bg-purple-400" />
+                      <div className="w-2 h-2 rounded-full bg-accent2" />
                       <h3 className="text-xs font-bold text-accent2-text uppercase tracking-wider">Competitor: @{competitor.handle}</h3>
                     </div>
                     <div className="grid grid-cols-4 gap-4">

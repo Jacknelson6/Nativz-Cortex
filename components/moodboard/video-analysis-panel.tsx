@@ -23,7 +23,7 @@ interface VideoAnalysisPanelProps {
 const PLATFORM_COLORS: Record<string, string> = {
   tiktok: 'bg-black text-white',
   youtube: 'bg-red-600 text-white',
-  instagram: 'bg-gradient-to-r from-purple-500 to-pink-500 text-white',
+  instagram: 'bg-gradient-to-r from-accent2 to-pink-500 text-white',
   twitter: 'bg-sky-500 text-white',
 };
 
@@ -832,7 +832,7 @@ function VisualHookMetrics({ hook }: { hook: HookVisualAnalysis }) {
   const metrics = [
     { label: 'Face prominence', value: hook.faceProminence, color: 'bg-blue-400' },
     { label: 'Movement energy', value: hook.movementEnergy, color: 'bg-amber-400' },
-    { label: 'Visual complexity', value: hook.visualComplexity, color: 'bg-purple-400' },
+    { label: 'Visual complexity', value: hook.visualComplexity, color: 'bg-accent2' },
   ].filter((m) => m.value > 0);
 
   if (metrics.length === 0 && hook.objectsDetected.length === 0) return null;

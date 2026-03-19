@@ -526,7 +526,7 @@ export default function AdminShootsPage() {
                                   className={`
                                     cursor-pointer w-full text-left rounded-md px-1.5 py-1 text-[10px] font-medium
                                     ${event.planData
-                                      ? 'bg-accent2-surface border border-purple-500/25 text-accent2-text'
+                                      ? 'bg-accent2-surface border border-accent2/25 text-accent2-text'
                                       : 'bg-white/[0.08] border border-white/10 text-white/80'
                                     }
                                     hover:bg-white/[0.12] hover:border-white/15 transition-colors

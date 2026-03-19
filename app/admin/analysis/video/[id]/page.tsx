@@ -15,7 +15,7 @@ import type { MoodboardItem } from '@/lib/types/moodboard';
 const PLATFORM_COLORS: Record<string, string> = {
   tiktok: 'bg-black text-white',
   youtube: 'bg-red-600 text-white',
-  instagram: 'bg-gradient-to-r from-purple-500 to-pink-500 text-white',
+  instagram: 'bg-gradient-to-r from-accent2 to-pink-500 text-white',
   facebook: 'bg-blue-600 text-white',
   twitter: 'bg-sky-500 text-white',
 };

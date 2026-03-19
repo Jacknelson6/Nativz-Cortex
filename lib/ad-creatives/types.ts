@@ -108,6 +108,18 @@ export type OnScreenText = {
   cta: string;
 };
 
+export type ProductInfo = {
+  name: string;
+  imageUrl: string | null;
+  description: string;
+};
+
+export type ProductOfferConfig = {
+  product: ProductInfo;
+  offer: string;
+  cta: string;
+};
+
 export type AdGenerationConfig = {
   aspectRatio: AspectRatio;
   numVariations: number;
@@ -116,6 +128,10 @@ export type AdGenerationConfig = {
   onScreenText: OnScreenText | 'ai_generate';
   templateIds: string[];
   templateSource: 'kandy' | 'custom';
+  /** Wizard-sourced product list (optional — backwards compatible) */
+  products?: ProductOfferConfig[];
+  /** Brand URL that was scraped for context */
+  brandUrl?: string;
 };
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Star, Loader2 } from 'lucide-react';
+import { Star, Loader2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog } from '@/components/ui/dialog';
@@ -34,7 +34,13 @@ const CATEGORY_LABELS: Record<AdCategory, string> = {
   comparison: 'Comparison',
 };
 
-export function TemplateCatalog() {
+interface TemplateCatalogProps {
+  clientId?: string;
+  onShowBulkImport?: () => void;
+  refreshKey?: number;
+}
+
+export function TemplateCatalog({ clientId, onShowBulkImport, refreshKey }: TemplateCatalogProps) {
   const [templates, setTemplates] = useState<KandyTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [verticalFilter, setVerticalFilter] = useState<AdVertical | 'all'>('all');
@@ -59,7 +65,7 @@ export function TemplateCatalog() {
 
   useEffect(() => {
     fetchTemplates();
-  }, [fetchTemplates]);
+  }, [fetchTemplates, refreshKey]);
 
   const toggleFavorite = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -149,6 +155,15 @@ export function TemplateCatalog() {
     <div className="space-y-6">
       {/* Filter bar */}
       <div className="flex items-center gap-3 flex-wrap">
+        {onShowBulkImport && (
+          <button
+            onClick={onShowBulkImport}
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90 cursor-pointer"
+          >
+            <Upload size={14} />
+            Bulk import
+          </button>
+        )}
         <select
           value={verticalFilter}
           onChange={(e) => setVerticalFilter(e.target.value as AdVertical | 'all')}

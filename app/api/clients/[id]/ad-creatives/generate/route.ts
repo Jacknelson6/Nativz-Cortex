@@ -13,6 +13,16 @@ const manualTextSchema = z.object({
   cta: z.string().min(1).max(100),
 });
 
+const productInfoSchema = z.object({
+  product: z.object({
+    name: z.string().min(1).max(200),
+    imageUrl: z.string().url().nullable(),
+    description: z.string().max(500),
+  }),
+  offer: z.string().max(300),
+  cta: z.string().max(100),
+});
+
 const bodySchema = z.object({
   templateIds: z.array(z.string().uuid()).min(1, 'At least one template is required'),
   templateSource: z.enum(['kandy', 'custom']),
@@ -22,6 +32,8 @@ const bodySchema = z.object({
   numVariations: z.number().int().min(1).max(20),
   onScreenTextMode: z.enum(['ai_generate', 'manual']),
   manualText: manualTextSchema.optional(),
+  products: z.array(productInfoSchema).max(20).optional(),
+  brandUrl: z.string().url().optional(),
 }).refine(
   (data) => data.onScreenTextMode !== 'manual' || data.manualText !== undefined,
   { message: 'manualText is required when onScreenTextMode is "manual"', path: ['manualText'] },
@@ -78,7 +90,7 @@ export async function POST(
   const { data: client } = await admin.from('clients').select('id').eq('id', clientId).single();
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
 
-  const { templateIds, templateSource, productService, offer, aspectRatio, numVariations, onScreenTextMode, manualText } = parsed.data;
+  const { templateIds, templateSource, productService, offer, aspectRatio, numVariations, onScreenTextMode, manualText, products, brandUrl } = parsed.data;
   const totalCount = templateIds.length * numVariations;
 
   // Build config for storage
@@ -90,6 +102,8 @@ export async function POST(
     onScreenText: onScreenTextMode === 'manual' ? manualText! : ('ai_generate' as const),
     templateIds,
     templateSource,
+    ...(products && { products }),
+    ...(brandUrl && { brandUrl }),
   };
 
   // Create batch record

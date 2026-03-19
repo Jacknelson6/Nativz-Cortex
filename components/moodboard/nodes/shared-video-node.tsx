@@ -23,7 +23,7 @@ function PlatformBadge({ platform }: { platform: string | null }) {
   const config: Record<string, { label: string; bg: string; text: string }> = {
     tiktok: { label: 'TikTok', bg: 'bg-black', text: 'text-white' },
     youtube: { label: 'YT', bg: 'bg-red-600', text: 'text-white' },
-    instagram: { label: 'IG', bg: 'bg-gradient-to-r from-purple-500 to-pink-500', text: 'text-white' },
+    instagram: { label: 'IG', bg: 'bg-gradient-to-r from-accent2 to-pink-500', text: 'text-white' },
     twitter: { label: '𝕏', bg: 'bg-black', text: 'text-white' },
   };
   const c = config[platform];

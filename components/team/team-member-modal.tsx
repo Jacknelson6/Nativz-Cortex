@@ -252,7 +252,7 @@ export function TeamMemberModal({
               className="h-12 w-12 rounded-full object-cover ring-1 ring-nativz-border shrink-0"
             />
           ) : (
-            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 ring-1 ring-nativz-border flex items-center justify-center shrink-0">
+            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500/20 to-accent2/20 ring-1 ring-nativz-border flex items-center justify-center shrink-0">
               <span className="text-sm font-semibold text-text-secondary">
                 {getInitials(member.full_name)}
               </span>

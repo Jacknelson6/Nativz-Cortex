@@ -82,7 +82,7 @@ export function PillarCard({ pillar, clientId, onUpdate, onDelete, index }: Pill
 
   return (
     <div
-      className="group relative rounded-xl border border-nativz-border bg-surface border-l-2 border-l-purple-500/30 transition-all hover:border-l-purple-500/60 animate-stagger-in"
+      className="group relative rounded-xl border border-nativz-border bg-surface border-l-2 border-l-accent2/30 transition-all hover:border-l-accent2/60 animate-stagger-in"
       style={{ animationDelay: `${index * 60}ms` }}
     >
       {/* Re-roll overlay */}

@@ -94,7 +94,7 @@ export function ComboSelect({
           onClick={() => setOpen(!open)}
           className={`flex items-center justify-between w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors cursor-pointer ${
             accent === 'purple'
-              ? 'hover:border-accent2/50 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:shadow-[0_0_0_3px_var(--accent2-surface)]'
+              ? 'hover:border-accent2/50 focus:border-accent2 focus:outline-none focus:ring-1 focus:ring-accent2 focus:shadow-[0_0_0_3px_var(--accent2-surface)]'
               : 'hover:border-accent/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_var(--focus-ring)]'
           }`}
         >

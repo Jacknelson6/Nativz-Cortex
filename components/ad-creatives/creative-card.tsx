@@ -56,7 +56,7 @@ export function CreativeCard({ creative, onFavorite, onDelete, onClick }: Creati
       >
         <img
           src={creative.image_url}
-          alt={creative.on_screen_text.headline || 'Ad creative'}
+          alt={creative.on_screen_text?.headline || 'Ad creative'}
           className="w-full block"
           loading="lazy"
         />

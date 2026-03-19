@@ -202,7 +202,7 @@ export function IdeasWizard({ open, onClose, clients, onStarted }: IdeasWizardPr
         )}
 
         <div className="flex justify-end mt-6">
-          <GlassButton onClick={() => setStep(2)} disabled={!canProceed} className="!text-accent2-text !bg-[var(--accent2-surface)] !border-[var(--accent2-ring)] hover:!bg-[var(--accent2-ring)] hover:!border-[var(--accent2-ring)] hover:!shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_0_20px_var(--accent2-surface)] active:!bg-[var(--accent2-ring)] focus-visible:!ring-purple-500">
+          <GlassButton onClick={() => setStep(2)} disabled={!canProceed} className="!text-accent2-text !bg-[var(--accent2-surface)] !border-[var(--accent2-ring)] hover:!bg-[var(--accent2-ring)] hover:!border-[var(--accent2-ring)] hover:!shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_0_20px_var(--accent2-surface)] active:!bg-[var(--accent2-ring)] focus-visible:!ring-accent2">
             Next &rarr;
           </GlassButton>
         </div>

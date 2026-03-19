@@ -240,7 +240,7 @@ function VideoIdeaListItem({
               'text-text-muted'
             }`}>
               <span className={`inline-block h-1 w-1 rounded-full ${
-                idea.virality === 'viral_potential' ? 'bg-purple-400' :
+                idea.virality === 'viral_potential' ? 'bg-accent2' :
                 idea.virality === 'high' ? 'bg-emerald-400' :
                 idea.virality === 'medium' ? 'bg-blue-400' :
                 'bg-text-muted'

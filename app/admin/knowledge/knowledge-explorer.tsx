@@ -74,7 +74,7 @@ const KIND_BADGE_COLORS: Record<string, string> = {
   domain: 'bg-amber-500/15 text-amber-400',
   playbook: 'bg-sky-500/15 text-sky-400',
   client: 'bg-green-500/15 text-green-400',
-  meeting: 'bg-purple-500/15 text-purple-400',
+  meeting: 'bg-accent2/15 text-accent2-text',
   asset: 'bg-slate-500/15 text-slate-400',
   insight: 'bg-pink-500/15 text-pink-400',
   'web-page': 'bg-cyan-500/15 text-cyan-400',

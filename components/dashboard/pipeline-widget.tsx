@@ -219,7 +219,7 @@ export function PipelineWidget() {
                   const hasLeadingName = colonIdx > 0 && colonIdx < 30;
                   return (
                     <li key={i} className="flex items-start gap-2 text-xs text-text-secondary leading-snug">
-                      <span className="shrink-0 mt-[5px] h-1.5 w-1.5 rounded-full bg-purple-400/40" />
+                      <span className="shrink-0 mt-[5px] h-1.5 w-1.5 rounded-full bg-accent2/40" />
                       {hasLeadingName ? (
                         <span>
                           <span className="font-medium text-text-primary">{clean.slice(0, colonIdx)}</span>

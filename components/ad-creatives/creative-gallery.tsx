@@ -49,10 +49,10 @@ export function CreativeGallery({ clientId, onNavigateToGenerate }: CreativeGall
       prev.map((c) => (c.id === id ? { ...c, is_favorite: next } : c)),
     );
 
-    await fetch(`/api/clients/${clientId}/ad-creatives/${id}`, {
+    await fetch(`/api/clients/${clientId}/ad-creatives`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_favorite: next }),
+      body: JSON.stringify({ creativeId: id, is_favorite: next }),
     }).catch(() => {
       // Revert on failure
       setCreatives((prev) =>
@@ -63,8 +63,10 @@ export function CreativeGallery({ clientId, onNavigateToGenerate }: CreativeGall
 
   const deleteCreative = async (id: string) => {
     setCreatives((prev) => prev.filter((c) => c.id !== id));
-    await fetch(`/api/clients/${clientId}/ad-creatives/${id}`, {
+    await fetch(`/api/clients/${clientId}/ad-creatives`, {
       method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ creativeId: id }),
     }).catch(() => {
       fetchCreatives(); // Refetch on failure
     });
@@ -178,14 +180,14 @@ export function CreativeGallery({ clientId, onNavigateToGenerate }: CreativeGall
           <div className="space-y-4">
             <img
               src={selectedCreative.image_url}
-              alt={selectedCreative.on_screen_text.headline}
+              alt={selectedCreative.on_screen_text?.headline ?? 'Creative'}
               className="w-full rounded-xl"
             />
             <div className="space-y-2">
               <h3 className="text-sm font-semibold text-text-primary">
-                {selectedCreative.on_screen_text.headline}
+                {selectedCreative.on_screen_text?.headline ?? ''}
               </h3>
-              {selectedCreative.on_screen_text.subheadline && (
+              {selectedCreative.on_screen_text?.subheadline && (
                 <p className="text-xs text-text-secondary">
                   {selectedCreative.on_screen_text.subheadline}
                 </p>

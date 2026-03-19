@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { ArrowLeft, Image, LayoutGrid, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { CreativeGallery } from './creative-gallery';
 import { TemplateCatalog } from './template-catalog';
-import { GenerationForm } from './generation-form';
+import { AdWizard } from './ad-wizard';
+import { BulkTemplateImport } from './bulk-template-import';
 
 type Tab = 'gallery' | 'templates' | 'generate';
 
@@ -32,6 +33,8 @@ export function AdCreativesView({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [templateRefreshKey, setTemplateRefreshKey] = useState(0);
 
   const activeTab = (searchParams.get('tab') as Tab) || 'gallery';
 
@@ -90,16 +93,30 @@ export function AdCreativesView({
         ))}
       </div>
 
+      {/* Bulk import panel */}
+      {showBulkImport && activeTab === 'templates' && (
+        <div className="rounded-xl bg-surface border border-nativz-border p-5">
+          <BulkTemplateImport
+            clientId={clientId}
+            onClose={() => setShowBulkImport(false)}
+            onImportComplete={() => setTemplateRefreshKey((k) => k + 1)}
+          />
+        </div>
+      )}
+
       {/* Tab content */}
       {activeTab === 'gallery' && (
         <CreativeGallery clientId={clientId} onNavigateToGenerate={() => setTab('generate')} />
       )}
-      {activeTab === 'templates' && <TemplateCatalog />}
-      {activeTab === 'generate' && (
-        <GenerationForm
+      {activeTab === 'templates' && (
+        <TemplateCatalog
           clientId={clientId}
-          onNavigateToTemplates={() => setTab('templates')}
+          onShowBulkImport={() => setShowBulkImport(true)}
+          refreshKey={templateRefreshKey}
         />
+      )}
+      {activeTab === 'generate' && (
+        <AdWizard clientId={clientId} />
       )}
     </div>
   );

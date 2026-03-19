@@ -80,7 +80,7 @@ const SERVICE_META: Record<
   groq: { label: 'Groq / Whisper', icon: Mic, color: 'text-green-400' },
   gemini: { label: 'Google AI / Gemini', icon: Eye, color: 'text-accent2-text' },
   brave: { label: 'Brave Search', icon: Search, color: 'text-orange-400' },
-  apify: { label: 'Apify / TikTok', icon: Bot, color: 'text-purple-400' },
+  apify: { label: 'Apify / TikTok', icon: Bot, color: 'text-accent2-text' },
   cloudflare: { label: 'Cloudflare / Crawl', icon: Cloud, color: 'text-amber-400' },
   resend: { label: 'Resend / Email', icon: Mail, color: 'text-indigo-400' },
   youtube: { label: 'YouTube Data', icon: Youtube, color: 'text-red-400' },

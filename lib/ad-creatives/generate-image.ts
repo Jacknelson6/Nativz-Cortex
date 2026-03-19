@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 const GOOGLE_AI_ENDPOINT =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
 
 const MAX_RETRIES = 2;
 const TIMEOUT_MS = 90_000;
@@ -97,7 +97,9 @@ async function buildParts(params: GenerateAdImageParams): Promise<GeminiContentP
     if (ref) {
       parts.push({ inlineData: ref });
       parts.push({
-        text: 'The above image is a STYLE and LAYOUT reference only. Copy the visual layout, text positioning, composition structure, and design style — but replace all content with the brand-specific content described below. Do NOT copy any brand names, logos, or product images from this reference.\n\n',
+        text: `The above image is a LAYOUT REFERENCE ONLY — use it for visual structure (where text goes, where images go, overall composition style).
+
+CRITICAL: You MUST NOT copy ANY text from this reference image. Every word in the reference is from a DIFFERENT brand and MUST be replaced. The ONLY text allowed in your output is what is explicitly specified in the prompt below. If you see text like "TRY ECHOS", "CAN'T SLEEP", or any other words in the reference — IGNORE them completely. Replace ALL text with the brand-specific content below.\n\n`,
       });
     }
   }

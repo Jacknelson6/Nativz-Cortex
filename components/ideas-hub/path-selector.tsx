@@ -42,7 +42,7 @@ export function PathSelector({ onSelectPath, onFullStrategy, disabled, hasClient
           className={`group relative flex flex-col items-center text-center gap-3 rounded-2xl border p-6 transition-all ${
             pillarDisabled
               ? 'border-nativz-border opacity-40 cursor-not-allowed'
-              : 'border-accent2/40 cursor-pointer hover:border-purple-500/70 hover:bg-purple-500/[0.04]'
+              : 'border-accent2/40 cursor-pointer hover:border-accent2/70 hover:bg-accent2/[0.04]'
           }`}
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent2-surface">

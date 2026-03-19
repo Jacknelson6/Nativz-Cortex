@@ -184,7 +184,7 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
       <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
         {/* Linked ideas banner */}
         {linkedIdeas.length > 0 && (
-          <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
+          <div className="rounded-xl border border-accent2/20 bg-accent2/5 p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent2-surface shrink-0">
                 <Sparkles size={16} className="text-accent2-text" />

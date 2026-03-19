@@ -24,7 +24,7 @@ export function normalizeReasons(why: string | string[]): string[] {
 
 function ReplaceSkeleton() {
   return (
-    <div className="rounded-xl border border-purple-500/20 bg-surface p-4 flex flex-col items-center justify-center min-h-[160px] space-y-3">
+    <div className="rounded-xl border border-accent2/20 bg-surface p-4 flex flex-col items-center justify-center min-h-[160px] space-y-3">
       <motion.div
         className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent2-surface"
         animate={{ scale: [1, 1.1, 1] }}
@@ -81,7 +81,7 @@ export function IdeaResultCard({
       transition={{ duration: 0.3, delay: index * 0.03 }}
       className={`group rounded-xl border bg-surface p-4 space-y-3 transition-all cursor-pointer ${
         idea.selected
-          ? 'border-accent2/40 bg-purple-500/[0.03]'
+          ? 'border-accent2/40 bg-accent2/[0.03]'
           : 'border-nativz-border hover:border-accent2/30'
       }`}
       onClick={() => selectionMode && onToggleSelect(index)}

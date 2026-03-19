@@ -119,7 +119,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <motion.div
-          className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent2-surface border border-purple-500/20 mb-4"
+          className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent2-surface border border-accent2/20 mb-4"
           animate={{ scale: [1, 1.05, 1] }}
           transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
         >
@@ -138,13 +138,13 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
           {Array.from({ length: 4 }).map((_, i) => (
             <motion.div
               key={i}
-              className="rounded-xl border border-purple-500/10 bg-surface p-4 space-y-2"
+              className="rounded-xl border border-accent2/10 bg-surface p-4 space-y-2"
               animate={{ opacity: [0.3, 0.6, 0.3] }}
               transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: i * 0.3 }}
             >
               <div className="h-4 rounded bg-accent2-surface w-3/4" />
-              <div className="h-3 rounded bg-purple-500/5 w-full" />
-              <div className="h-3 rounded bg-purple-500/5 w-2/3" />
+              <div className="h-3 rounded bg-accent2/5 w-full" />
+              <div className="h-3 rounded bg-accent2/5 w-2/3" />
             </motion.div>
           ))}
         </div>
@@ -599,7 +599,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
 
             return (
               <div key={pillar.id}>
-                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-purple-500/20">
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-accent2/20">
                   {pillar.emoji && <span className="text-base">{pillar.emoji}</span>}
                   <h3 className="text-sm font-semibold text-accent2-text">{pillar.name}</h3>
                   <span className="text-[11px] text-text-muted">{pillarIdeas.length} ideas</span>
@@ -836,7 +836,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                   >
                     <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-colors ${
                       selectedHooks.has(hook.id)
-                        ? 'border-purple-400 bg-accent2-surface'
+                        ? 'border-accent2 bg-accent2-surface'
                         : 'border-white/20 bg-transparent'
                     }`}>
                       {selectedHooks.has(hook.id) && <Check size={8} />}
@@ -863,7 +863,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
                     deselectAll();
                   }}
                   disabled={ideas.some((i) => i.selected && i.scriptLoading)}
-                  className="rounded-xl bg-accent2-surface border border-accent2/30 px-5 py-2.5 text-sm font-medium text-accent2-text hover:bg-purple-500/25 transition-colors disabled:opacity-40 cursor-pointer"
+                  className="rounded-xl bg-accent2-surface border border-accent2/30 px-5 py-2.5 text-sm font-medium text-accent2-text hover:bg-accent2/25 transition-colors disabled:opacity-40 cursor-pointer"
                 >
                   Generate {selectedCount} script{selectedCount !== 1 ? 's' : ''}
                 </button>

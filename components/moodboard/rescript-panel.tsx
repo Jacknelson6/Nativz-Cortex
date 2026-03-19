@@ -125,7 +125,7 @@ export function RescriptPanel({ item, onClose, onSaved }: RescriptPanelProps) {
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 p-2">
+              <div className="rounded-lg bg-gradient-to-br from-indigo-500 to-accent2 p-2">
                 <Sparkles size={18} className="text-white" />
               </div>
               <div>
@@ -187,7 +187,7 @@ export function RescriptPanel({ item, onClose, onSaved }: RescriptPanelProps) {
                 />
               </div>
 
-              <GlassButton onClick={handleGenerate} className="w-full justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white">
+              <GlassButton onClick={handleGenerate} className="w-full justify-center gap-2 bg-gradient-to-r from-indigo-500 to-accent2 hover:from-indigo-600 hover:to-accent2-hover text-white">
                 <Sparkles size={16} />
                 Generate Rescript
               </GlassButton>
@@ -198,8 +198,8 @@ export function RescriptPanel({ item, onClose, onSaved }: RescriptPanelProps) {
           {step === 'generating' && (
             <div className="flex flex-col items-center justify-center py-16 gap-4">
               <div className="relative">
-                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 blur-lg opacity-50 animate-pulse" />
-                <div className="relative rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 p-4">
+                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-indigo-500 to-accent2 blur-lg opacity-50 animate-pulse" />
+                <div className="relative rounded-full bg-gradient-to-r from-indigo-500 to-accent2 p-4">
                   <Loader2 size={24} className="text-white animate-spin" />
                 </div>
               </div>
@@ -255,7 +255,7 @@ export function RescriptPanel({ item, onClose, onSaved }: RescriptPanelProps) {
                   <div className="space-y-2">
                     {rescript.shot_list.map((shot, i) => (
                       <div key={i} className="flex gap-3 rounded-lg border border-nativz-border bg-surface-hover p-3">
-                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white">
+                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-accent2 flex items-center justify-center text-xs font-bold text-white">
                           {shot.number}
                         </span>
                         <div className="flex-1 min-w-0">
@@ -280,7 +280,7 @@ export function RescriptPanel({ item, onClose, onSaved }: RescriptPanelProps) {
                   </h3>
                   <div className="grid gap-2">
                     {rescript.hook_alternatives.map((hook, i) => (
-                      <div key={i} className="rounded-xl border border-nativz-border bg-gradient-to-r from-indigo-500/5 to-purple-600/5 p-3">
+                      <div key={i} className="rounded-xl border border-nativz-border bg-gradient-to-r from-indigo-500/5 to-accent2/5 p-3">
                         <span className="text-[10px] font-bold text-accent uppercase tracking-wider">Option {i + 1}</span>
                         <p className="text-sm text-text-secondary mt-1">{hook}</p>
                       </div>

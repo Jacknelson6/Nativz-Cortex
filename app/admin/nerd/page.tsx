@@ -417,7 +417,7 @@ export default function NerdPage() {
                 ))}
                 <button
                   onClick={() => setShowCapabilities(true)}
-                  className="rounded-xl border border-purple-500/20 bg-purple-500/[0.04] px-4 py-2.5 text-sm text-accent2-text hover:text-accent2-text hover:border-accent2/30 hover:bg-purple-500/[0.08] transition-all duration-200 cursor-pointer flex items-center gap-1.5"
+                  className="rounded-xl border border-accent2/20 bg-accent2/[0.04] px-4 py-2.5 text-sm text-accent2-text hover:text-accent2-text hover:border-accent2/30 hover:bg-accent2/[0.08] transition-all duration-200 cursor-pointer flex items-center gap-1.5"
                 >
                   <Sparkles size={14} />
                   What can I do?
