@@ -1,4 +1,5 @@
 import { logUsage, calculateCost } from './usage';
+import { checkCostBudget } from './cost-guard';
 
 export interface AICompletionResponse {
   text: string;
@@ -34,6 +35,17 @@ export async function createCompletion(options: CompletionOptions): Promise<AICo
 
   if (!apiKey) {
     throw new Error('OPENROUTER_API_KEY is not configured');
+  }
+
+  // Check cost budget before making the AI call
+  if (options.feature) {
+    const budget = await checkCostBudget(options.feature);
+    if (!budget.allowed) {
+      const detail = budget.featureLimit && budget.featureSpent !== undefined
+        ? ` (feature "${options.feature}": $${budget.featureSpent.toFixed(2)}/$${budget.featureLimit.toFixed(2)})`
+        : ` (total: $${budget.spent.toFixed(2)}/$${budget.limit.toFixed(2)})`;
+      throw new Error(`AI budget exceeded for this month${detail}. Contact admin.`);
+    }
   }
 
   const body: Record<string, unknown> = {

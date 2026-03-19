@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logActivity } from '@/lib/activity';
 
 const updateTeamMemberSchema = z.object({
   full_name: z.string().min(1).max(200).optional(),
@@ -78,6 +79,13 @@ export async function PATCH(
     if (!data) {
       return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
     }
+
+    // Audit log: team member update (especially role/active status changes)
+    logActivity(user.id, 'team_member_updated', 'user', id, {
+      updated_fields: Object.keys(updates),
+      ...(updates.role !== undefined && { new_role: updates.role }),
+      ...(updates.is_active !== undefined && { new_is_active: updates.is_active }),
+    }).catch(() => {});
 
     return NextResponse.json(data);
   } catch (error) {

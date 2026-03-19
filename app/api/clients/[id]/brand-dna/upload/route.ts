@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { processUploadedFiles } from '@/lib/brand-dna/process-uploads';
+import { validateFileSignature } from '@/lib/security/validate-file-type';
 
 export const maxDuration = 60;
 
@@ -48,6 +49,12 @@ export async function POST(
   ]);
   const MAX_SIZE = 50 * 1024 * 1024; // 50MB
 
+  // Binary types that should be validated with magic bytes
+  const MAGIC_BYTE_TYPES = [
+    'image/png', 'image/jpeg', 'image/svg+xml', 'image/webp', 'image/gif',
+    'application/pdf',
+  ];
+
   const files: { name: string; type: string; buffer: Buffer }[] = [];
 
   for (const entry of fileEntries) {
@@ -58,6 +65,15 @@ export async function POST(
     if (entry.size > MAX_SIZE) continue;
 
     const arrayBuffer = await entry.arrayBuffer();
+
+    // Validate magic bytes for binary/image types (skip text and docx)
+    const isTextFile = entry.type.startsWith('text/') || entry.name.endsWith('.md') || entry.name.endsWith('.txt');
+    const isDocx = entry.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if (!isTextFile && !isDocx) {
+      const { valid } = validateFileSignature(arrayBuffer, MAGIC_BYTE_TYPES);
+      if (!valid) continue; // Skip files with mismatched magic bytes
+    }
+
     files.push({
       name: entry.name,
       type: entry.type,

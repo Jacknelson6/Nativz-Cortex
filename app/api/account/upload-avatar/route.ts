@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { validateFileSignature } from '@/lib/security/validate-file-type';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_SIZE = 2 * 1024 * 1024; // 2MB
@@ -49,7 +50,16 @@ export async function POST(request: NextRequest) {
     const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
     const filename = `avatar-${user.id}-${Date.now()}.${ext}`;
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const arrayBuffer = await file.arrayBuffer();
+    const { valid, detectedType } = validateFileSignature(arrayBuffer, ALLOWED_TYPES);
+    if (!valid) {
+      return NextResponse.json(
+        { error: `File content does not match an allowed image type. Detected: ${detectedType ?? 'unknown'}` },
+        { status: 400 },
+      );
+    }
+
+    const buffer = Buffer.from(arrayBuffer);
 
     const { error: uploadError } = await adminClient.storage
       .from('client-logos')

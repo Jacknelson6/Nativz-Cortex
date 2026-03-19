@@ -20,7 +20,10 @@ async function verifySignature(
   signature: string | null,
 ): Promise<boolean> {
   const secret = process.env.GITHUB_VAULT_WEBHOOK_SECRET;
-  if (!secret) return true; // No secret = skip verification (dev)
+  if (!secret) {
+    console.error('[vault-webhook] GITHUB_VAULT_WEBHOOK_SECRET is not set — rejecting request');
+    return false;
+  }
 
   if (!signature) return false;
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { syncClientProfileToVault, removeClientFromVault } from '@/lib/vault/sync';
+import { logActivity } from '@/lib/activity';
 
 /**
  * GET /api/clients/[id]
@@ -329,6 +330,11 @@ export async function DELETE(
       console.error('Error deleting client:', deleteError);
       return NextResponse.json({ error: 'Failed to delete client' }, { status: 500 });
     }
+
+    // Audit log: client deletion
+    logActivity(user.id, 'client_deleted', 'client', id, {
+      client_name: client?.name ?? 'unknown',
+    }).catch(() => {});
 
     // Remove client folder from Obsidian vault (non-blocking)
     if (client?.name) {

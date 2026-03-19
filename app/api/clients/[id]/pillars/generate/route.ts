@@ -6,6 +6,7 @@ import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { getBrandProfile, getKnowledgeEntries } from '@/lib/knowledge/queries';
 import { getBrandContext } from '@/lib/knowledge/brand-context';
+import { rateLimitByUser } from '@/lib/security/rate-limit';
 
 const generateSchema = z.object({
   count: z.number().min(1).max(10).default(5),
@@ -46,6 +47,20 @@ export async function POST(
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Rate limit: 10 requests per minute per user for AI endpoints
+  const rl = rateLimitByUser(user.id, '/api/clients/pillars/generate', 'ai');
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Please try again later.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+        },
+      },
+    );
+  }
 
   const body = await req.json();
   const parsed = generateSchema.safeParse(body);

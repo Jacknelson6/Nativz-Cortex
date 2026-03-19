@@ -29,14 +29,14 @@ export async function POST(request: NextRequest) {
 
     // Verify Monday.com webhook signing secret
     const webhookSecret = process.env.MONDAY_WEBHOOK_SECRET;
-    if (webhookSecret) {
-      const authHeader = request.headers.get('authorization');
-      if (authHeader !== webhookSecret) {
-        console.warn('[monday-webhook] Invalid authorization header');
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-    } else {
-      console.warn('[monday-webhook] MONDAY_WEBHOOK_SECRET not set — skipping signature verification');
+    if (!webhookSecret) {
+      console.error('[monday-webhook] MONDAY_WEBHOOK_SECRET is not set — rejecting request');
+      return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 });
+    }
+    const authHeader = request.headers.get('authorization');
+    if (authHeader !== webhookSecret) {
+      console.warn('[monday-webhook] Invalid authorization header');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     if (!isVaultConfigured() || !isMondayConfigured()) {

@@ -1,6 +1,20 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
+/**
+ * SECURITY: Session lifetime configuration
+ *
+ * Supabase session settings are configured at the project level (Supabase Dashboard
+ * → Authentication → Settings), NOT in the client SDK. Ensure the following are set:
+ *
+ *   - Access token (JWT) lifetime: 3600 seconds (1 hour)
+ *   - Refresh token lifetime: 604800 seconds (7 days)
+ *   - Refresh token rotation: ENABLED (invalidates old refresh tokens on use)
+ *
+ * These settings limit exposure from stolen tokens and ensure sessions are
+ * revalidated regularly. The middleware in middleware.ts handles automatic
+ * token refresh on each request via supabase.auth.getUser().
+ */
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies();
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logActivity } from '@/lib/activity';
 
 /**
  * GET /api/settings/scheduling
@@ -88,6 +89,13 @@ export async function PUT(request: NextRequest) {
     if (error) {
       return NextResponse.json({ error: 'Failed to update' }, { status: 500 });
     }
+
+    // Audit log: scheduling settings changed
+    logActivity(user.id, 'settings_updated', 'client', agency, {
+      setting: 'scheduling_link',
+      agency,
+      new_value: scheduling_link || null,
+    }).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch {

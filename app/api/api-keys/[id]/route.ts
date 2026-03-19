@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logActivity } from '@/lib/activity';
 
 /**
  * DELETE /api/api-keys/[id]
@@ -48,6 +49,12 @@ export async function DELETE(
       if (error) {
         return NextResponse.json({ error: 'Failed to delete API key' }, { status: 500 });
       }
+
+      // Audit log: API key permanently deleted
+      logActivity(user.id, 'api_key_deleted', 'api_key', id, {
+        permanent: true,
+      }).catch(() => {});
+
       return NextResponse.json({ deleted: true });
     }
 
@@ -59,6 +66,11 @@ export async function DELETE(
     if (error) {
       return NextResponse.json({ error: 'Failed to revoke API key' }, { status: 500 });
     }
+
+    // Audit log: API key revoked
+    logActivity(user.id, 'api_key_revoked', 'api_key', id, {
+      permanent: false,
+    }).catch(() => {});
 
     return NextResponse.json({ revoked: true });
   } catch (error) {

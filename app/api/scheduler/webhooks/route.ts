@@ -31,13 +31,16 @@ export async function POST(request: NextRequest) {
       const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(rawBody));
       const expected = Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, '0')).join('');
       const actual = signature.replace(/^sha256=/, '');
-      if (expected.length !== actual.length || !crypto.subtle.verify) {
-        // Constant-time comparison via subtle
-        const a = encoder.encode(expected);
-        const b = encoder.encode(actual);
-        if (a.byteLength !== b.byteLength || expected !== actual) {
-          return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-        }
+      // Constant-time comparison to prevent timing attacks
+      const a = encoder.encode(expected);
+      const b = encoder.encode(actual);
+      if (a.byteLength !== b.byteLength) {
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      }
+      let diff = 0;
+      for (let i = 0; i < a.byteLength; i++) diff |= a[i] ^ b[i];
+      if (diff !== 0) {
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
       }
     } else {
       return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 });

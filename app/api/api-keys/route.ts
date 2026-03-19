@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateApiKey } from '@/lib/api-keys/generate';
+import { logActivity } from '@/lib/activity';
 
 const VALID_SCOPES = ['tasks', 'clients', 'shoots', 'scheduler', 'search', 'team', 'calendar'] as const;
 
@@ -94,6 +95,14 @@ export async function POST(request: NextRequest) {
       console.error('POST /api/api-keys error:', error);
       return NextResponse.json({ error: 'Failed to create API key' }, { status: 500 });
     }
+
+    // Audit log: API key creation
+    logActivity(user.id, 'api_key_created', 'api_key', key.id, {
+      key_name: parsed.data.name,
+      key_prefix: prefix,
+      scopes: parsed.data.scopes,
+      expires_at: parsed.data.expires_at ?? null,
+    }).catch(() => {});
 
     // Return plaintext key ONCE
     return NextResponse.json({ key: { ...key, plaintext } }, { status: 201 });

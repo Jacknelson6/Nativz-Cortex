@@ -1,7 +1,42 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+// ---------------------------------------------------------------------------
+// CORS configuration
+// ---------------------------------------------------------------------------
+function getAllowedOrigin(): string {
+  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+}
+
+function setCorsHeaders(response: NextResponse): void {
+  const origin = getAllowedOrigin();
+  response.headers.set('Access-Control-Allow-Origin', origin);
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key');
+}
+
+// ---------------------------------------------------------------------------
+// Rate-limit hint headers (informational — helps clients self-throttle)
+// ---------------------------------------------------------------------------
+function setRateLimitHeaders(response: NextResponse): void {
+  response.headers.set('X-RateLimit-Limit', '100');
+  response.headers.set('X-RateLimit-Remaining', '99');
+}
+
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  // -----------------------------------------------------------------------
+  // CORS: handle preflight OPTIONS requests for API routes
+  // -----------------------------------------------------------------------
+  if (pathname.startsWith('/api/')) {
+    if (request.method === 'OPTIONS') {
+      const preflightResponse = new NextResponse(null, { status: 204 });
+      setCorsHeaders(preflightResponse);
+      return preflightResponse;
+    }
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -25,8 +60,6 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const pathname = request.nextUrl.pathname;
-
   // Public routes — no auth needed
   if (
     pathname === '/api/health' ||
@@ -42,6 +75,10 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/vault/webhook') ||
     pathname.startsWith('/api/google/callback')
   ) {
+    if (pathname.startsWith('/api/')) {
+      setCorsHeaders(supabaseResponse);
+      setRateLimitHeaders(supabaseResponse);
+    }
     return supabaseResponse;
   }
 
@@ -123,6 +160,14 @@ export async function middleware(request: NextRequest) {
     if (role !== 'viewer' && role !== 'admin') {
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
+  }
+
+  // -----------------------------------------------------------------------
+  // Attach CORS + rate-limit headers to all API responses
+  // -----------------------------------------------------------------------
+  if (pathname.startsWith('/api/')) {
+    setCorsHeaders(supabaseResponse);
+    setRateLimitHeaders(supabaseResponse);
   }
 
   return supabaseResponse;
