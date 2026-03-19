@@ -108,6 +108,7 @@ function computeIntensity(totalSources: number, totalComments: number): 'low' | 
 // ── Topic extraction (TF-IDF-like frequency analysis) ────────────────────────
 
 const STOP_WORDS = new Set([
+  // Standard English stop words
   'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
   'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
   'should', 'may', 'might', 'can', 'shall', 'to', 'of', 'in', 'for',
@@ -122,6 +123,23 @@ const STOP_WORDS = new Set([
   'know', 'think', 'see', 'look', 'go', 'come', 'take', 'want', 'give',
   'first', 'last', 'long', 'great', 'little', 'right', 'big', 'high',
   'old', 'good', 'much', 'really', 'even', 'still', 'back', 'well',
+  // Recipe / measurement / ingredient generic terms
+  'tsp', 'tbsp', 'cup', 'cups', 'tablespoon', 'teaspoon', 'ounce', 'ounces',
+  'pound', 'pounds', 'gram', 'grams', 'lbs', 'oz', 'ml', 'liter',
+  'powder', 'salt', 'pepper', 'sugar', 'oil', 'water', 'butter', 'flour',
+  'garlic', 'onion', 'sauce', 'cream', 'cheese', 'chicken', 'beef', 'rice',
+  'add', 'mix', 'stir', 'cook', 'bake', 'heat', 'serve', 'cut', 'chop',
+  'medium', 'large', 'small', 'fresh', 'minutes', 'minute', 'hour', 'hours',
+  'recipe', 'recipes', 'ingredients', 'ingredient',
+  // Common non-topic words in social media
+  'video', 'videos', 'watch', 'watching', 'share', 'shared', 'comment',
+  'comments', 'follow', 'subscribe', 'link', 'check', 'post', 'posted',
+  'part', 'full', 'show', 'day', 'week', 'month', 'year', 'time', 'today',
+  'best', 'top', 'try', 'tried', 'using', 'used', 'per', 'via', 'here',
+  'thing', 'things', 'need', 'needs', 'help', 'want', 'going', 'made',
+  'many', 'work', 'works', 'working', 'started', 'start', 'found', 'find',
+  'put', 'keep', 'let', 'say', 'said', 'tell', 'told', 'ask', 'asked',
+  'lot', 'bit', 'kind', 'pretty', 'actually', 'literally', 'basically',
   'dont', 'ive', 'im', 'its', 'thats', 'youre',
 ]);
 
@@ -205,9 +223,20 @@ function extractTopics(
     }
   }
 
-  // Filter to topics with enough frequency and convert
+  // Filter: require minimum frequency, cross-platform presence preferred,
+  // and at least one word that's 4+ chars (filters out "tsp garlic" type noise)
   return Array.from(bigramCounts.entries())
-    .filter(([, data]) => data.count >= 3)
+    .filter(([name, data]) => {
+      if (data.count < 3) return false;
+      // Both words must be 3+ chars
+      const words = name.split(' ');
+      if (words.some(w => w.length < 3)) return false;
+      // At least one word must be 5+ chars (filters "tsp oil", "per cup" etc.)
+      if (!words.some(w => w.length >= 5)) return false;
+      // Require at least 2 unique sources (not just repetition in one post)
+      if (data.sources.length < 2) return false;
+      return true;
+    })
     .sort((a, b) => (b[1].count * b[1].engagement) - (a[1].count * a[1].engagement))
     .slice(0, 8)
     .map(([name, data]) => ({
