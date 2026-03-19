@@ -193,13 +193,13 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
 
         {contextMode === 'url' && (
           <div className="relative mt-3">
-            <LinkIcon size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+            <LinkIcon size={14} className="absolute left-3.5 top-[50%] -translate-y-[50%] text-text-muted pointer-events-none" />
             <input
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2.5 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:border-accent focus:outline-none"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:border-accent focus:outline-none"
               onKeyDown={(e) => { if (e.key === 'Enter' && step1Valid) setStep(2); }}
             />
             <p className="text-[10px] text-text-muted mt-1.5 ml-1">Brand DNA will be scraped for context but not saved</p>
