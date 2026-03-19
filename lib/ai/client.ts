@@ -1,5 +1,6 @@
 import { logUsage, calculateCost } from './usage';
 import { checkCostBudget } from './cost-guard';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export interface AICompletionResponse {
   text: string;
@@ -29,9 +30,47 @@ interface CompletionOptions {
 const PRICE_PER_INPUT_TOKEN = 0;
 const PRICE_PER_OUTPUT_TOKEN = 0;
 
+// ── Model cache (5-minute TTL) ──────────────────────────────────────────────
+let cachedModel: string | null = null;
+let cachedModelAt = 0;
+const MODEL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Get the active AI model from agency_settings, with in-memory cache.
+ * Falls back to OPENROUTER_MODEL env var, then to 'anthropic/claude-3.5-haiku'.
+ */
+export async function getActiveModel(): Promise<string> {
+  const now = Date.now();
+  if (cachedModel && now - cachedModelAt < MODEL_CACHE_TTL) {
+    return cachedModel;
+  }
+
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from('agency_settings')
+      .select('ai_model')
+      .eq('agency', 'nativz')
+      .single();
+
+    if (data?.ai_model) {
+      cachedModel = data.ai_model;
+      cachedModelAt = now;
+      return data.ai_model;
+    }
+  } catch (err) {
+    console.error('Failed to fetch active model from DB, using fallback:', err);
+  }
+
+  const fallback = process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-haiku';
+  cachedModel = fallback;
+  cachedModelAt = now;
+  return fallback;
+}
+
 export async function createCompletion(options: CompletionOptions): Promise<AICompletionResponse> {
   const apiKey = process.env.OPENROUTER_API_KEY;
-  const model = process.env.OPENROUTER_MODEL || 'openrouter/hunter-alpha';
+  const model = await getActiveModel();
 
   if (!apiKey) {
     throw new Error('OPENROUTER_API_KEY is not configured');

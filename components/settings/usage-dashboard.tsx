@@ -174,17 +174,7 @@ export function UsageDashboard() {
   }, [activeDays, fetchUsage]);
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-semibold text-text-primary">
-          API usage &amp; costs
-        </h1>
-        <p className="text-sm text-text-secondary mt-1">
-          Track token consumption and costs across all AI services
-        </p>
-      </div>
-
+    <div className="space-y-6">
       {/* Date range selector */}
       <div className="flex gap-2">
         {PRESETS.map((p) => (

@@ -8,7 +8,19 @@
 
 ## Active Work
 
-_No active tasks._
+### Static Ad Generator (built 2026-03-18)
+- [x] PRD finalized — Gemini image gen from Kandy template styles
+- [x] Database migration (4 tables + 2 storage buckets)
+- [x] Core engine (image gen, copy gen, prompt assembly, batch orchestrator)
+- [x] 6 API routes (template catalog, generation, gallery, batches)
+- [x] 7 UI components (gallery, catalog, gen form, progress, cards)
+- [x] 49 Kandy templates seeded (General, H&B, Digital Products, Story)
+- [x] ~29 templates AI-analyzed with prompt schemas
+- [x] E2E test passed — 2 Toastique ads generated
+- [ ] Top up OpenRouter credits (copy gen fails with 402)
+- [ ] Browser-test UI with auth session
+- [ ] Seed remaining ~150 templates from other Kandy collections
+- [ ] Analyze all templates with prompt schemas
 
 ---
 
