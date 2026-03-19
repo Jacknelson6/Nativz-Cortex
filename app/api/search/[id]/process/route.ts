@@ -226,9 +226,19 @@ export async function POST(
       try {
         narrative = parseAIResponseJSON(aiResult.text);
       } catch {
-        // If LLM JSON still fails, use a minimal fallback
+        // If LLM JSON still fails, try to extract summary text from the raw response
+        let fallbackSummary = `Analysis of "${search.query}" across ${platformSources.length} sources.`;
+        const raw = aiResult.text;
+        // Try to extract "summary" value from partial JSON
+        const summaryMatch = raw.match(/"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+        if (summaryMatch) {
+          fallbackSummary = summaryMatch[1].replace(/\\"/g, '"').replace(/\\n/g, ' ');
+        } else if (!raw.startsWith('{')) {
+          // If it's plain text (not JSON), use it directly
+          fallbackSummary = raw.substring(0, 500);
+        }
         narrative = {
-          summary: aiResult.text.substring(0, 500),
+          summary: fallbackSummary,
           topics: [],
         };
       }
@@ -256,7 +266,9 @@ export async function POST(
 
       // Assemble the full AI response in the existing format (backward compatible)
       const aiResponse: TopicSearchAIResponse = {
-        summary: narrative.summary || `Analysis of "${search.query}" across ${platformSources.length} sources.`,
+        summary: (narrative.summary && !narrative.summary.startsWith('{'))
+          ? narrative.summary
+          : `Analysis of "${search.query}" across ${platformSources.length} sources from ${platforms.length} platforms.`,
         overall_sentiment: analytics.overall_sentiment,
         conversation_intensity: analytics.conversation_intensity,
         emotions: analytics.emotions,
@@ -273,6 +285,7 @@ export async function POST(
         analytics.overall_sentiment,
         analytics.conversation_intensity,
         trendingTopics,
+        platformSources.length,
       );
 
       // ── Step 7: Save results ───────────────────────────────────────────────

@@ -40,22 +40,8 @@ export function MetricsRow({ metrics, isBrandSearch = false }: MetricsRowProps) 
         ];
 
     return (
-      <div className={`grid grid-cols-2 gap-4 ${isBrandSearch ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`}>
-        {[
-          ...cards,
-          {
-            tooltipKey: 'content_opportunities',
-            title: 'Video ideas',
-            value: String(metrics.content_opportunities ?? 0),
-            icon: <Lightbulb size={18} />,
-          },
-          {
-            tooltipKey: 'trending_topics',
-            title: 'Trending angles',
-            value: String(metrics.trending_topics_count ?? 0),
-            icon: <TrendingUp size={18} />,
-          },
-        ].map((card, i) => {
+      <div className={`grid grid-cols-2 gap-4 ${isBrandSearch ? 'sm:grid-cols-2' : 'sm:grid-cols-2'}`}>
+        {cards.map((card, i) => {
           const tooltip = TOOLTIPS[card.tooltipKey];
           return (
             <div key={card.tooltipKey} className="animate-stagger-in" style={{ animationDelay: `${i * 50}ms` }}>

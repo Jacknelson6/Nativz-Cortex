@@ -65,7 +65,8 @@ export function computeMetricsFromSerp(
   serpData: BraveSerpData,
   overallSentiment: number,
   conversationIntensity: 'low' | 'moderate' | 'high' | 'very_high',
-  trendingTopics?: TrendingTopic[]
+  trendingTopics?: TrendingTopic[],
+  platformSourceCount?: number,
 ): SearchMetrics {
   const webCount = serpData.webResults.length;
   const discussionCount = serpData.discussions.length;
@@ -104,6 +105,6 @@ export function computeMetricsFromSerp(
     topic_score: computeTopicScore(topics),
     content_opportunities: countContentOpportunities(topics),
     trending_topics_count: topics.length,
-    sources_analyzed: Math.max(totalSources, 1),
+    sources_analyzed: Math.max(platformSourceCount ?? totalSources, 1),
   };
 }
