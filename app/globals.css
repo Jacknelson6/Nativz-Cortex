@@ -129,6 +129,9 @@
     rgba(54, 209, 194, 0.9)
   );
 }
+[data-brand-mode="anderson"] .btn-shimmer {
+  background: linear-gradient(to bottom right, #36D1C2, #1A9E91) !important;
+}
 [data-brand-mode="anderson"] .btn-shimmer:hover {
   box-shadow: 0 0 20px rgba(54, 209, 194, 0.3), 0 0 40px rgba(54, 209, 194, 0.12);
 }

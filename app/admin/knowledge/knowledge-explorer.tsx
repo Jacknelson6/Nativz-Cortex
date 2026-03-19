@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AgencyKnowledgeGraph } from './agency-knowledge-graph';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,9 +82,25 @@ const KIND_BADGE_COLORS: Record<string, string> = {
   'brand-guideline': 'bg-yellow-500/15 text-yellow-400',
 };
 
+// AC brand palette badges — darker text for light backgrounds
+const AC_KIND_BADGE_COLORS: Record<string, string> = {
+  domain: 'bg-teal-500/12 text-teal-700',
+  playbook: 'bg-teal-600/12 text-teal-800',
+  client: 'bg-slate-800/10 text-slate-900',
+  meeting: 'bg-slate-500/12 text-slate-700',
+  asset: 'bg-slate-400/12 text-slate-600',
+  insight: 'bg-red-500/12 text-red-700',
+  'web-page': 'bg-teal-500/12 text-teal-700',
+  'brand-profile': 'bg-slate-800/10 text-slate-900',
+  'brand-guideline': 'bg-teal-600/12 text-teal-800',
+};
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 export function KnowledgeExplorer() {
+  const { mode: brandMode } = useBrandMode();
+  const isAC = brandMode === 'anderson';
+
   // Data state
   const [nodes, setNodes] = useState<KnowledgeNode[]>([]);
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], edges: [] });
@@ -404,7 +421,7 @@ export function KnowledgeExplorer() {
         {/* ── Graph ── */}
         <div className="flex-1 min-w-0 relative">
           {loading && graphData.nodes.length === 0 ? (
-            <div className="flex items-center justify-center h-full bg-[#0a0e1a]">
+            <div className={`flex items-center justify-center h-full ${isAC ? 'bg-[#F4F6F8]' : 'bg-[#0a0e1a]'}`}>
               <Loader2 size={24} className="animate-spin text-text-muted" />
             </div>
           ) : (
@@ -422,7 +439,7 @@ export function KnowledgeExplorer() {
           <>
             <div
               className="absolute right-0 top-0 bottom-0 w-[400px] pointer-events-none z-20"
-              style={{ boxShadow: '-8px 0 24px rgba(0, 0, 0, 0.4)' }}
+              style={{ boxShadow: isAC ? '-8px 0 24px rgba(0, 22, 31, 0.12)' : '-8px 0 24px rgba(0, 0, 0, 0.4)' }}
             />
 
             <div
@@ -451,7 +468,7 @@ export function KnowledgeExplorer() {
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <span
                           className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                            KIND_BADGE_COLORS[detailNode.kind] ?? 'bg-slate-500/15 text-slate-400'
+                            (isAC ? AC_KIND_BADGE_COLORS : KIND_BADGE_COLORS)[detailNode.kind] ?? 'bg-slate-500/15 text-slate-400'
                           }`}
                         >
                           {detailNode.kind.replace(/_/g, ' ')}

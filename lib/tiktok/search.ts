@@ -4,6 +4,7 @@
 // transcript extractor for subtitles/Whisper transcription.
 
 import { extractTikTokTranscript } from './scraper';
+import { logUsage } from '@/lib/ai/usage';
 
 export interface TikTokSearchVideo {
   id: string;
@@ -256,6 +257,16 @@ export async function gatherTikTokData(
       .sort((a, b) => b[1] - a[1])
       .slice(0, 15)
       .map(([tag]) => tag);
+
+    logUsage({
+      service: 'apify',
+      model: 'tiktok-scraper',
+      feature: 'tiktok_search',
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      costUsd: 0,
+    }).catch(() => {});
 
     return { videos, topHashtags, totalResults: videos.length };
   } catch (err) {

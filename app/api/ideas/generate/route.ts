@@ -90,7 +90,7 @@ export async function POST(req: Request) {
 
   // ── Return immediately, process in background ──
   after(async () => {
-    await processGeneration({ generationId, client_id, url, concept, count, reference_video_ids, search_id, pillar_ids, ideas_per_pillar });
+    await processGeneration({ generationId, client_id, url, concept, count, reference_video_ids, search_id, pillar_ids, ideas_per_pillar, userId: user.id, userEmail: user.email ?? undefined });
   });
 
   return NextResponse.json({ id: generationId, status: 'processing' });
@@ -108,6 +108,8 @@ async function processGeneration({
   search_id,
   pillar_ids,
   ideas_per_pillar,
+  userId,
+  userEmail,
 }: {
   generationId: string;
   client_id?: string;
@@ -118,6 +120,8 @@ async function processGeneration({
   search_id?: string;
   pillar_ids?: string[];
   ideas_per_pillar?: number;
+  userId: string;
+  userEmail?: string;
 }) {
   const admin = createAdminClient();
 
@@ -391,6 +395,8 @@ Output ONLY the JSON array. No other text.`;
           ],
           maxTokens: 4000,
           feature: 'idea_generation',
+          userId,
+          userEmail,
         });
 
         const pillarIdeas = parseAIResponseJSON<GeneratedIdeaResult[]>(result.text)
@@ -443,6 +449,8 @@ Output ONLY the JSON array. No other text.`;
       ],
       maxTokens: 8000,
       feature: 'idea_generation',
+      userId,
+      userEmail,
     });
 
     const ideas = parseAIResponseJSON<GeneratedIdeaResult[]>(result.text).slice(0, count);

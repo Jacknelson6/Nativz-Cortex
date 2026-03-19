@@ -179,9 +179,9 @@ export default function PresentationsPage() {
   }
 
   const typeConfig = {
-    slides: { icon: FileText, label: 'Slides', accent: 'rgba(4, 107, 210, 0.15)', iconColor: 'text-accent-text' },
-    tier_list: { icon: ListOrdered, label: 'Tier list', accent: 'rgba(168, 85, 247, 0.15)', iconColor: 'text-accent2-text' },
-    social_audit: { icon: BarChart3, label: 'Social audit', accent: 'rgba(16, 185, 129, 0.15)', iconColor: 'text-emerald-400' },
+    slides: { icon: FileText, label: 'Slides', accentClass: 'bg-accent-surface', iconColor: 'text-accent-text' },
+    tier_list: { icon: ListOrdered, label: 'Tier list', accentClass: 'bg-accent2-surface', iconColor: 'text-accent2-text' },
+    social_audit: { icon: BarChart3, label: 'Social audit', accentClass: 'bg-emerald-500/15', iconColor: 'text-emerald-400' },
   };
 
   const active = presentations.filter((p) => p.status !== 'archived');
@@ -286,7 +286,7 @@ export default function PresentationsPage() {
 
                   {/* Top row: icon + badges + ellipsis (always visible) */}
                   <div className="flex items-center gap-2 px-4 pt-4 pb-1">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg shrink-0" style={{ backgroundColor: tc.accent }}>
+                    <div className={`flex h-9 w-9 items-center justify-center rounded-lg shrink-0 ${tc.accentClass}`}>
                       <TypeIcon size={16} className={tc.iconColor} />
                     </div>
                     <div className="flex items-center gap-1.5 flex-1 min-w-0">

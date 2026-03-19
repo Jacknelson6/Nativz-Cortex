@@ -149,6 +149,8 @@ Output ONLY the script text. Nothing else — no title, no labels, no formatting
       ],
       maxTokens: 2000,
       feature: 'script_generation',
+      userId: user.id,
+      userEmail: user.email ?? undefined,
     });
 
     const scriptText = result.text.trim();

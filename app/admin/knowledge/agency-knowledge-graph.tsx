@@ -4,11 +4,26 @@ import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Plus, Minus, Maximize2, Play, Pause } from 'lucide-react';
 import Graph from 'graphology';
 import forceAtlas2 from 'graphology-layout-forceatlas2';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 // Sigma and FA2 worker need browser APIs — imported dynamically in useEffect to avoid SSR crashes
 
-// Custom dark-themed hover renderer for Sigma
-function drawDarkNodeHover(
+// Shared hover theme — set by component before Sigma renders
+interface GraphTheme {
+  defaultColor: string;
+  dimmedColor: string;
+  bgColor: string;
+  edgeColor: string;
+  edgeHoverColor: string;
+  edgeSelectedColor: string;
+  labelColor: string;
+  hoverBg: string;
+  hoverBorder: string;
+}
+let _hoverTheme: GraphTheme;
+
+// Custom themed hover renderer for Sigma
+function drawThemedNodeHover(
   context: CanvasRenderingContext2D,
   data: { x: number; y: number; size: number; label?: string | null; color: string },
   settings: { labelFont: string; labelSize: number; labelWeight: string },
@@ -16,6 +31,7 @@ function drawDarkNodeHover(
   const size = settings.labelSize;
   const font = settings.labelFont;
   const weight = settings.labelWeight;
+  const theme = _hoverTheme;
 
   context.font = `${weight} ${size}px ${font}`;
 
@@ -36,14 +52,14 @@ function drawDarkNodeHover(
     const xStart = data.x + radius;
     const yCenter = data.y;
 
-    // Dark label background with rounded corners
-    context.fillStyle = 'rgba(10, 14, 26, 0.92)';
+    // Label background with rounded corners
+    context.fillStyle = theme.hoverBg;
     context.shadowOffsetX = 0;
     context.shadowOffsetY = 2;
     context.shadowBlur = 8;
     context.shadowColor = 'rgba(0, 0, 0, 0.5)';
 
-    const r = 4; // border radius
+    const r = 4;
     context.beginPath();
     context.moveTo(xStart + r, yCenter - boxHeight / 2);
     context.lineTo(xStart + boxWidth - r, yCenter - boxHeight / 2);
@@ -57,19 +73,16 @@ function drawDarkNodeHover(
     context.closePath();
     context.fill();
 
-    // Reset shadow
     context.shadowOffsetX = 0;
     context.shadowOffsetY = 0;
     context.shadowBlur = 0;
     context.shadowColor = 'transparent';
 
-    // Subtle border
-    context.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    context.strokeStyle = theme.hoverBorder;
     context.lineWidth = 0.5;
     context.stroke();
 
-    // Label text
-    context.fillStyle = '#f1f5f9';
+    context.fillStyle = theme.labelColor;
     context.textBaseline = 'middle';
     context.fillText(data.label, xStart + 5, yCenter);
   }
@@ -97,18 +110,17 @@ interface GraphData {
 
 // ── Colors ───────────────────────────────────────────────────────────────────
 
-const TYPE_COLORS: Record<string, string> = {
+// Nativz brand palette (dark mode)
+const NATIVZ_TYPE_COLORS: Record<string, string> = {
   domain: '#f59e0b',           // Gold — top-level navigation
   playbook: '#38bdf8',         // Blue — consolidated knowledge
   client: '#22c55e',           // Green — client source of truth
   meeting: '#a78bfa',          // Purple — meeting notes
   asset: '#64748b',            // Slate — docs, templates, projects
   insight: '#f472b6',          // Pink — industry insights
-  // Brand DNA types (from client_knowledge_entries)
   'web-page': '#06b6d4',      // Cyan — scraped website pages
   'brand-profile': '#f59e0b', // Gold — brand profile
   'brand-guideline': '#eab308', // Yellow — brand DNA guideline
-  // Brand DNA sub-types
   'visual-identity': '#06b6d4',   // Cyan
   'verbal-identity': '#f97316',   // Orange
   'brand-logo': '#eab308',        // Gold
@@ -118,10 +130,50 @@ const TYPE_COLORS: Record<string, string> = {
   'competitive-positioning': '#ef4444', // Red
 };
 
-const DEFAULT_COLOR = '#64748b';
-const DIMMED_COLOR = '#1a1d2e';
-const DIMMED_EDGE_COLOR = '#111422';
-const BG_COLOR = '#0a0e1a';
+// Anderson Collaborative brand palette (light mode — AC design tokens)
+const AC_TYPE_COLORS: Record<string, string> = {
+  domain: '#36D1C2',           // AC Teal — top-level navigation
+  playbook: '#2BB5A8',         // AC Teal Dark — consolidated knowledge
+  client: '#00161F',           // AC Navy — client source of truth
+  meeting: '#617792',          // AC Blue-gray — meeting notes
+  asset: '#8A99A8',            // AC Silver (darkened) — docs, templates, projects
+  insight: '#E54B4B',          // AC Red — industry insights
+  'web-page': '#36D1C2',      // AC Teal
+  'brand-profile': '#00161F', // AC Navy
+  'brand-guideline': '#2BB5A8', // AC Teal Dark
+  'visual-identity': '#36D1C2',
+  'verbal-identity': '#617792',
+  'brand-logo': '#00161F',
+  'brand-screenshot': '#8A99A8',
+  'product-catalog': '#2BB5A8',
+  'target-audience': '#E54B4B',
+  'competitive-positioning': '#617792',
+};
+
+// Theme-dependent constants
+const NATIVZ_THEME: GraphTheme = {
+  defaultColor: '#64748b',
+  dimmedColor: '#1a1d2e',
+  bgColor: '#0a0e1a',
+  edgeColor: '#1e2338',           // Dark blue-gray — subtly visible against #0a0e1a
+  edgeHoverColor: 'rgba(160,165,180,0.6)',
+  edgeSelectedColor: 'rgba(140,145,160,0.4)',
+  labelColor: '#f1f5f9',
+  hoverBg: 'rgba(10, 14, 26, 0.92)',
+  hoverBorder: 'rgba(255, 255, 255, 0.08)',
+};
+
+const AC_THEME: GraphTheme = {
+  defaultColor: '#B3BEC9',
+  dimmedColor: '#E8ECF0',
+  bgColor: '#F4F6F8',
+  edgeColor: '#D6DCE2',           // Light gray — subtly visible against #F4F6F8
+  edgeHoverColor: 'rgba(0,22,31,0.5)',
+  edgeSelectedColor: 'rgba(0,22,31,0.3)',
+  labelColor: '#00161F',
+  hoverBg: 'rgba(255, 255, 255, 0.95)',
+  hoverBorder: 'rgba(0, 0, 0, 0.1)',
+};
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -144,6 +196,14 @@ export function AgencyKnowledgeGraph({
   const graphRef = useRef<Graph | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fa2Ref = useRef<InstanceType<any> | null>(null);
+
+  const { mode: brandMode } = useBrandMode();
+  const isAC = brandMode === 'anderson';
+  const TYPE_COLORS = isAC ? AC_TYPE_COLORS : NATIVZ_TYPE_COLORS;
+  const theme = isAC ? AC_THEME : NATIVZ_THEME;
+
+  // Keep hover renderer in sync with current theme
+  _hoverTheme = theme;
 
   const [visibleTypes, setVisibleTypes] = useState<Set<string>>(new Set());
   const [nodeSize, setNodeSize] = useState(3);
@@ -204,18 +264,21 @@ export function AgencyKnowledgeGraph({
 
       const nodeIds = new Set<string>();
       const scale = Math.sqrt(data.nodes.length) * 10;
+      const MAX_NODE_SIZE = 18; // Cap so domain nodes aren't overbearing
       for (const node of data.nodes) {
         if (nodeIds.has(node.id)) continue;
         nodeIds.add(node.id);
 
         const connectionCount = connectionCounts.get(node.id) ?? 0;
-        const kindSizeMultiplier = node.kind === 'domain' ? 4 : node.kind === 'playbook' ? 2.5 : 1;
-        const baseSize = Math.max(3, 2 + Math.sqrt(connectionCount) * 1.5) * (nodeSize / 3) * kindSizeMultiplier;
+        // Reduced multipliers — domains 2x instead of 4x, playbooks 1.8x instead of 2.5x
+        const kindSizeMultiplier = node.kind === 'domain' ? 2 : node.kind === 'playbook' ? 1.8 : 1;
+        const rawSize = Math.max(3, 2 + Math.sqrt(connectionCount) * 1.5) * (nodeSize / 3) * kindSizeMultiplier;
+        const baseSize = Math.min(rawSize, MAX_NODE_SIZE);
 
         graph.addNode(node.id, {
           label: node.title,
           size: baseSize,
-          color: TYPE_COLORS[node.kind] ?? DEFAULT_COLOR,
+          color: TYPE_COLORS[node.kind] ?? theme.defaultColor,
           kind: node.kind,
           x: (Math.random() - 0.5) * scale,
           y: (Math.random() - 0.5) * scale,
@@ -232,8 +295,8 @@ export function AgencyKnowledgeGraph({
         seenEdges.add(key);
 
         graph.addEdge(edge.source, edge.target, {
-          size: 0.4,
-          color: 'rgba(140,140,160,0.5)',
+          size: 0.3,
+          color: theme.edgeColor,
         });
       }
 
@@ -253,25 +316,25 @@ export function AgencyKnowledgeGraph({
 
       graphRef.current = graph;
 
-      // Custom node program with dark hover
+      // Custom node program with themed hover
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const DarkNodeProgram = createNodeCompoundProgram([NodeCircleProgram], drawDiscNodeLabel, drawDarkNodeHover as any);
+      const ThemedNodeProgram = createNodeCompoundProgram([NodeCircleProgram], drawDiscNodeLabel, drawThemedNodeHover as any);
 
-      // Create Sigma renderer — edges hidden by default, shown on hover
+      // Create Sigma renderer — edges visible as subtle lines, brighten on hover
       const renderer = new Sigma(graph, containerRef.current!, {
         renderEdgeLabels: false,
         labelFont: 'system-ui, -apple-system, sans-serif',
         labelSize: 12,
         labelWeight: '500',
-        labelColor: { color: '#f1f5f9' },
-        labelRenderedSizeThreshold: 100,  // Hide all labels — only show on hover
-        defaultNodeColor: DEFAULT_COLOR,
-        defaultEdgeColor: 'rgba(140,140,160,0.5)',
+        labelColor: { color: theme.labelColor },
+        labelRenderedSizeThreshold: 100,
+        defaultNodeColor: theme.defaultColor,
+        defaultEdgeColor: theme.edgeColor,
         stagePadding: 60,
         enableEdgeEvents: true,
-        defaultNodeType: 'dark',
+        defaultNodeType: 'themed',
         nodeProgramClasses: {
-          dark: DarkNodeProgram,
+          themed: ThemedNodeProgram,
         },
       });
 
@@ -297,6 +360,7 @@ export function AgencyKnowledgeGraph({
       renderer.on('clickNode', ({ node }: { node: string }) => {
         if (onNodeClick) onNodeClick(node);
       });
+
     }
 
     init();
@@ -313,25 +377,23 @@ export function AgencyKnowledgeGraph({
       }
       graphRef.current = null;
     };
-    // We intentionally only rebuild on data changes — other state handled via reducers
+    // Rebuild on data or brand mode changes — other state handled via reducers
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  }, [data, brandMode]);
 
   // ── Update node sizes when slider changes ────────────────────────────────
 
   useEffect(() => {
     const graph = graphRef.current;
     if (!graph) return;
+    const MAX_NODE_SIZE = 18;
 
     graph.forEachNode((nodeId) => {
       const connectionCount = graph.degree(nodeId);
       const kind = graph.getNodeAttribute(nodeId, 'kind') as string;
-      const kindMul = kind === 'domain' ? 4 : kind === 'playbook' ? 2.5 : 1;
-      graph.setNodeAttribute(
-        nodeId,
-        'size',
-        Math.max(3, 2 + Math.sqrt(connectionCount) * 1.5) * (nodeSize / 3) * kindMul,
-      );
+      const kindMul = kind === 'domain' ? 2 : kind === 'playbook' ? 1.8 : 1;
+      const raw = Math.max(3, 2 + Math.sqrt(connectionCount) * 1.5) * (nodeSize / 3) * kindMul;
+      graph.setNodeAttribute(nodeId, 'size', Math.min(raw, MAX_NODE_SIZE));
     });
   }, [nodeSize]);
 
@@ -366,7 +428,7 @@ export function AgencyKnowledgeGraph({
         // Hover dimming
         if (hoveredNeighbors) {
           if (node !== hoveredNode && !hoveredNeighbors.has(node)) {
-            res.color = DIMMED_COLOR;
+            res.color = theme.dimmedColor;
             res.label = '';
             res.zIndex = 0;
             return res;
@@ -390,8 +452,7 @@ export function AgencyKnowledgeGraph({
             res.highlighted = true;
             res.zIndex = 1;
           } else if (!hoveredNeighbors) {
-            // If searching but no hover, dim non-matches
-            res.color = DIMMED_COLOR;
+            res.color = theme.dimmedColor;
             res.label = '';
           }
         }
@@ -414,22 +475,24 @@ export function AgencyKnowledgeGraph({
           return res;
         }
 
-        // Only show edges connected to hovered or selected node
+        // Edges always visible — subtle by default, brighten on hover/select
         const isHoverEdge = hoveredNode && (source === hoveredNode || target === hoveredNode);
         const isSelectedEdge = selectedNodeId && (source === selectedNodeId || target === selectedNodeId);
 
         if (isHoverEdge) {
-          res.hidden = false;
-          res.color = 'rgba(160,165,180,0.6)';
+          res.color = theme.edgeHoverColor;
           res.size = 0.8;
           res.zIndex = 1;
         } else if (isSelectedEdge && !hoveredNeighbors) {
-          res.hidden = false;
-          res.color = 'rgba(140,145,160,0.4)';
+          res.color = theme.edgeSelectedColor;
           res.size = 0.6;
-        } else {
-          // Hide all edges by default
+        } else if (hoveredNeighbors) {
+          // Dim non-connected edges when hovering a node
           res.hidden = true;
+        } else {
+          // Default: subtle visible edges
+          res.color = theme.edgeColor;
+          res.size = 0.3;
         }
 
         return res;
@@ -456,7 +519,7 @@ export function AgencyKnowledgeGraph({
 
     // Sigma doesn't expose a way to unbind single listeners cleanly,
     // so we rely on the parent effect cleaning up the whole renderer
-  }, [visibleTypes, selectedNodeId, searchQuery]);
+  }, [visibleTypes, selectedNodeId, searchQuery, theme]);
 
   // ── Camera: focus on selected node ───────────────────────────────────────
 
@@ -528,11 +591,12 @@ export function AgencyKnowledgeGraph({
 
   const isEmpty = data.nodes.length === 0;
 
-  const sliderClassName =
-    'w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent-text';
+  const sliderClassName = isAC
+    ? 'w-full h-1 bg-black/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent-text'
+    : 'w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent-text';
 
   return (
-    <div className="relative w-full h-full" style={{ backgroundColor: BG_COLOR }}>
+    <div className="relative w-full h-full" style={{ backgroundColor: theme.bgColor }}>
       {isEmpty ? (
         <div className="flex items-center justify-center h-full">
           <div className="text-center max-w-sm">
@@ -549,7 +613,7 @@ export function AgencyKnowledgeGraph({
         <>
           {/* Loading overlay */}
           {!ready && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center" style={{ backgroundColor: BG_COLOR }}>
+            <div className="absolute inset-0 z-20 flex items-center justify-center" style={{ backgroundColor: theme.bgColor }}>
               <div className="flex flex-col items-center gap-3">
                 <div className="h-6 w-6 border-2 border-accent-text/30 border-t-accent-text rounded-full animate-spin" />
                 <p className="text-xs text-text-muted">Building graph layout...</p>
@@ -561,7 +625,7 @@ export function AgencyKnowledgeGraph({
           <div
             ref={containerRef}
             className="w-full h-full"
-            style={{ cursor: 'grab', backgroundColor: BG_COLOR }}
+            style={{ cursor: 'grab', backgroundColor: theme.bgColor }}
           />
 
           {/* Controls */}
@@ -570,7 +634,7 @@ export function AgencyKnowledgeGraph({
             {allTypes.length > 0 && (
               <div className="bg-surface/80 backdrop-blur-sm border border-nativz-border rounded-lg p-2.5 space-y-1.5 max-h-[280px] overflow-y-auto">
                 {allTypes.map((type) => {
-                  const color = TYPE_COLORS[type] ?? DEFAULT_COLOR;
+                  const color = TYPE_COLORS[type] ?? theme.defaultColor;
                   const visible = visibleTypes.has(type);
                   return (
                     <button

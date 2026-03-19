@@ -31,55 +31,57 @@ export interface TextOverlayConfig {
   layout: 'top' | 'center' | 'bottom';
 }
 
-/**
- * Render a transparent PNG text overlay with brand fonts, colors, and layout.
- * Returns a Buffer of the PNG with alpha channel.
- */
 export async function renderTextOverlay(config: TextOverlayConfig): Promise<Buffer> {
   const { width, height, headline, subheadline, cta, offer, brandName, colors, fonts, layout } =
     config;
 
-  // Determine vertical alignment
-  const justifyContent = layout === 'top' ? 'flex-start' : layout === 'center' ? 'center' : 'flex-end';
+  // Scale factors
+  const s = width / 1080;
+  const pad = Math.round(40 * s);
+  const gap = Math.round(12 * s);
 
-  // Gradient direction — gradient appears behind text for legibility
-  const gradientDirection =
-    layout === 'top' ? 'to bottom' : layout === 'center' ? 'to bottom' : 'to top';
+  // Font sizes
+  const headlinePx = Math.round(52 * s);
+  const subPx = Math.round(22 * s);
+  const ctaPx = Math.round(18 * s);
+  const offerPx = Math.round(15 * s);
+  const brandPx = Math.round(13 * s);
 
-  // Scale font sizes relative to image width
-  const scale = width / 1080;
-  const headlineSize = Math.round(48 * scale);
-  const subheadlineSize = Math.round(24 * scale);
-  const ctaSize = Math.round(20 * scale);
-  const offerSize = Math.round(16 * scale);
-  const brandNameSize = Math.round(14 * scale);
-  const padding = Math.round(48 * scale);
-  const ctaPaddingH = Math.round(32 * scale);
-  const ctaPaddingV = Math.round(14 * scale);
-  const ctaRadius = Math.round(8 * scale);
-  const offerPaddingH = Math.round(16 * scale);
-  const offerPaddingV = Math.round(6 * scale);
-  const offerRadius = Math.round(20 * scale);
-  const gap = Math.round(16 * scale);
+  // CTA button
+  const ctaPadH = Math.round(28 * s);
+  const ctaPadV = Math.round(12 * s);
+  const ctaRadius = Math.round(6 * s);
 
-  // Build children elements
-  const children: SatoriElement[] = [];
+  // Offer pill
+  const offerPadH = Math.round(14 * s);
+  const offerPadV = Math.round(5 * s);
+  const offerRadius = Math.round(16 * s);
 
-  // Offer badge
+  // Text content area sits at top or bottom ~40% of the image
+  // with a subtle gradient fade behind it (not a heavy block)
+  const textAreaHeight = Math.round(height * 0.42);
+  const gradientStops = layout === 'top'
+    ? 'rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0) 100%'
+    : 'rgba(0,0,0,0) 0%, rgba(0,0,0,0.4) 40%, rgba(0,0,0,0.65) 100%';
+
+  // Build the text content column
+  const textChildren: SatoriElement[] = [];
+
+  // Offer badge (above headline)
   if (offer) {
-    children.push({
+    textChildren.push({
       type: 'div',
       props: {
         style: {
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: colors.accent,
+          alignSelf: 'flex-start',
+          backgroundColor: colors.primary,
           borderRadius: offerRadius,
-          paddingLeft: offerPaddingH,
-          paddingRight: offerPaddingH,
-          paddingTop: offerPaddingV,
-          paddingBottom: offerPaddingV,
+          paddingLeft: offerPadH,
+          paddingRight: offerPadH,
+          paddingTop: offerPadV,
+          paddingBottom: offerPadV,
           marginBottom: gap,
         },
         children: {
@@ -87,7 +89,7 @@ export async function renderTextOverlay(config: TextOverlayConfig): Promise<Buff
           props: {
             style: {
               fontFamily: fonts.body.name,
-              fontSize: offerSize,
+              fontSize: offerPx,
               fontWeight: 600,
               color: '#FFFFFF',
             },
@@ -99,65 +101,66 @@ export async function renderTextOverlay(config: TextOverlayConfig): Promise<Buff
   }
 
   // Headline
-  children.push({
+  textChildren.push({
     type: 'span',
     props: {
       style: {
         fontFamily: fonts.display.name,
-        fontSize: headlineSize,
+        fontSize: headlinePx,
         fontWeight: fonts.display.weight,
         color: '#FFFFFF',
-        lineHeight: 1.15,
-        marginBottom: gap,
-        textShadow: '0 2px 8px rgba(0,0,0,0.5)',
+        lineHeight: 1.1,
+        marginBottom: Math.round(gap * 0.6),
+        textShadow: '0 2px 12px rgba(0,0,0,0.6), 0 1px 3px rgba(0,0,0,0.4)',
       },
       children: headline,
     },
   });
 
   // Subheadline
-  children.push({
+  textChildren.push({
     type: 'span',
     props: {
       style: {
         fontFamily: fonts.body.name,
-        fontSize: subheadlineSize,
+        fontSize: subPx,
         fontWeight: fonts.body.weight,
-        color: 'rgba(255,255,255,0.9)',
-        lineHeight: 1.4,
-        marginBottom: Math.round(gap * 1.5),
-        textShadow: '0 1px 4px rgba(0,0,0,0.4)',
+        color: 'rgba(255,255,255,0.92)',
+        lineHeight: 1.35,
+        marginBottom: Math.round(gap * 1.2),
+        textShadow: '0 1px 6px rgba(0,0,0,0.5)',
       },
       children: subheadline,
     },
   });
 
   // CTA button
-  children.push({
+  textChildren.push({
     type: 'div',
     props: {
       style: {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.accent,
+        alignSelf: 'flex-start',
+        backgroundColor: colors.primary,
         borderRadius: ctaRadius,
-        paddingLeft: ctaPaddingH,
-        paddingRight: ctaPaddingH,
-        paddingTop: ctaPaddingV,
-        paddingBottom: ctaPaddingV,
-        marginBottom: Math.round(gap * 1.5),
-        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+        paddingLeft: ctaPadH,
+        paddingRight: ctaPadH,
+        paddingTop: ctaPadV,
+        paddingBottom: ctaPadV,
+        boxShadow: '0 3px 10px rgba(0,0,0,0.25)',
       },
       children: {
         type: 'span',
         props: {
           style: {
             fontFamily: fonts.body.name,
-            fontSize: ctaSize,
+            fontSize: ctaPx,
             fontWeight: 700,
             color: '#FFFFFF',
-            letterSpacing: '0.02em',
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase' as const,
           },
           children: cta,
         },
@@ -165,41 +168,71 @@ export async function renderTextOverlay(config: TextOverlayConfig): Promise<Buff
     },
   });
 
-  // Brand name
-  children.push({
-    type: 'span',
+  // The text content column
+  const textColumn: SatoriElement = {
+    type: 'div',
     props: {
       style: {
-        fontFamily: fonts.body.name,
-        fontSize: brandNameSize,
-        fontWeight: 400,
-        color: 'rgba(255,255,255,0.7)',
-        letterSpacing: '0.05em',
-        textTransform: 'uppercase' as const,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: layout === 'top' ? 'flex-start' : 'flex-end',
+        alignItems: 'flex-start',
+        paddingLeft: pad,
+        paddingRight: pad,
+        paddingTop: layout === 'top' ? pad : Math.round(pad * 0.5),
+        paddingBottom: layout === 'bottom' ? Math.round(pad * 1.8) : Math.round(pad * 0.5),
+        width: '100%',
+        height: textAreaHeight,
       },
-      children: brandName,
+      children: textChildren,
     },
-  });
+  };
 
-  // Root element — full canvas with gradient background for text legibility
+  // Brand name watermark — always bottom-right, small and subtle
+  const brandWatermark: SatoriElement = {
+    type: 'div',
+    props: {
+      style: {
+        display: 'flex',
+        position: 'absolute',
+        bottom: Math.round(14 * s),
+        right: Math.round(16 * s),
+      },
+      children: {
+        type: 'span',
+        props: {
+          style: {
+            fontFamily: fonts.body.name,
+            fontSize: brandPx,
+            fontWeight: 500,
+            color: 'rgba(255,255,255,0.55)',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase' as const,
+            textShadow: '0 1px 4px rgba(0,0,0,0.4)',
+          },
+          children: brandName,
+        },
+      },
+    },
+  };
+
+  // Root: full canvas with a subtle gradient only behind the text area
   const root: SatoriElement = {
     type: 'div',
     props: {
       style: {
         display: 'flex',
         flexDirection: 'column',
-        justifyContent,
-        alignItems: 'flex-start',
+        justifyContent: layout === 'top' ? 'flex-start' : 'flex-end',
         width: '100%',
         height: '100%',
-        padding,
-        backgroundImage: `linear-gradient(${gradientDirection}, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 50%, transparent 100%)`,
+        position: 'relative',
+        backgroundImage: `linear-gradient(${layout === 'top' ? '180deg' : '0deg'}, ${gradientStops})`,
       },
-      children,
+      children: [textColumn, brandWatermark],
     },
   };
 
-  // Render to SVG with satori
   const svg = await satori(root as never, {
     width,
     height,
@@ -209,7 +242,6 @@ export async function renderTextOverlay(config: TextOverlayConfig): Promise<Buff
     ],
   });
 
-  // Rasterize SVG → PNG with transparency
   const resvg = new Resvg(svg, {
     fitTo: { mode: 'width', value: width },
   });
@@ -218,7 +250,7 @@ export async function renderTextOverlay(config: TextOverlayConfig): Promise<Buff
 }
 
 // ---------------------------------------------------------------------------
-// Satori element type (JSX-like object syntax)
+// Satori element type
 // ---------------------------------------------------------------------------
 
 interface SatoriElement {

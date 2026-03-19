@@ -70,7 +70,7 @@ export function SlideEditor({
             type="text"
             value={presentation.title}
             onChange={(e) => update({ title: e.target.value })}
-            className="bg-transparent text-lg font-bold text-white border-none outline-none placeholder:text-white/30 min-w-0 flex-1"
+            className="bg-transparent text-lg font-bold text-foreground border-none outline-none placeholder:text-foreground/30 min-w-0 flex-1"
             placeholder="Presentation title..."
           />
         </div>
@@ -79,7 +79,7 @@ export function SlideEditor({
           <select
             value={presentation.status}
             onChange={(e) => update({ status: e.target.value as PresentationData['status'] })}
-            className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white cursor-pointer"
+            className="rounded-lg border border-nativz-border bg-surface-hover px-3 py-1.5 text-xs text-foreground cursor-pointer"
           >
             <option value="draft">Draft</option>
             <option value="ready">Ready</option>
@@ -111,8 +111,8 @@ export function SlideEditor({
                 </div>
               </div>
               <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
-                <button onClick={(e) => { e.stopPropagation(); moveSlide(i, -1); }} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-white hover:bg-white/10 transition-colors" disabled={i === 0}><ChevronUp size={12} /></button>
-                <button onClick={(e) => { e.stopPropagation(); moveSlide(i, 1); }} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-white hover:bg-white/10 transition-colors" disabled={i === presentation.slides.length - 1}><ChevronDown size={12} /></button>
+                <button onClick={(e) => { e.stopPropagation(); moveSlide(i, -1); }} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-foreground hover:bg-white/10 transition-colors" disabled={i === 0}><ChevronUp size={12} /></button>
+                <button onClick={(e) => { e.stopPropagation(); moveSlide(i, 1); }} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-foreground hover:bg-white/10 transition-colors" disabled={i === presentation.slides.length - 1}><ChevronDown size={12} /></button>
                 <button onClick={(e) => { e.stopPropagation(); removeSlide(i); }} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors" disabled={presentation.slides.length <= 1}><Trash2 size={12} /></button>
               </div>
             </div>
@@ -124,10 +124,10 @@ export function SlideEditor({
 
         {/* Editor */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          <input type="text" value={currentSlide.title} onChange={(e) => updateSlide(activeSlide, { title: e.target.value })} className="w-full bg-transparent text-2xl font-bold text-white border-none outline-none placeholder:text-white/20" placeholder="Slide title..." />
+          <input type="text" value={currentSlide.title} onChange={(e) => updateSlide(activeSlide, { title: e.target.value })} className="w-full bg-transparent text-2xl font-bold text-foreground border-none outline-none placeholder:text-foreground/20" placeholder="Slide title..." />
           <div className="flex items-center gap-2">
             <Image size={14} className="text-text-muted shrink-0" />
-            <input type="url" value={currentSlide.image_url ?? ''} onChange={(e) => updateSlide(activeSlide, { image_url: e.target.value || null })} className="flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-accent/50 focus:outline-none transition-colors" placeholder="Image URL (optional)..." />
+            <input type="url" value={currentSlide.image_url ?? ''} onChange={(e) => updateSlide(activeSlide, { image_url: e.target.value || null })} className="flex-1 rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-sm text-foreground placeholder:text-foreground/30 focus:border-accent/50 focus:outline-none transition-colors" placeholder="Image URL (optional)..." />
           </div>
           {currentSlide.image_url && (
             <div className="rounded-xl overflow-hidden border border-nativz-border bg-black/30">
@@ -135,10 +135,10 @@ export function SlideEditor({
               <img src={currentSlide.image_url} alt="" className="max-h-64 w-full object-contain" />
             </div>
           )}
-          <textarea value={currentSlide.body} onChange={(e) => updateSlide(activeSlide, { body: e.target.value })} className="w-full min-h-[300px] rounded-xl border border-white/10 bg-white/[0.04] p-4 text-sm text-white leading-relaxed placeholder:text-white/20 focus:border-accent/50 focus:outline-none resize-none transition-colors" placeholder="Slide content (supports markdown)..." />
+          <textarea value={currentSlide.body} onChange={(e) => updateSlide(activeSlide, { body: e.target.value })} className="w-full min-h-[300px] rounded-xl border border-nativz-border bg-surface-hover p-4 text-sm text-foreground leading-relaxed placeholder:text-foreground/20 focus:border-accent/50 focus:outline-none resize-none transition-colors" placeholder="Slide content (supports markdown)..." />
           <div>
             <label className="text-xs text-text-muted font-medium mb-1 block">Speaker notes</label>
-            <textarea value={currentSlide.notes ?? ''} onChange={(e) => updateSlide(activeSlide, { notes: e.target.value || null })} className="w-full min-h-[80px] rounded-lg border border-white/10 bg-white/[0.04] p-3 text-xs text-white/70 placeholder:text-white/20 focus:border-accent/50 focus:outline-none resize-none transition-colors" placeholder="Notes for the presenter..." />
+            <textarea value={currentSlide.notes ?? ''} onChange={(e) => updateSlide(activeSlide, { notes: e.target.value || null })} className="w-full min-h-[80px] rounded-lg border border-nativz-border bg-surface-hover p-3 text-xs text-foreground/70 placeholder:text-foreground/20 focus:border-accent/50 focus:outline-none resize-none transition-colors" placeholder="Notes for the presenter..." />
           </div>
         </div>
 
@@ -150,7 +150,7 @@ export function SlideEditor({
           </div>
           <div>
             <label className="text-xs text-text-muted font-medium mb-2 block">Description</label>
-            <textarea value={presentation.description ?? ''} onChange={(e) => update({ description: e.target.value || null })} className="w-full min-h-[60px] rounded-lg border border-white/10 bg-white/[0.04] p-2.5 text-xs text-white placeholder:text-white/30 focus:border-accent/50 focus:outline-none resize-none transition-colors" placeholder="Brief description..." />
+            <textarea value={presentation.description ?? ''} onChange={(e) => update({ description: e.target.value || null })} className="w-full min-h-[60px] rounded-lg border border-nativz-border bg-surface-hover p-2.5 text-xs text-foreground placeholder:text-foreground/30 focus:border-accent/50 focus:outline-none resize-none transition-colors" placeholder="Brief description..." />
           </div>
           <div className="pt-3 border-t border-nativz-border text-[11px] text-text-muted space-y-1">
             <div className="flex justify-between"><span>Slides</span><span className="text-text-secondary">{presentation.slides.length}</span></div>

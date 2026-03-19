@@ -111,13 +111,10 @@ async function main() {
   console.log('\nStep 4: Generating ad images...');
   
   // Import the generation modules
-  const { assembleImagePromptTextFree } = await import('../lib/ad-creatives/assemble-prompt');
+  const { assembleImagePrompt } = await import('../lib/ad-creatives/assemble-prompt');
   const { generateAdImage } = await import('../lib/ad-creatives/generate-image');
   const { generateAdCopy } = await import('../lib/ad-creatives/generate-copy');
-  const { resolveBrandFonts } = await import('../lib/ad-creatives/resolve-fonts');
-  const { renderTextOverlay } = await import('../lib/ad-creatives/render-text-overlay');
   const { compositeAd } = await import('../lib/ad-creatives/composite-ad');
-  const { ASPECT_RATIOS } = await import('../lib/ad-creatives/types');
   
   // Real Toastique brand context (scraped from toastique.com)
   const testBrandContext = {
@@ -193,22 +190,9 @@ Products: Gourmet artisan toasts, smoothie bowls, cold-pressed juices`;
     console.log('  Using fallback copy');
   }
   
-  // Resolve brand fonts for post-processing
-  console.log('  Resolving brand fonts...');
-  const brandFonts = await resolveBrandFonts(testBrandContext.visualIdentity.fonts as any);
-  console.log(`  ✓ Fonts: display="${brandFonts.display.name}", body="${brandFonts.body.name}"`);
-
-  const dims = ASPECT_RATIOS.find(r => r.value === batchConfig.aspectRatio) ?? ASPECT_RATIOS[0];
-  const brandColors = {
-    primary: testBrandContext.visualIdentity.colors.find(c => c.role === 'primary')?.hex ?? '#b18b5b',
-    secondary: testBrandContext.visualIdentity.colors.find(c => c.role === 'secondary')?.hex ?? '#b4d5b6',
-    accent: testBrandContext.visualIdentity.colors.find(c => c.role === 'accent' || c.role === 'background')?.hex ?? '#f7f4ee',
-    text: '#FFFFFF',
-    background: '#000000',
-  };
   const logoUrl = testBrandContext.visualIdentity.logos[0]?.url ?? null;
 
-  // Generate images with post-processing
+  // Generate images — Gemini renders full ad with text matching template layout, then logo composited
   for (let i = 0; i < templates.length; i++) {
     const template = templates[i];
     const copy = copyVariations[i] ?? copyVariations[0];
@@ -216,22 +200,17 @@ Products: Gourmet artisan toasts, smoothie bowls, cold-pressed juices`;
     console.log(`\n  Generating image ${i + 1}/${templates.length} (template page ${template.page_index})...`);
 
     try {
-      // Determine text layout from template
-      const textPos = (template.prompt_schema as any)?.layout?.textPosition?.toLowerCase() ?? 'bottom';
-      const textLayout: 'top' | 'center' | 'bottom' =
-        textPos.includes('top') ? 'top' : textPos.includes('center') ? 'center' : 'bottom';
-
-      const prompt = assembleImagePromptTextFree({
+      const prompt = assembleImagePrompt({
         brandContext: testBrandContext as any,
         promptSchema: template.prompt_schema as any,
         productService: batchConfig.productService,
         offer: batchConfig.offer,
+        onScreenText: copy,
         aspectRatio: batchConfig.aspectRatio,
-        textLayout,
       });
 
-      console.log(`  Prompt length: ${prompt.length} chars (text-free)`);
-      console.log(`  Step 1: Generating base image (no text)...`);
+      console.log(`  Prompt length: ${prompt.length} chars`);
+      console.log(`  Step 1: Generating full ad (Gemini renders text matching template)...`);
 
       const productImageUrls = testBrandContext.visualIdentity.screenshots.map(s => s.url);
 
@@ -242,35 +221,22 @@ Products: Gourmet artisan toasts, smoothie bowls, cold-pressed juices`;
         aspectRatio: batchConfig.aspectRatio,
       });
 
-      console.log(`  ✓ Base image: ${baseImageBuffer.length} bytes`);
+      console.log(`  ✓ Ad generated: ${baseImageBuffer.length} bytes`);
 
-      // Post-processing: render text overlay
-      console.log(`  Step 2: Rendering text overlay (${brandFonts.display.name})...`);
-      const textOverlayBuffer = await renderTextOverlay({
-        width: dims.width,
-        height: dims.height,
-        headline: copy.headline,
-        subheadline: copy.subheadline,
-        cta: copy.cta,
-        offer: batchConfig.offer ?? null,
-        brandName: 'Toastique',
-        colors: brandColors,
-        fonts: brandFonts,
-        layout: textLayout,
-      });
-      console.log(`  ✓ Text overlay: ${textOverlayBuffer.length} bytes`);
-
-      // Post-processing: composite
-      console.log(`  Step 3: Compositing base + text + logo...`);
-      const imageBuffer = await compositeAd({
-        baseImage: baseImageBuffer,
-        textOverlay: textOverlayBuffer,
-        logoUrl,
-        logoPosition: 'bottom-right',
-        width: dims.width,
-        height: dims.height,
-      });
-      console.log(`  ✓ Final image: ${imageBuffer.length} bytes`);
+      // Post-processing: composite ONLY the logo
+      let imageBuffer = baseImageBuffer;
+      if (logoUrl) {
+        console.log(`  Step 2: Compositing logo...`);
+        imageBuffer = await compositeAd({
+          baseImage: baseImageBuffer,
+          textOverlay: null,
+          logoUrl,
+          logoPosition: 'bottom-left',
+          width: 1080,
+          height: 1080,
+        });
+        console.log(`  ✓ Logo composited: ${imageBuffer.length} bytes`);
+      }
 
       // Upload to Supabase Storage
       const creativeId = crypto.randomUUID();

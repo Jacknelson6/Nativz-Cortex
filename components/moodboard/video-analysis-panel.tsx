@@ -351,7 +351,7 @@ function HookView({ item, isAnalyzed, analyzing, onAnalyze }: {
                 <Badge variant="info" className="text-[10px]">{formatTag(item.hook_type)}</Badge>
               )}
               {item.mediapipe_analysis?.hook && item.mediapipe_analysis.hook.visualHookType !== 'unknown' && (
-                <span className="text-[10px] bg-white/5 rounded-full px-2 py-0.5 text-text-muted">
+                <span className="text-[10px] bg-surface-hover rounded-full px-2 py-0.5 text-text-muted">
                   {formatTag(item.mediapipe_analysis.hook.visualHookType)}
                 </span>
               )}
@@ -384,7 +384,7 @@ function HookView({ item, isAnalyzed, analyzing, onAnalyze }: {
           <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1.5">Themes</p>
           <div className="flex flex-wrap gap-1.5">
             {item.content_themes.map((tag, i) => (
-              <span key={i} className="text-[11px] bg-white/5 rounded-full px-2.5 py-0.5 text-text-secondary">
+              <span key={i} className="text-[11px] bg-surface-hover rounded-full px-2.5 py-0.5 text-text-secondary">
                 {formatTag(tag)}
               </span>
             ))}
@@ -549,7 +549,7 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied, 
 
   return (
     <div className="space-y-3">
-      {/* Search bar + extract frames button */}
+      {/* Search bar + copy + extract frames */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
@@ -561,6 +561,15 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied, 
             className="w-full pl-9 pr-3 py-2 rounded-lg border border-nativz-border bg-surface-hover/30 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
           />
         </div>
+        {item.transcript && (
+          <button
+            onClick={() => onCopy(item.transcript!)}
+            className="cursor-pointer shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-nativz-border text-xs text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
+          >
+            {copied ? <Check size={12} /> : <CopyIcon size={12} />}
+            Copy
+          </button>
+        )}
         {!hasFrames && (
           <button
             onClick={onExtractFrames}
@@ -606,13 +615,43 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied, 
       )}
 
       {hasSegments ? (
-        <div className="space-y-0 overflow-y-auto">
-          {/* Frames that appear before the first segment */}
-          {hasFrames && (frameInsertMap.get(0) ?? []).map(fi => renderFrameCard(fi))}
-
-          {filteredSegments.map((seg, i) => (
-            <React.Fragment key={i}>
-              <div className="flex gap-2 rounded p-1.5 hover:bg-surface-hover/50 transition-colors">
+        hasFrames ? (
+          /* ── Frames mode: show only frame cards (each includes its transcript excerpt) ── */
+          <div className="space-y-2 overflow-y-auto">
+            {frames.map((frame, fi) => {
+              const transcriptText = segments.length > 0
+                ? getTranscriptAtTimestamp(segments, frame.timestamp, fi < frames.length - 1 ? frames[fi + 1].timestamp - frame.timestamp : 3)
+                : '';
+              return (
+                <div key={fi} className="flex gap-3 rounded-lg border border-nativz-border bg-surface-hover/20 p-2 hover:border-accent/30 transition-colors">
+                  <div className="relative shrink-0 w-[72px] rounded-md overflow-hidden border border-nativz-border">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={frame.url} alt={frame.label} className="w-full aspect-[9/16] object-cover" />
+                    <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-mono text-center py-0.5">
+                      {frame.label}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0 py-0.5">
+                    <p className="text-[10px] font-medium text-text-muted mb-1">
+                      {frame.label}{fi < frames.length - 1 ? ` – ${frames[fi + 1].label}` : '+'}
+                    </p>
+                    {transcriptText ? (
+                      <p className="text-sm text-text-secondary leading-relaxed">
+                        {searchQuery ? highlightText(transcriptText, searchQuery) : transcriptText}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-text-muted italic">No transcript at this point</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* ── Text-only mode: show timestamped segments ── */
+          <div className="space-y-0 overflow-y-auto">
+            {filteredSegments.map((seg, i) => (
+              <div key={i} className="flex gap-2 rounded p-1.5 hover:bg-surface-hover/50 transition-colors">
                 <span className="text-[10px] text-accent-text font-mono shrink-0 pt-0.5 w-10 text-right">
                   {formatTimestamp(seg.start)}
                 </span>
@@ -620,27 +659,17 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied, 
                   {searchQuery ? highlightText(seg.text, searchQuery) : seg.text}
                 </p>
               </div>
-              {/* Insert any frames that appear before the next segment */}
-              {hasFrames && (frameInsertMap.get(i + 1) ?? []).map(fi => renderFrameCard(fi))}
-            </React.Fragment>
-          ))}
-          {filteredSegments.length === 0 && searchQuery && (
-            <p className="text-sm text-text-muted text-center py-4">No matches found</p>
-          )}
-        </div>
+            ))}
+            {filteredSegments.length === 0 && searchQuery && (
+              <p className="text-sm text-text-muted text-center py-4">No matches found</p>
+            )}
+          </div>
+        )
       ) : item.transcript ? (
         <div className="rounded-lg border border-nativz-border bg-surface-hover/30 p-4 text-sm text-text-secondary whitespace-pre-wrap overflow-y-auto">
           {highlightedTranscript ? renderHighlighted(highlightedTranscript) : item.transcript}
         </div>
       ) : null}
-
-      {item.transcript && (
-        <button onClick={() => onCopy(item.transcript!)}
-          className="cursor-pointer flex items-center gap-1 text-[10px] text-text-muted hover:text-accent-text transition-colors">
-          {copied ? <Check size={10} /> : <CopyIcon size={10} />}
-          Copy transcript
-        </button>
-      )}
 
       {item.cta && (
         <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-3">
@@ -815,7 +844,7 @@ function VisualHookMetrics({ hook }: { hook: HookVisualAnalysis }) {
           {metrics.map((m) => (
             <div key={m.label} className="flex items-center gap-2">
               <span className="text-[10px] text-text-muted w-28 shrink-0">{m.label}</span>
-              <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+              <div className="flex-1 h-1.5 rounded-full bg-surface-hover overflow-hidden">
                 <div
                   className={`h-full rounded-full ${m.color}`}
                   style={{ width: `${Math.round(m.value * 100)}%` }}
@@ -829,7 +858,7 @@ function VisualHookMetrics({ hook }: { hook: HookVisualAnalysis }) {
       {hook.objectsDetected.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {hook.objectsDetected.slice(0, 5).map((obj, i) => (
-            <span key={i} className="text-[10px] bg-white/5 rounded-full px-2 py-0.5 text-text-muted">
+            <span key={i} className="text-[10px] bg-surface-hover rounded-full px-2 py-0.5 text-text-muted">
               {obj}
             </span>
           ))}

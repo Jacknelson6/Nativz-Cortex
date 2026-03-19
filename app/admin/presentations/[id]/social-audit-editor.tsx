@@ -117,7 +117,7 @@ export function SocialAuditEditor({
         <div className="flex items-center justify-between border-b border-nativz-border px-4 py-3">
           <div className="flex items-center gap-3">
             <button onClick={onBack} className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors"><ArrowLeft size={18} /></button>
-            <h1 className="text-lg font-bold text-white">Social audit setup</h1>
+            <h1 className="text-lg font-bold text-foreground">Social audit setup</h1>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-text-muted">{saving ? 'Saving...' : 'Saved'}</span>
@@ -136,7 +136,7 @@ export function SocialAuditEditor({
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   placeholder="e.g. Joe's Gym, Acme Corp..."
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-colors"
+                  className="w-full rounded-lg border border-nativz-border bg-surface-hover px-4 py-3 text-sm text-foreground placeholder:text-foreground/30 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-colors"
                 />
               </div>
               <div>
@@ -149,7 +149,7 @@ export function SocialAuditEditor({
                       className={`cursor-pointer rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                         timelineMonths === m
                           ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/40'
-                          : 'bg-white/[0.04] text-text-muted border border-white/10 hover:text-white'
+                          : 'bg-surface-hover text-text-muted border border-nativz-border hover:text-foreground'
                       }`}
                     >
                       {m} months
@@ -161,7 +161,7 @@ export function SocialAuditEditor({
 
             {/* Their profiles */}
             <div className="space-y-3">
-              <h2 className="text-base font-semibold text-white">Their social profiles</h2>
+              <h2 className="text-base font-semibold text-foreground">Their social profiles</h2>
               <p className="text-sm text-text-muted">Enter the prospect&apos;s social media handles. We&apos;ll pull public data to build the before &amp; after.</p>
               <div className="space-y-2">
                 {PLATFORMS.map(({ id, label, icon: Icon, color }) => {
@@ -176,7 +176,7 @@ export function SocialAuditEditor({
                         value={handles[id] ?? existing?.handle ?? ''}
                         onChange={(e) => setHandles({ ...handles, [id]: e.target.value })}
                         placeholder={`${label} handle...`}
-                        className="flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none transition-colors"
+                        className="flex-1 rounded-lg border border-nativz-border bg-surface-hover px-3 py-2.5 text-sm text-foreground placeholder:text-foreground/30 focus:border-white/20 focus:outline-none transition-colors"
                       />
                       <Button
                         size="sm"
@@ -205,14 +205,14 @@ export function SocialAuditEditor({
                           <img src={p.profile_image} alt="" className="w-8 h-8 rounded-full object-cover" />
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-white truncate">{p.display_name}</p>
+                          <p className="text-xs font-semibold text-foreground truncate">{p.display_name}</p>
                           <p className="text-[10px] text-text-muted">@{p.handle} · {plat?.label}</p>
                         </div>
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-center">
-                        <div><p className="text-sm font-bold text-white">{formatNumber(p.followers)}</p><p className="text-[10px] text-text-muted">Followers</p></div>
-                        <div><p className="text-sm font-bold text-white">{formatNumber(p.posts)}</p><p className="text-[10px] text-text-muted">Posts</p></div>
-                        <div><p className="text-sm font-bold text-white">{p.engagement_rate ? `${p.engagement_rate}%` : '\u2014'}</p><p className="text-[10px] text-text-muted">Eng. rate</p></div>
+                        <div><p className="text-sm font-bold text-foreground">{formatNumber(p.followers)}</p><p className="text-[10px] text-text-muted">Followers</p></div>
+                        <div><p className="text-sm font-bold text-foreground">{formatNumber(p.posts)}</p><p className="text-[10px] text-text-muted">Posts</p></div>
+                        <div><p className="text-sm font-bold text-foreground">{p.engagement_rate ? `${p.engagement_rate}%` : '\u2014'}</p><p className="text-[10px] text-text-muted">Eng. rate</p></div>
                       </div>
                     </div>
                   );
@@ -222,7 +222,7 @@ export function SocialAuditEditor({
 
             {/* Competitor profiles */}
             <div className="space-y-3">
-              <h2 className="text-base font-semibold text-white">Competitor profiles <span className="text-text-muted font-normal">(optional)</span></h2>
+              <h2 className="text-base font-semibold text-foreground">Competitor profiles <span className="text-text-muted font-normal">(optional)</span></h2>
               <p className="text-sm text-text-muted">Add competitor handles to show what&apos;s possible in their space.</p>
               <div className="space-y-2">
                 {PLATFORMS.map(({ id, label, icon: Icon, color }) => {
@@ -237,7 +237,7 @@ export function SocialAuditEditor({
                         value={compHandles[id] ?? existing?.handle ?? ''}
                         onChange={(e) => setCompHandles({ ...compHandles, [id]: e.target.value })}
                         placeholder={`Competitor ${label} handle...`}
-                        className="flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none transition-colors"
+                        className="flex-1 rounded-lg border border-nativz-border bg-surface-hover px-3 py-2.5 text-sm text-foreground placeholder:text-foreground/30 focus:border-white/20 focus:outline-none transition-colors"
                       />
                       <Button
                         size="sm"
@@ -279,7 +279,7 @@ export function SocialAuditEditor({
       <div className="flex items-center justify-between border-b border-nativz-border px-4 py-3">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors"><ArrowLeft size={18} /></button>
-          <input type="text" value={presentation.title} onChange={(e) => update({ title: e.target.value })} className="bg-transparent text-lg font-bold text-white border-none outline-none placeholder:text-white/30 min-w-0 flex-1" placeholder="Social audit title..." />
+          <input type="text" value={presentation.title} onChange={(e) => update({ title: e.target.value })} className="bg-transparent text-lg font-bold text-foreground border-none outline-none placeholder:text-foreground/30 min-w-0 flex-1" placeholder="Social audit title..." />
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-text-muted">{saving ? 'Saving...' : 'Saved'}</span>
@@ -294,7 +294,7 @@ export function SocialAuditEditor({
         <div className="max-w-5xl mx-auto space-y-8">
           {/* Header */}
           <div className="text-center space-y-2">
-            <h1 className="text-3xl font-bold text-white">{audit.business_name || 'Social media'} audit</h1>
+            <h1 className="text-3xl font-bold text-foreground">{audit.business_name || 'Social media'} audit</h1>
             <p className="text-text-muted">What your social presence looks like today vs. what it could look like in {timelineMonths} months with Nativz</p>
           </div>
 
@@ -318,7 +318,7 @@ export function SocialAuditEditor({
                     <Icon size={20} style={{ color: plat.color }} />
                   </div>
                   <div>
-                    <h2 className="text-base font-semibold text-white">{plat.label}</h2>
+                    <h2 className="text-base font-semibold text-foreground">{plat.label}</h2>
                     <p className="text-xs text-text-muted">@{profile.handle}</p>
                   </div>
                   {profile.profile_image && (
@@ -342,7 +342,7 @@ export function SocialAuditEditor({
                       <MetricCard icon={MessageCircle} label="Following" value={formatNumber(profile.following)} />
                     </div>
                     {profile.bio && (
-                      <p className="text-xs text-text-muted italic border-l-2 border-white/10 pl-3">&ldquo;{profile.bio.substring(0, 120)}{profile.bio.length > 120 ? '...' : ''}&rdquo;</p>
+                      <p className="text-xs text-text-muted italic border-l-2 border-nativz-border pl-3">&ldquo;{profile.bio.substring(0, 120)}{profile.bio.length > 120 ? '...' : ''}&rdquo;</p>
                     )}
                   </div>
 
@@ -393,15 +393,15 @@ export function SocialAuditEditor({
                     </div>
                     <div className="grid grid-cols-4 gap-4">
                       <div className="text-center">
-                        <p className="text-sm font-bold text-white">{formatNumber(competitor.followers)}</p>
+                        <p className="text-sm font-bold text-foreground">{formatNumber(competitor.followers)}</p>
                         <p className="text-[10px] text-text-muted">Followers</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-sm font-bold text-white">{formatNumber(competitor.posts)}</p>
+                        <p className="text-sm font-bold text-foreground">{formatNumber(competitor.posts)}</p>
                         <p className="text-[10px] text-text-muted">Posts</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-sm font-bold text-white">{competitor.engagement_rate ? `${competitor.engagement_rate}%` : '\u2014'}</p>
+                        <p className="text-sm font-bold text-foreground">{competitor.engagement_rate ? `${competitor.engagement_rate}%` : '\u2014'}</p>
                         <p className="text-[10px] text-text-muted">Eng. rate</p>
                       </div>
                       <div className="text-center">
@@ -423,7 +423,7 @@ export function SocialAuditEditor({
           {/* Summary callout */}
           {audit.profiles.length > 0 && (
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.05] p-6 text-center space-y-3">
-              <h2 className="text-xl font-bold text-white">What this means for {audit.business_name || 'your business'}</h2>
+              <h2 className="text-xl font-bold text-foreground">What this means for {audit.business_name || 'your business'}</h2>
               <div className="grid grid-cols-3 gap-6 max-w-lg mx-auto">
                 <div>
                   <p className="text-2xl font-bold text-emerald-400">
@@ -493,7 +493,7 @@ function MetricCard({
         <span className="text-[10px] text-text-muted uppercase tracking-wider font-medium">{label}</span>
       </div>
       <div className="flex items-baseline gap-1.5">
-        <p className="text-lg font-bold text-white">{value}</p>
+        <p className="text-lg font-bold text-foreground">{value}</p>
         {change && (
           <span className={`text-[10px] font-bold ${positive ? 'text-emerald-400' : 'text-red-400'}`}>{change}</span>
         )}

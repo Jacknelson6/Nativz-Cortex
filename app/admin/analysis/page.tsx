@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SpotlightCard } from '@/components/ui/spotlight-card';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import { CreateBoardModal } from '@/components/moodboard/create-board-modal';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -23,6 +24,9 @@ export default function MoodboardPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+
+  const { mode } = useBrandMode();
+  const isAC = mode === 'anderson';
 
   // Quick analyze state
   const [quickUrl, setQuickUrl] = useState('');
@@ -169,7 +173,7 @@ export default function MoodboardPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Quick analyze */}
-        <SpotlightCard spotlightColor="rgba(168, 85, 247, 0.15)" className="p-6">
+        <SpotlightCard spotlightColor={isAC ? "rgba(54, 209, 194, 0.15)" : "rgba(168, 85, 247, 0.15)"} className="p-6">
           <div className="flex flex-col items-center text-center">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent2-surface mb-3">
               <Film size={18} className="text-accent2-text" />
@@ -195,7 +199,7 @@ export default function MoodboardPage() {
               <button
                 type="submit"
                 disabled={quickLoading || !quickUrl.trim()}
-                className="w-full rounded-lg bg-accent2-surface border border-purple-500/25 py-2.5 text-sm font-semibold text-accent2-text hover:bg-accent2-surface transition-colors disabled:opacity-40 cursor-pointer"
+                className="w-full rounded-lg bg-accent2-surface border border-accent2/25 py-2.5 text-sm font-semibold text-accent2-text hover:bg-accent2-surface transition-colors disabled:opacity-40 cursor-pointer"
               >
                 {quickLoading ? 'Analyzing...' : 'Analyze'}
               </button>
@@ -204,7 +208,7 @@ export default function MoodboardPage() {
         </SpotlightCard>
 
         {/* Moodboard */}
-        <SpotlightCard spotlightColor="rgba(91, 163, 230, 0.15)" className="p-6">
+        <SpotlightCard spotlightColor={isAC ? "rgba(43, 181, 168, 0.15)" : "rgba(91, 163, 230, 0.15)"} className="p-6">
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
@@ -252,7 +256,11 @@ export default function MoodboardPage() {
                 style={{ animationDelay: `${i * 40}ms` }}
               >
                 <div className="relative group rounded-xl border border-nativz-border bg-surface overflow-hidden shadow-card hover:shadow-elevated transition-all duration-300 hover:border-transparent hover:ring-1 hover:ring-accent/40">
-                  <div className="absolute -inset-px rounded-xl bg-gradient-to-r from-blue-500/0 via-purple-500/0 to-blue-500/0 group-hover:from-blue-500/20 group-hover:via-purple-500/20 group-hover:to-blue-500/20 transition-all duration-500 -z-10 blur-sm" />
+                  <div className={`absolute -inset-px rounded-xl bg-gradient-to-r transition-all duration-500 -z-10 blur-sm ${
+                    isAC
+                      ? 'from-teal-500/0 via-teal-400/0 to-teal-500/0 group-hover:from-teal-500/20 group-hover:via-teal-400/20 group-hover:to-teal-500/20'
+                      : 'from-blue-500/0 via-purple-500/0 to-blue-500/0 group-hover:from-blue-500/20 group-hover:via-purple-500/20 group-hover:to-blue-500/20'
+                  }`} />
 
                   <button
                     onClick={() => router.push(`/admin/analysis/${board.id}`)}
@@ -273,7 +281,10 @@ export default function MoodboardPage() {
                         </div>
                       ) : (
                         <div className="h-full bg-gradient-to-br from-surface-hover via-accent/5 to-surface-hover flex items-center justify-center"
-                          style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.08) 0%, transparent 50%), radial-gradient(circle at 80% 50%, rgba(168,85,247,0.08) 0%, transparent 50%)' }}>
+                          style={{ backgroundImage: isAC
+                            ? 'radial-gradient(circle at 20% 50%, rgba(54,209,194,0.08) 0%, transparent 50%), radial-gradient(circle at 80% 50%, rgba(43,181,168,0.08) 0%, transparent 50%)'
+                            : 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.08) 0%, transparent 50%), radial-gradient(circle at 80% 50%, rgba(168,85,247,0.08) 0%, transparent 50%)'
+                          }}>
                           <Layers size={28} className="text-text-muted/20" />
                         </div>
                       )}

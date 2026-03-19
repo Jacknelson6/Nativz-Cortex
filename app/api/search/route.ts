@@ -240,6 +240,8 @@ export async function POST(request: NextRequest) {
         messages: [{ role: 'user', content: prompt }],
         maxTokens: 16000,
         feature: 'topic_search',
+        userId: user.id,
+        userEmail: user.email ?? undefined,
       });
 
       const rawAiResponse = parseAIResponseJSON<TopicSearchAIResponse>(aiResult.text);

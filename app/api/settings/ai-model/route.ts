@@ -4,13 +4,14 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
 
 const PatchSchema = z.object({
-  model: z.string().min(1, 'Model name is required').max(200),
+  model: z.string().min(1, 'Model name is required').max(200).optional(),
+  fallbackModels: z.array(z.string().min(1).max(200)).max(5).optional(),
 });
 
 /**
  * GET /api/settings/ai-model
  *
- * Fetch the currently active AI model from agency_settings.
+ * Fetch the currently active AI model and fallback models from agency_settings.
  *
  * @auth Required (admin)
  */
@@ -35,12 +36,13 @@ export async function GET() {
 
     const { data: settings } = await adminClient
       .from('agency_settings')
-      .select('ai_model, updated_at')
+      .select('ai_model, ai_fallback_models, updated_at')
       .eq('agency', 'nativz')
       .single();
 
     return NextResponse.json({
       model: settings?.ai_model ?? 'anthropic/claude-3.5-haiku',
+      fallbackModels: settings?.ai_fallback_models ?? [],
       updatedAt: settings?.updated_at ?? null,
     });
   } catch (err) {
@@ -52,10 +54,10 @@ export async function GET() {
 /**
  * PATCH /api/settings/ai-model
  *
- * Update the platform-wide AI model.
+ * Update the platform-wide AI model and/or fallback models.
  *
  * @auth Required (admin)
- * @body { model: string }
+ * @body { model?: string, fallbackModels?: string[] }
  */
 export async function PATCH(req: NextRequest) {
   try {
@@ -85,11 +87,22 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const { model } = parsed.data;
+    if (!parsed.data.model && !parsed.data.fallbackModels) {
+      return NextResponse.json(
+        { error: 'Provide at least model or fallbackModels' },
+        { status: 400 },
+      );
+    }
+
+    const updatePayload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (parsed.data.model) updatePayload.ai_model = parsed.data.model;
+    if (parsed.data.fallbackModels !== undefined) updatePayload.ai_fallback_models = parsed.data.fallbackModels;
 
     const { error: updateError } = await adminClient
       .from('agency_settings')
-      .update({ ai_model: model, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('agency', 'nativz');
 
     if (updateError) {
@@ -97,7 +110,18 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to save model' }, { status: 500 });
     }
 
-    return NextResponse.json({ model, updatedAt: new Date().toISOString() });
+    // Fetch updated settings to return
+    const { data: settings } = await adminClient
+      .from('agency_settings')
+      .select('ai_model, ai_fallback_models, updated_at')
+      .eq('agency', 'nativz')
+      .single();
+
+    return NextResponse.json({
+      model: settings?.ai_model ?? parsed.data.model,
+      fallbackModels: settings?.ai_fallback_models ?? parsed.data.fallbackModels ?? [],
+      updatedAt: settings?.updated_at ?? new Date().toISOString(),
+    });
   } catch (err) {
     console.error('PATCH /api/settings/ai-model error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -116,6 +116,8 @@ Generate exactly 4 ideas. Make them DIFFERENT from the existing ideas — new an
     const aiResult = await createCompletion({
       messages: [{ role: 'user', content: prompt }],
       maxTokens: 4000,
+      userId: user.id,
+      userEmail: user.email ?? undefined,
     });
 
     const result = parseAIResponseJSON<{ ideas: VideoIdea[] }>(aiResult.text);

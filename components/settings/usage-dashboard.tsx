@@ -10,6 +10,11 @@ import {
   DollarSign,
   Hash,
   Activity,
+  Users,
+  Bot,
+  Cloud,
+  Mail,
+  Youtube,
 } from 'lucide-react';
 import {
   BarChart,
@@ -47,10 +52,18 @@ interface FeatureData {
   requests: number;
 }
 
+interface UserData {
+  email: string;
+  totalTokens: number;
+  costUsd: number;
+  requests: number;
+}
+
 interface UsageSummary {
   byService: Record<string, ServiceData>;
   byModel: Record<string, ModelData>;
   byFeature: Record<string, FeatureData>;
+  byUser: Record<string, UserData>;
   total: { totalTokens: number; costUsd: number; requests: number };
   daily: { date: string; costUsd: number; requests: number }[];
 }
@@ -67,6 +80,10 @@ const SERVICE_META: Record<
   groq: { label: 'Groq / Whisper', icon: Mic, color: 'text-green-400' },
   gemini: { label: 'Google AI / Gemini', icon: Eye, color: 'text-accent2-text' },
   brave: { label: 'Brave Search', icon: Search, color: 'text-orange-400' },
+  apify: { label: 'Apify / TikTok', icon: Bot, color: 'text-purple-400' },
+  cloudflare: { label: 'Cloudflare / Crawl', icon: Cloud, color: 'text-amber-400' },
+  resend: { label: 'Resend / Email', icon: Mail, color: 'text-indigo-400' },
+  youtube: { label: 'YouTube Data', icon: Youtube, color: 'text-red-400' },
 };
 
 function formatCost(usd: number): string {
@@ -235,54 +252,73 @@ export function UsageDashboard() {
             </div>
           </Card>
 
-          {/* Service breakdown cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {Object.entries(SERVICE_META).map(
-              ([key, { label, icon: Icon, color }]) => {
-                const svc = data.byService[key] ?? {
-                  totalTokens: 0,
-                  costUsd: 0,
-                  requests: 0,
-                };
-                return (
-                  <Card key={key} padding="sm">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Icon size={16} className={color} />
-                      <span className="text-sm font-medium text-text-primary">
+          {/* Service breakdown cards — show active services first, then inactive */}
+          {(() => {
+            const allServices = Object.entries(SERVICE_META);
+            const active = allServices.filter(([key]) => data.byService[key]?.requests > 0);
+            const inactive = allServices.filter(([key]) => !data.byService[key]?.requests);
+
+            return (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {active.map(([key, { label, icon: Icon, color }]) => {
+                    const svc = data.byService[key]!;
+                    return (
+                      <Card key={key} padding="sm">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Icon size={16} className={color} />
+                          <span className="text-sm font-medium text-text-primary">
+                            {label}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-text-muted flex items-center gap-1">
+                              <Activity size={12} /> Requests
+                            </span>
+                            <span className="text-sm text-text-secondary font-medium">
+                              {formatNumber(svc.requests)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-text-muted flex items-center gap-1">
+                              <Hash size={12} /> Tokens
+                            </span>
+                            <span className="text-sm text-text-secondary font-medium">
+                              {formatTokens(svc.totalTokens)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-text-muted flex items-center gap-1">
+                              <DollarSign size={12} /> Cost
+                            </span>
+                            <span className="text-sm text-text-primary font-semibold">
+                              {formatCost(svc.costUsd)}
+                            </span>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+                {/* Inactive services — compact row */}
+                {inactive.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {inactive.map(([key, { label, icon: Icon, color }]) => (
+                      <div
+                        key={key}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-hover border border-nativz-border text-xs text-text-muted"
+                      >
+                        <Icon size={12} className={color} />
                         {label}
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-text-muted flex items-center gap-1">
-                          <Activity size={12} /> Requests
-                        </span>
-                        <span className="text-sm text-text-secondary font-medium">
-                          {formatNumber(svc.requests)}
-                        </span>
+                        <span className="text-text-muted/50 ml-1">0 req</span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-text-muted flex items-center gap-1">
-                          <Hash size={12} /> Tokens
-                        </span>
-                        <span className="text-sm text-text-secondary font-medium">
-                          {formatTokens(svc.totalTokens)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-text-muted flex items-center gap-1">
-                          <DollarSign size={12} /> Cost
-                        </span>
-                        <span className="text-sm text-text-primary font-semibold">
-                          {formatCost(svc.costUsd)}
-                        </span>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              }
-            )}
-          </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Model breakdown */}
           <Card>
@@ -320,6 +356,68 @@ export function UsageDashboard() {
                             <span className={`text-xs ${serviceColor(stats.service)}`}>
                               {SERVICE_META[stats.service]?.label ?? stats.service}
                             </span>
+                          </td>
+                          <td className="py-2.5 text-right text-text-secondary">
+                            {formatNumber(stats.requests)}
+                          </td>
+                          <td className="py-2.5 text-right text-text-secondary">
+                            {formatTokens(stats.totalTokens)}
+                          </td>
+                          <td className="py-2.5 text-right text-text-primary font-medium">
+                            {stats.costUsd === 0 ? (
+                              <span className="text-emerald-400">Free</span>
+                            ) : (
+                              formatCost(stats.costUsd)
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+
+          {/* Usage by user */}
+          <Card>
+            <div className="flex items-center gap-2 mb-4">
+              <Users size={16} className="text-text-muted" />
+              <h2 className="text-sm font-semibold text-text-primary">
+                Usage by user
+              </h2>
+            </div>
+            {Object.keys(data.byUser ?? {}).length === 0 ? (
+              <p className="text-sm text-text-muted py-4 text-center">
+                No per-user data for this period
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-nativz-border text-text-muted text-xs">
+                      <th className="text-left pb-2 font-medium">User</th>
+                      <th className="text-right pb-2 font-medium">Requests</th>
+                      <th className="text-right pb-2 font-medium">Tokens</th>
+                      <th className="text-right pb-2 font-medium">Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(data.byUser ?? {})
+                      .sort(([, a], [, b]) => b.requests - a.requests)
+                      .map(([userId, stats]) => (
+                        <tr
+                          key={userId}
+                          className="border-b border-nativz-border/50 last:border-0"
+                        >
+                          <td className="py-2.5">
+                            <span className="text-text-primary font-medium">
+                              {stats.email}
+                            </span>
+                            {userId === 'system' && (
+                              <span className="ml-2 text-xs text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
+                                automated
+                              </span>
+                            )}
                           </td>
                           <td className="py-2.5 text-right text-text-secondary">
                             {formatNumber(stats.requests)}

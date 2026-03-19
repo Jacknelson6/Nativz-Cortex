@@ -6,6 +6,8 @@
  * Docs: https://developers.cloudflare.com/changelog/post/2026-03-10-br-crawl-endpoint/
  */
 
+import { logUsage } from '@/lib/ai/usage';
+
 const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID!;
 const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN!;
 const CRAWL_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/browser-rendering/crawl`;
@@ -82,6 +84,16 @@ export async function crawlWebsite(websiteUrl: string): Promise<CrawlResult[] | 
       if (!pollData.success) continue;
 
       if (pollData.result?.status === 'completed' && pollData.result.pages) {
+        logUsage({
+          service: 'cloudflare',
+          model: 'browser-rendering',
+          feature: 'website_crawl',
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          costUsd: 0,
+        }).catch(() => {});
+
         return pollData.result.pages.map((p) => ({
           url: p.url,
           content: p.content.slice(0, 5000), // Cap per page to keep prompt size reasonable

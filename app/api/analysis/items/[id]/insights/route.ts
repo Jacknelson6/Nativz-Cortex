@@ -131,6 +131,8 @@ Return ONLY the JSON.`,
           },
         ],
         maxTokens: 1500,
+        userId: user.id,
+        userEmail: user.email ?? undefined,
       });
 
       const insights = parseAIResponseJSON<PageInsights>(aiResponse.text);

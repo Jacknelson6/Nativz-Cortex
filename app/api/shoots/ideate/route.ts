@@ -127,6 +127,8 @@ Generate a detailed shoot plan with specific video ideas, hooks, talking points,
         { role: 'user', content: userPrompt },
       ],
       maxTokens: 3000,
+      userId: user.id,
+      userEmail: user.email ?? undefined,
     });
 
     // Parse JSON from AI response

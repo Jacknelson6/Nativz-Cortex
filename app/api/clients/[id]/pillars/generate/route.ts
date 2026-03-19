@@ -93,7 +93,7 @@ export async function POST(
 
   // Return immediately, process in background
   after(async () => {
-    await processGeneration({ generationId, clientId: id, count, direction });
+    await processGeneration({ generationId, clientId: id, count, direction, userId: user.id, userEmail: user.email ?? undefined });
   });
 
   return NextResponse.json({ id: generationId, status: 'processing' });
@@ -106,11 +106,15 @@ async function processGeneration({
   clientId,
   count,
   direction,
+  userId,
+  userEmail,
 }: {
   generationId: string;
   clientId: string;
   count: number;
   direction?: string;
+  userId: string;
+  userEmail?: string;
 }) {
   const admin = createAdminClient();
 
@@ -194,6 +198,8 @@ Topic keywords: ${Array.isArray(clientRecord.topic_keywords) ? (clientRecord.top
       ],
       maxTokens: 8000,
       feature: 'pillar_generation',
+      userId,
+      userEmail,
     });
 
     const pillars = parseAIResponseJSON<GeneratedPillar[]>(result.text).slice(0, count);

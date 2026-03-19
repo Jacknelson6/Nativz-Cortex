@@ -655,7 +655,7 @@ export async function POST(req: NextRequest) {
 
             // Auto-generate title for new conversations
             if (isFirstMessage && latestUserMsg) {
-              generateTitle(convoIdForStream, latestUserMsg.content, fullAssistantText).catch(() => {});
+              generateTitle(convoIdForStream, latestUserMsg.content, fullAssistantText, userIdForStream, user.email ?? undefined).catch(() => {});
             }
           }
 
@@ -681,7 +681,7 @@ export async function POST(req: NextRequest) {
 // Auto-generate conversation title from first exchange
 // ---------------------------------------------------------------------------
 
-async function generateTitle(conversationId: string, userMessage: string, assistantResponse: string) {
+async function generateTitle(conversationId: string, userMessage: string, assistantResponse: string, userId?: string, userEmail?: string) {
   try {
     const { createCompletion } = await import('@/lib/ai/client');
     const result = await createCompletion({
@@ -697,6 +697,8 @@ async function generateTitle(conversationId: string, userMessage: string, assist
       ],
       maxTokens: 20,
       feature: 'nerd_title',
+      userId,
+      userEmail,
     });
 
     const title = result.text.trim().replace(/^["']|["']$/g, '').slice(0, 100);

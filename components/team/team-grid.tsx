@@ -145,7 +145,7 @@ export function TeamGrid({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
-            <Users size={22} className="text-blue-400" />
+            <Users size={22} className="text-accent-text" />
             Team
           </h1>
           <p className="text-sm text-text-muted mt-0.5">
@@ -229,7 +229,7 @@ export function TeamGrid({
                         className="h-16 w-16 rounded-full object-cover ring-2 ring-nativz-border shrink-0"
                       />
                     ) : (
-                      <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 ring-2 ring-nativz-border flex items-center justify-center shrink-0">
+                      <div className="h-16 w-16 rounded-full bg-gradient-to-br from-accent/15 to-accent2/15 ring-2 ring-nativz-border flex items-center justify-center shrink-0">
                         <span className="text-base font-semibold text-text-secondary">
                           {getInitials(member.full_name)}
                         </span>

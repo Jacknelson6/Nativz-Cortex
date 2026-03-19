@@ -77,6 +77,8 @@ ${clientContext}`,
         },
       ],
       maxTokens: 400,
+      userId: user.id,
+      userEmail: user.email ?? undefined,
     });
 
     // Parse the AI response

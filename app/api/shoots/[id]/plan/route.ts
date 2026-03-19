@@ -113,6 +113,8 @@ export async function POST(
       const aiResult = await createCompletion({
         messages: [{ role: 'user', content: prompt }],
         maxTokens: 12000,
+        userId: user.id,
+        userEmail: user.email ?? undefined,
       });
 
       const plan = parseAIResponseJSON<ShootPlan>(aiResult.text);

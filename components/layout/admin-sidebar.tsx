@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Building2,
@@ -20,6 +20,11 @@ import {
   Clapperboard,
   Presentation,
   Brain,
+  Film,
+  Scissors,
+  ThumbsUp,
+  Megaphone,
+  CalendarClock,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -63,10 +68,18 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Content',
     items: [
-      { href: '/admin/pipeline', label: 'Pipeline', icon: Workflow },
-      { href: '/admin/scheduler', label: 'Scheduler', icon: Send },
+      {
+        href: '/admin/pipeline',
+        label: 'Pipeline',
+        icon: Workflow,
+        children: [
+          { href: '/admin/pipeline?stage=editing', label: 'Editing', icon: Scissors },
+          { href: '/admin/scheduler', label: 'Scheduling', icon: CalendarClock },
+          { href: '/admin/pipeline?stage=boosting', label: 'Boosting', icon: Megaphone },
+        ],
+      },
       { href: '/admin/search/new', label: 'Research', icon: Telescope },
-      { href: '/admin/analysis', label: 'Video analysis', icon: Clapperboard },
+      { href: '/admin/analysis', label: 'Analysis', icon: Clapperboard },
     ],
   },
   {
@@ -94,10 +107,23 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-function isActivePath(pathname: string, href: string) {
+function isActivePath(pathname: string, href: string, searchParams?: URLSearchParams) {
   if (href === '/admin/search/new') {
     return pathname.startsWith('/admin/search') || pathname.startsWith('/admin/ideas');
   }
+
+  // Handle hrefs with query params (e.g. /admin/pipeline?stage=editing)
+  if (href.includes('?')) {
+    const [hrefPath, hrefQuery] = href.split('?');
+    if (pathname !== hrefPath && !pathname.startsWith(hrefPath + '/')) return false;
+    if (!searchParams) return false;
+    const params = new URLSearchParams(hrefQuery);
+    for (const [key, value] of params) {
+      if (searchParams.get(key) !== value) return false;
+    }
+    return true;
+  }
+
   return pathname === href || pathname.startsWith(href + '/');
 }
 
@@ -112,6 +138,8 @@ interface AdminSidebarProps {
 
 export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { open } = useSidebar();
   const { mode, toggleMode } = useBrandMode();
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
@@ -167,17 +195,25 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
             {!open && idx > 0 && <SidebarSeparator />}
             <SidebarMenu>
               {section.items.map((item) => {
-                const active = isActivePath(pathname, item.href);
+                const active = isActivePath(pathname, item.href, searchParams);
 
                 if (item.children && open) {
-                  const childActive = item.children.some((c) => isActivePath(pathname, c.href));
+                  const childActive = item.children.some((c) => isActivePath(pathname, c.href, searchParams));
                   const isExpanded = childActive || active || expandedMenus.has(item.href);
                   return (
                     <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton isActive={active || childActive} tooltip={item.label} onClick={() => toggleMenu(item.href)}>
+                      <SidebarMenuButton isActive={active || childActive} tooltip={item.label} onClick={() => {
+                        // Navigate to the parent (all stages) and expand children
+                        router.push(item.href);
+                        if (!isExpanded) toggleMenu(item.href);
+                      }}>
                         <item.icon size={18} className="shrink-0" />
                         <span className="truncate">{item.label}</span>
-                        <ChevronRight size={14} className={`ml-auto shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                        <ChevronRight
+                          size={14}
+                          className={`ml-auto shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+                          onClick={(e) => { e.stopPropagation(); toggleMenu(item.href); }}
+                        />
                       </SidebarMenuButton>
                       <div
                         className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
@@ -189,7 +225,7 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
                         <div className="overflow-hidden">
                           <ul className="ml-6 mt-0.5 space-y-0.5 border-l border-nativz-border pl-2 pb-0.5">
                             {item.children.map((child) => {
-                              const cActive = isActivePath(pathname, child.href);
+                              const cActive = isActivePath(pathname, child.href, searchParams);
                               return (
                                 <li key={child.href}>
                                   <Link

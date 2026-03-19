@@ -167,6 +167,8 @@ Return ONLY the JSON, no other text.`;
         { role: 'user', content: analysisPrompt },
       ],
       maxTokens: 2000,
+      userId: user.id,
+      userEmail: user.email ?? undefined,
     });
 
     const analysis = parseAIResponseJSON<VideoAnalysis>(aiResponse.text);

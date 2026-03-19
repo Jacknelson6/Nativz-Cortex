@@ -10,7 +10,7 @@ import { Resvg } from '@resvg/resvg-js';
 
 export interface CompositeConfig {
   baseImage: Buffer;
-  textOverlay: Buffer;
+  textOverlay: Buffer | null;
   logoUrl: string | null;
   logoPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   width: number;
@@ -33,12 +33,14 @@ export async function compositeAd(config: CompositeConfig): Promise<Buffer> {
   // 2. Build composite layers
   const layers: sharp.OverlayOptions[] = [];
 
-  // Text overlay (transparent PNG)
-  layers.push({
-    input: textOverlay,
-    top: 0,
-    left: 0,
-  });
+  // Text overlay (transparent PNG) — only if provided
+  if (textOverlay) {
+    layers.push({
+      input: textOverlay,
+      top: 0,
+      left: 0,
+    });
+  }
 
   // 3. Logo (if provided)
   if (logoUrl) {

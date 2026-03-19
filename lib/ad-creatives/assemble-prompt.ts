@@ -89,14 +89,14 @@ export function assembleImagePrompt(config: AssemblePromptConfig): string {
       `- Position: ${promptSchema.ctaStyle.position}`
   );
 
-  // On-screen text
+  // On-screen text — Gemini renders these matching the template layout
   sections.push(
     `EXACT TEXT TO RENDER ON THE IMAGE:\n` +
-      `- Brand name: "${brandContext.clientName}" (must appear on the ad — in the logo area or as a watermark)\n` +
       `- Headline: "${onScreenText.headline}"\n` +
       `- Subheadline: "${onScreenText.subheadline}"\n` +
       `- CTA button text: "${onScreenText.cta}"` +
-      (offer ? `\n- Offer text: "${offer}"` : '')
+      (offer ? `\n- Offer text: "${offer}"` : '') +
+      `\n- Do NOT render any brand name or logo — the logo will be added separately in post-processing`
   );
 
   return sections.join('\n\n');
@@ -170,13 +170,15 @@ export function assembleImagePromptTextFree(config: AssembleTextFreePromptConfig
   // Emotional tone
   sections.push(`EMOTIONAL TONE: ${promptSchema.emotionalTone.replace(/_/g, ' ')}`);
 
-  // Text-free zone — replaces the old text rendering instructions
+  // Text-free zone — critical instructions
   sections.push(
-    `TEXT-FREE ZONE:\n` +
-      `- Do NOT render any text, words, letters, numbers, logos, or UI elements on the image\n` +
-      `- Leave clean, uncluttered space in the ${textLayout} area for text overlay\n` +
-      `- The image should be purely visual — product imagery, backgrounds, colors, composition only\n` +
-      `- Where a CTA button would go, leave a clean area (the button will be added in post-processing)`
+    `ABSOLUTELY NO TEXT:\n` +
+      `- This image must contain ZERO text — no words, letters, numbers, labels, watermarks, logos, buttons, or UI elements\n` +
+      `- No brand names anywhere on the image\n` +
+      `- No arrows with labels, no callout text, no price tags, no "shop now" buttons\n` +
+      `- The ${textLayout} ~40% of the image should have a slightly darker/muted area or natural negative space where text will be overlaid later\n` +
+      `- Think of this as a background plate for a graphic designer to add typography on top\n` +
+      `- The product imagery should be the ONLY visual content — beautifully composed, well-lit, on-brand colors`
   );
 
   // Content blocks (visual ones only)
@@ -218,13 +220,13 @@ export function assembleImagePromptTextFree(config: AssembleTextFreePromptConfig
   );
 
   sections.push(
-    `IMPORTANT RULES:\n` +
-      `- Do NOT render ANY text, words, letters, numbers, or symbols on the image\n` +
-      `- Do NOT render any logos, brand marks, or UI elements\n` +
-      `- The image must be completely text-free — all text will be added in post-processing\n` +
-      `- Use the ACTUAL product photos provided as reference images\n` +
-      `- The image should look like the visual layer of a polished, production-ready advertisement\n` +
-      `- Maintain clean composition with intentional space for overlay elements`
+    `CRITICAL RULES — MUST FOLLOW:\n` +
+      `1. ZERO TEXT on the image. Not one single letter, number, word, or symbol. No exceptions.\n` +
+      `2. ZERO logos, brand marks, watermarks, labels, stickers, or badges.\n` +
+      `3. ZERO UI elements — no buttons, arrows, callout boxes, price tags, or star ratings.\n` +
+      `4. Use the ACTUAL product photos provided as reference — match their real appearance exactly.\n` +
+      `5. Beautiful, clean product photography composition with intentional negative space for later text overlay.\n` +
+      `6. The ${textLayout} portion should subtly darken or have natural shadow — this is where text goes later.`
   );
 
   return sections.join('\n\n');

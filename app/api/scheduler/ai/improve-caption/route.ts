@@ -111,6 +111,8 @@ ${clientContext ? `Client context:${clientContext}` : ''}${savedCaptionsContext}
         },
       ],
       maxTokens: 500,
+      userId: user.id,
+      userEmail: user.email ?? undefined,
     });
 
     return NextResponse.json({ improved_caption: result.text.trim() });

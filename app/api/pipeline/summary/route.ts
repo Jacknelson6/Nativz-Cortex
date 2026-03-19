@@ -128,6 +128,8 @@ export async function GET() {
             ],
             maxTokens: 500,
             feature: 'pipeline_summary',
+            userId: user.id,
+            userEmail: user.email ?? undefined,
           });
 
           // Race against a 10-second timeout

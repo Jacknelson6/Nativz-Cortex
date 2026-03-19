@@ -124,6 +124,9 @@ export default function PipelinePageClient({
     (searchParams.get('view') as PipelineViewMode) || defaultView
   );
 
+  // Stage filter from sidebar navigation (editing, scheduling, boosting)
+  const stageParam = searchParams.get('stage') as 'editing' | 'scheduling' | 'boosting' | null;
+
   // Filter state — myClientsOnly defaults on for non-owners
   const [myClientsOnly, setMyClientsOnly] = useState(!isOwner);
   const [statusFilter, setStatusFilter] = useState('');
@@ -154,6 +157,27 @@ export default function PipelinePageClient({
   const filteredItems = useMemo(() => {
     let result = items;
 
+    // Stage filter from sidebar — show items relevant to that pipeline phase
+    if (stageParam === 'editing') {
+      // Editing stage: raws uploaded but editing not finished
+      result = result.filter(item =>
+        item.raws_status === 'uploaded' &&
+        !['em_approved', 'scheduled', 'done'].includes(item.editing_status)
+      );
+    } else if (stageParam === 'scheduling') {
+      // Scheduling stage: editing done, awaiting client approval or scheduling
+      result = result.filter(item =>
+        ['em_approved', 'scheduled', 'done'].includes(item.editing_status) &&
+        !['client_approved', 'sent_to_paid_media'].includes(item.client_approval_status)
+      );
+    } else if (stageParam === 'boosting') {
+      // Boosting stage: approved, needs boosting
+      result = result.filter(item =>
+        ['client_approved', 'sent_to_paid_media'].includes(item.client_approval_status) &&
+        item.boosting_status !== 'done'
+      );
+    }
+
     if (myClientsOnly && userTeamMember) {
       const name = userTeamMember.full_name;
       result = result.filter(item =>
@@ -179,7 +203,7 @@ export default function PipelinePageClient({
     }
 
     return result;
-  }, [items, myClientsOnly, userTeamMember, statusFilter, agencyFilter, search]);
+  }, [items, stageParam, myClientsOnly, userTeamMember, statusFilter, agencyFilter, search]);
 
   // ── API Handlers ─────────────────────────────────────────────────────────
 
@@ -274,7 +298,10 @@ export default function PipelinePageClient({
 
   function changeView(view: PipelineViewMode) {
     setActiveView(view);
-    router.push(`/admin/pipeline?view=${view}`, { scroll: false });
+    const params = new URLSearchParams();
+    params.set('view', view);
+    if (stageParam) params.set('stage', stageParam);
+    router.push(`/admin/pipeline?${params.toString()}`, { scroll: false });
   }
 
   // ── Loading State ────────────────────────────────────────────────────────
@@ -326,7 +353,12 @@ export default function PipelinePageClient({
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-nativz-border bg-surface shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold text-text-primary">Content pipeline</h1>
+          <h1 className="text-lg font-semibold text-text-primary">
+            Content pipeline
+            {stageParam && (
+              <span className="ml-2 text-sm font-medium text-accent-text capitalize">&middot; {stageParam}</span>
+            )}
+          </h1>
           <div className="flex items-center gap-1">
             <button onClick={() => navigateMonth(-1)} className="p-1 rounded-lg hover:bg-surface-hover text-text-muted cursor-pointer">
               <ChevronLeft size={16} />

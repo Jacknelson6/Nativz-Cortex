@@ -138,7 +138,7 @@ export function TierListEditor({
       <div className="flex items-center justify-between border-b border-nativz-border px-4 py-3">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors"><ArrowLeft size={18} /></button>
-          <input type="text" value={presentation.title} onChange={(e) => update({ title: e.target.value })} className="bg-transparent text-lg font-bold text-white border-none outline-none placeholder:text-white/30 min-w-0 flex-1" placeholder="Tier list title..." />
+          <input type="text" value={presentation.title} onChange={(e) => update({ title: e.target.value })} className="bg-transparent text-lg font-bold text-foreground border-none outline-none placeholder:text-foreground/30 min-w-0 flex-1" placeholder="Tier list title..." />
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-text-muted">{saving ? 'Saving...' : 'Saved'}</span>
@@ -173,8 +173,8 @@ export function TierListEditor({
           })}
 
           {/* Unranked */}
-          <div className={`rounded-xl border-2 border-dashed transition-all ${dragOverTier === '__unranked' ? 'border-white/30 bg-white/[0.04]' : 'border-white/10'}`} onDragOver={(e) => handleDragOver(e, '__unranked')} onDrop={() => handleDrop(null)}>
-            <div className="px-4 py-2 border-b border-white/10"><span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Unranked</span></div>
+          <div className={`rounded-xl border-2 border-dashed transition-all ${dragOverTier === '__unranked' ? 'border-white/30 bg-surface-hover' : 'border-nativz-border'}`} onDragOver={(e) => handleDragOver(e, '__unranked')} onDrop={() => handleDrop(null)}>
+            <div className="px-4 py-2 border-b border-nativz-border"><span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Unranked</span></div>
             <div className="flex flex-wrap items-center gap-2 p-3 min-h-[64px]">
               {unranked.length === 0 && <span className="text-xs text-text-muted/50">Add items below, then drag them into tiers</span>}
               {unranked.map((item) => (
@@ -185,9 +185,9 @@ export function TierListEditor({
 
           {/* Add item */}
           <div className="rounded-xl border border-nativz-border bg-surface p-4 space-y-3">
-            <div className="flex gap-1 rounded-lg bg-white/[0.04] p-0.5 w-fit">
+            <div className="flex gap-1 rounded-lg bg-surface-hover p-0.5 w-fit">
               {(['url', 'image', 'text'] as const).map((mode) => (
-                <button key={mode} onClick={() => setAddMode(mode)} className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${addMode === mode ? 'bg-accent-surface text-accent-text' : 'text-text-muted hover:text-white'}`}>
+                <button key={mode} onClick={() => setAddMode(mode)} className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${addMode === mode ? 'bg-accent-surface text-accent-text' : 'text-text-muted hover:text-foreground'}`}>
                   <span className="flex items-center gap-1.5">
                     {mode === 'url' && <><Link2 size={12} /> URL</>}
                     {mode === 'image' && <><ImageIcon size={12} /> Image</>}
@@ -201,7 +201,7 @@ export function TierListEditor({
               <form onSubmit={(e) => { e.preventDefault(); handleAddUrl(); }} className="flex gap-2">
                 <div className="relative flex-1">
                   <Link2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-                  <input type="url" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="Paste a video or content URL..." className="w-full rounded-lg border border-white/10 bg-white/[0.04] py-2.5 pl-9 pr-4 text-sm text-white placeholder:text-white/30 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors" />
+                  <input type="url" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="Paste a video or content URL..." className="w-full rounded-lg border border-nativz-border bg-surface-hover py-2.5 pl-9 pr-4 text-sm text-foreground placeholder:text-foreground/30 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors" />
                 </div>
                 <Button type="submit" disabled={extracting || !urlInput.trim()}>
                   {extracting ? <><div className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Extracting...</> : <><Plus size={14} /> Add item</>}
@@ -214,11 +214,11 @@ export function TierListEditor({
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <ImageIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-                    <input type="url" value={imageUrlInput} onChange={(e) => setImageUrlInput(e.target.value)} placeholder="Paste an image URL..." className="w-full rounded-lg border border-white/10 bg-white/[0.04] py-2.5 pl-9 pr-4 text-sm text-white placeholder:text-white/30 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors" />
+                    <input type="url" value={imageUrlInput} onChange={(e) => setImageUrlInput(e.target.value)} placeholder="Paste an image URL..." className="w-full rounded-lg border border-nativz-border bg-surface-hover py-2.5 pl-9 pr-4 text-sm text-foreground placeholder:text-foreground/30 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors" />
                   </div>
                   <Button type="submit" disabled={!imageUrlInput.trim()}><Plus size={14} /> Add image</Button>
                 </div>
-                <input type="text" value={imageTitleInput} onChange={(e) => setImageTitleInput(e.target.value)} placeholder="Title (optional)..." className="w-full rounded-lg border border-white/10 bg-white/[0.04] py-2 px-3 text-sm text-white placeholder:text-white/30 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors" />
+                <input type="text" value={imageTitleInput} onChange={(e) => setImageTitleInput(e.target.value)} placeholder="Title (optional)..." className="w-full rounded-lg border border-nativz-border bg-surface-hover py-2 px-3 text-sm text-foreground placeholder:text-foreground/30 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors" />
               </form>
             )}
 
@@ -226,7 +226,7 @@ export function TierListEditor({
               <form onSubmit={(e) => { e.preventDefault(); handleAddText(); }} className="flex gap-2">
                 <div className="relative flex-1">
                   <Type size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-                  <input type="text" value={textInput} onChange={(e) => setTextInput(e.target.value)} placeholder="Type a label or description..." className="w-full rounded-lg border border-white/10 bg-white/[0.04] py-2.5 pl-9 pr-4 text-sm text-white placeholder:text-white/30 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors" />
+                  <input type="text" value={textInput} onChange={(e) => setTextInput(e.target.value)} placeholder="Type a label or description..." className="w-full rounded-lg border border-nativz-border bg-surface-hover py-2.5 pl-9 pr-4 text-sm text-foreground placeholder:text-foreground/30 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors" />
                 </div>
                 <Button type="submit" disabled={!textInput.trim()}><Plus size={14} /> Add text</Button>
               </form>
@@ -243,7 +243,7 @@ export function TierListEditor({
             </div>
             <div>
               <label className="text-xs text-text-muted font-medium mb-2 block">Description</label>
-              <textarea value={presentation.description ?? ''} onChange={(e) => update({ description: e.target.value || null })} className="w-full min-h-[60px] rounded-lg border border-white/10 bg-white/[0.04] p-2.5 text-xs text-white placeholder:text-white/30 focus:border-accent/50 focus:outline-none resize-none transition-colors" placeholder="Brief description..." />
+              <textarea value={presentation.description ?? ''} onChange={(e) => update({ description: e.target.value || null })} className="w-full min-h-[60px] rounded-lg border border-nativz-border bg-surface-hover p-2.5 text-xs text-foreground placeholder:text-foreground/30 focus:border-accent/50 focus:outline-none resize-none transition-colors" placeholder="Brief description..." />
             </div>
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -254,10 +254,10 @@ export function TierListEditor({
                 {tiers.map((tier, i) => (
                   <div key={tier.id} className="flex items-center gap-1.5 rounded-lg border border-nativz-border bg-surface px-2 py-1.5">
                     <input type="color" value={tier.color} onChange={(e) => updateTierDef(tier.id, { color: e.target.value })} className="h-5 w-5 rounded border-0 cursor-pointer bg-transparent shrink-0" />
-                    <input type="text" value={tier.name} onChange={(e) => updateTierDef(tier.id, { name: e.target.value })} className="flex-1 bg-transparent text-xs text-white outline-none min-w-0" />
+                    <input type="text" value={tier.name} onChange={(e) => updateTierDef(tier.id, { name: e.target.value })} className="flex-1 bg-transparent text-xs text-foreground outline-none min-w-0" />
                     <div className="flex items-center gap-0.5 shrink-0">
-                      <button onClick={() => moveTier(i, -1)} disabled={i === 0} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 15l-6-6-6 6"/></svg></button>
-                      <button onClick={() => moveTier(i, 1)} disabled={i === tiers.length - 1} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
+                      <button onClick={() => moveTier(i, -1)} disabled={i === 0} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-foreground hover:bg-white/10 transition-colors disabled:opacity-30"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 15l-6-6-6 6"/></svg></button>
+                      <button onClick={() => moveTier(i, 1)} disabled={i === tiers.length - 1} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-foreground hover:bg-white/10 transition-colors disabled:opacity-30"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
                       <button onClick={() => removeTier(tier.id)} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"><Trash2 size={10} /></button>
                     </div>
                   </div>
@@ -326,7 +326,7 @@ function TierItemCard({
       <div className="px-1.5 flex items-center" style={{ height: cardTH }}>
         {isEditing ? (
           <div className="flex items-center gap-0.5 w-full">
-            <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { onUpdate({ title: editTitle }); onEdit(); } if (e.key === 'Escape') onEdit(); }} autoFocus className="flex-1 bg-transparent text-[10px] text-white outline-none min-w-0" />
+            <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { onUpdate({ title: editTitle }); onEdit(); } if (e.key === 'Escape') onEdit(); }} autoFocus className="flex-1 bg-transparent text-[10px] text-foreground outline-none min-w-0" />
             <button onClick={() => { onUpdate({ title: editTitle }); onEdit(); }} className="cursor-pointer text-accent-text shrink-0"><Check size={10} /></button>
           </div>
         ) : (
@@ -337,10 +337,10 @@ function TierItemCard({
       {/* Hover actions */}
       <div className="absolute top-0.5 right-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity flex items-center gap-0.5">
         {hasUrl && (
-          <a href={item.url} target="_blank" rel="noopener noreferrer" className="rounded p-0.5 bg-black/60 text-white/70 hover:text-white transition-colors" onClick={(e) => e.stopPropagation()}><ExternalLink size={10} /></a>
+          <a href={item.url} target="_blank" rel="noopener noreferrer" className="rounded p-0.5 bg-black/60 text-foreground/70 hover:text-foreground transition-colors" onClick={(e) => e.stopPropagation()}><ExternalLink size={10} /></a>
         )}
-        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="cursor-pointer rounded p-0.5 bg-black/60 text-white/70 hover:text-white transition-colors"><Pencil size={10} /></button>
-        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="cursor-pointer rounded p-0.5 bg-black/60 text-white/70 hover:text-red-400 transition-colors"><Trash2 size={10} /></button>
+        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="cursor-pointer rounded p-0.5 bg-black/60 text-foreground/70 hover:text-foreground transition-colors"><Pencil size={10} /></button>
+        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="cursor-pointer rounded p-0.5 bg-black/60 text-foreground/70 hover:text-red-400 transition-colors"><Trash2 size={10} /></button>
       </div>
     </div>
   );

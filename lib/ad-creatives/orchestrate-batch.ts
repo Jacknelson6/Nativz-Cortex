@@ -4,11 +4,9 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getBrandContext } from '@/lib/knowledge/brand-context';
-import { assembleImagePromptTextFree } from './assemble-prompt';
+import { assembleImagePrompt } from './assemble-prompt';
 import { generateAdImage } from './generate-image';
 import { generateAdCopy } from './generate-copy';
-import { resolveBrandFonts } from './resolve-fonts';
-import { renderTextOverlay } from './render-text-overlay';
 import { compositeAd } from './composite-ad';
 import { ASPECT_RATIOS } from './types';
 import type {
@@ -75,10 +73,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
       copyVariations = Array.from({ length: config.numVariations }, () => staticText);
     }
 
-    // 5. Resolve brand fonts for post-processing
-    const brandFonts = await resolveBrandFonts(brandContext.visualIdentity.fonts);
-
-    // 6. Build work items (template x variation)
+    // 5. Build work items (template x variation)
     const workItems = buildWorkItems(templates, copyVariations, config);
 
     // Update total count based on actual work items
@@ -87,25 +82,22 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
       .update({ total_count: workItems.length })
       .eq('id', batchId);
 
-    // 7. Resolve dimensions and brand colors for post-processing
+    // 6. Resolve dimensions, product images, and logo for compositing
     const dimensions = ASPECT_RATIOS.find((r) => r.value === config.aspectRatio) ?? ASPECT_RATIOS[0];
     const fullCtx = brandContext.toFullContext();
     const vi = fullCtx.visualIdentity;
 
-    // Extract brand colors for text overlay
-    const brandColors = {
-      primary: vi.colors.find((c) => c.role === 'primary')?.hex ?? '#000000',
-      secondary: vi.colors.find((c) => c.role === 'secondary')?.hex ?? '#333333',
-      accent: vi.colors.find((c) => c.role === 'accent')?.hex ?? '#2563EB',
-      text: '#FFFFFF',
-      background: vi.colors.find((c) => c.role === 'neutral')?.hex ?? '#000000',
-    };
+    // Collect real product images from Brand DNA
+    const productImageUrls: string[] = [];
+    if (vi.screenshots.length > 0) {
+      productImageUrls.push(...vi.screenshots.slice(0, 2).map((s) => s.url));
+    }
 
-    // Resolve primary logo URL
+    // Resolve primary logo URL (composited in post-processing for pixel-perfect branding)
     const primaryLogo = vi.logos.find((l) => l.variant === 'primary') ?? vi.logos[0] ?? null;
     const logoUrl = primaryLogo?.url ?? null;
 
-    // 8. Process with concurrency control
+    // 7. Process with concurrency control
     let completedCount = 0;
     let failedCount = 0;
 
@@ -114,32 +106,17 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
       MAX_CONCURRENCY,
       async (item) => {
         try {
-          // Determine text layout position from template schema
-          const textPosition = item.promptSchema.layout.textPosition?.toLowerCase() ?? 'bottom';
-          const textLayout: 'top' | 'center' | 'bottom' =
-            textPosition.includes('top') ? 'top' :
-            textPosition.includes('center') || textPosition.includes('middle') ? 'center' :
-            'bottom';
-
-          // Assemble text-free prompt for Gemini
-          const prompt = assembleImagePromptTextFree({
+          // Assemble full prompt — Gemini renders text matching the template layout
+          const prompt = assembleImagePrompt({
             brandContext,
             promptSchema: item.promptSchema,
             productService: config.productService,
             offer: config.offer || null,
+            onScreenText: item.onScreenText,
             aspectRatio: config.aspectRatio,
-            textLayout,
           });
 
-          // Collect real product images from Brand DNA (no logos — logo composited separately)
-          const productImageUrls: string[] = [];
-          if (vi.screenshots.length > 0) {
-            productImageUrls.push(
-              ...vi.screenshots.slice(0, 2).map((s) => s.url),
-            );
-          }
-
-          // Generate base image (text-free)
+          // Generate full ad image (with text, matching template layout)
           const baseImageBuffer = await generateAdImage({
             prompt,
             referenceImageUrl: item.referenceImageUrl ?? undefined,
@@ -147,29 +124,20 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
             aspectRatio: config.aspectRatio,
           });
 
-          // Post-processing: render text overlay
-          const textOverlayBuffer = await renderTextOverlay({
-            width: dimensions.width,
-            height: dimensions.height,
-            headline: item.onScreenText.headline,
-            subheadline: item.onScreenText.subheadline,
-            cta: item.onScreenText.cta,
-            offer: config.offer || null,
-            brandName: brandContext.clientName,
-            colors: brandColors,
-            fonts: brandFonts,
-            layout: textLayout,
-          });
-
-          // Post-processing: composite base + text overlay + logo
-          const imageBuffer = await compositeAd({
-            baseImage: baseImageBuffer,
-            textOverlay: textOverlayBuffer,
-            logoUrl,
-            logoPosition: 'bottom-right',
-            width: dimensions.width,
-            height: dimensions.height,
-          });
+          // Post-processing: composite ONLY the logo for pixel-perfect branding
+          let imageBuffer: Buffer;
+          if (logoUrl) {
+            imageBuffer = await compositeAd({
+              baseImage: baseImageBuffer,
+              textOverlay: null,
+              logoUrl,
+              logoPosition: 'bottom-left',
+              width: dimensions.width,
+              height: dimensions.height,
+            });
+          } else {
+            imageBuffer = baseImageBuffer;
+          }
 
           // Upload to Supabase Storage
           const creativeId = crypto.randomUUID();

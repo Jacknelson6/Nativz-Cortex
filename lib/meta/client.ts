@@ -111,6 +111,7 @@ async function metaGet<T>(endpoint: string, params: Record<string, string> = {})
     const body = await res.text();
     throw new Error(`Meta API ${res.status}: ${body}`);
   }
+
   return res.json();
 }
 

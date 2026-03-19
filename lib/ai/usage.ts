@@ -22,8 +22,18 @@ const PRICING: Record<string, { input: number; output: number }> = {
 // Groq audio pricing: $0.006 per minute of audio
 const GROQ_AUDIO_PRICE_PER_SECOND = 0.006 / 60;
 
+export type TrackedService =
+  | 'openrouter'
+  | 'groq'
+  | 'gemini'
+  | 'brave'
+  | 'apify'
+  | 'cloudflare'
+  | 'resend'
+  | 'youtube';
+
 export interface UsageEntry {
-  service: 'openrouter' | 'groq' | 'gemini' | 'brave';
+  service: TrackedService;
   model: string;
   feature: string;
   inputTokens: number;
@@ -31,6 +41,9 @@ export interface UsageEntry {
   totalTokens: number;
   costUsd: number;
   metadata?: Record<string, unknown>;
+  /** Optional user context for per-user tracking */
+  userId?: string;
+  userEmail?: string;
 }
 
 export function calculateCost(
@@ -62,6 +75,8 @@ export async function logUsage(entry: UsageEntry): Promise<void> {
       total_tokens: entry.totalTokens,
       cost_usd: entry.costUsd,
       metadata: entry.metadata ?? {},
+      user_id: entry.userId ?? null,
+      user_email: entry.userEmail ?? null,
     });
   } catch (err) {
     console.error('Failed to log API usage:', err);
@@ -78,6 +93,7 @@ export async function getUsageSummary(
   byService: Record<string, { totalTokens: number; costUsd: number; requests: number }>;
   byModel: Record<string, { service: string; totalTokens: number; costUsd: number; requests: number }>;
   byFeature: Record<string, { model: string; totalTokens: number; costUsd: number; requests: number }>;
+  byUser: Record<string, { email: string; totalTokens: number; costUsd: number; requests: number }>;
   total: { totalTokens: number; costUsd: number; requests: number };
   daily: { date: string; costUsd: number; requests: number }[];
 }> {
@@ -85,7 +101,7 @@ export async function getUsageSummary(
 
   const { data: logs } = await admin
     .from('api_usage_logs')
-    .select('service, model, feature, total_tokens, cost_usd, created_at')
+    .select('service, model, feature, total_tokens, cost_usd, created_at, user_id, user_email')
     .gte('created_at', from)
     .lte('created_at', to)
     .order('created_at', { ascending: true });
@@ -95,6 +111,7 @@ export async function getUsageSummary(
   const byService: Record<string, { totalTokens: number; costUsd: number; requests: number }> = {};
   const byModel: Record<string, { service: string; totalTokens: number; costUsd: number; requests: number }> = {};
   const byFeature: Record<string, { model: string; totalTokens: number; costUsd: number; requests: number }> = {};
+  const byUser: Record<string, { email: string; totalTokens: number; costUsd: number; requests: number }> = {};
   const dailyMap: Record<string, { costUsd: number; requests: number }> = {};
   let totalTokens = 0;
   let totalCost = 0;
@@ -124,6 +141,13 @@ export async function getUsageSummary(
     // Keep the most-used model for this feature (last seen is fine for display)
     byFeature[log.feature].model = modelKey;
 
+    // By user
+    const userKey = log.user_id ?? 'system';
+    if (!byUser[userKey]) byUser[userKey] = { email: log.user_email ?? 'System', totalTokens: 0, costUsd: 0, requests: 0 };
+    byUser[userKey].totalTokens += tokens;
+    byUser[userKey].costUsd += cost;
+    byUser[userKey].requests += 1;
+
     // Daily
     const day = log.created_at.split('T')[0];
     if (!dailyMap[day]) dailyMap[day] = { costUsd: 0, requests: 0 };
@@ -140,6 +164,7 @@ export async function getUsageSummary(
     byService,
     byModel,
     byFeature,
+    byUser,
     total: { totalTokens, costUsd: totalCost, requests: entries.length },
     daily,
   };

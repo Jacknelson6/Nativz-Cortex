@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { logUsage } from '@/lib/ai/usage';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -111,7 +112,7 @@ export async function sendTeamInviteEmail(opts: {
   inviteUrl: string;
   invitedBy: string;
 }) {
-  return resend.emails.send({
+  const result = await resend.emails.send({
     from: FROM_ADDRESS,
     to: opts.to,
     subject: `You're invited to join Nativz Cortex`,
@@ -139,6 +140,18 @@ export async function sendTeamInviteEmail(opts: {
       </div>
     `),
   });
+
+  logUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  }).catch(() => {});
+
+  return result;
 }
 
 // ── Client portal invite ─────────────────────────────────────────────────────
@@ -150,7 +163,7 @@ export async function sendClientInviteEmail(opts: {
   inviteUrl: string;
   invitedBy: string;
 }) {
-  return resend.emails.send({
+  const result = await resend.emails.send({
     from: FROM_ADDRESS,
     to: opts.to,
     subject: `${opts.clientName} — Your content portal is ready`,
@@ -179,6 +192,18 @@ export async function sendClientInviteEmail(opts: {
       </div>
     `),
   });
+
+  logUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  }).catch(() => {});
+
+  return result;
 }
 
 // ── Welcome email (after account creation) ───────────────────────────────────
@@ -190,7 +215,7 @@ export async function sendWelcomeEmail(opts: {
   loginUrl: string;
 }) {
   const isTeam = opts.role === 'admin';
-  return resend.emails.send({
+  const result = await resend.emails.send({
     from: FROM_ADDRESS,
     to: opts.to,
     subject: `Welcome to Nativz Cortex`,
@@ -222,4 +247,16 @@ export async function sendWelcomeEmail(opts: {
       </div>
     `),
   });
+
+  logUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  }).catch(() => {});
+
+  return result;
 }
