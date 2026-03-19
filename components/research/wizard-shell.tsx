@@ -40,7 +40,15 @@ function SlideTransition({
   const ref = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
-    if (ref.current) onHeightReady(ref.current.offsetHeight);
+    if (!ref.current) return;
+    onHeightReady(ref.current.offsetHeight);
+
+    // Observe size changes (e.g. context mode toggle reveals/hides inputs)
+    const observer = new ResizeObserver(() => {
+      if (ref.current) onHeightReady(ref.current.offsetHeight);
+    });
+    observer.observe(ref.current);
+    return () => observer.disconnect();
   }, [children, onHeightReady]);
 
   return (
@@ -105,7 +113,7 @@ export function WizardShell({ open, onClose, accentColor, totalSteps, currentSte
             onClick={onClose}
           />
           <motion.div
-            className="relative w-full max-w-md rounded-2xl border border-white/[0.08] bg-surface shadow-2xl"
+            className="relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-white/[0.08] bg-surface shadow-2xl"
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
