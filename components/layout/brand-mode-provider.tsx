@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useLayoutEffect, useRef, ReactNode } from 'react';
 
 type BrandMode = 'nativz' | 'anderson';
 
@@ -36,22 +36,42 @@ export function BrandModeProvider({ children, forcedMode }: BrandModeProviderPro
   const initialized = useRef(false);
   const isForced = forcedMode !== undefined;
 
-  // Hydrate from localStorage after mount (avoids SSR mismatch) — skip when forced
+  // For forced mode, use useLayoutEffect (synchronous before paint) and mark DOM
+  useLayoutEffect(() => {
+    if (!isForced) return;
+    document.documentElement.setAttribute('data-brand-mode', forcedMode);
+    document.documentElement.setAttribute('data-brand-forced', 'true');
+    setModeState(forcedMode);
+    initialized.current = true;
+  }, [isForced, forcedMode]);
+
+  // Cleanup: remove forced flag when this provider unmounts
   useEffect(() => {
-    if (isForced) {
-      setModeState(forcedMode);
-      initialized.current = true;
-      return;
-    }
+    if (!isForced) return;
+    return () => {
+      document.documentElement.removeAttribute('data-brand-forced');
+    };
+  }, [isForced]);
+
+  // Hydrate from localStorage after mount — skip when forced OR when a child forced provider owns the DOM
+  useEffect(() => {
+    if (isForced) return;
+    // If a nested forced provider already claimed the DOM, don't override
+    if (document.documentElement.hasAttribute('data-brand-forced')) return;
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored === 'anderson') setModeState('anderson');
+      if (stored === 'anderson') {
+        setModeState('anderson');
+        document.documentElement.setAttribute('data-brand-mode', 'anderson');
+      }
     } catch {}
     initialized.current = true;
   }, [isForced, forcedMode]);
 
   // Sync data-brand-mode attribute on <html> and persist to localStorage
   useEffect(() => {
+    // Don't override if a forced child provider owns the DOM
+    if (!isForced && document.documentElement.hasAttribute('data-brand-forced')) return;
     document.documentElement.setAttribute('data-brand-mode', mode);
     if (!isForced && initialized.current) {
       try { localStorage.setItem(STORAGE_KEY, mode); } catch {}
