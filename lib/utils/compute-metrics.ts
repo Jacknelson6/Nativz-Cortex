@@ -44,9 +44,9 @@ function computeTopicScore(topics: TrendingTopic[]): number {
   );
   const avgResonance = totalResonance / topics.length;
 
-  // Scale: more topics and higher resonance → higher score
-  // 5 topics at "high" avg = ~75, 8 topics at "viral" avg = 100
-  const raw = (topics.length * avgResonance * 100) / 32;
+  // Logarithmic scale so it doesn't cap at 100 too easily
+  // 3 topics at medium avg ≈ 40, 5 topics at high avg ≈ 65, 8 topics at viral avg ≈ 90
+  const raw = Math.log2(1 + topics.length) * avgResonance * 15;
   return Math.min(100, Math.round(raw));
 }
 

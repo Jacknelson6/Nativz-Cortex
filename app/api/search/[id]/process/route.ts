@@ -137,10 +137,28 @@ export async function POST(
         platformSources = platformResults.sources;
         platformStats = platformResults.platformStats;
 
-        // Store raw platform data for future re-analysis
+        // Store raw platform data + sources for display (TikTok embeds, etc.)
         await adminClient
           .from('topic_searches')
-          .update({ platform_data: { stats: platformResults.platformStats, sourceCount: platformResults.sources.length } })
+          .update({
+            platform_data: {
+              stats: platformResults.platformStats,
+              sourceCount: platformResults.sources.length,
+              sources: platformResults.sources.map(s => ({
+                platform: s.platform,
+                id: s.id,
+                url: s.url,
+                title: s.title,
+                content: s.content.substring(0, 500),
+                author: s.author,
+                subreddit: s.subreddit,
+                engagement: s.engagement,
+                createdAt: s.createdAt,
+                comments: s.comments.slice(0, 5),
+                transcript: s.transcript?.substring(0, 1000) ?? null,
+              })),
+            },
+          })
           .eq('id', id);
       } else {
         serpData = await gatherSerpData(search.query, {

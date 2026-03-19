@@ -18,6 +18,7 @@ import { TrendingTopicsTable } from '@/components/results/trending-topics-table'
 import { ContentPillars } from '@/components/results/content-pillars';
 import { NicheInsights } from '@/components/results/niche-insights';
 import { SourcesPanel } from '@/components/results/sources-panel';
+import { PlatformSources } from '@/components/results/platform-sources';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { KeyFindings } from '@/components/results/key-findings';
 import { SentimentBadge } from '@/components/results/sentiment-badge';
@@ -54,6 +55,8 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
   const [showSendModal, setShowSendModal] = useState(false);
   const [showIdeasWizard, setShowIdeasWizard] = useState(false);
   const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const trendingTopics: any[] | null = search.trending_topics as any;
 
   async function handleSend(action: 'approve' | 'reject') {
     setSending(true);
@@ -313,9 +316,10 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
             )}
           </div>
         )}
-        {search.trending_topics && search.trending_topics.length > 0 && (
-          <TrendingTopicsTable topics={search.trending_topics} clientId={clientInfo?.id} searchId={search.id} />
-        )}
+        {/* Render trending topics — cast needed due to React 19 types regression */}
+        {(trendingTopics && trendingTopics.length > 0) as boolean ? (
+          <TrendingTopicsTable topics={trendingTopics!} clientId={clientInfo?.id ?? undefined} searchId={search.id} />
+        ) : null}
 
         {(aiResponse?.content_pillars || aiResponse?.niche_performance_insights) && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -338,6 +342,11 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
         {/* Big movers — who's making noise in this space */}
         {aiResponse?.big_movers && aiResponse.big_movers.length > 0 && (
           <BigMovers movers={aiResponse.big_movers} />
+        )}
+
+        {/* Platform sources with TikTok embeds */}
+        {search.platform_data && (search.platform_data as Record<string, unknown>).sources && (
+          <PlatformSources sources={(search.platform_data as Record<string, unknown>).sources as any[]} />
         )}
 
         {hasSerp(search) && search.serp_data && (

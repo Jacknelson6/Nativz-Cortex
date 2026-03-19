@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ChevronDown, ChevronRight, ChevronUp, Bookmark, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardTitle } from '@/components/ui/card';
@@ -72,7 +72,7 @@ function SortHeader({
   );
 }
 
-export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopicsTableProps) {
+export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopicsTableProps): React.JSX.Element | null {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('desc');
