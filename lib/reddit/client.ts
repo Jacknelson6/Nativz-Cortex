@@ -172,15 +172,17 @@ export async function fetchTopComments(
 export async function gatherRedditData(
   query: string,
   timeRange: string,
-  volume: 'quick' | 'deep' = 'quick',
+  volume: string = 'medium',
 ): Promise<RedditSearchResult & { postsWithComments: (RedditPost & { top_comments: RedditComment[] })[] }> {
-  const limit = volume === 'deep' ? 200 : 50;
+  // Smart split: Reddit is high-priority for social listening (comments = sentiment goldmine)
+  const limit = volume === 'deep' ? 500 : volume === 'medium' ? 150 : 30;
   const result = await searchReddit(query, timeRange, limit);
 
   // Fetch comments for top engaging posts (by score + comments)
+  const commentPostCount = volume === 'deep' ? 60 : volume === 'medium' ? 25 : 8;
   const topPosts = [...result.posts]
     .sort((a, b) => (b.score + b.num_comments) - (a.score + a.num_comments))
-    .slice(0, volume === 'deep' ? 30 : 8);
+    .slice(0, commentPostCount);
 
   // Batch comment fetches to respect Reddit's ~60 req/min unauthenticated rate limit
   const postsWithComments: (RedditPost & { top_comments: RedditComment[] })[] = [];

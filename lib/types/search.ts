@@ -7,7 +7,7 @@ export type SearchMode = 'general' | 'client_strategy';
 // ── v2 Multi-platform types ────────────────────────────────────────────────
 
 export type SearchPlatform = 'reddit' | 'youtube' | 'tiktok' | 'web';
-export type SearchVolume = 'quick' | 'deep';
+export type SearchVolume = 'light' | 'medium' | 'deep' | 'quick'; // 'quick' kept for backward compat
 
 export const PLATFORM_OPTIONS: { value: SearchPlatform; label: string; available: boolean }[] = [
   { value: 'web', label: 'Web & news', available: true },

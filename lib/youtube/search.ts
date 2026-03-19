@@ -249,7 +249,7 @@ async function fetchTranscript(videoId: string): Promise<string | null> {
 export async function gatherYouTubeData(
   query: string,
   timeRange: string,
-  volume: 'quick' | 'deep' = 'quick',
+  volume: string = 'medium',
 ): Promise<YouTubeSearchResult> {
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -257,8 +257,9 @@ export async function gatherYouTubeData(
     return { videos: [], totalResults: 0 };
   }
 
-  const maxResults = volume === 'deep' ? 100 : 25;
-  const commentLimit = volume === 'deep' ? 10 : 5;
+  // Smart split: YouTube gives good trend signals + transcripts are free
+  const maxResults = volume === 'deep' ? 200 : volume === 'medium' ? 100 : 20;
+  const commentLimit = volume === 'deep' ? 100 : volume === 'medium' ? 20 : 5;
 
   // Step 1: Search for video IDs
   const { videoIds, totalResults } = await searchVideos(query, timeRange, maxResults);
@@ -274,7 +275,7 @@ export async function gatherYouTubeData(
     .sort((a, b) => b.details.viewCount - a.details.viewCount);
 
   // Fetch comments for top most viewed videos
-  const commentFetchCount = volume === 'deep' ? 40 : 10;
+  const commentFetchCount = volume === 'deep' ? 100 : volume === 'medium' ? 40 : 8;
   const topForComments = videosWithDetails.slice(0, commentFetchCount);
 
   const commentsMap = new Map<string, YouTubeComment[]>();
@@ -286,7 +287,7 @@ export async function gatherYouTubeData(
   );
 
   // Step 4: Fetch transcripts for top videos (free — no quota cost)
-  const transcriptCount = volume === 'deep' ? 25 : 8;
+  const transcriptCount = volume === 'deep' ? 50 : volume === 'medium' ? 20 : 5;
   const topForTranscripts = videosWithDetails.slice(0, transcriptCount);
   const transcriptMap = new Map<string, string>();
   await Promise.allSettled(

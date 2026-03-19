@@ -12,7 +12,7 @@ const searchSchema = z.object({
   client_id: z.string().uuid().nullable().optional(),
   search_mode: z.enum(['general', 'client_strategy']).default('general'),
   platforms: z.array(z.enum(['web', 'reddit', 'youtube', 'tiktok'])).default(['web']),
-  volume: z.enum(['quick', 'deep']).default('quick'),
+  volume: z.enum(['light', 'medium', 'deep', 'quick']).default('medium'),
 });
 
 /**

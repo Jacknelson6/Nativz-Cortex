@@ -29,7 +29,7 @@ export async function gatherPlatformData(
   query: string,
   platforms: SearchPlatform[],
   timeRange: string,
-  volume: SearchVolume = 'quick',
+  volume: SearchVolume = 'medium',
 ): Promise<PlatformResults> {
   const allSources: PlatformSource[] = [];
   const platformStats: PlatformResults['platformStats'] = [];

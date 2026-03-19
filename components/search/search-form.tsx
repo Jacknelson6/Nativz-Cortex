@@ -36,8 +36,8 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
   const country = 'us';
   const [clientId, setClientId] = useState<string | null>(fixedClientId ?? null);
   const [searchMode, setSearchMode] = useState<SearchMode>(fixedClientId ? 'client_strategy' : 'general');
-  const [platforms, setPlatforms] = useState<Set<SearchPlatform>>(new Set(['web']));
-  const [volume, setVolume] = useState<SearchVolume>('quick');
+  const [platforms, setPlatforms] = useState<Set<SearchPlatform>>(new Set(['web', 'reddit', 'youtube', 'tiktok']));
+  const [volume, setVolume] = useState<SearchVolume>('medium');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -200,26 +200,29 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
 
         <div className="h-4 w-px bg-nativz-border" />
 
-        {/* Volume toggle */}
+        {/* Depth selector */}
         <div className="flex items-center gap-1 rounded-lg bg-surface-hover p-0.5">
-          <button
-            type="button"
-            onClick={() => setVolume('quick')}
-            className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-              volume === 'quick' ? 'bg-surface text-text-primary shadow-sm' : 'text-text-muted'
-            }`}
-          >
-            Quick
-          </button>
-          <button
-            type="button"
-            onClick={() => setVolume('deep')}
-            className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-              volume === 'deep' ? 'bg-surface text-text-primary shadow-sm' : 'text-text-muted'
-            }`}
-          >
-            Deep
-          </button>
+          {([
+            { value: 'light' as const, label: 'Light', tip: '~20 sources · Fast scan' },
+            { value: 'medium' as const, label: 'Medium', tip: '~100 sources · Recommended' },
+            { value: 'deep' as const, label: 'Deep', tip: '500+ sources · Full analysis' },
+          ]).map((opt) => (
+            <div key={opt.value} className="relative group">
+              <button
+                type="button"
+                onClick={() => setVolume(opt.value)}
+                className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  volume === opt.value ? 'bg-surface text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                }`}
+              >
+                {opt.label}
+              </button>
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded-md bg-[#1a1d27] border border-white/[0.08] text-[10px] text-text-muted whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-lg">
+                {opt.tip}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-[#1a1d27]" />
+              </div>
+            </div>
+          ))}
         </div>
 
         {!hideClientSelector && (

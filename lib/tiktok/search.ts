@@ -85,7 +85,7 @@ async function fetchTikTokTranscript(videoUrl: string, tikTokUrl: string): Promi
 export async function gatherTikTokData(
   query: string,
   _timeRange: string,
-  volume: 'quick' | 'deep' = 'quick',
+  volume: string = 'medium',
 ): Promise<TikTokSearchResult> {
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -93,7 +93,9 @@ export async function gatherTikTokData(
     return { videos: [], topHashtags: [], totalResults: 0 };
   }
 
-  const maxResults = volume === 'deep' ? 100 : 20;
+  // TikTok capped at 150 max to control Apify costs
+  // Social listening priority: comments are where the sentiment lives
+  const maxResults = volume === 'deep' ? 150 : volume === 'medium' ? 100 : 20;
 
   try {
     // Step 1: Search via Apify actor
@@ -204,8 +206,9 @@ export async function gatherTikTokData(
     }
 
     // Step 3: Enrich with comments + transcripts (parallel, batched)
-    const commentBatchSize = volume === 'deep' ? 15 : 5;
-    const transcriptBatchSize = volume === 'deep' ? 15 : 4;
+    // Social listening priority: get ALL comments possible — that's where sentiment lives
+    const commentBatchSize = volume === 'deep' ? 20 : volume === 'medium' ? 15 : 5;
+    const transcriptBatchSize = volume === 'deep' ? 15 : volume === 'medium' ? 10 : 4;
 
     // Sort by engagement for prioritizing enrichment
     const sorted = [...baseVideos].sort((a, b) =>
@@ -213,7 +216,8 @@ export async function gatherTikTokData(
     );
 
     // Fetch comments for top videos (batched to avoid rate limits)
-    const commentFetchCount = volume === 'deep' ? 40 : 20;
+    // Comments are the #1 priority — fetch for as many videos as possible
+    const commentFetchCount = volume === 'deep' ? 100 : volume === 'medium' ? 60 : 15;
     const topForComments = sorted.slice(0, commentFetchCount);
     const commentsMap = new Map<string, TikTokComment[]>();
     for (let i = 0; i < topForComments.length; i += commentBatchSize) {
