@@ -118,9 +118,16 @@ export async function middleware(request: NextRequest) {
   if (!role) {
     const { data: userData } = await supabase
       .from('users')
-      .select('role')
+      .select('role, is_active')
       .eq('id', user.id)
       .single();
+
+    // Block deactivated portal users
+    if (userData?.is_active === false) {
+      if (pathname.startsWith('/portal')) {
+        return NextResponse.redirect(new URL('/portal/login?error=deactivated', request.url));
+      }
+    }
 
     role = userData?.role || null;
 

@@ -1,4 +1,8 @@
 /**
+ * GET /api/invites?client_id=X
+ *
+ * List all invite tokens for a client, with status info.
+ *
  * POST /api/invites
  *
  * Create a portal invite token for a client. The token is used to generate a
@@ -12,6 +16,80 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const adminClient = createAdminClient();
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (userData?.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const clientId = request.nextUrl.searchParams.get('client_id');
+    if (!clientId) {
+      return NextResponse.json({ error: 'client_id is required' }, { status: 400 });
+    }
+
+    const { data: invites, error } = await adminClient
+      .from('invite_tokens')
+      .select('id, token, expires_at, used_at, used_by, created_at, created_by')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Failed to fetch invites:', error);
+      return NextResponse.json({ error: 'Failed to fetch invites' }, { status: 500 });
+    }
+
+    // Enrich with used_by user info
+    const usedByIds = (invites ?? []).filter(i => i.used_by).map(i => i.used_by);
+    let usedByMap: Record<string, { email: string; full_name: string }> = {};
+    if (usedByIds.length > 0) {
+      const { data: usedByUsers } = await adminClient
+        .from('users')
+        .select('id, email, full_name')
+        .in('id', usedByIds);
+      for (const u of usedByUsers ?? []) {
+        usedByMap[u.id] = { email: u.email, full_name: u.full_name };
+      }
+    }
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+
+    const enriched = (invites ?? []).map(inv => {
+      const now = new Date();
+      const expired = new Date(inv.expires_at) < now;
+      const status = inv.used_at ? 'used' : expired ? 'expired' : 'active';
+
+      return {
+        id: inv.id,
+        token: inv.token,
+        invite_url: `${baseUrl}/portal/join/${inv.token}`,
+        status,
+        expires_at: inv.expires_at,
+        used_at: inv.used_at,
+        used_by: inv.used_by ? usedByMap[inv.used_by] ?? null : null,
+        created_at: inv.created_at,
+      };
+    });
+
+    return NextResponse.json({ invites: enriched });
+  } catch (error) {
+    console.error('GET /api/invites error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {

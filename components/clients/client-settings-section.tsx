@@ -1,14 +1,330 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { AlertTriangle, Trash2, Power } from 'lucide-react';
+import {
+  AlertTriangle, Trash2, Power, Link2, Copy, Check,
+  Loader2, UserPlus, Users, X, Clock, CheckCircle2,
+  XCircle, RotateCcw,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface InviteItem {
+  id: string;
+  token: string;
+  invite_url: string;
+  status: 'active' | 'used' | 'expired';
+  expires_at: string;
+  used_at: string | null;
+  used_by: { email: string; full_name: string } | null;
+  created_at: string;
+}
+
+interface PortalUser {
+  id: string;
+  email: string;
+  full_name: string;
+  avatar_url: string | null;
+  last_login: string | null;
+  created_at: string;
+  is_active: boolean;
+}
+
+// ─── Invite Management ────────────────────────────────────────────────────────
+
+function InviteManagement({ clientId }: { clientId: string }) {
+  const [invites, setInvites] = useState<InviteItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const fetchInvites = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/invites?client_id=${clientId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setInvites(data.invites ?? []);
+      }
+    } catch {
+      // Silently fail — non-critical
+    } finally {
+      setLoading(false);
+    }
+  }, [clientId]);
+
+  useEffect(() => { fetchInvites(); }, [fetchInvites]);
+
+  async function handleCreate() {
+    setCreating(true);
+    try {
+      const res = await fetch('/api/invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to create invite');
+        return;
+      }
+      toast.success('Invite link created');
+      fetchInvites();
+    } catch {
+      toast.error('Failed to create invite');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleRevoke(inviteId: string) {
+    try {
+      const res = await fetch(`/api/invites/${inviteId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to revoke');
+        return;
+      }
+      toast.success('Invite revoked');
+      setInvites(prev => prev.filter(i => i.id !== inviteId));
+    } catch {
+      toast.error('Failed to revoke invite');
+    }
+  }
+
+  function handleCopy(invite: InviteItem) {
+    navigator.clipboard.writeText(invite.invite_url);
+    setCopiedId(invite.id);
+    toast.success('Invite link copied');
+    setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  function formatDate(dateStr: string) {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+    });
+  }
+
+  const statusBadge = (status: string) => {
+    switch (status) {
+      case 'active': return <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">Active</Badge>;
+      case 'used': return <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px]">Used</Badge>;
+      case 'expired': return <Badge className="bg-zinc-500/10 text-zinc-400 border-zinc-500/20 text-[10px]">Expired</Badge>;
+      default: return null;
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Link2 size={14} className="text-text-muted" />
+          <h3 className="text-sm font-medium text-text-primary">Invite links</h3>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          type="button"
+          onClick={handleCreate}
+          disabled={creating}
+        >
+          {creating ? <Loader2 size={12} className="animate-spin" /> : <UserPlus size={12} />}
+          Generate link
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 size={16} className="animate-spin text-text-muted" />
+        </div>
+      ) : invites.length === 0 ? (
+        <p className="text-xs text-text-muted py-2">
+          No invite links yet. Generate one to give a client access to their portal.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {invites.map(invite => (
+            <div
+              key={invite.id}
+              className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  {statusBadge(invite.status)}
+                  <span className="text-xs text-text-muted truncate">
+                    {invite.status === 'used' && invite.used_by
+                      ? `Used by ${invite.used_by.full_name} (${invite.used_by.email})`
+                      : invite.status === 'expired'
+                        ? `Expired ${formatDate(invite.expires_at)}`
+                        : `Expires ${formatDate(invite.expires_at)}`
+                    }
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {invite.status === 'active' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(invite)}
+                      className="rounded-md p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
+                      title="Copy invite link"
+                    >
+                      {copiedId === invite.id ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRevoke(invite.id)}
+                      className="rounded-md p-1.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                      title="Revoke invite"
+                    >
+                      <X size={13} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Portal Users ─────────────────────────────────────────────────────────────
+
+function PortalUsersSection({ clientId }: { clientId: string }) {
+  const [users, setUsers] = useState<PortalUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetch_() {
+      try {
+        const res = await fetch(`/api/clients/${clientId}/portal-users`);
+        if (res.ok) {
+          const data = await res.json();
+          setUsers(data.users ?? []);
+        }
+      } catch {
+        // Silently fail
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetch_();
+  }, [clientId]);
+
+  async function handleToggle(userId: string, newActive: boolean) {
+    setTogglingId(userId);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/portal-users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: newActive }),
+      });
+      if (!res.ok) {
+        toast.error('Failed to update user');
+        return;
+      }
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_active: newActive } : u));
+      toast.success(newActive ? 'User reactivated' : 'User deactivated');
+    } catch {
+      toast.error('Failed to update user');
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  function formatDate(dateStr: string | null) {
+    if (!dateStr) return 'Never';
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+    });
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Users size={14} className="text-text-muted" />
+        <h3 className="text-sm font-medium text-text-primary">Portal users</h3>
+        {users.length > 0 && (
+          <span className="text-[10px] text-text-muted bg-surface-hover rounded-full px-1.5 py-0.5">
+            {users.length}
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 size={16} className="animate-spin text-text-muted" />
+        </div>
+      ) : users.length === 0 ? (
+        <p className="text-xs text-text-muted py-2">
+          No portal users yet. Share an invite link to get started.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {users.map(u => (
+            <div
+              key={u.id}
+              className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+                u.is_active
+                  ? 'border-white/[0.06] bg-white/[0.02]'
+                  : 'border-red-500/10 bg-red-500/[0.02] opacity-60'
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-full bg-surface-hover flex items-center justify-center text-[10px] font-medium text-text-muted shrink-0">
+                    {u.full_name?.charAt(0)?.toUpperCase() || '?'}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm text-text-primary truncate">{u.full_name}</p>
+                    <p className="text-[11px] text-text-muted truncate">{u.email}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] text-text-muted hidden sm:inline">
+                  {u.last_login ? `Last login ${formatDate(u.last_login)}` : 'Never logged in'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleToggle(u.id, !u.is_active)}
+                  disabled={togglingId === u.id}
+                  className={`rounded-md p-1.5 transition-colors ${
+                    u.is_active
+                      ? 'text-text-muted hover:text-red-400 hover:bg-red-500/10'
+                      : 'text-text-muted hover:text-emerald-400 hover:bg-emerald-500/10'
+                  }`}
+                  title={u.is_active ? 'Deactivate user' : 'Reactivate user'}
+                >
+                  {togglingId === u.id
+                    ? <Loader2 size={13} className="animate-spin" />
+                    : u.is_active
+                      ? <Power size={13} />
+                      : <RotateCcw size={13} />
+                  }
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Portal Access Card (exported) ───────────────────────────────────────────
 
 export function PortalAccessCard({
+  clientId,
   canSearch,
   setCanSearch,
   canViewReports,
@@ -18,6 +334,7 @@ export function PortalAccessCard({
   canSubmitIdeas,
   setCanSubmitIdeas,
 }: {
+  clientId: string;
   canSearch: boolean;
   setCanSearch: (v: boolean) => void;
   canViewReports: boolean;
@@ -29,16 +346,37 @@ export function PortalAccessCard({
 }) {
   return (
     <Card>
-      <h2 className="text-base font-semibold text-text-primary mb-4">Portal access</h2>
-      <div className="space-y-4">
-        <Toggle checked={canSearch} onChange={setCanSearch} label="Can run topic searches" description="Allow this client's portal users to run new searches" />
-        <Toggle checked={canViewReports} onChange={setCanViewReports} label="Can view approved reports" description="Show approved reports in the client portal" />
-        <Toggle checked={canEditPreferences} onChange={setCanEditPreferences} label="Can edit brand preferences" description="Allow portal users to update tone, topics, and seasonal priorities" />
-        <Toggle checked={canSubmitIdeas} onChange={setCanSubmitIdeas} label="Can submit ideas" description="Allow portal users to submit content ideas and requests" />
+      <h2 className="text-base font-semibold text-text-primary mb-5">Portal access</h2>
+
+      <div className="space-y-6">
+        {/* Invite Management */}
+        <InviteManagement clientId={clientId} />
+
+        {/* Divider */}
+        <div className="border-t border-white/[0.06]" />
+
+        {/* Portal Users */}
+        <PortalUsersSection clientId={clientId} />
+
+        {/* Divider */}
+        <div className="border-t border-white/[0.06]" />
+
+        {/* Feature Flags */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium text-text-primary">Feature permissions</h3>
+          <div className="space-y-4">
+            <Toggle checked={canSearch} onChange={setCanSearch} label="Can run topic searches" description="Allow this client's portal users to run new searches" />
+            <Toggle checked={canViewReports} onChange={setCanViewReports} label="Can view approved reports" description="Show approved reports in the client portal" />
+            <Toggle checked={canEditPreferences} onChange={setCanEditPreferences} label="Can edit brand preferences" description="Allow portal users to update tone, topics, and seasonal priorities" />
+            <Toggle checked={canSubmitIdeas} onChange={setCanSubmitIdeas} label="Can submit ideas" description="Allow portal users to submit content ideas and requests" />
+          </div>
+        </div>
       </div>
     </Card>
   );
 }
+
+// ─── Danger Zone (exported, unchanged) ───────────────────────────────────────
 
 export function DangerZone({
   clientId,
