@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Users, Briefcase, ListTodo, Mail, Plus, Loader2, CheckSquare, Calendar, Search } from 'lucide-react';
+import { Users, Briefcase, ListTodo, Mail, Plus, Loader2, CheckSquare, Calendar, Search, Crown } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,7 @@ interface TeamGridProps {
   todoCountByUser: Record<string, number>;
   integrationsByUser: Record<string, { todoist: boolean; calendar: boolean }>;
   isSuperAdmin?: boolean;
+  superAdminMemberIds?: string[];
 }
 
 function getInitials(name: string): string {
@@ -48,7 +49,9 @@ export function TeamGrid({
   todoCountByUser,
   integrationsByUser,
   isSuperAdmin = false,
+  superAdminMemberIds = [],
 }: TeamGridProps) {
+  const superAdminSet = useMemo(() => new Set(superAdminMemberIds), [superAdminMemberIds]);
   const [members, setMembers] = useState<TeamMember[]>(initialMembers);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -205,6 +208,9 @@ export function TeamGrid({
                         <h3 className="text-sm font-semibold text-text-primary truncate group-hover:text-accent-text transition-colors">
                           {member.full_name}
                         </h3>
+                        {superAdminSet.has(member.id) && (
+                          <span title="Super admin"><Crown size={12} className="text-amber-400 shrink-0" /></span>
+                        )}
                         {member.user_id ? (
                           <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" title="Has account" />
                         ) : (

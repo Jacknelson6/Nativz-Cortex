@@ -241,6 +241,49 @@ export function TeamMemberModal({
                   className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-1.5 text-sm text-text-primary"
                   placeholder="Email"
                 />
+
+                {/* Alias emails inline editor */}
+                <div className="rounded-lg border border-nativz-border/50 p-2 space-y-1.5">
+                  <p className="text-[10px] font-medium text-text-muted uppercase tracking-wider flex items-center gap-1">
+                    <AtSign size={9} />
+                    Alias emails
+                  </p>
+                  {aliasEmails.length > 0 && (
+                    <div className="space-y-0.5">
+                      {aliasEmails.map((alias) => (
+                        <div key={alias} className="flex items-center gap-1.5 group">
+                          <Mail size={9} className="text-text-muted/40 shrink-0" />
+                          <span className="text-[11px] text-text-secondary flex-1 truncate">{alias}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAlias(alias)}
+                            className="opacity-0 group-hover:opacity-100 text-text-muted/40 hover:text-red-400 transition-all cursor-pointer p-0.5"
+                          >
+                            <X size={9} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      value={newAlias}
+                      onChange={(e) => setNewAlias(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddAlias(); } }}
+                      placeholder="Add alias email..."
+                      className="flex-1 rounded-md border border-nativz-border/40 bg-transparent px-2 py-1 text-[11px] text-text-primary placeholder:text-text-muted/40"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddAlias}
+                      disabled={!newAlias.trim() || savingAlias}
+                      className="text-[10px] text-accent-text hover:underline disabled:opacity-40 cursor-pointer"
+                    >
+                      {savingAlias ? '...' : 'Add'}
+                    </button>
+                  </div>
+                </div>
+
                 <input
                   value={form.role}
                   onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}

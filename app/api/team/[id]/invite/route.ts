@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { sendTeamInviteEmail } from '@/lib/email/resend';
 
 async function requireAdmin() {
   const supabase = await createServerSupabaseClient();
@@ -84,6 +85,21 @@ export async function POST(
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     const inviteUrl = `${baseUrl}/shared/join/${invite.token}`;
+
+    // Get inviter's name for the email
+    const { data: inviter } = await adminClient
+      .from('users')
+      .select('full_name')
+      .eq('id', admin.id)
+      .single();
+
+    // Send invite email (non-blocking)
+    sendTeamInviteEmail({
+      to: member.email,
+      memberName: member.full_name,
+      inviteUrl,
+      invitedBy: inviter?.full_name ?? 'The Nativz team',
+    }).catch((err) => console.error('Team invite email failed:', err));
 
     return NextResponse.json({
       token: invite.token,

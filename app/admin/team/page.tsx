@@ -57,21 +57,44 @@ export default async function TeamPage() {
         .eq('is_completed', false),
       admin
         .from('users')
-        .select('id, todoist_api_key'),
+        .select('id, todoist_api_key, is_super_admin, avatar_url'),
     ]);
 
     const members = teamRes.data ?? [];
     const assignments: Assignment[] = assignmentsRes.data ?? [];
     const todos: TodoRow[] = todosRes.data ?? [];
-    const userIntegrations: UserIntegration[] = usersRes.data ?? [];
+    const userIntegrations: (UserIntegration & { is_super_admin?: boolean; avatar_url?: string | null })[] = usersRes.data ?? [];
 
     // Map user_id → integrations
     const integrationsByUser: Record<string, { todoist: boolean; calendar: boolean }> = {};
+    const superAdminUserIds = new Set<string>();
     for (const u of userIntegrations) {
       integrationsByUser[u.id] = {
         todoist: !!u.todoist_api_key,
-        calendar: false, // TODO: Check google_tokens table for calendar connection status
+        calendar: false,
       };
+      if (u.is_super_admin) superAdminUserIds.add(u.id);
+    }
+
+    // Build user_id → avatar_url map for syncing
+    const userAvatars: Record<string, string> = {};
+    for (const u of userIntegrations) {
+      if (u.avatar_url) userAvatars[u.id] = u.avatar_url;
+    }
+
+    // Sync avatars from users → team_members (in-memory for display, no DB write here)
+    for (const m of members) {
+      if (m.user_id && !m.avatar_url && userAvatars[m.user_id]) {
+        m.avatar_url = userAvatars[m.user_id];
+      }
+    }
+
+    // Build set of super admin team member IDs
+    const superAdminMemberIds = new Set<string>();
+    for (const m of members) {
+      if (m.user_id && superAdminUserIds.has(m.user_id)) {
+        superAdminMemberIds.add(m.id);
+      }
     }
 
     // Group assignments by team member → serializable record
@@ -98,6 +121,7 @@ export default async function TeamPage() {
           todoCountByUser={todoCountByUser}
           integrationsByUser={integrationsByUser}
           isSuperAdmin={isSuperAdmin}
+          superAdminMemberIds={Array.from(superAdminMemberIds)}
         />
       </div>
     );

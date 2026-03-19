@@ -16,6 +16,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { sendWelcomeEmail } from '@/lib/email/resend';
 
 export async function POST(request: NextRequest) {
   try {
@@ -99,6 +100,12 @@ export async function POST(request: NextRequest) {
       .from('invite_tokens')
       .update({ used_at: new Date().toISOString(), used_by: userId })
       .eq('id', invite.id);
+
+    // Send welcome email (non-blocking)
+    const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io'}/portal/login`;
+    sendWelcomeEmail({ to: email, name: full_name, role: 'viewer', loginUrl }).catch((err) =>
+      console.error('Welcome email failed:', err),
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {
