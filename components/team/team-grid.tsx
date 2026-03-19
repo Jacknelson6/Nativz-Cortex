@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Users, Briefcase, ListTodo, Mail, Plus, Loader2, CheckSquare, Calendar, Search, Crown } from 'lucide-react';
+import { Users, Briefcase, ListTodo, Mail, Plus, Loader2, CheckSquare, Calendar, Search, Crown, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -62,6 +62,7 @@ export function TeamGrid({
   });
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   // Modal state
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
 
@@ -109,6 +110,25 @@ export function TeamGrid({
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteMember(e: React.MouseEvent, memberId: string) {
+    e.stopPropagation(); // Don't open modal
+    if (!confirm('Delete this team member? This cannot be undone.')) return;
+    setDeletingId(memberId);
+    try {
+      const res = await fetch(`/api/team/${memberId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? 'Failed to delete');
+      }
+      setMembers(prev => prev.filter(m => m.id !== memberId));
+      toast.success('Team member deleted');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete');
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -188,6 +208,16 @@ export function TeamGrid({
                 className="text-left cursor-pointer"
               >
                 <Card className="group relative overflow-hidden transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5 hover:border-accent/30">
+                  {isSuperAdmin && (
+                    <button
+                      onClick={(e) => handleDeleteMember(e, member.id)}
+                      disabled={deletingId === member.id}
+                      className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 rounded-md p-1 text-text-muted/30 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer z-10"
+                      title="Delete team member"
+                    >
+                      {deletingId === member.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    </button>
+                  )}
                   <div className="flex items-start gap-4">
                     {member.avatar_url ? (
                       <img
