@@ -111,9 +111,21 @@ export async function POST(request: NextRequest) {
     if (client_id) {
       const { data: client } = await adminClient
         .from('clients')
-        .select('name, industry, target_audience, brand_voice, topic_keywords, website_url, preferences')
+        .select('name, industry, target_audience, brand_voice, topic_keywords, website_url, preferences, organization_id')
         .eq('id', client_id)
         .single();
+
+      // Org scope check: portal users can only search their own org's clients
+      if (client) {
+        const { data: userData } = await adminClient
+          .from('users')
+          .select('role, organization_id')
+          .eq('id', user.id)
+          .single();
+        if (userData?.role === 'viewer' && client.organization_id !== userData.organization_id) {
+          return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+        }
+      }
 
       if (client) {
         clientContext = {

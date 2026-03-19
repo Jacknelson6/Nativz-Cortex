@@ -9,13 +9,12 @@ function StepBar({ total, current, accentColor }: { total: number; current: numb
   return (
     <div className="flex gap-1.5 mb-6">
       {Array.from({ length: total }).map((_, i) => (
-        <motion.div
+        <div
           key={i}
-          className="h-1 flex-1 rounded-full"
-          animate={{
-            backgroundColor: i < current ? accentColor : 'rgba(255,255,255,0.08)',
-          }}
-          transition={{ duration: 0.3 }}
+          className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
+            i < current ? '' : 'bg-nativz-border'
+          }`}
+          style={i < current ? { backgroundColor: accentColor } : undefined}
         />
       ))}
     </div>

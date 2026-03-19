@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { unstable_cache } from 'next/cache';
@@ -56,8 +57,22 @@ export default async function PortalLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Detect auth pages (login, join) — skip sidebar for unauthenticated pages
+  const headersList = await headers();
+  const pathname = headersList.get('x-pathname') || headersList.get('x-invoke-path') || '';
+  const isAuthPage = pathname.includes('/portal/login') || pathname.includes('/portal/join');
+
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
+
+  // Auth pages: render without sidebar
+  if (isAuthPage || !user) {
+    return (
+      <div className="min-h-screen bg-background">
+        {children}
+      </div>
+    );
+  }
 
   let userName = '';
   let avatarUrl: string | null = null;
@@ -72,12 +87,10 @@ export default async function PortalLayout({
     can_view_knowledge: true,
   };
 
-  if (user) {
-    const cached = await getCachedPortalUser(user.id);
-    userName = cached?.fullName || user.email || '';
-    avatarUrl = cached?.avatarUrl || null;
-    if (cached?.featureFlags) featureFlags = cached.featureFlags;
-  }
+  const cached = await getCachedPortalUser(user.id);
+  userName = cached?.fullName || user.email || '';
+  avatarUrl = cached?.avatarUrl || null;
+  if (cached?.featureFlags) featureFlags = cached.featureFlags;
 
   return (
     <>

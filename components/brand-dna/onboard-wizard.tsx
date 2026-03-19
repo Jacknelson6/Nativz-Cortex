@@ -163,7 +163,7 @@ export function OnboardWizard({ open, onClose, existingClientId, existingClientN
     <WizardShell
       open={open}
       onClose={handleClose}
-      accentColor="#5ba3e6"
+      accentColor="var(--accent)"
       totalSteps={totalSteps}
       currentStep={displayStep}
     >
