@@ -49,7 +49,7 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
     ],
   },
-  serverExternalPackages: ['ffmpeg-static', 'fluent-ffmpeg'],
+  serverExternalPackages: ['ffmpeg-static', 'fluent-ffmpeg', '@resvg/resvg-js'],
   webpack: (config, { dev }) => {
     if (dev) {
       config.watchOptions = {

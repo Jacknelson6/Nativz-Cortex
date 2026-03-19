@@ -253,6 +253,7 @@ export function TeamGrid({
         todoCount={selectedMember?.user_id ? (todoCountByUser[selectedMember.user_id] ?? 0) : 0}
         onClose={() => setSelectedMember(null)}
         onMemberUpdated={handleMemberUpdated}
+        isSuperAdmin={isSuperAdmin}
       />
 
       {/* Add member dialog */}

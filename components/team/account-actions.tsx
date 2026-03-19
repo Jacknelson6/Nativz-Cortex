@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LinkIcon, Send, Check, Copy, UserCheck, Unlink } from 'lucide-react';
+import { LinkIcon, Send, Check, Copy, UserCheck, Unlink, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -16,9 +16,11 @@ interface AccountActionsProps {
   memberEmail: string | null;
   linkedUserId: string | null;
   linkedUserName?: string | null;
+  isSuperAdmin?: boolean;
+  onAccountDeleted?: () => void;
 }
 
-export function AccountActions({ memberId, memberEmail, linkedUserId, linkedUserName }: AccountActionsProps) {
+export function AccountActions({ memberId, memberEmail, linkedUserId, linkedUserName, isSuperAdmin = false, onAccountDeleted }: AccountActionsProps) {
   const [isLinked, setIsLinked] = useState(!!linkedUserId);
   const [currentLinkedName, setCurrentLinkedName] = useState(linkedUserName ?? null);
   const [linkableUsers, setLinkableUsers] = useState<LinkableUser[]>([]);
@@ -29,6 +31,8 @@ export function AccountActions({ memberId, memberEmail, linkedUserId, linkedUser
   const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   async function fetchLinkableUsers() {
     setLoadingUsers(true);
@@ -91,6 +95,26 @@ export function AccountActions({ memberId, memberEmail, linkedUserId, linkedUser
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function handleDeleteAccount() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/team/${memberId}/delete-account`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? 'Failed to delete account');
+      }
+      setIsLinked(false);
+      setCurrentLinkedName(null);
+      setShowDeleteConfirm(false);
+      toast.success('Account deleted');
+      onAccountDeleted?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete account');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="rounded-lg border border-nativz-border/50 p-3">
       <div className="flex items-center justify-between mb-2">
@@ -106,17 +130,54 @@ export function AccountActions({ memberId, memberEmail, linkedUserId, linkedUser
       </div>
 
       {isLinked ? (
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-text-secondary">
-            {currentLinkedName ?? 'Linked account'}
-          </span>
-          <button
-            onClick={handleUnlink}
-            disabled={unlinking}
-            className="text-[10px] text-red-400/60 hover:text-red-400 transition-colors cursor-pointer"
-          >
-            <Unlink size={11} />
-          </button>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-text-secondary">
+              {currentLinkedName ?? 'Linked account'}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleUnlink}
+                disabled={unlinking}
+                className="text-[10px] text-text-muted/40 hover:text-amber-400 transition-colors cursor-pointer p-0.5"
+                title="Unlink account"
+              >
+                <Unlink size={11} />
+              </button>
+              {isSuperAdmin && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="text-[10px] text-text-muted/40 hover:text-red-400 transition-colors cursor-pointer p-0.5"
+                  title="Delete account"
+                >
+                  <Trash2 size={11} />
+                </button>
+              )}
+            </div>
+          </div>
+          {showDeleteConfirm && (
+            <div className="rounded-lg border border-red-500/20 bg-red-500/[0.04] p-2.5 space-y-2">
+              <p className="text-[11px] text-red-400">
+                Delete this user&apos;s Cortex account? They will lose access and need a new invite.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deleting}
+                  className="flex items-center gap-1 rounded-md bg-red-500/20 px-2.5 py-1 text-[10px] font-medium text-red-400 hover:bg-red-500/30 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {deleting ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                  {deleting ? 'Deleting...' : 'Delete account'}
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="rounded-md px-2.5 py-1 text-[10px] text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-2">

@@ -50,6 +50,7 @@ interface TeamMemberModalProps {
   todoCount: number;
   onClose: () => void;
   onMemberUpdated: (member: TeamMember) => void;
+  isSuperAdmin?: boolean;
 }
 
 function getInitials(name: string): string {
@@ -67,6 +68,7 @@ export function TeamMemberModal({
   todoCount,
   onClose,
   onMemberUpdated,
+  isSuperAdmin = false,
 }: TeamMemberModalProps) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ full_name: '', email: '', role: '' });
@@ -475,6 +477,8 @@ export function TeamMemberModal({
           memberId={member.id}
           memberEmail={member.email}
           linkedUserId={member.user_id}
+          isSuperAdmin={isSuperAdmin}
+          onAccountDeleted={() => onMemberUpdated({ ...member, user_id: null })}
         />
       </div>
     </Dialog>
