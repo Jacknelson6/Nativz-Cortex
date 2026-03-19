@@ -47,7 +47,7 @@ export function HistoryFeed({ items, onViewAll, onItemDeleted }: HistoryFeedProp
     setDeletingId(item.id);
     try {
       const endpoint = item.type === 'ideas'
-        ? `/api/ideas/runs/${item.id}`
+        ? `/api/ideas/${item.id}`
         : `/api/search/${item.id}`;
       const res = await fetch(endpoint, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete');
