@@ -8,12 +8,15 @@ interface BrandModeContextValue {
   mode: BrandMode;
   toggleMode: (e?: React.MouseEvent) => void;
   setMode: (mode: BrandMode) => void;
+  /** When true, the brand mode is locked by the server and cannot be toggled */
+  isForced: boolean;
 }
 
 const BrandModeContext = createContext<BrandModeContextValue>({
   mode: 'nativz',
   toggleMode: () => {},
   setMode: () => {},
+  isForced: false,
 });
 
 export function useBrandMode() {
@@ -22,30 +25,47 @@ export function useBrandMode() {
 
 const STORAGE_KEY = 'nativz-cortex-brand-mode';
 
-export function BrandModeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<BrandMode>('nativz');
-  const initialized = useRef(false);
+interface BrandModeProviderProps {
+  children: ReactNode;
+  /** When set, locks the brand mode to this value (no localStorage, no toggle) */
+  forcedMode?: BrandMode;
+}
 
-  // Hydrate from localStorage after mount (avoids SSR mismatch)
+export function BrandModeProvider({ children, forcedMode }: BrandModeProviderProps) {
+  const [mode, setModeState] = useState<BrandMode>(forcedMode ?? 'nativz');
+  const initialized = useRef(false);
+  const isForced = forcedMode !== undefined;
+
+  // Hydrate from localStorage after mount (avoids SSR mismatch) — skip when forced
   useEffect(() => {
+    if (isForced) {
+      setModeState(forcedMode);
+      initialized.current = true;
+      return;
+    }
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored === 'anderson') setModeState('anderson');
     } catch {}
     initialized.current = true;
-  }, []);
+  }, [isForced, forcedMode]);
 
   // Sync data-brand-mode attribute on <html> and persist to localStorage
   useEffect(() => {
     document.documentElement.setAttribute('data-brand-mode', mode);
-    if (initialized.current) {
+    if (!isForced && initialized.current) {
       try { localStorage.setItem(STORAGE_KEY, mode); } catch {}
     }
-  }, [mode]);
+  }, [mode, isForced]);
 
-  const setMode = useCallback((m: BrandMode) => setModeState(m), []);
+  const setMode = useCallback((m: BrandMode) => {
+    if (isForced) return; // no-op when forced
+    setModeState(m);
+  }, [isForced]);
 
   const toggleMode = useCallback((e?: React.MouseEvent) => {
+    if (isForced) return; // no-op when forced
+
     const switchBrand = () => {
       setModeState((prev) => (prev === 'nativz' ? 'anderson' : 'nativz'));
     };
@@ -69,10 +89,10 @@ export function BrandModeProvider({ children }: { children: ReactNode }) {
     }
 
     document.startViewTransition(switchBrand);
-  }, []);
+  }, [isForced]);
 
   return (
-    <BrandModeContext.Provider value={{ mode, toggleMode, setMode }}>
+    <BrandModeContext.Provider value={{ mode, toggleMode, setMode, isForced }}>
       {children}
     </BrandModeContext.Provider>
   );

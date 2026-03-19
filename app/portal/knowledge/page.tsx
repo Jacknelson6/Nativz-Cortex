@@ -31,6 +31,7 @@ export default async function PortalKnowledgePage() {
       .from('client_knowledge_entries')
       .select('id, type, title, content, source, created_at')
       .eq('client_id', client.id)
+      .eq('client_visible', true)
       .order('created_at', { ascending: false })
       .limit(200);
 

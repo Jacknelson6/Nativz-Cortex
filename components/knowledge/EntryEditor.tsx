@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
+import { Eye, EyeOff } from 'lucide-react';
 import type { KnowledgeEntry } from '@/lib/knowledge/types';
 
 const TYPE_COLORS: Record<string, string> = {
@@ -30,6 +31,7 @@ interface EntryEditorProps {
 export function EntryEditor({ entry, allEntries, clientId, onEntryUpdated }: EntryEditorProps) {
   const [title, setTitle] = useState(entry.title);
   const [content, setContent] = useState(entry.content);
+  const [clientVisible, setClientVisible] = useState(entry.client_visible ?? false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [autocompleteQuery, setAutocompleteQuery] = useState('');
@@ -44,6 +46,7 @@ export function EntryEditor({ entry, allEntries, clientId, onEntryUpdated }: Ent
   useEffect(() => {
     setTitle(entry.title);
     setContent(entry.content);
+    setClientVisible(entry.client_visible ?? false);
     setSaveStatus('saved');
     setShowAutocomplete(false);
   }, [entry.id, entry.title, entry.content]);
@@ -97,6 +100,34 @@ export function EntryEditor({ entry, allEntries, clientId, onEntryUpdated }: Ent
     setContent(newContent);
     debounceSave(title, newContent);
     checkForWikilink(newContent);
+  };
+
+  const handleToggleClientVisible = async () => {
+    const newValue = !clientVisible;
+    setClientVisible(newValue);
+    setSaveStatus('saving');
+    try {
+      const res = await fetch(`/api/clients/${clientId}/knowledge/${entry.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_visible: newValue }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        toast.error(d.error ?? 'Failed to update visibility');
+        setClientVisible(!newValue);
+        setSaveStatus('unsaved');
+        return;
+      }
+      const updated = await res.json();
+      setSaveStatus('saved');
+      onEntryUpdated(updated);
+      toast.success(newValue ? 'Visible to client' : 'Hidden from client');
+    } catch {
+      toast.error('Failed to update visibility');
+      setClientVisible(!newValue);
+      setSaveStatus('unsaved');
+    }
   };
 
   // Wikilink autocomplete
@@ -242,6 +273,19 @@ export function EntryEditor({ entry, allEntries, clientId, onEntryUpdated }: Ent
           })}
         </span>
         <span className="text-[10px] text-text-muted">{wordCount} words</span>
+        <button
+          type="button"
+          onClick={handleToggleClientVisible}
+          className={`cursor-pointer inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
+            clientVisible
+              ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'
+              : 'bg-surface-hover text-text-muted hover:bg-surface-hover/80'
+          }`}
+          title={clientVisible ? 'Visible to client — click to hide' : 'Hidden from client — click to show'}
+        >
+          {clientVisible ? <Eye size={10} /> : <EyeOff size={10} />}
+          {clientVisible ? 'Client visible' : 'Internal only'}
+        </button>
         <span className={`text-[10px] ${statusColor} ml-auto`}>{statusLabel}</span>
       </div>
 

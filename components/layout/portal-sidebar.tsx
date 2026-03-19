@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Search, FileText, Settings, Lightbulb, PanelLeftClose, Bell, Telescope, Calendar, Microscope, Brain, Sliders } from 'lucide-react';
+import { LayoutDashboard, Search, FileText, Settings, Lightbulb, PanelLeftClose, Bell, Telescope, Calendar, Microscope, Brain, Sliders, BotMessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
+import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import {
   Sidebar,
   SidebarHeader,
@@ -28,18 +29,30 @@ const ALL_NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard
   { href: '/portal/calendar', label: 'Calendar', icon: Calendar, flag: 'can_view_calendar' },
   { href: '/portal/analyze', label: 'Analyze', icon: Microscope, flag: 'can_view_analyze' },
   { href: '/portal/knowledge', label: 'Knowledge', icon: Brain, flag: 'can_view_knowledge' },
+  { href: '/portal/nerd', label: 'The Nerd', icon: BotMessageSquare, flag: 'can_use_nerd' },
   { href: '/portal/reports', label: 'Reports', icon: FileText, flag: 'can_view_reports' },
   { href: '/portal/preferences', label: 'Preferences', icon: Sliders, flag: 'can_edit_preferences' },
   { href: '/portal/settings', label: 'Settings', icon: Settings, flag: null },
 ];
 
+interface PortalBrand {
+  id: string;
+  name: string;
+  slug: string;
+  agency: string | null;
+  logo_url: string | null;
+  organization_id: string;
+}
+
 interface PortalSidebarProps {
   userName?: string;
   avatarUrl?: string | null;
   featureFlags?: FeatureFlags;
+  brands?: PortalBrand[];
+  activeBrandId?: string | null;
 }
 
-export function PortalSidebar({ userName, avatarUrl, featureFlags }: PortalSidebarProps) {
+export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activeBrandId }: PortalSidebarProps) {
   const pathname = usePathname();
   const { open, toggleSidebar } = useSidebar();
 
@@ -48,6 +61,8 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags }: PortalSideb
     if (!item.flag) return true;
     return flags?.[item.flag] !== false;
   });
+
+  const showBrandSwitcher = brands && brands.length > 1 && activeBrandId;
 
   return (
     <Sidebar>
@@ -72,6 +87,16 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags }: PortalSideb
             </span>
           )}
         </Link>
+
+        {showBrandSwitcher && (
+          <div className="mb-2">
+            <BrandSwitcher
+              activeBrandId={activeBrandId}
+              brands={brands}
+              collapsed={!open}
+            />
+          </div>
+        )}
 
         {featureFlags?.can_search !== false && (
           <Link href="/portal/search/new">

@@ -321,7 +321,7 @@ export async function createKnowledgeEntry(
 
 export async function updateKnowledgeEntry(
   id: string,
-  updates: Partial<Pick<KnowledgeEntry, 'title' | 'content' | 'metadata'>>
+  updates: Partial<Pick<KnowledgeEntry, 'title' | 'content' | 'metadata' | 'client_visible'>>
 ): Promise<KnowledgeEntry> {
   const admin = createAdminClient();
   const { data, error } = await admin

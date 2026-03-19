@@ -8,6 +8,7 @@ const updateSchema = z.object({
   title: z.string().min(1).optional(),
   content: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
+  client_visible: z.boolean().optional(),
 });
 
 /**

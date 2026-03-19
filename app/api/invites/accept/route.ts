@@ -95,6 +95,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to set up account' }, { status: 500 });
     }
 
+    // Create user_client_access row for multi-brand support
+    if (invite.client_id) {
+      await adminClient
+        .from('user_client_access')
+        .upsert({
+          user_id: userId,
+          client_id: invite.client_id,
+          organization_id: invite.organization_id,
+        }, { onConflict: 'user_id,client_id' });
+    } else {
+      // Fallback: link to all active clients in the org
+      const { data: orgClients } = await adminClient
+        .from('clients')
+        .select('id')
+        .eq('organization_id', invite.organization_id)
+        .eq('is_active', true);
+
+      if (orgClients && orgClients.length > 0) {
+        await adminClient
+          .from('user_client_access')
+          .upsert(
+            orgClients.map((c) => ({
+              user_id: userId,
+              client_id: c.id,
+              organization_id: invite.organization_id,
+            })),
+            { onConflict: 'user_id,client_id' },
+          );
+      }
+    }
+
     // Mark invite as used
     await adminClient
       .from('invite_tokens')

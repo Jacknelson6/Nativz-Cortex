@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
       metadata: {},
       source: 'manual',
       created_by: user.id,
+      client_visible: true,
     });
 
     return NextResponse.json({ entry }, { status: 201 });

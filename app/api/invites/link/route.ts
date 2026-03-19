@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     // Validate token
     const { data: invite } = await adminClient
       .from('invite_tokens')
-      .select('id, organization_id, expires_at, used_at')
+      .select('id, client_id, organization_id, expires_at, used_at')
       .eq('token', token)
       .single();
 
@@ -47,32 +47,58 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'This invite has expired' }, { status: 400 });
     }
 
-    // Check if user already belongs to an org
+    // Ensure user record has viewer role and an organization_id
     const { data: userData } = await adminClient
       .from('users')
       .select('organization_id, role')
       .eq('id', user.id)
       .single();
 
-    if (userData?.organization_id && userData.organization_id !== invite.organization_id) {
-      return NextResponse.json(
-        { error: 'Your account is already linked to a different organization' },
-        { status: 409 },
-      );
+    // Set organization_id if not already set (keep existing for backwards compat)
+    if (!userData?.organization_id) {
+      const { error: updateError } = await adminClient
+        .from('users')
+        .update({
+          organization_id: invite.organization_id,
+          role: 'viewer',
+        })
+        .eq('id', user.id);
+
+      if (updateError) {
+        console.error('Failed to link user to organization:', updateError);
+        return NextResponse.json({ error: 'Failed to link account' }, { status: 500 });
+      }
     }
 
-    // Link user to the invite's organization and set role to viewer
-    const { error: updateError } = await adminClient
-      .from('users')
-      .update({
-        organization_id: invite.organization_id,
-        role: 'viewer',
-      })
-      .eq('id', user.id);
+    // Create user_client_access row for multi-brand support
+    if (invite.client_id) {
+      await adminClient
+        .from('user_client_access')
+        .upsert({
+          user_id: user.id,
+          client_id: invite.client_id,
+          organization_id: invite.organization_id,
+        }, { onConflict: 'user_id,client_id' });
+    } else {
+      // Fallback: link to all active clients in the org
+      const { data: orgClients } = await adminClient
+        .from('clients')
+        .select('id')
+        .eq('organization_id', invite.organization_id)
+        .eq('is_active', true);
 
-    if (updateError) {
-      console.error('Failed to link user to organization:', updateError);
-      return NextResponse.json({ error: 'Failed to link account' }, { status: 500 });
+      if (orgClients && orgClients.length > 0) {
+        await adminClient
+          .from('user_client_access')
+          .upsert(
+            orgClients.map((c) => ({
+              user_id: user.id,
+              client_id: c.id,
+              organization_id: invite.organization_id,
+            })),
+            { onConflict: 'user_id,client_id' },
+          );
+      }
     }
 
     // Mark invite as used
