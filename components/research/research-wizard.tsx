@@ -129,7 +129,7 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
     <WizardShell
       open={open}
       onClose={handleClose}
-      accentColor="#5ba3e6"
+      accentColor="var(--accent)"
       totalSteps={2}
       currentStep={step}
     >
@@ -146,7 +146,7 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
             value={topicQuery}
             onChange={(e) => setTopicQuery(e.target.value)}
             placeholder="e.g. vodka seltzer trends, AI video editing tools..."
-            className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:border-accent focus:outline-none"
+            className="w-full rounded-xl border border-nativz-border bg-surface-hover py-3 pl-10 pr-4 text-sm text-foreground placeholder-text-muted focus:border-accent focus:outline-none"
             autoFocus
             onKeyDown={(e) => { if (e.key === 'Enter' && step1Valid) setStep(2); }}
           />
@@ -168,7 +168,7 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
                 className={`flex-1 rounded-xl border p-3 text-left transition-all ${
                   contextMode === mode
                     ? 'border-accent/40 bg-accent-surface/30'
-                    : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'
+                    : 'border-nativz-border bg-surface hover:bg-surface-hover'
                 } cursor-pointer`}
               >
                 <Icon size={14} className={contextMode === mode ? 'text-accent-text mb-1.5' : 'text-text-muted mb-1.5'} />
@@ -193,14 +193,14 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
 
         {contextMode === 'url' && (
           <div className="mt-3">
-            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 focus-within:border-accent">
+            <div className="flex items-center gap-2 rounded-xl border border-nativz-border bg-surface-hover px-3.5 focus-within:border-accent">
               <LinkIcon size={14} className="text-text-muted shrink-0" />
               <input
                 type="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://example.com"
-                className="w-full bg-transparent py-3 text-sm text-white placeholder-white/40 focus:outline-none"
+                className="w-full bg-transparent py-3 text-sm text-foreground placeholder-text-muted focus:outline-none"
                 onKeyDown={(e) => { if (e.key === 'Enter' && step1Valid) setStep(2); }}
               />
             </div>
@@ -247,10 +247,10 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
                   }}
                   className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
                     !isConfigured
-                      ? 'bg-white/[0.03] text-text-muted/40 border border-white/[0.06] cursor-not-allowed'
+                      ? 'bg-surface text-text-muted/40 border border-nativz-border cursor-not-allowed'
                       : isActive
-                        ? 'bg-white/[0.06] border border-accent/30 text-text-primary'
-                        : 'bg-white/[0.03] text-text-muted hover:bg-white/[0.06] border border-white/[0.06] cursor-pointer'
+                        ? 'bg-surface-hover border border-accent/30 text-text-primary'
+                        : 'bg-surface text-text-muted hover:bg-surface-hover border border-nativz-border cursor-pointer'
                   }`}
                 >
                   {!isConfigured ? (
@@ -265,32 +265,30 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
           </div>
         </div>
 
-        {/* Depth selector with tooltips */}
+        {/* Depth selector */}
         <div className="mb-5">
           <span className="block text-xs font-medium text-text-muted mb-2">Depth</span>
-          <div className="flex items-center gap-1 rounded-lg bg-white/[0.04] p-0.5 w-fit">
+          <div className="flex items-center gap-1 rounded-lg bg-surface-hover p-0.5 w-fit">
             {DEPTH_OPTIONS.map((opt) => (
-              <div key={opt.value} className="relative group">
-                <button
-                  type="button"
-                  onClick={() => setVolume(opt.value)}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    volume === opt.value ? 'bg-white/[0.08] text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded-md bg-[#1a1d27] border border-white/[0.08] text-[10px] text-text-muted whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-lg">
-                  {opt.tip}
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-[#1a1d27]" />
-                </div>
-              </div>
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setVolume(opt.value)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  volume === opt.value ? 'bg-surface text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                }`}
+              >
+                {opt.label}
+              </button>
             ))}
           </div>
+          <p className="text-[10px] text-text-muted mt-1.5">
+            {DEPTH_OPTIONS.find(d => d.value === volume)?.tip}
+          </p>
         </div>
 
         {/* Summary card */}
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 mb-6">
+        <div className="rounded-xl border border-nativz-border bg-surface p-4 mb-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-surface">
               <Search size={18} className="text-accent-text" />

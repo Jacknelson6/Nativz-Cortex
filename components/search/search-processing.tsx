@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Check, Loader2, AlertCircle, RotateCcw, Brain, Search,
@@ -11,7 +11,6 @@ import { Badge } from '@/components/ui/badge';
 import { EncryptedText } from '@/components/ui/encrypted-text';
 import { PLATFORM_CONFIG } from './platform-icon';
 import { toast } from 'sonner';
-import type { SearchPlatform } from '@/lib/types/search';
 
 interface SearchProcessingProps {
   searchId: string;
@@ -21,12 +20,11 @@ interface SearchProcessingProps {
   platforms?: string[];
 }
 
-// Time estimates by depth (in seconds)
-const TIME_ESTIMATES: Record<string, { min: number; max: number; label: string }> = {
-  light: { min: 30, max: 60, label: '30 sec – 1 min' },
-  medium: { min: 60, max: 180, label: '1–3 min' },
-  deep: { min: 180, max: 480, label: '3–8 min' },
-  quick: { min: 30, max: 60, label: '30 sec – 1 min' },
+const TIME_ESTIMATES: Record<string, { label: string }> = {
+  light: { label: '30 sec – 1 min' },
+  medium: { label: '1–3 min' },
+  deep: { label: '3–8 min' },
+  quick: { label: '30 sec – 1 min' },
 };
 
 const DEPTH_LABELS: Record<string, { label: string; color: string }> = {
@@ -36,35 +34,38 @@ const DEPTH_LABELS: Record<string, { label: string; color: string }> = {
   quick: { label: 'Light', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
 };
 
-function getPlatformStages(platforms: string[], volume: string) {
+interface Stage {
+  label: string;
+  icon: React.ReactNode;
+  target: number;
+  duration: number;
+}
+
+function buildStages(platforms: string[], volume: string): Stage[] {
   const isDeep = volume === 'deep';
   const isMedium = volume === 'medium';
-  const stages: { label: string; icon: React.ReactNode; target: number; duration: number }[] = [];
+  const stages: Stage[] = [];
+  let cumulative = 0;
+  const totalEst = isDeep ? 300000 : isMedium ? 120000 : 45000;
 
-  let totalDuration = 0;
-  const addStage = (label: string, icon: React.ReactNode, duration: number) => {
-    totalDuration += duration;
-    const target = Math.min(92, (totalDuration / (isDeep ? 300 : isMedium ? 120 : 45)) * 92);
-    stages.push({ label, icon, target, duration });
+  const add = (label: string, icon: React.ReactNode, duration: number) => {
+    cumulative += duration;
+    stages.push({ label, icon, target: Math.min(92, (cumulative / totalEst) * 92), duration });
   };
 
-  if (platforms.includes('web')) {
-    addStage('Searching the web', <Search size={14} />, isDeep ? 5000 : 3000);
-  }
-  if (platforms.includes('reddit')) {
-    addStage('Scanning Reddit discussions', <MessageSquare size={14} />, isDeep ? 15000 : isMedium ? 8000 : 3000);
-  }
+  if (platforms.includes('web')) add('Searching the web', <Search size={14} />, isDeep ? 5000 : 3000);
+  if (platforms.includes('reddit')) add('Scanning Reddit discussions', <MessageSquare size={14} />, isDeep ? 15000 : isMedium ? 8000 : 3000);
   if (platforms.includes('youtube')) {
-    const Icon = PLATFORM_CONFIG.youtube.icon;
-    addStage('Fetching YouTube videos & transcripts', <Icon size={14} className="text-red-400" />, isDeep ? 30000 : isMedium ? 15000 : 5000);
+    const YT = PLATFORM_CONFIG.youtube.icon;
+    add('Fetching YouTube videos & transcripts', <YT size={14} className="text-red-400" />, isDeep ? 30000 : isMedium ? 15000 : 5000);
   }
   if (platforms.includes('tiktok')) {
-    const Icon = PLATFORM_CONFIG.tiktok.icon;
-    addStage('Scraping TikTok & comments', <Icon size={14} className="text-teal-400" />, isDeep ? 45000 : isMedium ? 20000 : 8000);
+    const TT = PLATFORM_CONFIG.tiktok.icon;
+    add('Scraping TikTok & comments', <TT size={14} className="text-teal-400" />, isDeep ? 45000 : isMedium ? 20000 : 8000);
   }
-  addStage('Computing analytics', <Brain size={14} />, isDeep ? 5000 : 3000);
-  addStage('Generating video ideas with AI', <Sparkles size={14} />, isDeep ? 20000 : isMedium ? 12000 : 8000);
-  addStage('Building your report', <FileText size={14} />, isDeep ? 5000 : 3000);
+  add('Computing analytics', <Brain size={14} />, isDeep ? 5000 : 3000);
+  add('Generating video ideas with AI', <Sparkles size={14} />, isDeep ? 20000 : isMedium ? 12000 : 8000);
+  add('Building your report', <FileText size={14} />, isDeep ? 5000 : 3000);
 
   return stages;
 }
@@ -78,41 +79,45 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
   const [elapsed, setElapsed] = useState(0);
   const [emailSent, setEmailSent] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
-  const progressRef = useRef<ReturnType<typeof setInterval>>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval>>(null);
   const hasStarted = useRef(false);
+  const intervalsRef = useRef<{ progress: ReturnType<typeof setInterval> | null; timer: ReturnType<typeof setInterval> | null }>({ progress: null, timer: null });
 
-  const stages = getPlatformStages(platforms, volume);
+  // Memoize stages with useRef so they don't change between renders
+  const stagesRef = useRef<Stage[]>(buildStages(platforms, volume));
+
   const timeEstimate = TIME_ESTIMATES[volume] ?? TIME_ESTIMATES.medium;
   const depth = DEPTH_LABELS[volume] ?? DEPTH_LABELS.medium;
 
-  const startProgress = useCallback(() => {
+  function clearIntervals() {
+    if (intervalsRef.current.progress) clearInterval(intervalsRef.current.progress);
+    if (intervalsRef.current.timer) clearInterval(intervalsRef.current.timer);
+    intervalsRef.current = { progress: null, timer: null };
+  }
+
+  function startProgress() {
+    clearIntervals();
     setProgress(0);
     setStageIndex(0);
     setDone(false);
     setElapsed(0);
 
+    const stages = stagesRef.current;
     const startTime = Date.now();
-
-    // Elapsed timer
-    timerRef.current = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTime) / 1000));
-    }, 1000);
-
     let currentProgress = 0;
     let currentStage = 0;
 
-    progressRef.current = setInterval(() => {
+    intervalsRef.current.timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+
+    intervalsRef.current.progress = setInterval(() => {
       const elapsedMs = Date.now() - startTime;
 
       let cumulativeDuration = 0;
       let targetStage = 0;
       for (let i = 0; i < stages.length; i++) {
         cumulativeDuration += stages[i].duration;
-        if (elapsedMs < cumulativeDuration) {
-          targetStage = i;
-          break;
-        }
+        if (elapsedMs < cumulativeDuration) { targetStage = i; break; }
         targetStage = i;
       }
 
@@ -123,16 +128,15 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
 
       const stage = stages[currentStage];
       const diff = stage.target - currentProgress;
-
       if (diff > 0) {
         currentProgress += Math.max(0.1, diff * 0.03);
         currentProgress = Math.min(currentProgress, stage.target);
         setProgress(currentProgress);
       }
     }, 100);
-  }, [stages]);
+  }
 
-  const runProcess = useCallback(async () => {
+  async function runProcess() {
     setError('');
     startProgress();
 
@@ -141,39 +145,33 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
       const data = await res.json();
 
       if (!res.ok) {
-        if (progressRef.current) clearInterval(progressRef.current);
-        if (timerRef.current) clearInterval(timerRef.current);
+        clearIntervals();
         const msg = data.details ? `${data.error}: ${data.details}` : (data.error || 'Search failed.');
         setError(msg);
         return;
       }
 
-      if (progressRef.current) clearInterval(progressRef.current);
-      if (timerRef.current) clearInterval(timerRef.current);
+      clearIntervals();
       setProgress(100);
-      setStageIndex(stages.length - 1);
+      setStageIndex(stagesRef.current.length - 1);
       setDone(true);
 
       setTimeout(() => {
         router.push(`${redirectPrefix}/search/${searchId}`);
       }, 800);
     } catch {
-      if (progressRef.current) clearInterval(progressRef.current);
-      if (timerRef.current) clearInterval(timerRef.current);
+      clearIntervals();
       setError('Something went wrong. Try again.');
     }
-  }, [searchId, redirectPrefix, router, startProgress, stages.length]);
+  }
 
   useEffect(() => {
     if (hasStarted.current) return;
     hasStarted.current = true;
     runProcess();
-
-    return () => {
-      if (progressRef.current) clearInterval(progressRef.current);
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [runProcess]);
+    return () => clearIntervals();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleRetry() {
     hasStarted.current = false;
@@ -202,6 +200,8 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
     if (s < 60) return `${s}s`;
     return `${Math.floor(s / 60)}m ${s % 60}s`;
   }
+
+  const stages = stagesRef.current;
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 animate-fade-slide-in">
@@ -245,9 +245,7 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
           {stages.map((stage, i) => {
             const isComplete = i < stageIndex || done;
             const isCurrent = i === stageIndex && !done && !error;
-            const isVisible = isComplete || isCurrent;
-
-            if (!isVisible) return null;
+            if (!isComplete && !isCurrent) return null;
 
             return (
               <div key={stage.label} className="flex items-center gap-2.5 animate-fade-slide-in">
@@ -282,16 +280,11 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
           )}
         </div>
 
-        {/* Action buttons (visible after 10s) */}
+        {/* Action buttons */}
         {!done && !error && elapsed > 10 && (
           <div className="mt-6 flex items-center justify-center gap-3">
             {!emailSent ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleEmailMe}
-                disabled={sendingEmail}
-              >
+              <Button variant="outline" size="sm" onClick={handleEmailMe} disabled={sendingEmail}>
                 {sendingEmail ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} />}
                 Email me when done
               </Button>
@@ -300,11 +293,7 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
                 <Check size={12} /> We&apos;ll email you
               </span>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push(`${redirectPrefix}/search/new`)}
-            >
+            <Button variant="ghost" size="sm" onClick={() => router.push(`${redirectPrefix}/search/new`)}>
               <ArrowLeft size={12} />
               Back to research
             </Button>
