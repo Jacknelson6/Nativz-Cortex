@@ -7,9 +7,9 @@ import { PORTFOLIO_BREAKDOWN_DATA } from '../data';
 
 const chartData = PORTFOLIO_BREAKDOWN_DATA.map((row) => ({
   tier: row.tier,
-  'Losers (<0.5x)': row.losers_pct,
-  'Mid-range (0.5-2x)': row.mid_range_pct,
-  'Winners (>2x)': row.winners_pct,
+  'Losers (< 28 days)': row.losers_pct,
+  'Mid-range (≥ 28 days)': row.mid_range_pct,
+  'Winners (≥ 10× median)': row.winners_pct,
 }));
 
 export function PortfolioBreakdown() {
@@ -49,9 +49,9 @@ export function PortfolioBreakdown() {
           <Legend
             wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
           />
-          <Bar dataKey="Losers (<0.5x)" stackId="a" fill="#f87171" radius={[0, 0, 0, 0]} />
-          <Bar dataKey="Mid-range (0.5-2x)" stackId="a" fill="#fbbf24" />
-          <Bar dataKey="Winners (>2x)" stackId="a" fill="#34d399" radius={[0, 4, 4, 0]} />
+          <Bar dataKey="Losers (< 28 days)" stackId="a" fill="#f87171" radius={[0, 0, 0, 0]} />
+          <Bar dataKey="Mid-range (≥ 28 days)" stackId="a" fill="#fbbf24" />
+          <Bar dataKey="Winners (≥ 10× median)" stackId="a" fill="#34d399" radius={[0, 4, 4, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
