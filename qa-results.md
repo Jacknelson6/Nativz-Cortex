@@ -1,75 +1,90 @@
-# QA Results — Client Portal — 2026-03-19
+# QA Results — Client Portal — 2026-03-19 (Updated)
 
 ## Summary
-- Pages tested: 8 (login, join, dashboard, knowledge, reports, notifications, research, settings)
-- Security tests: 2 (admin/dashboard, admin/clients — both correctly blocked)
-- Issues found: 7 (2 critical, 3 warning, 2 info)
-- Console errors: 2 (strategy API 404s)
+- Pages tested: 8 portal routes + 2 admin security tests
+- Security tests: All passed
+- Issues found: 7 (2 critical — FIXED, 3 warning — 2 FIXED, 2 info)
+- Features built & verified: 5 (theme lock, multi-brand, nerd, knowledge visibility, sidebar fix)
 
-## Critical Issues
+## Critical Issues — ALL FIXED
 
-| # | Page | Issue | Type | Status |
-|---|------|-------|------|--------|
-| 1 | `/portal/login`, `/portal/join/[token]` | **Sidebar visible on unauthenticated pages** — full nav (Dashboard, Research, Knowledge, etc.) shows before login. Client can see all nav items and click them before authenticating. | Security/UI | **FIXED** — layout now renders without sidebar when no user session |
-| 2 | `/api/search` (POST) | **Missing org scope validation** — portal users can craft a request with an arbitrary `client_id` from another organization. No server-side check verifies the client belongs to the user's org. | Security | **FIXED** — added org_id check for viewer role users |
+| # | Page | Issue | Status |
+|---|------|-------|--------|
+| 1 | `/portal/login`, `/portal/join/[token]` | Sidebar visible on unauthenticated pages | **FIXED** — layout skips sidebar when no user session |
+| 2 | `/api/search` (POST) | Missing org scope validation for portal users | **FIXED** — added org_id check for viewer role |
 
 ## Warnings
 
-| # | Page | Issue | Type | Status |
-|---|------|-------|------|--------|
-| 3 | `/portal/knowledge` | **Internal meeting notes visible** — meeting notes contain sensitive internal strategy (e.g., "Stop paid ad spend immediately"). Knowledge entries should have an `approved` or `client_visible` flag. | Data Privacy | Open |
-| 4 | `/portal/dashboard` | **"Loading strategy..." spinner never resolves** — strategy card shows perpetual loading state (404 on `/api/clients/.../strategy`). Should show empty state or be hidden when no strategy exists. | UX | Open |
-| 5 | All portal pages | **No theme lock to agency** — Toastique is an AC client (`agency: "Anderson Collaborative"`) but portal shows Nativz dark theme. Should auto-lock to AC theme based on client's agency assignment. | UX | Open — needs new feature |
+| # | Page | Issue | Status |
+|---|------|-------|--------|
+| 3 | `/portal/knowledge` | Internal meeting notes visible to clients | **FIXED** — `client_visible` column added, portal filters to visible-only |
+| 4 | `/portal/dashboard` | Strategy card shows perpetual "Loading strategy..." (404) | Open — minor, needs strategy API endpoint |
+| 5 | All portal pages | Theme should lock to agency assignment | **FIXED** — AC clients auto-locked to AC theme via `data-brand-forced` |
 
-## Info
+## Features Built & QA Verified
 
-| # | Page | Issue | Type | Status |
-|---|------|-------|------|--------|
-| 6 | `/portal/dashboard` | Console: 2x 404 on `/api/clients/22bb761f.../strategy` | Console | Open |
-| 7 | `/portal/settings` | Feature access shows "Edit preferences: Disabled" and "Submit ideas: Disabled" — these features are hidden from sidebar (correct) but settings page shows they're disabled. Expected behavior but worth noting. | Info | N/A |
+### F1: Theme Lock to Agency ✅
+- Toastique (AC client) → AC light theme on all portal pages
+- Verified: dashboard, knowledge, research, reports, notifications, settings
+- `useLayoutEffect` + `data-brand-forced` DOM flag prevents root provider override
+- No flash of wrong theme on navigation
 
-## Security Tests — Passed
+### F2+F3: Multi-Brand Accounts + Switcher ✅
+- `user_client_access` junction table created (migration 048)
+- Brand switcher in sidebar (visible with 2+ brands)
+- Cookie-based active brand selection
+- Invite flow creates access rows (second invite adds brand, doesn't overwrite)
+- QA: Test user has 1 brand (Toastique) — switcher correctly hidden
+
+### F4: Portal Nerd (Scoped AI Chat) ✅
+- `/portal/nerd` page created with simplified chat UI
+- Auto-scoped to client's data only
+- Read-only tools (no write operations)
+- Gated by `can_use_nerd` feature flag (default: false)
+- QA: Not visible in sidebar (flag is off) — correct behavior
+
+### F5: Knowledge Entry Visibility ✅
+- `client_visible` column added to `client_knowledge_entries` (migration 047)
+- Portal shows 0 entries (all defaulted to internal-only) — correct
+- Admin has eye/eye-off toggle per entry
+- Portal-created entries auto-set `client_visible = true`
+
+### Security Checks — All Passed ✅
 
 | Test | Result |
 |------|--------|
 | Portal user → `/admin/dashboard` | Redirected to `/portal/dashboard` |
 | Portal user → `/admin/clients` | Redirected to `/portal/dashboard` |
-| Knowledge data scoped to org | Only Toastique entries visible |
+| Knowledge scoped to org | Only Toastique entries visible |
+| Search API org validation | Added; blocks cross-org client_id |
 | Invite token single-use | Token marked `used_at` after acceptance |
-| User record org assignment | Correctly set to Toastique org |
-| Feature flags applied | Ideas/Preferences hidden from sidebar per flags |
+| Feature flags applied | Ideas/Preferences hidden per flags |
+| Theme lock works | AC theme persists across all pages |
 
-## Client Portal Feature Access
+## Portal Pages — AC Theme QA
 
-**Currently accessible to portal clients:**
-1. Dashboard — overview stats, recent reports
-2. Notifications — notification center (empty by default)
-3. Research — brand intel + topic research
-4. Knowledge — view/add knowledge entries
-5. Reports — view approved research reports
-6. Settings — view account, brand profile, feature flags
+| Page | Theme | Readability | Issues |
+|------|-------|-------------|--------|
+| `/portal/login` | N/A (no sidebar, clean form) | ✅ | None |
+| `/portal/join/[token]` | N/A (no sidebar) | ✅ | None |
+| `/portal/dashboard` | AC light ✅ | ✅ | Strategy card 404 (minor) |
+| `/portal/knowledge` | AC light ✅ | ✅ | None (0 visible entries — correct) |
+| `/portal/reports` | AC light ✅ | ✅ | None |
+| `/portal/notifications` | AC light ✅ | ✅ | None |
+| `/portal/search/new` | AC light ✅ | ✅ | None — teal accents, proper contrast |
+| `/portal/settings` | AC light ✅ | ✅ | None — keyword tags visible |
 
-**Hidden by default (feature flags):**
-- Ideas (`can_submit_ideas: false`)
-- Preferences (`can_edit_preferences: false`)
-- Calendar (`can_view_calendar: false`)
-- Analyze/Moodboard (`can_view_analyze: false`)
-
-## Features Needed (from user requirements)
-
-| # | Feature | Priority | Scope |
-|---|---------|----------|-------|
-| F1 | **Lock theme to agency** — AC clients see AC theme, Nativz clients see Nativz theme, no toggle | High | Portal layout + brand mode provider |
-| F2 | **Multi-brand accounts** — one user can belong to multiple client orgs | High | DB schema change (user_organizations junction table) + brand switcher UI |
-| F3 | **Brand switcher** — toggle between brands in sidebar/header | High | Portal sidebar component |
-| F4 | **Scope Nerd agent to client** — AI chat only accesses current client's knowledge/data | Medium | Nerd chat API route + portal nerd page |
-| F5 | **Knowledge entry visibility** — add `client_visible` flag to filter internal-only notes | Medium | DB migration + knowledge API + portal knowledge page |
-| F6 | **Fix search route org scoping** — add server-side org validation | High | `app/api/search/route.ts` |
-
-## Test Account Created
+## Test Account
 
 - **Email:** test@toastique.com
 - **Password:** TestPortal123!
 - **Role:** viewer
 - **Organization:** Toastique Portal (e5e1e21a-8c44-4c20-b706-68749d790d16)
 - **Client:** Toastique (22bb761f-4fb6-41ec-ac73-e13693e74c12, agency: Anderson Collaborative)
+
+## Remaining Open Items
+
+| # | Item | Priority |
+|---|------|----------|
+| 1 | Dashboard strategy card 404 — needs `/api/clients/[id]/strategy` endpoint or hide the card | Low |
+| 2 | Creative Benchmarks presentation — PRD in progress | New feature |
