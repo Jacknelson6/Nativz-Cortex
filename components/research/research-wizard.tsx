@@ -223,7 +223,7 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
         {/* Platform toggles */}
         <div className="mb-4">
           <span className="block text-xs font-medium text-text-muted mb-2">Platforms</span>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="grid grid-cols-2 gap-2">
             {PLATFORM_OPTIONS.filter((p) => p.available).map((p) => {
               const config = PLATFORM_CONFIG[p.value];
               const Icon = config.icon;
@@ -245,20 +245,18 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
                       return next;
                     });
                   }}
-                  className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                  className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
                     !isConfigured
                       ? 'bg-white/[0.03] text-text-muted/40 border border-white/[0.06] cursor-not-allowed'
                       : isActive
-                        ? 'bg-accent-surface text-accent-text'
-                        : isWeb
-                          ? 'bg-accent-surface/50 text-accent-text/60 cursor-default'
-                          : 'bg-white/[0.04] text-text-muted hover:bg-white/[0.08] hover:text-text-secondary border border-white/[0.06] cursor-pointer'
+                        ? 'bg-white/[0.06] border border-accent/30 text-text-primary'
+                        : 'bg-white/[0.03] text-text-muted hover:bg-white/[0.06] border border-white/[0.06] cursor-pointer'
                   }`}
                 >
                   {!isConfigured ? (
-                    <AlertCircle size={12} className="text-amber-500/60" />
+                    <AlertCircle size={14} className="text-amber-500/60" />
                   ) : (
-                    <Icon size={12} className={isActive ? config.color : ''} />
+                    <Icon size={14} className={config.color} />
                   )}
                   {p.label}
                 </button>
