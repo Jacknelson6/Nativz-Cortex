@@ -10,6 +10,8 @@ import {
   Plus,
   Pencil,
   Check,
+  X,
+  AtSign,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +27,7 @@ interface TeamMember {
   avatar_url: string | null;
   is_active: boolean;
   user_id: string | null;
+  alias_emails?: string[] | null;
 }
 
 interface ClientInfo {
@@ -72,6 +75,10 @@ export function TeamMemberModal({
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [addingTask, setAddingTask] = useState(false);
+  const [aliasEmails, setAliasEmails] = useState<string[]>([]);
+  const [newAlias, setNewAlias] = useState('');
+  const [showAddAlias, setShowAddAlias] = useState(false);
+  const [savingAlias, setSavingAlias] = useState(false);
 
   useEffect(() => {
     if (!member) return;
@@ -80,7 +87,10 @@ export function TeamMemberModal({
       email: member.email ?? '',
       role: member.role ?? '',
     });
+    setAliasEmails(member.alias_emails ?? []);
     setEditing(false);
+    setShowAddAlias(false);
+    setNewAlias('');
 
     setLoadingTasks(true);
     fetch(`/api/tasks?assignee_id=${member.id}&status=backlog,in_progress,review`)
@@ -146,6 +156,45 @@ export function TeamMemberModal({
     } finally {
       setAddingTask(false);
     }
+  }
+
+  async function saveAliasEmails(updated: string[]) {
+    setSavingAlias(true);
+    try {
+      const res = await fetch(`/api/team/${member!.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alias_emails: updated }),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      setAliasEmails(updated);
+      toast.success('Alias emails updated');
+    } catch {
+      toast.error('Failed to update alias emails');
+    } finally {
+      setSavingAlias(false);
+    }
+  }
+
+  function handleAddAlias() {
+    const trimmed = newAlias.trim().toLowerCase();
+    if (!trimmed || !trimmed.includes('@')) {
+      toast.error('Enter a valid email');
+      return;
+    }
+    if (aliasEmails.includes(trimmed)) {
+      toast.error('Already added');
+      return;
+    }
+    const updated = [...aliasEmails, trimmed];
+    saveAliasEmails(updated);
+    setNewAlias('');
+    setShowAddAlias(false);
+  }
+
+  function handleRemoveAlias(email: string) {
+    const updated = aliasEmails.filter(e => e !== email);
+    saveAliasEmails(updated);
   }
 
   const priorityColors: Record<string, string> = {
@@ -236,6 +285,64 @@ export function TeamMemberModal({
           </div>
 
         </div>
+
+        {/* Alias emails */}
+        {!editing && (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <h3 className="text-[10px] font-medium text-text-muted uppercase tracking-wider flex items-center gap-1">
+                <AtSign size={10} />
+                Alias emails
+              </h3>
+              <button
+                onClick={() => setShowAddAlias(!showAddAlias)}
+                className="text-[10px] text-accent-text hover:underline cursor-pointer flex items-center gap-0.5"
+              >
+                <Plus size={10} />
+                Add alias
+              </button>
+            </div>
+
+            {showAddAlias && (
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  value={newAlias}
+                  onChange={(e) => setNewAlias(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddAlias()}
+                  placeholder="alias@example.com"
+                  className="flex-1 rounded-lg border border-nativz-border bg-transparent px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-muted"
+                  autoFocus
+                />
+                <Button size="sm" onClick={handleAddAlias} disabled={savingAlias || !newAlias.trim()}>
+                  {savingAlias ? <Loader2 size={12} className="animate-spin" /> : 'Add'}
+                </Button>
+              </div>
+            )}
+
+            {aliasEmails.length === 0 ? (
+              <p className="text-[11px] text-text-muted/40 py-2 text-center">No alias emails</p>
+            ) : (
+              <div className="space-y-0.5">
+                {aliasEmails.map((alias) => (
+                  <div
+                    key={alias}
+                    className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-surface-hover transition-colors group"
+                  >
+                    <Mail size={10} className="text-text-muted/40 shrink-0" />
+                    <span className="text-xs text-text-secondary truncate flex-1">{alias}</span>
+                    <button
+                      onClick={() => handleRemoveAlias(alias)}
+                      disabled={savingAlias}
+                      className="opacity-0 group-hover:opacity-100 text-text-muted/40 hover:text-red-400 transition-all cursor-pointer p-0.5"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Open tasks */}
         <div>

@@ -10,6 +10,7 @@ const updateTeamMemberSchema = z.object({
   role: z.string().max(100).optional().nullable(),
   avatar_url: z.string().url().optional().nullable(),
   is_active: z.boolean().optional(),
+  alias_emails: z.array(z.string().email()).optional(),
 });
 
 async function requireAdmin() {
