@@ -70,7 +70,7 @@ async function searchVideos(
   const allVideoIds: string[] = [];
   let totalResults = 0;
   let pageToken: string | undefined;
-  const pages = Math.ceil(Math.min(maxResults, 150) / 50);
+  const pages = Math.ceil(Math.min(maxResults, 500) / 50);
 
   for (let page = 0; page < pages; page++) {
     const params = new URLSearchParams({
@@ -259,8 +259,9 @@ export async function gatherYouTubeData(
   }
 
   // Smart split: YouTube gives good trend signals + transcripts are free
-  const maxResults = volume === 'deep' ? 200 : volume === 'medium' ? 100 : 20;
-  const commentLimit = volume === 'deep' ? 100 : volume === 'medium' ? 20 : 5;
+  // Quota: deep (~1,100 units), medium (~342 units), light (~70 units) — well within 10K/day free quota
+  const maxResults = volume === 'deep' ? 500 : volume === 'medium' ? 100 : 15;
+  const commentLimit = volume === 'deep' ? 100 : volume === 'medium' ? 30 : 5;
 
   // Step 1: Search for video IDs
   const { videoIds, totalResults } = await searchVideos(query, timeRange, maxResults);
@@ -275,8 +276,8 @@ export async function gatherYouTubeData(
     .filter((v): v is { id: string; details: NonNullable<typeof v.details> } => !!v.details)
     .sort((a, b) => b.details.viewCount - a.details.viewCount);
 
-  // Fetch comments for top most viewed videos
-  const commentFetchCount = volume === 'deep' ? 100 : volume === 'medium' ? 40 : 8;
+  // Fetch comments for top most viewed videos — matches VOLUME_CONFIG commentVideos
+  const commentFetchCount = volume === 'deep' ? 100 : volume === 'medium' ? 30 : 5;
   const topForComments = videosWithDetails.slice(0, commentFetchCount);
 
   const commentsMap = new Map<string, YouTubeComment[]>();
@@ -287,8 +288,8 @@ export async function gatherYouTubeData(
     }),
   );
 
-  // Step 4: Fetch transcripts for top videos (free — no quota cost)
-  const transcriptCount = volume === 'deep' ? 50 : volume === 'medium' ? 20 : 5;
+  // Step 4: Fetch transcripts for top videos (free — no quota cost) — matches VOLUME_CONFIG transcriptVideos
+  const transcriptCount = volume === 'deep' ? 50 : volume === 'medium' ? 20 : 3;
   const topForTranscripts = videosWithDetails.slice(0, transcriptCount);
   const transcriptMap = new Map<string, string>();
   await Promise.allSettled(

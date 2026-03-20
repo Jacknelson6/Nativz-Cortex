@@ -94,9 +94,9 @@ export async function gatherTikTokData(
     return { videos: [], topHashtags: [], totalResults: 0 };
   }
 
-  // TikTok capped at 150 max to control Apify costs
+  // Apify costs: ~$0.50-$2 at medium (100), ~$5-$16 at deep (500)
   // Social listening priority: comments are where the sentiment lives
-  const maxResults = volume === 'deep' ? 150 : volume === 'medium' ? 100 : 20;
+  const maxResults = volume === 'deep' ? 500 : volume === 'medium' ? 100 : 15;
 
   try {
     // Step 1: Search via Apify actor
@@ -228,7 +228,7 @@ export async function gatherTikTokData(
     // Step 3: Enrich with comments + transcripts (parallel, batched)
     // Social listening priority: get ALL comments possible — that's where sentiment lives
     const commentBatchSize = volume === 'deep' ? 20 : volume === 'medium' ? 15 : 5;
-    const transcriptBatchSize = volume === 'deep' ? 15 : volume === 'medium' ? 10 : 4;
+    const transcriptBatchSize = volume === 'deep' ? 30 : volume === 'medium' ? 15 : 3;
 
     // Sort by engagement for prioritizing enrichment
     const sorted = [...baseVideos].sort((a, b) =>
@@ -237,7 +237,8 @@ export async function gatherTikTokData(
 
     // Fetch comments for top videos (batched to avoid rate limits)
     // Comments are the #1 priority — fetch for as many videos as possible
-    const commentFetchCount = volume === 'deep' ? 100 : volume === 'medium' ? 60 : 15;
+    // Matches VOLUME_CONFIG commentVideos: deep=100, medium=30, light=5
+    const commentFetchCount = volume === 'deep' ? 100 : volume === 'medium' ? 30 : 5;
     const topForComments = sorted.slice(0, commentFetchCount);
     const commentsMap = new Map<string, TikTokComment[]>();
     for (let i = 0; i < topForComments.length; i += commentBatchSize) {
@@ -255,7 +256,7 @@ export async function gatherTikTokData(
       if (i + commentBatchSize < topForComments.length) await new Promise((r) => setTimeout(r, 300));
     }
 
-    // Fetch transcripts for top videos only (expensive)
+    // Fetch transcripts for top videos — matches VOLUME_CONFIG transcriptVideos: deep=30, medium=15, light=3
     const transcriptMap = new Map<string, string>();
     const topForTranscripts = sorted.slice(0, transcriptBatchSize);
     await Promise.allSettled(
