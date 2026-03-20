@@ -1,25 +1,25 @@
 'use client';
 
-import { HEATMAP_DATA, VERTICALS, TIERS } from '../data';
+import { HEATMAP_DATA, VERTICALS, SPEND_TIERS } from '../data';
 import type { SpendTier, Vertical } from '../data';
 
 function heatColor(value: number): string {
-  if (value <= 10) return 'bg-blue-950/60';
-  if (value <= 50) return 'bg-blue-900/70';
-  if (value <= 100) return 'bg-blue-700/60';
-  if (value <= 200) return 'bg-blue-600/60';
-  if (value <= 400) return 'bg-blue-500/60';
-  return 'bg-blue-400/60';
+  if (value <= 3) return 'bg-accent/10';
+  if (value <= 5) return 'bg-accent/20';
+  if (value <= 10) return 'bg-accent/30';
+  if (value <= 18) return 'bg-accent/40';
+  if (value <= 30) return 'bg-accent/55';
+  return 'bg-accent/70';
 }
 
 function textColor(value: number): string {
-  if (value <= 50) return 'text-blue-300/80';
-  return 'text-white';
+  if (value <= 10) return 'text-text-secondary';
+  return 'text-foreground font-bold';
 }
 
 function getCell(vertical: Vertical, tier: SpendTier): number {
   const cell = HEATMAP_DATA.find((c) => c.vertical === vertical && c.tier === tier);
-  return cell?.weekly_new_creatives ?? 0;
+  return cell?.weekly_creatives ?? 0;
 }
 
 export function TestingHeatmap() {
@@ -27,9 +27,9 @@ export function TestingHeatmap() {
     <div className="overflow-x-auto">
       <div className="min-w-[700px]">
         {/* Header row */}
-        <div className="grid gap-1" style={{ gridTemplateColumns: '180px repeat(6, 1fr)' }}>
+        <div className="grid gap-1" style={{ gridTemplateColumns: '180px repeat(5, 1fr)' }}>
           <div className="py-2 px-2" />
-          {TIERS.map((tier) => (
+          {SPEND_TIERS.map((tier) => (
             <div key={tier} className="py-2 px-1 text-center text-[11px] text-text-muted font-medium leading-tight">
               {tier}
             </div>
@@ -41,12 +41,12 @@ export function TestingHeatmap() {
           <div
             key={vertical}
             className="grid gap-1"
-            style={{ gridTemplateColumns: '180px repeat(6, 1fr)' }}
+            style={{ gridTemplateColumns: '180px repeat(5, 1fr)' }}
           >
             <div className="py-2 px-2 text-xs text-text-secondary font-medium flex items-center">
               {vertical}
             </div>
-            {TIERS.map((tier) => {
+            {SPEND_TIERS.map((tier) => {
               const value = getCell(vertical, tier);
               return (
                 <div
