@@ -18,6 +18,7 @@ import {
   Share2,
   Handshake,
   Clapperboard,
+  ImagePlus,
   Presentation,
   Brain,
   Film,
@@ -80,6 +81,7 @@ const NAV_SECTIONS: NavSection[] = [
       },
       { href: '/admin/search/new', label: 'Research', icon: Telescope },
       { href: '/admin/analysis', label: 'Analysis', icon: Clapperboard },
+      { href: '/admin/ad-creatives', label: 'Ad creatives', icon: ImagePlus },
     ],
   },
   {

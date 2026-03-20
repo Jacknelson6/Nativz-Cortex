@@ -115,6 +115,7 @@ async function main() {
   const { generateAdImage } = await import('../lib/ad-creatives/generate-image');
   const { generateAdCopy } = await import('../lib/ad-creatives/generate-copy');
   const { compositeAd } = await import('../lib/ad-creatives/composite-ad');
+  const { qaCheckAd } = await import('../lib/ad-creatives/qa-check');
   
   // Real Toastique brand context (scraped from toastique.com)
   const testBrandContext = {
@@ -200,43 +201,66 @@ Products: Gourmet artisan toasts, smoothie bowls, cold-pressed juices`;
     console.log(`\n  Generating image ${i + 1}/${templates.length} (template page ${template.page_index})...`);
 
     try {
-      const prompt = assembleImagePrompt({
-        brandContext: testBrandContext as any,
-        promptSchema: template.prompt_schema as any,
-        productService: batchConfig.productService,
-        offer: batchConfig.offer,
-        onScreenText: copy,
-        aspectRatio: batchConfig.aspectRatio,
-      });
+      const MAX_QA_RETRIES = 2;
+      let imageBuffer: Buffer | null = null;
+      let qaResult = { passed: false, issues: [] as any[], extractedText: [] as string[], confidence: 0 };
 
-      console.log(`  Prompt length: ${prompt.length} chars`);
-      console.log(`  Step 1: Generating full ad (Gemini renders text matching template)...`);
-
-      const productImageUrls = testBrandContext.visualIdentity.screenshots.map(s => s.url);
-
-      const baseImageBuffer = await generateAdImage({
-        prompt,
-        referenceImageUrl: template.image_url,
-        productImageUrls,
-        aspectRatio: batchConfig.aspectRatio,
-      });
-
-      console.log(`  ✓ Ad generated: ${baseImageBuffer.length} bytes`);
-
-      // Post-processing: composite ONLY the logo
-      let imageBuffer = baseImageBuffer;
-      if (logoUrl) {
-        console.log(`  Step 2: Compositing logo...`);
-        imageBuffer = await compositeAd({
-          baseImage: baseImageBuffer,
-          textOverlay: null,
-          logoUrl,
-          logoPosition: 'bottom-left',
-          width: 1080,
-          height: 1080,
+      for (let attempt = 0; attempt <= MAX_QA_RETRIES; attempt++) {
+        const prompt = assembleImagePrompt({
+          brandContext: testBrandContext as any,
+          promptSchema: template.prompt_schema as any,
+          productService: batchConfig.productService,
+          offer: batchConfig.offer,
+          onScreenText: copy,
+          aspectRatio: batchConfig.aspectRatio,
         });
-        console.log(`  ✓ Logo composited: ${imageBuffer.length} bytes`);
+
+        if (attempt === 0) console.log(`  Prompt length: ${prompt.length} chars`);
+        console.log(`  ${attempt > 0 ? `Retry ${attempt}: ` : ''}Generating ad...`);
+
+        const productImageUrls = testBrandContext.visualIdentity.screenshots.map(s => s.url);
+
+        const baseImageBuffer = await generateAdImage({
+          prompt,
+          referenceImageUrl: template.image_url,
+          productImageUrls,
+          aspectRatio: batchConfig.aspectRatio,
+        });
+
+        // Composite logo
+        if (logoUrl) {
+          imageBuffer = await compositeAd({
+            baseImage: baseImageBuffer,
+            textOverlay: null,
+            logoUrl,
+            logoPosition: 'bottom-left',
+            width: 1080,
+            height: 1080,
+          });
+        } else {
+          imageBuffer = baseImageBuffer;
+        }
+
+        console.log(`  ✓ Image: ${imageBuffer.length} bytes. Running QA...`);
+
+        // QA check
+        qaResult = await qaCheckAd({
+          imageBuffer,
+          intendedText: copy,
+          offer: batchConfig.offer ?? null,
+          brandName: 'Toastique',
+        });
+
+        console.log(`  QA: score=${qaResult.confidence}, passed=${qaResult.passed}, issues=${qaResult.issues.length}`);
+        if (qaResult.issues.length > 0) {
+          qaResult.issues.forEach(issue => console.log(`    ⚠ ${issue.type}: ${issue.description}${issue.found ? ` (found: "${issue.found}")` : ''}`));
+        }
+
+        if (qaResult.passed) break;
+        if (attempt < MAX_QA_RETRIES) console.log(`  ✗ QA failed, retrying...`);
       }
+
+      if (!imageBuffer) throw new Error('No image generated');
 
       // Upload to Supabase Storage
       const creativeId = crypto.randomUUID();
@@ -262,10 +286,15 @@ Products: Gourmet artisan toasts, smoothie bowls, cold-pressed juices`;
         template_source: 'kandy',
         image_url: urlData.publicUrl,
         aspect_ratio: batchConfig.aspectRatio,
-        prompt_used: prompt.substring(0, 2000),
+        prompt_used: 'QA-verified generation',
         on_screen_text: copy,
         product_service: batchConfig.productService,
         offer: batchConfig.offer,
+        metadata: {
+          qa_passed: qaResult.passed,
+          qa_score: qaResult.confidence,
+          qa_issues: qaResult.issues.length > 0 ? qaResult.issues : undefined,
+        },
       });
       
       console.log(`  ✓ Creative saved: ${urlData.publicUrl.substring(0, 80)}...`);
