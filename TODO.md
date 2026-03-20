@@ -8,19 +8,31 @@
 
 ## Active Work
 
-### Static Ad Generator (built 2026-03-18)
-- [x] PRD finalized — Gemini image gen from Kandy template styles
+### Static Ad Generator (built 2026-03-18, QA'd 2026-03-19)
+- [x] PRD finalized — Gemini 3.1 Flash Image gen from Kandy template styles
 - [x] Database migration (4 tables + 2 storage buckets)
 - [x] Core engine (image gen, copy gen, prompt assembly, batch orchestrator)
-- [x] 6 API routes (template catalog, generation, gallery, batches)
-- [x] 7 UI components (gallery, catalog, gen form, progress, cards)
-- [x] 49 Kandy templates seeded (General, H&B, Digital Products, Story)
-- [x] ~29 templates AI-analyzed with prompt schemas
-- [x] E2E test passed — 2 Toastique ads generated
-- [ ] Top up OpenRouter credits (copy gen fails with 402)
-- [ ] Browser-test UI with auth session
+- [x] 9 API routes (templates, generation, gallery, batches, bulk upload, scrape, brand scan, AI model)
+- [x] 4-step wizard UI (brand scan → templates → offers → generate)
+- [x] 49 Kandy templates seeded + all analyzed with prompt schemas
+- [x] Post-processing pipeline (logo compositing via sharp)
+- [x] QA layer (10 checks: wrong brand, duplicate logos, misspellings, wrong product, fabricated info, etc.)
+- [x] Bulk template import (drag-and-drop up to 50 + URL scraper)
+- [x] AI model switcher (settings page, DB-backed, platform-wide)
+- [x] E2E tested — Toastique ads through v1→v9 iterations
+- [x] Browser QA passed — gallery, templates, wizard, AC mode all working
 - [ ] Seed remaining ~150 templates from other Kandy collections
-- [ ] Analyze all templates with prompt schemas
+
+### QA Fixes Applied (2026-03-19)
+- [x] Portal login + invite: AC brand logo toggle
+- [x] Portal login: deactivated user error display
+- [x] Search process route: portal org scope check
+- [x] Ad scraper: HTTP→HTTPS URL rewrite, filter non-product artifacts
+- [x] Template catalog: display names + formatted section headings
+
+### Remaining QA Items
+- [x] Topic search expansion — built (API + UI + pre-fill from URL params)
+- [x] Search processing progress — fixed (error state, retry button, timeout)
 
 ---
 
