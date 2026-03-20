@@ -1,13 +1,24 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, Filter } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Sparkles, Filter, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreativeCard } from './creative-card';
 import { GalleryPlaceholder } from './gallery-placeholder';
 import { Dialog } from '@/components/ui/dialog';
 import type { AdCreative, AspectRatio } from '@/lib/ad-creatives/types';
+
+function formatBatchDate(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const dayMs = 86_400_000;
+  const diff = now.getTime() - d.getTime();
+  const timeStr = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (diff < dayMs && d.getDate() === now.getDate()) return `Today, ${timeStr}`;
+  if (diff < 2 * dayMs) return `Yesterday, ${timeStr}`;
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + `, ${timeStr}`;
+}
 
 type FilterTab = 'all' | 'favorites';
 
@@ -129,6 +140,24 @@ export function CreativeGallery({ clientId, onNavigateToGenerate, activeBatchId,
     return true;
   });
 
+  // Group filtered creatives by batch_id, preserving newest-first order
+  const batchGroups = useMemo(() => {
+    const seenBatches: string[] = [];
+    const map = new Map<string, AdCreative[]>();
+    for (const c of filtered) {
+      const key = c.batch_id ?? 'unknown';
+      if (!map.has(key)) {
+        seenBatches.push(key);
+        map.set(key, []);
+      }
+      map.get(key)!.push(c);
+    }
+    return seenBatches.map((batchId) => ({
+      batchId,
+      items: map.get(batchId)!,
+    }));
+  }, [filtered]);
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -200,47 +229,100 @@ export function CreativeGallery({ clientId, onNavigateToGenerate, activeBatchId,
         </div>
       </div>
 
-      {/* Masonry grid with placeholders */}
-      <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-        {/* Placeholder cards for active generation */}
-        {activeBatchId && placeholderConfig && placeholderConfig.templateThumbnails.map((thumb, i) => {
-          // Check if this placeholder has been replaced by a real creative
-          const completedCreatives = creatives.filter((c) => batchCreativeIds.has(c.id));
-          if (i < completedCreatives.length) return null; // Already showing as real card
+      {/* Batch-grouped grid */}
+      <div className="space-y-6">
+        {/* Active generating batch at the top */}
+        {activeBatchId && !batchGroups.some((g) => g.batchId === activeBatchId) && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Loader2 size={12} className="animate-spin text-accent-text" />
+              <span className="text-xs font-medium text-accent-text">Generating now</span>
+            </div>
+            {placeholderConfig && (
+              <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+                {placeholderConfig.templateThumbnails.map((thumb, i) => (
+                  <div key={`placeholder-${i}`} className="break-inside-avoid">
+                    <GalleryPlaceholder
+                      brandColors={placeholderConfig.brandColors}
+                      templateThumbnailUrl={thumb.imageUrl}
+                      status="generating"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Grouped by batch */}
+        {batchGroups.map((group, groupIndex) => {
+          const isActiveBatch = group.batchId === activeBatchId;
+          const firstCreated = group.items[0]?.created_at;
+          const completedInBatch = group.items.filter((c) => batchCreativeIds.has(c.id));
+          const remainingPlaceholders = isActiveBatch && placeholderConfig
+            ? Math.max(0, placeholderConfig.templateThumbnails.length - completedInBatch.length)
+            : 0;
 
           return (
-            <div key={`placeholder-${i}`} className="break-inside-avoid">
-              <GalleryPlaceholder
-                brandColors={placeholderConfig.brandColors}
-                templateThumbnailUrl={thumb.imageUrl}
-                status="generating"
-              />
+            <div key={group.batchId} className="space-y-3">
+              {/* Batch divider (not first group, or any group after an active batch) */}
+              {groupIndex > 0 && (
+                <div className="flex items-center gap-3 pt-2">
+                  <div className="flex-1 h-px bg-nativz-border/60" />
+                  {firstCreated && (
+                    <span className="text-[11px] text-text-muted shrink-0">
+                      {formatBatchDate(firstCreated)}
+                    </span>
+                  )}
+                  <div className="flex-1 h-px bg-nativz-border/60" />
+                </div>
+              )}
+
+              {isActiveBatch && (
+                <div className="flex items-center gap-2">
+                  <Loader2 size={12} className="animate-spin text-accent-text" />
+                  <span className="text-xs font-medium text-accent-text">Generating now</span>
+                </div>
+              )}
+
+              <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+                {/* Remaining placeholder slots for this active batch */}
+                {isActiveBatch && placeholderConfig && Array.from({ length: remainingPlaceholders }).map((_, i) => (
+                  <div key={`placeholder-${i}`} className="break-inside-avoid">
+                    <GalleryPlaceholder
+                      brandColors={placeholderConfig.brandColors}
+                      templateThumbnailUrl={placeholderConfig.templateThumbnails[completedInBatch.length + i]?.imageUrl}
+                      status="generating"
+                    />
+                  </div>
+                ))}
+
+                {/* Creatives in this batch */}
+                {group.items.map((creative) => (
+                  <div key={creative.id} className="break-inside-avoid">
+                    {batchCreativeIds.has(creative.id) ? (
+                      <GalleryPlaceholder
+                        brandColors={placeholderConfig?.brandColors ?? []}
+                        status="completed"
+                        imageUrl={creative.image_url}
+                      />
+                    ) : (
+                      <CreativeCard
+                        creative={creative}
+                        onFavorite={() => toggleFavorite(creative.id)}
+                        onDelete={() => deleteCreative(creative.id)}
+                        onClick={() => setSelectedCreative(creative)}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           );
         })}
 
-        {/* Real creatives */}
-        {filtered.map((creative) => (
-          <div key={creative.id} className="break-inside-avoid">
-            {batchCreativeIds.has(creative.id) ? (
-              <GalleryPlaceholder
-                brandColors={placeholderConfig?.brandColors ?? []}
-                status="completed"
-                imageUrl={creative.image_url}
-              />
-            ) : (
-              <CreativeCard
-                creative={creative}
-                onFavorite={() => toggleFavorite(creative.id)}
-                onDelete={() => deleteCreative(creative.id)}
-                onClick={() => setSelectedCreative(creative)}
-              />
-            )}
-          </div>
-        ))}
-
         {filtered.length === 0 && !activeBatchId && (
-          <p className="text-sm text-text-muted text-center py-12 col-span-full">
+          <p className="text-sm text-text-muted text-center py-12">
             No creatives match the current filters.
           </p>
         )}
