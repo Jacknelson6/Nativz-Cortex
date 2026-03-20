@@ -1,26 +1,37 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Sparkles, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreativeCard } from './creative-card';
+import { GalleryPlaceholder } from './gallery-placeholder';
 import { Dialog } from '@/components/ui/dialog';
 import type { AdCreative, AspectRatio } from '@/lib/ad-creatives/types';
 
 type FilterTab = 'all' | 'favorites';
 
+interface PlaceholderConfig {
+  brandColors: string[];
+  templateThumbnails: { templateId: string; imageUrl: string; variationIndex: number }[];
+}
+
 interface CreativeGalleryProps {
   clientId: string;
   onNavigateToGenerate: () => void;
+  activeBatchId?: string | null;
+  placeholderConfig?: PlaceholderConfig | null;
+  onBatchComplete?: () => void;
 }
 
-export function CreativeGallery({ clientId, onNavigateToGenerate }: CreativeGalleryProps) {
+export function CreativeGallery({ clientId, onNavigateToGenerate, activeBatchId, placeholderConfig, onBatchComplete }: CreativeGalleryProps) {
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [aspectFilter, setAspectFilter] = useState<AspectRatio | 'all'>('all');
   const [selectedCreative, setSelectedCreative] = useState<AdCreative | null>(null);
+  const [batchCreativeIds, setBatchCreativeIds] = useState<Set<string>>(new Set());
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchCreatives = useCallback(async () => {
     try {
@@ -39,6 +50,46 @@ export function CreativeGallery({ clientId, onNavigateToGenerate }: CreativeGall
   useEffect(() => {
     fetchCreatives();
   }, [fetchCreatives]);
+
+  // Poll for batch progress when actively generating
+  useEffect(() => {
+    if (!activeBatchId || !clientId) return;
+
+    async function pollBatch() {
+      try {
+        const res = await fetch(`/api/clients/${clientId}/ad-creatives/batches/${activeBatchId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // Update batch creatives
+        const batchCreatives: AdCreative[] = data.creatives ?? [];
+        setBatchCreativeIds(new Set(batchCreatives.map((c: AdCreative) => c.id)));
+
+        // Merge batch creatives into main list
+        setCreatives((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id));
+          const newOnes = batchCreatives.filter((c: AdCreative) => !existingIds.has(c.id));
+          return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
+        });
+
+        // Check if batch is done
+        const status = data.batch?.status;
+        if (status === 'completed' || status === 'failed' || status === 'partial') {
+          if (pollRef.current) clearInterval(pollRef.current);
+          onBatchComplete?.();
+        }
+      } catch {
+        // Keep polling
+      }
+    }
+
+    pollBatch();
+    pollRef.current = setInterval(pollBatch, 3000);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [activeBatchId, clientId, onBatchComplete]);
 
   const toggleFavorite = async (id: string) => {
     const creative = creatives.find((c) => c.id === id);
@@ -94,7 +145,7 @@ export function CreativeGallery({ clientId, onNavigateToGenerate }: CreativeGall
     );
   }
 
-  if (creatives.length === 0) {
+  if (creatives.length === 0 && !activeBatchId) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-surface mb-4">
@@ -149,25 +200,51 @@ export function CreativeGallery({ clientId, onNavigateToGenerate }: CreativeGall
         </div>
       </div>
 
-      {/* Masonry grid */}
-      {filtered.length === 0 ? (
-        <p className="text-sm text-text-muted text-center py-12">
-          No creatives match the current filters.
-        </p>
-      ) : (
-        <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-          {filtered.map((creative) => (
-            <div key={creative.id} className="break-inside-avoid">
+      {/* Masonry grid with placeholders */}
+      <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+        {/* Placeholder cards for active generation */}
+        {activeBatchId && placeholderConfig && placeholderConfig.templateThumbnails.map((thumb, i) => {
+          // Check if this placeholder has been replaced by a real creative
+          const completedCreatives = creatives.filter((c) => batchCreativeIds.has(c.id));
+          if (i < completedCreatives.length) return null; // Already showing as real card
+
+          return (
+            <div key={`placeholder-${i}`} className="break-inside-avoid">
+              <GalleryPlaceholder
+                brandColors={placeholderConfig.brandColors}
+                templateThumbnailUrl={thumb.imageUrl}
+                status="generating"
+              />
+            </div>
+          );
+        })}
+
+        {/* Real creatives */}
+        {filtered.map((creative) => (
+          <div key={creative.id} className="break-inside-avoid">
+            {batchCreativeIds.has(creative.id) ? (
+              <GalleryPlaceholder
+                brandColors={placeholderConfig?.brandColors ?? []}
+                status="completed"
+                imageUrl={creative.image_url}
+              />
+            ) : (
               <CreativeCard
                 creative={creative}
                 onFavorite={() => toggleFavorite(creative.id)}
                 onDelete={() => deleteCreative(creative.id)}
                 onClick={() => setSelectedCreative(creative)}
               />
-            </div>
-          ))}
-        </div>
-      )}
+            )}
+          </div>
+        ))}
+
+        {filtered.length === 0 && !activeBatchId && (
+          <p className="text-sm text-text-muted text-center py-12 col-span-full">
+            No creatives match the current filters.
+          </p>
+        )}
+      </div>
 
       {/* Detail modal */}
       <Dialog
