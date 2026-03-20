@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { crawlSite } from '@/lib/ad-creatives/crawl-site';
+import { scrapeBrandAndProducts } from '@/lib/ad-creatives/scrape-brand';
 
 export const maxDuration = 300;
 
@@ -57,13 +58,22 @@ export async function POST(req: Request) {
     }
   }
 
-  // Kick off async crawl
-  after(async () => {
-    try {
-      const result = await crawlSite(url);
+  // Quick homepage scan for immediate UI feedback
+  let quickBrand = null;
+  let quickProducts: unknown[] = [];
+  try {
+    const quick = await scrapeBrandAndProducts(url);
+    quickBrand = quick.brand;
+    quickProducts = quick.products;
+  } catch {
+    // Homepage scan failed — still try full crawl
+  }
 
-      if (clientId) {
-        // Persist to knowledge
+  // Kick off full-site crawl in background to persist to knowledge
+  if (clientId) {
+    after(async () => {
+      try {
+        const result = await crawlSite(url);
         await admin.from('client_knowledge_entries').insert({
           client_id: clientId,
           type: 'brand_profile',
@@ -80,11 +90,21 @@ export async function POST(req: Request) {
             },
           },
         });
+      } catch (err) {
+        console.error('[crawl-brand] background full crawl failed:', err);
       }
-    } catch (err) {
-      console.error('[crawl-brand] background crawl failed:', err);
-    }
-  });
+    });
+  }
+
+  // Return quick scan results immediately (full crawl continues in background)
+  if (quickBrand) {
+    return NextResponse.json({
+      status: 'ready',
+      brand: quickBrand,
+      products: quickProducts,
+      mediaUrls: [],
+    });
+  }
 
   return NextResponse.json({ status: 'crawling' });
 }
