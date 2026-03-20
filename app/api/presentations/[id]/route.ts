@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional().nullable(),
+  type: z.enum(['slides', 'tier_list', 'social_audit', 'benchmarks', 'prospect_audit', 'social_results']).optional(),
   client_id: z.string().uuid().optional().nullable(),
   slides: z.array(z.object({
     title: z.string().default(''),
