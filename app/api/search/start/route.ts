@@ -11,7 +11,7 @@ const searchSchema = z.object({
   country: z.string().default('us'),
   client_id: z.string().uuid().nullable().optional(),
   search_mode: z.enum(['general', 'client_strategy']).default('general'),
-  platforms: z.array(z.enum(['web', 'reddit', 'youtube', 'tiktok'])).default(['web']),
+  platforms: z.array(z.enum(['web', 'reddit', 'youtube', 'tiktok', 'quora'])).default(['web']),
   volume: z.enum(['light', 'medium', 'deep', 'quick']).default('medium'),
 });
 
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { query, source, time_range, language, country, client_id, search_mode, platforms, volume } = parsed.data;
-    const isV2 = platforms.length > 1 || platforms.includes('reddit');
+    const isV2 = platforms.length > 1 || platforms.includes('reddit') || platforms.includes('quora');
 
     const adminClient = createAdminClient();
 

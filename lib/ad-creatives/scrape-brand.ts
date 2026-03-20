@@ -44,7 +44,23 @@ export async function scrapeBrandAndProducts(url: string): Promise<ScrapeBrandRe
   const brand = extractBrand(html, url);
   const products = extractProducts(html);
 
-  return { brand, products };
+  // Rewrite http:// URLs to https:// for CSP compliance
+  if (brand.logoUrl) {
+    brand.logoUrl = brand.logoUrl.replace(/^http:\/\//, 'https://');
+  }
+
+  // Filter out non-product scrape artifacts and sanitize URLs
+  const ARTIFACT_PATTERNS = /load video|play video|watch/i;
+  const cleanProducts = products
+    .filter((p) => p.imageUrl) // must have an image
+    .filter((p) => p.name.length >= 3) // name must be at least 3 chars
+    .filter((p) => !ARTIFACT_PATTERNS.test(p.name)) // filter video artifacts
+    .map((p) => ({
+      ...p,
+      imageUrl: p.imageUrl ? p.imageUrl.replace(/^http:\/\//, 'https://') : null,
+    }));
+
+  return { brand, products: cleanProducts };
 }
 
 // ---------------------------------------------------------------------------

@@ -14,10 +14,11 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      web: !!process.env.BRAVE_SEARCH_API_KEY,
-      reddit: true, // No API key needed — uses public JSON API
+      web: !!process.env.BRAVE_SEARCH_API_KEY, // Brave + Google SERP (via Serper) combined
+      reddit: !!process.env.BRAVE_SEARCH_API_KEY, // Brave Search to find threads + scrapes for content
       youtube: !!process.env.YOUTUBE_API_KEY,
       tiktok: !!process.env.APIFY_API_KEY,
+      quora: !!process.env.BRAVE_SEARCH_API_KEY, // Brave Search for Quora threads
     });
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

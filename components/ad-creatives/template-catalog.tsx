@@ -21,6 +21,16 @@ const VERTICAL_LABELS: Record<AdVertical, string> = {
   automotive: 'Automotive',
 };
 
+/** Format snake_case vertical keys into readable section headings */
+function formatSectionHeading(key: string): string {
+  // Check the vertical labels map first
+  if (key in VERTICAL_LABELS) return VERTICAL_LABELS[key as AdVertical];
+  // Fallback: replace underscores, capitalize first word, lowercase rest
+  return key
+    .replace(/_/g, ' ')
+    .replace(/\b\w/, (c) => c.toUpperCase());
+}
+
 const CATEGORY_LABELS: Record<AdCategory, string> = {
   promotional: 'Promotional',
   brand_awareness: 'Brand awareness',
@@ -212,7 +222,7 @@ export function TemplateCatalog({ clientId, onShowBulkImport, refreshKey }: Temp
         Array.from(grouped.entries()).map(([vertical, items]) => (
           <div key={vertical} className="space-y-3">
             <h3 className="text-sm font-semibold text-text-primary">
-              {VERTICAL_LABELS[vertical as AdVertical] ?? vertical}
+              {formatSectionHeading(vertical)}
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {items.map((template) => (
@@ -229,7 +239,7 @@ export function TemplateCatalog({ clientId, onShowBulkImport, refreshKey }: Temp
                   />
                   <div className="p-3 space-y-2">
                     <p className="text-xs font-medium text-text-primary truncate">
-                      {template.collection_name}
+                      {CATEGORY_LABELS[template.ad_category]} — {template.collection_name}
                     </p>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <Badge variant="info" className="text-[10px]">

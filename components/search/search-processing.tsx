@@ -79,8 +79,16 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
   const [elapsed, setElapsed] = useState(0);
   const [emailSent, setEmailSent] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [apiStarted, setApiStarted] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   const hasStarted = useRef(false);
+  const apiErrorRef = useRef(false);
   const intervalsRef = useRef<{ progress: ReturnType<typeof setInterval> | null; timer: ReturnType<typeof setInterval> | null }>({ progress: null, timer: null });
+
+  // Keep ref in sync so the interval closure can read it
+  useEffect(() => {
+    apiErrorRef.current = apiError !== null;
+  }, [apiError]);
 
   // Memoize stages with useRef so they don't change between renders
   const stagesRef = useRef<Stage[]>(buildStages(platforms, volume));
@@ -111,6 +119,9 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
     }, 1000);
 
     intervalsRef.current.progress = setInterval(() => {
+      // Stop advancing if the API call errored out
+      if (apiErrorRef.current) return;
+
       const elapsedMs = Date.now() - startTime;
 
       let cumulativeDuration = 0;
@@ -138,16 +149,23 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
 
   async function runProcess() {
     setError('');
+    setApiError(null);
+    apiErrorRef.current = false;
+    setApiStarted(true);
     startProgress();
 
     try {
-      const res = await fetch(`/api/search/${searchId}/process`, { method: 'POST' });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 min timeout
+      const res = await fetch(`/api/search/${searchId}/process`, { method: 'POST', signal: controller.signal });
+      clearTimeout(timeoutId);
       const data = await res.json();
 
       if (!res.ok) {
         clearIntervals();
         const msg = data.details ? `${data.error}: ${data.details}` : (data.error || 'Search failed.');
         setError(msg);
+        setApiError(msg);
         return;
       }
 
@@ -159,9 +177,13 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
       setTimeout(() => {
         router.push(`${redirectPrefix}/search/${searchId}`);
       }, 800);
-    } catch {
+    } catch (err) {
       clearIntervals();
-      setError('Something went wrong. Try again.');
+      const msg = err instanceof DOMException && err.name === 'AbortError'
+        ? 'Request timed out — the search took too long. Try again or use a lighter depth.'
+        : 'Something went wrong. Try again.';
+      setError(msg);
+      setApiError(msg);
     }
   }
 
@@ -176,6 +198,8 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
   function handleRetry() {
     hasStarted.current = false;
     setError('');
+    setApiError(null);
+    setApiStarted(false);
     runProcess();
   }
 

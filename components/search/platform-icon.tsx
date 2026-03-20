@@ -27,14 +27,23 @@ function TikTokLogo({ size = 14, className = '' }: { size?: number; className?: 
   );
 }
 
+function QuoraLogo({ size = 14, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M12.73 19.35c-.84-1.35-1.83-2.67-3.21-2.67-.46 0-.92.15-1.27.56l-.78-.85c.63-.86 1.58-1.38 2.81-1.38 1.84 0 2.98 1.05 3.91 2.34.6-1.18.91-2.68.91-4.43 0-5.14-2.09-8.27-5.1-8.27S4.9 7.78 4.9 12.92c0 5.12 2.09 8.2 5.1 8.2.96 0 1.83-.32 2.57-.97l.16.2zM10 24C4.48 24 0 18.63 0 12.92S4.48 1.85 10 1.85s10 5.37 10 11.07c0 2.69-.76 5.12-2.04 7.03.58.81 1.22 1.33 2.04 1.33.58 0 1.05-.22 1.37-.48l.66 1.35c-.67.6-1.56.85-2.53.85-1.74 0-3.02-1.05-3.92-2.5C14.22 22.33 12.21 24 10 24z" />
+    </svg>
+  );
+}
+
 export const PLATFORM_CONFIG: Record<
   SearchPlatform,
   { label: string; icon: React.ComponentType<{ size?: number; className?: string }>; color: string; bg: string }
 > = {
-  web: { label: 'Web & news', icon: Globe, color: 'text-blue-400', bg: 'bg-blue-400/10' },
+  web: { label: 'Web', icon: Globe, color: 'text-blue-400', bg: 'bg-blue-400/10' },
   reddit: { label: 'Reddit', icon: RedditLogo, color: 'text-orange-400', bg: 'bg-orange-400/10' },
   youtube: { label: 'YouTube', icon: YouTubeLogo, color: 'text-red-400', bg: 'bg-red-400/10' },
   tiktok: { label: 'TikTok', icon: TikTokLogo, color: 'text-teal-400', bg: 'bg-teal-400/10' },
+  quora: { label: 'Quora', icon: QuoraLogo, color: 'text-red-500', bg: 'bg-red-500/10' },
 };
 
 interface PlatformIconProps {

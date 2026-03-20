@@ -8,6 +8,7 @@ import { CheckCircle2, AlertCircle, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { createClient } from '@/lib/supabase/client';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 type InviteStatus = 'loading' | 'valid' | 'invalid' | 'expired' | 'used';
 type FlowMode = 'signup' | 'link-existing';
@@ -15,6 +16,8 @@ type FlowMode = 'signup' | 'link-existing';
 export default function PortalJoinPage() {
   const params = useParams<{ token: string }>();
   const router = useRouter();
+  const { mode } = useBrandMode();
+  const isAC = mode === 'anderson';
 
   const [status, setStatus] = useState<InviteStatus>('loading');
   const [clientName, setClientName] = useState('');
@@ -142,14 +145,18 @@ export default function PortalJoinPage() {
         {/* Logo */}
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex items-center justify-center">
-            <Image
-              src="/nativz-logo.svg"
-              alt="Nativz"
-              width={140}
-              height={53}
-              className="h-12 w-auto"
-              priority
-            />
+            {isAC ? (
+              <img src="/anderson-logo.svg" alt="Anderson Collaborative" className="h-12 w-auto" />
+            ) : (
+              <Image
+                src="/nativz-logo.svg"
+                alt="Nativz"
+                width={140}
+                height={53}
+                className="h-12 w-auto"
+                priority
+              />
+            )}
           </div>
         </div>
 

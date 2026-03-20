@@ -82,6 +82,25 @@ export async function POST(
       return NextResponse.json({ error: 'Search not found' }, { status: 404 });
     }
 
+    // Org scope check: portal users can only process their own org's client searches
+    if (search.client_id) {
+      const { data: userData } = await adminClient
+        .from('users')
+        .select('role, organization_id')
+        .eq('id', user.id)
+        .single();
+      if (userData?.role === 'viewer') {
+        const { data: client } = await adminClient
+          .from('clients')
+          .select('organization_id')
+          .eq('id', search.client_id)
+          .single();
+        if (client && client.organization_id !== userData.organization_id) {
+          return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+        }
+      }
+    }
+
     if (search.status === 'completed') {
       return NextResponse.json({ status: 'completed' });
     }
@@ -116,7 +135,7 @@ export async function POST(
     // Read platforms/volume from the search record
     const platforms: string[] = search.platforms ?? ['web'];
     const volume: string = search.volume ?? 'medium';
-    const isV2 = platforms.length > 1 || platforms.includes('reddit');
+    const isV2 = platforms.length > 1 || platforms.includes('reddit') || platforms.includes('quora');
 
     try {
       // ── Step 1: Gather data ────────────────────────────────────────────────

@@ -182,7 +182,7 @@ function extractTopics(
           existing.sources.push({
             url: source.url,
             title: source.title,
-            type: source.platform === 'web' ? 'web' : source.platform === 'reddit' ? 'discussion' : 'video',
+            type: source.platform === 'web' ? 'web' : source.platform === 'reddit' || source.platform === 'quora' ? 'discussion' : 'video',
             relevance: `${source.engagement.views ?? source.engagement.score ?? 0} engagement`,
             platform: source.platform,
           });
@@ -194,7 +194,7 @@ function extractTopics(
           sources: [{
             url: source.url,
             title: source.title,
-            type: source.platform === 'web' ? 'web' : source.platform === 'reddit' ? 'discussion' : 'video',
+            type: source.platform === 'web' ? 'web' : source.platform === 'reddit' || source.platform === 'quora' ? 'discussion' : 'video',
             relevance: `${source.engagement.views ?? source.engagement.score ?? 0} engagement`,
             platform: source.platform,
           }],
@@ -276,7 +276,7 @@ function computeContentBreakdown(sources: PlatformSource[]): ContentBreakdown {
       formatCounts['Short-form video'] = formatCounts['Short-form video'] || { count: 0, engagement: 0 };
       formatCounts['Short-form video'].count++;
       formatCounts['Short-form video'].engagement += engagement;
-    } else if (source.platform === 'reddit') {
+    } else if (source.platform === 'reddit' || source.platform === 'quora') {
       formatCounts['Discussion thread'] = formatCounts['Discussion thread'] || { count: 0, engagement: 0 };
       formatCounts['Discussion thread'].count++;
       formatCounts['Discussion thread'].engagement += engagement;
