@@ -10,6 +10,9 @@ import {
   RectangleVertical,
   Sparkles,
   Type,
+  Zap,
+  Eye,
+  Image,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -17,6 +20,8 @@ import { BrandEditor } from './brand-editor';
 import { ProductGrid } from './product-grid';
 import { TemplateGrid } from './template-grid';
 import { VariationStrip } from './variation-strip';
+import { BrandMediaPanel } from './brand-media-panel';
+import { PromptReview, type PromptPreviewData } from './prompt-review';
 import type { KandyTemplate, AspectRatio } from '@/lib/ad-creatives/types';
 import { ASPECT_RATIOS } from '@/lib/ad-creatives/types';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
@@ -73,6 +78,15 @@ export function AdWizard({ clientId, initialBrand, initialProducts, onGeneration
   const [manualHeadline, setManualHeadline] = useState('');
   const [manualSubheadline, setManualSubheadline] = useState('');
   const [manualCta, setManualCta] = useState('');
+
+  // Brand media
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
+  const [selectedMediaUrls, setSelectedMediaUrls] = useState<Set<string>>(new Set());
+
+  // Mode: auto vs interactive
+  const [mode, setMode] = useState<'auto' | 'interactive'>('auto');
+  const [promptPreviews, setPromptPreviews] = useState<PromptPreviewData[] | null>(null);
+  const [loadingPreviews, setLoadingPreviews] = useState(false);
 
   // Generate
   const [generating, setGenerating] = useState(false);
@@ -174,6 +188,71 @@ export function AdWizard({ clientId, initialBrand, initialProducts, onGeneration
   function addProduct(product: ScrapedProduct) {
     setScrapedProducts((prev) => [...prev, product]);
     setSelectedProductIndices((prev) => new Set([...prev, scrapedProducts.length]));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Brand media
+  // ---------------------------------------------------------------------------
+
+  function toggleMediaUrl(url: string) {
+    setSelectedMediaUrls((prev) => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url);
+      else next.add(url);
+      return next;
+    });
+  }
+
+  function handleMediaUpload(urls: string[]) {
+    setMediaUrls((prev) => [...prev, ...urls]);
+    // Auto-select newly uploaded media
+    setSelectedMediaUrls((prev) => {
+      const next = new Set(prev);
+      for (const url of urls) next.add(url);
+      return next;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Prompt preview (interactive mode)
+  // ---------------------------------------------------------------------------
+
+  async function handlePreviewPrompts() {
+    if (!brand || selectedTemplateIds.size === 0) return;
+    setLoadingPreviews(true);
+
+    try {
+      const templateVariations = selectedTemplates.map((t) => ({
+        templateId: t.id,
+        count: variations.get(t.id) ?? 2,
+      }));
+
+      const res = await fetch(`/api/clients/${clientId}/ad-creatives/preview-prompts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateVariations,
+          templateSource: 'kandy',
+          productService: brand.name,
+          offer: '',
+          aspectRatio,
+          onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
+          manualText: copyMode === 'manual' ? {
+            headline: manualHeadline || brand.name,
+            subheadline: manualSubheadline,
+            cta: manualCta || 'Learn more',
+          } : undefined,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Failed to generate previews');
+      const data = await res.json();
+      setPromptPreviews(data.previews ?? []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to preview prompts');
+    } finally {
+      setLoadingPreviews(false);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -284,8 +363,21 @@ export function AdWizard({ clientId, initialBrand, initialProducts, onGeneration
         )}
       </WizardSection>
 
-      {/* Step 2: Products */}
-      <WizardSection step={2} title="Products" status={productStatus} ref={productRef}>
+      {/* Step 1.5: Brand Media (shown when brand has media) */}
+      {brand && mediaUrls.length > 0 && (
+        <WizardSection step={2} title="Brand media" status={selectedMediaUrls.size > 0 ? 'complete' : 'active'}>
+          <BrandMediaPanel
+            mediaUrls={mediaUrls}
+            selectedUrls={selectedMediaUrls}
+            onToggle={toggleMediaUrl}
+            onUpload={handleMediaUpload}
+            clientId={clientId || undefined}
+          />
+        </WizardSection>
+      )}
+
+      {/* Step 2/3: Products */}
+      <WizardSection step={mediaUrls.length > 0 ? 3 : 2} title="Products" status={productStatus} ref={productRef}>
         <ProductGrid
           products={scrapedProducts}
           selectedIndices={selectedProductIndices}
@@ -400,9 +492,9 @@ export function AdWizard({ clientId, initialBrand, initialProducts, onGeneration
         </WizardSection>
       )}
 
-      {/* Step 5: Generate */}
+      {/* Step 5/6: Generate */}
       {selectedTemplateIds.size > 0 && brand && (
-        <WizardSection step={5} title="Generate" status={generateStatus} ref={generateRef}>
+        <WizardSection step={mediaUrls.length > 0 ? 6 : 5} title="Generate" status={generateStatus} ref={generateRef}>
           <div className="space-y-4">
             <VariationStrip
               templates={selectedTemplates}
@@ -411,18 +503,80 @@ export function AdWizard({ clientId, initialBrand, initialProducts, onGeneration
               onRemove={handleRemoveTemplate}
             />
 
-            <Button
-              size="lg"
-              className="w-full"
-              onClick={handleGenerate}
-              disabled={generating || totalAds === 0}
-            >
-              {generating ? (
-                <><Loader2 size={16} className="animate-spin" /> Generating...</>
-              ) : (
-                <><Sparkles size={16} /> Generate {totalAds} ad{totalAds !== 1 ? 's' : ''}</>
-              )}
-            </Button>
+            {/* Mode toggle */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => { setMode('auto'); setPromptPreviews(null); }}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
+                  mode === 'auto'
+                    ? 'border-accent bg-accent-surface text-accent-text'
+                    : 'border-nativz-border bg-surface text-text-muted hover:border-accent/30'
+                }`}
+              >
+                <Zap size={13} /> Auto
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('interactive')}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
+                  mode === 'interactive'
+                    ? 'border-accent bg-accent-surface text-accent-text'
+                    : 'border-nativz-border bg-surface text-text-muted hover:border-accent/30'
+                }`}
+              >
+                <Eye size={13} /> Interactive
+              </button>
+              <span className="text-[10px] text-text-muted ml-1">
+                {mode === 'auto' ? 'Generate immediately' : 'Review prompts first'}
+              </span>
+            </div>
+
+            {/* Prompt review (interactive mode) */}
+            {promptPreviews && mode === 'interactive' && (
+              <PromptReview
+                previews={promptPreviews}
+                onApproveAll={(edited) => {
+                  // TODO: Pass edited prompts to generation
+                  handleGenerate();
+                }}
+                onCancel={() => setPromptPreviews(null)}
+                generating={generating}
+              />
+            )}
+
+            {/* Generate buttons */}
+            {!promptPreviews && (
+              <div className="flex gap-2">
+                {mode === 'interactive' && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={handlePreviewPrompts}
+                    disabled={loadingPreviews || totalAds === 0}
+                  >
+                    {loadingPreviews ? (
+                      <><Loader2 size={16} className="animate-spin" /> Loading previews...</>
+                    ) : (
+                      <><Eye size={16} /> Review prompts ({totalAds})</>
+                    )}
+                  </Button>
+                )}
+                <Button
+                  size="lg"
+                  className={mode === 'interactive' ? 'flex-1' : 'w-full'}
+                  onClick={handleGenerate}
+                  disabled={generating || totalAds === 0}
+                >
+                  {generating ? (
+                    <><Loader2 size={16} className="animate-spin" /> Generating...</>
+                  ) : (
+                    <><Sparkles size={16} /> Generate {totalAds} ad{totalAds !== 1 ? 's' : ''}</>
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         </WizardSection>
       )}
