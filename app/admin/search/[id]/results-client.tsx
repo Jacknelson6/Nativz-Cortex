@@ -31,8 +31,9 @@ import { SearchIdeasWizard } from '@/components/research/search-ideas-wizard';
 import type { ClientOption } from '@/components/ui/client-picker';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { hasSerp } from '@/lib/types/search';
-import type { TopicSearch, TopicSearchAIResponse, SearchPlatform } from '@/lib/types/search';
+import type { TopicSearch, TopicSearchAIResponse, SearchPlatform, TrendingTopic, LegacyTrendingTopic } from '@/lib/types/search';
 import { BenchmarkRecommendations } from '@/components/search/benchmark-recommendations';
+import { RelatedTopics } from '@/components/search/related-topics';
 import type { Recipient } from './page';
 
 interface LinkedIdea {
@@ -56,8 +57,7 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
   const [showSendModal, setShowSendModal] = useState(false);
   const [showIdeasWizard, setShowIdeasWizard] = useState(false);
   const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const trendingTopics: any[] | null = search.trending_topics as any;
+  const trendingTopics = (search.trending_topics ?? []) as (TrendingTopic | LegacyTrendingTopic)[];
 
   async function handleSend(action: 'approve' | 'reject') {
     setSending(true);
@@ -317,10 +317,11 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
             )}
           </div>
         )}
-        {/* Render trending topics — cast needed due to React 19 types regression */}
-        {(trendingTopics && trendingTopics.length > 0) as boolean ? (
-          <TrendingTopicsTable topics={trendingTopics!} clientId={clientInfo?.id ?? undefined} searchId={search.id} />
-        ) : null}
+        {/* Render trending topics */}
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {(trendingTopics.length > 0 ? (
+          <TrendingTopicsTable topics={trendingTopics} clientId={clientInfo?.id ?? undefined} searchId={search.id} />
+        ) : null) as any}
 
         {(aiResponse?.content_pillars || aiResponse?.niche_performance_insights) && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -358,6 +359,9 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
         {hasSerp(search) && search.serp_data && (
           <SourcesPanel serpData={search.serp_data} />
         )}
+
+        {/* Explore related topics */}
+        <RelatedTopics searchId={search.id} />
       </div>
 
       <ScrollToTop />

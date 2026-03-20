@@ -6,14 +6,15 @@ export type SearchMode = 'general' | 'client_strategy';
 
 // ── v2 Multi-platform types ────────────────────────────────────────────────
 
-export type SearchPlatform = 'reddit' | 'youtube' | 'tiktok' | 'web';
+export type SearchPlatform = 'reddit' | 'youtube' | 'tiktok' | 'web' | 'quora';
 export type SearchVolume = 'light' | 'medium' | 'deep' | 'quick'; // 'quick' kept for backward compat
 
 export const PLATFORM_OPTIONS: { value: SearchPlatform; label: string; available: boolean }[] = [
-  { value: 'web', label: 'Web & news', available: true },
+  { value: 'web', label: 'Web', available: true },
   { value: 'reddit', label: 'Reddit', available: true },
   { value: 'youtube', label: 'YouTube', available: true },
   { value: 'tiktok', label: 'TikTok', available: true },
+  { value: 'quora', label: 'Quora', available: true },
 ];
 
 export interface PlatformSource {

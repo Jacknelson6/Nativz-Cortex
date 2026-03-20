@@ -17,6 +17,7 @@ interface ResearchWizardProps {
   open: boolean;
   onClose: () => void;
   clients: ClientOption[];
+  initialQuery?: string;
   onStarted?: (item: { id: string; query: string; mode: string; clientName: string | null }) => void;
 }
 
@@ -26,10 +27,10 @@ const DEPTH_OPTIONS: { value: 'light' | 'medium' | 'deep'; label: string; tip: s
   { value: 'deep', label: 'Deep', tip: '500+ sources · Full analysis' },
 ];
 
-export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWizardProps) {
+export function ResearchWizard({ open, onClose, clients, initialQuery, onStarted }: ResearchWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
-  const [topicQuery, setTopicQuery] = useState('');
+  const [topicQuery, setTopicQuery] = useState(initialQuery ?? '');
   const [contextMode, setContextMode] = useState<ContextMode>('none');
   const [clientId, setClientId] = useState<string | null>(null);
   const [url, setUrl] = useState('');
@@ -45,6 +46,13 @@ export function ResearchWizard({ open, onClose, clients, onStarted }: ResearchWi
       .then(setPlatformAvailability)
       .catch(() => {});
   }, []);
+
+  // Sync topicQuery when initialQuery changes (e.g., opened from related topics)
+  useEffect(() => {
+    if (initialQuery) {
+      setTopicQuery(initialQuery);
+    }
+  }, [initialQuery]);
 
   const selectedClient = clients.find((c) => c.id === clientId);
   const step1Valid = topicQuery.trim().length > 0 && (

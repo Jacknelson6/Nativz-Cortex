@@ -19,7 +19,8 @@ interface ResearchHubProps {
 export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [researchOpen, setResearchOpen] = useState(false);
+  const prefillQuery = searchParams.get('query') ?? '';
+  const [researchOpen, setResearchOpen] = useState(!!prefillQuery);
   const [strategyOpen, setStrategyOpen] = useState(false);
   const [historyModalOpen, setHistoryModalOpen] = useState(searchParams.get('history') === 'true');
 
@@ -29,6 +30,13 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
       setHistoryModalOpen(true);
     }
   }, [searchParams]);
+
+  // Auto-open research wizard when ?query= is present
+  useEffect(() => {
+    if (prefillQuery) {
+      setResearchOpen(true);
+    }
+  }, [prefillQuery]);
   const [optimisticItems, setOptimisticItems] = useState<HistoryItem[]>([]);
   const prevHistoryRef = useRef(historyItems);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -165,6 +173,7 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
         open={researchOpen}
         onClose={() => setResearchOpen(false)}
         clients={clients}
+        initialQuery={prefillQuery}
         onStarted={handleResearchStarted}
       />
       <ContentWizardModal

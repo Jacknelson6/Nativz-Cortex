@@ -5,7 +5,10 @@ import { gatherRedditData } from '@/lib/reddit/client';
 import { gatherYouTubeData } from '@/lib/youtube/search';
 import { gatherTikTokData } from '@/lib/tiktok/search';
 import { gatherSerpData } from '@/lib/brave/client';
+import { gatherQuoraData } from '@/lib/quora/client';
+import { gatherSerperData } from '@/lib/serper/client';
 import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerperPeopleAlsoAsk } from '@/lib/serper/client';
 
 export interface PlatformResults {
   sources: PlatformSource[];
@@ -18,6 +21,10 @@ export interface PlatformResults {
     topChannels?: string[];
     topHashtags?: string[];
   }[];
+  /** Google "People Also Ask" questions — great for content ideation */
+  peopleAlsoAsk?: SerperPeopleAlsoAsk[];
+  /** Related search queries from Google */
+  relatedSearches?: string[];
 }
 
 /**
@@ -34,29 +41,59 @@ export async function gatherPlatformData(
   const allSources: PlatformSource[] = [];
   const platformStats: PlatformResults['platformStats'] = [];
   let braveSerpData: BraveSerpData | null = null;
+  let peopleAlsoAsk: SerperPeopleAlsoAsk[] = [];
+  let relatedSearches: string[] = [];
 
   // Build platform fetch promises
   const promises: Promise<void>[] = [];
 
-  // Web (Brave) — always included
+  // Web — runs Brave Search + Serper (Google SERP) in parallel
   if (platforms.includes('web')) {
     promises.push(
       (async () => {
         try {
-          const serpData = await gatherSerpData(query, { timeRange });
-          braveSerpData = serpData;
+          // Run Brave + Serper in parallel for maximum coverage
+          const [braveResult, serperResult] = await Promise.allSettled([
+            gatherSerpData(query, { timeRange }),
+            process.env.SERPER_API_KEY ? gatherSerperData(query, timeRange, volume) : Promise.resolve(null),
+          ]);
 
-          // Convert Brave results to PlatformSource format
-          const webSources = normalizeBraveToSources(serpData);
-          allSources.push(...webSources);
+          // Process Brave results
+          if (braveResult.status === 'fulfilled') {
+            braveSerpData = braveResult.value;
+            const webSources = normalizeBraveToSources(braveResult.value);
+            allSources.push(...webSources);
+          }
 
+          // Process Serper results (People Also Ask + Google organic)
+          if (serperResult.status === 'fulfilled' && serperResult.value) {
+            peopleAlsoAsk = serperResult.value.peopleAlsoAsk;
+            relatedSearches = serperResult.value.relatedSearches;
+
+            // Add People Also Ask as web sources (questions people are searching)
+            for (const paa of serperResult.value.peopleAlsoAsk) {
+              allSources.push({
+                platform: 'web',
+                id: `paa-${paa.link}`,
+                url: paa.link,
+                title: `❓ ${paa.question}`,
+                content: paa.snippet,
+                author: '',
+                engagement: {},
+                createdAt: '',
+                comments: [],
+              });
+            }
+          }
+
+          const webCount = allSources.filter(s => s.platform === 'web').length;
           platformStats.push({
             platform: 'web',
-            postCount: webSources.length,
+            postCount: webCount,
             commentCount: 0,
           });
         } catch (err) {
-          console.error('Brave Search failed:', err);
+          console.error('Web search failed:', err);
           platformStats.push({ platform: 'web', postCount: 0, commentCount: 0 });
         }
       })(),
@@ -205,10 +242,46 @@ export async function gatherPlatformData(
     );
   }
 
+  // Quora
+  if (platforms.includes('quora')) {
+    promises.push(
+      (async () => {
+        try {
+          const quoraData = await gatherQuoraData(query, timeRange, volume);
+
+          const quoraSources: PlatformSource[] = quoraData.threads.map((thread) => ({
+            platform: 'quora' as const,
+            id: thread.id,
+            url: thread.url,
+            title: thread.question,
+            content: thread.topAnswer,
+            author: '',
+            engagement: {
+              comments: thread.answerCount ?? undefined,
+            },
+            createdAt: '',
+            comments: [],
+          }));
+
+          allSources.push(...quoraSources);
+
+          platformStats.push({
+            platform: 'quora',
+            postCount: quoraSources.length,
+            commentCount: 0,
+          });
+        } catch (err) {
+          console.error('Quora search failed:', err);
+          platformStats.push({ platform: 'quora', postCount: 0, commentCount: 0 });
+        }
+      })(),
+    );
+  }
+
   // Execute all platform fetches in parallel
   await Promise.allSettled(promises);
 
-  return { sources: allSources, braveSerpData, platformStats };
+  return { sources: allSources, braveSerpData, platformStats, peopleAlsoAsk, relatedSearches };
 }
 
 /**
@@ -295,10 +368,11 @@ export function formatPlatformContext(
     const platformSources = byPlatform[stat.platform] ?? [];
     if (platformSources.length === 0) continue;
 
-    const label = stat.platform === 'web' ? 'Web & News' :
+    const label = stat.platform === 'web' ? 'Web' :
       stat.platform === 'reddit' ? 'Reddit' :
       stat.platform === 'youtube' ? 'YouTube' :
-      stat.platform === 'tiktok' ? 'TikTok' : stat.platform;
+      stat.platform === 'tiktok' ? 'TikTok' :
+      stat.platform === 'quora' ? 'Quora' : stat.platform;
 
     const header = `## ${label} (${stat.postCount} posts${stat.commentCount > 0 ? `, ${stat.commentCount} comments` : ''})`;
     const subInfo = stat.topSubreddits?.length
