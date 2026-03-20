@@ -20,6 +20,7 @@ import { TemplateCatalog } from './template-catalog';
 import { AdWizard } from './ad-wizard';
 import { BulkTemplateImport } from './bulk-template-import';
 import { GenerationBanner } from './generation-banner';
+import { BrandDnaRequiredPanel } from './brand-dna-required-panel';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
 import type { RecentClient } from '@/app/admin/ad-creatives/page';
 
@@ -33,6 +34,7 @@ type Tab = 'generate' | 'gallery' | 'templates';
 interface ClientWithSlug extends ClientOption {
   slug: string;
   website_url?: string | null;
+  brand_dna_status?: string | null;
 }
 
 interface AdCreativesHubProps {
@@ -96,6 +98,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
   const [scanning, setScanning] = useState(false);
   const [brand, setBrand] = useState<ScrapedBrand | null>(null);
   const [scrapedProducts, setScrapedProducts] = useState<ScrapedProduct[]>([]);
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [clientId, setClientId] = useState<string | null>(null);
 
   // Generation state (passed from wizard → gallery)
@@ -113,6 +116,11 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
 
   // Resolve the client ID for API calls
   const resolvedClientId = clientId ?? (brand ? findClientByUrl(clients, brand.url) : null);
+  const resolvedClient = resolvedClientId ? clients.find((c) => c.id === resolvedClientId) : null;
+  const brandDnaReady =
+    !resolvedClientId ||
+    resolvedClient?.brand_dna_status === 'active' ||
+    resolvedClient?.brand_dna_status === 'draft';
 
   const counter = useAnimatedCounter(10000);
 
@@ -145,6 +153,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     setScanning(true);
     setBrand(null);
     setScrapedProducts([]);
+    setMediaUrls([]);
 
     try {
       // Use the new crawl-brand endpoint (checks knowledge cache first)
@@ -165,6 +174,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
         // Immediate result from knowledge cache
         setBrand(data.brand ?? null);
         setScrapedProducts(data.products ?? []);
+        setMediaUrls(data.mediaUrls ?? []);
         setScanning(false);
       } else {
         // Crawl started in background — poll for completion
@@ -184,6 +194,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     setBrand(null);
     setBrandUrl('');
     setScrapedProducts([]);
+    setMediaUrls([]);
 
     const client = clients.find((c) => c.id === id);
 
@@ -209,6 +220,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
           if (data.status === 'cached' || data.status === 'ready') {
             setBrand(data.brand ?? null);
             setScrapedProducts(data.products ?? []);
+            setMediaUrls(data.mediaUrls ?? []);
             setScanning(false);
           } else {
             pollForBrandContext(id, null);
@@ -222,7 +234,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     }
   }
 
-  function pollForBrandContext(pollClientId: string | null, pollUrl: string | null) {
+  function pollForBrandContext(pollClientId: string | null, _pollUrl: string | null) {
     const interval = setInterval(async () => {
       try {
         const params = new URLSearchParams();
@@ -233,6 +245,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
         if (data.status === 'ready') {
           setBrand(data.brand ?? null);
           setScrapedProducts(data.products ?? []);
+          setMediaUrls(data.mediaUrls ?? []);
           setScanning(false);
           clearInterval(interval);
         }
@@ -252,6 +265,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     setBrand(null);
     setBrandUrl('');
     setScrapedProducts([]);
+    setMediaUrls([]);
     setClientId(null);
     setActiveBatchId(null);
     setPlaceholderConfig(null);
@@ -486,11 +500,24 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
           </div>
         </div>
       )}
-      {activeTab === 'generate' && !isScanning && (
+      {activeTab === 'generate' &&
+        !isScanning &&
+        resolvedClientId &&
+        !brandDnaReady &&
+        resolvedClient && (
+          <BrandDnaRequiredPanel
+            clientId={resolvedClientId}
+            clientSlug={resolvedClient.slug}
+            clientName={resolvedClient.name}
+            brandDnaStatus={resolvedClient.brand_dna_status}
+          />
+        )}
+      {activeTab === 'generate' && !isScanning && (!resolvedClientId || brandDnaReady) && (
         <AdWizard
           clientId={resolvedClientId ?? ''}
           initialBrand={brand ?? undefined}
           initialProducts={scrapedProducts}
+          initialMediaUrls={mediaUrls}
           onGenerationStart={handleGenerationStart}
         />
       )}

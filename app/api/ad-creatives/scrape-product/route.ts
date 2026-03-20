@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     }
 
     const html = await res.text();
-    const products = extractProducts(html);
+    const products = extractProducts(html, parsed.data.url);
 
     // Return the first product found, with URL-sanitized image
     const product = products[0] ?? null;

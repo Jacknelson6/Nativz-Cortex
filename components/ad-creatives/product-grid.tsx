@@ -122,6 +122,9 @@ export function ProductGrid({ products, selectedIndices, onToggle, onAddProduct 
 
               {/* Name */}
               <p className="text-xs font-medium text-text-primary line-clamp-2">{product.name}</p>
+              {product.description ? (
+                <p className="text-[10px] text-text-muted mt-1 line-clamp-2">{product.description}</p>
+              ) : null}
               {product.price && (
                 <p className="text-xs text-text-muted mt-0.5">{product.price}</p>
               )}

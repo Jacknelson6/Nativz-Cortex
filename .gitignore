@@ -56,6 +56,9 @@ next-env.d.ts
 # playwright MCP artifacts
 .playwright-mcp/
 
+# local Kandy folder → vertical map (optional; see scripts/kandy-folder-map.example.json)
+scripts/kandy-folder-map.json
+
 # screenshots
 *.png
 vectors.db

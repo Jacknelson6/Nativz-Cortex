@@ -3,6 +3,8 @@
 // ---------------------------------------------------------------------------
 
 import * as cheerio from 'cheerio';
+import type { CrawledPage } from '@/lib/brand-dna/types';
+import { extractColorPalette } from '@/lib/brand-dna/extract-visuals';
 import { extractProducts, extractColors, extractMeta } from './scrape-brand';
 import { extractLogo } from './extract-logo';
 import type { ScrapedBrand, ScrapedProduct } from './scrape-brand';
@@ -78,10 +80,20 @@ export async function crawlSite(url: string, options?: CrawlOptions): Promise<Cr
     let pagesCrawled = 1; // homepage already fetched
 
     // Process homepage first
-    const homepageProducts = extractProducts(homepageHtml);
+    const homepageProducts = extractProducts(homepageHtml, url);
     allProducts.push(...homepageProducts);
     extractMediaUrls(homepageHtml, origin).forEach((u) => allMediaUrls.add(u));
     extractColors(homepageHtml).forEach((c) => allColors.add(c));
+
+    const homeCrawled: CrawledPage = {
+      url,
+      html: homepageHtml,
+      title: extractMeta(homepageHtml, 'og:title') ?? extractTitle(homepageHtml) ?? '',
+      content: '',
+      wordCount: 0,
+      pageType: 'homepage',
+    };
+    extractColorPalette([homeCrawled]).forEach((c) => allColors.add(c.hex));
 
     // Crawl remaining pages with concurrency control
     const remainingUrls = [...discoveredUrls].filter((u) => u !== url);
@@ -98,7 +110,7 @@ export async function crawlSite(url: string, options?: CrawlOptions): Promise<Cr
         pagesCrawled++;
 
         // Extract products from this page
-        const products = extractProducts(html);
+        const products = extractProducts(html, pageUrl);
         allProducts.push(...products);
 
         // Discover more links (second-level crawl)

@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run -c app/vitest.config.ts",
-    "test:watch": "vitest -c app/vitest.config.ts"
+    "test:watch": "vitest -c app/vitest.config.ts",
+    "kandy:upload": "tsx scripts/upload-kandy-templates.ts",
+    "kandy:analyze": "tsx scripts/analyze-kandy-templates.ts",
+    "supabase:apply-053": "tsx scripts/exec-sql-file.ts supabase/migrations/053_kandy_templates_vertical_expand.sql"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -57,12 +60,15 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.15.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.1.4",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "pg": "^8.17.2",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.0.18"
   }

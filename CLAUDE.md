@@ -15,6 +15,8 @@ npm run dev          # Dev server (http://localhost:3000)
 npm run build        # Production build
 npm run lint         # ESLint
 npx tsc --noEmit     # Type-check
+npm run kandy:upload # Local Kandy export folders → Supabase kandy_templates (see scripts/upload-kandy-templates.ts)
+npm run kandy:analyze # Backfill prompt_schema for templates missing analysis
 ```
 
 ## Reference Docs

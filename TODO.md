@@ -21,7 +21,8 @@
 - [x] AI model switcher (settings page, DB-backed, platform-wide)
 - [x] E2E tested — Toastique ads through v1→v9 iterations
 - [x] Browser QA passed — gallery, templates, wizard, AC mode all working
-- [ ] Seed remaining ~150 templates from other Kandy collections
+- [x] Ad wizard: Brand DNA gate (client must be draft/active), step-by-step flow, offers field, crawl → `mediaUrls`; scraper uses Brand DNA color/logo extractors + richer products
+- [ ] Sync Desktop Kandy folders to site: apply migration `053_kandy_templates_vertical_expand.sql`, set `KANDY_TEMPLATES_ROOT` if needed, run `npm run kandy:upload` (then `npm run kandy:analyze`)
 
 ### QA Fixes Applied (2026-03-19)
 - [x] Portal login + invite: AC brand logo toggle

@@ -2,6 +2,11 @@
 // Lightweight brand + product scraper for the ad wizard
 // ---------------------------------------------------------------------------
 
+import type { CrawledPage } from '@/lib/brand-dna/types';
+import { extractColorPalette, extractLogoUrls } from '@/lib/brand-dna/extract-visuals';
+import { extractLogo } from './extract-logo';
+import { extractRichProducts } from './extract-products-rich';
+
 export type ScrapedBrand = {
   name: string;
   logoUrl: string | null;
@@ -42,7 +47,7 @@ export async function scrapeBrandAndProducts(url: string): Promise<ScrapeBrandRe
 
   const html = await res.text();
   const brand = extractBrand(html, url);
-  const products = extractProducts(html);
+  const products = extractProducts(html, url);
 
   // Rewrite http:// URLs to https:// for CSP compliance
   if (brand.logoUrl) {
@@ -52,15 +57,20 @@ export async function scrapeBrandAndProducts(url: string): Promise<ScrapeBrandRe
   // Filter out non-product scrape artifacts and sanitize URLs
   const ARTIFACT_PATTERNS = /load video|play video|watch/i;
   const cleanProducts = products
-    .filter((p) => p.imageUrl) // must have an image
-    .filter((p) => p.name.length >= 3) // name must be at least 3 chars
-    .filter((p) => !ARTIFACT_PATTERNS.test(p.name)) // filter video artifacts
+    .filter((p) => isPlausibleProduct(p, ARTIFACT_PATTERNS))
     .map((p) => ({
       ...p,
       imageUrl: p.imageUrl ? p.imageUrl.replace(/^http:\/\//, 'https://') : null,
     }));
 
   return { brand, products: cleanProducts };
+}
+
+function isPlausibleProduct(p: ScrapedProduct, artifact: RegExp): boolean {
+  if (p.name.length < 3 || artifact.test(p.name)) return false;
+  if (p.imageUrl) return true;
+  if (p.description && p.description.length >= 24) return true;
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,7 +84,25 @@ function extractBrand(html: string, url: string): ScrapedBrand {
     extractTitle(html) ??
     new URL(url).hostname.replace(/^www\./, '');
 
+  const crawled: CrawledPage = {
+    url,
+    html,
+    title: extractTitle(html) ?? name,
+    content: '',
+    wordCount: 0,
+    pageType: 'homepage',
+  };
+
+  const paletteHex = extractColorPalette([crawled]).map((c) => c.hex);
+  const logoFromDom = extractLogo(html, url);
+  const logoFromMeta =
+    extractLogoUrls([crawled])
+      .map((l) => l.url)
+      .find(Boolean) ?? null;
+
   const logoUrl =
+    logoFromDom ??
+    logoFromMeta ??
     extractLinkIcon(html, url) ??
     extractMeta(html, 'og:image') ??
     null;
@@ -84,9 +112,22 @@ function extractBrand(html: string, url: string): ScrapedBrand {
     extractMeta(html, 'description') ??
     '';
 
-  const colors = extractColors(html);
+  const colors = mergeColorLists(paletteHex, extractColors(html));
 
   return { name, logoUrl, colors, description, url };
+}
+
+function mergeColorLists(primary: string[], fallback: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const c of [...primary, ...fallback]) {
+    const n = c.toLowerCase();
+    if (seen.has(n)) continue;
+    seen.add(n);
+    out.push(n.startsWith('#') ? n : c);
+    if (out.length >= 12) break;
+  }
+  return out;
 }
 
 function extractTitle(html: string): string | null {
@@ -162,20 +203,21 @@ export function extractColors(html: string): string[] {
 // Product extraction
 // ---------------------------------------------------------------------------
 
-export function extractProducts(html: string): ScrapedProduct[] {
+export function extractProducts(html: string, baseUrl: string): ScrapedProduct[] {
   const products: ScrapedProduct[] = [];
 
-  // 1. Try JSON-LD structured data first
-  const jsonLdProducts = extractJsonLdProducts(html);
-  if (jsonLdProducts.length > 0) return jsonLdProducts.slice(0, 20);
+  // 1. JSON-LD (highest signal)
+  products.push(...extractJsonLdProducts(html));
 
-  // 2. Try OG product tags
+  // 2. Microdata, WooCommerce-style cards, figures
+  products.push(...extractRichProducts(html, baseUrl));
+
+  // 3. OG product
   const ogProduct = extractOgProduct(html);
   if (ogProduct) products.push(ogProduct);
 
-  // 3. Heuristic: look for product-like image+text patterns
-  const heuristicProducts = extractHeuristicProducts(html);
-  products.push(...heuristicProducts);
+  // 4. Alt-text heuristics
+  products.push(...extractHeuristicProducts(html));
 
   // Deduplicate by name
   const seen = new Set<string>();
@@ -186,7 +228,7 @@ export function extractProducts(html: string): ScrapedProduct[] {
       seen.add(key);
       return true;
     })
-    .slice(0, 20);
+    .slice(0, 30);
 }
 
 function extractJsonLdProducts(html: string): ScrapedProduct[] {

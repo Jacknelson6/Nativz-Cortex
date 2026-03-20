@@ -19,7 +19,7 @@ export default async function AdCreativesPage() {
     getVaultClients(),
     supabase
       .from('clients')
-      .select('id, slug, logo_url, website_url, is_active')
+      .select('id, slug, logo_url, website_url, is_active, brand_dna_status')
       .eq('is_active', true),
     supabase
       .from('ad_generation_batches')
@@ -37,6 +37,7 @@ export default async function AdCreativesPage() {
       slug: db.slug,
       logo_url: db.logo_url,
       website_url: db.website_url ?? null,
+      brand_dna_status: db.brand_dna_status ?? 'none',
       agency: vault?.agency,
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
