@@ -60,18 +60,23 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
     const templates = await resolveTemplates(config);
 
     // 4. Generate copy if needed
+    // Resolve total unique copy needed from templateVariations or legacy numVariations
+    const maxVariations = config.templateVariations
+      ? Math.max(...config.templateVariations.map((tv) => tv.count), 1)
+      : (config.numVariations ?? 2);
+
     let copyVariations: OnScreenText[] = [];
     if (config.onScreenText === 'ai_generate') {
       copyVariations = await generateAdCopy({
         brandContext,
         productService: config.productService,
         offer: config.offer || null,
-        count: config.numVariations,
+        count: maxVariations,
       });
     } else {
       // Use the same provided text for all variations
       const staticText = config.onScreenText as OnScreenText;
-      copyVariations = Array.from({ length: config.numVariations }, () => staticText);
+      copyVariations = Array.from({ length: maxVariations }, () => staticText);
     }
 
     // 5. Build work items (template x variation)
