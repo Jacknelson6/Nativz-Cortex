@@ -120,9 +120,17 @@ export type ProductOfferConfig = {
   cta: string;
 };
 
+export type TemplateVariation = {
+  templateId: string;
+  count: number;
+};
+
 export type AdGenerationConfig = {
   aspectRatio: AspectRatio;
-  numVariations: number;
+  /** @deprecated Use templateVariations instead */
+  numVariations?: number;
+  /** Per-template variation counts (v2) */
+  templateVariations?: TemplateVariation[];
   productService: string;
   offer: string;
   onScreenText: OnScreenText | 'ai_generate';

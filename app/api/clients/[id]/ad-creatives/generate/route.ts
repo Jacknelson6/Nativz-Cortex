@@ -23,20 +23,39 @@ const productInfoSchema = z.object({
   cta: z.string().max(100),
 });
 
+const templateVariationSchema = z.object({
+  templateId: z.string().uuid(),
+  count: z.number().int().min(1).max(10),
+});
+
 const bodySchema = z.object({
-  templateIds: z.array(z.string().uuid()).min(1, 'At least one template is required'),
+  // v2: per-template variation counts (preferred)
+  templateVariations: z.array(templateVariationSchema).min(1).optional(),
+  // v1 compat: flat templateIds + numVariations (deprecated, still accepted)
+  templateIds: z.array(z.string().uuid()).optional(),
+  numVariations: z.number().int().min(1).max(20).optional(),
   templateSource: z.enum(['kandy', 'custom']),
   productService: z.string().min(1, 'Product or service description is required').max(500),
   offer: z.string().max(300).optional(),
   aspectRatio: z.enum(['1:1', '9:16', '4:5']),
-  numVariations: z.number().int().min(1).max(20),
   onScreenTextMode: z.enum(['ai_generate', 'manual']),
   manualText: manualTextSchema.optional(),
   products: z.array(productInfoSchema).max(20).optional(),
   brandUrl: z.string().url().optional(),
+  placeholderConfig: z.object({
+    brandColors: z.array(z.string()).optional(),
+    templateThumbnails: z.array(z.object({
+      templateId: z.string(),
+      imageUrl: z.string(),
+      variationIndex: z.number(),
+    })).optional(),
+  }).optional(),
 }).refine(
   (data) => data.onScreenTextMode !== 'manual' || data.manualText !== undefined,
   { message: 'manualText is required when onScreenTextMode is "manual"', path: ['manualText'] },
+).refine(
+  (data) => (data.templateVariations && data.templateVariations.length > 0) || (data.templateIds && data.templateIds.length > 0),
+  { message: 'Either templateVariations or templateIds is required', path: ['templateVariations'] },
 );
 
 /**
@@ -90,17 +109,25 @@ export async function POST(
   const { data: client } = await admin.from('clients').select('id').eq('id', clientId).single();
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
 
-  const { templateIds, templateSource, productService, offer, aspectRatio, numVariations, onScreenTextMode, manualText, products, brandUrl } = parsed.data;
-  const totalCount = templateIds.length * numVariations;
+  const { templateVariations, templateIds: legacyTemplateIds, templateSource, productService, offer, aspectRatio, numVariations: legacyNumVariations, onScreenTextMode, manualText, products, brandUrl, placeholderConfig } = parsed.data;
+
+  // Normalize to templateVariations format
+  const resolvedVariations = templateVariations ?? (legacyTemplateIds ?? []).map((id) => ({
+    templateId: id,
+    count: legacyNumVariations ?? 2,
+  }));
+
+  const resolvedTemplateIds = resolvedVariations.map((v) => v.templateId);
+  const totalCount = resolvedVariations.reduce((sum, v) => sum + v.count, 0);
 
   // Build config for storage
   const config = {
     aspectRatio,
-    numVariations,
+    templateVariations: resolvedVariations,
     productService,
     offer: offer ?? '',
     onScreenText: onScreenTextMode === 'manual' ? manualText! : ('ai_generate' as const),
-    templateIds,
+    templateIds: resolvedTemplateIds,
     templateSource,
     ...(products && { products }),
     ...(brandUrl && { brandUrl }),
@@ -111,12 +138,13 @@ export async function POST(
     .from('ad_generation_batches')
     .insert({
       client_id: clientId,
-      status: 'pending',
+      status: 'queued',
       config,
       total_count: totalCount,
       completed_count: 0,
       failed_count: 0,
       created_by: user.id,
+      placeholder_config: placeholderConfig ?? null,
     })
     .select('id')
     .single();

@@ -109,6 +109,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
         try {
           const MAX_QA_RETRIES = 2;
           let imageBuffer: Buffer | null = null;
+          let lastPrompt = '';
           let qaResult = { passed: true, issues: [] as { type: string; description: string }[], extractedText: [] as string[], confidence: 0 };
 
           for (let attempt = 0; attempt <= MAX_QA_RETRIES; attempt++) {
@@ -120,6 +121,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
               onScreenText: item.onScreenText,
               aspectRatio: config.aspectRatio,
             });
+            lastPrompt = prompt;
 
             const baseImageBuffer = await generateAdImage({
               prompt,
@@ -192,7 +194,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
             template_source: item.templateSource,
             image_url: imageUrl,
             aspect_ratio: config.aspectRatio,
-            prompt_used: prompt,
+            prompt_used: lastPrompt,
             on_screen_text: item.onScreenText,
             product_service: config.productService,
             offer: config.offer ?? '',
@@ -238,7 +240,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
         ? 'completed'
         : completedCount === 0
           ? 'failed'
-          : 'partially_completed';
+          : 'partial';
 
     await admin
       .from('ad_generation_batches')
@@ -334,8 +336,18 @@ function buildWorkItems(
 ): WorkItem[] {
   const items: WorkItem[] = [];
 
+  // Use per-template variation counts if available (v2), otherwise fall back to uniform count
+  const variationMap = new Map<string, number>();
+  if (config.templateVariations && config.templateVariations.length > 0) {
+    for (const tv of config.templateVariations) {
+      variationMap.set(tv.templateId, tv.count);
+    }
+  }
+
   for (const template of templates) {
-    for (const copy of copyVariations) {
+    const count = variationMap.get(template.id) ?? config.numVariations ?? copyVariations.length;
+    for (let i = 0; i < count; i++) {
+      const copy = copyVariations[i % copyVariations.length];
       items.push({
         templateId: template.id,
         templateSource: template.source,
