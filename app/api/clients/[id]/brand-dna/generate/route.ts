@@ -1,8 +1,8 @@
-import { NextResponse, after } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateBrandDNA } from '@/lib/brand-dna';
+import { queueBrandDNAGeneration } from '@/lib/brand-dna/queue-generation';
 import { rateLimitByUser } from '@/lib/security/rate-limit';
 import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
 
@@ -82,63 +82,28 @@ export async function POST(
     const { data: client } = await admin.from('clients').select('id').eq('id', clientId).single();
     if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
 
-    // Create job record
-    const { data: job, error: jobErr } = await admin
-      .from('brand_dna_jobs')
-      .insert({
-        client_id: clientId,
-        status: 'queued',
-        progress_pct: 0,
-        step_label: 'Queued for processing',
-        website_url: parsed.data.websiteUrl,
-        created_by: user.id,
-      })
-      .select('id')
-      .single();
-
-    if (jobErr || !job) {
-      console.error('[brand-dna/generate] Failed to insert brand_dna_jobs:', jobErr);
+    let jobId: string;
+    try {
+      const q = await queueBrandDNAGeneration({
+        admin,
+        clientId,
+        websiteUrl: parsed.data.websiteUrl,
+        userId: user.id,
+        uploadedContent,
+      });
+      jobId = q.jobId;
+    } catch (e) {
+      console.error('[brand-dna/generate] Failed to queue job:', e);
       return NextResponse.json(
         {
           error: 'Failed to create generation job',
-          hint: jobErr?.message ?? 'Check that migration 040 (brand_dna_jobs) is applied.',
+          hint: e instanceof Error ? e.message : 'Check that migration 040 (brand_dna_jobs) is applied.',
         },
         { status: 500 },
       );
     }
 
-    const websiteUrl = parsed.data.websiteUrl;
-
-    // Process in background
-    after(async () => {
-      try {
-        await generateBrandDNA(clientId, websiteUrl, {
-          uploadedContent,
-          onProgress: async (status, progressPct, stepLabel) => {
-            await admin
-              .from('brand_dna_jobs')
-              .update({ status, progress_pct: progressPct, step_label: stepLabel })
-              .eq('id', job.id);
-          },
-        });
-
-        await admin
-          .from('brand_dna_jobs')
-          .update({ status: 'completed', progress_pct: 100, step_label: 'Complete', completed_at: new Date().toISOString() })
-          .eq('id', job.id);
-      } catch (err) {
-        console.error('[brand-dna/generate] Pipeline failed:', err);
-        await admin
-          .from('brand_dna_jobs')
-          .update({
-            status: 'failed',
-            error_message: err instanceof Error ? err.message : 'Unknown error',
-          })
-          .eq('id', job.id);
-      }
-    });
-
-    return NextResponse.json({ jobId: job.id, status: 'generating' });
+    return NextResponse.json({ jobId, status: 'generating' });
   } catch (err) {
     console.error('[brand-dna/generate] Unhandled error:', err);
     return NextResponse.json(

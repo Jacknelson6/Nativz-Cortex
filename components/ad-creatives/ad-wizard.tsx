@@ -10,6 +10,8 @@ import {
   Type,
   Zap,
   Eye,
+  Library,
+  LayoutGrid,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -18,13 +20,18 @@ import { ProductGrid } from './product-grid';
 import { TemplateGrid } from './template-grid';
 import { VariationStrip } from './variation-strip';
 import { BrandMediaPanel } from './brand-media-panel';
+import { BrandDnaGuidelinePanel } from './brand-dna-guideline-panel';
 import { PromptReview, type PromptPreviewData } from './prompt-review';
-import type { KandyTemplate, AspectRatio } from '@/lib/ad-creatives/types';
+import type { AdPromptTemplate, AspectRatio, KandyTemplate } from '@/lib/ad-creatives/types';
+import type { WizardTemplate } from '@/lib/ad-creatives/wizard-template';
+import { adPromptRowToWizardTemplate, withKandyOrigin } from '@/lib/ad-creatives/wizard-template';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+type BrandContextSource = 'brand_dna' | 'knowledge_cache' | 'live_scrape';
 
 interface AdWizardProps {
   clientId: string;
@@ -32,6 +39,10 @@ interface AdWizardProps {
   initialProducts?: ScrapedProduct[];
   /** Image URLs discovered during site crawl (optional). */
   initialMediaUrls?: string[];
+  /** Set when hub loaded context from Brand DNA vs cache vs live scrape. */
+  brandContextSource?: BrandContextSource;
+  /** For “Edit in Brand DNA” link in the inline guideline panel. */
+  clientSlug?: string;
   onGenerationStart?: (batchId: string, placeholderConfig: {
     brandColors: string[];
     templateThumbnails: { templateId: string; imageUrl: string; variationIndex: number }[];
@@ -102,6 +113,8 @@ export function AdWizard({
   initialBrand,
   initialProducts,
   initialMediaUrls,
+  brandContextSource,
+  clientSlug,
   onGenerationStart,
 }: AdWizardProps) {
   // Brand
@@ -111,8 +124,9 @@ export function AdWizard({
     new Set(initialProducts?.map((_, i) => i) ?? []),
   );
 
-  // Templates
-  const [templates, setTemplates] = useState<KandyTemplate[]>([]);
+  // Templates — Kandy catalog vs client ad library (scraped / uploaded prompt templates)
+  const [templateMode, setTemplateMode] = useState<'kandy' | 'ad_library'>('kandy');
+  const [templates, setTemplates] = useState<WizardTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set());
 
@@ -171,45 +185,54 @@ export function AdWizard({
   // ---------------------------------------------------------------------------
 
   const fetchTemplates = useCallback(async () => {
+    setLoadingTemplates(true);
     try {
-      const res = await fetch('/api/ad-creatives/templates?limit=2000');
-      if (res.ok) {
-        const data = await res.json();
-        setTemplates(data.templates ?? []);
-      }
+      const [kRes, cRes] = await Promise.all([
+        fetch('/api/ad-creatives/templates?limit=2000'),
+        fetch(`/api/clients/${clientId}/ad-creatives/templates?limit=500`),
+      ]);
+
+      const kandyRaw = kRes.ok ? ((await kRes.json()) as { templates?: KandyTemplate[] }).templates ?? [] : [];
+      const customRows = cRes.ok ? ((await cRes.json()) as { templates?: AdPromptTemplate[] }).templates ?? [] : [];
+
+      const kandy: WizardTemplate[] = kandyRaw.map((t) => withKandyOrigin(t));
+      const custom: WizardTemplate[] = customRows.map((row) => adPromptRowToWizardTemplate(row));
+
+      setTemplates([...kandy, ...custom]);
     } catch {
       // Silent
     } finally {
       setLoadingTemplates(false);
     }
-  }, []);
+  }, [clientId]);
 
   useEffect(() => {
     fetchTemplates();
   }, [fetchTemplates]);
 
   function toggleTemplate(id: string) {
+    const picked = templates.find((t) => t.id === id);
+    const origin = picked?.templateOrigin ?? 'kandy';
+
     setSelectedTemplateIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
-        // Also remove from variations
         setVariations((vm) => {
           const nextVm = new Map(vm);
           nextVm.delete(id);
           return nextVm;
         });
       } else {
+        for (const tid of [...next]) {
+          const ot = templates.find((t) => t.id === tid);
+          if (ot && (ot.templateOrigin ?? 'kandy') !== origin) next.delete(tid);
+        }
         next.add(id);
-        // Set default variation count
         setVariations((vm) => new Map(vm).set(id, 2));
       }
       return next;
     });
-  }
-
-  function handleTemplatesAdded(newTemplates: KandyTemplate[]) {
-    setTemplates((prev) => [...newTemplates, ...prev]);
   }
 
   function handleVariationChange(templateId: string, count: number) {
@@ -289,7 +312,7 @@ export function AdWizard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           templateVariations,
-          templateSource: 'kandy',
+          templateSource: activeTemplateSource,
           productService: brand.name,
           offer: offerText,
           aspectRatio,
@@ -317,6 +340,7 @@ export function AdWizard({
   // ---------------------------------------------------------------------------
 
   const selectedTemplates = templates.filter((t) => selectedTemplateIds.has(t.id));
+  const activeTemplateSource = templateMode === 'kandy' ? ('kandy' as const) : ('custom' as const);
   const totalAds = selectedTemplates.reduce((sum, t) => sum + (variations.get(t.id) ?? 2), 0);
 
   async function handleGenerate() {
@@ -351,7 +375,7 @@ export function AdWizard({
 
       const body: Record<string, unknown> = {
         templateVariations,
-        templateSource: 'kandy' as const,
+        templateSource: activeTemplateSource,
         productService: brand.name ?? selectedProducts.map((p) => p.name).join(', '),
         offer: offerText,
         onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
@@ -416,18 +440,35 @@ export function AdWizard({
         <p className="text-xs text-text-muted">
           Step {flowIdx + 1} of {FLOW_STEPS.length}
         </p>
-        <p className="text-sm font-semibold text-text-primary">{currentStep.title}</p>
+        <div className="text-right">
+          <p className="text-sm font-semibold text-text-primary">{currentStep.title}</p>
+          {brandContextSource === 'brand_dna' && currentStep.id === 'products' && (
+            <p className="text-[10px] text-accent-text/90 mt-0.5 max-w-[220px] ml-auto leading-snug">
+              From Brand DNA — edit the list under Brand DNA → Product catalog
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-nativz-border bg-surface p-5 min-h-[280px]">
         {currentStep.id === 'brand' && (
           <div className="space-y-6">
+            {brandContextSource === 'brand_dna' && brand && (
+              <p className="text-xs text-text-muted rounded-lg border border-accent/20 bg-accent/5 px-3 py-2">
+                <span className="font-medium text-accent-text">Brand DNA</span>
+                {' — '}
+                Colors, logo, and copy cues below match your generated guideline. Adjust in Brand DNA if something looks off.
+              </p>
+            )}
             {brand ? (
               <BrandEditor brand={brand} onBrandChange={setBrand} clientId={clientId || undefined} />
             ) : (
               <div className="rounded-xl border border-dashed border-nativz-border bg-background/40 p-8 text-center">
                 <p className="text-sm text-text-muted">Waiting for brand scan...</p>
               </div>
+            )}
+            {brand && brandContextSource === 'brand_dna' && clientId && (
+              <BrandDnaGuidelinePanel clientId={clientId} clientSlug={clientSlug} />
             )}
             {brand && mediaUrls.length > 0 && (
               <div className="pt-2 border-t border-nativz-border">
@@ -450,11 +491,56 @@ export function AdWizard({
             selectedIndices={selectedProductIndices}
             onToggle={toggleProductSelection}
             onAddProduct={addProduct}
+            dataSourceHint={
+              brandContextSource === 'brand_dna'
+                ? 'Product names and images from Brand DNA (structured catalog).'
+                : undefined
+            }
           />
         )}
 
         {currentStep.id === 'templates' && (
           <>
+            <div className="flex flex-col gap-3 mb-4">
+              <p className="text-xs text-text-muted">
+                Use Nativz Kandy layouts, or import static ads from a competitor&apos;s{' '}
+                <span className="text-text-secondary">Meta Ad Library</span> page (same client).
+              </p>
+              <div className="flex rounded-xl border border-nativz-border bg-background/40 p-1 gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTemplateMode('kandy');
+                    setSelectedTemplateIds(new Set());
+                    setVariations(new Map());
+                  }}
+                  className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all cursor-pointer ${
+                    templateMode === 'kandy'
+                      ? 'bg-surface text-text-primary shadow-sm border border-nativz-border'
+                      : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  <LayoutGrid size={14} />
+                  Nativz catalog
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTemplateMode('ad_library');
+                    setSelectedTemplateIds(new Set());
+                    setVariations(new Map());
+                  }}
+                  className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all cursor-pointer ${
+                    templateMode === 'ad_library'
+                      ? 'bg-surface text-text-primary shadow-sm border border-nativz-border'
+                      : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  <Library size={14} />
+                  Ad library import
+                </button>
+              </div>
+            </div>
             {loadingTemplates ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 size={24} className="animate-spin text-text-muted" />
@@ -462,10 +548,11 @@ export function AdWizard({
             ) : (
               <TemplateGrid
                 templates={templates}
+                templateMode={templateMode}
                 selectedIds={selectedTemplateIds}
                 onToggle={toggleTemplate}
                 clientId={clientId}
-                onTemplatesAdded={handleTemplatesAdded}
+                onTemplatesRefresh={fetchTemplates}
                 recommendedVertical={recommendedVertical}
               />
             )}
@@ -561,19 +648,19 @@ export function AdWizard({
                     value={manualHeadline}
                     onChange={(e) => setManualHeadline(e.target.value)}
                     placeholder="Headline (e.g., Real Gold. Real Value.)"
-                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 outline-none"
+                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30"
                   />
                   <input
                     value={manualSubheadline}
                     onChange={(e) => setManualSubheadline(e.target.value)}
                     placeholder="Subheadline (optional)"
-                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 outline-none"
+                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30"
                   />
                   <input
                     value={manualCta}
                     onChange={(e) => setManualCta(e.target.value)}
                     placeholder="CTA (e.g., Shop now)"
-                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 outline-none"
+                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30"
                   />
                 </div>
               )}

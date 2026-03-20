@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 
 export async function GET() {
   try {
@@ -40,12 +41,12 @@ export async function GET() {
 
     const clientIds = accessRows.map((r) => r.client_id);
 
-    const { data: clients } = await adminClient
-      .from('clients')
-      .select('id, name, slug, agency, logo_url, organization_id')
-      .in('id', clientIds)
-      .eq('is_active', true)
-      .order('name');
+    const { data: clients } = await selectClientsWithRosterVisibility(adminClient, {
+      select: 'id, name, slug, agency, logo_url, organization_id',
+      onlyActive: true,
+      in: { id: clientIds },
+      orderBy: { column: 'name' },
+    });
 
     return NextResponse.json({
       brands: (clients ?? []).map((c) => ({

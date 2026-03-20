@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateApiKey } from '@/lib/api-keys/validate';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 import { createLateProfile } from '@/lib/posting/late';
 
 const onboardSchema = z.object({
@@ -31,10 +32,10 @@ export async function GET(request: NextRequest) {
   if ('error' in auth) return auth.error;
 
   const admin = createAdminClient();
-  const { data: clients, error } = await admin
-    .from('clients')
-    .select('id, name, slug, agency, services, health_score, is_active, industry, website_url, logo_url')
-    .order('name');
+  const { data: clients, error } = await selectClientsWithRosterVisibility(admin, {
+    select: 'id, name, slug, agency, services, health_score, is_active, industry, website_url, logo_url',
+    orderBy: { column: 'name' },
+  });
 
   if (error) {
     return NextResponse.json({ error: 'Failed to fetch clients' }, { status: 500 });

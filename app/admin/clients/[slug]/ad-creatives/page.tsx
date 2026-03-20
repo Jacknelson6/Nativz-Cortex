@@ -12,7 +12,7 @@ export default async function AdCreativesPage({
 
   const { data: client } = await admin
     .from('clients')
-    .select('id, name, slug')
+    .select('id, name, slug, website_url, brand_dna_status')
     .eq('slug', slug)
     .single();
 
@@ -29,6 +29,8 @@ export default async function AdCreativesPage({
       clientId={client.id}
       clientName={client.name ?? ''}
       clientSlug={client.slug ?? slug}
+      websiteUrl={client.website_url}
+      brandDnaStatus={client.brand_dna_status}
       creativeCount={count ?? 0}
     />
   );

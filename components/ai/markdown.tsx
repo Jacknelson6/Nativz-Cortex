@@ -68,6 +68,26 @@ export function Markdown({ content }: { content: string }) {
     }
     if (inCodeBlock) { codeBuffer.push(line); return; }
 
+    if (/^\s*<!--[\s\S]*?-->\s*$/.test(line)) {
+      return;
+    }
+
+    const imgLine = line.match(/^!\[([^\]]*)\]\(([^)]+)\)\s*$/);
+    if (imgLine) {
+      elements.push(
+        <div key={i} className="my-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imgLine[2]}
+            alt={imgLine[1]?.trim() || ''}
+            className="max-h-44 max-w-full rounded-lg border border-white/[0.06] object-contain"
+            loading="lazy"
+          />
+        </div>,
+      );
+      return;
+    }
+
     if (line.startsWith('### ')) {
       elements.push(<h4 key={i} className="mt-4 mb-1.5 text-sm font-semibold text-text-primary">{formatInline(line.slice(4))}</h4>);
       return;

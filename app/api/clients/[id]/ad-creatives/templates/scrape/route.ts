@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { validateFileSignature } from '@/lib/security/validate-file-type';
 import { extractAdPrompt } from '@/lib/ad-creatives/extract-prompt';
+import { extractMetaAdLibraryImageUrls, isMetaAdLibraryUrl } from '@/lib/ad-creatives/extract-ad-library-urls';
 import { rateLimitByUser } from '@/lib/security/rate-limit';
 
 export const maxDuration = 300;
@@ -196,16 +197,43 @@ export async function POST(
       );
     }
 
-    // Extract image URLs from HTML
-    const imageUrls = extractImageUrls(html, url);
+    // Extract image URLs from HTML (Meta Ad Library: CDN URLs often appear in initial HTML)
+    let imageUrls = isMetaAdLibraryUrl(url)
+      ? extractMetaAdLibraryImageUrls(html)
+      : extractImageUrls(html, url);
+
+    if (imageUrls.length === 0) {
+      imageUrls = extractImageUrls(html, url);
+    }
 
     if (imageUrls.length === 0) {
       return NextResponse.json({
         found: 0,
         imported: 0,
         templates: [],
-        errors: ['No qualifying ad images found on this page. The page may load images via JavaScript which cannot be scraped. Try downloading the images manually and using bulk upload instead.'],
+        errors: [
+          isMetaAdLibraryUrl(url)
+            ? 'No static ad images found in this page response. Meta Ad Library often loads creatives in the browser — try again after the page fully loads in your browser, export screenshots, or use bulk image upload.'
+            : 'No qualifying ad images found on this page. The page may load images via JavaScript which cannot be scraped. Try downloading the images manually and using bulk upload instead.',
+        ],
       });
+    }
+
+    let scrapeJobId: string | null = null;
+    try {
+      const { data: jobRow, error: jobInsErr } = await admin
+        .from('ad_library_scrape_jobs')
+        .insert({
+          user_id: user.id,
+          client_id: clientId,
+          library_url: url,
+          status: 'scraping',
+        })
+        .select('id')
+        .single();
+      if (!jobInsErr && jobRow?.id) scrapeJobId = jobRow.id;
+    } catch {
+      // Optional migration 055 — ignore if client_id column missing
     }
 
     // Download and import each image
@@ -283,7 +311,10 @@ export async function POST(
             prompt_schema: {},
             aspect_ratio: '1:1',
             ad_category,
-            tags: ['scraped', new URL(url).hostname],
+            tags: [
+              isMetaAdLibraryUrl(url) ? 'ad_library_scrape' : 'scraped',
+              new URL(url).hostname,
+            ],
             created_by: user.id,
           })
           .select('id')
@@ -333,11 +364,26 @@ export async function POST(
       });
     }
 
+    if (scrapeJobId) {
+      await admin
+        .from('ad_library_scrape_jobs')
+        .update({
+          status: templates.length > 0 ? 'completed' : 'failed',
+          total_found: imageUrls.length,
+          imported_count: templates.length,
+          completed_at: new Date().toISOString(),
+          error_message:
+            templates.length === 0 ? (errors[0] ?? 'No images imported') : null,
+        })
+        .eq('id', scrapeJobId);
+    }
+
     return NextResponse.json({
       found: imageUrls.length,
       imported: templates.length,
       templates,
       errors,
+      scrapeJobId,
     });
   } catch (error) {
     console.error('POST /api/clients/[id]/ad-creatives/templates/scrape error:', error);

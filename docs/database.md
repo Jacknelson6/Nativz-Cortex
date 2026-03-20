@@ -51,6 +51,7 @@ Client records with feature flags and preferences.
 | `google_drive_branding_url` | text | Link to branding assets on Google Drive |
 | `google_drive_calendars_url` | text | Link to content calendars on Google Drive |
 | `is_active` | bool | Soft delete flag |
+| `hide_from_roster` | bool | When true, client is omitted from admin/portal pickers (used for ad creatives URL-only Brand DNA persistence) |
 
 ### `users`
 App users with role-based access.

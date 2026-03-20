@@ -15,9 +15,18 @@ const STAGES = [
 interface BrandDNAProgressProps {
   clientId: string;
   onComplete: () => void;
+  /** Modal only: close UI while the server keeps generating */
+  onContinueInBackground?: () => void;
+  /** Extra line under the title (e.g. “You can use other pages…”) */
+  navigateAwayHint?: string;
 }
 
-export function BrandDNAProgress({ clientId, onComplete }: BrandDNAProgressProps) {
+export function BrandDNAProgress({
+  clientId,
+  onComplete,
+  onContinueInBackground,
+  navigateAwayHint,
+}: BrandDNAProgressProps) {
   const [progress, setProgress] = useState(0);
   const [stepLabel, setStepLabel] = useState('Starting...');
   const [status, setStatus] = useState('queued');
@@ -67,10 +76,34 @@ export function BrandDNAProgress({ clientId, onComplete }: BrandDNAProgressProps
     return false;
   });
 
+  const awayCopy =
+    navigateAwayHint ??
+    (onContinueInBackground
+      ? 'This runs on the server — you can use other admin pages and come back when it’s done.'
+      : null);
+
   return (
     <div className="text-center">
       <h2 className="text-lg font-semibold text-text-primary mb-1">Building Brand DNA</h2>
-      <p className="text-sm text-text-muted mb-6">This usually takes 60–90 seconds</p>
+      <p className="text-sm text-text-muted mb-1">This usually takes 60–90 seconds</p>
+      {awayCopy ? (
+        <p className="text-xs text-text-muted/90 mb-4 max-w-sm mx-auto leading-relaxed">{awayCopy}</p>
+      ) : (
+        <div className="mb-5" aria-hidden />
+      )}
+      {onContinueInBackground && (
+        <div className="mb-5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="text-text-secondary"
+            onClick={onContinueInBackground}
+          >
+            Continue in background
+          </Button>
+        </div>
+      )}
 
       {/* Progress bar */}
       <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden mb-2">

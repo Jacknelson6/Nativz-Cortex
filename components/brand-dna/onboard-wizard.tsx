@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Globe, Loader2, Upload, X, Check, ArrowLeft,
@@ -12,6 +12,11 @@ import { GlassButton } from '@/components/ui/glass-button';
 import { BrandDNACards } from './brand-dna-cards';
 import { BrandDNAProgress } from './brand-dna-progress';
 import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
+import {
+  clearBrandDnaPending,
+  readBrandDnaPending,
+  setBrandDnaPending,
+} from '@/lib/utils/brand-dna-pending';
 
 function slugify(name: string): string {
   const s = name
@@ -42,9 +47,17 @@ interface OnboardWizardProps {
   /** If provided, we're generating for an existing client (not creating new) */
   existingClientId?: string;
   existingClientName?: string;
+  /** Pre-fill website when opening for an existing client (e.g. from ad creatives). */
+  initialWebsiteUrl?: string | null;
 }
 
-export function OnboardWizard({ open, onClose, existingClientId, existingClientName }: OnboardWizardProps) {
+export function OnboardWizard({
+  open,
+  onClose,
+  existingClientId,
+  existingClientName,
+  initialWebsiteUrl,
+}: OnboardWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [clientName, setClientName] = useState(existingClientName ?? '');
@@ -61,7 +74,7 @@ export function OnboardWizard({ open, onClose, existingClientId, existingClientN
     ? isValidWebsiteUrl(normalizedWebsiteUrl)
     : clientName.trim().length > 0 && isValidWebsiteUrl(normalizedWebsiteUrl);
 
-  function reset() {
+  const reset = useCallback(() => {
     setStep(1);
     setClientName(existingClientName ?? '');
     setWebsiteUrl('');
@@ -71,12 +84,108 @@ export function OnboardWizard({ open, onClose, existingClientId, existingClientN
     setJobId('');
     setError('');
     setBrandDNA(null);
-  }
+  }, [existingClientId, existingClientName]);
 
-  function handleClose() {
+  const handleClose = useCallback(() => {
+    clearBrandDnaPending();
     reset();
     onClose();
-  }
+  }, [reset, onClose]);
+
+  const continueInBackground = useCallback(() => {
+    if (clientId) {
+      const name = (clientName.trim() || existingClientName || '').trim();
+      setBrandDnaPending(clientId, name || undefined);
+    }
+    toast.message('Brand DNA is still generating', {
+      description:
+        'You can keep working elsewhere. Reopen this wizard from ad creatives when it’s ready.',
+    });
+    onClose();
+  }, [clientId, clientName, existingClientName, onClose]);
+
+  const handleWizardClose = useCallback(() => {
+    if (step === 2) {
+      continueInBackground();
+      return;
+    }
+    handleClose();
+  }, [step, continueInBackground, handleClose]);
+
+  useEffect(() => {
+    if (!open) {
+      reset();
+    }
+  }, [open, reset]);
+
+  useEffect(() => {
+    if (!open || !existingClientId) return;
+    const raw = initialWebsiteUrl?.trim();
+    if (!raw) return;
+    const n = normalizeWebsiteUrl(raw);
+    if (isValidWebsiteUrl(n)) setWebsiteUrl(n);
+  }, [open, existingClientId, initialWebsiteUrl]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+
+    async function resumeIfNeeded() {
+      const pending = readBrandDnaPending();
+      let targetId = '';
+      if (existingClientId) {
+        targetId = existingClientId;
+      } else if (pending?.clientId) {
+        targetId = pending.clientId;
+      }
+      if (!targetId) return;
+
+      const res = await fetch(`/api/clients/${targetId}/brand-dna/status`);
+      if (cancelled || !res.ok) return;
+      const data = (await res.json()) as { status?: string };
+      const st = data.status ?? 'none';
+
+      if (['queued', 'crawling', 'extracting', 'analyzing', 'compiling'].includes(st)) {
+        if (cancelled) return;
+        setClientId(targetId);
+        setClientName((n) => {
+          const fromPending = pending?.clientName?.trim();
+          if (fromPending) return fromPending;
+          if (existingClientName) return existingClientName;
+          return n;
+        });
+        setStep(2);
+        return;
+      }
+
+      if (st === 'completed') {
+        if (cancelled) return;
+        setClientId(targetId);
+        setClientName((n) => {
+          const fromPending = pending?.clientName?.trim();
+          if (fromPending) return fromPending;
+          if (existingClientName) return existingClientName;
+          return n;
+        });
+        const g = await fetch(`/api/clients/${targetId}/brand-dna`);
+        if (cancelled || !g.ok) return;
+        setBrandDNA((await g.json()) as Record<string, unknown>);
+        setStep(3);
+        clearBrandDnaPending();
+        return;
+      }
+
+      if (st === 'failed') {
+        clearBrandDnaPending();
+      }
+    }
+
+    void resumeIfNeeded();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, existingClientId, existingClientName]);
 
   function removeFile(idx: number) {
     setUploadedFiles((prev) => prev.filter((_, i) => i !== idx));
@@ -174,7 +283,7 @@ export function OnboardWizard({ open, onClose, existingClientId, existingClientN
   }, [clientId, clientName, websiteUrl, uploadedFiles]);
 
   const handleGenerationComplete = useCallback(async () => {
-    // Fetch the generated Brand DNA
+    clearBrandDnaPending();
     try {
       const res = await fetch(`/api/clients/${clientId}/brand-dna`);
       if (res.ok) {
@@ -188,7 +297,6 @@ export function OnboardWizard({ open, onClose, existingClientId, existingClientN
   }, [clientId]);
 
   const handleConfirm = useCallback(async () => {
-    // Update client status to active
     try {
       await fetch(`/api/clients/${clientId}`, {
         method: 'PATCH',
@@ -197,20 +305,24 @@ export function OnboardWizard({ open, onClose, existingClientId, existingClientN
       });
       toast.success('Brand DNA activated');
       handleClose();
-      router.push(`/admin/clients`);
-      router.refresh();
+      if (existingClientId) {
+        router.refresh();
+      } else {
+        router.push(`/admin/clients`);
+        router.refresh();
+      }
     } catch {
       toast.error('Failed to activate Brand DNA');
     }
-  }, [clientId, router, handleClose]);
+  }, [clientId, existingClientId, router, handleClose]);
 
   const totalSteps = existingClientId ? 3 : 4;
-  const displayStep = existingClientId ? step : step;
+  const displayStep = step;
 
   return (
     <WizardShell
       open={open}
-      onClose={handleClose}
+      onClose={handleWizardClose}
       accentColor="var(--accent)"
       totalSteps={totalSteps}
       currentStep={displayStep}
@@ -307,6 +419,7 @@ export function OnboardWizard({ open, onClose, existingClientId, existingClientN
         <BrandDNAProgress
           clientId={clientId}
           onComplete={handleGenerationComplete}
+          onContinueInBackground={continueInBackground}
         />
       </div>
 

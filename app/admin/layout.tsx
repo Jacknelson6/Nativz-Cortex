@@ -27,26 +27,40 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-  let userName = '';
-  let avatarUrl: string | null = null;
-  if (user) {
-    const userData = await getCachedUser(user.id);
-    userName = userData?.full_name || user.email || '';
-    avatarUrl = userData?.avatar_url || null;
+    // Login (and any unauthenticated admin render) must not mount sidebar / header or hit admin DB cache.
+    if (!user) {
+      return <PageTransition>{children}</PageTransition>;
+    }
+
+    let userName = '';
+    let avatarUrl: string | null = null;
+    try {
+      const userData = await getCachedUser(user.id);
+      userName = userData?.full_name || user.email || '';
+      avatarUrl = userData?.avatar_url || null;
+    } catch {
+      userName = user.email || '';
+      avatarUrl = null;
+    }
+
+    return (
+      <SidebarProvider>
+        <EasterEgg />
+        <CommandPalette />
+        <AdminSidebar userName={userName} avatarUrl={avatarUrl} />
+        <SidebarInset>
+          <AdminHeader />
+          <PageTransition>{children}</PageTransition>
+        </SidebarInset>
+      </SidebarProvider>
+    );
+  } catch (err) {
+    console.error('AdminLayout bootstrap failed:', err);
+    // Degraded shell so /admin/login can still render if env/DB is misconfigured during local dev.
+    return <PageTransition>{children}</PageTransition>;
   }
-
-  return (
-    <SidebarProvider>
-      <EasterEgg />
-      <CommandPalette />
-      <AdminSidebar userName={userName} avatarUrl={avatarUrl} />
-      <SidebarInset>
-        <AdminHeader />
-        <PageTransition>{children}</PageTransition>
-      </SidebarInset>
-    </SidebarProvider>
-  );
 }

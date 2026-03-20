@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run -c app/vitest.config.ts",
     "test:watch": "vitest -c app/vitest.config.ts",
+    "test:ad-library": "vitest run lib/ad-creatives/extract-ad-library-urls.test.ts -c app/vitest.config.ts",
     "kandy:upload": "tsx scripts/upload-kandy-templates.ts",
     "kandy:analyze": "tsx scripts/analyze-kandy-templates.ts",
     "supabase:apply-053": "tsx scripts/exec-sql-file.ts supabase/migrations/053_kandy_templates_vertical_expand.sql"

@@ -12,9 +12,11 @@ interface ProductGridProps {
   selectedIndices: Set<number>;
   onToggle: (index: number) => void;
   onAddProduct: (product: ScrapedProduct) => void;
+  /** Shown above the grid when data comes from Brand DNA, etc. */
+  dataSourceHint?: string;
 }
 
-export function ProductGrid({ products, selectedIndices, onToggle, onAddProduct }: ProductGridProps) {
+export function ProductGrid({ products, selectedIndices, onToggle, onAddProduct, dataSourceHint }: ProductGridProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showUrlForm, setShowUrlForm] = useState(false);
   const [addName, setAddName] = useState('');
@@ -82,6 +84,9 @@ export function ProductGrid({ products, selectedIndices, onToggle, onAddProduct 
 
   return (
     <div className="space-y-3">
+      {dataSourceHint && (
+        <p className="text-[11px] text-accent-text/90 leading-relaxed">{dataSourceHint}</p>
+      )}
       {/* Product cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
         {products.map((product, i) => {
@@ -112,6 +117,7 @@ export function ProductGrid({ products, selectedIndices, onToggle, onAddProduct 
                     alt={product.name}
                     className="h-full w-full object-cover"
                     loading="lazy"
+                    referrerPolicy="no-referrer"
                   />
                 </div>
               ) : (

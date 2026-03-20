@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 
 /**
  * GET /api/nerd/clients
@@ -20,11 +21,11 @@ export async function GET() {
     }
 
     const admin = createAdminClient();
-    const { data: clients } = await admin
-      .from('clients')
-      .select('name, slug, agency')
-      .eq('is_active', true)
-      .order('name');
+    const { data: clients } = await selectClientsWithRosterVisibility(admin, {
+      select: 'name, slug, agency',
+      onlyActive: true,
+      orderBy: { column: 'name' },
+    });
 
     return NextResponse.json(clients ?? []);
   } catch {

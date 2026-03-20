@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 import { getVaultClients } from '@/lib/vault/reader';
 import { AdCreativesHub } from '@/components/ad-creatives/ad-creatives-hub';
 
@@ -11,16 +12,25 @@ export type RecentClient = {
   creativeCount: number;
 };
 
+type AdCreativesDbClientRow = {
+  id: string;
+  slug: string;
+  logo_url: string | null;
+  website_url: string | null;
+  is_active: boolean;
+  brand_dna_status: string | null;
+};
+
 export default async function AdCreativesPage() {
   const supabase = createAdminClient();
 
   // Fetch clients with logos + recent clients with creative counts
-  const [vaultClients, { data: dbClients }, { data: recentBatches }] = await Promise.all([
+  const [vaultClients, rosterResult, { data: recentBatches }] = await Promise.all([
     getVaultClients(),
-    supabase
-      .from('clients')
-      .select('id, slug, logo_url, website_url, is_active, brand_dna_status')
-      .eq('is_active', true),
+    selectClientsWithRosterVisibility<AdCreativesDbClientRow>(supabase, {
+      select: 'id, slug, logo_url, website_url, is_active, brand_dna_status',
+      onlyActive: true,
+    }),
     supabase
       .from('ad_generation_batches')
       .select('client_id, ad_creatives(count)')
@@ -28,6 +38,11 @@ export default async function AdCreativesPage() {
       .order('created_at', { ascending: false })
       .limit(50),
   ]);
+
+  const dbClients = rosterResult.data;
+  if (rosterResult.error) {
+    console.error('Ad creatives roster query:', rosterResult.error);
+  }
 
   const clients = (dbClients || []).map((db) => {
     const vault = vaultClients.find((v) => v.slug === db.slug);

@@ -1,6 +1,7 @@
 import { createCompletion } from '@/lib/ai/client';
 import type { BrandDNARawData, CompiledBrandDNA } from './types';
 import type { BrandGuidelineMetadata } from '@/lib/knowledge/types';
+import { mergeProductAppendix } from './product-catalog-md';
 
 /**
  * Compile all extracted Brand DNA data into a comprehensive markdown brand guideline.
@@ -45,10 +46,12 @@ export async function compileBrandDocument(data: BrandDNARawData): Promise<Compi
     }
   }
   if (products.length > 0) {
-    const productList = products.slice(0, 20).map((p) =>
-      `- ${p.name}: ${p.description}${p.price ? ` (${p.price})` : ''}${p.category ? ` [${p.category}]` : ''}`
-    ).join('\n');
-    contextParts.push(`\nProducts/services:\n${productList}`);
+    const categories = [...new Set(products.map((p) => p.category?.trim() || 'General'))];
+    const catPreview = categories.slice(0, 10).join(', ') + (categories.length > 10 ? ', …' : '');
+    contextParts.push(
+      `\nStructured product catalog: ${products.length} items in ${categories.length} categories (${catPreview}). ` +
+        'Do not paste a full inventory in prose — the "## Structured product catalog" appendix will list every item automatically.',
+    );
   }
   if (data.uploadedContent) {
     contextParts.push(`\nAdditional brand materials:\n${data.uploadedContent.slice(0, 3000)}`);
@@ -66,7 +69,7 @@ Document the brand's visual language: primary and secondary colors (reference he
 Document how the brand communicates: tone of voice, messaging pillars, vocabulary patterns, what they avoid, and formality level. Include example phrases that capture their voice.
 
 ## Product catalog
-List all products/services with descriptions. Group by category if applicable.
+2–4 short paragraphs only: how offerings are positioned, main categories, and representative examples. Do **not** enumerate every SKU or service — the full, editable list (names, descriptions, images, prices) is appended after your document as **Structured product catalog**.
 
 ## Target audience
 Who the brand is talking to: demographics, psychographics, pain points, aspirations. Based on content language signals.
@@ -80,7 +83,7 @@ Recommended content formats, platforms, and approach based on the brand's identi
 Rules:
 - Write in third person ("The brand..." not "Your brand...")
 - Be specific and actionable, not generic
-- Reference actual data from the extraction (real color codes, real product names, real phrases)
+- Reference actual data from the extraction (real color codes, real product names, real phrases). For products, reference themes and categories — not an exhaustive list
 - Keep total length under 3000 words
 - Output ONLY the markdown document. No preamble or closing notes.`;
 
@@ -93,7 +96,7 @@ Rules:
     feature: 'brand_dna_compile',
   });
 
-  const content = result.text;
+  const content = mergeProductAppendix(result.text, products);
 
   // Build metadata sidecar
   const metadata: BrandGuidelineMetadata = {

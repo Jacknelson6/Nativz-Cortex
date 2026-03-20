@@ -11,6 +11,7 @@ import { generateEmbeddingsBatch, generateMultimodalEmbedding } from '@/lib/ai/e
 import { BRAND_DNA_TYPES } from '@/lib/knowledge/types';
 import type { CompiledBrandDNA } from './types';
 import type { BrandGuidelineMetadata } from '@/lib/knowledge/types';
+import { buildCanonicalProductCatalogMarkdown } from './product-catalog-md';
 
 interface StoredBrandDNA {
   guidelineId: string;
@@ -167,7 +168,7 @@ export async function storeBrandDNANodes(
   entryIds.push(positioning.id);
 
   // Product Catalog
-  const productsContent = buildProductCatalogMarkdown(meta);
+  const productsContent = buildCanonicalProductCatalogMarkdown(meta.products ?? [], 'standalone');
   const products = await createKnowledgeEntry({
     client_id: clientId,
     type: 'product_catalog',
@@ -351,29 +352,3 @@ function buildVerbalIdentityMarkdown(meta: BrandGuidelineMetadata): string {
   return sections.join('\n');
 }
 
-function buildProductCatalogMarkdown(meta: BrandGuidelineMetadata): string {
-  const sections: string[] = ['# Products & Services\n'];
-
-  if (!meta.products?.length) {
-    sections.push('No products or services extracted.');
-    return sections.join('\n');
-  }
-
-  // Group by category
-  const byCategory = new Map<string, typeof meta.products>();
-  for (const p of meta.products) {
-    const cat = p.category ?? 'General';
-    if (!byCategory.has(cat)) byCategory.set(cat, []);
-    byCategory.get(cat)!.push(p);
-  }
-
-  for (const [category, items] of byCategory) {
-    sections.push(`## ${category}`);
-    for (const p of items) {
-      sections.push(`- **${p.name}:** ${p.description}${p.price ? ` — ${p.price}` : ''}`);
-    }
-    sections.push('');
-  }
-
-  return sections.join('\n');
-}

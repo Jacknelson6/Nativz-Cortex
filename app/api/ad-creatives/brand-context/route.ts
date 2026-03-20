@@ -9,7 +9,8 @@ const bodySchema = z.object({
     name: z.string().min(1).max(200),
     logoUrl: z.string().nullable(),
     colors: z.array(z.string()).max(12),
-    description: z.string().max(2000),
+    /** Scraped site copy can exceed 2k; cap at a safe size for JSONB */
+    description: z.string().max(50000),
   }),
 });
 

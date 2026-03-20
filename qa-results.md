@@ -1,44 +1,59 @@
-# QA Results — 2026-03-20
+# QA results — ad creatives & admin shell (2026-03-20)
 
-## Summary
-- Production deploy: **READY** (commit d5a4ea8)
-- API endpoints: All passing
-- Browser QA: Partial (Playwright auth issue — tested login page load + API routes)
+## Round 3 — authenticated QA + API alignment
 
-## API Endpoint Tests
+- **Templates GET `limit`:** `GET /api/clients/[id]/ad-creatives/templates` had **`max(100)`** while **`ad-wizard.tsx`** requests **`limit=500`**, causing **400** and console noise on the Generate flow. **Fixed:** `max` raised to **2000** (comment points to wizard).
+- **Brand context PATCH:** Scraped **`description`** can exceed **2000** chars, failing Zod on autosave. **Fixed:** **`description` max 50000** in `app/api/ad-creatives/brand-context/route.ts`.
+- **Signed-in browser QA from this environment:** Not possible without your session cookies; after pull, confirm **Generate → Templates** step loads with **no 400** in Network for client templates.
 
-| # | Endpoint | Method | Expected | Actual | Status |
-|---|----------|--------|----------|--------|--------|
-| 1 | `/api/search/platforms` | GET | 307 redirect | 307 | PASS |
-| 2 | `/api/team/invite/validate?token=invalid` | GET | 404 | `{"error":"Invalid invite","reason":"invalid"}` | PASS |
-| 3 | `/api/invites/validate?token=invalid` | GET | 404 | `{"error":"Invalid invite","reason":"invalid"}` | PASS |
-| 4 | `/api/search/[id]/notify` | POST | Auth redirect | Redirected | PASS |
-| 5 | `/admin/login` page | GET | 200 + form | Login form rendered | PASS |
+## Re-test summary (round 2)
 
-## Features Shipped This Session
+- **`/admin/login`:** Now returns **HTTP 200** after fixing `app/admin/layout.tsx` (see below). Dev server was **restarted** so the layout change applied cleanly.
+- **Playwright:** Login page renders correctly (headline, email/password, forgot link, brand toggle). **`/admin/ad-creatives` unauthenticated → redirects to `/admin/login`** as expected.
+- **Console (errors):** **0** on login load (only benign devtools / autocomplete hints).
+- **Authenticated ad creatives flow:** Not exercised here — requires real credentials in the browser. Use the checklist below after sign-in.
 
-1. Research wizard — 3 context modes, 2x2 platform grid, 3-tier depth with descriptions
-2. Processing page — Depth badge, elapsed timer, platform stages, email-me-when-done
-3. TikTok embeds — Sources stored, iframe embeds sorted by views with comments/transcripts
-4. Topic score — Logarithmic scaling
-5. Stop words — Recipe/measurement terms filtered
-6. Key findings — Compact stat chips + topic tags
-7. History delete — Hover trash button
-8. Team delete — Grid card delete (super admin)
-9. Unified emails section — Primary + aliases + invite in one section
-10. Portal RLS — 13 policies, 6 tables
-11. Invite system — Full UI, account linking, public middleware routes
-12. Resend emails — 3 branded Nativz templates
-13. cortex.nativz.io — Live with SSL + Supabase auth URLs
-14. Dynamic CORS — Multi-origin support
-15. Hybrid search pipeline — Code-computed analytics + LLM narrative only
-16. Super admin crown badge + avatar sync
+## Root cause of prior 500 on `/admin/login`
 
-## Known Issues
+The admin root layout always mounted **sidebar, header, `getCachedUser` (service role + `unstable_cache`)** even when there was **no session**. On `/admin/login` that extra work was unnecessary and could **fail or error in dev**, surfacing as **500**.
 
-| # | Issue | Severity | Notes |
-|---|-------|----------|-------|
-| 1 | Local build `TypeError: length` | Low | Vercel builds fine — env-specific |
-| 2 | React 19 types regression | Low | Suppressed via `ignoreBuildErrors` |
-| 3 | Reddit 0 posts on some queries | Medium | Rate limiting, not code bug |
-| 4 | Old searches lack TikTok embeds | Low | By design — only new searches store sources |
+### Fix: `app/admin/layout.tsx`
+
+1. If **`getUser()` has no user**, render **only** `<PageTransition>{children}</PageTransition>` (full-screen login, no chrome).
+2. Wrap bootstrap in **`try/catch`** and fall back to the same minimal shell so local misconfig is less likely to brick login.
+3. **`getCachedUser`** wrapped in **`try/catch`** so a cache/DB hiccup does not take down the layout.
+
+## Earlier ad-creatives fixes (still in tree)
+
+| Area | Change |
+|------|--------|
+| **Brand DNA polling** | `AdCreativesHub`: single poll interval, cleanup on unmount / reset / new scan / client change. |
+| **Long-running DNA** | 5-minute timeout → neutral toast. |
+| **Client picker** | No website URL → toast; failed crawl → error toast. |
+| **Missing `clientId`** | Empty state + start over instead of broken wizard. |
+| **Tabs / back / inputs** | `type="button"`, `aria-label`s, focus rings on key controls. |
+| **Ad library** | Category `aria-label`; input focus rings. |
+
+## Login page polish (round 2)
+
+- Password visibility control: **`aria-label`** (show / hide password).
+- Email / password: **`autoComplete="email"`** and **`current-password`** (quieter browser warnings, better UX).
+- Logo mode toggles: **`type="button"`** + mobile toggle **`aria-label`** (match desktop).
+
+## Automated tests
+
+- **`npm test`** — pass (includes `extract-ad-library-urls` when run as part of suite).
+- **`npx tsc --noEmit`** — run after edits.
+
+## Production build (unchanged caveat)
+
+`npm run build` may still fail if this checkout is missing **route modules** or has a **corrupt `.next`**. Try `rm -rf .next && npm run build` after confirming routes exist on disk.
+
+## Manual checklist (signed-in)
+
+1. **`/admin/ad-creatives`** — URL vs client, scan, tabs Generate / Gallery / Templates.
+2. **Client without `website_url`** — toast, no stuck spinner.
+3. **Brand DNA generating** — poll completes or fails clearly.
+4. **Templates → Ad library import** — scrape + empty/success toasts.
+5. **`/admin/clients/[slug]/ad-creatives`** — generate tab + loading.
+6. **AC mode** on login — toggle logos and readable form.

@@ -14,9 +14,12 @@ Next.js 15 (App Router) + TypeScript, Supabase (Postgres + Auth), Brave Search A
 npm run dev          # Dev server (http://localhost:3000)
 npm run build        # Production build
 npm run lint         # ESLint
+npm run test:ad-library # Vitest — Meta Ad Library URL extraction (`extract-ad-library-urls`)
+npx tsx scripts/test-ad-library-scrape.ts "<facebook ads library url>" # Live fetch + print extracted image URLs (no API/auth)
 npx tsc --noEmit     # Type-check
 npm run kandy:upload # Local Kandy export folders → Supabase kandy_templates (see scripts/upload-kandy-templates.ts)
 npm run kandy:analyze # Backfill prompt_schema for templates missing analysis
+npm run supabase:apply-053 # Run migration 053 SQL via Postgres (needs SUPABASE_DB_URL in .env.local — Dashboard → Database → URI)
 ```
 
 ## Reference Docs

@@ -1,23 +1,74 @@
-import { NextResponse, after } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { crawlSite } from '@/lib/ad-creatives/crawl-site';
 import { scrapeBrandAndProducts } from '@/lib/ad-creatives/scrape-brand';
+import { buildAdWizardContextFromBrandDNA } from '@/lib/ad-creatives/brand-dna-context';
+import { findOrCreateEphemeralBrandClient } from '@/lib/ad-creatives/ephemeral-brand-client';
+import { queueBrandDNAGeneration } from '@/lib/brand-dna/queue-generation';
+import type { BrandGuidelineMetadata } from '@/lib/knowledge/types';
+import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
+import { rateLimitByUser } from '@/lib/security/rate-limit';
 
 export const maxDuration = 300;
 
-const bodySchema = z.object({
-  url: z.string().url(),
-  clientId: z.string().uuid().optional(),
-});
+const bodySchema = z
+  .object({
+    url: z.string().url().optional(),
+    clientId: z.string().uuid().optional(),
+  })
+  .refine((d) => Boolean(d.clientId) || Boolean(d.url), {
+    message: 'Provide clientId and/or url',
+  });
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+const DNA_JOB_ACTIVE = ['queued', 'crawling', 'extracting', 'analyzing', 'compiling'] as const;
+
+/**
+ * Prefer Brand DNA (draft/active) for ad wizard — same source as Brand DNA cards.
+ */
+async function loadBrandDnaWizardContext(admin: AdminClient, clientId: string) {
+  const { data: clientRow } = await admin
+    .from('clients')
+    .select('name, website_url, brand_dna_status')
+    .eq('id', clientId)
+    .single();
+
+  const status = clientRow?.brand_dna_status;
+  if (status !== 'draft' && status !== 'active') return null;
+  if (!clientRow?.name) return null;
+
+  const { data: guideline } = await admin
+    .from('client_knowledge_entries')
+    .select('metadata')
+    .eq('client_id', clientId)
+    .eq('type', 'brand_guideline')
+    .is('metadata->superseded_by', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!guideline?.metadata) return null;
+
+  const meta = guideline.metadata as unknown as BrandGuidelineMetadata;
+  return buildAdWizardContextFromBrandDNA(clientRow.name, clientRow.website_url, meta);
+}
+
+function hostnameLabel(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '');
+  } catch {
+    return 'Website';
+  }
+}
 
 /**
  * POST /api/ad-creatives/crawl-brand
  *
- * Full-site crawl. If clientId has cached brand context in knowledge, returns
- * it immediately. Otherwise kicks off an async crawl via after() and the UI
- * polls GET for completion.
+ * Uses Brand DNA (draft/active) when present. Otherwise kicks off the same full Brand DNA
+ * pipeline as /api/clients/[id]/brand-dna/generate, returns quick homepage scrape immediately,
+ * and includes clientId for polling (including roster-hidden URL-only clients).
  */
 export async function POST(req: Request) {
   const supabase = await createServerSupabaseClient();
@@ -30,89 +81,141 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { url, clientId } = parsed.data;
+  const { url: bodyUrl, clientId: bodyClientId } = parsed.data;
   const admin = createAdminClient();
 
-  // Check cache if clientId provided
-  if (clientId) {
-    const { data: existing } = await admin
-      .from('client_knowledge_entries')
-      .select('id, metadata')
-      .eq('client_id', clientId)
-      .eq('type', 'brand_profile')
-      .not('metadata->ad_creative_context', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+  const { data: userRow } = await admin
+    .from('users')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single();
 
-    if (existing?.metadata) {
-      const ctx = (existing.metadata as Record<string, unknown>).ad_creative_context as Record<string, unknown> | undefined;
-      if (ctx) {
-        return NextResponse.json({
-          status: 'cached',
-          brand: ctx.brand ?? null,
-          products: ctx.products ?? [],
-          mediaUrls: ctx.mediaUrls ?? [],
-        });
-      }
+  const organizationId = userRow?.organization_id;
+  if (!bodyClientId && !organizationId) {
+    return NextResponse.json(
+      { error: 'Your account has no organization; open ad creatives from a saved client or contact an admin.' },
+      { status: 400 },
+    );
+  }
+
+  let effectiveClientId = bodyClientId ?? null;
+  let effectiveUrl = bodyUrl ? normalizeWebsiteUrl(bodyUrl) : '';
+
+  if (effectiveClientId) {
+    const { data: crow } = await admin.from('clients').select('id').eq('id', effectiveClientId).maybeSingle();
+    if (!crow) {
+      return NextResponse.json({ error: 'Client not found' }, { status: 404 });
     }
   }
 
-  // Quick homepage scan for immediate UI feedback
-  let quickBrand = null;
-  let quickProducts: unknown[] = [];
-  try {
-    const quick = await scrapeBrandAndProducts(url);
-    quickBrand = quick.brand;
-    quickProducts = quick.products;
-  } catch {
-    // Homepage scan failed — still try full crawl
+  if (!effectiveUrl && effectiveClientId) {
+    const { data: crow } = await admin.from('clients').select('website_url').eq('id', effectiveClientId).single();
+    const n = normalizeWebsiteUrl(crow?.website_url ?? '');
+    if (isValidWebsiteUrl(n)) effectiveUrl = n;
   }
 
-  // Kick off full-site crawl in background to persist to knowledge
-  if (clientId) {
-    after(async () => {
-      try {
-        const result = await crawlSite(url);
-        await admin.from('client_knowledge_entries').insert({
-          client_id: clientId,
-          type: 'brand_profile',
-          title: `Ad creative brand context — ${result.brand.name}`,
-          content: `Brand context for ad generation. ${result.pagesCrawled} pages crawled. ${result.products.length} products found.`,
-          source_url: url,
-          metadata: {
-            ad_creative_context: {
-              brand: result.brand,
-              products: result.products,
-              mediaUrls: result.mediaUrls,
-              pagesCrawled: result.pagesCrawled,
-              crawledAt: new Date().toISOString(),
-            },
-          },
-        });
-      } catch (err) {
-        console.error('[crawl-brand] background full crawl failed:', err);
-      }
+  if (!effectiveUrl || !isValidWebsiteUrl(effectiveUrl)) {
+    return NextResponse.json(
+      {
+        error:
+          'Add a website URL on the client profile or generate Brand DNA so we can load brand context.',
+      },
+      { status: 400 },
+    );
+  }
+
+  if (!effectiveClientId && organizationId) {
+    effectiveClientId = await findOrCreateEphemeralBrandClient(
+      admin,
+      organizationId,
+      effectiveUrl,
+      hostnameLabel(effectiveUrl),
+    );
+  }
+
+  if (!effectiveClientId) {
+    return NextResponse.json({ error: 'Could not resolve client' }, { status: 400 });
+  }
+
+  const fromDna = await loadBrandDnaWizardContext(admin, effectiveClientId);
+  if (fromDna) {
+    return NextResponse.json({
+      status: 'cached',
+      source: 'brand_dna',
+      clientId: effectiveClientId,
+      brand: fromDna.brand,
+      products: fromDna.products,
+      mediaUrls: fromDna.mediaUrls,
     });
   }
 
-  // Return quick scan results immediately (full crawl continues in background)
+  const rl = rateLimitByUser(user.id, '/api/clients/brand-dna/generate', 'ai');
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Please try again later.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+        },
+      },
+    );
+  }
+
+  let quickBrand = null;
+  let quickProducts: unknown[] = [];
+  try {
+    const quick = await scrapeBrandAndProducts(effectiveUrl);
+    quickBrand = quick.brand;
+    quickProducts = quick.products;
+  } catch {
+    // Homepage scan failed — still queue Brand DNA
+  }
+
+  let jobId: string | undefined;
+  try {
+    const q = await queueBrandDNAGeneration({
+      admin,
+      clientId: effectiveClientId,
+      websiteUrl: effectiveUrl,
+      userId: user.id,
+    });
+    jobId = q.jobId;
+  } catch (e) {
+    console.error('[crawl-brand] queue Brand DNA failed:', e);
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Failed to start Brand DNA generation' },
+      { status: 500 },
+    );
+  }
+
   if (quickBrand) {
     return NextResponse.json({
-      status: 'ready',
+      status: 'generating',
+      source: 'live_scrape',
+      clientId: effectiveClientId,
+      jobId,
       brand: quickBrand,
       products: quickProducts,
       mediaUrls: [],
     });
   }
 
-  return NextResponse.json({ status: 'crawling' });
+  return NextResponse.json({
+    status: 'generating',
+    source: 'live_scrape',
+    clientId: effectiveClientId,
+    jobId,
+    brand: null,
+    products: [],
+    mediaUrls: [],
+  });
 }
 
 /**
  * GET /api/ad-creatives/crawl-brand?clientId=X
  *
- * Poll for crawl completion by checking if knowledge entry exists.
+ * Poll until Brand DNA (draft/active) is available, or surface job failure.
  */
 export async function GET(req: Request) {
   const supabase = await createServerSupabaseClient();
@@ -126,27 +229,48 @@ export async function GET(req: Request) {
   }
 
   const admin = createAdminClient();
-  const { data: existing } = await admin
-    .from('client_knowledge_entries')
-    .select('id, metadata')
+
+  const fromDna = await loadBrandDnaWizardContext(admin, clientId);
+  if (fromDna) {
+    return NextResponse.json({
+      status: 'ready',
+      source: 'brand_dna',
+      clientId,
+      brand: fromDna.brand,
+      products: fromDna.products,
+      mediaUrls: fromDna.mediaUrls,
+    });
+  }
+
+  const { data: lastJob } = await admin
+    .from('brand_dna_jobs')
+    .select('status, error_message, step_label, progress_pct')
     .eq('client_id', clientId)
-    .eq('type', 'brand_profile')
-    .not('metadata->ad_creative_context', 'is', null)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (existing?.metadata) {
-    const ctx = (existing.metadata as Record<string, unknown>).ad_creative_context as Record<string, unknown> | undefined;
-    if (ctx) {
-      return NextResponse.json({
-        status: 'ready',
-        brand: ctx.brand ?? null,
-        products: ctx.products ?? [],
-        mediaUrls: ctx.mediaUrls ?? [],
-      });
-    }
+  if (lastJob?.status === 'failed') {
+    return NextResponse.json({
+      status: 'failed',
+      clientId,
+      error: lastJob.error_message ?? 'Brand DNA generation failed',
+    });
   }
 
-  return NextResponse.json({ status: 'crawling' });
+  if (lastJob && (DNA_JOB_ACTIVE as readonly string[]).includes(lastJob.status)) {
+    return NextResponse.json({
+      status: 'generating',
+      clientId,
+      stepLabel: lastJob.step_label,
+      progressPct: lastJob.progress_pct,
+    });
+  }
+
+  const { data: crow } = await admin.from('clients').select('brand_dna_status').eq('id', clientId).maybeSingle();
+  if (crow?.brand_dna_status === 'generating') {
+    return NextResponse.json({ status: 'generating', clientId });
+  }
+
+  return NextResponse.json({ status: 'generating', clientId });
 }

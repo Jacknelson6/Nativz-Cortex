@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { invalidateBrandContext } from '@/lib/knowledge/brand-context';
+import {
+  mergeProductAppendix,
+  buildCanonicalProductCatalogMarkdown,
+} from '@/lib/brand-dna/product-catalog-md';
+import type { ProductItem } from '@/lib/knowledge/types';
 
 /**
  * GET /api/clients/[id]/brand-dna
@@ -122,10 +127,43 @@ export async function PATCH(
     }
   }
 
+  const existingMeta = (guideline.metadata as Record<string, unknown>) ?? {};
+
   // Metadata merge
   if (parsed.data.metadata) {
-    const existingMeta = (guideline.metadata as Record<string, unknown>) ?? {};
     updates.metadata = { ...existingMeta, ...parsed.data.metadata };
+  }
+
+  // Keep guideline markdown + product_catalog node in sync when structured products are PATCHed
+  if (
+    parsed.data.metadata &&
+    'products' in parsed.data.metadata &&
+    Array.isArray(parsed.data.metadata.products)
+  ) {
+    const products = parsed.data.metadata.products as ProductItem[];
+      const baseContent =
+        typeof updates.content === 'string' ? (updates.content as string) : (guideline.content as string);
+      updates.content = mergeProductAppendix(baseContent, products);
+
+      const { data: pcRow } = await admin
+        .from('client_knowledge_entries')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('type', 'product_catalog')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (pcRow) {
+        await admin
+          .from('client_knowledge_entries')
+          .update({
+            content: buildCanonicalProductCatalogMarkdown(products, 'standalone'),
+            metadata: { products },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', pcRow.id);
+      }
   }
 
   const { error: updateErr } = await admin

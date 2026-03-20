@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Building2, Save, Sparkles, Loader2,
   Clock, Pencil, X, Settings2, ExternalLink, DollarSign,
-  BookOpen, Lightbulb, Wand2, Plug, Palette,
+  BookOpen, Lightbulb, Wand2, Plug, Palette, Dna,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -239,46 +239,54 @@ export function ClientProfileForm({
           </div>
         </div>
 
-        {/* Quick navigation */}
-        {!inModal && (
-          <nav className="flex items-center gap-1 border-b border-nativz-border-light pb-3 -mt-2">
-            <Link
-              href={`/admin/clients/${slug}/knowledge`}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-            >
-              <BookOpen size={14} />
-              Knowledge
-            </Link>
-            <Link
-              href={`/admin/clients/${slug}/ideas`}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-            >
-              <Lightbulb size={14} />
-              Ideas
-            </Link>
-            <Link
-              href={`/admin/clients/${slug}/ad-creatives`}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-            >
-              <Palette size={14} />
-              Ad creatives
-            </Link>
-            <Link
-              href={`/admin/clients/${slug}/ideas/generate`}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-            >
-              <Wand2 size={14} />
-              Idea generator
-            </Link>
-            <Link
-              href={`/admin/clients/${slug}/settings`}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-            >
-              <Settings2 size={14} />
-              Settings
-            </Link>
-          </nav>
-        )}
+        {/* Quick navigation — shown in modal (Clients list) and on any full-page profile */}
+        <nav
+          className={`flex flex-wrap items-center gap-1 border-b border-nativz-border-light pb-3 -mt-2 ${inModal ? 'pt-1' : ''}`}
+          aria-label="Client sections"
+        >
+          <Link
+            href={`/admin/clients/${slug}/brand-dna`}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-accent-text bg-accent-surface/25 border border-accent-border/35 hover:bg-accent-surface/45 transition-colors"
+          >
+            <Dna size={14} />
+            Brand DNA
+          </Link>
+          <Link
+            href={`/admin/clients/${slug}/knowledge`}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+          >
+            <BookOpen size={14} />
+            Knowledge
+          </Link>
+          <Link
+            href={`/admin/clients/${slug}/ideas`}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+          >
+            <Lightbulb size={14} />
+            Ideas
+          </Link>
+          <Link
+            href={`/admin/clients/${slug}/ad-creatives`}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+          >
+            <Palette size={14} />
+            Ad creatives
+          </Link>
+          <Link
+            href={`/admin/clients/${slug}/ideas/generate`}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+          >
+            <Wand2 size={14} />
+            Idea generator
+          </Link>
+          <Link
+            href={`/admin/clients/${slug}/settings`}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+          >
+            <Settings2 size={14} />
+            Settings
+          </Link>
+        </nav>
 
         {editingLogo && (
           <Card className="max-w-xs">

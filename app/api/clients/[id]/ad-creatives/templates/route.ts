@@ -13,7 +13,8 @@ const MAX_SIZE = 10 * 1024 * 1024; // 10MB for ad images
 
 const querySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(24),
+  /** Ad wizard loads client library in one request (see ad-wizard.tsx limit=500). */
+  limit: z.coerce.number().int().min(1).max(2000).default(24),
 });
 
 /**
@@ -24,7 +25,7 @@ const querySchema = z.object({
  * @auth Required
  * @param id - Client UUID
  * @query page - Page number (default 1)
- * @query limit - Items per page (default 24, max 100)
+ * @query limit - Items per page (default 24, max 2000)
  * @returns {{ templates: AdPromptTemplate[], total: number, page: number, limit: number }}
  */
 export async function GET(

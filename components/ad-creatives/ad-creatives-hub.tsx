@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { ClientPickerButton, type ClientOption } from '@/components/ui/client-picker';
+import type { ClientOption } from '@/components/ui/client-picker';
+import { AdCreativesClientPick } from './ad-creatives-client-pick';
 import { CreativeGallery } from './creative-gallery';
 import { TemplateCatalog } from './template-catalog';
 import { AdWizard } from './ad-wizard';
@@ -31,6 +32,9 @@ import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-we
 
 type ContextMode = 'url' | 'client';
 type Tab = 'generate' | 'gallery' | 'templates';
+
+/** Where ad wizard brand/products came from (shown in UI). */
+export type BrandContextSource = 'brand_dna' | 'knowledge_cache' | 'live_scrape';
 
 interface ClientWithSlug extends ClientOption {
   slug: string;
@@ -59,7 +63,8 @@ const TABS: { key: Tab; label: string; icon: typeof Image }[] = [
 // ---------------------------------------------------------------------------
 
 function useAnimatedCounter(target: number, duration: number = 3000) {
-  const [value, setValue] = useState(0);
+  // Avoid a first-paint "0+" flash before the effect runs.
+  const [value, setValue] = useState(1);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -93,6 +98,22 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearBrandPoll = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    if (pollTimeoutRef.current) {
+      clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearBrandPoll(), [clearBrandPoll]);
+
   // Context state
   const [contextMode, setContextMode] = useState<ContextMode>('url');
   const [brandUrl, setBrandUrl] = useState('');
@@ -101,6 +122,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
   const [scrapedProducts, setScrapedProducts] = useState<ScrapedProduct[]>([]);
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [clientId, setClientId] = useState<string | null>(null);
+  const [brandContextSource, setBrandContextSource] = useState<BrandContextSource | null>(null);
 
   // Generation state (passed from wizard → gallery)
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
@@ -113,7 +135,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
 
   const selectedClient = clients.find((c) => c.id === clientId);
   const hasContext = brand !== null || clientId !== null;
-  const isScanning = scanning && clientId !== null;
+  const isScanning = scanning;
 
   // Resolve the client ID for API calls
   const resolvedClientId = clientId ?? (brand ? findClientByUrl(clients, brand.url) : null);
@@ -122,6 +144,10 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     !resolvedClientId ||
     resolvedClient?.brand_dna_status === 'active' ||
     resolvedClient?.brand_dna_status === 'draft';
+
+  const clientLikelyUsesBrandDna =
+    !!selectedClient &&
+    (selectedClient.brand_dna_status === 'draft' || selectedClient.brand_dna_status === 'active');
 
   const counter = useAnimatedCounter(10000);
 
@@ -152,10 +178,12 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     }
     if (url !== brandUrl.trim()) setBrandUrl(url);
 
+    clearBrandPoll();
     setScanning(true);
     setBrand(null);
     setScrapedProducts([]);
     setMediaUrls([]);
+    setBrandContextSource(null);
 
     try {
       // Use the new crawl-brand endpoint (checks knowledge cache first)
@@ -172,15 +200,27 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
 
       const data = await res.json();
 
+      if (data.clientId) setClientId(data.clientId as string);
+
       if (data.status === 'cached' || data.status === 'ready') {
-        // Immediate result from knowledge cache
         setBrand(data.brand ?? null);
         setScrapedProducts(data.products ?? []);
         setMediaUrls(data.mediaUrls ?? []);
+        setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
         setScanning(false);
+      } else if (data.status === 'generating') {
+        setBrand(data.brand ?? null);
+        setScrapedProducts(data.products ?? []);
+        setMediaUrls(data.mediaUrls ?? []);
+        setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
+        const pollId = (data.clientId as string) ?? null;
+        if (pollId) pollForBrandContext(pollId);
+        else {
+          toast.error('Scan started but client id was missing; try again.');
+          setScanning(false);
+        }
       } else {
-        // Crawl started in background — poll for completion
-        pollForBrandContext(null, url);
+        setScanning(false);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to scan website');
@@ -188,7 +228,11 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     }
   }
 
-  async function handleClientSelect(id: string | null) {
+  async function handleClientSelect(
+    id: string | null,
+    opts?: { preferGenerateTab?: boolean },
+  ) {
+    clearBrandPoll();
     setClientId(id);
     if (!id) return;
 
@@ -197,50 +241,74 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     setBrandUrl('');
     setScrapedProducts([]);
     setMediaUrls([]);
+    setBrandContextSource(null);
 
     const client = clients.find((c) => c.id === id);
 
-    // Check if this client has existing creatives — default to gallery
-    const hasCreatives = recentClients.some((rc) => rc.clientId === id);
-    if (hasCreatives) {
-      setTab('gallery');
+    if (opts?.preferGenerateTab) {
+      setTab('generate');
+    } else {
+      // Clients with past creatives default to gallery when picked from the roster
+      const hasCreatives = recentClients.some((rc) => rc.clientId === id);
+      if (hasCreatives) {
+        setTab('gallery');
+      }
     }
 
     // Auto-scan client's website URL for brand context
     const url = client?.website_url;
-    if (url) {
-      setScanning(true);
-      try {
-        const res = await fetch('/api/ad-creatives/crawl-brand', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, clientId: id }),
-        });
+    if (!url?.trim()) {
+      toast.message(
+        "Add a website URL on this client's profile (or finish Brand DNA) to load brand context here.",
+      );
+      return;
+    }
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data.status === 'cached' || data.status === 'ready') {
-            setBrand(data.brand ?? null);
-            setScrapedProducts(data.products ?? []);
-            setMediaUrls(data.mediaUrls ?? []);
-            setScanning(false);
-          } else {
-            pollForBrandContext(id, null);
-          }
-        } else {
-          setScanning(false);
-        }
-      } catch {
+    setScanning(true);
+    try {
+      const res = await fetch('/api/ad-creatives/crawl-brand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, clientId: id }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        toast.error(typeof data.error === 'string' ? data.error : 'Could not load brand context');
+        setScanning(false);
+        return;
+      }
+
+      if (data.clientId && data.clientId !== id) setClientId(data.clientId as string);
+
+      if (data.status === 'cached' || data.status === 'ready') {
+        setBrand(data.brand ?? null);
+        setScrapedProducts(data.products ?? []);
+        setMediaUrls(data.mediaUrls ?? []);
+        setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
+        setScanning(false);
+      } else if (data.status === 'generating') {
+        setBrand(data.brand ?? null);
+        setScrapedProducts(data.products ?? []);
+        setMediaUrls(data.mediaUrls ?? []);
+        setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
+        pollForBrandContext((data.clientId as string) ?? id);
+      } else {
         setScanning(false);
       }
+    } catch {
+      toast.error('Could not load brand context');
+      setScanning(false);
     }
   }
 
-  function pollForBrandContext(pollClientId: string | null, _pollUrl: string | null) {
-    const interval = setInterval(async () => {
+  function pollForBrandContext(pollClientId: string) {
+    clearBrandPoll();
+    pollIntervalRef.current = setInterval(async () => {
       try {
         const params = new URLSearchParams();
-        if (pollClientId) params.set('clientId', pollClientId);
+        params.set('clientId', pollClientId);
         const res = await fetch(`/api/ad-creatives/crawl-brand?${params.toString()}`);
         if (!res.ok) return;
         const data = await res.json();
@@ -248,22 +316,28 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
           setBrand(data.brand ?? null);
           setScrapedProducts(data.products ?? []);
           setMediaUrls(data.mediaUrls ?? []);
+          setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
           setScanning(false);
-          clearInterval(interval);
+          clearBrandPoll();
+        } else if (data.status === 'failed') {
+          toast.error(typeof data.error === 'string' ? data.error : 'Brand DNA generation failed');
+          setScanning(false);
+          clearBrandPoll();
         }
       } catch {
         // Keep polling
       }
     }, 3000);
 
-    // Timeout after 5 minutes
-    setTimeout(() => {
-      clearInterval(interval);
+    pollTimeoutRef.current = setTimeout(() => {
+      clearBrandPoll();
       setScanning(false);
+      toast.message('Brand DNA is still processing. You can leave this page and come back, or refresh in a few minutes.');
     }, 300_000);
   }
 
   function handleReset() {
+    clearBrandPoll();
     setBrand(null);
     setBrandUrl('');
     setScrapedProducts([]);
@@ -271,15 +345,11 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     setClientId(null);
     setActiveBatchId(null);
     setPlaceholderConfig(null);
+    setBrandContextSource(null);
   }
 
   function handleRecentClientClick(rc: RecentClient) {
-    setClientId(rc.clientId);
-    // Set brand URL if available for auto-scan
-    if (rc.website_url) {
-      handleClientSelect(rc.clientId);
-    }
-    setTab('gallery');
+    void handleClientSelect(rc.clientId, { preferGenerateTab: true });
   }
 
   // Called by wizard when generation starts
@@ -315,7 +385,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
             {([
               { mode: 'url' as const, icon: Globe, label: 'Website URL' },
               { mode: 'client' as const, icon: Building2, label: 'Existing client' },
-            ]).map(({ mode, icon: Icon, label }) => (
+            ] as const).map(({ mode, icon: Icon, label }) => (
               <button
                 key={mode}
                 type="button"
@@ -344,7 +414,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
                     onChange={(e) => setBrandUrl(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleScan()}
                     placeholder="yourwebsite.com"
-                    className="w-full rounded-xl border border-nativz-border bg-surface py-3 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted/60 transition-colors focus:border-accent focus:outline-none"
+                    className="w-full rounded-xl border border-nativz-border bg-surface py-3 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted/60 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/35"
                     disabled={scanning}
                     autoFocus
                   />
@@ -365,7 +435,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
               {scanning && (
                 <div className="flex items-center justify-center gap-3 py-6">
                   <Loader2 size={20} className="animate-spin text-accent-text" />
-                  <p className="text-sm text-text-muted">Crawling site for brand & products...</p>
+                  <p className="text-sm text-text-muted">Scanning website for brand & products…</p>
                 </div>
               )}
 
@@ -375,23 +445,18 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
             </div>
           )}
 
-          {/* Client picker */}
+          {/* Client picker — rich grid + recents (URL mode keeps its own layout above) */}
           {contextMode === 'client' && (
-            <div className="space-y-3">
-              <ClientPickerButton
-                clients={clients}
-                value={clientId}
-                onChange={handleClientSelect}
-                placeholder="Select a client"
-              />
-              <p className="text-xs text-text-muted text-center">
-                Uses existing brand DNA and product info from the knowledge base.
-              </p>
-            </div>
+            <AdCreativesClientPick
+              clients={clients}
+              recentClients={recentClients}
+              onSelectRoster={(id) => void handleClientSelect(id)}
+              onSelectRecent={handleRecentClientClick}
+            />
           )}
 
-          {/* Recent clients */}
-          {recentClients.length > 0 && (
+          {/* Recent clients — only when scanning by URL (quick reuse) */}
+          {contextMode === 'url' && recentClients.length > 0 && (
             <div className="space-y-3 pt-4 border-t border-nativz-border">
               <p className="text-xs text-text-muted uppercase tracking-wide text-center">Recent</p>
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
@@ -403,6 +468,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
                     className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-nativz-border bg-surface hover:border-accent/30 transition-colors cursor-pointer"
                   >
                     {rc.logo_url ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
                       <img src={rc.logo_url} alt={rc.name} className="h-8 w-8 rounded-lg object-contain" />
                     ) : (
                       <div className="h-8 w-8 rounded-lg bg-background flex items-center justify-center text-xs font-bold text-text-muted">
@@ -431,15 +497,28 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={handleReset}
-            className="text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+            aria-label="Start over — pick a different website or client"
+            className="text-text-muted hover:text-text-secondary transition-colors cursor-pointer rounded-lg p-1 -m-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
             <h1 className="text-xl font-semibold text-text-primary">Ad creatives</h1>
-            <p className="text-sm text-text-muted">
-              {brand?.name ?? selectedClient?.name ?? 'Unknown brand'}
+            <p className="text-sm text-text-muted flex flex-wrap items-center gap-2">
+              <span>{brand?.name ?? selectedClient?.name ?? 'Unknown brand'}</span>
+              {brandContextSource === 'brand_dna' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent-text">
+                  <Sparkles size={10} />
+                  Brand DNA
+                </span>
+              )}
+              {brandContextSource === 'knowledge_cache' && (
+                <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-text-muted">
+                  Cached crawl
+                </span>
+              )}
             </p>
           </div>
           {brand && (
@@ -466,6 +545,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
+            type="button"
             onClick={() => setTab(key)}
             className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all cursor-pointer ${
               activeTab === key
@@ -494,10 +574,16 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
       {activeTab === 'generate' && isScanning && (
         <div className="rounded-2xl border border-nativz-border bg-surface p-12 flex flex-col items-center justify-center gap-4">
           <Loader2 size={28} className="animate-spin text-accent-text" />
-          <div className="text-center">
-            <p className="text-sm font-medium text-text-primary">Crawling site for brand & products...</p>
+          <div className="text-center max-w-md">
+            <p className="text-sm font-medium text-text-primary">
+              {clientLikelyUsesBrandDna
+                ? 'Loading brand & products from Brand DNA…'
+                : 'Crawling site for brand & products…'}
+            </p>
             <p className="text-xs text-text-muted mt-1">
-              Analyzing {selectedClient?.name ?? 'website'} — crawling all pages for colors, products, and brand identity
+              {clientLikelyUsesBrandDna
+                ? 'Using the same colors, logos, and product list as the Brand DNA page. If this hangs, confirm Brand DNA finished generating.'
+                : `Analyzing ${selectedClient?.name ?? 'website'} — homepage scan and knowledge cache`}
             </p>
           </div>
         </div>
@@ -509,19 +595,34 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
         resolvedClient && (
           <BrandDnaRequiredPanel
             clientId={resolvedClientId}
-            clientSlug={resolvedClient.slug}
-            clientName={resolvedClient.name}
+            clientName={resolvedClient.name ?? ''}
             brandDnaStatus={resolvedClient.brand_dna_status}
+            websiteUrl={resolvedClient.website_url}
           />
         )}
       {activeTab === 'generate' && !isScanning && (!resolvedClientId || brandDnaReady) && (
-        <AdWizard
-          clientId={resolvedClientId ?? ''}
-          initialBrand={brand ?? undefined}
-          initialProducts={scrapedProducts}
-          initialMediaUrls={mediaUrls}
-          onGenerationStart={handleGenerationStart}
-        />
+        resolvedClientId ? (
+          <AdWizard
+            clientId={resolvedClientId}
+            clientSlug={resolvedClient?.slug}
+            initialBrand={brand ?? undefined}
+            initialProducts={scrapedProducts}
+            initialMediaUrls={mediaUrls}
+            brandContextSource={brandContextSource ?? undefined}
+            onGenerationStart={handleGenerationStart}
+          />
+        ) : (
+          <div className="rounded-2xl border border-nativz-border bg-surface p-10 text-center space-y-2 max-w-lg mx-auto">
+            <p className="text-sm font-medium text-text-primary">Client not linked yet</p>
+            <p className="text-xs text-text-muted leading-relaxed">
+              We could not resolve a saved client for this session. Go back, run the scan again, or choose an existing
+              client from the roster.
+            </p>
+            <Button type="button" variant="outline" size="sm" className="mt-2" onClick={handleReset}>
+              Start over
+            </Button>
+          </div>
+        )
       )}
       {activeTab === 'gallery' && resolvedClientId && (
         <CreativeGallery

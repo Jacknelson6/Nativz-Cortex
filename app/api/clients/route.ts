@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 
 const createClientSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -47,21 +48,31 @@ export async function GET() {
     }
 
     if (userData.role === 'admin') {
-      // Admin sees all clients
-      const { data: clients } = await adminClient
-        .from('clients')
-        .select('*')
-        .order('name');
+      const { data: clients, error } = await selectClientsWithRosterVisibility(adminClient, {
+        select: '*',
+        orderBy: { column: 'name' },
+      });
+      if (error) {
+        console.error('GET /api/clients (admin):', error);
+        return NextResponse.json({ error: 'Failed to fetch clients' }, { status: 500 });
+      }
       return NextResponse.json(clients || []);
     }
 
-    // Portal user sees only their org's clients
-    const { data: clients } = await adminClient
-      .from('clients')
-      .select('*')
-      .eq('organization_id', userData.organization_id)
-      .eq('is_active', true)
-      .order('name');
+    if (!userData.organization_id) {
+      return NextResponse.json([]);
+    }
+
+    const { data: clients, error } = await selectClientsWithRosterVisibility(adminClient, {
+      select: '*',
+      onlyActive: true,
+      eq: { organization_id: userData.organization_id },
+      orderBy: { column: 'name' },
+    });
+    if (error) {
+      console.error('GET /api/clients (portal):', error);
+      return NextResponse.json({ error: 'Failed to fetch clients' }, { status: 500 });
+    }
 
     return NextResponse.json(clients || []);
   } catch (error) {

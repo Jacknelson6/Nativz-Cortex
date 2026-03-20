@@ -11,6 +11,7 @@ import { CompletenessBadge } from './completeness-badge';
 import { OnboardWizard } from './onboard-wizard';
 import { BrandDNAProgress } from './brand-dna-progress';
 import { BrandDNASectionEditor } from './brand-dna-section-editor';
+import { Markdown } from '@/components/ai/markdown';
 import { formatRelativeTime } from '@/lib/utils/format';
 import type { BrandGuidelineMetadata } from '@/lib/knowledge/types';
 
@@ -47,6 +48,9 @@ export function BrandDNAView({
 
   const metadata = (localMetadata ?? guideline?.metadata ?? null) as Record<string, unknown> | null;
 
+  const canRecrawl =
+    websiteUrl.trim().length > 0 && brandDnaStatus !== 'generating';
+
   function handleSectionSaved(updated: Partial<BrandGuidelineMetadata>) {
     setLocalMetadata((prev) => prev ? { ...prev, ...updated } : (updated as BrandGuidelineMetadata));
   }
@@ -59,10 +63,10 @@ export function BrandDNAView({
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error ?? 'Refresh failed');
       }
-      toast.success('Re-crawl started — check back in a minute');
+      toast.success('Re-crawl started — you can leave this page; refresh when it finishes');
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Refresh failed');
+      toast.error(err instanceof Error ? err.message : 'Re-crawl failed');
     } finally {
       setRefreshing(false);
     }
@@ -85,18 +89,18 @@ export function BrandDNAView({
           </div>
           {metadata && <CompletenessBadge metadata={metadata} size="md" />}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {guideline && (
-            <>
-              <span className="text-xs text-text-muted flex items-center gap-1">
-                <Clock size={12} />
-                {formatRelativeTime(guideline.updated_at ?? guideline.created_at)}
-              </span>
-              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-                Refresh
-              </Button>
-            </>
+            <span className="text-xs text-text-muted flex items-center gap-1">
+              <Clock size={12} />
+              Updated {formatRelativeTime(guideline.updated_at ?? guideline.created_at)}
+            </span>
+          )}
+          {canRecrawl && (
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Starting…' : 'Re-run crawl'}
+            </Button>
           )}
         </div>
       </div>
@@ -104,7 +108,11 @@ export function BrandDNAView({
       {/* Brand DNA content or empty state */}
       {brandDnaStatus === 'generating' ? (
         <div className="rounded-xl border border-nativz-border bg-surface p-8">
-          <BrandDNAProgress clientId={clientId} onComplete={() => router.refresh()} />
+          <BrandDNAProgress
+            clientId={clientId}
+            onComplete={() => router.refresh()}
+            navigateAwayHint="You can open other admin pages — generation keeps running. Refresh this page when it finishes."
+          />
         </div>
       ) : guideline && metadata ? (
         <>
@@ -120,9 +128,7 @@ export function BrandDNAView({
           <div className="rounded-xl border border-nativz-border bg-surface p-6">
             <h3 className="text-sm font-semibold text-text-primary mb-4">Full brand guideline</h3>
             <div className="prose prose-invert prose-sm max-w-none text-text-secondary">
-              <pre className="whitespace-pre-wrap text-xs leading-relaxed font-sans">
-                {guideline.content}
-              </pre>
+              <Markdown content={guideline.content} />
             </div>
           </div>
         </>
@@ -136,10 +142,23 @@ export function BrandDNAView({
             Generate a comprehensive brand guideline from {clientName}&apos;s website.
             This becomes the source of truth for all AI-powered content generation.
           </p>
-          <Button onClick={() => setGenerateOpen(true)}>
-            <Globe size={14} />
-            Generate Brand DNA
-          </Button>
+          {!websiteUrl.trim() && (
+            <p className="text-xs text-text-muted mb-4 max-w-md">
+              Add a website URL on the client profile to run a crawl.
+            </p>
+          )}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Button onClick={() => setGenerateOpen(true)}>
+              <Globe size={14} />
+              Generate Brand DNA
+            </Button>
+            {canRecrawl && !guideline && (
+              <Button type="button" variant="outline" onClick={handleRefresh} disabled={refreshing}>
+                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                {refreshing ? 'Starting…' : 'Re-run crawl'}
+              </Button>
+            )}
+          </div>
         </div>
       )}
 

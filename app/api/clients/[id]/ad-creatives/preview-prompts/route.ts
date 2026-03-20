@@ -5,7 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getBrandContext } from '@/lib/knowledge/brand-context';
 import { assembleImagePrompt } from '@/lib/ad-creatives/assemble-prompt';
 import { generateAdCopy } from '@/lib/ad-creatives/generate-copy';
-import type { KandyTemplate } from '@/lib/ad-creatives/types';
+import type { AdPromptTemplate, KandyTemplate } from '@/lib/ad-creatives/types';
+import { adPromptRowToWizardTemplate, wizardTemplateToKandy } from '@/lib/ad-creatives/wizard-template';
 
 const bodySchema = z.object({
   templateVariations: z.array(z.object({
@@ -62,15 +63,28 @@ export async function POST(
     // Resolve brand context
     const brandContext = await getBrandContext(clientId);
 
-    // Resolve templates
     const templateIds = templateVariations.map((tv) => tv.templateId);
-    const { data: templates } = await admin
-      .from('kandy_templates')
-      .select('*')
-      .in('id', templateIds)
-      .eq('is_active', true);
 
-    if (!templates || templates.length === 0) {
+    let templates: KandyTemplate[] = [];
+    if (templateSource === 'kandy') {
+      const { data } = await admin
+        .from('kandy_templates')
+        .select('*')
+        .in('id', templateIds)
+        .eq('is_active', true);
+      templates = (data ?? []) as KandyTemplate[];
+    } else {
+      const { data } = await admin
+        .from('ad_prompt_templates')
+        .select('*')
+        .eq('client_id', clientId)
+        .in('id', templateIds);
+      templates = (data ?? []).map((row) =>
+        wizardTemplateToKandy(adPromptRowToWizardTemplate(row as AdPromptTemplate)),
+      );
+    }
+
+    if (templates.length === 0) {
       return NextResponse.json({ error: 'No templates found' }, { status: 404 });
     }
 

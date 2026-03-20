@@ -73,6 +73,7 @@ export default function AdminLoginPage() {
         {/* Branding — centered, click to toggle */}
         <div className="relative z-10 flex flex-1 flex-col items-center justify-center p-10">
           <button
+            type="button"
             onClick={(e) => toggleMode(e)}
             className="cursor-pointer hover:opacity-80 transition-opacity mb-5"
             aria-label={`Switch to ${isAC ? 'Nativz' : 'Anderson Collaborative'} mode`}
@@ -115,8 +116,10 @@ State of the art<br />content intelligence.
             {/* Mobile logo — click to toggle */}
             <div className="lg:hidden mb-8 flex justify-center">
               <button
+                type="button"
                 onClick={(e) => toggleMode(e)}
                 className="cursor-pointer hover:opacity-80 transition-opacity"
+                aria-label={`Switch to ${isAC ? 'Nativz' : 'Anderson Collaborative'} mode`}
               >
                 {isAC ? (
                   <img src="/anderson-logo-dark.svg" alt="Anderson Collaborative" className="h-10 w-auto" />
@@ -144,6 +147,7 @@ State of the art<br />content intelligence.
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@nativz.io"
+                  autoComplete="email"
                   required
                   className={`w-full rounded-lg border px-4 py-3 text-sm focus:outline-none focus:ring-1 transition-colors ${
                     isAC
@@ -164,6 +168,7 @@ State of the art<br />content intelligence.
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
+                    autoComplete="current-password"
                     required
                     className={`w-full rounded-lg border px-4 py-3 pr-11 text-sm focus:outline-none focus:ring-1 transition-colors ${
                       isAC
@@ -174,6 +179,7 @@ State of the art<br />content intelligence.
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                     className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors cursor-pointer ${
                       isAC ? 'text-[#617792]/50 hover:text-[#617792]' : 'text-white/30 hover:text-white/60'
                     }`}

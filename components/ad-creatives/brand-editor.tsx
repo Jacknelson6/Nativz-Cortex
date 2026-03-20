@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { Pencil, Plus, X, Save, Upload, Check } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Pencil, Plus, X, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
 import type { ScrapedBrand } from '@/lib/ad-creatives/scrape-brand';
 
 interface BrandEditorProps {
@@ -16,14 +15,36 @@ export function BrandEditor({ brand, onBrandChange, clientId }: BrandEditorProps
   const [editingName, setEditingName] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const colorInputRef = useRef<HTMLInputElement>(null);
 
+  const persistBrand = useCallback(
+    async (b: ScrapedBrand) => {
+      if (!clientId) return;
+      try {
+        const res = await fetch('/api/ad-creatives/brand-context', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId, brand: b }),
+        });
+        if (!res.ok) throw new Error('Failed to save');
+      } catch {
+        toast.error('Failed to save brand context');
+      }
+    },
+    [clientId],
+  );
+
+  useEffect(() => {
+    if (!clientId) return;
+    const t = window.setTimeout(() => {
+      void persistBrand(brand);
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, [brand, clientId, persistBrand]);
+
   function updateField<K extends keyof ScrapedBrand>(key: K, value: ScrapedBrand[K]) {
     onBrandChange({ ...brand, [key]: value });
-    setSaved(false);
   }
 
   function removeColor(index: number) {
@@ -47,34 +68,13 @@ export function BrandEditor({ brand, onBrandChange, clientId }: BrandEditorProps
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // For now, create a local object URL. In production this would upload to Supabase Storage.
     const objectUrl = URL.createObjectURL(file);
     updateField('logoUrl', objectUrl);
-  }
-
-  async function saveToBrand() {
-    if (!clientId) return;
-    setSaving(true);
-    try {
-      const res = await fetch('/api/ad-creatives/brand-context', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, brand }),
-      });
-      if (!res.ok) throw new Error('Failed to save');
-      setSaved(true);
-      toast.success('Brand context saved');
-    } catch {
-      toast.error('Failed to save brand context');
-    } finally {
-      setSaving(false);
-    }
   }
 
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-5 space-y-4">
       <div className="flex items-start gap-4">
-        {/* Logo */}
         <button
           type="button"
           onClick={() => logoInputRef.current?.click()}
@@ -99,7 +99,6 @@ export function BrandEditor({ brand, onBrandChange, clientId }: BrandEditorProps
           />
         </button>
 
-        {/* Name + Description */}
         <div className="flex-1 min-w-0 space-y-1">
           {editingName ? (
             <input
@@ -142,7 +141,6 @@ export function BrandEditor({ brand, onBrandChange, clientId }: BrandEditorProps
         </div>
       </div>
 
-      {/* Colors */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-text-muted uppercase tracking-wide mr-1">Colors</span>
         {brand.colors.map((color, i) => (
@@ -187,21 +185,6 @@ export function BrandEditor({ brand, onBrandChange, clientId }: BrandEditorProps
           onChange={(e) => addColor(e.target.value)}
         />
       </div>
-
-      {/* Save to brand button */}
-      {clientId && (
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={saveToBrand}
-            disabled={saving || saved}
-            className="text-xs"
-          >
-            {saved ? <Check size={14} /> : saving ? 'Saving...' : <><Save size={14} /> Save to brand</>}
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

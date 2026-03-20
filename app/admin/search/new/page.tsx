@@ -1,19 +1,32 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 import { getVaultClients } from '@/lib/vault/reader';
 import { ResearchHub } from '@/components/research/research-hub';
 import { fetchHistory } from '@/lib/research/history';
+
+type ResearchHubDbClientRow = {
+  id: string;
+  slug: string;
+  logo_url: string | null;
+  is_active: boolean;
+};
 
 export default async function AdminNewSearchPage() {
   const supabase = createAdminClient();
 
   // Fetch clients with logos and agencies
-  const [vaultClients, { data: dbClients }] = await Promise.all([
+  const [vaultClients, rosterResult] = await Promise.all([
     getVaultClients(),
-    supabase
-      .from('clients')
-      .select('id, slug, logo_url, is_active')
-      .eq('is_active', true),
+    selectClientsWithRosterVisibility<ResearchHubDbClientRow>(supabase, {
+      select: 'id, slug, logo_url, is_active',
+      onlyActive: true,
+    }),
   ]);
+
+  const dbClients = rosterResult.data;
+  if (rosterResult.error) {
+    console.error('Research hub roster query:', rosterResult.error);
+  }
 
   const clients = (dbClients || []).map((db) => {
     const vault = vaultClients.find((v) => v.slug === db.slug);

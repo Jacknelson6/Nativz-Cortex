@@ -617,6 +617,13 @@ function ProductsForm({
                     className="flex-1 rounded bg-transparent text-xs text-text-muted border-b border-nativz-border/50 outline-none focus:border-accent/50 px-1 py-0.5"
                   />
                 </div>
+                <input
+                  type="url"
+                  value={product.imageUrl ?? ''}
+                  onChange={(e) => update(i, 'imageUrl', e.target.value)}
+                  placeholder="Image URL (optional)"
+                  className="w-full rounded bg-transparent text-[11px] text-text-muted border-b border-nativz-border/50 outline-none focus:border-accent/50 px-1 py-0.5"
+                />
               </div>
               <button
                 type="button"
