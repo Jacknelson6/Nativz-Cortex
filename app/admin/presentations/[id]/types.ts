@@ -102,11 +102,50 @@ export interface BenchmarkConfig {
   active_vertical_filter: string | null;
 }
 
+// ─── Social Results types ─────────────────────────────────────────────────────
+
+export interface SocialResultsPost {
+  id: string;
+  image_url: string;
+  is_generated: boolean;
+  type: 'photo' | 'reel' | 'carousel';
+  caption?: string | null;
+}
+
+export interface SocialResultsHighlight {
+  id: string;
+  title: string;
+  cover_image_url: string | null;
+  is_generated: boolean;
+}
+
+export interface SocialResultsProfile {
+  handle: string;
+  display_name: string;
+  bio: string;
+  profile_image: string | null;
+  followers: number;
+  following: number;
+  posts_count: number;
+  posts: SocialResultsPost[];
+  story_highlights: SocialResultsHighlight[];
+}
+
+export interface SocialResultsData {
+  instagram_handle: string;
+  status: 'idle' | 'scraping' | 'generating' | 'done' | 'error';
+  error_message?: string | null;
+  before: SocialResultsProfile | null;
+  after: SocialResultsProfile | null;
+  timeline_months: number;
+  generated_at: string | null;
+}
+
 export interface PresentationData {
   id: string;
   title: string;
   description: string | null;
-  type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks' | 'prospect_audit';
+  type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks' | 'prospect_audit' | 'social_results';
   client_id: string | null;
   slides: Slide[];
   tiers: TierDef[];
