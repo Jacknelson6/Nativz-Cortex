@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
-import { Upload, Check, Loader2, Square, Smartphone, RectangleVertical } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Upload, Check, Loader2, Square, Smartphone, RectangleVertical, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import type { KandyTemplate, AspectRatio, AdVertical } from '@/lib/ad-creatives/types';
@@ -12,6 +12,7 @@ interface TemplateGridProps {
   onToggle: (id: string) => void;
   clientId: string;
   onTemplatesAdded?: (templates: KandyTemplate[]) => void;
+  recommendedVertical?: string | null;
 }
 
 const RATIO_SECTIONS: { ratio: AspectRatio; label: string; icon: typeof Square }[] = [
@@ -33,7 +34,7 @@ const VERTICAL_LABELS: Record<string, string> = {
   automotive: 'Automotive',
 };
 
-export function TemplateGrid({ templates, selectedIds, onToggle, clientId, onTemplatesAdded }: TemplateGridProps) {
+export function TemplateGrid({ templates, selectedIds, onToggle, clientId, onTemplatesAdded, recommendedVertical }: TemplateGridProps) {
   const [activeRatioFilter, setActiveRatioFilter] = useState<AspectRatio | 'all'>('all');
   const [verticalFilter, setVerticalFilter] = useState<AdVertical | 'all'>('all');
   const [brandFilter, setBrandFilter] = useState<string | 'all'>('all');
@@ -43,6 +44,13 @@ export function TemplateGrid({ templates, selectedIds, onToggle, clientId, onTem
   const [importUrl, setImportUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Auto-set vertical filter when recommendation is detected
+  useEffect(() => {
+    if (recommendedVertical && recommendedVertical !== 'general') {
+      setVerticalFilter(recommendedVertical as AdVertical);
+    }
+  }, [recommendedVertical]);
 
   // Group templates by aspect ratio
   const grouped = groupByRatio(templates);
@@ -130,6 +138,24 @@ export function TemplateGrid({ templates, selectedIds, onToggle, clientId, onTem
 
   return (
     <div className="space-y-4">
+      {/* Recommendation banner */}
+      {recommendedVertical && recommendedVertical !== 'general' && (
+        <div className="rounded-lg border border-accent/20 bg-accent-surface/20 px-3 py-2 flex items-center gap-2">
+          <Sparkles size={14} className="text-accent-text shrink-0" />
+          <p className="text-xs text-text-secondary">
+            <span className="font-medium text-accent-text">Recommended:</span>{' '}
+            Showing {VERTICAL_LABELS[recommendedVertical] ?? recommendedVertical} templates based on your brand.
+            <button
+              type="button"
+              onClick={() => setVerticalFilter('all')}
+              className="ml-1.5 text-text-muted hover:text-text-primary underline cursor-pointer"
+            >
+              Show all
+            </button>
+          </p>
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="flex items-center gap-2 flex-wrap">
         {/* Aspect ratio filter buttons */}

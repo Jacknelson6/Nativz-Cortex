@@ -46,6 +46,45 @@ type StepStatus = 'empty' | 'active' | 'complete';
 // Constants
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Vertical detection from brand description
+// ---------------------------------------------------------------------------
+
+const VERTICAL_KEYWORDS: Record<string, string[]> = {
+  ecommerce: ['shop', 'store', 'ecommerce', 'e-commerce', 'retail', 'buy', 'sale', 'discount', 'coupon', 'merch', 'clothing', 'apparel', 'jewelry', 'accessories', 'products'],
+  saas: ['software', 'saas', 'app', 'platform', 'digital', 'cloud', 'ai', 'tool', 'automation', 'api', 'dashboard', 'analytics', 'crm', 'erp', 'b2b'],
+  health_wellness: ['health', 'beauty', 'wellness', 'skincare', 'cosmetic', 'supplement', 'vitamin', 'fitness', 'spa', 'clinic', 'medical', 'pharma', 'organic', 'natural'],
+  fashion: ['fashion', 'style', 'designer', 'luxury', 'boutique', 'couture', 'dress', 'wear', 'trend'],
+  food_beverage: ['food', 'restaurant', 'cafe', 'coffee', 'drink', 'beverage', 'catering', 'kitchen', 'recipe', 'menu', 'toast', 'juice', 'bar', 'grill', 'bakery'],
+  finance: ['finance', 'bank', 'invest', 'insurance', 'mortgage', 'loan', 'credit', 'wealth', 'gold', 'currency', 'crypto', 'fund', 'capital'],
+  real_estate: ['real estate', 'property', 'home', 'house', 'apartment', 'condo', 'realtor', 'listing', 'rental'],
+  automotive: ['auto', 'car', 'vehicle', 'motor', 'dealer', 'truck', 'tire', 'mechanic'],
+  education: ['education', 'school', 'university', 'course', 'learning', 'tutor', 'academy', 'training'],
+  local_service: ['plumbing', 'electric', 'roofing', 'hvac', 'landscap', 'cleaning', 'repair', 'contractor', 'handyman', 'pest', 'moving'],
+  general: [], // fallback
+};
+
+function detectVertical(description: string, brandName: string): string {
+  const text = `${description} ${brandName}`.toLowerCase();
+  let bestMatch = 'general';
+  let bestScore = 0;
+
+  for (const [vertical, keywords] of Object.entries(VERTICAL_KEYWORDS)) {
+    if (vertical === 'general') continue;
+    const score = keywords.filter((kw) => text.includes(kw)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = vertical;
+    }
+  }
+
+  return bestMatch;
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
 const RATIO_OPTIONS: { value: AspectRatio; label: string; icon: typeof Square }[] = [
   { value: '1:1', label: 'Square', icon: Square },
   { value: '9:16', label: 'Story', icon: Smartphone },
@@ -96,6 +135,9 @@ export function AdWizard({ clientId, initialBrand, initialProducts, onGeneration
   const templateRef = useRef<HTMLDivElement>(null);
   const formatRef = useRef<HTMLDivElement>(null);
   const generateRef = useRef<HTMLDivElement>(null);
+
+  // Recommended vertical based on brand
+  const recommendedVertical = brand ? detectVertical(brand.description, brand.name) : null;
 
   // Update brand from parent when it changes
   useEffect(() => {
@@ -399,6 +441,7 @@ export function AdWizard({ clientId, initialBrand, initialProducts, onGeneration
             onToggle={toggleTemplate}
             clientId={clientId}
             onTemplatesAdded={handleTemplatesAdded}
+            recommendedVertical={recommendedVertical}
           />
         )}
       </WizardSection>
