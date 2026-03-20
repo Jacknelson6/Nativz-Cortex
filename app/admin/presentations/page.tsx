@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Presentation, Plus, MoreHorizontal, Clock, Trash2, Archive, ArchiveRestore,
-  Copy, Pencil, FileText, ListOrdered, BarChart3, BarChart2, ChevronRight, Search,
+  Copy, Pencil, FileText, ListOrdered, BarChart3, BarChart2, ChevronRight, Search, Instagram,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,7 @@ interface PresentationItem {
   id: string;
   title: string;
   description: string | null;
-  type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks' | 'prospect_audit';
+  type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks' | 'prospect_audit' | 'social_results';
   client_id: string | null;
   client_name: string | null;
   slides: { title: string; body: string; image_url?: string | null }[];
@@ -78,7 +78,7 @@ export default function PresentationsPage() {
     return () => document.removeEventListener('click', handleClick);
   }, [menuOpenId]);
 
-  async function handleCreate(type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks' | 'prospect_audit') {
+  async function handleCreate(type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks' | 'prospect_audit' | 'social_results') {
     try {
       const titles: Record<string, string> = {
         slides: 'Untitled presentation',
@@ -86,6 +86,7 @@ export default function PresentationsPage() {
         social_audit: 'Social audit',
         benchmarks: 'Creative benchmarks 2026',
         prospect_audit: 'Prospect audit',
+        social_results: 'Instagram social results',
       };
       const body: Record<string, unknown> = {
         title: titles[type],
@@ -116,6 +117,15 @@ export default function PresentationsPage() {
           recommendations: [],
           scraped_content: [],
           analyzed_at: null,
+        };
+      } else if (type === 'social_results') {
+        body.audit_data = {
+          instagram_handle: '',
+          status: 'idle',
+          before: null,
+          after: null,
+          timeline_months: 3,
+          generated_at: null,
         };
       }
 
@@ -205,6 +215,7 @@ export default function PresentationsPage() {
     social_audit: { icon: BarChart3, label: 'Social audit', accentClass: 'bg-emerald-500/15', iconColor: 'text-emerald-400' },
     benchmarks: { icon: BarChart2, label: 'Benchmarks', accentClass: 'bg-orange-500/15', iconColor: 'text-orange-400' },
     prospect_audit: { icon: Search, label: 'Prospect audit', accentClass: 'bg-cyan-500/15', iconColor: 'text-cyan-400' },
+    social_results: { icon: Instagram, label: 'Social results', accentClass: 'bg-pink-500/15', iconColor: 'text-pink-400' },
   };
 
   const active = presentations.filter((p) => p.status !== 'archived');
@@ -243,6 +254,7 @@ export default function PresentationsPage() {
                 { type: 'social_audit' as const, label: 'Social audit', desc: 'Before & after analysis with real social data and growth projections', icon: BarChart3, color: 'rgba(16, 185, 129, 0.15)', iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10' },
                 { type: 'benchmarks' as const, label: 'Creative benchmarks', desc: 'Interactive charts and tables from $1.3B in ad spend data', icon: BarChart2, color: 'rgba(249, 115, 22, 0.15)', iconColor: 'text-orange-400', bgColor: 'bg-orange-500/15' },
                 { type: 'prospect_audit' as const, label: 'Prospect audit', desc: 'Audit a prospect\'s social presence, content pillars, and ad strategy', icon: Search, color: 'rgba(6, 182, 212, 0.15)', iconColor: 'text-cyan-400', bgColor: 'bg-cyan-500/15' },
+                { type: 'social_results' as const, label: 'Social results visualizer', desc: 'Show prospects their Instagram before & after 3 months with Nativz', icon: Instagram, color: 'rgba(236, 72, 153, 0.15)', iconColor: 'text-pink-400', bgColor: 'bg-pink-500/10' },
               ].map(({ type, label, desc, icon: Icon, iconColor, bgColor }) => (
                 <button
                   key={type}
