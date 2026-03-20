@@ -10,6 +10,7 @@ import { Input, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ImageUpload } from '@/components/ui/image-upload';
 import { OnboardWizard } from '@/components/brand-dna/onboard-wizard';
+import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
 
 function slugify(name: string): string {
   return name
@@ -45,13 +46,19 @@ export default function AdminNewClientPage() {
   }
 
   async function handleAutoFill() {
-    if (!websiteUrl.trim()) return;
+    const url = normalizeWebsiteUrl(websiteUrl);
+    if (!url) return;
+    if (!isValidWebsiteUrl(url)) {
+      toast.error('Enter a valid website (e.g. example.com)');
+      return;
+    }
+    if (url !== websiteUrl.trim()) setWebsiteUrl(url);
     setAnalyzing(true);
     try {
       const res = await fetch('/api/clients/analyze-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: websiteUrl.trim() }),
+        body: JSON.stringify({ url }),
       });
 
       if (!res.ok) {
@@ -88,6 +95,13 @@ export default function AdminNewClientPage() {
     setError('');
     setSaving(true);
 
+    const siteUrl = websiteUrl.trim() ? normalizeWebsiteUrl(websiteUrl) : '';
+    if (siteUrl && !isValidWebsiteUrl(siteUrl)) {
+      setError('Enter a valid website URL or leave it blank.');
+      setSaving(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/clients', {
         method: 'POST',
@@ -103,7 +117,7 @@ export default function AdminNewClientPage() {
             .map((k) => k.trim())
             .filter(Boolean),
           logo_url: logoUrl || null,
-          website_url: websiteUrl.trim() || null,
+          website_url: siteUrl || null,
         }),
       });
 
@@ -211,10 +225,16 @@ export default function AdminNewClientPage() {
               <Input
                 id="website_url"
                 label="Website URL"
-                type="url"
+                type="text"
+                inputMode="url"
+                autoComplete="url"
                 value={websiteUrl}
                 onChange={(e) => setWebsiteUrl(e.target.value)}
-                placeholder="https://example.com"
+                onBlur={() => {
+                  const n = normalizeWebsiteUrl(websiteUrl);
+                  if (n && n !== websiteUrl.trim()) setWebsiteUrl(n);
+                }}
+                placeholder="example.com or https://example.com"
               />
               <Button
                 type="button"

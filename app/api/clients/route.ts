@@ -13,6 +13,7 @@ const createClientSchema = z.object({
   topic_keywords: z.array(z.string()).optional(),
   logo_url: z.string().url().nullable().optional(),
   website_url: z.string().url().nullable().optional(),
+  onboarded_via: z.enum(['manual', 'brand_dna']).optional(),
 });
 
 /**
@@ -118,12 +119,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { onboarded_via, ...clientFields } = parsed.data;
     const { data: client, error: insertError } = await adminClient
       .from('clients')
       .insert({
-        ...parsed.data,
+        ...clientFields,
         organization_id: parsed.data.organization_id || userData.organization_id,
         feature_flags: { can_search: true, can_view_reports: true },
+        ...(onboarded_via ? { onboarded_via } : {}),
       })
       .select()
       .single();

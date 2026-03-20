@@ -11,6 +11,30 @@ import { WizardShell } from '@/components/research/wizard-shell';
 import { GlassButton } from '@/components/ui/glass-button';
 import { BrandDNACards } from './brand-dna-cards';
 import { BrandDNAProgress } from './brand-dna-progress';
+import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
+
+function slugify(name: string): string {
+  const s = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return s || 'client';
+}
+
+function formatApiError(data: Record<string, unknown>): string {
+  if (typeof data.error === 'string' && data.error) {
+    const hint = typeof data.hint === 'string' ? ` ${data.hint}` : '';
+    return `${data.error}${hint}`;
+  }
+  const d = data.details as Record<string, string[] | undefined> | undefined;
+  if (d && typeof d === 'object') {
+    const parts = Object.entries(d).flatMap(([k, v]) =>
+      Array.isArray(v) ? v.map((m) => `${k}: ${m}`) : [],
+    );
+    if (parts.length) return parts.join(' · ');
+  }
+  return 'Request failed';
+}
 
 interface OnboardWizardProps {
   open: boolean;
@@ -32,8 +56,10 @@ export function OnboardWizard({ open, onClose, existingClientId, existingClientN
   const [error, setError] = useState('');
   const [brandDNA, setBrandDNA] = useState<Record<string, unknown> | null>(null);
 
-  const isUrlValid = /^https?:\/\/.+\..+/.test(websiteUrl.trim());
-  const step1Valid = clientName.trim().length > 0 && isUrlValid;
+  const normalizedWebsiteUrl = normalizeWebsiteUrl(websiteUrl);
+  const step1Valid = existingClientId
+    ? isValidWebsiteUrl(normalizedWebsiteUrl)
+    : clientName.trim().length > 0 && isValidWebsiteUrl(normalizedWebsiteUrl);
 
   function reset() {
     setStep(1);
@@ -60,26 +86,48 @@ export function OnboardWizard({ open, onClose, existingClientId, existingClientN
     setError('');
     setLoading(true);
 
+    const urlForApi = normalizeWebsiteUrl(websiteUrl);
+    if (!isValidWebsiteUrl(urlForApi)) {
+      setLoading(false);
+      setError('Enter a valid website (e.g. example.com or https://example.com)');
+      return;
+    }
+
     try {
       let id = clientId;
 
-      // Create client if new
+      // Create client if new (API requires slug + industry)
       if (!id) {
-        const createRes = await fetch('/api/clients', {
+        const baseSlug = slugify(clientName.trim());
+        let slug = baseSlug;
+        let createBody: Record<string, unknown> = {
+          name: clientName.trim(),
+          slug,
+          industry: 'General',
+          website_url: urlForApi,
+          onboarded_via: 'brand_dna',
+        };
+        let createRes = await fetch('/api/clients', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: clientName.trim(),
-            website_url: websiteUrl.trim(),
-            onboarded_via: 'brand_dna',
-          }),
+          body: JSON.stringify(createBody),
         });
+        if (createRes.status === 409) {
+          slug = `${baseSlug}-${Date.now().toString(36)}`;
+          createBody = { ...createBody, slug };
+          createRes = await fetch('/api/clients', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(createBody),
+          });
+        }
         if (!createRes.ok) {
-          const d = await createRes.json().catch(() => ({}));
-          throw new Error(d.error ?? 'Failed to create client');
+          const d = (await createRes.json().catch(() => ({}))) as Record<string, unknown>;
+          throw new Error(formatApiError(d));
         }
         const clientData = await createRes.json();
         id = clientData.id ?? clientData.client?.id;
+        if (!id) throw new Error('Client was created but no id was returned');
         setClientId(id);
       }
 
@@ -105,14 +153,14 @@ export function OnboardWizard({ open, onClose, existingClientId, existingClientN
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          websiteUrl: websiteUrl.trim(),
+          websiteUrl: urlForApi,
           uploadedContent: uploadedContent || undefined,
         }),
       });
 
       if (!genRes.ok) {
-        const d = await genRes.json().catch(() => ({}));
-        throw new Error(d.error ?? 'Failed to start generation');
+        const d = (await genRes.json().catch(() => ({}))) as Record<string, unknown>;
+        throw new Error(formatApiError(d) || 'Failed to start generation');
       }
 
       const genData = await genRes.json();
@@ -194,10 +242,16 @@ export function OnboardWizard({ open, onClose, existingClientId, existingClientN
           <div className="relative">
             <Globe size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
             <input
-              type="url"
+              type="text"
+              inputMode="url"
+              autoComplete="url"
               value={websiteUrl}
               onChange={(e) => setWebsiteUrl(e.target.value)}
-              placeholder="https://example.com"
+              onBlur={() => {
+                const n = normalizeWebsiteUrl(websiteUrl);
+                if (n && n !== websiteUrl.trim()) setWebsiteUrl(n);
+              }}
+              placeholder="example.com or https://example.com"
               className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:border-accent focus:outline-none"
             />
           </div>

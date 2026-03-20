@@ -23,6 +23,7 @@ import { GenerationBanner } from './generation-banner';
 import { BrandDnaRequiredPanel } from './brand-dna-required-panel';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
 import type { RecentClient } from '@/app/admin/ad-creatives/page';
+import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -143,12 +144,13 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
   // ---------------------------------------------------------------------------
 
   async function handleScan() {
-    let url = brandUrl.trim();
+    const url = normalizeWebsiteUrl(brandUrl);
     if (!url) return;
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = `https://${url}`;
-      setBrandUrl(url);
+    if (!isValidWebsiteUrl(url)) {
+      toast.error('Enter a valid website (e.g. example.com)');
+      return;
     }
+    if (url !== brandUrl.trim()) setBrandUrl(url);
 
     setScanning(true);
     setBrand(null);
