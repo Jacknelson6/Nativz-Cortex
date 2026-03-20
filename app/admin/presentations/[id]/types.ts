@@ -51,6 +51,51 @@ export interface AuditData {
   timeline_months?: number;
 }
 
+export interface ProspectAuditProfile {
+  name: string;
+  handle: string;
+  platform: string;
+  bio: string;
+  followers: number | null;
+  following: number | null;
+  posts: number | null;
+  engagement_rate: number | null;
+  profile_image: string | null;
+  url: string;
+}
+
+export interface ProspectAuditData {
+  url: string;
+  status: 'idle' | 'running' | 'done' | 'error';
+  error_message?: string;
+  profile: ProspectAuditProfile | null;
+  content_pillars: Array<{
+    name: string;
+    description: string;
+    post_count: number;
+    avg_engagement: number;
+    tier: 'S' | 'A' | 'B' | 'C' | 'D';
+  }>;
+  visual_styles: Array<{
+    style: string;
+    frequency_pct: number;
+  }>;
+  posting_cadence: {
+    posts_per_week: number;
+    best_days: string[];
+    best_times: string[];
+    consistency_score: number;
+  } | null;
+  hook_strategies: Array<{
+    strategy: string;
+    frequency_pct: number;
+    effectiveness: 'high' | 'medium' | 'low';
+  }>;
+  recommendations: string[];
+  scraped_content: string[];
+  analyzed_at: string | null;
+}
+
 export interface BenchmarkConfig {
   visible_sections: string[];
   section_order: string[];
@@ -61,7 +106,7 @@ export interface PresentationData {
   id: string;
   title: string;
   description: string | null;
-  type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks';
+  type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks' | 'prospect_audit';
   client_id: string | null;
   slides: Slide[];
   tiers: TierDef[];

@@ -9,6 +9,7 @@ import { SlideEditor } from './slide-editor';
 import { TierListEditor } from './tier-list-editor';
 import { SocialAuditEditor } from './social-audit-editor';
 import { BenchmarksEditor } from './benchmarks-editor';
+import { ProspectAuditEditor } from './prospect-audit-editor';
 
 // ─── Router page ─────────────────────────────────────────────────────────────
 
@@ -126,6 +127,19 @@ export default function PresentationEditorPage() {
         onSave={handleManualSave}
         onBack={() => router.push('/admin/presentations')}
         onPresent={() => router.push(`/admin/presentations/${id}/present`)}
+      />
+    );
+  }
+
+  if (presentation.type === 'prospect_audit') {
+    return (
+      <ProspectAuditEditor
+        presentation={presentation}
+        saving={saving}
+        clients={clients}
+        update={update}
+        onSave={handleManualSave}
+        onBack={() => router.push('/admin/presentations')}
       />
     );
   }

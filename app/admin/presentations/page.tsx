@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Presentation, Plus, MoreHorizontal, Clock, Trash2, Archive, ArchiveRestore,
-  Copy, Pencil, FileText, ListOrdered, BarChart3, BarChart2, ChevronRight,
+  Copy, Pencil, FileText, ListOrdered, BarChart3, BarChart2, ChevronRight, Search,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,7 @@ interface PresentationItem {
   id: string;
   title: string;
   description: string | null;
-  type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks';
+  type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks' | 'prospect_audit';
   client_id: string | null;
   client_name: string | null;
   slides: { title: string; body: string; image_url?: string | null }[];
@@ -78,13 +78,14 @@ export default function PresentationsPage() {
     return () => document.removeEventListener('click', handleClick);
   }, [menuOpenId]);
 
-  async function handleCreate(type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks') {
+  async function handleCreate(type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks' | 'prospect_audit') {
     try {
       const titles: Record<string, string> = {
         slides: 'Untitled presentation',
         tier_list: 'Untitled tier list',
         social_audit: 'Social audit',
         benchmarks: 'Creative benchmarks 2026',
+        prospect_audit: 'Prospect audit',
       };
       const body: Record<string, unknown> = {
         title: titles[type],
@@ -102,6 +103,19 @@ export default function PresentationsPage() {
           visible_sections: ['CH-003', 'CH-005', 'CH-006', 'CH-007', 'CH-008', 'CH-009', 'CH-010', 'CH-011', 'CH-012'],
           section_order: ['CH-003', 'CH-005', 'CH-006', 'CH-007', 'CH-008', 'CH-009', 'CH-010', 'CH-011', 'CH-012'],
           active_vertical_filter: null,
+        };
+      } else if (type === 'prospect_audit') {
+        body.audit_data = {
+          url: '',
+          status: 'idle',
+          profile: null,
+          content_pillars: [],
+          visual_styles: [],
+          posting_cadence: null,
+          hook_strategies: [],
+          recommendations: [],
+          scraped_content: [],
+          analyzed_at: null,
         };
       }
 
@@ -190,6 +204,7 @@ export default function PresentationsPage() {
     tier_list: { icon: ListOrdered, label: 'Tier list', accentClass: 'bg-accent2-surface', iconColor: 'text-accent2-text' },
     social_audit: { icon: BarChart3, label: 'Social audit', accentClass: 'bg-emerald-500/15', iconColor: 'text-emerald-400' },
     benchmarks: { icon: BarChart2, label: 'Benchmarks', accentClass: 'bg-orange-500/15', iconColor: 'text-orange-400' },
+    prospect_audit: { icon: Search, label: 'Prospect audit', accentClass: 'bg-cyan-500/15', iconColor: 'text-cyan-400' },
   };
 
   const active = presentations.filter((p) => p.status !== 'archived');
@@ -227,6 +242,7 @@ export default function PresentationsPage() {
                 { type: 'tier_list' as const, label: 'Tier list', desc: 'Rank content with drag-and-drop tiers for visual demos on calls', icon: ListOrdered, color: 'rgba(168, 85, 247, 0.15)', iconColor: 'text-accent2-text', bgColor: 'bg-accent2-surface' },
                 { type: 'social_audit' as const, label: 'Social audit', desc: 'Before & after analysis with real social data and growth projections', icon: BarChart3, color: 'rgba(16, 185, 129, 0.15)', iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10' },
                 { type: 'benchmarks' as const, label: 'Creative benchmarks', desc: 'Interactive charts and tables from $1.3B in ad spend data', icon: BarChart2, color: 'rgba(249, 115, 22, 0.15)', iconColor: 'text-orange-400', bgColor: 'bg-orange-500/15' },
+                { type: 'prospect_audit' as const, label: 'Prospect audit', desc: 'Audit a prospect\'s social presence, content pillars, and ad strategy', icon: Search, color: 'rgba(6, 182, 212, 0.15)', iconColor: 'text-cyan-400', bgColor: 'bg-cyan-500/15' },
               ].map(({ type, label, desc, icon: Icon, iconColor, bgColor }) => (
                 <button
                   key={type}
