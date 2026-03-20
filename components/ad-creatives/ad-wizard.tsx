@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Loader2,
+  Check,
+  Circle,
   Square,
   Smartphone,
   RectangleVertical,
@@ -10,6 +12,7 @@ import {
   Type,
   Zap,
   Eye,
+  Image,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -20,6 +23,7 @@ import { VariationStrip } from './variation-strip';
 import { BrandMediaPanel } from './brand-media-panel';
 import { PromptReview, type PromptPreviewData } from './prompt-review';
 import type { KandyTemplate, AspectRatio } from '@/lib/ad-creatives/types';
+import { ASPECT_RATIOS } from '@/lib/ad-creatives/types';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
 
 // ---------------------------------------------------------------------------
@@ -30,13 +34,17 @@ interface AdWizardProps {
   clientId: string;
   initialBrand?: ScrapedBrand;
   initialProducts?: ScrapedProduct[];
-  /** Image URLs discovered during site crawl (optional). */
-  initialMediaUrls?: string[];
   onGenerationStart?: (batchId: string, placeholderConfig: {
     brandColors: string[];
     templateThumbnails: { templateId: string; imageUrl: string; variationIndex: number }[];
   }) => void;
 }
+
+type StepStatus = 'empty' | 'active' | 'complete';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Vertical detection from brand description
@@ -83,27 +91,11 @@ const RATIO_OPTIONS: { value: AspectRatio; label: string; icon: typeof Square }[
   { value: '4:5', label: 'Portrait', icon: RectangleVertical },
 ];
 
-const FLOW_STEPS = [
-  { id: 'brand' as const, title: 'Brand & assets' },
-  { id: 'products' as const, title: 'Products & services' },
-  { id: 'templates' as const, title: 'Templates' },
-  { id: 'format' as const, title: 'Aspect ratio' },
-  { id: 'offers' as const, title: 'Offers' },
-  { id: 'copy' as const, title: 'Headlines & CTAs' },
-  { id: 'generate' as const, title: 'Generate' },
-];
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function AdWizard({
-  clientId,
-  initialBrand,
-  initialProducts,
-  initialMediaUrls,
-  onGenerationStart,
-}: AdWizardProps) {
+export function AdWizard({ clientId, initialBrand, initialProducts, onGenerationStart }: AdWizardProps) {
   // Brand
   const [brand, setBrand] = useState<ScrapedBrand | null>(initialBrand ?? null);
   const [scrapedProducts, setScrapedProducts] = useState<ScrapedProduct[]>(initialProducts ?? []);
@@ -127,10 +119,8 @@ export function AdWizard({
   const [manualCta, setManualCta] = useState('');
 
   // Brand media
-  const [mediaUrls, setMediaUrls] = useState<string[]>(initialMediaUrls ?? []);
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [selectedMediaUrls, setSelectedMediaUrls] = useState<Set<string>>(new Set());
-  const [flowIdx, setFlowIdx] = useState(0);
-  const [offerText, setOfferText] = useState('');
 
   // Mode: auto vs interactive
   const [mode, setMode] = useState<'auto' | 'interactive'>('auto');
@@ -139,6 +129,12 @@ export function AdWizard({
 
   // Generate
   const [generating, setGenerating] = useState(false);
+
+  // Section refs for auto-scroll
+  const productRef = useRef<HTMLDivElement>(null);
+  const templateRef = useRef<HTMLDivElement>(null);
+  const formatRef = useRef<HTMLDivElement>(null);
+  const generateRef = useRef<HTMLDivElement>(null);
 
   // Recommended vertical based on brand
   const recommendedVertical = brand ? detectVertical(brand.description, brand.name) : null;
@@ -154,17 +150,6 @@ export function AdWizard({
       setSelectedProductIndices(new Set(initialProducts.map((_, i) => i)));
     }
   }, [initialProducts]);
-
-  useEffect(() => {
-    if (initialMediaUrls && initialMediaUrls.length > 0) {
-      setMediaUrls(initialMediaUrls);
-      setSelectedMediaUrls((prev) => {
-        const next = new Set(prev);
-        for (const u of initialMediaUrls) next.add(u);
-        return next;
-      });
-    }
-  }, [initialMediaUrls]);
 
   // ---------------------------------------------------------------------------
   // Templates
@@ -291,7 +276,7 @@ export function AdWizard({
           templateVariations,
           templateSource: 'kandy',
           productService: brand.name,
-          offer: offerText,
+          offer: '',
           aspectRatio,
           onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
           manualText: copyMode === 'manual' ? {
@@ -327,7 +312,7 @@ export function AdWizard({
       const selectedProducts = Array.from(selectedProductIndices).map((i) => scrapedProducts[i]).filter(Boolean);
       const productConfigs = selectedProducts.map((p) => ({
         product: { name: p.name, imageUrl: p.imageUrl, description: p.description },
-        offer: offerText,
+        offer: '',
         cta: '',
       }));
 
@@ -353,7 +338,7 @@ export function AdWizard({
         templateVariations,
         templateSource: 'kandy' as const,
         productService: brand.name ?? selectedProducts.map((p) => p.name).join(', '),
-        offer: offerText,
+        offer: '',
         onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
         aspectRatio,
         products: productConfigs,
@@ -393,143 +378,118 @@ export function AdWizard({
     }
   }
 
-  const currentStep = FLOW_STEPS[flowIdx] ?? FLOW_STEPS[0];
+  // ---------------------------------------------------------------------------
+  // Step statuses
+  // ---------------------------------------------------------------------------
 
-  function canAdvanceFromCurrentStep(): boolean {
-    switch (currentStep.id) {
-      case 'brand':
-        return !!brand;
-      case 'templates':
-        return selectedTemplateIds.size > 0 && !loadingTemplates;
-      default:
-        return true;
-    }
-  }
+  const brandStatus: StepStatus = brand ? 'complete' : 'active';
+  const productStatus: StepStatus = selectedProductIndices.size > 0 ? 'complete' : brand ? 'active' : 'empty';
+  const templateStatus: StepStatus = selectedTemplateIds.size > 0 ? 'complete' : brand ? 'active' : 'empty';
+  const formatStatus: StepStatus = selectedTemplateIds.size > 0 ? 'complete' : 'empty';
+  const generateStatus: StepStatus = selectedTemplateIds.size > 0 && brand ? 'active' : 'empty';
 
   // ---------------------------------------------------------------------------
-  // Render — one step at a time
+  // Render — vertical stepper
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
-      <div className="flex items-center justify-between gap-3 px-1">
-        <p className="text-xs text-text-muted">
-          Step {flowIdx + 1} of {FLOW_STEPS.length}
-        </p>
-        <p className="text-sm font-semibold text-text-primary">{currentStep.title}</p>
-      </div>
-
-      <div className="rounded-2xl border border-nativz-border bg-surface p-5 min-h-[280px]">
-        {currentStep.id === 'brand' && (
-          <div className="space-y-6">
-            {brand ? (
-              <BrandEditor brand={brand} onBrandChange={setBrand} clientId={clientId || undefined} />
-            ) : (
-              <div className="rounded-xl border border-dashed border-nativz-border bg-background/40 p-8 text-center">
-                <p className="text-sm text-text-muted">Waiting for brand scan...</p>
-              </div>
-            )}
-            {brand && mediaUrls.length > 0 && (
-              <div className="pt-2 border-t border-nativz-border">
-                <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Images from your site</p>
-                <BrandMediaPanel
-                  mediaUrls={mediaUrls}
-                  selectedUrls={selectedMediaUrls}
-                  onToggle={toggleMediaUrl}
-                  onUpload={handleMediaUpload}
-                  clientId={clientId || undefined}
-                />
-              </div>
-            )}
+    <div className="max-w-4xl mx-auto space-y-1">
+      {/* Step 1: Brand */}
+      <WizardSection step={1} title="Brand" status={brandStatus}>
+        {brand ? (
+          <BrandEditor brand={brand} onBrandChange={setBrand} clientId={clientId || undefined} />
+        ) : (
+          <div className="rounded-xl border border-dashed border-nativz-border bg-surface/50 p-8 text-center">
+            <p className="text-sm text-text-muted">Waiting for brand scan...</p>
           </div>
         )}
+      </WizardSection>
 
-        {currentStep.id === 'products' && (
-          <ProductGrid
-            products={scrapedProducts}
-            selectedIndices={selectedProductIndices}
-            onToggle={toggleProductSelection}
-            onAddProduct={addProduct}
+      {/* Step 1.5: Brand Media (shown when brand has media) */}
+      {brand && mediaUrls.length > 0 && (
+        <WizardSection step={2} title="Brand media" status={selectedMediaUrls.size > 0 ? 'complete' : 'active'}>
+          <BrandMediaPanel
+            mediaUrls={mediaUrls}
+            selectedUrls={selectedMediaUrls}
+            onToggle={toggleMediaUrl}
+            onUpload={handleMediaUpload}
+            clientId={clientId || undefined}
+          />
+        </WizardSection>
+      )}
+
+      {/* Step 2/3: Products / Menu items / Services */}
+      {(() => {
+        const bType = brand?.businessType;
+        const itemLabel = bType === 'restaurant' ? 'Menu items' : bType === 'service' || bType === 'saas' ? 'Services' : 'Products';
+        return (
+          <WizardSection step={mediaUrls.length > 0 ? 3 : 2} title={itemLabel} status={productStatus} ref={productRef}>
+            <ProductGrid
+              products={scrapedProducts}
+              selectedIndices={selectedProductIndices}
+              onToggle={toggleProductSelection}
+              onAddProduct={addProduct}
+              itemLabel={itemLabel}
+            />
+          </WizardSection>
+        );
+      })()}
+
+      {/* Step 3: Templates */}
+      <WizardSection step={3} title="Templates" status={templateStatus} ref={templateRef}>
+        {loadingTemplates ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 size={24} className="animate-spin text-text-muted" />
+          </div>
+        ) : (
+          <TemplateGrid
+            templates={templates}
+            selectedIds={selectedTemplateIds}
+            onToggle={toggleTemplate}
+            clientId={clientId}
+            onTemplatesAdded={handleTemplatesAdded}
+            recommendedVertical={recommendedVertical}
           />
         )}
+      </WizardSection>
 
-        {currentStep.id === 'templates' && (
-          <>
-            {loadingTemplates ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 size={24} className="animate-spin text-text-muted" />
-              </div>
-            ) : (
-              <TemplateGrid
-                templates={templates}
-                selectedIds={selectedTemplateIds}
-                onToggle={toggleTemplate}
-                clientId={clientId}
-                onTemplatesAdded={handleTemplatesAdded}
-                recommendedVertical={recommendedVertical}
-              />
-            )}
-          </>
-        )}
-
-        {currentStep.id === 'format' && (
-          <div className="space-y-2">
-            <label className="text-xs text-text-muted uppercase tracking-wide">Aspect ratio</label>
-            <p className="text-xs text-text-muted mb-3">
-              Pick the shape that matches where these ads will run.
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              {RATIO_OPTIONS.map(({ value, label, icon: Icon }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setAspectRatio(value)}
-                  className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all cursor-pointer ${
-                    aspectRatio === value
-                      ? 'border-accent bg-accent-surface text-accent-text'
-                      : 'border-nativz-border bg-background text-text-muted hover:border-accent/30'
-                  }`}
-                >
-                  <Icon size={15} />
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {currentStep.id === 'offers' && (
-          <div className="space-y-3">
-            <label className="text-xs text-text-muted uppercase tracking-wide">Promotional offer</label>
-            <p className="text-xs text-text-muted">
-              Optional. If you&apos;re running a sale, free trial, or limited-time deal, add it here so copy and prompts stay accurate.
-            </p>
-            <textarea
-              value={offerText}
-              onChange={(e) => setOfferText(e.target.value.slice(0, 300))}
-              placeholder="e.g., 20% off first order · Free shipping this week · Buy one get one"
-              rows={4}
-              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 outline-none resize-y min-h-[100px]"
-            />
-            <p className="text-[10px] text-text-muted">{offerText.length}/300</p>
-          </div>
-        )}
-
-        {currentStep.id === 'copy' && (
+      {/* Step 4: Copy & Format (visible once templates selected) */}
+      {selectedTemplateIds.size > 0 && (
+        <WizardSection step={4} title="Copy & format" status={formatStatus} ref={formatRef}>
           <div className="space-y-5">
+            {/* Aspect ratio */}
+            <div className="space-y-2">
+              <label className="text-xs text-text-muted uppercase tracking-wide">Format</label>
+              <div className="flex items-center gap-2">
+                {RATIO_OPTIONS.map(({ value, label, icon: Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setAspectRatio(value)}
+                    className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all cursor-pointer ${
+                      aspectRatio === value
+                        ? 'border-accent bg-accent-surface text-accent-text'
+                        : 'border-nativz-border bg-surface text-text-muted hover:border-accent/30'
+                    }`}
+                  >
+                    <Icon size={15} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Copy mode */}
             <div className="space-y-2">
               <label className="text-xs text-text-muted uppercase tracking-wide">Ad copy</label>
-              <p className="text-xs text-text-muted">
-                Use AI for variations, or write your own headline, subheadline, and CTA. You can tweak wording anytime before generating.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setCopyMode('ai')}
                   className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all cursor-pointer ${
                     copyMode === 'ai'
                       ? 'border-accent bg-accent-surface text-accent-text'
-                      : 'border-nativz-border bg-background text-text-muted hover:border-accent/30'
+                      : 'border-nativz-border bg-surface text-text-muted hover:border-accent/30'
                   }`}
                 >
                   <Sparkles size={15} />
@@ -541,7 +501,7 @@ export function AdWizard({
                   className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all cursor-pointer ${
                     copyMode === 'manual'
                       ? 'border-accent bg-accent-surface text-accent-text'
-                      : 'border-nativz-border bg-background text-text-muted hover:border-accent/30'
+                      : 'border-nativz-border bg-surface text-text-muted hover:border-accent/30'
                   }`}
                 >
                   <Type size={15} />
@@ -550,13 +510,13 @@ export function AdWizard({
               </div>
 
               {copyMode === 'ai' && (
-                <p className="text-xs text-text-muted bg-background/50 rounded-lg px-3 py-2 border border-nativz-border">
+                <p className="text-xs text-text-muted bg-surface/50 rounded-lg px-3 py-2 border border-nativz-border">
                   Headlines, subheadlines, and CTAs will be AI-generated from your brand voice. Each variation gets unique copy.
                 </p>
               )}
 
               {copyMode === 'manual' && (
-                <div className="space-y-2 bg-background/50 rounded-lg p-3 border border-nativz-border">
+                <div className="space-y-2 bg-surface/50 rounded-lg p-3 border border-nativz-border">
                   <input
                     value={manualHeadline}
                     onChange={(e) => setManualHeadline(e.target.value)}
@@ -572,22 +532,19 @@ export function AdWizard({
                   <input
                     value={manualCta}
                     onChange={(e) => setManualCta(e.target.value)}
-                    placeholder="CTA (e.g., Shop now)"
+                    placeholder="CTA (e.g., Shop Now)"
                     className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 outline-none"
                   />
                 </div>
               )}
             </div>
           </div>
-        )}
+        </WizardSection>
+      )}
 
-        {currentStep.id === 'generate' && !brand && (
-          <p className="text-sm text-text-muted text-center py-8">
-            Brand context is missing. Go back to the first step or run a new scan.
-          </p>
-        )}
-
-        {currentStep.id === 'generate' && brand && (
+      {/* Step 5/6: Generate */}
+      {selectedTemplateIds.size > 0 && brand && (
+        <WizardSection step={mediaUrls.length > 0 ? 6 : 5} title="Generate" status={generateStatus} ref={generateRef}>
           <div className="space-y-4">
             <VariationStrip
               templates={selectedTemplates}
@@ -596,6 +553,7 @@ export function AdWizard({
               onRemove={handleRemoveTemplate}
             />
 
+            {/* Mode toggle */}
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -603,7 +561,7 @@ export function AdWizard({
                 className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
                   mode === 'auto'
                     ? 'border-accent bg-accent-surface text-accent-text'
-                    : 'border-nativz-border bg-background text-text-muted hover:border-accent/30'
+                    : 'border-nativz-border bg-surface text-text-muted hover:border-accent/30'
                 }`}
               >
                 <Zap size={13} /> Auto
@@ -614,7 +572,7 @@ export function AdWizard({
                 className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
                   mode === 'interactive'
                     ? 'border-accent bg-accent-surface text-accent-text'
-                    : 'border-nativz-border bg-background text-text-muted hover:border-accent/30'
+                    : 'border-nativz-border bg-surface text-text-muted hover:border-accent/30'
                 }`}
               >
                 <Eye size={13} /> Interactive
@@ -624,10 +582,12 @@ export function AdWizard({
               </span>
             </div>
 
+            {/* Prompt review (interactive mode) */}
             {promptPreviews && mode === 'interactive' && (
               <PromptReview
                 previews={promptPreviews}
-                onApproveAll={() => {
+                onApproveAll={(edited) => {
+                  // TODO: Pass edited prompts to generation
                   handleGenerate();
                 }}
                 onCancel={() => setPromptPreviews(null)}
@@ -635,8 +595,9 @@ export function AdWizard({
               />
             )}
 
+            {/* Generate buttons */}
             {!promptPreviews && (
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex gap-2">
                 {mode === 'interactive' && (
                   <Button
                     size="lg"
@@ -667,36 +628,45 @@ export function AdWizard({
               </div>
             )}
           </div>
-        )}
-      </div>
-
-      {currentStep.id !== 'generate' && (
-        <div className="flex items-center justify-between gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={flowIdx <= 0}
-            onClick={() => setFlowIdx((i) => Math.max(0, i - 1))}
-          >
-            Back
-          </Button>
-          <Button
-            type="button"
-            disabled={!canAdvanceFromCurrentStep() || flowIdx >= FLOW_STEPS.length - 1}
-            onClick={() => setFlowIdx((i) => Math.min(FLOW_STEPS.length - 1, i + 1))}
-          >
-            Continue
-          </Button>
-        </div>
-      )}
-
-      {currentStep.id === 'generate' && (
-        <div className="flex justify-start">
-          <Button type="button" variant="outline" onClick={() => setFlowIdx((i) => Math.max(0, i - 1))}>
-            Back
-          </Button>
-        </div>
+        </WizardSection>
       )}
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Wizard section wrapper
+// ---------------------------------------------------------------------------
+
+import { forwardRef } from 'react';
+
+const WizardSection = forwardRef<
+  HTMLDivElement,
+  { step: number; title: string; status: StepStatus; children: React.ReactNode }
+>(function WizardSection({ step, title, status, children }, ref) {
+  return (
+    <div ref={ref} className="flex gap-4 py-4">
+      {/* Step indicator */}
+      <div className="flex flex-col items-center shrink-0">
+        <div
+          className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+            status === 'complete'
+              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+              : status === 'active'
+                ? 'bg-accent/20 text-accent-text border border-accent/30 animate-pulse'
+                : 'bg-surface text-text-muted border border-nativz-border'
+          }`}
+        >
+          {status === 'complete' ? <Check size={14} /> : status === 'active' ? <Circle size={8} className="fill-current" /> : step}
+        </div>
+        <div className="w-px flex-1 bg-nativz-border mt-2" />
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0 pb-4">
+        <h3 className="text-sm font-semibold text-text-primary mb-3">{title}</h3>
+        {children}
+      </div>
+    </div>
+  );
+});

@@ -3,9 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import * as cheerio from 'cheerio';
-import type { CrawledPage } from '@/lib/brand-dna/types';
-import { extractColorPalette } from '@/lib/brand-dna/extract-visuals';
-import { extractProducts, extractColors, extractMeta } from './scrape-brand';
+import { extractProducts, extractMenuItems, extractServiceItems, extractColors, extractMeta, detectBusinessType } from './scrape-brand';
 import { extractLogo } from './extract-logo';
 import type { ScrapedBrand, ScrapedProduct } from './scrape-brand';
 
@@ -14,6 +12,7 @@ export interface CrawlResult {
   products: ScrapedProduct[];
   mediaUrls: string[];
   pagesCrawled: number;
+  businessType: import('./scrape-brand').BusinessType;
 }
 
 interface CrawlOptions {
@@ -73,30 +72,33 @@ export async function crawlSite(url: string, options?: CrawlOptions): Promise<Cr
       discoveredUrls.add(sitemapUrl);
     }
 
-    // 4. Crawl all discovered pages
+    // 4. Detect business type from homepage to adapt extraction strategy
+    const businessType = detectBusinessType(homepageHtml, url);
+    const extractFn = businessType === 'restaurant'
+      ? extractMenuItems
+      : businessType === 'service' || businessType === 'saas'
+        ? extractServiceItems
+        : extractProducts;
+
+    // Crawl all discovered pages
     const allProducts: ScrapedProduct[] = [];
     const allMediaUrls = new Set<string>();
     const allColors = new Set<string>();
     let pagesCrawled = 1; // homepage already fetched
 
     // Process homepage first
-    const homepageProducts = extractProducts(homepageHtml, url);
+    const homepageProducts = extractFn(homepageHtml, url);
     allProducts.push(...homepageProducts);
     extractMediaUrls(homepageHtml, origin).forEach((u) => allMediaUrls.add(u));
     extractColors(homepageHtml).forEach((c) => allColors.add(c));
 
-    const homeCrawled: CrawledPage = {
-      url,
-      html: homepageHtml,
-      title: extractMeta(homepageHtml, 'og:title') ?? extractTitle(homepageHtml) ?? '',
-      content: '',
-      wordCount: 0,
-      pageType: 'homepage',
-    };
-    extractColorPalette([homeCrawled]).forEach((c) => allColors.add(c.hex));
-
-    // Crawl remaining pages with concurrency control
-    const remainingUrls = [...discoveredUrls].filter((u) => u !== url);
+    // For restaurants, prioritize menu pages in crawl order
+    let remainingUrls = [...discoveredUrls].filter((u) => u !== url);
+    if (businessType === 'restaurant') {
+      const menuFirst = remainingUrls.filter((u) => /\/(menu|food|eat|order)/.test(u.toLowerCase()));
+      const rest = remainingUrls.filter((u) => !/\/(menu|food|eat|order)/.test(u.toLowerCase()));
+      remainingUrls = [...menuFirst, ...rest];
+    }
 
     await runConcurrent(
       remainingUrls,
@@ -109,8 +111,8 @@ export async function crawlSite(url: string, options?: CrawlOptions): Promise<Cr
 
         pagesCrawled++;
 
-        // Extract products from this page
-        const products = extractProducts(html, pageUrl);
+        // Extract products from this page using business-type-adapted function
+        const products = extractFn(html, pageUrl);
         allProducts.push(...products);
 
         // Discover more links (second-level crawl)
@@ -155,10 +157,12 @@ export async function crawlSite(url: string, options?: CrawlOptions): Promise<Cr
         colors: finalColors,
         description,
         url,
+        businessType,
       },
       products: deduplicatedProducts.slice(0, 50),
       mediaUrls: [...allMediaUrls].slice(0, 100),
       pagesCrawled,
+      businessType,
     };
   } finally {
     clearTimeout(timeoutId);

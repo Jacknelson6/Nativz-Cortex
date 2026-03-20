@@ -2,10 +2,7 @@
 // Lightweight brand + product scraper for the ad wizard
 // ---------------------------------------------------------------------------
 
-import type { CrawledPage } from '@/lib/brand-dna/types';
-import { extractColorPalette, extractLogoUrls } from '@/lib/brand-dna/extract-visuals';
-import { extractLogo } from './extract-logo';
-import { extractRichProducts } from './extract-products-rich';
+export type BusinessType = 'ecommerce' | 'restaurant' | 'service' | 'saas' | 'general';
 
 export type ScrapedBrand = {
   name: string;
@@ -13,6 +10,7 @@ export type ScrapedBrand = {
   colors: string[];
   description: string;
   url: string;
+  businessType: BusinessType;
 };
 
 export type ScrapedProduct = {
@@ -46,8 +44,17 @@ export async function scrapeBrandAndProducts(url: string): Promise<ScrapeBrandRe
   }
 
   const html = await res.text();
-  const brand = extractBrand(html, url);
-  const products = extractProducts(html, url);
+  const businessType = detectBusinessType(html, url);
+  const brand = extractBrand(html, url, businessType);
+
+  let products: ScrapedProduct[];
+  if (businessType === 'restaurant') {
+    products = extractMenuItems(html, url);
+  } else if (businessType === 'service' || businessType === 'saas') {
+    products = extractServiceItems(html, url);
+  } else {
+    products = extractProducts(html, url);
+  }
 
   // Rewrite http:// URLs to https:// for CSP compliance
   if (brand.logoUrl) {
@@ -57,7 +64,9 @@ export async function scrapeBrandAndProducts(url: string): Promise<ScrapeBrandRe
   // Filter out non-product scrape artifacts and sanitize URLs
   const ARTIFACT_PATTERNS = /load video|play video|watch/i;
   const cleanProducts = products
-    .filter((p) => isPlausibleProduct(p, ARTIFACT_PATTERNS))
+    .filter((p) => p.imageUrl || p.description) // must have image or description
+    .filter((p) => p.name.length >= 3) // name must be at least 3 chars
+    .filter((p) => !ARTIFACT_PATTERNS.test(p.name)) // filter video artifacts
     .map((p) => ({
       ...p,
       imageUrl: p.imageUrl ? p.imageUrl.replace(/^http:\/\//, 'https://') : null,
@@ -66,43 +75,67 @@ export async function scrapeBrandAndProducts(url: string): Promise<ScrapeBrandRe
   return { brand, products: cleanProducts };
 }
 
-function isPlausibleProduct(p: ScrapedProduct, artifact: RegExp): boolean {
-  if (p.name.length < 3 || artifact.test(p.name)) return false;
-  if (p.imageUrl) return true;
-  if (p.description && p.description.length >= 24) return true;
-  return false;
+// ---------------------------------------------------------------------------
+// Business type detection
+// ---------------------------------------------------------------------------
+
+export function detectBusinessType(html: string, url: string): BusinessType {
+  const lower = html.toLowerCase();
+  const urlLower = url.toLowerCase();
+
+  // URL-based hints (strongest signal)
+  if (/\/(menu|food|eat|restaurant|cafe|bistro)/.test(urlLower)) return 'restaurant';
+  if (/\/(services|solutions|what-we-do)/.test(urlLower)) return 'service';
+
+  const restaurantSignals = [
+    /\bmenu\b/, /\bdish(es)?\b/, /\bmeal(s)?\b/, /\bappetizer/, /\bentree/,
+    /\brestaurant/, /\bcafe\b/, /\bcafé\b/, /\bbistro\b/, /\bfood truck\b/,
+    /\bdelivery|doordash|ubereats|grubhub/, /\bbreakfast|lunch|dinner|brunch\b/,
+    /\bvegan|vegetarian|gluten.free\b/,
+  ];
+  const serviceSignals = [
+    /\bour services\b/, /\bwhat we do\b/, /\bwe offer\b/, /\bget a quote\b/,
+    /\bfree consultation\b/, /\blaw firm|attorney|lawyer\b/,
+    /\breal estate|realtor|property\b/, /\bhvac|plumb|electric|contrac\b/,
+    /\baccounting|cpa|tax prep\b/, /\binsurance|financial advisor\b/,
+    /\bcleaning service|landscap\b/, /\bmedical|dental|therapy|clinic\b/,
+  ];
+  const saasSignals = [
+    /\bfree trial\b/, /\bsign up free\b/, /\bsubscription\b/, /\bplatform\b/,
+    /\bdashboard\b/, /\bapi\b/, /\bintegration(s)?\b/, /\bsoftware\b/,
+    /\bautomat(e|ion)\b/,
+  ];
+  const ecommerceSignals = [
+    /\badd to cart\b/, /\bshop now\b/, /\bbuy now\b/, /\bcheckout\b/,
+    /\bfree shipping\b/, /\bproduct(s)?\b/, /\bcollection(s)?\b/,
+    /shopify|woocommerce|bigcommerce/,
+  ];
+
+  const scores: [BusinessType, number][] = [
+    ['restaurant', restaurantSignals.filter((r) => r.test(lower)).length],
+    ['service', serviceSignals.filter((r) => r.test(lower)).length],
+    ['saas', saasSignals.filter((r) => r.test(lower)).length],
+    ['ecommerce', ecommerceSignals.filter((r) => r.test(lower)).length],
+  ];
+
+  const [topType, topScore] = scores.reduce((best, curr) => (curr[1] > best[1] ? curr : best));
+  if (topScore >= 2) return topType;
+  if (topScore === 1 && topType === 'restaurant') return 'restaurant';
+  return 'general';
 }
 
 // ---------------------------------------------------------------------------
 // Brand extraction
 // ---------------------------------------------------------------------------
 
-function extractBrand(html: string, url: string): ScrapedBrand {
+function extractBrand(html: string, url: string, businessType: BusinessType): ScrapedBrand {
   const name =
     extractMeta(html, 'og:site_name') ??
     extractMeta(html, 'og:title') ??
     extractTitle(html) ??
     new URL(url).hostname.replace(/^www\./, '');
 
-  const crawled: CrawledPage = {
-    url,
-    html,
-    title: extractTitle(html) ?? name,
-    content: '',
-    wordCount: 0,
-    pageType: 'homepage',
-  };
-
-  const paletteHex = extractColorPalette([crawled]).map((c) => c.hex);
-  const logoFromDom = extractLogo(html, url);
-  const logoFromMeta =
-    extractLogoUrls([crawled])
-      .map((l) => l.url)
-      .find(Boolean) ?? null;
-
   const logoUrl =
-    logoFromDom ??
-    logoFromMeta ??
     extractLinkIcon(html, url) ??
     extractMeta(html, 'og:image') ??
     null;
@@ -112,22 +145,9 @@ function extractBrand(html: string, url: string): ScrapedBrand {
     extractMeta(html, 'description') ??
     '';
 
-  const colors = mergeColorLists(paletteHex, extractColors(html));
+  const colors = extractColors(html);
 
-  return { name, logoUrl, colors, description, url };
-}
-
-function mergeColorLists(primary: string[], fallback: string[]): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const c of [...primary, ...fallback]) {
-    const n = c.toLowerCase();
-    if (seen.has(n)) continue;
-    seen.add(n);
-    out.push(n.startsWith('#') ? n : c);
-    if (out.length >= 12) break;
-  }
-  return out;
+  return { name, logoUrl, colors, description, url, businessType };
 }
 
 function extractTitle(html: string): string | null {
@@ -200,24 +220,23 @@ export function extractColors(html: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Product extraction
+// Product extraction (ecommerce / general)
 // ---------------------------------------------------------------------------
 
-export function extractProducts(html: string, baseUrl: string): ScrapedProduct[] {
+export function extractProducts(html: string, baseUrl?: string): ScrapedProduct[] {
   const products: ScrapedProduct[] = [];
 
-  // 1. JSON-LD (highest signal)
-  products.push(...extractJsonLdProducts(html));
+  // 1. Try JSON-LD structured data first
+  const jsonLdProducts = extractJsonLdProducts(html, baseUrl);
+  if (jsonLdProducts.length > 0) return jsonLdProducts.slice(0, 20);
 
-  // 2. Microdata, WooCommerce-style cards, figures
-  products.push(...extractRichProducts(html, baseUrl));
-
-  // 3. OG product
-  const ogProduct = extractOgProduct(html);
+  // 2. Try OG product tags
+  const ogProduct = extractOgProduct(html, baseUrl);
   if (ogProduct) products.push(ogProduct);
 
-  // 4. Alt-text heuristics
-  products.push(...extractHeuristicProducts(html));
+  // 3. Heuristic: look for product-like image+text patterns
+  const heuristicProducts = extractHeuristicProducts(html, baseUrl);
+  products.push(...heuristicProducts);
 
   // Deduplicate by name
   const seen = new Set<string>();
@@ -228,10 +247,188 @@ export function extractProducts(html: string, baseUrl: string): ScrapedProduct[]
       seen.add(key);
       return true;
     })
+    .slice(0, 20);
+}
+
+// ---------------------------------------------------------------------------
+// Restaurant menu item extraction
+// ---------------------------------------------------------------------------
+
+export function extractMenuItems(html: string, baseUrl?: string): ScrapedProduct[] {
+  const items: ScrapedProduct[] = [];
+
+  // 1. JSON-LD MenuItem / FoodEstablishment / Menu
+  const jsonLdItems = extractJsonLdMenuItems(html, baseUrl);
+  if (jsonLdItems.length > 0) return jsonLdItems.slice(0, 30);
+
+  // 2. Heuristic: look for price-tagged images near food keywords
+  const heuristicItems = extractHeuristicMenuItems(html, baseUrl);
+  items.push(...heuristicItems);
+
+  // 3. Fallback to general heuristic with food keywords
+  if (items.length < 3) {
+    items.push(...extractHeuristicProducts(html, baseUrl, true));
+  }
+
+  const seen = new Set<string>();
+  return items
+    .filter((p) => {
+      const key = p.name.toLowerCase().trim();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
     .slice(0, 30);
 }
 
-function extractJsonLdProducts(html: string): ScrapedProduct[] {
+function extractJsonLdMenuItems(html: string, baseUrl?: string): ScrapedProduct[] {
+  const items: ScrapedProduct[] = [];
+  const scriptRegex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+
+  let match;
+  while ((match = scriptRegex.exec(html)) !== null) {
+    try {
+      const data = JSON.parse(match[1]);
+      const nodes = Array.isArray(data) ? data : data['@graph'] ?? [data];
+
+      for (const node of nodes) {
+        // FoodEstablishment with hasMenu
+        if (node.hasMenu) {
+          const sections = (node.hasMenu.hasMenuSection ?? []) as Record<string, unknown>[];
+          for (const section of Array.isArray(sections) ? sections : [sections]) {
+            const menuItems = (section.hasMenuItem ?? []) as Record<string, unknown>[];
+            for (const item of Array.isArray(menuItems) ? menuItems : [menuItems]) {
+              const typedItem = item as Record<string, unknown>;
+              if (typedItem.name) {
+                items.push({
+                  name: typedItem.name as string,
+                  imageUrl: resolveImageUrl(
+                    (Array.isArray(typedItem.image) ? typedItem.image[0] : typedItem.image) as string | null,
+                    baseUrl,
+                  ),
+                  description: (typedItem.description as string) ?? '',
+                  price: extractJsonLdPrice(typedItem),
+                });
+              }
+            }
+          }
+        }
+
+        // Direct MenuItem
+        if (node['@type'] === 'MenuItem' && node.name) {
+          items.push({
+            name: node.name as string,
+            imageUrl: resolveImageUrl(
+              (Array.isArray(node.image) ? node.image[0] : node.image) as string | null,
+              baseUrl,
+            ),
+            description: (node.description as string) ?? '',
+            price: extractJsonLdPrice(node as Record<string, unknown>),
+          });
+        }
+      }
+    } catch {
+      // Invalid JSON-LD
+    }
+  }
+
+  return items;
+}
+
+function extractHeuristicMenuItems(html: string, baseUrl?: string): ScrapedProduct[] {
+  const items: ScrapedProduct[] = [];
+  const pricePattern = /\$\d+(?:\.\d{2})?/;
+  const imgTagRegex = /<img([^>]+)>/gi;
+  let imgMatch;
+
+  while ((imgMatch = imgTagRegex.exec(html)) !== null) {
+    const context = getContext(html, imgMatch.index, 300);
+    if (!pricePattern.test(context)) continue;
+
+    const imageUrl = resolveImageUrl(extractImgSrc(imgMatch[0]), baseUrl);
+    if (!imageUrl) continue;
+
+    const nameMatch = context.match(/<(?:h[1-6]|p|span|div)[^>]*>([^<]{3,60})<\/(?:h[1-6]|p|span|div)>/i);
+    const priceMatch = context.match(pricePattern);
+
+    if (nameMatch) {
+      items.push({
+        name: decodeEntities(nameMatch[1].trim()),
+        imageUrl,
+        description: '',
+        price: priceMatch ? priceMatch[0] : null,
+      });
+    }
+  }
+
+  return items;
+}
+
+// ---------------------------------------------------------------------------
+// Service item extraction
+// ---------------------------------------------------------------------------
+
+export function extractServiceItems(html: string, baseUrl?: string): ScrapedProduct[] {
+  const items: ScrapedProduct[] = [];
+
+  // JSON-LD Service type
+  const scriptRegex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+  while ((match = scriptRegex.exec(html)) !== null) {
+    try {
+      const data = JSON.parse(match[1]);
+      const nodes = Array.isArray(data) ? data : data['@graph'] ?? [data];
+      for (const node of nodes) {
+        if (node['@type'] === 'Service' && node.name) {
+          items.push({
+            name: node.name as string,
+            imageUrl: resolveImageUrl(
+              (Array.isArray(node.image) ? node.image[0] : node.image) as string | null,
+              baseUrl,
+            ),
+            description: (node.description as string) ?? '',
+            price: null,
+          });
+        }
+      }
+    } catch {
+      // Invalid JSON-LD
+    }
+  }
+
+  if (items.length > 0) return items.slice(0, 20);
+
+  // Heuristic: look for service cards — heading + image + short description
+  const serviceKeywords = /\b(service|solution|offer|speciali[sz]e|provid|support|consult|manag)\b/i;
+  const headingRegex = /<h[2-4][^>]*>([^<]{5,80})<\/h[2-4]>/gi;
+  let headingMatch;
+
+  while ((headingMatch = headingRegex.exec(html)) !== null) {
+    const heading = decodeEntities(headingMatch[1].trim());
+    const context = getContext(html, headingMatch.index, 500);
+    if (!serviceKeywords.test(heading) && !serviceKeywords.test(context)) continue;
+
+    const imgInContext = context.match(/<img([^>]+)>/i);
+    const imageUrl = imgInContext
+      ? resolveImageUrl(extractImgSrc(imgInContext[0]), baseUrl)
+      : null;
+
+    const descMatch = context.match(/<p[^>]*>([^<]{10,200})<\/p>/i);
+    const description = descMatch ? decodeEntities(descMatch[1].trim()) : '';
+
+    if (!items.some((s) => s.name === heading)) {
+      items.push({ name: heading, imageUrl, description, price: null });
+    }
+  }
+
+  return items.slice(0, 20);
+}
+
+// ---------------------------------------------------------------------------
+// JSON-LD product extraction (ecommerce)
+// ---------------------------------------------------------------------------
+
+function extractJsonLdProducts(html: string, baseUrl?: string): ScrapedProduct[] {
   const products: ScrapedProduct[] = [];
   const scriptRegex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
 
@@ -249,7 +446,10 @@ function extractJsonLdProducts(html: string): ScrapedProduct[] {
         ) {
           products.push({
             name: item.name ?? '',
-            imageUrl: Array.isArray(item.image) ? item.image[0] : (item.image ?? null),
+            imageUrl: resolveImageUrl(
+              Array.isArray(item.image) ? item.image[0] : item.image,
+              baseUrl,
+            ),
             description: item.description ?? '',
             price: extractJsonLdPrice(item),
           });
@@ -262,7 +462,10 @@ function extractJsonLdProducts(html: string): ScrapedProduct[] {
             if (product.name) {
               products.push({
                 name: product.name,
-                imageUrl: Array.isArray(product.image) ? product.image[0] : (product.image ?? null),
+                imageUrl: resolveImageUrl(
+                  Array.isArray(product.image) ? product.image[0] : product.image,
+                  baseUrl,
+                ),
                 description: product.description ?? '',
                 price: extractJsonLdPrice(product),
               });
@@ -294,7 +497,7 @@ function extractJsonLdPrice(item: Record<string, unknown>): string | null {
   return null;
 }
 
-function extractOgProduct(html: string): ScrapedProduct | null {
+function extractOgProduct(html: string, baseUrl?: string): ScrapedProduct | null {
   const ogType = extractMeta(html, 'og:type');
   if (ogType !== 'product' && ogType !== 'og:product') return null;
 
@@ -303,7 +506,7 @@ function extractOgProduct(html: string): ScrapedProduct | null {
 
   return {
     name,
-    imageUrl: extractMeta(html, 'og:image') ?? null,
+    imageUrl: resolveImageUrl(extractMeta(html, 'og:image'), baseUrl),
     description: extractMeta(html, 'og:description') ?? '',
     price:
       extractMeta(html, 'product:price:amount') ??
@@ -312,41 +515,30 @@ function extractOgProduct(html: string): ScrapedProduct | null {
   };
 }
 
-function extractHeuristicProducts(html: string): ScrapedProduct[] {
+function extractHeuristicProducts(html: string, baseUrl?: string, includeFood = false): ScrapedProduct[] {
   const products: ScrapedProduct[] = [];
+  const productKeywords = includeFood
+    ? /product|shop|buy|price|item|collection|menu|dish|meal|offer|food|eat/i
+    : /product|shop|buy|price|item|collection|menu|dish|meal|offer/i;
 
-  // Look for images with alt text containing product-like keywords
-  const imgRegex = /<img[^>]+alt=["']([^"']{5,80})["'][^>]+src=["']([^"']+)["'][^>]*>/gi;
-  const imgRegexReversed = /<img[^>]+src=["']([^"']+)["'][^>]+alt=["']([^"']{5,80})["'][^>]*>/gi;
-
-  const productKeywords = /product|shop|buy|price|item|collection|menu|dish|meal|offer/i;
-
+  // Match all <img> tags, including lazy-loaded variants
+  const imgTagRegex = /<img([^>]+)>/gi;
   let imgMatch;
-  while ((imgMatch = imgRegex.exec(html)) !== null) {
-    const alt = decodeEntities(imgMatch[1]);
-    if (productKeywords.test(alt) || productKeywords.test(getContext(html, imgMatch.index, 200))) {
-      products.push({
-        name: alt,
-        imageUrl: imgMatch[2],
-        description: '',
-        price: null,
-      });
-    }
-  }
 
-  while ((imgMatch = imgRegexReversed.exec(html)) !== null) {
-    const alt = decodeEntities(imgMatch[2]);
-    const src = imgMatch[1];
-    if (
-      !products.some((p) => p.imageUrl === src) &&
-      (productKeywords.test(alt) || productKeywords.test(getContext(html, imgMatch.index, 200)))
-    ) {
-      products.push({
-        name: alt,
-        imageUrl: src,
-        description: '',
-        price: null,
-      });
+  while ((imgMatch = imgTagRegex.exec(html)) !== null) {
+    const attrs = imgMatch[1];
+    const altMatch = attrs.match(/\balt=["']([^"']{5,80})["']/i);
+    if (!altMatch) continue;
+    const alt = decodeEntities(altMatch[1]);
+
+    const context = getContext(html, imgMatch.index, 200);
+    if (!productKeywords.test(alt) && !productKeywords.test(context)) continue;
+
+    const imageUrl = resolveImageUrl(extractImgSrc(imgMatch[0]), baseUrl);
+    if (!imageUrl) continue;
+
+    if (!products.some((p) => p.imageUrl === imageUrl)) {
+      products.push({ name: alt, imageUrl, description: '', price: null });
     }
   }
 
@@ -356,6 +548,39 @@ function extractHeuristicProducts(html: string): ScrapedProduct[] {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Extracts the best image src from an <img> tag string.
+ * Prefers actual src, falls back to lazy-load attributes (data-src, data-lazy-src, etc.).
+ */
+function extractImgSrc(imgTag: string): string | null {
+  // Try real src (skip data: URIs)
+  const srcMatch = imgTag.match(/\bsrc=["'](?!data:)([^"']+)["']/i);
+  if (srcMatch) return srcMatch[1];
+
+  // Lazy-load attribute fallbacks
+  for (const attr of ['data-src', 'data-lazy-src', 'data-lazy', 'data-original', 'data-srcset']) {
+    const lazyMatch = imgTag.match(new RegExp(`\\b${attr}=["']([^"']+)["']`, 'i'));
+    if (lazyMatch) {
+      // data-srcset may be "url1 1x, url2 2x" — take first URL
+      return lazyMatch[1].split(',')[0].trim().split(' ')[0];
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolves an image URL to absolute and converts http to https.
+ */
+function resolveImageUrl(url: string | null | undefined, baseUrl?: string): string | null {
+  if (!url) return null;
+  try {
+    const resolved = baseUrl ? new URL(url, baseUrl).href : url;
+    return resolved.replace(/^http:\/\//, 'https://');
+  } catch {
+    return null;
+  }
+}
 
 function resolveUrl(href: string, baseUrl: string): string {
   try {
