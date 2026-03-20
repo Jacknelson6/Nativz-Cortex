@@ -36,7 +36,11 @@ const VERTICAL_LABELS: Record<string, string> = {
 export function TemplateGrid({ templates, selectedIds, onToggle, clientId, onTemplatesAdded }: TemplateGridProps) {
   const [activeRatioFilter, setActiveRatioFilter] = useState<AspectRatio | 'all'>('all');
   const [verticalFilter, setVerticalFilter] = useState<AdVertical | 'all'>('all');
+  const [brandFilter, setBrandFilter] = useState<string | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [importingUrl, setImportingUrl] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -44,7 +48,10 @@ export function TemplateGrid({ templates, selectedIds, onToggle, clientId, onTem
   const grouped = groupByRatio(templates);
 
   // Get custom/uploaded templates
-  const customTemplates = templates.filter((t) => t.collection_name === 'Custom' || t.collection_name === 'Uploaded');
+  const customTemplates = templates.filter((t) => t.collection_name === 'Custom' || t.collection_name === 'Uploaded' || t.collection_name === 'Imported');
+
+  // Unique brands for filter
+  const uniqueBrands = [...new Set(templates.map((t) => t.source_brand).filter(Boolean))] as string[];
 
   const handleFilterClick = useCallback((ratio: AspectRatio) => {
     setActiveRatioFilter((prev) => (prev === ratio ? 'all' : ratio));
@@ -90,6 +97,34 @@ export function TemplateGrid({ templates, selectedIds, onToggle, clientId, onTem
     }
   }
 
+  async function handleImportUrl() {
+    if (!importUrl.trim()) return;
+    setImportingUrl(true);
+    try {
+      const res = await fetch('/api/ad-creatives/templates/import-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: importUrl.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? 'Import failed');
+      }
+      const data = await res.json();
+      if (data.template) {
+        toast.success(`Imported from ${data.template.source_brand ?? 'URL'}`);
+        if (onTemplatesAdded) {
+          onTemplatesAdded([data.template]);
+        }
+        setImportUrl('');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Import failed');
+    } finally {
+      setImportingUrl(false);
+    }
+  }
+
   // Unique verticals for filter dropdown
   const uniqueVerticals = [...new Set(templates.map((t) => t.vertical).filter(Boolean))] as AdVertical[];
 
@@ -126,6 +161,20 @@ export function TemplateGrid({ templates, selectedIds, onToggle, clientId, onTem
           })}
         </div>
 
+        {/* Brand filter */}
+        {uniqueBrands.length > 1 && (
+          <select
+            value={brandFilter}
+            onChange={(e) => setBrandFilter(e.target.value)}
+            className="rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-xs text-text-secondary"
+          >
+            <option value="all">All brands</option>
+            {uniqueBrands.map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+        )}
+
         {/* Vertical filter */}
         {uniqueVerticals.length > 1 && (
           <select
@@ -140,8 +189,8 @@ export function TemplateGrid({ templates, selectedIds, onToggle, clientId, onTem
           </select>
         )}
 
-        {/* Upload button */}
-        <div className="ml-auto">
+        {/* Upload + Import buttons */}
+        <div className="ml-auto flex items-center gap-2">
           <Button
             size="sm"
             variant="outline"
@@ -183,6 +232,20 @@ export function TemplateGrid({ templates, selectedIds, onToggle, clientId, onTem
           sectionTemplates = sectionTemplates.filter((t) => t.vertical === verticalFilter);
         }
 
+        // Apply brand filter
+        if (brandFilter !== 'all') {
+          sectionTemplates = sectionTemplates.filter((t) => t.source_brand === brandFilter);
+        }
+
+        // Apply search
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          sectionTemplates = sectionTemplates.filter((t) =>
+            (t.collection_name ?? '').toLowerCase().includes(q) ||
+            (t.source_brand ?? '').toLowerCase().includes(q),
+          );
+        }
+
         // Exclude custom templates (shown separately above)
         sectionTemplates = sectionTemplates.filter(
           (t) => t.collection_name !== 'Custom' && t.collection_name !== 'Uploaded',
@@ -216,6 +279,24 @@ export function TemplateGrid({ templates, selectedIds, onToggle, clientId, onTem
           </div>
         );
       })}
+
+      {/* Import from URL */}
+      <div className="rounded-xl border border-nativz-border bg-surface/50 p-4 space-y-2">
+        <p className="text-xs text-text-muted">Import from Instagram, Facebook, or any image URL:</p>
+        <div className="flex gap-2">
+          <input
+            value={importUrl}
+            onChange={(e) => setImportUrl(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleImportUrl()}
+            placeholder="https://instagram.com/p/... or any image URL"
+            className="flex-1 rounded-lg border border-nativz-border bg-background px-3 py-2 text-xs text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 outline-none"
+            disabled={importingUrl}
+          />
+          <Button size="sm" onClick={handleImportUrl} disabled={importingUrl || !importUrl.trim()}>
+            {importingUrl ? <Loader2 size={14} className="animate-spin" /> : 'Import'}
+          </Button>
+        </div>
+      </div>
 
       {/* Drop zone overlay for drag-drop */}
       <div

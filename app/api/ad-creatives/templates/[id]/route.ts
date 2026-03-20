@@ -4,7 +4,11 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const patchSchema = z.object({
-  is_favorite: z.boolean(),
+  is_favorite: z.boolean().optional(),
+  source_brand: z.string().max(200).nullable().optional(),
+  ad_category: z.string().max(100).nullable().optional(),
+  vertical: z.string().max(100).nullable().optional(),
+  aspect_ratio: z.string().max(20).nullable().optional(),
 });
 
 /**
@@ -70,10 +74,22 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 });
     }
 
+    // Build update object from provided fields
+    const updateData: Record<string, unknown> = {};
+    if (parsed.data.is_favorite !== undefined) updateData.is_favorite = parsed.data.is_favorite;
+    if (parsed.data.source_brand !== undefined) updateData.source_brand = parsed.data.source_brand;
+    if (parsed.data.ad_category !== undefined) updateData.ad_category = parsed.data.ad_category;
+    if (parsed.data.vertical !== undefined) updateData.vertical = parsed.data.vertical;
+    if (parsed.data.aspect_ratio !== undefined) updateData.aspect_ratio = parsed.data.aspect_ratio;
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+    }
+
     const admin = createAdminClient();
     const { data: template, error } = await admin
       .from('kandy_templates')
-      .update({ is_favorite: parsed.data.is_favorite })
+      .update(updateData)
       .eq('id', id)
       .select('*')
       .single();

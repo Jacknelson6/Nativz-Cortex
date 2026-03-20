@@ -160,6 +160,7 @@ export type KandyTemplate = {
   is_favorite: boolean;
   is_active: boolean;
   created_at: string;
+  source_brand?: string | null;
 };
 
 export type AdPromptTemplate = {
