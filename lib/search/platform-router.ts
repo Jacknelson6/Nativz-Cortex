@@ -62,13 +62,22 @@ export async function gatherPlatformData(
           if (braveResult.status === 'fulfilled') {
             braveSerpData = braveResult.value;
             const webSources = normalizeBraveToSources(braveResult.value);
+            if (webSources.length === 0) {
+              console.warn('[platform-router] Brave returned 0 web sources for query');
+            }
             allSources.push(...webSources);
+          } else {
+            console.error('[platform-router] Brave search failed:', braveResult.reason);
           }
 
           // Process Serper results (People Also Ask + Google organic)
           if (serperResult.status === 'fulfilled' && serperResult.value) {
             peopleAlsoAsk = serperResult.value.peopleAlsoAsk;
             relatedSearches = serperResult.value.relatedSearches;
+
+            if (serperResult.value.peopleAlsoAsk.length === 0) {
+              console.warn('[platform-router] Serper returned 0 People Also Ask results');
+            }
 
             // Add People Also Ask as web sources (questions people are searching)
             for (const paa of serperResult.value.peopleAlsoAsk) {
@@ -84,9 +93,12 @@ export async function gatherPlatformData(
                 comments: [],
               });
             }
+          } else if (serperResult.status === 'rejected') {
+            console.error('[platform-router] Serper search failed:', serperResult.reason);
           }
 
           const webCount = allSources.filter(s => s.platform === 'web').length;
+          console.log(`[platform-router] Web sources total: ${webCount} (Brave: ${braveSerpData ? braveSerpData.webResults.length + braveSerpData.discussions.length + braveSerpData.videos.length : 0}, Serper PAA: ${peopleAlsoAsk.length})`);
           platformStats.push({
             platform: 'web',
             postCount: webCount,
@@ -100,12 +112,14 @@ export async function gatherPlatformData(
     );
   }
 
-  // Reddit
+  // Reddit — delayed 1s to avoid Brave rate limits (web handler goes first)
   if (platforms.includes('reddit')) {
     promises.push(
       (async () => {
         try {
+          await new Promise(r => setTimeout(r, 1000));
           const redditData = await gatherRedditData(query, timeRange, volume);
+          console.log(`[platform-router] Reddit raw: ${redditData.posts.length} posts, ${redditData.postsWithComments.length} with comments, subreddits: ${redditData.topSubreddits.join(', ') || 'none'}`);
 
           const redditSources: PlatformSource[] = redditData.postsWithComments.map((post) => ({
             platform: 'reddit' as const,
@@ -242,12 +256,14 @@ export async function gatherPlatformData(
     );
   }
 
-  // Quora
+  // Quora — delayed 2s to avoid Brave rate limits (web + reddit go first)
   if (platforms.includes('quora')) {
     promises.push(
       (async () => {
         try {
+          await new Promise(r => setTimeout(r, 2000));
           const quoraData = await gatherQuoraData(query, timeRange, volume);
+          console.log(`[platform-router] Quora raw: ${quoraData.threads.length} threads (total: ${quoraData.totalResults})`);
 
           const quoraSources: PlatformSource[] = quoraData.threads.map((thread) => ({
             platform: 'quora' as const,

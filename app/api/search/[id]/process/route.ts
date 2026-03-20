@@ -239,12 +239,13 @@ export async function POST(
         }
       }
 
-      // ── Step 4: Call LLM for narrative + video ideas only ──────────────────
+      // ── Step 4: Call LLM for topic discovery + narrative + video ideas ─────
       const timeLabel = search.time_range.replace(/_/g, ' ').replace('last ', 'last ');
       const narrativePrompt = buildNarrativePrompt({
         query: search.query,
         timeRange: timeLabel,
         analytics,
+        platformContext: platformContext || undefined,
         clientName: clientContext?.name,
         clientIndustry: clientContext?.industry,
         brandVoice: clientContext?.brandVoice,
@@ -258,11 +259,23 @@ export async function POST(
         userEmail: user.email ?? undefined,
       });
 
-      // Parse the simplified LLM response
-      let narrative: { summary: string; topics: { name: string; posts_overview: string; comments_overview: string; video_ideas: TopicSearchAIResponse['trending_topics'][0]['video_ideas'] }[] };
+      // Parse the LLM response (now includes topic discovery)
+      let narrative: {
+        summary: string;
+        topics: {
+          name: string;
+          why_trending: string;
+          platforms_seen: string[];
+          posts_overview: string;
+          comments_overview: string;
+          video_ideas: TopicSearchAIResponse['trending_topics'][0]['video_ideas'];
+        }[];
+      };
       try {
         narrative = parseAIResponseJSON(aiResult.text);
-      } catch {
+      } catch (parseErr) {
+        console.error('[process] LLM JSON parse failed:', parseErr instanceof Error ? parseErr.message : parseErr);
+        console.error('[process] LLM raw response (first 500 chars):', aiResult.text.substring(0, 500));
         // If LLM JSON still fails, try to extract summary text from the raw response
         let fallbackSummary = `Analysis of "${search.query}" across ${platformSources.length} sources.`;
         const raw = aiResult.text;
@@ -274,32 +287,89 @@ export async function POST(
           // If it's plain text (not JSON), use it directly
           fallbackSummary = raw.substring(0, 500);
         }
+        // Try to extract topics from partial JSON even if full parse failed
+        const topicMatches = raw.matchAll(/"name"\s*:\s*"((?:[^"\\]|\\.)*)"/g);
+        const extractedTopicNames = [...topicMatches].map(m => m[1].replace(/\\"/g, '"'));
+        const fallbackTopics = extractedTopicNames
+          .filter(name => name.length > 3 && name.length < 80)
+          .slice(0, 10)
+          .map(name => ({
+            name,
+            why_trending: '',
+            platforms_seen: [] as string[],
+            posts_overview: '',
+            comments_overview: '',
+            video_ideas: [] as TopicSearchAIResponse['trending_topics'][0]['video_ideas'],
+          }));
+
+        console.log(`[process] Extracted ${fallbackTopics.length} topic names from partial JSON: ${fallbackTopics.map(t => t.name).join(', ')}`);
+
         narrative = {
           summary: fallbackSummary,
-          topics: [],
+          topics: fallbackTopics,
         };
       }
 
-      // ── Step 5: Merge code-computed analytics + LLM narrative ──────────────
+      // ── Step 5: Merge LLM-discovered topics with code-computed analytics ───
       const serpUrls = buildSerpUrlSet(serpData);
 
-      // Build trending topics by merging code-extracted topics with LLM narratives
-      const trendingTopics: TrendingTopic[] = analytics.extracted_topics.map(topic => {
-        // Find matching LLM topic by name
-        const llmTopic = narrative.topics.find(t =>
-          t.name.toLowerCase() === topic.name.toLowerCase()
-        );
+      // LLM topics are the PRIMARY source — enrich with code-computed engagement data
+      // Total engagement across all sources for relative scoring
+      const totalSearchEngagement = platformSources.reduce((sum, s) => {
+        return sum + (s.engagement.views ?? 0) + (s.engagement.likes ?? 0) * 10 + (s.engagement.comments ?? 0) * 5 + (s.engagement.score ?? 0) * 2;
+      }, 0);
+      const avgEngagementPerTopic = totalSearchEngagement / Math.max(narrative.topics?.length ?? 1, 1);
+
+      const trendingTopics: TrendingTopic[] = (narrative.topics ?? []).map((llmTopic, idx) => {
+        // Try fuzzy matching: check if any code-extracted topic name appears within the LLM topic name (or vice versa)
+        const llmNameLower = llmTopic.name.toLowerCase();
+        const codeTopic = analytics.extracted_topics.find(t => {
+          const codeNameLower = t.name.toLowerCase();
+          return codeNameLower === llmNameLower ||
+            llmNameLower.includes(codeNameLower) ||
+            codeNameLower.split(' ').every(word => llmNameLower.includes(word));
+        });
+
+        const sentiment = codeTopic?.avgSentiment ?? analytics.overall_sentiment;
+        const sources = codeTopic?.sources.filter(s => serpUrls.has(s.url) || s.platform !== 'web') ?? [];
+
+        // Assign resonance based on platform presence + position in LLM ranking
+        // LLM lists topics roughly by importance, so use position as a signal
+        const platformCount = (llmTopic.platforms_seen ?? []).length;
+        const positionBoost = Math.max(0, narrative.topics!.length - idx); // higher for earlier topics
+        const engagementEstimate = codeTopic?.totalEngagement ?? (avgEngagementPerTopic * (1 + positionBoost * 0.2));
+        const resonanceScore = platformCount * 3 + positionBoost * 2 + Math.log10(Math.max(engagementEstimate, 1));
+
+        const resonance: 'low' | 'medium' | 'high' | 'viral' =
+          resonanceScore > 20 ? 'viral' :
+          resonanceScore > 14 ? 'high' :
+          resonanceScore > 8 ? 'medium' : 'low';
 
         return {
-          name: topic.name,
-          resonance: computeResonance(topic.frequency, topic.totalEngagement),
-          sentiment: topic.avgSentiment,
-          posts_overview: llmTopic?.posts_overview ?? `Found in ${topic.frequency} sources across ${Array.from(topic.platforms).join(', ')} with ${topic.totalEngagement.toLocaleString()} total engagement.`,
-          comments_overview: llmTopic?.comments_overview ?? `Sentiment is ${topic.avgSentiment > 0.2 ? 'positive' : topic.avgSentiment < -0.2 ? 'negative' : 'mixed'} based on comment analysis.`,
-          sources: topic.sources.filter(s => serpUrls.has(s.url) || s.platform !== 'web'),
-          video_ideas: llmTopic?.video_ideas ?? [],
+          name: llmTopic.name,
+          resonance,
+          sentiment,
+          posts_overview: llmTopic.posts_overview ?? `Trending topic across ${(llmTopic.platforms_seen ?? []).join(', ')}.`,
+          comments_overview: llmTopic.comments_overview ?? `${llmTopic.why_trending ?? 'Active discussion across platforms.'}`,
+          sources,
+          video_ideas: llmTopic.video_ideas ?? [],
         };
       });
+
+      // If LLM returned no topics, fall back to code-extracted topics
+      if (trendingTopics.length === 0) {
+        for (const topic of analytics.extracted_topics.slice(0, 10)) {
+          trendingTopics.push({
+            name: topic.name,
+            resonance: computeResonance(topic.frequency, topic.totalEngagement),
+            sentiment: topic.avgSentiment,
+            posts_overview: `Found in ${topic.frequency} sources across ${Array.from(topic.platforms).join(', ')} with ${topic.totalEngagement.toLocaleString()} total engagement.`,
+            comments_overview: `Sentiment is ${topic.avgSentiment > 0.2 ? 'positive' : topic.avgSentiment < -0.2 ? 'negative' : 'mixed'} based on comment analysis.`,
+            sources: topic.sources.filter(s => serpUrls.has(s.url) || s.platform !== 'web'),
+            video_ideas: [],
+          });
+        }
+      }
 
       // Assemble the full AI response in the existing format (backward compatible)
       const aiResponse: TopicSearchAIResponse = {

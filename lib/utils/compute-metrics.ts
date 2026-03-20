@@ -27,27 +27,42 @@ function parseViewCount(views: string | undefined): number | null {
 const RESONANCE_WEIGHTS: Record<string, number> = {
   low: 1,
   medium: 2,
-  high: 3,
-  viral: 4,
+  high: 4,
+  viral: 8,
 };
 
 /**
  * Compute a topic score (0–100) from trending topics.
- * Factors in number of topics and their resonance levels.
+ * Uses an asymptotic curve so 100 is nearly impossible — reserved for
+ * truly viral phenomena with high resonance across many platforms.
+ *
+ * Guidelines:
+ *   3 medium topics ≈ 25-35
+ *   5 high topics ≈ 50-65
+ *   8 viral topics across all platforms ≈ 80-90
  */
 function computeTopicScore(topics: TrendingTopic[]): number {
   if (topics.length === 0) return 0;
 
-  const totalResonance = topics.reduce(
+  // Weighted sum of resonance levels
+  const rawScore = topics.reduce(
     (sum, t) => sum + (RESONANCE_WEIGHTS[t.resonance] ?? 1),
     0
   );
-  const avgResonance = totalResonance / topics.length;
 
-  // Logarithmic scale so it doesn't cap at 100 too easily
-  // 3 topics at medium avg ≈ 40, 5 topics at high avg ≈ 65, 8 topics at viral avg ≈ 90
-  const raw = Math.log2(1 + topics.length) * avgResonance * 15;
-  return Math.min(100, Math.round(raw));
+  // Source diversity bonus: how many unique platforms are represented (0–1 scale)
+  const uniquePlatforms = new Set(
+    topics.flatMap(t => t.sources?.map(s => s.platform) ?? [])
+  ).size;
+  const diversityBonus = Math.min(uniquePlatforms / 5, 1);
+
+  // Asymptotic curve: approaches 100 but never reaches it
+  // k=0.04 gives: rawScore=6 → ~21, rawScore=20 → ~55, rawScore=64 → ~92
+  const score = Math.round(
+    100 * (1 - Math.exp(-0.04 * rawScore)) * (0.7 + 0.3 * diversityBonus)
+  );
+
+  return Math.min(100, score);
 }
 
 /**

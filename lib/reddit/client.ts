@@ -58,43 +58,64 @@ async function findRedditThreadsViaBrave(
   const freshness = FRESHNESS_MAP[timeRange];
   const threads: { title: string; url: string; description: string; subreddit: string; answers: number | null; topComment: string | null }[] = [];
 
-  // Run two searches in parallel: discussions-focused + web results for Reddit
-  const [discussionRes, webRes] = await Promise.allSettled([
-    // Brave discussions endpoint — gets forum metadata (answer counts, top comments)
-    fetch(`${BRAVE_API_BASE}?${new URLSearchParams({
-      q: `site:reddit.com ${query}`,
+  const braveHeaders = {
+    'Accept': 'application/json',
+    'Accept-Encoding': 'gzip',
+    'X-Subscription-Token': braveKey,
+  };
+
+  // Run two searches sequentially (not parallel) to avoid Brave 429 rate limits.
+  // 1. General query — Brave's discussions section naturally surfaces Reddit threads
+  // 2. "reddit" keyword query — catches additional threads
+  // Skipping site:reddit.com — it gets rate-limited and Brave's discussions already surface Reddit.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const results: (any | null)[] = [];
+
+  // First query: general search to get Brave's discussions section
+  try {
+    const res = await fetch(`${BRAVE_API_BASE}?${new URLSearchParams({
+      q: query,
       count: String(Math.min(count, 20)),
       ...(freshness ? { freshness } : {}),
     })}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Accept-Encoding': 'gzip',
-        'X-Subscription-Token': braveKey,
-      },
+      headers: braveHeaders,
       signal: AbortSignal.timeout(10000),
-    }).then(r => r.ok ? r.json() : null),
+    });
+    results.push(res.ok ? await res.json() : null);
+    if (!res.ok) console.warn(`[reddit] Brave general search failed: ${res.status}`);
+  } catch (err) {
+    console.error('[reddit] Brave general search error:', err);
+    results.push(null);
+  }
 
-    // Second search with different query phrasing for broader coverage
-    fetch(`${BRAVE_API_BASE}?${new URLSearchParams({
+  // Small delay to avoid rate limits
+  await new Promise(r => setTimeout(r, 500));
+
+  // Second query: reddit keyword search for broader coverage
+  try {
+    const res = await fetch(`${BRAVE_API_BASE}?${new URLSearchParams({
       q: `reddit ${query} discussion`,
       count: String(Math.min(count, 20)),
       ...(freshness ? { freshness } : {}),
     })}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Accept-Encoding': 'gzip',
-        'X-Subscription-Token': braveKey,
-      },
+      headers: braveHeaders,
       signal: AbortSignal.timeout(10000),
-    }).then(r => r.ok ? r.json() : null),
-  ]);
+    });
+    results.push(res.ok ? await res.json() : null);
+    if (!res.ok) console.warn(`[reddit] Brave reddit search failed: ${res.status}`);
+  } catch (err) {
+    console.error('[reddit] Brave reddit search error:', err);
+    results.push(null);
+  }
 
   const seenUrls = new Set<string>();
 
-  // Process discussion results (best quality — has answer counts, top comments)
-  for (const result of [discussionRes, webRes]) {
-    if (result.status !== 'fulfilled' || !result.value) continue;
-    const data = result.value;
+  // Process all search results — discussions section has best quality (answer counts, top comments)
+  for (const data of results) {
+    if (!data) continue;
+    const discussionCount = data.discussions?.results?.length ?? 0;
+    const webResultCount = data.web?.results?.length ?? 0;
+    console.log(`[reddit] Brave response — discussions: ${discussionCount}, web results: ${webResultCount}`);
 
     // Check discussions section
     for (const d of data.discussions?.results ?? []) {
@@ -113,10 +134,11 @@ async function findRedditThreadsViaBrave(
     }
 
     // Check web results for Reddit pages
+    // Accept any reddit.com URL (not just /r/ — comments links, short URLs, etc.)
     for (const r of data.web?.results ?? []) {
-      if (!r.url?.includes('reddit.com/r/') || seenUrls.has(r.url)) continue;
-      // Skip non-post URLs (wiki pages, sidebar, etc.)
-      if (r.url.includes('/wiki/') || r.url.includes('/about/')) continue;
+      if (!r.url?.includes('reddit.com') || seenUrls.has(r.url)) continue;
+      // Skip non-post URLs (wiki pages, sidebar, about pages, subreddit listings)
+      if (r.url.includes('/wiki/') || r.url.includes('/about/') || r.url.match(/reddit\.com\/r\/[^/]+\/?$/)) continue;
       seenUrls.add(r.url);
 
       const subreddit = extractSubreddit(r.url);
@@ -131,6 +153,7 @@ async function findRedditThreadsViaBrave(
     }
   }
 
+  console.log(`[reddit] Total threads found via Brave: ${threads.length}`);
   return threads.slice(0, count);
 }
 

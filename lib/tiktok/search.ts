@@ -113,7 +113,7 @@ export async function gatherTikTokData(
           shouldDownloadSubtitles: false,
           shouldDownloadSlideshowImages: false,
         }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(30000),
       },
     );
 
@@ -126,10 +126,11 @@ export async function gatherTikTokData(
     const runId = runData?.data?.id;
     if (!runId) return { videos: [], topHashtags: [], totalResults: 0 };
 
-    // Poll for completion (max 60s)
-    const maxWait = 60000;
+    // Poll for completion (max 120s)
+    const maxWait = 120000;
     const pollInterval = 3000;
     const startTime = Date.now();
+    let runSucceeded = false;
 
     while (Date.now() - startTime < maxWait) {
       await new Promise((r) => setTimeout(r, pollInterval));
@@ -140,15 +141,33 @@ export async function gatherTikTokData(
       if (!statusRes.ok) continue;
       const statusData = await statusRes.json();
       const status = statusData?.data?.status;
-      if (status === 'SUCCEEDED') break;
+      if (status === 'SUCCEEDED') {
+        runSucceeded = true;
+        break;
+      }
       if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
         console.error('Apify TikTok run failed:', status);
         return { videos: [], topHashtags: [], totalResults: 0 };
       }
     }
 
-    // If polling timed out without SUCCEEDED, don't fetch from an incomplete run
-    if (Date.now() - startTime >= maxWait) {
+    // Check status one final time after the loop in case the last poll showed success
+    if (!runSucceeded) {
+      try {
+        const finalStatusRes = await fetch(
+          `https://api.apify.com/v2/actor-runs/${runId}?token=${apiKey}`,
+          { signal: AbortSignal.timeout(5000) },
+        );
+        if (finalStatusRes.ok) {
+          const finalStatusData = await finalStatusRes.json();
+          runSucceeded = finalStatusData?.data?.status === 'SUCCEEDED';
+        }
+      } catch {
+        // ignore final check error
+      }
+    }
+
+    if (!runSucceeded) {
       console.error('Apify TikTok run timed out after', maxWait / 1000, 'seconds');
       return { videos: [], topHashtags: [], totalResults: 0 };
     }

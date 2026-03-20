@@ -4,6 +4,10 @@ import { Globe, Video, ExternalLink } from 'lucide-react';
 import { Card, CardTitle } from '@/components/ui/card';
 import type { BraveSerpData } from '@/lib/brave/types';
 
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '');
+}
+
 interface SourcesPanelProps {
   serpData: BraveSerpData;
 }
@@ -57,8 +61,8 @@ function SourceTypeSection({
 export function SourcesPanel({ serpData }: SourcesPanelProps) {
   const webItems = serpData.webResults.map(r => ({
     url: r.url,
-    title: r.title,
-    detail: r.description.slice(0, 120) + (r.description.length > 120 ? '...' : ''),
+    title: stripHtml(r.title),
+    detail: stripHtml(r.description).slice(0, 120) + (r.description.length > 120 ? '...' : ''),
   }));
 
   const videoItems = serpData.videos.map(v => ({

@@ -8,10 +8,15 @@ interface SentimentBadgeProps {
 }
 
 export function SentimentBadge({ sentiment, size = 'sm' }: SentimentBadgeProps) {
-  const isPositive = sentiment > 0.15;
-  const isNegative = sentiment < -0.15;
+  const isPositive = sentiment > 0.2;
+  const isNegative = sentiment < -0.2;
 
-  const label = isPositive ? 'Positive' : isNegative ? 'Negative' : 'Neutral';
+  const pct = Math.round((sentiment + 1) / 2 * 100);
+  const label = isPositive
+    ? `${pct}% positive`
+    : isNegative
+    ? `${100 - pct}% negative`
+    : 'Neutral';
   const Icon = isPositive ? TrendingUp : isNegative ? TrendingDown : Minus;
 
   const colors = isPositive

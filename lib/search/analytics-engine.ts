@@ -141,6 +141,17 @@ const STOP_WORDS = new Set([
   'put', 'keep', 'let', 'say', 'said', 'tell', 'told', 'ask', 'asked',
   'lot', 'bit', 'kind', 'pretty', 'actually', 'literally', 'basically',
   'dont', 'ive', 'im', 'its', 'thats', 'youre',
+  // URL fragments
+  'http', 'https', 'www', 'com', 'org', 'net', 'edu', 'gov', 'html', 'php',
+  'asp', 'jsp', 'htm', 'url', 'link', 'site', 'page', 'blog',
+  // Platform / format noise
+  'shorts', 'short', 'reels', 'reel', 'tiktok', 'youtube', 'instagram',
+  'reddit', 'quora', 'twitter', 'facebook', 'clip', 'clips', 'content',
+  'posts', 'channel', 'likes', 'views', 'viral', 'trending',
+  // Common noise
+  'people', 'really', 'getting', 'making', 'trying', 'looking', 'saying',
+  'talking', 'feeling', 'stuff', 'often', 'usually', 'never', 'always',
+  'still', 'right', 'wrong',
 ]);
 
 interface ExtractedTopic {
@@ -223,6 +234,15 @@ function extractTopics(
     }
   }
 
+  // Helper: detect URL-like components in a word
+  const COMMON_TLDS = new Set(['com', 'org', 'net', 'edu', 'gov', 'io', 'co', 'us', 'uk', 'ca', 'au', 'de']);
+  function looksLikeUrl(word: string): boolean {
+    if (word.includes('.')) return true;
+    if (word.startsWith('http')) return true;
+    if (COMMON_TLDS.has(word)) return true;
+    return false;
+  }
+
   // Filter: require minimum frequency, cross-platform presence preferred,
   // and at least one word that's 4+ chars (filters out "tsp garlic" type noise)
   return Array.from(bigramCounts.entries())
@@ -233,6 +253,8 @@ function extractTopics(
       if (words.some(w => w.length < 3)) return false;
       // At least one word must be 5+ chars (filters "tsp oil", "per cup" etc.)
       if (!words.some(w => w.length >= 5)) return false;
+      // Strip bigrams where either word looks like a URL component
+      if (words.some(w => looksLikeUrl(w))) return false;
       // Require at least 2 unique sources (not just repetition in one post)
       if (data.sources.length < 2) return false;
       return true;

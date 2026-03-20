@@ -11,11 +11,10 @@ export function getSentimentBadgeVariant(score: number): 'success' | 'warning' |
 }
 
 export function getSentimentLabel(score: number): string {
-  if (score >= 0.6) return 'Very Positive';
-  if (score >= 0.2) return 'Positive';
-  if (score >= -0.2) return 'Neutral';
-  if (score >= -0.6) return 'Negative';
-  return 'Very Negative';
+  const pct = Math.round((score + 1) / 2 * 100);
+  if (score >= 0.2) return `${pct}% positive`;
+  if (score <= -0.2) return `${100 - pct}% negative`;
+  return 'Neutral';
 }
 
 export function getSentimentEmoji(score: number): string {

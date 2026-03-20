@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, Clock, Send, Undo2, Building2, Check, Plus, X, Mail, Users, User, Sparkles } from 'lucide-react';
-import { PlatformBadgeSearch, PLATFORM_CONFIG } from '@/components/search/platform-icon';
+import { PlatformIcon } from '@/components/search/platform-icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -18,7 +18,7 @@ import { TrendingTopicsTable } from '@/components/results/trending-topics-table'
 import { ContentPillars } from '@/components/results/content-pillars';
 import { NicheInsights } from '@/components/results/niche-insights';
 import { SourcesPanel } from '@/components/results/sources-panel';
-import { PlatformSources } from '@/components/results/platform-sources';
+import { SourceBrowser } from '@/components/results/source-browser';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { KeyFindings } from '@/components/results/key-findings';
 import { SentimentBadge } from '@/components/results/sentiment-badge';
@@ -31,7 +31,7 @@ import { SearchIdeasWizard } from '@/components/research/search-ideas-wizard';
 import type { ClientOption } from '@/components/ui/client-picker';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { hasSerp } from '@/lib/types/search';
-import type { TopicSearch, TopicSearchAIResponse, SearchPlatform, TrendingTopic, LegacyTrendingTopic } from '@/lib/types/search';
+import type { TopicSearch, TopicSearchAIResponse, SearchPlatform, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
 import { BenchmarkRecommendations } from '@/components/search/benchmark-recommendations';
 import { RelatedTopics } from '@/components/search/related-topics';
 import type { Recipient } from './page';
@@ -215,89 +215,21 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
         )}
         {/* Key Findings Cards */}
         {search.summary && aiResponse?.trending_topics && (
-          <KeyFindings summary={search.summary} topics={aiResponse.trending_topics} />
+          <KeyFindings summary={search.summary} topics={aiResponse.trending_topics} overallSentiment={aiResponse.overall_sentiment ?? (search.metrics as any)?.overall_sentiment} />
         )}
 
         {search.metrics && <MetricsRow metrics={search.metrics} isBrandSearch={!!aiResponse?.brand_alignment_notes} />}
 
-        {/* Platform breakdown — v2 searches only */}
+        {/* Platform source strip — v2 searches only */}
         {aiResponse?.platform_breakdown && aiResponse.platform_breakdown.length > 0 && (
-          <div className="rounded-xl border border-nativz-border bg-surface p-5">
-            <h3 className="text-sm font-semibold text-text-primary mb-3">Platform breakdown</h3>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {aiResponse.platform_breakdown.map((pb) => {
-                const config = PLATFORM_CONFIG[pb.platform];
-                return (
-                <div key={pb.platform} className="rounded-lg bg-background p-3 border border-nativz-border/50">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <PlatformBadgeSearch platform={pb.platform} />
-                    <span className="text-xs font-medium text-text-primary">{config?.label ?? pb.platform}</span>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-text-muted">Posts</span>
-                      <span className="text-text-secondary font-medium">{pb.post_count}</span>
-                    </div>
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-text-muted">Comments</span>
-                      <span className="text-text-secondary font-medium">{pb.comment_count}</span>
-                    </div>
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-text-muted">Sentiment</span>
-                      <span className={`font-medium ${pb.avg_sentiment > 0.2 ? 'text-emerald-400' : pb.avg_sentiment < -0.2 ? 'text-red-400' : 'text-text-secondary'}`}>
-                        {pb.avg_sentiment > 0 ? '+' : ''}{pb.avg_sentiment.toFixed(1)}
-                      </span>
-                    </div>
-                    {pb.top_subreddits && pb.top_subreddits.length > 0 && (
-                      <div className="pt-1">
-                        <span className="text-[10px] text-text-muted">Top: </span>
-                        <span className="text-[10px] text-text-secondary">{pb.top_subreddits.slice(0, 3).map((s: string) => `r/${s}`).join(', ')}</span>
-                      </div>
-                    )}
-                    {pb.top_channels && pb.top_channels.length > 0 && (
-                      <div className="pt-1">
-                        <span className="text-[10px] text-text-muted">Top: </span>
-                        <span className="text-[10px] text-text-secondary">{pb.top_channels.slice(0, 3).join(', ')}</span>
-                      </div>
-                    )}
-                    {pb.top_hashtags && pb.top_hashtags.length > 0 && (
-                      <div className="pt-1">
-                        <span className="text-[10px] text-text-muted">Top: </span>
-                        <span className="text-[10px] text-text-secondary">{pb.top_hashtags.slice(0, 3).map((h: string) => `#${h}`).join(', ')}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Conversation themes — v2 searches only */}
-        {aiResponse?.conversation_themes && aiResponse.conversation_themes.length > 0 && (
-          <div className="rounded-xl border border-nativz-border bg-surface p-5">
-            <h3 className="text-sm font-semibold text-text-primary mb-3">Conversation themes</h3>
-            <div className="space-y-3">
-              {aiResponse.conversation_themes.map((theme, i) => (
-                <div key={i} className="rounded-lg bg-background p-3 border border-nativz-border/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-text-primary">{theme.theme}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-text-muted">{theme.post_count} posts</span>
-                      {theme.platforms.map((p) => (
-                        <PlatformBadgeSearch key={p} platform={p} size="sm" />
-                      ))}
-                    </div>
-                  </div>
-                  {theme.representative_quotes.length > 0 && (
-                    <div className="space-y-1.5">
-                      {theme.representative_quotes.slice(0, 2).map((q: string, j: number) => (
-                        <p key={j} className="text-xs text-text-muted italic border-l-2 border-nativz-border pl-2">&ldquo;{q}&rdquo;</p>
-                      ))}
-                    </div>
-                  )}
-                </div>
+          <div className="flex items-center gap-4 py-3 px-4 rounded-xl bg-surface border border-nativz-border">
+            <span className="text-xs text-text-muted">Sources gathered</span>
+            <div className="flex items-center gap-3">
+              {aiResponse.platform_breakdown.map((pb) => (
+                <span key={pb.platform} className="flex items-center gap-1.5 text-sm">
+                  <PlatformIcon platform={pb.platform} size={14} />
+                  <span className="text-text-secondary font-medium">{pb.post_count}</span>
+                </span>
               ))}
             </div>
           </div>
@@ -351,9 +283,9 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
           <BenchmarkRecommendations industry={clientInfo.industry} />
         )}
 
-        {/* Platform sources with TikTok embeds */}
+        {/* Source browser — browse posts by platform */}
         {search.platform_data && (search.platform_data as Record<string, unknown>).sources && (
-          <PlatformSources sources={(search.platform_data as Record<string, unknown>).sources as any[]} />
+          <SourceBrowser sources={(search.platform_data as Record<string, unknown>).sources as PlatformSource[]} />
         )}
 
         {hasSerp(search) && search.serp_data && (

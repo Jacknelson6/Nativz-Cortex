@@ -51,7 +51,7 @@ type StepStatus = 'empty' | 'active' | 'complete';
 // ---------------------------------------------------------------------------
 
 const VERTICAL_KEYWORDS: Record<string, string[]> = {
-  ecommerce: ['shop', 'store', 'ecommerce', 'e-commerce', 'retail', 'buy', 'sale', 'discount', 'coupon', 'merch', 'clothing', 'apparel', 'jewelry', 'accessories', 'products'],
+  ecommerce: ['shop', 'store', 'ecommerce', 'e-commerce', 'retail', 'buy', 'sale', 'discount', 'coupon', 'merch', 'clothing', 'apparel', 'jewelry', 'accessories', 'products', 'cattle', 'ranch', 'meat', 'beef', 'farm', 'livestock', 'poultry', 'seafood', 'wholesale', 'direct-to-consumer', 'd2c', 'dtc', 'subscription box'],
   saas: ['software', 'saas', 'app', 'platform', 'digital', 'cloud', 'ai', 'tool', 'automation', 'api', 'dashboard', 'analytics', 'crm', 'erp', 'b2b'],
   health_wellness: ['health', 'beauty', 'wellness', 'skincare', 'cosmetic', 'supplement', 'vitamin', 'fitness', 'spa', 'clinic', 'medical', 'pharma', 'organic', 'natural'],
   fashion: ['fashion', 'style', 'designer', 'luxury', 'boutique', 'couture', 'dress', 'wear', 'trend'],

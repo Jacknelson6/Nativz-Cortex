@@ -2,28 +2,35 @@
 
 import {
   TrendingUp,
-  MessageCircle,
   Flame,
-  Users,
-  Hash,
 } from 'lucide-react';
 
 interface KeyFindingsProps {
   summary: string;
   topics: { name: string; resonance: string; sentiment: number }[];
+  overallSentiment?: number;
 }
 
-export function KeyFindings({ summary, topics }: KeyFindingsProps) {
+export function KeyFindings({ summary, topics, overallSentiment }: KeyFindingsProps) {
   if (!summary && topics.length === 0) return null;
 
   // Quick stats from topics
-  const viralCount = topics.filter(t => t.resonance === 'viral').length;
-  const highCount = topics.filter(t => t.resonance === 'high').length;
   const avgSentiment = topics.length > 0
     ? topics.reduce((sum, t) => sum + t.sentiment, 0) / topics.length
     : 0;
-  const sentimentLabel = avgSentiment > 0.3 ? 'Positive' : avgSentiment < -0.3 ? 'Negative' : 'Mixed';
-  const sentimentColor = avgSentiment > 0.3 ? 'text-emerald-400' : avgSentiment < -0.3 ? 'text-red-400' : 'text-amber-400';
+  const sentiment = overallSentiment ?? avgSentiment;
+  const sentimentLabel =
+    sentiment >= 0.6 ? 'Positive' :
+    sentiment >= 0.2 ? 'Leaning positive' :
+    sentiment > -0.2 ? 'Neutral' :
+    sentiment > -0.6 ? 'Leaning negative' :
+    'Negative';
+  const sentimentColor =
+    sentiment >= 0.6 ? 'text-emerald-400' :
+    sentiment >= 0.2 ? 'text-emerald-300' :
+    sentiment > -0.2 ? 'text-zinc-400' :
+    sentiment > -0.6 ? 'text-red-300' :
+    'text-red-400';
 
   // Top trending topics as chips
   const topTopics = topics
@@ -44,18 +51,6 @@ export function KeyFindings({ summary, topics }: KeyFindingsProps) {
     <div className="space-y-4">
       {/* Quick stat chips */}
       <div className="flex flex-wrap gap-3">
-        {topics.length > 0 && (
-          <div className="flex items-center gap-1.5 text-xs text-text-muted">
-            <Hash size={12} className="text-accent-text" />
-            <span className="text-text-primary font-medium">{topics.length}</span> trending topics
-          </div>
-        )}
-        {(viralCount + highCount) > 0 && (
-          <div className="flex items-center gap-1.5 text-xs text-text-muted">
-            <Flame size={12} className="text-orange-400" />
-            <span className="text-text-primary font-medium">{viralCount + highCount}</span> high-resonance
-          </div>
-        )}
         <div className="flex items-center gap-1.5 text-xs text-text-muted">
           <TrendingUp size={12} className={sentimentColor} />
           Sentiment: <span className={`font-medium ${sentimentColor}`}>{sentimentLabel}</span>
