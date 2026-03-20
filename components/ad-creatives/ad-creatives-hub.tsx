@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import {
   Globe,
@@ -19,7 +19,9 @@ import { CreativeGallery } from './creative-gallery';
 import { TemplateCatalog } from './template-catalog';
 import { AdWizard } from './ad-wizard';
 import { BulkTemplateImport } from './bulk-template-import';
+import { GenerationBanner } from './generation-banner';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
+import type { RecentClient } from '@/app/admin/ad-creatives/page';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,6 +37,12 @@ interface ClientWithSlug extends ClientOption {
 
 interface AdCreativesHubProps {
   clients: ClientWithSlug[];
+  recentClients?: RecentClient[];
+}
+
+interface PlaceholderConfig {
+  brandColors: string[];
+  templateThumbnails: { templateId: string; imageUrl: string; variationIndex: number }[];
 }
 
 const TABS: { key: Tab; label: string; icon: typeof Image }[] = [
@@ -44,10 +52,40 @@ const TABS: { key: Tab; label: string; icon: typeof Image }[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Animated counter hook
+// ---------------------------------------------------------------------------
+
+function useAnimatedCounter(target: number, duration: number = 3000) {
+  const [value, setValue] = useState(0);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const steps = [1, 10, 50, 100, 500, 1000, 2500, 5000, 7500, target];
+    const stepDuration = duration / steps.length;
+    let i = 0;
+
+    function tick() {
+      if (i < steps.length) {
+        setValue(steps[i]);
+        i++;
+        rafRef.current = window.setTimeout(tick, stepDuration) as unknown as number;
+      }
+    }
+
+    tick();
+    return () => {
+      if (rafRef.current) clearTimeout(rafRef.current);
+    };
+  }, [target, duration]);
+
+  return value;
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function AdCreativesHub({ clients }: AdCreativesHubProps) {
+export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -60,6 +98,10 @@ export function AdCreativesHub({ clients }: AdCreativesHubProps) {
   const [scrapedProducts, setScrapedProducts] = useState<ScrapedProduct[]>([]);
   const [clientId, setClientId] = useState<string | null>(null);
 
+  // Generation state (passed from wizard → gallery)
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
+  const [placeholderConfig, setPlaceholderConfig] = useState<PlaceholderConfig | null>(null);
+
   // Tab state (only shown after context is set)
   const activeTab = (searchParams.get('tab') as Tab) || 'generate';
   const [showBulkImport, setShowBulkImport] = useState(false);
@@ -69,8 +111,10 @@ export function AdCreativesHub({ clients }: AdCreativesHubProps) {
   const hasContext = brand !== null || clientId !== null;
   const isScanning = scanning && clientId !== null;
 
-  // Resolve the client ID for API calls — either picked directly or we need to match by URL
+  // Resolve the client ID for API calls
   const resolvedClientId = clientId ?? (brand ? findClientByUrl(clients, brand.url) : null);
+
+  const counter = useAnimatedCounter(10000);
 
   const setTab = useCallback(
     (tab: Tab) => {
@@ -87,7 +131,7 @@ export function AdCreativesHub({ clients }: AdCreativesHubProps) {
   );
 
   // ---------------------------------------------------------------------------
-  // Scan brand
+  // Scan brand (uses new crawl-brand API with knowledge caching)
   // ---------------------------------------------------------------------------
 
   async function handleScan() {
@@ -103,7 +147,8 @@ export function AdCreativesHub({ clients }: AdCreativesHubProps) {
     setScrapedProducts([]);
 
     try {
-      const res = await fetch('/api/ad-creatives/scrape-brand', {
+      // Use the new crawl-brand endpoint (checks knowledge cache first)
+      const res = await fetch('/api/ad-creatives/crawl-brand', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
@@ -115,20 +160,20 @@ export function AdCreativesHub({ clients }: AdCreativesHubProps) {
       }
 
       const data = await res.json();
-      setBrand(data.brand ?? null);
-      setScrapedProducts(data.products ?? []);
+
+      if (data.status === 'cached' || data.status === 'ready') {
+        // Immediate result from knowledge cache
+        setBrand(data.brand ?? null);
+        setScrapedProducts(data.products ?? []);
+        setScanning(false);
+      } else {
+        // Crawl started in background — poll for completion
+        pollForBrandContext(null, url);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to scan website');
-    } finally {
       setScanning(false);
     }
-  }
-
-  function handleReset() {
-    setBrand(null);
-    setBrandUrl('');
-    setScrapedProducts([]);
-    setClientId(null);
   }
 
   async function handleClientSelect(id: string | null) {
@@ -140,43 +185,112 @@ export function AdCreativesHub({ clients }: AdCreativesHubProps) {
     setBrandUrl('');
     setScrapedProducts([]);
 
-    // Auto-scan client's website URL for brand context + products
     const client = clients.find((c) => c.id === id);
+
+    // Check if this client has existing creatives — default to gallery
+    const hasCreatives = recentClients.some((rc) => rc.clientId === id);
+    if (hasCreatives) {
+      setTab('gallery');
+    }
+
+    // Auto-scan client's website URL for brand context
     const url = client?.website_url;
     if (url) {
       setScanning(true);
       try {
-        const res = await fetch('/api/ad-creatives/scrape-brand', {
+        const res = await fetch('/api/ad-creatives/crawl-brand', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }),
+          body: JSON.stringify({ url, clientId: id }),
         });
+
         if (res.ok) {
           const data = await res.json();
-          setBrand(data.brand ?? null);
-          setScrapedProducts(data.products ?? []);
+          if (data.status === 'cached' || data.status === 'ready') {
+            setBrand(data.brand ?? null);
+            setScrapedProducts(data.products ?? []);
+            setScanning(false);
+          } else {
+            pollForBrandContext(id, null);
+          }
+        } else {
+          setScanning(false);
         }
       } catch {
-        // Non-fatal — wizard still works without scraped data
-      } finally {
         setScanning(false);
       }
     }
   }
 
+  function pollForBrandContext(pollClientId: string | null, pollUrl: string | null) {
+    const interval = setInterval(async () => {
+      try {
+        const params = new URLSearchParams();
+        if (pollClientId) params.set('clientId', pollClientId);
+        const res = await fetch(`/api/ad-creatives/crawl-brand?${params.toString()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === 'ready') {
+          setBrand(data.brand ?? null);
+          setScrapedProducts(data.products ?? []);
+          setScanning(false);
+          clearInterval(interval);
+        }
+      } catch {
+        // Keep polling
+      }
+    }, 3000);
+
+    // Timeout after 5 minutes
+    setTimeout(() => {
+      clearInterval(interval);
+      setScanning(false);
+    }, 300_000);
+  }
+
+  function handleReset() {
+    setBrand(null);
+    setBrandUrl('');
+    setScrapedProducts([]);
+    setClientId(null);
+    setActiveBatchId(null);
+    setPlaceholderConfig(null);
+  }
+
+  function handleRecentClientClick(rc: RecentClient) {
+    setClientId(rc.clientId);
+    // Set brand URL if available for auto-scan
+    if (rc.website_url) {
+      handleClientSelect(rc.clientId);
+    }
+    setTab('gallery');
+  }
+
+  // Called by wizard when generation starts
+  function handleGenerationStart(batchId: string, config: PlaceholderConfig) {
+    setActiveBatchId(batchId);
+    setPlaceholderConfig(config);
+    setTab('gallery');
+  }
+
   // ---------------------------------------------------------------------------
-  // Landing — URL or client picker (vibiz-style)
+  // Landing — URL or client picker
   // ---------------------------------------------------------------------------
 
   if (!hasContext) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] p-6">
         <div className="w-full max-w-xl space-y-8">
-          {/* Header */}
+          {/* Header with animated counter */}
           <div className="text-center space-y-2">
-            <h1 className="text-3xl font-bold text-text-primary">Create ad creatives</h1>
+            <h1 className="text-3xl font-bold text-text-primary">
+              Generate limitless ad creatives
+            </h1>
             <p className="text-text-muted">
-              Enter a website to scan, or select an existing client.
+              <span className="text-accent-text font-semibold tabular-nums">
+                {counter.toLocaleString()}+
+              </span>{' '}
+              variations from a single brand scan.
             </p>
           </div>
 
@@ -232,16 +346,15 @@ export function AdCreativesHub({ clients }: AdCreativesHubProps) {
                 </Button>
               </div>
 
-              {/* Scanning state */}
               {scanning && (
                 <div className="flex items-center justify-center gap-3 py-6">
                   <Loader2 size={20} className="animate-spin text-accent-text" />
-                  <p className="text-sm text-text-muted">Scanning brand and products...</p>
+                  <p className="text-sm text-text-muted">Crawling site for brand & products...</p>
                 </div>
               )}
 
               <p className="text-xs text-text-muted text-center">
-                We&apos;ll analyze your brand and find products to generate ads for.
+                We&apos;ll crawl your entire website for brand assets, colors, and products.
               </p>
             </div>
           )}
@@ -258,6 +371,33 @@ export function AdCreativesHub({ clients }: AdCreativesHubProps) {
               <p className="text-xs text-text-muted text-center">
                 Uses existing brand DNA and product info from the knowledge base.
               </p>
+            </div>
+          )}
+
+          {/* Recent clients */}
+          {recentClients.length > 0 && (
+            <div className="space-y-3 pt-4 border-t border-nativz-border">
+              <p className="text-xs text-text-muted uppercase tracking-wide text-center">Recent</p>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                {recentClients.map((rc) => (
+                  <button
+                    key={rc.clientId}
+                    type="button"
+                    onClick={() => handleRecentClientClick(rc)}
+                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-nativz-border bg-surface hover:border-accent/30 transition-colors cursor-pointer"
+                  >
+                    {rc.logo_url ? (
+                      <img src={rc.logo_url} alt={rc.name} className="h-8 w-8 rounded-lg object-contain" />
+                    ) : (
+                      <div className="h-8 w-8 rounded-lg bg-background flex items-center justify-center text-xs font-bold text-text-muted">
+                        {rc.name[0]}
+                      </div>
+                    )}
+                    <span className="text-[10px] text-text-secondary truncate w-full text-center">{rc.name}</span>
+                    <span className="text-[10px] text-accent-text">{rc.creativeCount} ads</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -288,9 +428,9 @@ export function AdCreativesHub({ clients }: AdCreativesHubProps) {
           </div>
           {brand && (
             <div className="flex items-center gap-1.5 ml-2">
-              {brand.colors.slice(0, 4).map((color) => (
+              {brand.colors.slice(0, 4).map((color, i) => (
                 <div
-                  key={color}
+                  key={`${color}-${i}`}
                   className="h-4 w-4 rounded-full border border-white/10"
                   style={{ backgroundColor: color }}
                 />
@@ -299,6 +439,11 @@ export function AdCreativesHub({ clients }: AdCreativesHubProps) {
           )}
         </div>
       </div>
+
+      {/* Active generation banner */}
+      {resolvedClientId && (
+        <GenerationBanner clientId={resolvedClientId} onViewGallery={() => setTab('gallery')} />
+      )}
 
       {/* Tab bar */}
       <div className="flex items-center gap-1 bg-surface rounded-xl p-1 w-fit">
@@ -334,9 +479,9 @@ export function AdCreativesHub({ clients }: AdCreativesHubProps) {
         <div className="rounded-2xl border border-nativz-border bg-surface p-12 flex flex-col items-center justify-center gap-4">
           <Loader2 size={28} className="animate-spin text-accent-text" />
           <div className="text-center">
-            <p className="text-sm font-medium text-text-primary">Scanning brand & products...</p>
+            <p className="text-sm font-medium text-text-primary">Crawling site for brand & products...</p>
             <p className="text-xs text-text-muted mt-1">
-              Analyzing {selectedClient?.name ?? 'website'} for colors, products, and brand identity
+              Analyzing {selectedClient?.name ?? 'website'} — crawling all pages for colors, products, and brand identity
             </p>
           </div>
         </div>
@@ -346,10 +491,20 @@ export function AdCreativesHub({ clients }: AdCreativesHubProps) {
           clientId={resolvedClientId ?? ''}
           initialBrand={brand ?? undefined}
           initialProducts={scrapedProducts}
+          onGenerationStart={handleGenerationStart}
         />
       )}
       {activeTab === 'gallery' && resolvedClientId && (
-        <CreativeGallery clientId={resolvedClientId} onNavigateToGenerate={() => setTab('generate')} />
+        <CreativeGallery
+          clientId={resolvedClientId}
+          onNavigateToGenerate={() => setTab('generate')}
+          activeBatchId={activeBatchId}
+          placeholderConfig={placeholderConfig}
+          onBatchComplete={() => {
+            setActiveBatchId(null);
+            setPlaceholderConfig(null);
+          }}
+        />
       )}
       {activeTab === 'gallery' && !resolvedClientId && (
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
@@ -372,7 +527,6 @@ export function AdCreativesHub({ clients }: AdCreativesHubProps) {
 // ---------------------------------------------------------------------------
 
 function findClientByUrl(clients: ClientWithSlug[], url: string): string | null {
-  // Try matching the brand URL hostname to a client slug
   try {
     const hostname = new URL(url).hostname.replace('www.', '');
     const slug = hostname.split('.')[0];
