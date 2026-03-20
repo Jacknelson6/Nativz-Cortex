@@ -94,7 +94,7 @@ function extractTitle(html: string): string | null {
   return match ? decodeEntities(match[1].trim()) : null;
 }
 
-function extractMeta(html: string, nameOrProperty: string): string | null {
+export function extractMeta(html: string, nameOrProperty: string): string | null {
   // Try property= (OG tags)
   const propRegex = new RegExp(
     `<meta[^>]+(?:property|name)=["']${escapeRegex(nameOrProperty)}["'][^>]+content=["']([^"']+)["']`,
@@ -133,7 +133,7 @@ function extractLinkIcon(html: string, baseUrl: string): string | null {
   return null;
 }
 
-function extractColors(html: string): string[] {
+export function extractColors(html: string): string[] {
   const colors = new Set<string>();
 
   // Theme color meta tag
@@ -162,7 +162,7 @@ function extractColors(html: string): string[] {
 // Product extraction
 // ---------------------------------------------------------------------------
 
-function extractProducts(html: string): ScrapedProduct[] {
+export function extractProducts(html: string): ScrapedProduct[] {
   const products: ScrapedProduct[] = [];
 
   // 1. Try JSON-LD structured data first
