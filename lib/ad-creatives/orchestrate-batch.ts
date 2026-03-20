@@ -46,6 +46,8 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
   const typedBatch = batch as AdGenerationBatch;
   const config = typedBatch.config as AdGenerationConfig;
 
+  console.log(`[orchestrate-batch] starting batch ${batchId} for client ${typedBatch.client_id}`);
+
   // Mark as generating
   await admin
     .from('ad_generation_batches')
@@ -81,6 +83,10 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
 
     // 5. Build work items (template x variation)
     const workItems = buildWorkItems(templates, copyVariations, config);
+
+    console.log(
+      `[orchestrate-batch] batch ${batchId}: ${workItems.length} work items across ${templates.length} template(s)`,
+    );
 
     // Update total count based on actual work items
     await admin
@@ -205,7 +211,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
             offer: config.offer ?? '',
             is_favorite: false,
             metadata: {
-              model: 'gemini-3.1-flash-image-preview',
+              model: 'gemini-2.0-flash-preview-image-generation',
               qa_passed: qaResult.passed,
               qa_score: qaResult.confidence,
               qa_issues: qaResult.issues.length > 0 ? qaResult.issues : undefined,
@@ -219,9 +225,9 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
           completedCount++;
         } catch (err) {
           failedCount++;
+          const msg = err instanceof Error ? err.message : String(err);
           console.error(
-            `[orchestrate-batch] creative failed for template=${item.templateId}:`,
-            err instanceof Error ? err.message : err,
+            `[orchestrate-batch] creative failed — batchId=${batchId} templateId=${item.templateId} source=${item.templateSource}: ${msg}`,
           );
         }
 
