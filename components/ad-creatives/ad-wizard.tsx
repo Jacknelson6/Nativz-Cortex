@@ -172,7 +172,7 @@ export function AdWizard({
 
   const fetchTemplates = useCallback(async () => {
     try {
-      const res = await fetch('/api/ad-creatives/templates');
+      const res = await fetch('/api/ad-creatives/templates?limit=2000');
       if (res.ok) {
         const data = await res.json();
         setTemplates(data.templates ?? []);

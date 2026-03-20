@@ -307,12 +307,14 @@ export async function gatherRedditData(
   timeRange: string,
   volume: string = 'medium',
 ): Promise<RedditSearchResult & { postsWithComments: (RedditPost & { top_comments: RedditComment[] })[] }> {
-  const limit = volume === 'deep' ? 40 : volume === 'medium' ? 25 : 10;
+  // Brave Search returns ~20 results per query (2 queries = ~40 max).
+  // These limits reflect the practical ceiling of the Brave-based approach.
+  const limit = volume === 'deep' ? 40 : volume === 'medium' ? 40 : 20;
   const result = await searchReddit(query, timeRange, limit);
 
-  // Scrape top threads for full content + comments
-  // Be conservative with scraping to avoid Reddit's rate limits on .json endpoints
-  const scrapeCount = volume === 'deep' ? 25 : volume === 'medium' ? 15 : 6;
+  // Scrape top threads for full content + comments.
+  // deep=40, medium=20, light=5 — matches VOLUME_CONFIG commentPosts targets.
+  const scrapeCount = volume === 'deep' ? 40 : volume === 'medium' ? 20 : 5;
   const toScrape = result.posts.slice(0, scrapeCount);
 
   const postsWithComments: (RedditPost & { top_comments: RedditComment[] })[] = [];

@@ -41,7 +41,7 @@ export const BATCH_STATUSES = [
   'generating',
   'completed',
   'failed',
-  'partially_completed',
+  'partial',
 ] as const;
 
 export type AdVertical = (typeof AD_VERTICALS)[number];

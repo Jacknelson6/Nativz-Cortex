@@ -1,6 +1,38 @@
 // lib/search/platform-router.ts — Orchestrates multi-platform data gathering
 
 import type { SearchPlatform, SearchVolume, PlatformSource, PlatformComment } from '@/lib/types/search';
+
+/**
+ * Centralized volume config — single source of truth for per-platform source counts.
+ * Matches the three-tier depth system: Light / Medium (default) / Deep.
+ */
+export const VOLUME_CONFIG = {
+  light: {
+    reddit: { posts: 20, commentPosts: 5 },
+    youtube: { videos: 15, commentVideos: 5, transcriptVideos: 3 },
+    tiktok: { videos: 15, commentVideos: 5, transcriptVideos: 3 },
+    web: { results: 15 },
+  },
+  medium: {
+    reddit: { posts: 100, commentPosts: 20 },
+    youtube: { videos: 100, commentVideos: 30, transcriptVideos: 20 },
+    tiktok: { videos: 100, commentVideos: 30, transcriptVideos: 15 },
+    web: { results: 30 },
+  },
+  deep: {
+    reddit: { posts: 500, commentPosts: 50 },
+    youtube: { videos: 500, commentVideos: 100, transcriptVideos: 50 },
+    tiktok: { videos: 500, commentVideos: 100, transcriptVideos: 30 },
+    web: { results: 50 },
+  },
+  // backward compat alias
+  quick: {
+    reddit: { posts: 20, commentPosts: 5 },
+    youtube: { videos: 15, commentVideos: 5, transcriptVideos: 3 },
+    tiktok: { videos: 15, commentVideos: 5, transcriptVideos: 3 },
+    web: { results: 15 },
+  },
+} as const;
 import { gatherRedditData } from '@/lib/reddit/client';
 import { gatherYouTubeData } from '@/lib/youtube/search';
 import { gatherTikTokData } from '@/lib/tiktok/search';

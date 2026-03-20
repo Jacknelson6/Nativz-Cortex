@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, Upload, Clock, Sparkles, Globe, ArrowLeft } from 'lucide-react';
+import { RefreshCw, Clock, Sparkles, Globe, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,9 @@ import { BrandDNACards } from './brand-dna-cards';
 import { CompletenessBadge } from './completeness-badge';
 import { OnboardWizard } from './onboard-wizard';
 import { BrandDNAProgress } from './brand-dna-progress';
+import { BrandDNASectionEditor } from './brand-dna-section-editor';
 import { formatRelativeTime } from '@/lib/utils/format';
+import type { BrandGuidelineMetadata } from '@/lib/knowledge/types';
 
 interface BrandDNAViewProps {
   clientId: string;
@@ -38,8 +40,16 @@ export function BrandDNAView({
   const router = useRouter();
   const [generateOpen, setGenerateOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [localMetadata, setLocalMetadata] = useState<BrandGuidelineMetadata | null>(
+    (guideline?.metadata as BrandGuidelineMetadata) ?? null
+  );
 
-  const metadata = (guideline?.metadata as Record<string, unknown>) ?? null;
+  const metadata = (localMetadata ?? guideline?.metadata ?? null) as Record<string, unknown> | null;
+
+  function handleSectionSaved(updated: Partial<BrandGuidelineMetadata>) {
+    setLocalMetadata((prev) => prev ? { ...prev, ...updated } : (updated as BrandGuidelineMetadata));
+  }
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -103,9 +113,7 @@ export function BrandDNAView({
             metadata={metadata}
             clientId={clientId}
             editable
-            onEditSection={(section) => {
-              toast.info(`Edit ${section} — coming soon`);
-            }}
+            onEditSection={setEditingSection}
           />
 
           {/* Full guideline document */}
@@ -142,6 +150,18 @@ export function BrandDNAView({
         existingClientId={clientId}
         existingClientName={clientName}
       />
+
+      {/* Section editor */}
+      {editingSection && metadata && (
+        <BrandDNASectionEditor
+          section={editingSection}
+          clientId={clientId}
+          metadata={metadata as unknown as BrandGuidelineMetadata}
+          open={!!editingSection}
+          onClose={() => setEditingSection(null)}
+          onSaved={handleSectionSaved}
+        />
+      )}
     </div>
   );
 }

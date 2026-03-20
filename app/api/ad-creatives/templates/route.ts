@@ -10,7 +10,7 @@ const querySchema = z.object({
   format: z.string().optional(),
   is_favorite: z.enum(['true', 'false']).optional(),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(24),
+  limit: z.coerce.number().int().min(1).max(2000).default(24),
 });
 
 /**

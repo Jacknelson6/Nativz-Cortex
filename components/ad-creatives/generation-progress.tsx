@@ -32,7 +32,7 @@ export function GenerationProgress({ clientId, batchId, onComplete }: Generation
 
       // Stop polling when done
       const status = data.batch?.status;
-      if (status === 'completed' || status === 'failed' || status === 'partially_completed') {
+      if (status === 'completed' || status === 'failed' || status === 'partial') {
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
@@ -57,7 +57,7 @@ export function GenerationProgress({ clientId, batchId, onComplete }: Generation
   const progress = total > 0 ? (completed / total) * 100 : 0;
   const isDone =
     batch?.status === 'completed' ||
-    batch?.status === 'partially_completed' ||
+    batch?.status === 'partial' ||
     batch?.status === 'failed';
 
   return (
