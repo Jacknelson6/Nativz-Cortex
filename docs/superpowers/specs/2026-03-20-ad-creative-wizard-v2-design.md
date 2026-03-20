@@ -40,17 +40,21 @@ Redesign the wizard as a vertical, always-visible stepper with editable brand co
 
 When a brand is scanned (either via URL input or client selection with a website_url):
 
-1. **Check knowledge first.** Query `client_knowledge_entries` for an existing `brand_guideline` entry for this client. If one exists with `metadata.ad_creative_context`, skip the crawl — use cached data.
-2. **Crawl all pages.** If no cached context exists:
-   - Fetch the homepage, extract all internal links from nav, footer, and `<a>` tags
-   - Discover sitemap.xml and parse it for additional URLs
-   - Crawl all discovered pages (respect robots.txt, 60s total budget, 5 concurrent)
-   - Extract from each page: products (JSON-LD, OG tags, heuristics), images, brand signals
-   - Deduplicate products by name similarity (Levenshtein distance < 3)
-3. **Persist to knowledge.** Save the crawl results as a `client_knowledge_entries` record with `type: 'brand_guideline'` and `metadata.ad_creative_context` containing: brand info, colors, logo, products, media URLs. This is a one-time operation per brand.
+1. **Check knowledge first.** Query `client_knowledge_entries` for an existing `brand_profile` entry for this client where `metadata.ad_creative_context` is not null. If found, skip the crawl — use cached data.
+2. **Crawl all pages (async).** If no cached context exists:
+   - The `POST /api/ad-creatives/crawl-brand` route kicks off the crawl via `after()` and returns immediately with `{ crawlId, status: 'crawling' }`. The UI polls for completion (same pattern as generation batches).
+   - `maxDuration = 300` on the route. The crawl logic uses a shared `AbortController` with a 240s wall-clock timeout.
+   - Fetch the homepage, parse with **cheerio** (already a dependency) to extract all internal links from nav, footer, and `<a>` tags.
+   - Discover sitemap.xml and parse for additional URLs.
+   - Crawl all discovered pages (respect robots.txt, 5 concurrent fetches, shared timeout).
+   - Extract from each page: products (JSON-LD, OG tags, heuristics), images, brand signals.
+   - Deduplicate products by normalized name similarity (lowercase, trim, ratio > 0.85 using a simple inline Levenshtein ratio function — no external library needed).
+3. **Persist to knowledge.** Save the crawl results as a `client_knowledge_entries` record with `type: 'brand_profile'` and `metadata.ad_creative_context` containing: brand info, colors, logo, products, media URLs. Uses the existing `brand_profile` type which is already in the DB constraint. This is a one-time operation per brand.
 4. **Subsequent visits** load from knowledge instantly — no re-crawl.
 
 ### Logo extraction priority
+
+Uses **cheerio** (already installed) to parse the HTML DOM:
 
 1. `<img>` inside `<nav>` or `<header>` with "logo" in class, alt, or src
 2. `<svg>` with "logo" in class or id
@@ -82,11 +86,11 @@ Each product shows: thumbnail image, name, description (truncated), price if fou
 ### Manual product entry
 
 - **"+ Add product" button** — opens inline form: name (required), image (file upload or URL), description (optional)
-- **"Paste product URL" button** — paste any URL, system scrapes that single page for product data and adds it to the grid
+- **"Paste product URL" button** — paste any URL, calls `POST /api/ad-creatives/scrape-product` (new route) which scrapes that single page for product data only (no brand extraction) and returns `{ product: ScrapedProduct }`. Added to the grid client-side.
 
 ### Persistence
 
-Products discovered during crawl are persisted to knowledge (part of the brand_guideline entry). Manually added products for this session are ephemeral unless "Save to brand" is clicked.
+Products discovered during crawl are persisted to knowledge (part of the `brand_profile` entry). Manually added products for this session are ephemeral unless "Save to brand" is clicked.
 
 ---
 
@@ -249,25 +253,90 @@ Landing page shows up to 6 recent clients below the picker:
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `POST /api/ad-creatives/crawl-brand` | POST | Full-site crawl, persists to knowledge |
-| `PATCH /api/ad-creatives/brand-context` | PATCH | Save edited brand context back to knowledge |
+| `POST /api/ad-creatives/crawl-brand` | POST | Full-site crawl (async via `after()`), persists to knowledge. Returns `{ crawlId, status }`. `maxDuration = 300`. |
+| `GET /api/ad-creatives/crawl-brand/[crawlId]` | GET | Poll crawl status. Returns `{ status, brand?, products? }`. |
+| `POST /api/ad-creatives/scrape-product` | POST | Single-page product scrape. Accepts `{ url }`, returns `{ product: ScrapedProduct }`. |
+| `PATCH /api/ad-creatives/brand-context` | PATCH | Save edited brand context back to knowledge entry. |
+
+### API schema change: per-template variation counts
+
+The `POST /api/clients/[id]/ad-creatives/generate` route Zod schema changes from:
+
+```
+numVariations: z.number().int().min(1).max(20)
+```
+
+to:
+
+```
+templateVariations: z.array(z.object({
+  templateId: z.string().uuid(),
+  count: z.number().int().min(1).max(10),
+})).min(1)
+```
+
+The `templateIds` field is removed (derived from `templateVariations`). The orchestrator (`lib/ad-creatives/orchestrate-batch.ts`) changes `buildWorkItems` to read per-template counts from `config.templateVariations` instead of a single `config.numVariations`.
+
+### Recent clients query
+
+The landing page's "recent clients" section is powered by a server component query:
+
+```sql
+SELECT DISTINCT ON (b.client_id) b.client_id, c.slug, c.logo_url,
+  COUNT(*) OVER (PARTITION BY b.client_id) as creative_count,
+  MAX(b.created_at) OVER (PARTITION BY b.client_id) as last_used
+FROM ad_generation_batches b
+JOIN clients c ON c.id = b.client_id
+WHERE b.status IN ('completed', 'partial')
+ORDER BY b.client_id, b.created_at DESC
+LIMIT 6
+```
+
+This runs in the `AdCreativesPage` server component and is passed as a prop to the hub.
+
+### Active generation banner
+
+The banner is scoped to the `AdCreativesHub` component (not a global layout concern). The hub already polls for batch status when a batch is active. The banner is a conditional render at the top of the hub when any batch for the current client has `status = 'generating'`. This is queried via the existing `GET /api/clients/[id]/ad-creatives/batches` endpoint. No new global state infrastructure needed.
 
 ### Modified files
 
 | File | Change |
 |------|--------|
-| `lib/ad-creatives/scrape-brand.ts` | Add full-site crawler with sitemap discovery, nav logo extraction |
-| `components/ad-creatives/ad-creatives-hub.tsx` | Recent clients section, default to gallery for returning clients |
+| `lib/ad-creatives/scrape-brand.ts` | Add full-site crawler with cheerio DOM parsing, sitemap discovery, nav logo extraction |
+| `lib/ad-creatives/orchestrate-batch.ts` | Read per-template counts from `config.templateVariations` |
+| `components/ad-creatives/ad-creatives-hub.tsx` | Recent clients section, default to gallery for returning clients, active generation banner |
 | `components/ad-creatives/ad-wizard.tsx` | Complete rewrite: vertical stepper, editable brand, always-visible templates, per-template counts |
 | `components/ad-creatives/generation-progress.tsx` | Remove (replaced by gallery placeholder cards) |
 | `components/ad-creatives/creative-gallery.tsx` | Add placeholder cards, batch grouping, crossfade transitions |
-| `app/api/clients/[id]/ad-creatives/generate/route.ts` | Return batch metadata for gallery placeholders |
+| `app/api/clients/[id]/ad-creatives/generate/route.ts` | Accept `templateVariations`, return `placeholder_config` in response |
+| `app/admin/ad-creatives/page.tsx` | Add recent clients query to server component |
 
 ### Database
 
-No new tables. Crawl results stored in existing `client_knowledge_entries` table with `type: 'brand_guideline'` and `metadata.ad_creative_context`.
+No new tables. Crawl results stored in existing `client_knowledge_entries` table with `type: 'brand_profile'` and `metadata.ad_creative_context`.
 
-One new column on `ad_generation_batches`: `placeholder_config jsonb` — stores brand colors and template thumbnails for rendering placeholders before images arrive.
+#### Migration: `051_ad_batch_placeholder_config.sql`
+
+```sql
+ALTER TABLE ad_generation_batches
+  ADD COLUMN IF NOT EXISTS placeholder_config jsonb DEFAULT NULL;
+
+COMMENT ON COLUMN ad_generation_batches.placeholder_config IS
+  'Brand colors and template thumbnails for rendering gallery placeholders during generation';
+```
+
+The `placeholder_config` shape:
+
+```typescript
+{
+  brandColors: string[];       // hex colors from brand context
+  templateThumbnails: {        // one per expected creative
+    templateId: string;
+    imageUrl: string;          // template reference image
+    variationIndex: number;
+  }[];
+}
+```
 
 ---
 
