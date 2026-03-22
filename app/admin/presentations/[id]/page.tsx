@@ -10,6 +10,7 @@ import { TierListEditor } from './tier-list-editor';
 import { SocialAuditEditor } from './social-audit-editor';
 import { BenchmarksEditor } from './benchmarks-editor';
 import { ProspectAuditEditor } from './prospect-audit-editor';
+import { SocialResultsEditor } from './social-results-editor';
 
 // ─── Router page ─────────────────────────────────────────────────────────────
 
@@ -147,6 +148,19 @@ export default function PresentationEditorPage() {
   if (presentation.type === 'social_audit') {
     return (
       <SocialAuditEditor
+        presentation={presentation}
+        saving={saving}
+        clients={clients}
+        update={update}
+        onSave={handleManualSave}
+        onBack={() => router.push('/admin/presentations')}
+      />
+    );
+  }
+
+  if (presentation.type === 'social_results') {
+    return (
+      <SocialResultsEditor
         presentation={presentation}
         saving={saving}
         clients={clients}

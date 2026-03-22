@@ -14,6 +14,7 @@ interface ProductGridProps {
   onAddProduct: (product: ScrapedProduct) => void;
   /** Shown above the grid when data comes from Brand DNA, etc. */
   dataSourceHint?: string;
+  itemLabel?: string;
 }
 
 function ProductThumb({ src, alt }: { src: string; alt: string }) {
@@ -39,7 +40,14 @@ function ProductThumb({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-export function ProductGrid({ products, selectedIndices, onToggle, onAddProduct, dataSourceHint }: ProductGridProps) {
+export function ProductGrid({
+  products,
+  selectedIndices,
+  onToggle,
+  onAddProduct,
+  dataSourceHint,
+  itemLabel = 'Products',
+}: ProductGridProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showUrlForm, setShowUrlForm] = useState(false);
   const [addName, setAddName] = useState('');
@@ -92,13 +100,13 @@ export function ProductGrid({ products, selectedIndices, onToggle, onAddProduct,
     return (
       <div className="rounded-2xl border border-dashed border-nativz-border bg-background/35 p-10 text-center space-y-4">
         <Package size={32} className="mx-auto text-text-muted/40" />
-        <p className="text-sm text-text-muted">No products found on this site.</p>
+        <p className="text-sm text-text-muted">No {itemLabel.toLowerCase()} found on this site.</p>
         <div className="flex items-center justify-center gap-2">
           <Button size="sm" variant="outline" onClick={() => setShowAddForm(true)}>
-            <Plus size={14} /> Add product
+            <Plus size={14} /> Add {itemLabel.toLowerCase().replace(/s$/, '')}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setShowUrlForm(true)}>
-            <Link size={14} /> Paste product URL
+            <Link size={14} /> Paste URL
           </Button>
         </div>
       </div>
@@ -161,10 +169,10 @@ export function ProductGrid({ products, selectedIndices, onToggle, onAddProduct,
       {/* Action buttons */}
       <div className="flex items-center gap-2">
         <Button size="sm" variant="outline" onClick={() => setShowAddForm(!showAddForm)}>
-          <Plus size={14} /> Add product
+          <Plus size={14} /> Add {itemLabel.toLowerCase().replace(/s$/, '')}
         </Button>
         <Button size="sm" variant="outline" onClick={() => setShowUrlForm(!showUrlForm)}>
-          <Link size={14} /> Paste product URL
+          <Link size={14} /> Paste URL
         </Button>
         <span className="text-xs text-text-muted ml-auto">
           {selectedIndices.size} of {products.length} selected
