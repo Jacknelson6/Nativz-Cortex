@@ -90,7 +90,7 @@ export function ProductGrid({ products, selectedIndices, onToggle, onAddProduct,
 
   if (products.length === 0 && !showAddForm && !showUrlForm) {
     return (
-      <div className="rounded-xl border border-dashed border-nativz-border bg-surface/50 p-8 text-center space-y-3">
+      <div className="rounded-2xl border border-dashed border-nativz-border bg-background/35 p-10 text-center space-y-4">
         <Package size={32} className="mx-auto text-text-muted/40" />
         <p className="text-sm text-text-muted">No products found on this site.</p>
         <div className="flex items-center justify-center gap-2">
@@ -106,9 +106,11 @@ export function ProductGrid({ products, selectedIndices, onToggle, onAddProduct,
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {dataSourceHint && (
-        <p className="text-[11px] text-accent-text/90 leading-relaxed">{dataSourceHint}</p>
+        <p className="text-xs text-text-muted rounded-xl border border-nativz-border bg-background/40 px-4 py-2.5 leading-relaxed">
+          {dataSourceHint}
+        </p>
       )}
       {/* Product cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">

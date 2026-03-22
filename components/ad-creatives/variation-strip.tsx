@@ -15,15 +15,14 @@ export function VariationStrip({ templates, variations, onVariationChange, onRem
   const countsBreakdown = templates.map((t) => variations.get(t.id) ?? 2).join(' + ');
 
   return (
-    <div className="space-y-3">
-      {/* Selected templates with per-template controls */}
-      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+    <div className="space-y-4">
+      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin -mx-1 px-1">
         {templates.map((template) => {
           const count = variations.get(template.id) ?? 2;
           return (
             <div
               key={template.id}
-              className="shrink-0 rounded-xl border border-nativz-border bg-surface p-2 flex items-center gap-3 min-w-[200px]"
+              className="shrink-0 rounded-xl border border-nativz-border bg-background/50 p-3 flex items-center gap-3 min-w-[220px] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
             >
               {/* Thumbnail */}
               <div className="h-12 w-12 rounded-lg overflow-hidden bg-background shrink-0">
@@ -78,13 +77,12 @@ export function VariationStrip({ templates, variations, onVariationChange, onRem
         })}
       </div>
 
-      {/* Total count */}
-      <div className="flex items-center justify-between text-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pt-2 border-t border-nativz-border/80 text-sm">
         <span className="text-text-muted">
-          {templates.length} template{templates.length !== 1 ? 's' : ''}: {countsBreakdown}
+          {templates.length} template{templates.length !== 1 ? 's' : ''} · variations {countsBreakdown}
         </span>
-        <span className="font-semibold text-text-primary">
-          {totalCount} ad{totalCount !== 1 ? 's' : ''} total
+        <span className="font-semibold text-text-primary tabular-nums">
+          {totalCount} ad{totalCount !== 1 ? 's' : ''} in this batch
         </span>
       </div>
     </div>

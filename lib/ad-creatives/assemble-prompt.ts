@@ -9,10 +9,12 @@ interface AssemblePromptConfig {
   offer: string | null;
   onScreenText: OnScreenText;
   aspectRatio: AspectRatio;
+  /** User-edited style direction from prompt review (optional) */
+  styleDirection?: string;
 }
 
 export function assembleImagePrompt(config: AssemblePromptConfig): string {
-  const { brandContext, promptSchema, productService, offer, onScreenText, aspectRatio } = config;
+  const { brandContext, promptSchema, productService, offer, onScreenText, aspectRatio, styleDirection } = config;
 
   const dimensions = ASPECT_RATIOS.find((r) => r.value === aspectRatio) ?? ASPECT_RATIOS[0];
   const vi = brandContext.visualIdentity;
@@ -101,6 +103,13 @@ export function assembleImagePrompt(config: AssemblePromptConfig): string {
       `\nIf the reference image has callout labels, replace them with feature descriptions relevant to "${productService}".` +
       `\nEvery single word on this image must be about ${brandContext.clientName} and ${productService} — nothing else.`
   );
+
+  const trimmedDirection = styleDirection?.trim();
+  if (trimmedDirection) {
+    sections.push(
+      `USER STYLE DIRECTION (follow in addition to the layout above):\n${trimmedDirection}`,
+    );
+  }
 
   return sections.join('\n\n');
 }

@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { rateLimitByUser } from '@/lib/security/rate-limit';
 import { runGenerationBatch } from '@/lib/ad-creatives/orchestrate-batch';
+import { AD_GENERATE_MAX_PRODUCTS } from '@/lib/ad-creatives/types';
 
 export const maxDuration = 300;
 
@@ -42,6 +43,15 @@ const templateVariationSchema = z.object({
   count: z.number().int().min(1).max(10),
 });
 
+const creativeOverrideSchema = z.object({
+  templateId: z.string().uuid(),
+  variationIndex: z.number().int().min(0).max(25),
+  headline: z.string().min(1).max(200),
+  subheadline: z.string().min(1).max(300),
+  cta: z.string().min(1).max(100),
+  styleNotes: z.string().max(4000).optional(),
+});
+
 const optionalBrandUrl = z.preprocess((val) => {
   if (val === '' || val === undefined || val === null) return undefined;
   return val;
@@ -59,7 +69,7 @@ const bodySchema = z.object({
   aspectRatio: z.enum(['1:1', '9:16', '4:5']),
   onScreenTextMode: z.enum(['ai_generate', 'manual']),
   manualText: manualTextSchema.optional(),
-  products: z.array(productInfoSchema).max(20).optional(),
+  products: z.array(productInfoSchema).max(AD_GENERATE_MAX_PRODUCTS).optional(),
   brandUrl: optionalBrandUrl,
   placeholderConfig: z.object({
     brandColors: z.array(z.string()).optional(),
@@ -69,12 +79,26 @@ const bodySchema = z.object({
       variationIndex: z.number(),
     })).optional(),
   }).optional(),
+  /** Full set from prompt review — one per template × variation slot */
+  creativeOverrides: z.array(creativeOverrideSchema).max(120).optional(),
 }).refine(
   (data) => data.onScreenTextMode !== 'manual' || data.manualText !== undefined,
   { message: 'manualText is required when onScreenTextMode is "manual"', path: ['manualText'] },
 ).refine(
   (data) => (data.templateVariations && data.templateVariations.length > 0) || (data.templateIds && data.templateIds.length > 0),
   { message: 'Either templateVariations or templateIds is required', path: ['templateVariations'] },
+).refine(
+  (data) => {
+    const co = data.creativeOverrides;
+    if (!co?.length) return true;
+    const resolved = data.templateVariations ?? (data.templateIds ?? []).map((id) => ({
+      templateId: id,
+      count: data.numVariations ?? 2,
+    }));
+    const expected = resolved.reduce((sum, tv) => sum + tv.count, 0);
+    return co.length === expected;
+  },
+  { message: 'creativeOverrides must include exactly one entry per template variation', path: ['creativeOverrides'] },
 );
 
 /**
@@ -89,6 +113,7 @@ const bodySchema = z.object({
  * @body offer - Optional promotional offer text
  * @body aspectRatio - Output aspect ratio
  * @body numVariations - Number of variations per template (1-20)
+ * @body products - Up to AD_GENERATE_MAX_PRODUCTS items
  * @body onScreenTextMode - 'ai_generate' or 'manual'
  * @body manualText - Required when onScreenTextMode is 'manual'
  * @returns {{ batchId: string, status: 'queued' }}
@@ -128,7 +153,21 @@ export async function POST(
   const { data: client } = await admin.from('clients').select('id').eq('id', clientId).single();
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
 
-  const { templateVariations, templateIds: legacyTemplateIds, templateSource, productService, offer, aspectRatio, numVariations: legacyNumVariations, onScreenTextMode, manualText, products, brandUrl, placeholderConfig } = parsed.data;
+  const {
+    templateVariations,
+    templateIds: legacyTemplateIds,
+    templateSource,
+    productService,
+    offer,
+    aspectRatio,
+    numVariations: legacyNumVariations,
+    onScreenTextMode,
+    manualText,
+    products,
+    brandUrl,
+    placeholderConfig,
+    creativeOverrides,
+  } = parsed.data;
 
   // Normalize to templateVariations format
   const resolvedVariations = templateVariations ?? (legacyTemplateIds ?? []).map((id) => ({
@@ -150,6 +189,7 @@ export async function POST(
     templateSource,
     ...(products && { products }),
     ...(brandUrl && { brandUrl }),
+    ...(creativeOverrides && creativeOverrides.length > 0 ? { creativeOverrides } : {}),
   };
 
   // Create batch record

@@ -450,7 +450,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
             <AdCreativesClientPick
               clients={clients}
               recentClients={recentClients}
-              onSelectRoster={(id) => void handleClientSelect(id)}
+              onSelectRoster={(id) => void handleClientSelect(id, { preferGenerateTab: true })}
               onSelectRecent={handleRecentClientClick}
             />
           )}

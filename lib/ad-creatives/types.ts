@@ -44,6 +44,9 @@ export const BATCH_STATUSES = [
   'partial',
 ] as const;
 
+/** Cap for `products` on POST /api/clients/[id]/ad-creatives/generate (Zod + client must match). */
+export const AD_GENERATE_MAX_PRODUCTS = 60;
+
 export type AdVertical = (typeof AD_VERTICALS)[number];
 export type AdCategory = (typeof AD_CATEGORIES)[number];
 export type AspectRatio = (typeof ASPECT_RATIOS)[number]['value'];
@@ -125,6 +128,17 @@ export type TemplateVariation = {
   count: number;
 };
 
+/** Per-creative copy from interactive prompt review (must match template × variation slots). */
+export type CreativeOverride = {
+  templateId: string;
+  variationIndex: number;
+  headline: string;
+  subheadline: string;
+  cta: string;
+  /** Extra style direction appended to the image prompt */
+  styleNotes?: string;
+};
+
 export type AdGenerationConfig = {
   aspectRatio: AspectRatio;
   /** @deprecated Use templateVariations instead */
@@ -140,6 +154,11 @@ export type AdGenerationConfig = {
   products?: ProductOfferConfig[];
   /** Brand URL that was scraped for context */
   brandUrl?: string;
+  /**
+   * When set (full set for all slots), orchestrator uses this copy and skips AI copy generation.
+   * Populated from interactive prompt review approvals.
+   */
+  creativeOverrides?: CreativeOverride[];
 };
 
 // ---------------------------------------------------------------------------

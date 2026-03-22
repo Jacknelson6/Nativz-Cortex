@@ -14,6 +14,7 @@ import type {
   AdGenerationBatch,
   AdGenerationConfig,
   AdPromptTemplate,
+  CreativeOverride,
   KandyTemplate,
   OnScreenText,
 } from './types';
@@ -61,28 +62,38 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
     // 3. Resolve templates
     const templates = await resolveTemplates(config);
 
-    // 4. Generate copy if needed
-    // Resolve total unique copy needed from templateVariations or legacy numVariations
+    // 4. Generate copy if needed (skipped when full creativeOverrides from prompt review)
     const maxVariations = config.templateVariations
       ? Math.max(...config.templateVariations.map((tv) => tv.count), 1)
       : (config.numVariations ?? 2);
 
+    const expectedSlots = expectedWorkItemCount(config);
+    const overrides = config.creativeOverrides;
+    const fullReview =
+      !!overrides?.length &&
+      overrides.length === expectedSlots;
+
+    const overrideMap = fullReview ? buildCreativeOverrideMap(overrides) : null;
+
     let copyVariations: OnScreenText[] = [];
-    if (config.onScreenText === 'ai_generate') {
-      copyVariations = await generateAdCopy({
-        brandContext,
-        productService: config.productService,
-        offer: config.offer || null,
-        count: maxVariations,
-      });
+    if (!fullReview) {
+      if (config.onScreenText === 'ai_generate') {
+        copyVariations = await generateAdCopy({
+          brandContext,
+          productService: config.productService,
+          offer: config.offer || null,
+          count: maxVariations,
+        });
+      } else {
+        const staticText = config.onScreenText as OnScreenText;
+        copyVariations = Array.from({ length: maxVariations }, () => staticText);
+      }
     } else {
-      // Use the same provided text for all variations
-      const staticText = config.onScreenText as OnScreenText;
-      copyVariations = Array.from({ length: maxVariations }, () => staticText);
+      copyVariations = [{ headline: ' ', subheadline: ' ', cta: ' ' }];
     }
 
     // 5. Build work items (template x variation)
-    const workItems = buildWorkItems(templates, copyVariations, config);
+    const workItems = buildWorkItems(templates, copyVariations, config, overrideMap);
 
     console.log(
       `[orchestrate-batch] batch ${batchId}: ${workItems.length} work items across ${templates.length} template(s)`,
@@ -131,6 +142,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
               offer: config.offer || null,
               onScreenText: item.onScreenText,
               aspectRatio: config.aspectRatio,
+              styleDirection: item.styleDirection,
             });
             lastPrompt = prompt;
 
@@ -338,33 +350,85 @@ interface WorkItem {
   promptSchema: KandyTemplate['prompt_schema'];
   referenceImageUrl: string | null;
   onScreenText: OnScreenText;
+  styleDirection?: string;
+}
+
+function overrideKey(templateId: string, variationIndex: number): string {
+  return `${templateId}:${variationIndex}`;
+}
+
+function expectedWorkItemCount(config: AdGenerationConfig): number {
+  if (config.templateVariations && config.templateVariations.length > 0) {
+    return config.templateVariations.reduce((sum, tv) => sum + tv.count, 0);
+  }
+  const n = config.templateIds?.length ?? 0;
+  return n * (config.numVariations ?? 2);
+}
+
+/**
+ * Returns a map when creativeOverrides is a non-empty, complete set for every
+ * template × variation slot; otherwise null (fall back to AI/manual pool).
+ */
+function buildCreativeOverrideMap(
+  overrides: CreativeOverride[] | undefined,
+): Map<string, { onScreenText: OnScreenText; styleDirection?: string }> | null {
+  if (!overrides?.length) return null;
+  const map = new Map<string, { onScreenText: OnScreenText; styleDirection?: string }>();
+  for (const o of overrides) {
+    map.set(overrideKey(o.templateId, o.variationIndex), {
+      onScreenText: {
+        headline: o.headline,
+        subheadline: o.subheadline,
+        cta: o.cta,
+      },
+      styleDirection: o.styleNotes?.trim() || undefined,
+    });
+  }
+  return map;
 }
 
 function buildWorkItems(
   templates: ResolvedTemplate[],
   copyVariations: OnScreenText[],
   config: AdGenerationConfig,
+  overrideMap: Map<string, { onScreenText: OnScreenText; styleDirection?: string }> | null,
 ): WorkItem[] {
   const items: WorkItem[] = [];
+  const templateById = new Map(templates.map((t) => [t.id, t]));
 
-  // Use per-template variation counts if available (v2), otherwise fall back to uniform count
-  const variationMap = new Map<string, number>();
+  /** Match preview-prompts + wizard: same order as `templateVariations` (not DB `.in()` order). */
   if (config.templateVariations && config.templateVariations.length > 0) {
     for (const tv of config.templateVariations) {
-      variationMap.set(tv.templateId, tv.count);
+      const template = templateById.get(tv.templateId);
+      if (!template) continue;
+      for (let i = 0; i < tv.count; i++) {
+        const fromOverride = overrideMap?.get(overrideKey(template.id, i));
+        const copy = fromOverride?.onScreenText ?? copyVariations[i % copyVariations.length];
+        items.push({
+          templateId: template.id,
+          templateSource: template.source,
+          promptSchema: template.promptSchema,
+          referenceImageUrl: template.referenceImageUrl,
+          onScreenText: copy,
+          styleDirection: fromOverride?.styleDirection,
+        });
+      }
     }
+    return items;
   }
 
   for (const template of templates) {
-    const count = variationMap.get(template.id) ?? config.numVariations ?? copyVariations.length;
+    const count = config.numVariations ?? copyVariations.length;
     for (let i = 0; i < count; i++) {
-      const copy = copyVariations[i % copyVariations.length];
+      const fromOverride = overrideMap?.get(overrideKey(template.id, i));
+      const copy = fromOverride?.onScreenText ?? copyVariations[i % copyVariations.length];
       items.push({
         templateId: template.id,
         templateSource: template.source,
         promptSchema: template.promptSchema,
         referenceImageUrl: template.referenceImageUrl,
         onScreenText: copy,
+        styleDirection: fromOverride?.styleDirection,
       });
     }
   }

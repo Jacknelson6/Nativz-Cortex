@@ -23,12 +23,20 @@ import { BrandMediaPanel } from './brand-media-panel';
 import { BrandDnaGuidelinePanel } from './brand-dna-guideline-panel';
 import { BrandDnaWizardRail } from './brand-dna-wizard-rail';
 import { PromptReview, type PromptPreviewData } from './prompt-review';
-import type { AdPromptTemplate, AspectRatio, KandyTemplate } from '@/lib/ad-creatives/types';
+import { AD_GENERATE_MAX_PRODUCTS, type AdPromptTemplate, type AspectRatio, type KandyTemplate } from '@/lib/ad-creatives/types';
 import type { WizardTemplate } from '@/lib/ad-creatives/wizard-template';
 import { adPromptRowToWizardTemplate, withKandyOrigin } from '@/lib/ad-creatives/wizard-template';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
 import { isStrongProductCandidate } from '@/lib/ad-creatives/product-name-filters';
 import { formatApiValidationError } from '@/lib/utils/format-api-validation-error';
+import {
+  AD_WIZARD_STEP_META,
+  AdWizardFooter,
+  AdWizardProgress,
+  AdWizardShell,
+  WizardSegmentedControl,
+  WizardStepHeader,
+} from './ad-wizard-chrome';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -119,16 +127,6 @@ const RATIO_OPTIONS: { value: AspectRatio; label: string; icon: typeof Square }[
   { value: '1:1', label: 'Square', icon: Square },
   { value: '9:16', label: 'Story', icon: Smartphone },
   { value: '4:5', label: 'Portrait', icon: RectangleVertical },
-];
-
-const FLOW_STEPS = [
-  { id: 'brand' as const, title: 'Brand & assets' },
-  { id: 'products' as const, title: 'Products & services' },
-  { id: 'templates' as const, title: 'Templates' },
-  { id: 'format' as const, title: 'Aspect ratio' },
-  { id: 'offers' as const, title: 'Offers' },
-  { id: 'copy' as const, title: 'Headlines & CTAs' },
-  { id: 'generate' as const, title: 'Generate' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -246,7 +244,7 @@ export function AdWizard({
 
       setTemplates([...kandy, ...custom]);
     } catch {
-      // Silent
+      toast.error('Could not load templates. Refresh the page or try again.');
     } finally {
       setLoadingTemplates(false);
     }
@@ -345,6 +343,10 @@ export function AdWizard({
 
   async function handlePreviewPrompts() {
     if (!brand || selectedTemplateIds.size === 0) return;
+    if (scrapedProducts.length > 0 && selectedProductIndices.size === 0) {
+      toast.error('Select at least one product before previewing prompts.');
+      return;
+    }
     setLoadingPreviews(true);
 
     try {
@@ -393,12 +395,41 @@ export function AdWizard({
   const activeTemplateSource = templateMode === 'kandy' ? ('kandy' as const) : ('custom' as const);
   const totalAds = selectedTemplates.reduce((sum, t) => sum + (variations.get(t.id) ?? 2), 0);
 
-  async function handleGenerate() {
+  async function handleGenerate(editedPreviews?: PromptPreviewData[] | null) {
     if (!brand || selectedTemplateIds.size === 0) return;
+
+    if (scrapedProducts.length > 0 && selectedProductIndices.size === 0) {
+      toast.error('Select at least one product, or go back and adjust your catalog.');
+      return;
+    }
+
+    if (editedPreviews?.length) {
+      if (editedPreviews.length !== totalAds) {
+        toast.error('Your preview list does not match the current template selection. Close review and load previews again.');
+        return;
+      }
+      for (const p of editedPreviews) {
+        const h = p.copy.headline.trim();
+        const s = p.copy.subheadline.trim();
+        const c = p.copy.cta.trim();
+        if (!h || !s || !c) {
+          toast.error('Each creative needs a headline, subheadline, and CTA. Expand any row with empty fields.');
+          return;
+        }
+      }
+    }
+
     setGenerating(true);
 
     try {
       const selectedProducts = Array.from(selectedProductIndices).map((i) => scrapedProducts[i]).filter(Boolean);
+
+      if (selectedProducts.length > AD_GENERATE_MAX_PRODUCTS) {
+        toast.message(
+          `Including the first ${AD_GENERATE_MAX_PRODUCTS} of ${selectedProducts.length} selected products in this batch. Deselect extras or run generation again for the rest.`,
+        );
+      }
+      const productsForBatch = selectedProducts.slice(0, AD_GENERATE_MAX_PRODUCTS);
 
       function sanitizeProductImageUrl(u: string | null): string | null {
         if (!u?.trim()) return null;
@@ -411,7 +442,7 @@ export function AdWizard({
         }
       }
 
-      const productConfigs = selectedProducts.map((p) => ({
+      const productConfigs = productsForBatch.map((p) => ({
         product: {
           name: p.name.slice(0, 200),
           imageUrl: sanitizeProductImageUrl(p.imageUrl),
@@ -442,7 +473,7 @@ export function AdWizard({
       const body: Record<string, unknown> = {
         templateVariations,
         templateSource: activeTemplateSource,
-        productService: brand.name ?? selectedProducts.map((p) => p.name).join(', '),
+        productService: brand.name ?? productsForBatch.map((p) => p.name).join(', '),
         offer: offerText,
         onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
         aspectRatio,
@@ -463,6 +494,17 @@ export function AdWizard({
         };
       }
 
+      if (editedPreviews?.length) {
+        body.creativeOverrides = editedPreviews.map((p) => ({
+          templateId: p.templateId,
+          variationIndex: p.variationIndex,
+          headline: p.copy.headline.trim().slice(0, 200),
+          subheadline: p.copy.subheadline.trim().slice(0, 300),
+          cta: p.copy.cta.trim().slice(0, 100),
+          ...(p.styleNotes.trim() ? { styleNotes: p.styleNotes.trim().slice(0, 4000) } : {}),
+        }));
+      }
+
       const res = await fetch(`/api/clients/${clientId}/ad-creatives/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -481,6 +523,7 @@ export function AdWizard({
       if (onGenerationStart && batchId) {
         onGenerationStart(batchId, placeholderConfig);
       }
+      setPromptPreviews(null);
       setGenerating(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Generation failed');
@@ -488,18 +531,30 @@ export function AdWizard({
     }
   }
 
-  const currentStep = FLOW_STEPS[flowIdx] ?? FLOW_STEPS[0];
+  const currentStep = AD_WIZARD_STEP_META[flowIdx] ?? AD_WIZARD_STEP_META[0];
+
+  const productsDnaAside =
+    brandContextSource === 'brand_dna' && currentStep.id === 'products' ? (
+      <p className="text-[11px] text-accent-text/90 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 max-w-[220px] leading-snug">
+        Product list is synced from Brand DNA. Edit the catalog there for lasting changes.
+      </p>
+    ) : undefined;
 
   function canAdvanceFromCurrentStep(): boolean {
     switch (currentStep.id) {
       case 'brand':
         return !!brand;
+      case 'products':
+        if (scrapedProducts.length === 0) return true;
+        return selectedProductIndices.size > 0;
       case 'templates':
         return selectedTemplateIds.size > 0 && !loadingTemplates;
       default:
         return true;
     }
   }
+
+  const aspectLabel = RATIO_OPTIONS.find((r) => r.value === aspectRatio)?.label ?? aspectRatio;
 
   // ---------------------------------------------------------------------------
   // Render — one step at a time
@@ -510,333 +565,288 @@ export function AdWizard({
       className={
         brandContextSource === 'brand_dna'
           ? 'flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px] lg:gap-8 lg:items-start w-full max-w-[1600px] mx-auto px-1'
-          : 'max-w-4xl mx-auto space-y-4'
+          : 'w-full max-w-3xl mx-auto px-1 space-y-6'
       }
     >
-      <div className="min-w-0 space-y-4">
-      <div className="flex items-center justify-between gap-3 px-1">
-        <p className="text-xs text-text-muted">
-          Step {flowIdx + 1} of {FLOW_STEPS.length}
-        </p>
-        <div className="text-right">
-          <p className="text-sm font-semibold text-text-primary">{currentStep.title}</p>
-          {brandContextSource === 'brand_dna' && currentStep.id === 'products' && (
-            <p className="text-[10px] text-accent-text/90 mt-0.5 max-w-[220px] ml-auto leading-snug">
-              From Brand DNA — edit the list under Brand DNA → Product catalog
-            </p>
-          )}
-        </div>
-      </div>
+      <div className="min-w-0 space-y-5">
+        <AdWizardProgress currentIndex={flowIdx} onStepClick={(i) => setFlowIdx(i)} />
 
-      <div className="rounded-2xl border border-nativz-border bg-surface p-5 min-h-[280px]">
-        {currentStep.id === 'brand' && (
-          <div className="space-y-6">
-            {brandContextSource === 'brand_dna' && brand && (
-              <p className="text-xs text-text-muted rounded-lg border border-accent/20 bg-accent/5 px-3 py-2">
-                <span className="font-medium text-accent-text">Brand DNA</span>
-                {' — '}
-                Colors, logo, and copy cues below match your generated guideline. Adjust in Brand DNA if something looks off.
-              </p>
-            )}
-            {brand ? (
-              <BrandEditor brand={brand} onBrandChange={setBrand} clientId={clientId || undefined} />
-            ) : (
-              <div className="rounded-xl border border-dashed border-nativz-border bg-background/40 p-8 text-center">
-                <p className="text-sm text-text-muted">Waiting for brand scan...</p>
-              </div>
-            )}
-            {brand && brandContextSource === 'brand_dna' && clientId && (
-              <BrandDnaGuidelinePanel clientId={clientId} clientSlug={clientSlug} />
-            )}
-            {brand && mediaUrls.length > 0 && (
-              <div className="pt-2 border-t border-nativz-border">
-                <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Images from your site</p>
-                <BrandMediaPanel
-                  mediaUrls={mediaUrls}
-                  selectedUrls={selectedMediaUrls}
-                  onToggle={toggleMediaUrl}
-                  onUpload={handleMediaUpload}
-                  clientId={clientId || undefined}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {currentStep.id === 'products' && (
-          <ProductGrid
-            products={scrapedProducts}
-            selectedIndices={selectedProductIndices}
-            onToggle={toggleProductSelection}
-            onAddProduct={addProduct}
-            dataSourceHint={
-              brandContextSource === 'brand_dna'
-                ? 'Product names and images from Brand DNA (structured catalog).'
-                : undefined
-            }
+        <AdWizardShell>
+          <WizardStepHeader
+            title={currentStep.title}
+            description={currentStep.description}
+            aside={productsDnaAside}
           />
-        )}
 
-        {currentStep.id === 'templates' && (
-          <>
-            <div className="flex flex-col gap-3 mb-4">
-              <p className="text-xs text-text-muted">
-                Use Nativz Kandy layouts, or import static ads from a competitor&apos;s{' '}
-                <span className="text-text-secondary">Meta Ad Library</span> page (same client).
-              </p>
-              <div className="flex rounded-xl border border-nativz-border bg-background/40 p-1 gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTemplateMode('kandy');
-                    setSelectedTemplateIds(new Set());
-                    setVariations(new Map());
-                  }}
-                  className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all cursor-pointer ${
-                    templateMode === 'kandy'
-                      ? 'bg-surface text-text-primary shadow-sm border border-nativz-border'
-                      : 'text-text-muted hover:text-text-secondary'
-                  }`}
-                >
-                  <LayoutGrid size={14} />
-                  Nativz catalog
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTemplateMode('ad_library');
-                    setSelectedTemplateIds(new Set());
-                    setVariations(new Map());
-                  }}
-                  className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all cursor-pointer ${
-                    templateMode === 'ad_library'
-                      ? 'bg-surface text-text-primary shadow-sm border border-nativz-border'
-                      : 'text-text-muted hover:text-text-secondary'
-                  }`}
-                >
-                  <Library size={14} />
-                  Ad library import
-                </button>
-              </div>
+          {currentStep.id === 'brand' && (
+            <div className="space-y-8">
+              {brandContextSource === 'brand_dna' && brand && (
+                <p className="text-sm text-text-muted rounded-xl border border-accent/20 bg-accent/[0.07] px-4 py-3 leading-relaxed">
+                  <span className="font-medium text-accent-text">Brand DNA</span>
+                  {' — '}
+                  Colors, logo, and copy cues match your guideline. Adjust in Brand DNA if something looks off.
+                </p>
+              )}
+              {brand ? (
+                <BrandEditor brand={brand} onBrandChange={setBrand} clientId={clientId || undefined} />
+              ) : (
+                <div className="rounded-xl border border-dashed border-nativz-border bg-background/40 p-10 text-center">
+                  <p className="text-sm text-text-muted">Waiting for brand scan…</p>
+                </div>
+              )}
+              {brand && brandContextSource === 'brand_dna' && clientId && (
+                <BrandDnaGuidelinePanel clientId={clientId} clientSlug={clientSlug} />
+              )}
+              {brand && mediaUrls.length > 0 && (
+                <div className="pt-6 border-t border-nativz-border/80 space-y-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Site imagery</p>
+                  <BrandMediaPanel
+                    mediaUrls={mediaUrls}
+                    selectedUrls={selectedMediaUrls}
+                    onToggle={toggleMediaUrl}
+                    onUpload={handleMediaUpload}
+                    clientId={clientId || undefined}
+                  />
+                </div>
+              )}
             </div>
-            {loadingTemplates ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 size={24} className="animate-spin text-text-muted" />
-              </div>
-            ) : (
-              <TemplateGrid
-                templates={templates}
-                templateMode={templateMode}
-                selectedIds={selectedTemplateIds}
-                onToggle={toggleTemplate}
-                clientId={clientId}
-                onTemplatesRefresh={fetchTemplates}
-                recommendedVertical={recommendedVertical}
-              />
-            )}
-          </>
-        )}
+          )}
 
-        {currentStep.id === 'format' && (
-          <div className="space-y-2">
-            <label className="text-xs text-text-muted uppercase tracking-wide">Aspect ratio</label>
-            <p className="text-xs text-text-muted mb-3">
-              Pick the shape that matches where these ads will run.
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
+          {currentStep.id === 'products' && (
+            <ProductGrid
+              products={scrapedProducts}
+              selectedIndices={selectedProductIndices}
+              onToggle={toggleProductSelection}
+              onAddProduct={addProduct}
+              dataSourceHint={
+                brandContextSource === 'brand_dna'
+                  ? 'Names and images from Brand DNA (structured catalog).'
+                  : undefined
+              }
+            />
+          )}
+
+          {currentStep.id === 'templates' && (
+            <div className="space-y-6">
+              <WizardSegmentedControl
+                value={templateMode}
+                onChange={(mode) => {
+                  setTemplateMode(mode);
+                  setSelectedTemplateIds(new Set());
+                  setVariations(new Map());
+                }}
+                options={[
+                  { value: 'kandy' as const, label: 'Nativz catalog', icon: LayoutGrid },
+                  { value: 'ad_library' as const, label: 'Ad library', icon: Library },
+                ]}
+              />
+              {loadingTemplates ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-text-muted">
+                  <Loader2 size={28} className="animate-spin opacity-80" />
+                  <p className="text-sm">Loading templates…</p>
+                </div>
+              ) : (
+                <TemplateGrid
+                  templates={templates}
+                  templateMode={templateMode}
+                  selectedIds={selectedTemplateIds}
+                  onToggle={toggleTemplate}
+                  clientId={clientId}
+                  onTemplatesRefresh={fetchTemplates}
+                  recommendedVertical={recommendedVertical}
+                />
+              )}
+            </div>
+          )}
+
+          {currentStep.id === 'format' && (
+            <div className="flex flex-wrap gap-2">
               {RATIO_OPTIONS.map(({ value, label, icon: Icon }) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setAspectRatio(value)}
-                  className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all cursor-pointer ${
+                  className={`inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all cursor-pointer min-w-[120px] justify-center ${
                     aspectRatio === value
-                      ? 'border-accent bg-accent-surface text-accent-text'
-                      : 'border-nativz-border bg-background text-text-muted hover:border-accent/30'
+                      ? 'border-accent-border bg-accent-surface text-accent-text shadow-[0_0_0_1px_rgba(59,130,246,0.15)]'
+                      : 'border-nativz-border bg-background/60 text-text-muted hover:border-accent/25 hover:text-text-secondary'
                   }`}
                 >
-                  <Icon size={15} />
+                  <Icon size={16} className="opacity-90" />
                   {label}
                 </button>
               ))}
             </div>
-          </div>
-        )}
+          )}
 
-        {currentStep.id === 'offers' && (
-          <div className="space-y-3">
-            <label className="text-xs text-text-muted uppercase tracking-wide">Promotional offer</label>
-            <p className="text-xs text-text-muted">
-              Optional. If you&apos;re running a sale, free trial, or limited-time deal, add it here so copy and prompts stay accurate.
-            </p>
-            <textarea
-              value={offerText}
-              onChange={(e) => setOfferText(e.target.value.slice(0, 300))}
-              placeholder="e.g., 20% off first order · Free shipping this week · Buy one get one"
-              rows={4}
-              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 outline-none resize-y min-h-[100px]"
-            />
-            <p className="text-[10px] text-text-muted">{offerText.length}/300</p>
-          </div>
-        )}
+          {currentStep.id === 'offers' && (
+            <div className="space-y-3 max-w-xl">
+              <textarea
+                value={offerText}
+                onChange={(e) => setOfferText(e.target.value.slice(0, 300))}
+                placeholder="e.g. 20% off first order, free shipping this week, buy one get one"
+                rows={5}
+                className="w-full rounded-xl border border-nativz-border bg-background px-4 py-3 text-sm text-text-primary placeholder:text-text-muted/45 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25 resize-y min-h-[120px]"
+              />
+              <p className="text-xs text-text-muted tabular-nums">{offerText.length}/300</p>
+            </div>
+          )}
 
-        {currentStep.id === 'copy' && (
-          <div className="space-y-5">
-            <div className="space-y-2">
-              <label className="text-xs text-text-muted uppercase tracking-wide">Ad copy</label>
-              <p className="text-xs text-text-muted">
-                Use AI for variations, or write your own headline, subheadline, and CTA. You can tweak wording anytime before generating.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCopyMode('ai')}
-                  className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all cursor-pointer ${
-                    copyMode === 'ai'
-                      ? 'border-accent bg-accent-surface text-accent-text'
-                      : 'border-nativz-border bg-background text-text-muted hover:border-accent/30'
-                  }`}
-                >
-                  <Sparkles size={15} />
-                  AI-generated
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCopyMode('manual')}
-                  className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all cursor-pointer ${
-                    copyMode === 'manual'
-                      ? 'border-accent bg-accent-surface text-accent-text'
-                      : 'border-nativz-border bg-background text-text-muted hover:border-accent/30'
-                  }`}
-                >
-                  <Type size={15} />
-                  Manual
-                </button>
-              </div>
+          {currentStep.id === 'copy' && (
+            <div className="space-y-6 max-w-xl">
+              <WizardSegmentedControl
+                value={copyMode}
+                onChange={setCopyMode}
+                options={[
+                  { value: 'ai' as const, label: 'AI-generated', icon: Sparkles },
+                  { value: 'manual' as const, label: 'Manual', icon: Type },
+                ]}
+              />
 
               {copyMode === 'ai' && (
-                <p className="text-xs text-text-muted bg-background/50 rounded-lg px-3 py-2 border border-nativz-border">
-                  Headlines, subheadlines, and CTAs will be AI-generated from your brand voice. Each variation gets unique copy.
+                <p className="text-sm text-text-muted rounded-xl border border-nativz-border bg-background/40 px-4 py-3 leading-relaxed">
+                  We&apos;ll write headlines, subheads, and CTAs from your brand voice. Each variation gets distinct copy.
                 </p>
               )}
 
               {copyMode === 'manual' && (
-                <div className="space-y-2 bg-background/50 rounded-lg p-3 border border-nativz-border">
+                <div className="space-y-3 rounded-xl border border-nativz-border bg-background/40 p-4">
                   <input
                     value={manualHeadline}
                     onChange={(e) => setManualHeadline(e.target.value)}
-                    placeholder="Headline (e.g., Real Gold. Real Value.)"
-                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                    placeholder="Headline (e.g. Real gold. Real value.)"
+                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted/45 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
                   />
                   <input
                     value={manualSubheadline}
                     onChange={(e) => setManualSubheadline(e.target.value)}
                     placeholder="Subheadline (optional)"
-                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted/45 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
                   />
                   <input
                     value={manualCta}
                     onChange={(e) => setManualCta(e.target.value)}
-                    placeholder="CTA (e.g., Shop now)"
-                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                    placeholder="CTA (e.g. Shop now)"
+                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted/45 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
                   />
                 </div>
               )}
             </div>
-          </div>
-        )}
+          )}
 
-        {currentStep.id === 'generate' && !brand && (
-          <p className="text-sm text-text-muted text-center py-8">
-            Brand context is missing. Go back to the first step or run a new scan.
-          </p>
-        )}
+          {currentStep.id === 'generate' && !brand && (
+            <p className="text-sm text-text-muted text-center py-12">
+              Brand context is missing. Go back to the first step or run a new scan.
+            </p>
+          )}
 
-        {currentStep.id === 'generate' && brand && (
-          <div className="space-y-4">
-            <VariationStrip
-              templates={selectedTemplates}
-              variations={variations}
-              onVariationChange={handleVariationChange}
-              onRemove={handleRemoveTemplate}
-            />
+          {currentStep.id === 'generate' && brand && (
+            <div className="space-y-8">
+              <div className="rounded-xl border border-nativz-border bg-background/35 px-4 py-4 sm:px-5 space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Batch summary</p>
+                <p className="text-sm text-text-primary">
+                  <span className="font-semibold tabular-nums">{totalAds}</span>
+                  {' '}
+                  {totalAds === 1 ? 'ad' : 'ads'} · {aspectLabel} ·{' '}
+                  {copyMode === 'ai' ? 'AI copy' : 'Manual copy'}
+                </p>
+                <p className="text-xs text-text-muted leading-relaxed">
+                  Adjust per-template variation counts below. Use interactive mode if you want to edit prompts before
+                  images run.
+                </p>
+              </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => { setMode('auto'); setPromptPreviews(null); }}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
-                  mode === 'auto'
-                    ? 'border-accent bg-accent-surface text-accent-text'
-                    : 'border-nativz-border bg-background text-text-muted hover:border-accent/30'
-                }`}
-              >
-                <Zap size={13} /> Auto
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('interactive')}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
-                  mode === 'interactive'
-                    ? 'border-accent bg-accent-surface text-accent-text'
-                    : 'border-nativz-border bg-background text-text-muted hover:border-accent/30'
-                }`}
-              >
-                <Eye size={13} /> Interactive
-              </button>
-              <span className="text-[10px] text-text-muted ml-1">
-                {mode === 'auto' ? 'Generate immediately' : 'Review prompts first'}
-              </span>
-            </div>
-
-            {promptPreviews && mode === 'interactive' && (
-              <PromptReview
-                previews={promptPreviews}
-                onApproveAll={() => {
-                  handleGenerate();
-                }}
-                onCancel={() => setPromptPreviews(null)}
-                generating={generating}
+              <VariationStrip
+                templates={selectedTemplates}
+                variations={variations}
+                onVariationChange={handleVariationChange}
+                onRemove={handleRemoveTemplate}
               />
-            )}
 
-            {!promptPreviews && (
-              <div className="flex flex-col sm:flex-row gap-2">
-                {mode === 'interactive' && (
+              <div className="rounded-xl border border-nativz-border bg-background/35 p-4 sm:p-5 space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-text-primary">Generation mode</p>
+                  <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                    Auto sends the batch immediately. Interactive loads prompt previews so you can tweak copy and style
+                    notes first.
+                  </p>
+                </div>
+                <WizardSegmentedControl
+                  value={mode}
+                  onChange={(m) => {
+                    setMode(m);
+                    if (m === 'auto') setPromptPreviews(null);
+                  }}
+                  options={[
+                    { value: 'auto' as const, label: 'Auto', icon: Zap },
+                    { value: 'interactive' as const, label: 'Interactive', icon: Eye },
+                  ]}
+                />
+              </div>
+
+              {promptPreviews && mode === 'interactive' && (
+                <PromptReview
+                  previews={promptPreviews}
+                  onApproveAll={(edited) => {
+                    void handleGenerate(edited);
+                  }}
+                  onCancel={() => setPromptPreviews(null)}
+                  generating={generating}
+                />
+              )}
+
+              {!promptPreviews && (
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {mode === 'interactive' && (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="flex-1 h-12"
+                      onClick={handlePreviewPrompts}
+                      disabled={
+                        loadingPreviews ||
+                        totalAds === 0 ||
+                        (scrapedProducts.length > 0 && selectedProductIndices.size === 0)
+                      }
+                    >
+                      {loadingPreviews ? (
+                        <>
+                          <Loader2 size={18} className="animate-spin" /> Loading previews…
+                        </>
+                      ) : (
+                        <>
+                          <Eye size={18} /> Review prompts ({totalAds})
+                        </>
+                      )}
+                    </Button>
+                  )}
                   <Button
                     size="lg"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={handlePreviewPrompts}
-                    disabled={loadingPreviews || totalAds === 0}
+                    className={`h-12 ${mode === 'interactive' ? 'flex-1' : 'w-full'}`}
+                    onClick={() => void handleGenerate()}
+                    disabled={
+                      generating ||
+                      totalAds === 0 ||
+                      (scrapedProducts.length > 0 && selectedProductIndices.size === 0)
+                    }
                   >
-                    {loadingPreviews ? (
-                      <><Loader2 size={16} className="animate-spin" /> Loading previews...</>
+                    {generating ? (
+                      <>
+                        <Loader2 size={18} className="animate-spin" /> Generating…
+                      </>
                     ) : (
-                      <><Eye size={16} /> Review prompts ({totalAds})</>
+                      <>
+                        <Sparkles size={18} /> Generate {totalAds} {totalAds === 1 ? 'ad' : 'ads'}
+                      </>
                     )}
                   </Button>
-                )}
-                <Button
-                  size="lg"
-                  className={mode === 'interactive' ? 'flex-1' : 'w-full'}
-                  onClick={handleGenerate}
-                  disabled={generating || totalAds === 0}
-                >
-                  {generating ? (
-                    <><Loader2 size={16} className="animate-spin" /> Generating...</>
-                  ) : (
-                    <><Sparkles size={16} /> Generate {totalAds} ad{totalAds !== 1 ? 's' : ''}</>
-                  )}
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                </div>
+              )}
+            </div>
+          )}
+        </AdWizardShell>
 
-      {currentStep.id !== 'generate' && (
-        <div className="flex items-center justify-between gap-3">
+        <AdWizardFooter>
           <Button
             type="button"
             variant="outline"
@@ -845,23 +855,16 @@ export function AdWizard({
           >
             Back
           </Button>
-          <Button
-            type="button"
-            disabled={!canAdvanceFromCurrentStep() || flowIdx >= FLOW_STEPS.length - 1}
-            onClick={() => setFlowIdx((i) => Math.min(FLOW_STEPS.length - 1, i + 1))}
-          >
-            Continue
-          </Button>
-        </div>
-      )}
-
-      {currentStep.id === 'generate' && (
-        <div className="flex justify-start">
-          <Button type="button" variant="outline" onClick={() => setFlowIdx((i) => Math.max(0, i - 1))}>
-            Back
-          </Button>
-        </div>
-      )}
+          {currentStep.id !== 'generate' ? (
+            <Button
+              type="button"
+              disabled={!canAdvanceFromCurrentStep() || flowIdx >= AD_WIZARD_STEP_META.length - 1}
+              onClick={() => setFlowIdx((i) => Math.min(AD_WIZARD_STEP_META.length - 1, i + 1))}
+            >
+              Continue
+            </Button>
+          ) : null}
+        </AdWizardFooter>
       </div>
 
       {brandContextSource === 'brand_dna' && (

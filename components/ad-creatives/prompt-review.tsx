@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Check, Pencil, Sparkles, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Sparkles, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export interface PromptPreviewData {
@@ -25,6 +25,11 @@ export function PromptReview({ previews, onApproveAll, onCancel, generating }: P
   const [edited, setEdited] = useState<PromptPreviewData[]>(previews);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
+  useEffect(() => {
+    setEdited(previews);
+    setExpandedIndex(null);
+  }, [previews]);
+
   function updateCopy(index: number, field: 'headline' | 'subheadline' | 'cta', value: string) {
     setEdited((prev) => prev.map((p, i) =>
       i === index ? { ...p, copy: { ...p.copy, [field]: value } } : p,
@@ -38,33 +43,42 @@ export function PromptReview({ previews, onApproveAll, onCancel, generating }: P
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-text-primary">Review prompts</h3>
-          <p className="text-xs text-text-muted mt-0.5">
-            Edit copy and style notes before generating. {edited.length} creative{edited.length !== 1 ? 's' : ''} queued.
-          </p>
+    <div className="relative overflow-hidden rounded-2xl border border-accent-border/25 bg-accent/[0.04] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent-border/35 to-transparent"
+        aria-hidden
+      />
+      <div className="relative p-4 sm:p-5 space-y-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-1">
+            <h3 className="text-sm font-semibold text-text-primary tracking-tight">Review prompts</h3>
+            <p className="text-xs text-text-muted leading-relaxed max-w-md">
+              Edit on-screen copy and style direction for each creative. {edited.length} queued for generation.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" variant="outline" onClick={onCancel} disabled={generating}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={() => onApproveAll(edited)} disabled={generating}>
+              {generating ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" /> Generating…
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} /> Generate all ({edited.length})
+                </>
+              )}
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={onCancel} disabled={generating}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={() => onApproveAll(edited)} disabled={generating}>
-            {generating ? (
-              <><Loader2 size={14} className="animate-spin" /> Generating...</>
-            ) : (
-              <><Sparkles size={14} /> Generate all ({edited.length})</>
-            )}
-          </Button>
-        </div>
-      </div>
 
-      <div className="space-y-3">
+        <div className="space-y-3">
         {edited.map((preview, i) => (
           <div
             key={`${preview.templateId}-${preview.variationIndex}`}
-            className="rounded-xl border border-nativz-border bg-surface overflow-hidden"
+            className="rounded-xl border border-nativz-border bg-surface overflow-hidden shadow-sm"
           >
             {/* Header */}
             <button
@@ -149,6 +163,7 @@ export function PromptReview({ previews, onApproveAll, onCancel, generating }: P
             )}
           </div>
         ))}
+        </div>
       </div>
     </div>
   );
