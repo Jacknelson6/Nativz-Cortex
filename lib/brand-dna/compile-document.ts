@@ -8,7 +8,7 @@ import { mergeProductAppendix } from './product-catalog-md';
  * Uses AI to write a polished, structured document from the raw extraction data.
  */
 export async function compileBrandDocument(data: BrandDNARawData): Promise<CompiledBrandDNA> {
-  const { colors, fonts, logos, products, designStyle, verbalIdentity } = data;
+  const { colors, fonts, logos, products, designStyle, verbalIdentity, audienceBenchmarks } = data;
 
   // Build context for AI compilation
   const contextParts: string[] = [];
@@ -48,10 +48,41 @@ export async function compileBrandDocument(data: BrandDNARawData): Promise<Compi
   if (products.length > 0) {
     const categories = [...new Set(products.map((p) => p.category?.trim() || 'General'))];
     const catPreview = categories.slice(0, 10).join(', ') + (categories.length > 10 ? ', …' : '');
+    const typeHint = [...new Set(products.map((p) => p.offeringType ?? 'unspecified'))].join(', ');
     contextParts.push(
-      `\nStructured product catalog: ${products.length} items in ${categories.length} categories (${catPreview}). ` +
-        'Do not paste a full inventory in prose — the "## Structured product catalog" appendix will list every item automatically.',
+      `\nStructured product catalog: ${products.length} items in ${categories.length} categories (${catPreview}). Offering types present: ${typeHint}. ` +
+        'Separate affiliate/ambassador programs from core products/services in narrative. Full list with images is in the appendix.',
     );
+  }
+  if (logos.length > 0) {
+    contextParts.push(`\nExtracted logo assets:\n${logos.map((l) => `- ${l.variant}: ${l.url}`).join('\n')}`);
+  }
+  if (audienceBenchmarks?.idealCustomerProfiles?.length) {
+    contextParts.push(
+      '\n## Five ICPs (authoritative — summarize in prose, do not drop segments)\n' +
+        audienceBenchmarks.idealCustomerProfiles
+          .map(
+            (icp, i) =>
+              `### ICP ${i + 1}: ${icp.label}\n${icp.summary}` +
+              (icp.demographics ? `\nDemographics: ${icp.demographics}` : '') +
+              (icp.pain_points?.length ? `\nPain points: ${icp.pain_points.join('; ')}` : '') +
+              (icp.goals?.length ? `\nGoals: ${icp.goals.join('; ')}` : '') +
+              (icp.preferred_channels?.length ? `\nChannels: ${icp.preferred_channels.join(', ')}` : '') +
+              (icp.buying_signals?.length ? `\nBuying signals: ${icp.buying_signals.join('; ')}` : ''),
+          )
+          .join('\n\n'),
+    );
+  }
+  if (audienceBenchmarks?.similarBrandsForAds?.length) {
+    contextParts.push(
+      '\nBrands to study in Meta Ad Library (static/image creative patterns):\n' +
+        audienceBenchmarks.similarBrandsForAds
+          .map((b) => `- **${b.name}** (${b.category}): ${b.why_similar}\n  Library: ${b.meta_ad_library_url}`)
+          .join('\n'),
+    );
+  }
+  if (audienceBenchmarks?.logoUsageSummary?.trim()) {
+    contextParts.push(`\nLogo usage notes:\n${audienceBenchmarks.logoUsageSummary.trim()}`);
   }
   if (data.uploadedContent) {
     contextParts.push(`\nAdditional brand materials:\n${data.uploadedContent.slice(0, 3000)}`);
@@ -74,8 +105,17 @@ Document how the brand communicates: tone of voice, messaging pillars, vocabular
 ## Target audience
 Who the brand is talking to: demographics, psychographics, pain points, aspirations. Based on content language signals.
 
+## Ideal customer profiles (ICPs)
+Summarize each of the **five** structured ICPs from the data: one short subsection per ICP (label as heading). Reflect pain points, goals, channels, and buying signals.
+
 ## Competitive positioning
 How the brand differentiates itself. What makes them unique in their market.
+
+## Logo assets
+Describe available logo variants (from extracted URLs), contrast/light vs dark backgrounds, and follow the logo usage notes provided.
+
+## Paid social creative references
+Explain why studying the listed peer brands in **Meta Ad Library** is useful for this brand’s category (static and image ads). Name each reference brand and what to look for — do not claim endorsement.
 
 ## Content style guide
 Recommended content formats, platforms, and approach based on the brand's identity. This should guide content creators working with this brand.
@@ -113,6 +153,15 @@ Rules:
     avoidance_patterns: verbalIdentity?.avoidancePatterns ?? [],
     target_audience_summary: verbalIdentity?.targetAudienceSummary ?? null,
     competitive_positioning: verbalIdentity?.competitivePositioning ?? null,
+    ideal_customer_profiles: audienceBenchmarks?.idealCustomerProfiles?.length
+      ? audienceBenchmarks.idealCustomerProfiles
+      : undefined,
+    similar_brands_for_ads: audienceBenchmarks?.similarBrandsForAds?.length
+      ? audienceBenchmarks.similarBrandsForAds
+      : undefined,
+    logo_usage_summary: audienceBenchmarks?.logoUsageSummary?.trim()
+      ? audienceBenchmarks.logoUsageSummary.trim()
+      : null,
     generated_from: data.pages.map((p) => p.url),
     version: 1,
   };

@@ -6,6 +6,7 @@ import type {
   ProductItem,
   DesignStyle,
   BrandGuidelineMetadata,
+  BrandAudienceBenchmarks,
 } from '@/lib/knowledge/types';
 
 /** A page crawled for Brand DNA extraction — includes raw HTML for CSS/meta parsing */
@@ -40,6 +41,8 @@ export interface BrandDNARawData {
     competitivePositioning: string;
   } | null;
   uploadedContent: string | null;
+  /** ICPs, similar brands for Meta Ad Library, logo usage notes */
+  audienceBenchmarks: BrandAudienceBenchmarks | null;
 }
 
 /** Compiled Brand DNA document ready to store */

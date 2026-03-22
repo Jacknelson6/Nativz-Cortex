@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { ArrowLeft, Image, LayoutGrid, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Dna, Image, LayoutGrid, Loader2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { CreativeGallery } from './creative-gallery';
@@ -10,16 +10,19 @@ import { TemplateCatalog } from './template-catalog';
 import { AdWizard } from './ad-wizard';
 import { BulkTemplateImport } from './bulk-template-import';
 import { BrandDnaRequiredPanel } from './brand-dna-required-panel';
+import { BrandDnaTabReadyPanel } from './brand-dna-tab-ready-panel';
+import { Dialog } from '@/components/ui/dialog';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
 import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
+import { useClientAdminShell } from '@/components/clients/client-admin-shell-context';
 
 type BrandContextSource = 'brand_dna' | 'knowledge_cache' | 'live_scrape';
 
 type Tab = 'gallery' | 'templates' | 'generate';
 
 const TABS: { key: Tab; label: string; icon: typeof Image }[] = [
-  { key: 'generate', label: 'Generate', icon: Sparkles },
   { key: 'gallery', label: 'Gallery', icon: Image },
+  { key: 'generate', label: 'Brand DNA', icon: Dna },
   { key: 'templates', label: 'Templates', icon: LayoutGrid },
 ];
 
@@ -33,6 +36,11 @@ interface AdCreativesViewProps {
   creativeCount: number;
 }
 
+type PlaceholderConfig = {
+  brandColors: string[];
+  templateThumbnails: { templateId: string; imageUrl: string; variationIndex: number }[];
+};
+
 export function AdCreativesView({
   clientId,
   clientName,
@@ -41,6 +49,7 @@ export function AdCreativesView({
   brandDnaStatus,
   creativeCount,
 }: AdCreativesViewProps) {
+  const shell = useClientAdminShell();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -54,20 +63,15 @@ export function AdCreativesView({
   const [contextLoading, setContextLoading] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
+  const [placeholderConfig, setPlaceholderConfig] = useState<PlaceholderConfig | null>(null);
+
   const tabParam = searchParams.get('tab') as Tab | null;
+  const brandDnaReady = brandDnaStatus === 'active' || brandDnaStatus === 'draft';
+  const defaultTab: Tab = brandDnaReady ? 'gallery' : 'generate';
   const activeTab: Tab =
-    tabParam === 'gallery' || tabParam === 'templates' || tabParam === 'generate'
-      ? tabParam
-      : 'generate';
-
-  const brandDnaReady =
-    brandDnaStatus === 'active' || brandDnaStatus === 'draft';
-
-  useLayoutEffect(() => {
-    if (activeTab === 'generate' && brandDnaReady) {
-      setContextLoading(true);
-    }
-  }, [activeTab, brandDnaReady]);
+    tabParam === 'gallery' || tabParam === 'templates' || tabParam === 'generate' ? tabParam : defaultTab;
 
   const clearPoll = useCallback(() => {
     if (pollTimerRef.current) {
@@ -106,15 +110,14 @@ export function AdCreativesView({
     }, 300_000);
   }, [clientId, clearPoll]);
 
+  const shouldLoadWizardContext = brandDnaReady && (activeTab === 'gallery' || wizardOpen);
+
   useEffect(() => {
-    if (activeTab !== 'generate') {
+    if (!shouldLoadWizardContext) {
       clearPoll();
-      setContextLoading(false);
-      return;
-    }
-    if (!brandDnaReady) {
-      clearPoll();
-      setContextLoading(false);
+      if (!wizardOpen) {
+        setContextLoading(false);
+      }
       return;
     }
 
@@ -174,12 +177,12 @@ export function AdCreativesView({
       cancelled = true;
       clearPoll();
     };
-  }, [activeTab, brandDnaReady, clientId, websiteUrl, pollForBrandContext, clearPoll]);
+  }, [shouldLoadWizardContext, clientId, websiteUrl, pollForBrandContext, clearPoll]);
 
   const setTab = useCallback(
     (tab: Tab) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (tab === 'generate') {
+      if (tab === defaultTab) {
         params.delete('tab');
       } else {
         params.set('tab', tab);
@@ -187,24 +190,36 @@ export function AdCreativesView({
       const qs = params.toString();
       router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
     },
-    [router, pathname, searchParams],
+    [router, pathname, searchParams, defaultTab],
+  );
+
+  const handleGenerationStart = useCallback(
+    (batchId: string, config: PlaceholderConfig) => {
+      setActiveBatchId(batchId);
+      setPlaceholderConfig(config);
+      setWizardOpen(false);
+      setTab('gallery');
+    },
+    [setTab],
   );
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link
-            href={`/admin/clients/${clientSlug}`}
-            aria-label="Back to client profile"
-            className="text-text-muted hover:text-text-secondary transition-colors rounded-lg p-1 -m-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            <ArrowLeft size={20} />
-          </Link>
+          {!shell && (
+            <Link
+              href={`/admin/clients/${clientSlug}`}
+              aria-label="Back to client profile"
+              className="text-text-muted hover:text-text-secondary transition-colors rounded-lg p-1 -m-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              <ArrowLeft size={20} />
+            </Link>
+          )}
           <div>
-            <h1 className="text-xl font-semibold text-text-primary">Ad creatives</h1>
-            <p className="text-sm text-text-muted">{clientName}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted mb-1">Content</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-text-primary">Ad creatives</h1>
+            <p className="text-sm text-text-muted mt-0.5">{clientName}</p>
           </div>
           {creativeCount > 0 && (
             <span className="text-[11px] text-text-muted rounded-full bg-background border border-nativz-border px-2 py-0.5">
@@ -214,17 +229,16 @@ export function AdCreativesView({
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex items-center gap-1 bg-surface rounded-xl p-1 w-fit">
+      <div className="flex items-center gap-1 rounded-full border border-nativz-border/80 bg-surface/90 p-1 w-fit shadow-sm backdrop-blur-sm">
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             type="button"
             onClick={() => setTab(key)}
-            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all cursor-pointer ${
               activeTab === key
-                ? 'bg-background text-text-primary shadow-sm'
-                : 'text-text-muted hover:text-text-secondary'
+                ? 'bg-accent/[0.14] text-accent-text shadow-sm ring-1 ring-accent/25'
+                : 'text-text-muted hover:text-text-secondary hover:bg-background/50'
             }`}
           >
             <Icon size={15} />
@@ -233,7 +247,6 @@ export function AdCreativesView({
         ))}
       </div>
 
-      {/* Bulk import panel */}
       {showBulkImport && activeTab === 'templates' && (
         <div className="rounded-xl bg-surface border border-nativz-border p-5">
           <BulkTemplateImport
@@ -244,10 +257,21 @@ export function AdCreativesView({
         </div>
       )}
 
-      {/* Tab content */}
       {activeTab === 'gallery' && (
-        <CreativeGallery clientId={clientId} onNavigateToGenerate={() => setTab('generate')} />
+        <CreativeGallery
+          clientId={clientId}
+          brandDnaReady={brandDnaReady}
+          onOpenAdWizard={() => setWizardOpen(true)}
+          onGoToBrandKit={() => setTab('generate')}
+          activeBatchId={activeBatchId}
+          placeholderConfig={placeholderConfig}
+          onBatchComplete={() => {
+            setActiveBatchId(null);
+            setPlaceholderConfig(null);
+          }}
+        />
       )}
+
       {activeTab === 'templates' && (
         <TemplateCatalog
           clientId={clientId}
@@ -255,18 +279,8 @@ export function AdCreativesView({
           refreshKey={templateRefreshKey}
         />
       )}
-      {activeTab === 'generate' && contextLoading && (
-        <div className="rounded-2xl border border-nativz-border bg-surface p-12 flex flex-col items-center justify-center gap-4">
-          <Loader2 size={28} className="animate-spin text-accent-text" />
-          <div className="text-center max-w-md">
-            <p className="text-sm font-medium text-text-primary">Loading brand & products…</p>
-            <p className="text-xs text-text-muted mt-1">
-              Using Brand DNA and site context when available. This can take a moment on first crawl.
-            </p>
-          </div>
-        </div>
-      )}
-      {activeTab === 'generate' && !brandDnaReady && !contextLoading && (
+
+      {activeTab === 'generate' && !brandDnaReady && (
         <BrandDnaRequiredPanel
           clientId={clientId}
           clientName={clientName}
@@ -274,16 +288,43 @@ export function AdCreativesView({
           websiteUrl={websiteUrl}
         />
       )}
-      {activeTab === 'generate' && brandDnaReady && !contextLoading && (
-        <AdWizard
-          clientId={clientId}
+
+      {activeTab === 'generate' && brandDnaReady && (
+        <BrandDnaTabReadyPanel
+          clientName={clientName}
           clientSlug={clientSlug}
-          initialBrand={brand ?? undefined}
-          initialProducts={scrapedProducts}
-          initialMediaUrls={mediaUrls}
-          brandContextSource={brandContextSource ?? undefined}
+          onOpenGallery={() => setTab('gallery')}
         />
       )}
+
+      <Dialog
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        maxWidth="full"
+        className="max-h-[min(92vh,940px)] sm:max-w-[min(96vw,1440px)]"
+        bodyClassName="flex max-h-[min(92vh,940px)] flex-col overflow-hidden p-0"
+      >
+        <div className="flex flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+          {contextLoading || !brand ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 py-20">
+              <Loader2 size={28} className="animate-spin text-accent-text" />
+              <p className="text-sm text-text-muted text-center max-w-xs">
+                Loading brand context for the wizard…
+              </p>
+            </div>
+          ) : (
+            <AdWizard
+              clientId={clientId}
+              clientSlug={clientSlug}
+              initialBrand={brand ?? undefined}
+              initialProducts={scrapedProducts}
+              initialMediaUrls={mediaUrls}
+              brandContextSource={brandContextSource ?? undefined}
+              onGenerationStart={handleGenerationStart}
+            />
+          )}
+        </div>
+      </Dialog>
     </div>
   );
 }

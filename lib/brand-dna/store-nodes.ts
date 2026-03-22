@@ -142,26 +142,32 @@ export async function storeBrandDNANodes(
   entryIds.push(verbal.id);
 
   // Target Audience
-  const audienceContent = meta.target_audience_summary ?? 'No target audience data extracted.';
+  const audienceContent = buildTargetAudienceMarkdown(meta);
   const audience = await createKnowledgeEntry({
     client_id: clientId,
     type: 'target_audience',
     title: `Target Audience — ${clientName}`,
     content: audienceContent,
-    metadata: { summary: meta.target_audience_summary ?? '' },
+    metadata: {
+      summary: meta.target_audience_summary ?? '',
+      ideal_customer_profiles: meta.ideal_customer_profiles ?? [],
+    },
     source: 'generated',
     created_by: null,
   });
   entryIds.push(audience.id);
 
   // Competitive Positioning
-  const positioningContent = meta.competitive_positioning ?? 'No competitive positioning data extracted.';
+  const positioningContent = buildCompetitivePositioningMarkdown(meta);
   const positioning = await createKnowledgeEntry({
     client_id: clientId,
     type: 'competitive_positioning',
     title: `Competitive Positioning — ${clientName}`,
     content: positioningContent,
-    metadata: { positioning_statement: meta.competitive_positioning ?? '' },
+    metadata: {
+      positioning_statement: meta.competitive_positioning ?? '',
+      similar_brands_for_ads: meta.similar_brands_for_ads ?? [],
+    },
     source: 'generated',
     created_by: null,
   });
@@ -183,12 +189,17 @@ export async function storeBrandDNANodes(
   // ── 4. Create individual nodes (logos + screenshots) ──────────────────────
 
   const logoIds: string[] = [];
-  for (const logo of meta.logos ?? []) {
+  for (let i = 0; i < (meta.logos ?? []).length; i++) {
+    const logo = meta.logos![i]!;
+    const usageExtra =
+      i === 0 && meta.logo_usage_summary?.trim()
+        ? `\n\n**Recommended usage:**\n${meta.logo_usage_summary.trim()}`
+        : '';
     const logoEntry = await createKnowledgeEntry({
       client_id: clientId,
       type: 'brand_logo',
       title: `Logo (${logo.variant}) — ${clientName}`,
-      content: `${logo.variant} logo variant for ${clientName}. URL: ${logo.url}`,
+      content: `${logo.variant} logo variant for ${clientName}. URL: ${logo.url}${usageExtra}`,
       metadata: { url: logo.url, variant: logo.variant },
       source: 'generated',
       created_by: null,
@@ -294,6 +305,60 @@ export async function storeBrandDNANodes(
 }
 
 // ── Markdown builders ─────────────────────────────────────────────────────────
+
+function buildTargetAudienceMarkdown(meta: BrandGuidelineMetadata): string {
+  const parts: string[] = [];
+  if (meta.target_audience_summary?.trim()) {
+    parts.push(meta.target_audience_summary.trim());
+  }
+  const icps = meta.ideal_customer_profiles ?? [];
+  if (icps.length > 0) {
+    parts.push('\n## Ideal customer profiles\n');
+    for (const icp of icps) {
+      parts.push(`### ${icp.label}\n\n${icp.summary}\n`);
+      if (icp.demographics?.trim()) parts.push(`\n**Demographics:** ${icp.demographics.trim()}\n`);
+      if (icp.pain_points?.length) {
+        parts.push('\n**Pain points:**\n');
+        icp.pain_points.forEach((x) => parts.push(`- ${x}`));
+        parts.push('');
+      }
+      if (icp.goals?.length) {
+        parts.push('**Goals:**\n');
+        icp.goals.forEach((x) => parts.push(`- ${x}`));
+        parts.push('');
+      }
+      if (icp.preferred_channels?.length) {
+        parts.push(`**Channels:** ${icp.preferred_channels.join(', ')}\n`);
+      }
+      if (icp.buying_signals?.length) {
+        parts.push('\n**Buying signals:**\n');
+        icp.buying_signals.forEach((x) => parts.push(`- ${x}`));
+        parts.push('');
+      }
+    }
+  }
+  return parts.length > 0 ? parts.join('\n') : 'No target audience data extracted.';
+}
+
+function buildCompetitivePositioningMarkdown(meta: BrandGuidelineMetadata): string {
+  const parts: string[] = [];
+  if (meta.competitive_positioning?.trim()) {
+    parts.push(meta.competitive_positioning.trim());
+  }
+  const brands = meta.similar_brands_for_ads ?? [];
+  if (brands.length > 0) {
+    parts.push('\n## Brands to study in Meta Ad Library\n');
+    parts.push(
+      '_Meta does not publish a ranked list of “best” advertisers — use these peer brands to review public image and video ads._\n',
+    );
+    for (const b of brands) {
+      parts.push(
+        `\n### ${b.name} (${b.category})\n${b.why_similar}\n\n[Open Meta Ad Library](${b.meta_ad_library_url})\n`,
+      );
+    }
+  }
+  return parts.length > 0 ? parts.join('\n') : 'No competitive positioning data extracted.';
+}
 
 function buildVisualIdentityMarkdown(meta: BrandGuidelineMetadata): string {
   const sections: string[] = ['# Visual Identity\n'];

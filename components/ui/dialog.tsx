@@ -6,9 +6,14 @@ import { X } from 'lucide-react';
 interface DialogProps {
   open: boolean;
   onClose: () => void;
-  title: string;
+  /** Omit or pass empty string for a close-only chrome (e.g. full-height wizards). */
+  title?: string;
   children: ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '5xl' | 'full';
+  /** Extra classes on the `<dialog>` element (e.g. max height). */
+  className?: string;
+  /** Override padding wrapper around children (default `p-6`). */
+  bodyClassName?: string;
 }
 
 const maxWidthStyles = {
@@ -21,7 +26,15 @@ const maxWidthStyles = {
   full: 'max-w-[calc(100vw-4rem)] max-h-[calc(100vh-4rem)]',
 };
 
-export function Dialog({ open, onClose, title, children, maxWidth = 'md' }: DialogProps) {
+export function Dialog({
+  open,
+  onClose,
+  title = '',
+  children,
+  maxWidth = 'md',
+  className = '',
+  bodyClassName,
+}: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -46,9 +59,9 @@ export function Dialog({ open, onClose, title, children, maxWidth = 'md' }: Dial
       ref={dialogRef}
       onClose={onClose}
       onClick={handleBackdropClick}
-      className={`${maxWidthStyles[maxWidth]} w-full m-auto rounded-xl border border-nativz-border bg-surface p-0 shadow-elevated backdrop:bg-black/60 relative`}
+      className={`${maxWidthStyles[maxWidth]} w-full m-auto rounded-xl border border-nativz-border bg-surface p-0 shadow-elevated backdrop:bg-black/60 relative ${className}`.trim()}
     >
-      <div className="p-6">
+      <div className={bodyClassName ?? 'p-6'}>
         {title ? (
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-text-primary">{title}</h2>

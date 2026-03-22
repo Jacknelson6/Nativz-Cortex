@@ -11,6 +11,7 @@ import {
   Image,
   LayoutGrid,
   Sparkles,
+  Dna,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,8 @@ import { AdWizard } from './ad-wizard';
 import { BulkTemplateImport } from './bulk-template-import';
 import { GenerationBanner } from './generation-banner';
 import { BrandDnaRequiredPanel } from './brand-dna-required-panel';
+import { BrandDnaTabReadyPanel } from './brand-dna-tab-ready-panel';
+import { Dialog } from '@/components/ui/dialog';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
 import type { RecentClient } from '@/app/admin/ad-creatives/page';
 import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
@@ -31,7 +34,7 @@ import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-we
 // ---------------------------------------------------------------------------
 
 type ContextMode = 'url' | 'client';
-type Tab = 'generate' | 'gallery' | 'templates';
+type Tab = 'gallery' | 'generate' | 'templates';
 
 /** Where ad wizard brand/products came from (shown in UI). */
 export type BrandContextSource = 'brand_dna' | 'knowledge_cache' | 'live_scrape';
@@ -53,8 +56,8 @@ interface PlaceholderConfig {
 }
 
 const TABS: { key: Tab; label: string; icon: typeof Image }[] = [
-  { key: 'generate', label: 'Generate', icon: Sparkles },
   { key: 'gallery', label: 'Gallery', icon: Image },
+  { key: 'generate', label: 'Brand DNA', icon: Dna },
   { key: 'templates', label: 'Templates', icon: LayoutGrid },
 ];
 
@@ -127,9 +130,9 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
   // Generation state (passed from wizard → gallery)
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [placeholderConfig, setPlaceholderConfig] = useState<PlaceholderConfig | null>(null);
+  const [adWizardOpen, setAdWizardOpen] = useState(false);
 
   // Tab state (only shown after context is set)
-  const activeTab = (searchParams.get('tab') as Tab) || 'generate';
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [templateRefreshKey, setTemplateRefreshKey] = useState(0);
 
@@ -145,6 +148,15 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     resolvedClient?.brand_dna_status === 'active' ||
     resolvedClient?.brand_dna_status === 'draft';
 
+  const clientDnaReady =
+    !!resolvedClient &&
+    (resolvedClient.brand_dna_status === 'active' || resolvedClient.brand_dna_status === 'draft');
+
+  const tabDefault: Tab = !resolvedClientId ? 'generate' : clientDnaReady ? 'gallery' : 'generate';
+  const tabParam = searchParams.get('tab') as Tab | null;
+  const activeTab: Tab =
+    tabParam === 'gallery' || tabParam === 'templates' || tabParam === 'generate' ? tabParam : tabDefault;
+
   const clientLikelyUsesBrandDna =
     !!selectedClient &&
     (selectedClient.brand_dna_status === 'draft' || selectedClient.brand_dna_status === 'active');
@@ -152,17 +164,24 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
   const counter = useAnimatedCounter(10000);
 
   const setTab = useCallback(
-    (tab: Tab) => {
+    (tab: Tab, navOpts?: { replace?: boolean }) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (tab === 'generate') {
+      const def: Tab =
+        !resolvedClientId ? 'generate' : clientDnaReady ? 'gallery' : 'generate';
+      if (tab === def) {
         params.delete('tab');
       } else {
         params.set('tab', tab);
       }
       const qs = params.toString();
-      router.push(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
+      const url = `${pathname}${qs ? `?${qs}` : ''}`;
+      if (navOpts?.replace) {
+        router.replace(url, { scroll: false });
+      } else {
+        router.push(url, { scroll: false });
+      }
     },
-    [router, pathname, searchParams],
+    [router, pathname, searchParams, resolvedClientId, clientDnaReady],
   );
 
   // ---------------------------------------------------------------------------
@@ -200,7 +219,16 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
 
       const data = await res.json();
 
-      if (data.clientId) setClientId(data.clientId as string);
+      if (data.clientId) {
+        const cid = data.clientId as string;
+        setClientId(cid);
+        const c = clients.find((x) => x.id === cid);
+        const dna =
+          c?.brand_dna_status === 'active' || c?.brand_dna_status === 'draft';
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.set('tab', dna ? 'gallery' : 'generate');
+        router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+      }
 
       if (data.status === 'cached' || data.status === 'ready') {
         setBrand(data.brand ?? null);
@@ -228,10 +256,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     }
   }
 
-  async function handleClientSelect(
-    id: string | null,
-    opts?: { preferGenerateTab?: boolean },
-  ) {
+  async function handleClientSelect(id: string | null) {
     clearBrandPoll();
     setClientId(id);
     if (!id) return;
@@ -244,16 +269,16 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     setBrandContextSource(null);
 
     const client = clients.find((c) => c.id === id);
+    const dnaReady =
+      client?.brand_dna_status === 'active' || client?.brand_dna_status === 'draft';
+    const recentWithCreatives = recentClients.some((rc) => rc.clientId === id);
 
-    if (opts?.preferGenerateTab) {
-      setTab('generate');
-    } else {
-      // Clients with past creatives default to gallery when picked from the roster
-      const hasCreatives = recentClients.some((rc) => rc.clientId === id);
-      if (hasCreatives) {
-        setTab('gallery');
-      }
-    }
+    // Gallery is the workspace for ads; Brand DNA tab when the kit still needs setup.
+    // Set tab explicitly so we never inherit the previous client's `?tab=` from search params.
+    const nextTab: Tab = recentWithCreatives || dnaReady ? 'gallery' : 'generate';
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('tab', nextTab);
+    router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
 
     // Auto-scan client's website URL for brand context
     const url = client?.website_url;
@@ -346,17 +371,20 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     setActiveBatchId(null);
     setPlaceholderConfig(null);
     setBrandContextSource(null);
+    setAdWizardOpen(false);
+    router.replace(pathname, { scroll: false });
   }
 
   function handleRecentClientClick(rc: RecentClient) {
-    void handleClientSelect(rc.clientId, { preferGenerateTab: true });
+    void handleClientSelect(rc.clientId);
   }
 
   // Called by wizard when generation starts
   function handleGenerationStart(batchId: string, config: PlaceholderConfig) {
     setActiveBatchId(batchId);
     setPlaceholderConfig(config);
-    setTab('gallery');
+    setAdWizardOpen(false);
+    setTab('gallery', { replace: true });
   }
 
   // ---------------------------------------------------------------------------
@@ -450,7 +478,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
             <AdCreativesClientPick
               clients={clients}
               recentClients={recentClients}
-              onSelectRoster={(id) => void handleClientSelect(id, { preferGenerateTab: true })}
+              onSelectRoster={(id) => void handleClientSelect(id)}
               onSelectRecent={handleRecentClientClick}
             />
           )}
@@ -492,7 +520,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -505,7 +533,10 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-xl font-semibold text-text-primary">Ad creatives</h1>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted mb-1">
+              Content
+            </p>
+            <h1 className="text-2xl font-semibold tracking-tight text-text-primary">Ad creatives</h1>
             <p className="text-sm text-text-muted flex flex-wrap items-center gap-2">
               <span>{brand?.name ?? selectedClient?.name ?? 'Unknown brand'}</span>
               {brandContextSource === 'brand_dna' && (
@@ -541,16 +572,16 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
       )}
 
       {/* Tab bar */}
-      <div className="flex items-center gap-1 bg-surface rounded-xl p-1 w-fit">
+      <div className="flex items-center gap-1 rounded-full border border-nativz-border/80 bg-surface/90 p-1 w-fit shadow-sm backdrop-blur-sm">
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             type="button"
             onClick={() => setTab(key)}
-            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all cursor-pointer ${
               activeTab === key
-                ? 'bg-background text-text-primary shadow-sm'
-                : 'text-text-muted hover:text-text-secondary'
+                ? 'bg-accent/[0.14] text-accent-text shadow-sm ring-1 ring-accent/25'
+                : 'text-text-muted hover:text-text-secondary hover:bg-background/50'
             }`}
           >
             <Icon size={15} />
@@ -558,6 +589,22 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
           </button>
         ))}
       </div>
+
+      {resolvedClientId && isScanning && (
+        <div className="flex items-center gap-3 rounded-xl border border-accent/20 bg-accent/[0.06] px-4 py-3 text-sm text-text-secondary">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent-text" />
+          <div>
+            <p className="font-medium text-text-primary">
+              {clientLikelyUsesBrandDna
+                ? 'Loading brand & products from Brand DNA…'
+                : 'Crawling site for brand & products…'}
+            </p>
+            <p className="text-xs text-text-muted mt-0.5">
+              You can switch tabs — open Generate creatives in the gallery when this finishes.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Bulk import panel */}
       {showBulkImport && activeTab === 'templates' && (
@@ -571,63 +618,39 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
       )}
 
       {/* Tab content */}
-      {activeTab === 'generate' && isScanning && (
-        <div className="rounded-2xl border border-nativz-border bg-surface p-12 flex flex-col items-center justify-center gap-4">
-          <Loader2 size={28} className="animate-spin text-accent-text" />
-          <div className="text-center max-w-md">
-            <p className="text-sm font-medium text-text-primary">
-              {clientLikelyUsesBrandDna
-                ? 'Loading brand & products from Brand DNA…'
-                : 'Crawling site for brand & products…'}
-            </p>
-            <p className="text-xs text-text-muted mt-1">
-              {clientLikelyUsesBrandDna
-                ? 'Using the same colors, logos, and product list as the Brand DNA page. If this hangs, confirm Brand DNA finished generating.'
-                : `Analyzing ${selectedClient?.name ?? 'website'} — homepage scan and knowledge cache`}
-            </p>
-          </div>
-        </div>
+      {activeTab === 'generate' && resolvedClientId && !clientDnaReady && resolvedClient && (
+        <BrandDnaRequiredPanel
+          clientId={resolvedClientId}
+          clientName={resolvedClient.name ?? ''}
+          brandDnaStatus={resolvedClient.brand_dna_status}
+          websiteUrl={resolvedClient.website_url}
+        />
       )}
-      {activeTab === 'generate' &&
-        !isScanning &&
-        resolvedClientId &&
-        !brandDnaReady &&
-        resolvedClient && (
-          <BrandDnaRequiredPanel
-            clientId={resolvedClientId}
-            clientName={resolvedClient.name ?? ''}
-            brandDnaStatus={resolvedClient.brand_dna_status}
-            websiteUrl={resolvedClient.website_url}
-          />
-        )}
-      {activeTab === 'generate' && !isScanning && (!resolvedClientId || brandDnaReady) && (
-        resolvedClientId ? (
-          <AdWizard
-            clientId={resolvedClientId}
-            clientSlug={resolvedClient?.slug}
-            initialBrand={brand ?? undefined}
-            initialProducts={scrapedProducts}
-            initialMediaUrls={mediaUrls}
-            brandContextSource={brandContextSource ?? undefined}
-            onGenerationStart={handleGenerationStart}
-          />
-        ) : (
-          <div className="rounded-2xl border border-nativz-border bg-surface p-10 text-center space-y-2 max-w-lg mx-auto">
-            <p className="text-sm font-medium text-text-primary">Client not linked yet</p>
-            <p className="text-xs text-text-muted leading-relaxed">
-              We could not resolve a saved client for this session. Go back, run the scan again, or choose an existing
-              client from the roster.
-            </p>
-            <Button type="button" variant="outline" size="sm" className="mt-2" onClick={handleReset}>
-              Start over
-            </Button>
-          </div>
-        )
+      {activeTab === 'generate' && resolvedClientId && clientDnaReady && resolvedClient && (
+        <BrandDnaTabReadyPanel
+          clientName={resolvedClient.name ?? 'Client'}
+          clientSlug={resolvedClient.slug}
+          onOpenGallery={() => setTab('gallery')}
+        />
+      )}
+      {activeTab === 'generate' && !resolvedClientId && (
+        <div className="rounded-2xl border border-nativz-border bg-surface p-10 text-center space-y-2 max-w-lg mx-auto">
+          <p className="text-sm font-medium text-text-primary">Client not linked yet</p>
+          <p className="text-xs text-text-muted leading-relaxed">
+            We could not resolve a saved client for this session. Go back, run the scan again, or choose an existing
+            client from the roster.
+          </p>
+          <Button type="button" variant="outline" size="sm" className="mt-2" onClick={handleReset}>
+            Start over
+          </Button>
+        </div>
       )}
       {activeTab === 'gallery' && resolvedClientId && (
         <CreativeGallery
           clientId={resolvedClientId}
-          onNavigateToGenerate={() => setTab('generate')}
+          brandDnaReady={clientDnaReady}
+          onOpenAdWizard={() => setAdWizardOpen(true)}
+          onGoToBrandKit={() => setTab('generate')}
           activeBatchId={activeBatchId}
           placeholderConfig={placeholderConfig}
           onBatchComplete={() => {
@@ -648,6 +671,35 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
           refreshKey={templateRefreshKey}
         />
       )}
+
+      <Dialog
+        open={adWizardOpen && !!resolvedClientId}
+        onClose={() => setAdWizardOpen(false)}
+        maxWidth="full"
+        className="max-h-[min(92vh,940px)] sm:max-w-[min(96vw,1440px)]"
+        bodyClassName="flex max-h-[min(92vh,940px)] flex-col overflow-hidden p-0"
+      >
+        <div className="flex flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+          {isScanning || !brand ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 py-20">
+              <Loader2 size={28} className="animate-spin text-accent-text" />
+              <p className="text-sm text-text-muted text-center max-w-xs">
+                Loading brand context for the wizard…
+              </p>
+            </div>
+          ) : (
+            <AdWizard
+              clientId={resolvedClientId!}
+              clientSlug={resolvedClient?.slug}
+              initialBrand={brand ?? undefined}
+              initialProducts={scrapedProducts}
+              initialMediaUrls={mediaUrls}
+              brandContextSource={brandContextSource ?? undefined}
+              onGenerationStart={handleGenerationStart}
+            />
+          )}
+        </div>
+      </Dialog>
     </div>
   );
 }

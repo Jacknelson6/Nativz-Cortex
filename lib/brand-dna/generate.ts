@@ -4,6 +4,7 @@ import { syncBrandDNAToKnowledgeGraph } from './sync-to-graph';
 import { crawlForBrandDNA } from './crawl';
 import { extractColorPalette, extractFontFamilies, extractLogoUrls, detectDesignStyle } from './extract-visuals';
 import { analyzeVerbalIdentity } from './analyze-verbal';
+import { extractAudienceBenchmarks } from './extract-audience-benchmarks';
 import { extractProductCatalog } from './extract-products';
 import { compileBrandDocument } from './compile-document';
 import type { BrandDNARawData, ProgressCallback } from './types';
@@ -71,17 +72,26 @@ export async function generateBrandDNA(
     // No screenshot capture in v1 — requires browser automation (Playwright/Puppeteer)
     const screenshots: BrandScreenshot[] = [];
 
-    await onProgress('analyzing', 50, 'Analyzing tone of voice...');
+    await onProgress('analyzing', 48, 'Analyzing tone of voice and catalog...');
 
-    // Step 3: Verbal identity analysis (AI)
-    const verbalIdentity = await analyzeVerbalIdentity(pages);
+    // Step 3–4: Verbal identity + product catalog (AI, parallel)
+    const [verbalIdentity, products] = await Promise.all([
+      analyzeVerbalIdentity(pages),
+      extractProductCatalog(pages),
+    ]);
 
-    await onProgress('analyzing', 65, 'Building product catalog...');
+    await onProgress('analyzing', 62, 'Defining ICPs and ad research peers...');
 
-    // Step 4: Product extraction (AI)
-    const products = await extractProductCatalog(pages);
+    const audienceBenchmarks = await extractAudienceBenchmarks({
+      clientName,
+      websiteUrl,
+      pages,
+      products,
+      verbalIdentity,
+      logoUrls: logoRefs.map((l) => l.url),
+    });
 
-    await onProgress('compiling', 80, 'Compiling brand guideline...');
+    await onProgress('compiling', 78, 'Compiling brand guideline...');
 
     // Step 5: Compile everything into the brand guideline document
     const rawData: BrandDNARawData = {
@@ -96,6 +106,7 @@ export async function generateBrandDNA(
       designStyle,
       verbalIdentity,
       uploadedContent: options?.uploadedContent ?? null,
+      audienceBenchmarks,
     };
 
     const compiled = await compileBrandDocument(rawData);

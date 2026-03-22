@@ -1,121 +1,9 @@
 import { JSDOM } from 'jsdom';
 import type { CrawledPage } from './types';
-import type { BrandColor, BrandFont, BrandLogo, DesignStyle } from '@/lib/knowledge/types';
+import type { BrandFont, BrandLogo, DesignStyle } from '@/lib/knowledge/types';
+import { cssColorToHex } from './color-palette';
 
-// ---------------------------------------------------------------------------
-// Color extraction
-// ---------------------------------------------------------------------------
-
-/** Parse a CSS color value to hex. Returns null for invalid/transparent values. */
-function cssColorToHex(value: string): string | null {
-  const v = value.trim().toLowerCase();
-  if (!v || v === 'transparent' || v === 'inherit' || v === 'initial' || v === 'currentcolor') return null;
-
-  // Already hex
-  if (/^#[0-9a-f]{3,8}$/i.test(v)) {
-    if (v.length === 4) return `#${v[1]}${v[1]}${v[2]}${v[2]}${v[3]}${v[3]}`;
-    return v.slice(0, 7); // strip alpha if 8-digit
-  }
-
-  // rgb/rgba
-  const rgbMatch = v.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  if (rgbMatch) {
-    const [, r, g, b] = rgbMatch;
-    return `#${Number(r).toString(16).padStart(2, '0')}${Number(g).toString(16).padStart(2, '0')}${Number(b).toString(16).padStart(2, '0')}`;
-  }
-
-  return null;
-}
-
-/** Calculate color distance (simple Euclidean in RGB space) */
-function colorDistance(hex1: string, hex2: string): number {
-  const r1 = parseInt(hex1.slice(1, 3), 16), g1 = parseInt(hex1.slice(3, 5), 16), b1 = parseInt(hex1.slice(5, 7), 16);
-  const r2 = parseInt(hex2.slice(1, 3), 16), g2 = parseInt(hex2.slice(3, 5), 16), b2 = parseInt(hex2.slice(5, 7), 16);
-  return Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2);
-}
-
-/** Check if a color is near-white or near-black (likely background/text, not brand) */
-function isNeutral(hex: string): boolean {
-  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
-  const brightness = (r + g + b) / 3;
-  return brightness > 240 || brightness < 15; // near white or near black
-}
-
-function nameColor(hex: string): string {
-  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
-  const brightness = (r + g + b) / 3;
-  if (brightness > 200) return 'Light';
-  if (brightness < 50) return 'Dark';
-  if (r > g && r > b) return r > 200 ? 'Red' : 'Dark red';
-  if (g > r && g > b) return g > 200 ? 'Green' : 'Dark green';
-  if (b > r && b > g) return b > 200 ? 'Blue' : 'Dark blue';
-  if (r > 200 && g > 150) return 'Orange';
-  if (r > 200 && g > 200) return 'Yellow';
-  if (r > 150 && b > 150) return 'Purple';
-  return 'Brand color';
-}
-
-/** Extract color palette from CSS custom properties and inline styles */
-export function extractColorPalette(pages: CrawledPage[]): BrandColor[] {
-  const colorCounts = new Map<string, number>();
-
-  for (const page of pages) {
-    const dom = new JSDOM(page.html, { url: page.url });
-    const doc = dom.window.document;
-
-    // Extract from <style> tags and inline style attributes
-    const styleBlocks: string[] = [];
-    doc.querySelectorAll('style').forEach((el) => styleBlocks.push(el.textContent ?? ''));
-    doc.querySelectorAll('[style]').forEach((el) => styleBlocks.push(el.getAttribute('style') ?? ''));
-
-    const cssText = styleBlocks.join('\n');
-
-    // CSS custom properties (--color-*, --bg-*, etc.)
-    const varMatches = cssText.matchAll(/--[\w-]*(?:color|bg|accent|primary|secondary|brand)[\w-]*\s*:\s*([^;}\n]+)/gi);
-    for (const m of varMatches) {
-      const hex = cssColorToHex(m[1]);
-      if (hex && !isNeutral(hex)) colorCounts.set(hex, (colorCounts.get(hex) ?? 0) + 3); // weight custom properties higher
-    }
-
-    // Direct color/background-color declarations
-    const colorMatches = cssText.matchAll(/(?:background-color|color|border-color)\s*:\s*([^;}\n]+)/gi);
-    for (const m of colorMatches) {
-      const hex = cssColorToHex(m[1]);
-      if (hex && !isNeutral(hex)) colorCounts.set(hex, (colorCounts.get(hex) ?? 0) + 1);
-    }
-
-    // Hex colors directly in CSS
-    const hexMatches = cssText.matchAll(/#[0-9a-fA-F]{3,8}\b/g);
-    for (const m of hexMatches) {
-      const hex = cssColorToHex(m[0]);
-      if (hex && !isNeutral(hex)) colorCounts.set(hex, (colorCounts.get(hex) ?? 0) + 1);
-    }
-
-    // Meta theme-color
-    const themeColor = doc.querySelector('meta[name="theme-color"]')?.getAttribute('content');
-    if (themeColor) {
-      const hex = cssColorToHex(themeColor);
-      if (hex) colorCounts.set(hex, (colorCounts.get(hex) ?? 0) + 10); // high weight
-    }
-  }
-
-  // Sort by frequency, deduplicate similar colors
-  const sorted = [...colorCounts.entries()].sort((a, b) => b[1] - a[1]);
-  const deduped: BrandColor[] = [];
-
-  for (const [hex] of sorted) {
-    if (deduped.length >= 8) break;
-    const tooClose = deduped.some((existing) => colorDistance(hex, existing.hex) < 30);
-    if (tooClose) continue;
-    deduped.push({
-      hex,
-      name: nameColor(hex),
-      role: deduped.length === 0 ? 'primary' : deduped.length === 1 ? 'secondary' : deduped.length < 4 ? 'accent' : 'neutral',
-    });
-  }
-
-  return deduped;
-}
+export { extractColorPalette } from './color-palette';
 
 // ---------------------------------------------------------------------------
 // Font extraction
@@ -140,23 +28,43 @@ export function extractFontFamilies(pages: CrawledPage[]): BrandFont[] {
       }
     });
 
-    // Check <link> tags for Google Fonts
+    // Google Fonts — multiple family= params per link
     doc.querySelectorAll('link[href*="fonts.googleapis.com"]').forEach((link) => {
       const href = link.getAttribute('href') ?? '';
-      const familyMatch = href.match(/family=([^&:]+)/);
+      for (const m of href.matchAll(/family=([^&:]+)/g)) {
+        const family = decodeURIComponent(m[1]).replace(/\+/g, ' ').split(':')[0]?.trim() ?? '';
+        if (!family) continue;
+        const existing = fontUsage.get(family) ?? { contexts: new Set(), count: 0 };
+        existing.contexts.add('link');
+        existing.count += 6;
+        fontUsage.set(family, existing);
+      }
+    });
+
+    doc.querySelectorAll('link[href*="fonts.bunny.net"], link[href*="use.typekit.net"]').forEach((link) => {
+      const href = link.getAttribute('href') ?? '';
+      const familyMatch = href.match(/family=([^&]+)/);
       if (familyMatch) {
         const family = decodeURIComponent(familyMatch[1]).replace(/\+/g, ' ');
         const existing = fontUsage.get(family) ?? { contexts: new Set(), count: 0 };
         existing.contexts.add('link');
-        existing.count += 5; // high weight for explicitly loaded fonts
+        existing.count += 5;
         fontUsage.set(family, existing);
       }
     });
 
     const cssText = styleBlocks.join('\n');
 
-    // font-family declarations with context detection
-    const fontMatches = cssText.matchAll(/([\w\s.#:-]+)\s*\{[^}]*font-family\s*:\s*([^;}"']+)/gi);
+    for (const m of cssText.matchAll(/@font-face\s*\{[^}]*font-family\s*:\s*['"]?([^;'"}]+)/gi)) {
+      const family = m[1].trim().replace(/['"]/g, '');
+      if (!family || family === 'inherit') continue;
+      const existing = fontUsage.get(family) ?? { contexts: new Set(), count: 0 };
+      existing.contexts.add('other');
+      existing.count += 4;
+      fontUsage.set(family, existing);
+    }
+
+    const fontMatches = cssText.matchAll(/([\w\s.#:[\]-]+)\s*\{[^}]*font-family\s*:\s*([^;}"']+)/gi);
     for (const m of fontMatches) {
       const selector = m[1].trim().toLowerCase();
       const families = m[2].split(',').map((f) => f.trim().replace(/["']/g, ''));
@@ -166,10 +74,15 @@ export function extractFontFamilies(pages: CrawledPage[]): BrandFont[] {
         const existing = fontUsage.get(family) ?? { contexts: new Set(), count: 0 };
         existing.count++;
 
-        if (/^h[1-6]|\.heading|\.title|\.hero/.test(selector)) existing.contexts.add('heading');
-        else if (/^p\b|^body|\.text|\.content|\.description/.test(selector)) existing.contexts.add('body');
-        else if (/code|pre|\.mono/.test(selector)) existing.contexts.add('mono');
-        else existing.contexts.add('other');
+        if (
+          /^h[1-6]|\.heading|\.headline|\.title|\.hero|\.display|font-heading|prose-headings/.test(selector)
+        ) {
+          existing.contexts.add('heading');
+        } else if (/^p\b|^body|\.text|\.content|\.description|\.prose\b|article/.test(selector)) {
+          existing.contexts.add('body');
+        } else if (/code|pre|\.mono|font-mono/.test(selector)) {
+          existing.contexts.add('mono');
+        } else existing.contexts.add('other');
 
         fontUsage.set(family, existing);
       }

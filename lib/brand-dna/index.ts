@@ -1,6 +1,8 @@
 export { generateBrandDNA } from './generate';
 export { crawlForBrandDNA } from './crawl';
 export { extractColorPalette, extractFontFamilies, extractLogoUrls, detectDesignStyle } from './extract-visuals';
+export { extractAudienceBenchmarks } from './extract-audience-benchmarks';
+export { metaAdLibrarySearchUrl, REFERENCE_ADVERTISERS } from './reference-advertisers';
 export { analyzeVerbalIdentity } from './analyze-verbal';
 export { extractProductCatalog } from './extract-products';
 export { compileBrandDocument } from './compile-document';

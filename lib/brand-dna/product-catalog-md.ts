@@ -49,6 +49,9 @@ export function buildCanonicalProductCatalogMarkdown(
         bits.push(`![${name.replace(/]/g, '')}](${p.imageUrl.trim()})`);
       }
       let line = `- **${name}**`;
+      if (p.offeringType) {
+        line += ` _(${p.offeringType.replace(/_/g, ' ')})_`;
+      }
       if (p.description?.trim()) line += ` — ${p.description.trim()}`;
       if (p.price?.trim()) line += ` _(${p.price.trim()})_`;
       bits.push(line);

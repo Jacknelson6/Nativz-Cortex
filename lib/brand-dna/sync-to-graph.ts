@@ -72,7 +72,8 @@ export async function syncBrandDNAToKnowledgeGraph(
   if (meta.products?.length) {
     sections.push('\n## Products & Services');
     for (const p of meta.products.slice(0, 20)) {
-      sections.push(`- **${p.name}:** ${p.description}${p.price ? ` — $${p.price}` : ''}`);
+      const t = p.offeringType ? ` _(${p.offeringType})_` : '';
+      sections.push(`- **${p.name}**${t}: ${p.description}${p.price ? ` — ${p.price}` : ''}`);
     }
   }
 
@@ -81,9 +82,23 @@ export async function syncBrandDNAToKnowledgeGraph(
     sections.push(`\n## Target Audience\n${meta.target_audience_summary}`);
   }
 
+  if (meta.ideal_customer_profiles?.length) {
+    sections.push('\n## ICPs');
+    for (const icp of meta.ideal_customer_profiles.slice(0, 5)) {
+      sections.push(`- **${icp.label}:** ${icp.summary}`);
+    }
+  }
+
   // Competitive positioning
   if (meta.competitive_positioning) {
     sections.push(`\n## Competitive Positioning\n${meta.competitive_positioning}`);
+  }
+
+  if (meta.similar_brands_for_ads?.length) {
+    sections.push('\n## Meta Ad Library references');
+    for (const b of meta.similar_brands_for_ads) {
+      sections.push(`- **${b.name}** (${b.category}): ${b.why_similar} — ${b.meta_ad_library_url}`);
+    }
   }
 
   const nodeContent = sections.join('\n');

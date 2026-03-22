@@ -300,10 +300,38 @@ Industry: ${ctx.clientIndustry}${ctx.clientWebsiteUrl ? `\nWebsite: ${ctx.client
   // Products
   if (ctx.products.length > 0) {
     const productLines = ctx.products
-      .slice(0, 20)
-      .map((p) => `- ${p.name}${p.description ? `: ${p.description}` : ''}${p.price ? ` ($${p.price})` : ''}`)
+      .slice(0, 24)
+      .map((p) => {
+        const type = p.offeringType ? ` [${p.offeringType}]` : '';
+        const img = p.imageUrl ? ` | image: ${p.imageUrl}` : '';
+        const price = p.price ? ` | ${p.price}` : '';
+        return `- ${p.name}${type}${p.description ? `: ${p.description}` : ''}${price}${img}`;
+      })
       .join('\n');
     sections.push(`<products>\n${productLines}\n</products>`);
+  }
+
+  const meta = ctx.metadata;
+  if (meta?.ideal_customer_profiles?.length) {
+    let icpBlock = '<ideal_customer_profiles>';
+    for (const icp of meta.ideal_customer_profiles.slice(0, 5)) {
+      icpBlock += `\n## ${icp.label}\n${icp.summary}`;
+      if (icp.pain_points?.length) icpBlock += `\nPain points: ${icp.pain_points.join('; ')}`;
+      if (icp.goals?.length) icpBlock += `\nGoals: ${icp.goals.join('; ')}`;
+    }
+    icpBlock += '\n</ideal_customer_profiles>';
+    sections.push(icpBlock);
+  }
+
+  if (meta?.similar_brands_for_ads?.length) {
+    const peerLines = meta.similar_brands_for_ads
+      .map((b) => `- ${b.name} (${b.category}): ${b.why_similar}\n  Meta Ad Library: ${b.meta_ad_library_url}`)
+      .join('\n');
+    sections.push(`<meta_ad_library_peers>\n${peerLines}\n</meta_ad_library_peers>`);
+  }
+
+  if (meta?.logo_usage_summary?.trim()) {
+    sections.push(`<logo_usage>\n${meta.logo_usage_summary.trim()}\n</logo_usage>`);
   }
 
   // Target audience

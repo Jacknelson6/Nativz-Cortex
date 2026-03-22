@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import * as cheerio from 'cheerio';
+import { dedupeHexList } from '@/lib/brand-dna/color-palette';
 import { extractProducts, extractMenuItems, extractServiceItems, extractColors, extractMeta, detectBusinessType } from './scrape-brand';
 import { extractLogo } from './extract-logo';
 import type { ScrapedBrand, ScrapedProduct } from './scrape-brand';
@@ -145,10 +146,8 @@ export async function crawlSite(url: string, options?: CrawlOptions): Promise<Cr
     // 7. Deduplicate products
     const deduplicatedProducts = deduplicateProducts(allProducts);
 
-    // 8. Merge homepage colors with crawled colors
-    const finalColors = [...allColors]
-      .filter((c) => !['#000', '#000000', '#fff', '#ffffff'].includes(c.toLowerCase()))
-      .slice(0, 8);
+    // 8. Merge homepage colors with crawled colors (similarity merge + cap)
+    const finalColors = dedupeHexList([...allColors], 6);
 
     return {
       brand: {

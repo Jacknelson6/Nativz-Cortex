@@ -2,7 +2,7 @@ import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import type { CrawledPage } from './types';
 
-interface VerbalIdentityResult {
+export interface VerbalIdentityAnalysis {
   tonePrimary: string;
   voiceAttributes: string[];
   messagingPillars: string[];
@@ -16,7 +16,7 @@ interface VerbalIdentityResult {
  * Analyze verbal identity from crawled page content using AI.
  * Sends homepage, about page, and product pages to Claude for tone/voice analysis.
  */
-export async function analyzeVerbalIdentity(pages: CrawledPage[]): Promise<VerbalIdentityResult | null> {
+export async function analyzeVerbalIdentity(pages: CrawledPage[]): Promise<VerbalIdentityAnalysis | null> {
   // Select the most relevant pages for voice analysis
   const homepage = pages.find((p) => p.pageType === 'homepage');
   const aboutPage = pages.find((p) => p.pageType === 'about');

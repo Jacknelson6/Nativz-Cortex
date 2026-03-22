@@ -80,6 +80,12 @@ export interface MeetingNoteMetadata {
   attendees?: string[];
   action_items?: string[];
   source?: 'fyxer' | 'manual' | 'other';
+  /** Set on Fyxer import / manual flows that classify cadence */
+  meeting_series?: 'recurring' | 'adhoc';
+  /** Client record vs prospect bucket (see slug `fyxer-prospects`) */
+  association?: 'client' | 'prospect';
+  /** Display / filter label for prospects or extra company context */
+  company_label?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,7 +95,7 @@ export interface MeetingNoteMetadata {
 export interface BrandColor {
   hex: string;
   name: string;
-  role: 'primary' | 'secondary' | 'accent' | 'neutral';
+  role: 'primary' | 'secondary' | 'accent' | 'tertiary' | 'neutral';
 }
 
 export interface BrandFont {
@@ -109,12 +115,49 @@ export interface BrandScreenshot {
   description: string;
 }
 
+/** What the offering actually is — affiliate/ambassador programs are not core services. */
+export type ProductOfferingType =
+  | 'product'
+  | 'service'
+  | 'affiliate_program'
+  | 'ambassador_program'
+  | 'partnership'
+  | 'other';
+
 export interface ProductItem {
   name: string;
   description: string;
   price?: string;
   imageUrl?: string;
   category?: string;
+  offeringType?: ProductOfferingType;
+}
+
+/** One of five ICPs generated during Brand DNA. */
+export interface IdealCustomerProfile {
+  label: string;
+  summary: string;
+  demographics?: string;
+  pain_points: string[];
+  goals: string[];
+  preferred_channels: string[];
+  buying_signals: string[];
+}
+
+/** Peer brand for Meta Ad Library creative research (URL is deterministic search, not a Page ID). */
+export interface SimilarBrandReference {
+  name: string;
+  category: string;
+  why_similar: string;
+  /** Meta Ad Library search URL for this brand name */
+  meta_ad_library_url: string;
+}
+
+/** Output of Brand DNA audience / benchmark extraction (ICPs + ad-library peers). */
+export interface BrandAudienceBenchmarks {
+  idealCustomerProfiles: IdealCustomerProfile[];
+  similarBrandsForAds: SimilarBrandReference[];
+  logoUsageSummary: string;
 }
 
 export interface DesignStyle {
@@ -138,6 +181,12 @@ export interface BrandGuidelineMetadata {
   avoidance_patterns: string[];
   target_audience_summary: string | null;
   competitive_positioning: string | null;
+  /** Five distinct ideal customer profiles */
+  ideal_customer_profiles?: IdealCustomerProfile[];
+  /** Brands with strong public ad libraries to study for static creative patterns */
+  similar_brands_for_ads?: SimilarBrandReference[];
+  /** How/when to use extracted logo assets */
+  logo_usage_summary?: string | null;
   generated_from: string[];
   version: number;
   superseded_by?: string;

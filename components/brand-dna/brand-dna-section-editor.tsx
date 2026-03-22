@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Plus, X, Save, Check } from 'lucide-react';
+import { Plus, X, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import type {
-  BrandColor, BrandFont, BrandLogo, ProductItem,
+  BrandColor, BrandFont, BrandLogo, ProductItem, ProductOfferingType,
   BrandGuidelineMetadata,
 } from '@/lib/knowledge/types';
 
@@ -128,7 +128,7 @@ async function saveBrandDNA(
 // Colors form
 // ---------------------------------------------------------------------------
 
-const COLOR_ROLES = ['primary', 'secondary', 'accent', 'neutral'] as const;
+const COLOR_ROLES = ['primary', 'secondary', 'accent', 'tertiary', 'neutral'] as const;
 
 function ColorsForm({
   clientId,
@@ -540,6 +540,16 @@ function VerbalForm({
 // Products form
 // ---------------------------------------------------------------------------
 
+const OFFERING_TYPE_OPTIONS: { value: ProductOfferingType | ''; label: string }[] = [
+  { value: '', label: 'Offering type' },
+  { value: 'product', label: 'Product' },
+  { value: 'service', label: 'Service' },
+  { value: 'affiliate_program', label: 'Affiliate program' },
+  { value: 'ambassador_program', label: 'Ambassador program' },
+  { value: 'partnership', label: 'Partnership' },
+  { value: 'other', label: 'Other' },
+];
+
 function ProductsForm({
   clientId,
   products: initial,
@@ -563,7 +573,18 @@ function ProductsForm({
   }
 
   function update(i: number, field: keyof ProductItem, value: string) {
-    setProducts((prev) => prev.map((p, idx) => (idx === i ? { ...p, [field]: value } : p)));
+    setProducts((prev) =>
+      prev.map((p, idx) => {
+        if (idx !== i) return p;
+        if (field === 'offeringType') {
+          return {
+            ...p,
+            offeringType: value === '' ? undefined : (value as ProductOfferingType),
+          };
+        }
+        return { ...p, [field]: value };
+      }),
+    );
   }
 
   async function handleSave() {
@@ -617,6 +638,17 @@ function ProductsForm({
                     className="flex-1 rounded bg-transparent text-xs text-text-muted border-b border-nativz-border/50 outline-none focus:border-accent/50 px-1 py-0.5"
                   />
                 </div>
+                <select
+                  value={product.offeringType ?? ''}
+                  onChange={(e) => update(i, 'offeringType', e.target.value)}
+                  className="w-full rounded bg-background text-[11px] text-text-muted border border-nativz-border px-1.5 py-1 outline-none focus:border-accent/50"
+                >
+                  {OFFERING_TYPE_OPTIONS.map((o) => (
+                    <option key={o.label} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
                 <input
                   type="url"
                   value={product.imageUrl ?? ''}

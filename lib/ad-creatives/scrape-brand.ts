@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { CrawledPage } from '@/lib/brand-dna/types';
+import { dedupeHexList, cssColorToHex } from '@/lib/brand-dna/color-palette';
 import { extractColorPalette, extractLogoUrls } from '@/lib/brand-dna/extract-visuals';
 import { extractLogo } from './extract-logo';
 import { extractRichProducts } from './extract-products-rich';
@@ -120,16 +121,17 @@ function extractBrand(html: string, url: string): ScrapedBrand {
 }
 
 function mergeColorLists(primary: string[], fallback: string[]): string[] {
-  const out: string[] = [];
+  const ordered: string[] = [];
   const seen = new Set<string>();
   for (const c of [...primary, ...fallback]) {
-    const n = c.toLowerCase();
+    const hex = cssColorToHex(c) ?? (c.startsWith('#') ? c.toLowerCase() : null);
+    if (!hex) continue;
+    const n = hex.toLowerCase();
     if (seen.has(n)) continue;
     seen.add(n);
-    out.push(n.startsWith('#') ? n : c);
-    if (out.length >= 12) break;
+    ordered.push(hex);
   }
-  return out;
+  return dedupeHexList(ordered, 6);
 }
 
 function extractTitle(html: string): string | null {
@@ -177,28 +179,26 @@ function extractLinkIcon(html: string, baseUrl: string): string | null {
 }
 
 export function extractColors(html: string): string[] {
-  const colors = new Set<string>();
+  const out: string[] = [];
+  const push = (raw: string | null | undefined) => {
+    const h = cssColorToHex(raw ?? '');
+    if (h) out.push(h);
+  };
 
-  // Theme color meta tag
-  const themeColor = extractMeta(html, 'theme-color');
-  if (themeColor) colors.add(themeColor);
+  push(extractMeta(html, 'theme-color'));
+  push(extractMeta(html, 'msapplication-TileColor'));
 
-  // MS tile color
-  const msColor = extractMeta(html, 'msapplication-TileColor');
-  if (msColor) colors.add(msColor);
-
-  // Inline style hex colors (limit to first few unique ones)
   const hexMatches = html.match(/#(?:[0-9a-fA-F]{3}){1,2}\b/g);
   if (hexMatches) {
-    const unique = [...new Set(hexMatches)].filter(
-      (c) => !['#000', '#000000', '#fff', '#ffffff', '#FFF', '#FFFFFF'].includes(c),
-    );
-    for (const c of unique.slice(0, 6)) {
-      colors.add(c.toLowerCase());
+    const skip = new Set(['#000', '#000000', '#fff', '#ffffff']);
+    for (const c of [...new Set(hexMatches.map((x) => x.toLowerCase()))]) {
+      if (skip.has(c)) continue;
+      push(c);
+      if (out.length >= 12) break;
     }
   }
 
-  return [...colors].slice(0, 8);
+  return dedupeHexList(out, 8);
 }
 
 // ---------------------------------------------------------------------------
