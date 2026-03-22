@@ -146,7 +146,7 @@ State of the art<br />content intelligence.
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@nativz.io"
+                  placeholder={isAC ? 'you@andersoncollaborative.com' : 'you@company.com'}
                   autoComplete="email"
                   required
                   className={`w-full rounded-lg border px-4 py-3 text-sm focus:outline-none focus:ring-1 transition-colors ${
@@ -192,7 +192,11 @@ State of the art<br />content intelligence.
 
               <div className="text-center">
                 <a
-                  href="mailto:Jack@nativz.io?subject=Cortex%20password%20reset"
+                  href={
+                    isAC
+                      ? 'mailto:hello@andersoncollaborative.com?subject=Cortex%20password%20reset'
+                      : 'mailto:hello@nativz.io?subject=Cortex%20password%20reset'
+                  }
                   className={`text-xs transition-colors ${
                     isAC ? 'text-[#36D1C2] hover:text-[#2BB5A8]' : 'text-[#046BD2]/70 hover:text-[#046BD2]'
                   }`}

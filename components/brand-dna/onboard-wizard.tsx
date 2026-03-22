@@ -31,6 +31,9 @@ function formatApiError(data: Record<string, unknown>): string {
     const hint = typeof data.hint === 'string' ? ` ${data.hint}` : '';
     return `${data.error}${hint}`;
   }
+  if (typeof data.message === 'string' && data.message.trim()) {
+    return data.message.trim();
+  }
   const d = data.details as Record<string, string[] | undefined> | undefined;
   if (d && typeof d === 'object') {
     const parts = Object.entries(d).flatMap(([k, v]) =>
@@ -38,7 +41,24 @@ function formatApiError(data: Record<string, unknown>): string {
     );
     if (parts.length) return parts.join(' · ');
   }
-  return 'Request failed';
+  return '';
+}
+
+/** Reads error text from any API response (JSON or HTML fallback). */
+async function readApiErrorFromResponse(res: Response): Promise<string> {
+  const raw = await res.text();
+  if (!raw.trim()) {
+    return res.status === 401
+      ? 'Unauthorized — sign in again (session may have expired).'
+      : `Request failed (HTTP ${res.status})`;
+  }
+  try {
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    return formatApiError(data) || `Request failed (HTTP ${res.status})`;
+  } catch {
+    const snippet = raw.slice(0, 160).replace(/\s+/g, ' ').trim();
+    return `Request failed (HTTP ${res.status})${snippet ? ` — ${snippet}` : ''}`;
+  }
 }
 
 interface OnboardWizardProps {
@@ -49,6 +69,9 @@ interface OnboardWizardProps {
   existingClientName?: string;
   /** Pre-fill website when opening for an existing client (e.g. from ad creatives). */
   initialWebsiteUrl?: string | null;
+  /** `inline` = embedded on ad creatives (no full-screen modal). */
+  layout?: 'modal' | 'inline';
+  className?: string;
 }
 
 export function OnboardWizard({
@@ -57,6 +80,8 @@ export function OnboardWizard({
   existingClientId,
   existingClientName,
   initialWebsiteUrl,
+  layout = 'modal',
+  className = '',
 }: OnboardWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -99,10 +124,14 @@ export function OnboardWizard({
     }
     toast.message('Brand DNA is still generating', {
       description:
-        'You can keep working elsewhere. Reopen this wizard from ad creatives when it’s ready.',
+        layout === 'inline'
+          ? 'You can switch tabs or leave this page. Use Refresh below when status is draft or active to start ads.'
+          : 'You can keep working elsewhere. Reopen this wizard from ad creatives when it’s ready.',
     });
-    onClose();
-  }, [clientId, clientName, existingClientName, onClose]);
+    if (layout === 'modal') {
+      onClose();
+    }
+  }, [clientId, clientName, existingClientName, onClose, layout]);
 
   const handleWizardClose = useCallback(() => {
     if (step === 2) {
@@ -231,8 +260,7 @@ export function OnboardWizard({
           });
         }
         if (!createRes.ok) {
-          const d = (await createRes.json().catch(() => ({}))) as Record<string, unknown>;
-          throw new Error(formatApiError(d));
+          throw new Error(await readApiErrorFromResponse(createRes));
         }
         const clientData = await createRes.json();
         id = clientData.id ?? clientData.client?.id;
@@ -268,8 +296,7 @@ export function OnboardWizard({
       });
 
       if (!genRes.ok) {
-        const d = (await genRes.json().catch(() => ({}))) as Record<string, unknown>;
-        throw new Error(formatApiError(d) || 'Failed to start generation');
+        throw new Error((await readApiErrorFromResponse(genRes)) || 'Failed to start generation');
       }
 
       const genData = await genRes.json();
@@ -326,6 +353,8 @@ export function OnboardWizard({
       accentColor="var(--accent)"
       totalSteps={totalSteps}
       currentStep={displayStep}
+      layout={layout}
+      className={className}
     >
       {/* Step 1: URL + name */}
       <div>
@@ -420,6 +449,11 @@ export function OnboardWizard({
           clientId={clientId}
           onComplete={handleGenerationComplete}
           onContinueInBackground={continueInBackground}
+          navigateAwayHint={
+            layout === 'inline'
+              ? 'This page stays open — refresh the ad creatives tab when generation finishes to unlock the ad wizard.'
+              : undefined
+          }
         />
       </div>
 

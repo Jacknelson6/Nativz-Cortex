@@ -20,7 +20,12 @@ for (const line of envContent.split('\n')) {
 async function main() {
   const { getServiceAccountGmailToken } = await import('../lib/google/service-account');
 
-  console.log('ENV check:', process.env.GOOGLE_SERVICE_ACCOUNT_KEY ? 'Key found' : 'Key missing');
+  const hasKey = !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY?.trim();
+  const hasPath = !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH?.trim();
+  console.log(
+    'ENV check:',
+    hasKey ? 'GOOGLE_SERVICE_ACCOUNT_KEY set' : hasPath ? 'GOOGLE_SERVICE_ACCOUNT_KEY_PATH set' : 'no credentials',
+  );
   console.log('Requesting Gmail token via service account...');
   const token = await getServiceAccountGmailToken();
   console.log('Token obtained:', token.substring(0, 20) + '...');

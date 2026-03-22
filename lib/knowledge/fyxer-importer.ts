@@ -11,6 +11,11 @@ import { getServiceAccountGmailToken } from '@/lib/google/service-account';
 import { createKnowledgeEntry, getKnowledgeEntries } from './queries';
 import { autoLinkEntities } from './entity-linker';
 import type { MeetingNoteMetadata } from './types';
+import {
+  extractCompanyLabelFromSubject,
+  inferMeetingSeriesFromText,
+} from '@/lib/meetings/meeting-note-helpers';
+import { filterClientsForFyxerMatching } from '@/lib/knowledge/fyxer-client-scope';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -235,10 +240,28 @@ async function getAllClients(): Promise<ClientRow[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from('clients')
-    .select('id, name, slug, website_url')
+    .select('id, name, slug, website_url, agency')
     .eq('is_active', true);
   if (error) throw new Error(`Failed to fetch clients: ${error.message}`);
-  return (data ?? []) as ClientRow[];
+  const scoped = filterClientsForFyxerMatching(data ?? []);
+  return scoped.map(({ id, name, slug, website_url }) => ({
+    id,
+    name,
+    slug,
+    website_url,
+  }));
+}
+
+/** Optional bucket for Fyxer meetings that do not match a client (slug must exist in `clients`). */
+export async function getProspectBucketClientId(): Promise<string | null> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('clients')
+    .select('id')
+    .eq('slug', 'fyxer-prospects')
+    .eq('is_active', true)
+    .maybeSingle();
+  return data?.id ?? null;
 }
 
 /**
@@ -304,8 +327,12 @@ async function getImportedEmailIds(): Promise<Set<string>> {
 
 /**
  * Poll Gmail for new Fyxer recap emails and import them into the knowledge base.
- * Uses a service account with domain-wide delegation to access jack@nativz.io's Gmail.
+ * Uses a service account with domain-wide delegation to access the impersonated user’s Gmail (`GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL`).
  * Zero AI tokens — parses Fyxer's structured HTML directly to markdown.
+ *
+ * Client auto-match uses active clients **excluding Nativz-agency rows** until those are ready
+ * (`clients.agency` containing “nativz”, case-insensitive). Unmatched → `fyxer-prospects` bucket.
+ * Override: `FYXER_INCLUDE_NATIVZ_CLIENTS=true`.
  */
 export async function importFyxerEmails(createdBy?: string): Promise<FyxerImportResult> {
   const result: FyxerImportResult = { imported: 0, skipped: 0, errors: [] };
@@ -313,7 +340,9 @@ export async function importFyxerEmails(createdBy?: string): Promise<FyxerImport
   // 1. Get Gmail access token via service account
   const accessToken = await getServiceAccountGmailToken();
   if (!accessToken) {
-    result.errors.push('Service account Gmail token failed — check GOOGLE_SERVICE_ACCOUNT_KEY');
+    result.errors.push(
+      'Service account Gmail token failed — check GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_SERVICE_ACCOUNT_KEY_PATH',
+    );
     return result;
   }
 
@@ -350,9 +379,22 @@ export async function importFyxerEmails(createdBy?: string): Promise<FyxerImport
       const markdown = fyxerHtmlToMarkdown(htmlBody);
       if (!markdown || markdown.length < 50) { result.skipped++; continue; }
 
-      // Match to a client
+      const prospectBucketId = await getProspectBucketClientId();
       const matchedClient = matchClient(subject, markdown, clients);
-      if (!matchedClient) { result.skipped++; continue; }
+      const targetClient = matchedClient
+        ? matchedClient
+        : prospectBucketId
+          ? { id: prospectBucketId, name: 'Prospects', slug: 'fyxer-prospects', website_url: null as string | null }
+          : null;
+      if (!targetClient) {
+        result.skipped++;
+        continue;
+      }
+
+      const meetingSeries = inferMeetingSeriesFromText(subject);
+      const association: MeetingNoteMetadata['association'] = matchedClient ? 'client' : 'prospect';
+      const companyLabel =
+        association === 'prospect' ? extractCompanyLabelFromSubject(subject) : undefined;
 
       // Extract date and duration
       const meetingDate = extractMeetingDate(htmlBody) ??
@@ -362,7 +404,7 @@ export async function importFyxerEmails(createdBy?: string): Promise<FyxerImport
       const title = `Meeting notes ${meetingDate} — ${subject}`;
 
       // Inject wikilinks where existing knowledge titles appear
-      const existingEntries = await getKnowledgeEntries(matchedClient.id);
+      const existingEntries = await getKnowledgeEntries(targetClient.id);
       let enrichedMarkdown = markdown;
       for (const entry of existingEntries) {
         if (entry.title.length < 4) continue;
@@ -378,12 +420,15 @@ export async function importFyxerEmails(createdBy?: string): Promise<FyxerImport
         meeting_date: meetingDate,
         source: 'fyxer',
         fyxer_email_id: ref.id,
+        meeting_series: meetingSeries,
+        association,
+        ...(companyLabel ? { company_label: companyLabel } : {}),
         ...(duration ? { duration } : {}),
       };
 
       // Create knowledge entry
       const entry = await createKnowledgeEntry({
-        client_id: matchedClient.id,
+        client_id: targetClient.id,
         type: 'meeting_note',
         title,
         content: enrichedMarkdown,
@@ -394,7 +439,7 @@ export async function importFyxerEmails(createdBy?: string): Promise<FyxerImport
 
       // Auto-link entities (no AI — just name matching)
       try {
-        await autoLinkEntities(matchedClient.id, entry.id);
+        await autoLinkEntities(targetClient.id, entry.id);
       } catch (err) {
         console.error(`Fyxer import: failed to auto-link for ${ref.id}`, err);
       }

@@ -10,8 +10,9 @@ export const maxDuration = 60;
  *
  * Vercel cron job (runs every 30 minutes): import Fyxer meeting recap emails from Gmail
  * into the knowledge base. Uses a Google service account with domain-wide delegation —
- * no AI tokens are consumed. Only imports meetings where the title contains a known
- * client name. Also generates embeddings for any entries missing them.
+ * no AI tokens are consumed. Matches subjects to active clients (excluding Nativz-agency
+ * rows unless `FYXER_INCLUDE_NATIVZ_CLIENTS=true`); unmatched → `fyxer-prospects` bucket.
+ * Also generates embeddings for any entries missing them.
  *
  * @auth Bearer CRON_SECRET (Vercel cron)
  * @returns {{ success: true, imported: number, skipped: number, errors: string[], embeddings: EmbedResult }}
@@ -25,7 +26,10 @@ async function handleFyxerImport(request: NextRequest) {
 
     if (!isServiceAccountConfigured()) {
       return NextResponse.json(
-        { error: 'GOOGLE_SERVICE_ACCOUNT_KEY not configured' },
+        {
+          error:
+            'Google service account not configured (GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_SERVICE_ACCOUNT_KEY_PATH)',
+        },
         { status: 400 },
       );
     }

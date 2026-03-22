@@ -110,6 +110,8 @@ export async function importMeetingNotes(
     attendees: allAttendees,
     action_items: extracted.actionItems,
     source: (options?.source as MeetingNoteMetadata['source']) ?? 'manual',
+    meeting_series: 'adhoc',
+    association: 'client',
   };
 
   // Build title from date and first topic

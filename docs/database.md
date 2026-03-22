@@ -210,3 +210,17 @@ Video idea submissions with status tracking.
 | Vercel | `NEXT_PUBLIC_APP_URL` |
 | Vault (GitHub) | `VAULT_GITHUB_TOKEN`, `VAULT_GITHUB_OWNER`, `VAULT_GITHUB_REPO` |
 | Knowledge graph (GitHub → Supabase sync) | `GITHUB_VAULT_TOKEN`; optional `KNOWLEDGE_GRAPH_GITHUB_REPO` (default `Jacknelson6/Cortex-Knowledge-Graph`) |
+| Fyxer / Gmail (service account + domain-wide delegation) | `GOOGLE_SERVICE_ACCOUNT_KEY` (base64 or JSON string, e.g. Vercel) **or** `GOOGLE_SERVICE_ACCOUNT_KEY_PATH` (absolute path to the JSON key file, local dev). Optional `GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL` (default `trevor@andersoncollaborative.com`) — the Workspace user mailbox to impersonate when calling Gmail. **Requires domain-wide delegation** (see below). |
+| Fyxer prospect bucket | Create an active **client** row with slug **`fyxer-prospects`** (any display name, e.g. “Prospects”) so unmatched Fyxer meetings are stored as `meeting_note` entries with `metadata.association: prospect` and `company_label` from the email subject. Without it, unmatched recaps are skipped. |
+| Fyxer client match scope | Auto-match only uses active clients whose **`agency`** value does **not** contain “nativz” (case-insensitive). **Nativz-agency clients are excluded until that roster is ready to be included.** Set `FYXER_INCLUDE_NATIVZ_CLIENTS=true` to match all active clients. |
+
+### Google domain-wide delegation (Fyxer / Gmail)
+
+Cortex uses a **service account JWT with `sub` = the user to impersonate** (`lib/google/service-account.ts`). That only works if Google Workspace domain-wide delegation is configured for that service account:
+
+1. In **Google Cloud Console** → IAM → the service account → enable **Domain-wide delegation** and note the **numeric Client ID** (not the `client_email`).
+2. In **Google Admin** (admin.google.com) → **Security** → **Access and data control** → **API controls** → **Domain-wide delegation** → **Add new** → paste that Client ID and authorize scope:  
+   `https://www.googleapis.com/auth/gmail.readonly`
+3. `GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL` must be a user in that Workspace domain (same domain the admin authorized). Fyxer recap messages must be visible in that user’s Gmail.
+
+If delegation or the scope is missing, token exchange returns an error (often `unauthorized_client` or `access_denied`).

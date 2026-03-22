@@ -28,7 +28,7 @@ This skill runs an autonomous QA cycle against the running dev server. It uses t
 ```
 1. Use browser_navigate to go to http://localhost:3001/admin/login
 2. Take a screenshot to confirm the app is running
-3. If login is needed, authenticate (Jack@nativz.io credentials)
+3. If login is needed, authenticate with team test credentials (never commit passwords; use env or 1Password)
 ```
 
 ### Step 2 — Systematic page crawl

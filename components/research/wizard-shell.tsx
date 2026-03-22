@@ -66,6 +66,8 @@ function SlideTransition({
   );
 }
 
+type WizardShellLayout = 'modal' | 'inline';
+
 interface WizardShellProps {
   open: boolean;
   onClose: () => void;
@@ -73,9 +75,22 @@ interface WizardShellProps {
   totalSteps: number;
   currentStep: number;
   children: ReactNode;
+  /** `inline` = embedded in a page (no overlay, no scroll lock). Default `modal`. */
+  layout?: WizardShellLayout;
+  /** Wrapper classes when `layout="inline"` */
+  className?: string;
 }
 
-export function WizardShell({ open, onClose, accentColor, totalSteps, currentStep, children }: WizardShellProps) {
+export function WizardShell({
+  open,
+  onClose,
+  accentColor,
+  totalSteps,
+  currentStep,
+  children,
+  layout = 'modal',
+  className = '',
+}: WizardShellProps) {
   const [direction, setDirection] = useState(1);
   const [contentHeight, setContentHeight] = useState(0);
   const prevStep = useRef(currentStep);
@@ -86,19 +101,53 @@ export function WizardShell({ open, onClose, accentColor, totalSteps, currentSte
   }, [currentStep]);
 
   useEffect(() => {
-    if (!open) return;
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    if (!open || layout !== 'modal') return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [open, onClose]);
+  }, [open, onClose, layout]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || layout !== 'modal') return;
     lockScroll();
     return () => unlockScroll();
-  }, [open]);
+  }, [open, layout]);
 
   const stepsArray = Children.toArray(children);
+
+  const stepBody = (
+    <div className={layout === 'modal' ? 'p-7' : 'p-6 sm:p-8'}>
+      <StepBar total={totalSteps} current={currentStep} accentColor={accentColor} />
+      <motion.div
+        style={{ position: 'relative', overflow: 'hidden' }}
+        animate={{ height: contentHeight }}
+        transition={{ type: 'spring', duration: 0.4, bounce: 0 }}
+      >
+        <AnimatePresence initial={false} mode="sync" custom={direction}>
+          <SlideTransition
+            key={currentStep}
+            direction={direction}
+            onHeightReady={setContentHeight}
+          >
+            {stepsArray[currentStep - 1]}
+          </SlideTransition>
+        </AnimatePresence>
+      </motion.div>
+    </div>
+  );
+
+  if (layout === 'inline') {
+    if (!open) return null;
+    return (
+      <div className={className}>
+        <div className="rounded-2xl border border-nativz-border bg-surface overflow-hidden shadow-[0_24px_64px_-32px_rgba(0,0,0,0.55)]">
+          {stepBody}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AnimatePresence>
@@ -118,24 +167,7 @@ export function WizardShell({ open, onClose, accentColor, totalSteps, currentSte
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ type: 'spring', duration: 0.35, bounce: 0.15 }}
           >
-            <div className="p-7">
-              <StepBar total={totalSteps} current={currentStep} accentColor={accentColor} />
-              <motion.div
-                style={{ position: 'relative', overflow: 'hidden' }}
-                animate={{ height: contentHeight }}
-                transition={{ type: 'spring', duration: 0.4, bounce: 0 }}
-              >
-                <AnimatePresence initial={false} mode="sync" custom={direction}>
-                  <SlideTransition
-                    key={currentStep}
-                    direction={direction}
-                    onHeightReady={setContentHeight}
-                  >
-                    {stepsArray[currentStep - 1]}
-                  </SlideTransition>
-                </AnimatePresence>
-              </motion.div>
-            </div>
+            {stepBody}
           </motion.div>
         </div>
       )}

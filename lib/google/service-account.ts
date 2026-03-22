@@ -1,12 +1,21 @@
 /**
  * Google Service Account authentication with domain-wide delegation.
  *
- * Used by the Fyxer cron importer to access jack@nativz.io's Gmail
- * without requiring OAuth consent or app verification.
+ * Used by the Fyxer cron importer and Nerd Fyxer tools to access a workspace
+ * user's Gmail without OAuth in the cron path.
  *
- * Env var required: GOOGLE_SERVICE_ACCOUNT_KEY (base64-encoded JSON key)
+ * Provide credentials in one of two ways:
+ * - `GOOGLE_SERVICE_ACCOUNT_KEY` — base64-encoded JSON or raw JSON string (Vercel-friendly)
+ * - `GOOGLE_SERVICE_ACCOUNT_KEY_PATH` — absolute path to the downloaded key file (local dev)
+ *
+ * Optional: `GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL` — Workspace user to impersonate (default `trevor@andersoncollaborative.com`).
+ *
+ * **Domain-wide delegation:** The JWT sets `sub` to that user. Google only accepts it if the service
+ * account’s numeric Client ID is allowlisted in Admin with scope `GMAIL_SCOPE` below.
  */
 
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { SignJWT, importPKCS8 } from 'jose';
 
 // ---------------------------------------------------------------------------
@@ -33,7 +42,9 @@ interface TokenCache {
 // Config
 // ---------------------------------------------------------------------------
 
-const IMPERSONATE_EMAIL = 'jack@nativz.io';
+const IMPERSONATE_EMAIL =
+  process.env.GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL ??
+  'trevor@andersoncollaborative.com';
 const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
 // In-memory cache to avoid re-signing JWTs on every request
@@ -43,18 +54,34 @@ let tokenCache: TokenCache | null = null;
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getServiceAccountKey(): ServiceAccountKey {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!raw) throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY env var not set');
-
+function parseKeyString(raw: string): ServiceAccountKey {
   try {
-    // Try base64 first
     const decoded = Buffer.from(raw, 'base64').toString('utf-8');
     return JSON.parse(decoded);
   } catch {
-    // Fall back to raw JSON
     return JSON.parse(raw);
   }
+}
+
+function getServiceAccountKey(): ServiceAccountKey {
+  const inline = process.env.GOOGLE_SERVICE_ACCOUNT_KEY?.trim();
+  if (inline) {
+    return parseKeyString(inline);
+  }
+
+  const keyPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH?.trim();
+  if (keyPath) {
+    const absolute = resolve(keyPath);
+    if (!existsSync(absolute)) {
+      throw new Error(`GOOGLE_SERVICE_ACCOUNT_KEY_PATH not found: ${absolute}`);
+    }
+    const json = readFileSync(absolute, 'utf-8');
+    return JSON.parse(json);
+  }
+
+  throw new Error(
+    'Set GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_SERVICE_ACCOUNT_KEY_PATH (service account JSON)',
+  );
 }
 
 /**
@@ -114,5 +141,12 @@ export async function getServiceAccountGmailToken(): Promise<string> {
  * Check if service account auth is configured.
  */
 export function isServiceAccountConfigured(): boolean {
-  return !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY?.trim()) return true;
+  const keyPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH?.trim();
+  if (!keyPath) return false;
+  try {
+    return existsSync(resolve(keyPath));
+  } catch {
+    return false;
+  }
 }

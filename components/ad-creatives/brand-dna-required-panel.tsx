@@ -1,17 +1,15 @@
 'use client';
 
-import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Dna,
   Loader2,
+  Palette,
   RefreshCw,
-  Upload,
   Sparkles,
-  Globe,
-  FileStack,
+  Type,
+  Wand2,
 } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { OnboardWizard } from '@/components/brand-dna/onboard-wizard';
 
@@ -24,7 +22,7 @@ interface BrandDnaRequiredPanelProps {
 }
 
 /**
- * Shown before the ad wizard when the selected client does not yet have usable Brand DNA.
+ * Full-page Brand DNA setup for ad creatives: run generation inline (no separate modal).
  */
 export function BrandDnaRequiredPanel({
   clientId,
@@ -33,207 +31,119 @@ export function BrandDnaRequiredPanel({
   websiteUrl,
 }: BrandDnaRequiredPanelProps) {
   const router = useRouter();
-  const [uploading, setUploading] = useState(false);
-  const [generateOpen, setGenerateOpen] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-
   const isGenerating = brandDnaStatus === 'generating';
 
-  async function handleUpload(files: FileList | null) {
-    if (!files?.length) return;
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      for (let i = 0; i < files.length; i++) fd.append('files', files[i]);
-      const res = await fetch(`/api/clients/${clientId}/brand-dna/upload`, {
-        method: 'POST',
-        body: fd,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? 'Upload failed');
-      toast.success(
-        data.entryIds?.length
-          ? `${data.entryIds.length} file(s) saved. Run Brand DNA generation to pull tone and colors from them.`
-          : 'Files uploaded.',
-      );
-      router.refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Upload failed');
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
-  }
-
   return (
-    <div className="max-w-lg mx-auto">
-      <div
-        className="relative overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-[0_24px_48px_-12px_rgba(0,0,0,0.45)]"
-        role="region"
-        aria-labelledby="brand-dna-gate-title"
-        aria-busy={isGenerating}
-      >
+    <div className="space-y-8 lg:space-y-10">
+      <section className="relative overflow-hidden rounded-2xl border border-nativz-border bg-surface">
         <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent-border/50 to-transparent"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(59,130,246,0.18),transparent)]"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[min(100%,28rem)] -translate-x-1/2 rounded-full bg-accent-text/[0.07] blur-3xl"
+          className="pointer-events-none absolute -right-20 top-1/2 h-64 w-64 -translate-y-1/2 rounded-full bg-accent/10 blur-3xl"
           aria-hidden
         />
-
-        <div className="relative px-6 py-8 sm:px-10 sm:py-10 space-y-8">
-          <div className="flex flex-col items-center text-center sm:items-start sm:text-left gap-5 sm:flex-row sm:gap-6">
-            <div
-              className={`relative flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-2xl border border-accent-border/25 bg-gradient-to-br from-accent-surface/35 to-accent-surface/[0.08] shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset,0_12px_40px_-16px_rgba(59,130,246,0.45)] ${isGenerating ? 'animate-pulse' : ''}`}
-            >
+        <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[1.15fr_minmax(0,1fr)] lg:items-center lg:gap-12">
+          <div className="space-y-5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-accent-text">
               {isGenerating ? (
-                <Loader2 className="h-8 w-8 text-accent-text animate-spin" strokeWidth={1.75} />
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Generating
+                </>
               ) : (
-                <Dna className="h-8 w-8 text-accent-text" strokeWidth={1.75} />
+                <>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Step before ads
+                </>
               )}
             </div>
-            <div className="min-w-0 space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-text/90">
-                {isGenerating ? 'In progress' : 'One quick setup'}
-              </p>
-              <h2
-                id="brand-dna-gate-title"
-                className="text-xl font-semibold tracking-tight text-text-primary sm:text-[1.35rem]"
-              >
-                {isGenerating ? (
-                  <>Generating Brand DNA for {clientName}</>
-                ) : (
-                  <>
-                    Generate Brand DNA for{' '}
-                    <span className="text-text-primary">{clientName}</span>
-                  </>
-                )}
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl">
+                Build a Brand DNA kit for{' '}
+                <span className="text-accent-text">{clientName}</span>
               </h2>
-              <p className="text-sm text-text-muted leading-relaxed max-w-md mx-auto sm:mx-0">
+              <p className="mt-3 max-w-xl text-sm leading-relaxed text-text-muted">
                 {isGenerating ? (
                   <>
-                    You can leave this page open. When the run finishes, tap{' '}
-                    <span className="text-text-secondary">Refresh</span> below to load the ad wizard.
+                    Analysis is running on the server. You can leave this tab — when it finishes, tap{' '}
+                    <span className="text-text-secondary">Refresh</span> to open the ad wizard.
                   </>
                 ) : (
                   <>
-                    Run generation once so we have colors, logos, tone, and product context before creating ads.
-                    You only need to do this per client unless you refresh their profile later.
+                    We pull colors, logos, voice, and products from the site (and any files you add) so
+                    generated ads stay on-brand. Run it once here — no need to jump to another page.
                   </>
                 )}
+              </p>
+            </div>
+            <ul className="grid gap-3 sm:grid-cols-3">
+              {[
+                { icon: Palette, label: 'Colors & logos', sub: 'From the live site' },
+                { icon: Type, label: 'Tone of voice', sub: 'Guidelines-ready' },
+                { icon: Wand2, label: 'Product context', sub: 'For ad copy & visuals' },
+              ].map(({ icon: Icon, label, sub }) => (
+                <li
+                  key={label}
+                  className="flex gap-3 rounded-xl border border-nativz-border/80 bg-background/40 px-3 py-3"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent-text">
+                    <Icon size={16} strokeWidth={1.75} />
+                  </span>
+                  <div className="min-w-0 pt-0.5">
+                    <p className="text-xs font-medium text-text-primary">{label}</p>
+                    <p className="text-[11px] text-text-muted leading-snug">{sub}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-nativz-border"
+                onClick={() => router.refresh()}
+              >
+                <RefreshCw size={14} />
+                Refresh status
+              </Button>
+              <p className="text-[11px] text-text-muted">
+                After Brand DNA is <span className="text-text-secondary">draft</span> or{' '}
+                <span className="text-text-secondary">active</span>, this tab loads the ad wizard automatically.
               </p>
             </div>
           </div>
-
-          {!isGenerating && (
-            <ul className="space-y-2.5" aria-label="Steps to enable ad generation">
-              <li>
-                <div className="group flex gap-3.5 rounded-xl border border-nativz-border/90 bg-background/35 p-4 transition-colors hover:border-nativz-border hover:bg-background/50">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-surface/30 text-accent-text ring-1 ring-accent-border/20">
-                    <Globe size={18} strokeWidth={1.75} />
-                  </span>
-                  <div className="min-w-0 pt-0.5">
-                    <p className="text-sm font-medium text-text-primary">Generate Brand DNA from the web</p>
-                    <p className="mt-0.5 text-xs text-text-muted leading-relaxed">
-                      Use the button below to open the wizard here, confirm their site URL, and start (or re-run) analysis.
-                    </p>
-                  </div>
-                </div>
-              </li>
-              <li>
-                <div className="group flex gap-3.5 rounded-xl border border-nativz-border/90 bg-background/35 p-4 transition-colors hover:border-nativz-border hover:bg-background/50">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-hover text-text-secondary ring-1 ring-nativz-border-light">
-                    <FileStack size={18} strokeWidth={1.75} />
-                  </span>
-                  <div className="min-w-0 pt-0.5">
-                    <p className="text-sm font-medium text-text-primary">Optional files</p>
-                    <p className="mt-0.5 text-xs text-text-muted leading-relaxed">
-                      Upload guidelines, PDFs, or logos — they feed the same Brand DNA pipeline.
-                    </p>
-                  </div>
-                </div>
-              </li>
-              <li>
-                <div className="group flex gap-3.5 rounded-xl border border-nativz-border/90 bg-background/35 p-4 transition-colors hover:border-nativz-border hover:bg-background/50">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-hover text-text-secondary ring-1 ring-nativz-border-light">
-                    <RefreshCw size={18} strokeWidth={1.75} />
-                  </span>
-                  <div className="min-w-0 pt-0.5">
-                    <p className="text-sm font-medium text-text-primary">Return to ad creatives</p>
-                    <p className="mt-0.5 text-xs text-text-muted leading-relaxed">
-                      When status is draft or active, tap Refresh to load the ad wizard.
-                    </p>
-                  </div>
-                </div>
-              </li>
-            </ul>
-          )}
-
-          <div className="flex flex-col gap-3 pt-1">
-            <Button
-              type="button"
-              size="lg"
-              className="w-full h-11 font-medium shadow-sm shadow-black/20"
-              disabled={isGenerating}
-              onClick={() => {
-                if (isGenerating) return;
-                setGenerateOpen(true);
-              }}
+          <div className="relative flex min-h-[200px] items-center justify-center lg:min-h-[280px]">
+            <div className="absolute inset-0 rounded-2xl border border-dashed border-nativz-border/60 bg-background/20" />
+            <div
+              className={`relative flex h-36 w-36 items-center justify-center rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/20 to-accent/5 shadow-[0_0_40px_-12px_rgba(59,130,246,0.5)] sm:h-44 sm:w-44 ${isGenerating ? 'animate-pulse' : ''}`}
             >
-              <Sparkles size={17} strokeWidth={2} />
-              Generate Brand DNA
-            </Button>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 h-10 border-nativz-border-light bg-background/30 hover:bg-background/50"
-                disabled={uploading || isGenerating}
-                onClick={() => {
-                  if (isGenerating) return;
-                  fileRef.current?.click();
-                }}
-              >
-                {uploading ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <Upload size={16} />
-                )}
-                Upload assets
-              </Button>
-              <input
-                ref={fileRef}
-                type="file"
-                multiple
-                accept="image/*,.pdf,.md,.txt,.docx"
-                className="hidden"
-                onChange={(e) => handleUpload(e.target.files)}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 h-10 border-nativz-border-light bg-background/30 hover:bg-background/50"
-                onClick={() => router.refresh()}
-              >
-                <RefreshCw size={16} />
-                Refresh
-              </Button>
+              {isGenerating ? (
+                <Loader2 className="h-14 w-14 text-accent-text animate-spin" strokeWidth={1.5} />
+              ) : (
+                <Dna className="h-14 w-14 text-accent-text" strokeWidth={1.5} />
+              )}
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <OnboardWizard
-        open={generateOpen}
-        onClose={() => {
-          setGenerateOpen(false);
-          router.refresh();
-        }}
-        existingClientId={clientId}
-        existingClientName={clientName}
-        initialWebsiteUrl={websiteUrl}
-      />
+      <section
+        aria-label="Brand DNA generation"
+        className="border-t border-nativz-border/60 pt-8 lg:pt-10"
+      >
+        <OnboardWizard
+          open
+          layout="inline"
+          className="max-w-2xl mx-auto w-full"
+          onClose={() => router.refresh()}
+          existingClientId={clientId}
+          existingClientName={clientName}
+          initialWebsiteUrl={websiteUrl}
+        />
+      </section>
     </div>
   );
 }

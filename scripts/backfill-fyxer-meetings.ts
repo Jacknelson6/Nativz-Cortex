@@ -33,6 +33,7 @@ for (const line of envContent.split('\n')) {
 import { createClient } from '@supabase/supabase-js';
 import { getServiceAccountGmailToken } from '@/lib/google/service-account';
 import { fyxerHtmlToMarkdown, matchClient } from '@/lib/knowledge/fyxer-importer';
+import { filterClientsForFyxerMatching } from '../lib/knowledge/fyxer-client-scope';
 import { importMeetingNotes } from '@/lib/knowledge/meeting-importer';
 
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -117,10 +118,11 @@ function getAdmin() {
 async function getAllClients() {
   const { data, error } = await getAdmin()
     .from('clients')
-    .select('id, name, slug, website_url')
+    .select('id, name, slug, website_url, agency')
     .eq('is_active', true);
   if (error) throw new Error(`Clients fetch failed: ${error.message}`);
-  return data ?? [];
+  const scoped = filterClientsForFyxerMatching(data ?? []);
+  return scoped.map(({ id, name, slug, website_url }) => ({ id, name, slug, website_url }));
 }
 
 async function getImportedEmailIds(): Promise<Set<string>> {
@@ -146,7 +148,9 @@ async function main() {
   // 1. Gmail auth
   const accessToken = await getServiceAccountGmailToken();
   if (!accessToken) {
-    console.error('❌ Failed to get Gmail token — check GOOGLE_SERVICE_ACCOUNT_KEY');
+    console.error(
+      '❌ Failed to get Gmail token — check GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_SERVICE_ACCOUNT_KEY_PATH',
+    );
     process.exit(1);
   }
   console.log('✓ Gmail authenticated');

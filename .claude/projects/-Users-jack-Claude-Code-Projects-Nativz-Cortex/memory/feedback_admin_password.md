@@ -1,9 +1,7 @@
 ---
 name: feedback_admin_password
-description: Jack's admin login credentials for Cortex dev server testing
+description: Use team test credentials for Cortex QA (never commit passwords)
 type: feedback
 ---
 
-Admin login for QA testing: Jack@nativz.io / Jack0406($
-**Why:** Needed to authenticate Playwright browser sessions for visual QA testing.
-**How to apply:** Use when running QA loops or browser-based testing against the dev server.
+For Playwright or browser QA against the dev server, sign in with credentials from your team or `.env.local` — **do not store real passwords in this repo.**

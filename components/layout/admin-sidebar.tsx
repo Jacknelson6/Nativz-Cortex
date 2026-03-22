@@ -26,6 +26,10 @@ import {
   ThumbsUp,
   Megaphone,
   CalendarClock,
+  Mic2,
+  List,
+  RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -95,6 +99,16 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/admin/clients', label: 'Clients', icon: Building2 },
       { href: '/admin/team', label: 'Team', icon: UsersRound },
+      {
+        href: '/admin/meetings',
+        label: 'Meetings',
+        icon: Mic2,
+        children: [
+          { href: '/admin/meetings', label: 'All', icon: List },
+          { href: '/admin/meetings?series=recurring', label: 'Recurring', icon: RefreshCw },
+          { href: '/admin/meetings?series=adhoc', label: 'Ad hoc', icon: Sparkles },
+        ],
+      },
       {
         href: '/admin/analytics',
         label: 'Analytics',

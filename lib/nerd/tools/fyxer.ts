@@ -2,7 +2,17 @@ import { z } from 'zod';
 import { ToolDefinition } from '../types';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getServiceAccountGmailToken } from '@/lib/google/service-account';
-import { fyxerHtmlToMarkdown, matchClient } from '@/lib/knowledge/fyxer-importer';
+import {
+  fyxerHtmlToMarkdown,
+  getProspectBucketClientId,
+  matchClient,
+} from '@/lib/knowledge/fyxer-importer';
+import {
+  extractCompanyLabelFromSubject,
+  inferMeetingSeriesFromText,
+} from '@/lib/meetings/meeting-note-helpers';
+import type { MeetingNoteMetadata } from '@/lib/knowledge/types';
+import { filterClientsForFyxerMatching } from '@/lib/knowledge/fyxer-client-scope';
 import { embedKnowledgeEntry } from '@/lib/ai/embeddings';
 
 // ---------------------------------------------------------------------------
@@ -240,23 +250,44 @@ export const fyxerTools: ToolDefinition[] = [
           return { success: false, error: 'Email content too short to import' };
         }
 
-        // Resolve client
         let resolvedClientId = clientId;
+        let association: MeetingNoteMetadata['association'] = 'client';
+        let companyLabel: string | undefined;
+
         if (!resolvedClientId) {
-          const { data: clients } = await admin
+          const { data: clientRows } = await admin
             .from('clients')
-            .select('id, name, slug, website_url')
+            .select('id, name, slug, website_url, agency')
             .eq('is_active', true);
 
-          const matched = matchClient(subject, markdown, clients ?? []);
-          if (!matched) {
-            return {
-              success: false,
-              error: 'Could not auto-detect client. Please specify client_id.',
-            };
+          const scoped = filterClientsForFyxerMatching(clientRows ?? []);
+          const clients = scoped.map(({ id, name, slug, website_url }) => ({
+            id,
+            name,
+            slug,
+            website_url,
+          }));
+
+          const matched = matchClient(subject, markdown, clients);
+          if (matched) {
+            resolvedClientId = matched.id;
+            association = 'client';
+          } else {
+            const bucket = await getProspectBucketClientId();
+            if (!bucket) {
+              return {
+                success: false,
+                error:
+                  'Could not auto-detect client. Specify client_id, or add an active client with slug fyxer-prospects for unmatched meetings.',
+              };
+            }
+            resolvedClientId = bucket;
+            association = 'prospect';
+            companyLabel = extractCompanyLabelFromSubject(subject);
           }
-          resolvedClientId = matched.id;
         }
+
+        const meetingSeries = inferMeetingSeriesFromText(subject);
 
         // Extract date
         const dateMatch = htmlBody.match(
@@ -295,6 +326,9 @@ export const fyxerTools: ToolDefinition[] = [
             meeting_date: meetingDate,
             source: 'fyxer',
             fyxer_email_id: emailId,
+            meeting_series: meetingSeries,
+            association,
+            ...(companyLabel ? { company_label: companyLabel } : {}),
             ...(duration ? { duration } : {}),
           },
           source: 'imported',
