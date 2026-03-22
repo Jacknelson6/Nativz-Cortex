@@ -44,6 +44,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
   });
 
   const [pillars, setPillars] = useState<PillarInfo[]>([]);
+  const [exporting, setExporting] = useState(false);
   const completedRefIds = (generation.reference_video_ids ?? []) as string[];
   const selectedCount = ideas.filter((i) => i.selected).length;
   const effectiveCta = ctaType === 'custom' ? customCta : ctaType === 'comment' ? `Comment "${commentWord || 'YES'}"` : ctaType;
@@ -322,7 +323,6 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
   };
 
   // ── Export PDF ──
-  const [exporting, setExporting] = useState(false);
   const handleExportPdf = async () => {
     setExporting(true);
     try {

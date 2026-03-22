@@ -30,7 +30,7 @@ import { SearchProgress } from '@/components/search/search-progress';
 import { SearchIdeasWizard } from '@/components/research/search-ideas-wizard';
 import type { ClientOption } from '@/components/ui/client-picker';
 import { formatRelativeTime } from '@/lib/utils/format';
-import { hasSerp } from '@/lib/types/search';
+import { hasSerp, isNewMetrics } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse, SearchPlatform, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
 import { BenchmarkRecommendations } from '@/components/search/benchmark-recommendations';
 import { RelatedTopics } from '@/components/search/related-topics';
@@ -141,12 +141,12 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
             {aiResponse?.overall_sentiment !== undefined && (
               <SentimentBadge sentiment={aiResponse.overall_sentiment} />
             )}
-            {search.completed_at && (
+            {search.completed_at ? (
               <span className="hidden sm:flex items-center gap-1 text-xs text-text-muted">
                 <Clock size={12} />
                 {formatRelativeTime(search.completed_at)}
               </span>
-            )}
+            ) : null}
             <Button variant="outline" size="sm" onClick={() => setShowIdeasWizard(true)}>
               <Sparkles size={14} />
               Create video ideas
@@ -183,7 +183,7 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
       {/* Content */}
       <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
         {/* Linked ideas banner */}
-        {linkedIdeas.length > 0 && (
+        {linkedIdeas.length > 0 ? (
           <div className="rounded-xl border border-accent2/20 bg-accent2/5 p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent2-surface shrink-0">
@@ -206,26 +206,35 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
               </Link>
             </div>
           </div>
-        )}
+        ) : null}
 
         {aiResponse?.brand_alignment_notes ? (
           <ExecutiveSummary summary={aiResponse.brand_alignment_notes} variant="brand" />
-        ) : (
-          search.summary && <ExecutiveSummary summary={search.summary} />
-        )}
+        ) : search.summary ? (
+          <ExecutiveSummary summary={search.summary} />
+        ) : null}
         {/* Key Findings Cards */}
-        {search.summary && aiResponse?.trending_topics && (
-          <KeyFindings summary={search.summary} topics={aiResponse.trending_topics} overallSentiment={aiResponse.overall_sentiment ?? (search.metrics as any)?.overall_sentiment} />
-        )}
+        {Boolean(search.summary && aiResponse?.trending_topics) ? (
+          <KeyFindings
+            summary={search.summary!}
+            topics={aiResponse!.trending_topics}
+            overallSentiment={
+              aiResponse!.overall_sentiment ??
+              (search.metrics && isNewMetrics(search.metrics) ? search.metrics.overall_sentiment : undefined)
+            }
+          />
+        ) : null}
 
-        {search.metrics && <MetricsRow metrics={search.metrics} isBrandSearch={!!aiResponse?.brand_alignment_notes} />}
+        {search.metrics ? (
+          <MetricsRow metrics={search.metrics} isBrandSearch={!!aiResponse?.brand_alignment_notes} />
+        ) : null}
 
         {/* Platform source strip — v2 searches only */}
-        {aiResponse?.platform_breakdown && aiResponse.platform_breakdown.length > 0 && (
+        {Boolean(aiResponse?.platform_breakdown?.length) ? (
           <div className="flex items-center gap-4 py-3 px-4 rounded-xl bg-surface border border-nativz-border">
             <span className="text-xs text-text-muted">Sources gathered</span>
             <div className="flex items-center gap-3">
-              {aiResponse.platform_breakdown.map((pb) => (
+              {aiResponse!.platform_breakdown!.map((pb) => (
                 <span key={pb.platform} className="flex items-center gap-1.5 text-sm">
                   <PlatformIcon platform={pb.platform} size={14} />
                   <span className="text-text-secondary font-medium">{pb.post_count}</span>
@@ -233,64 +242,64 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
               ))}
             </div>
           </div>
-        )}
+        ) : null}
 
-        {search.activity_data && search.activity_data.length > 0 && (
+        {search.activity_data && search.activity_data.length > 0 ? (
           <ActivityChart data={search.activity_data} />
-        )}
+        ) : null}
 
-        {(search.emotions || search.content_breakdown) && (
+        {(Boolean(search.emotions?.length) || Boolean(search.content_breakdown)) ? (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {search.emotions && search.emotions.length > 0 && (
+            {search.emotions && search.emotions.length > 0 ? (
               <EmotionsBreakdown emotions={search.emotions} />
-            )}
-            {search.content_breakdown && (
+            ) : null}
+            {search.content_breakdown ? (
               <ContentBreakdown data={search.content_breakdown} />
-            )}
+            ) : null}
           </div>
-        )}
+        ) : null}
         {/* Render trending topics */}
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        {(trendingTopics.length > 0 ? (
+        {trendingTopics.length > 0 ? (
           <TrendingTopicsTable topics={trendingTopics} clientId={clientInfo?.id ?? undefined} searchId={search.id} />
-        ) : null) as any}
+        ) : null}
 
-        {(aiResponse?.content_pillars || aiResponse?.niche_performance_insights) && (
+        {Boolean(aiResponse) &&
+        ((aiResponse!.content_pillars?.length ?? 0) > 0 || Boolean(aiResponse!.niche_performance_insights)) ? (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {aiResponse.content_pillars && aiResponse.content_pillars.length > 0 && (
-              <ContentPillars pillars={aiResponse.content_pillars} />
-            )}
-            {aiResponse.niche_performance_insights && (
-              <NicheInsights insights={aiResponse.niche_performance_insights} />
-            )}
+            {(aiResponse!.content_pillars?.length ?? 0) > 0 && aiResponse!.content_pillars ? (
+              <ContentPillars pillars={aiResponse!.content_pillars} />
+            ) : null}
+            {aiResponse!.niche_performance_insights ? (
+              <NicheInsights insights={aiResponse!.niche_performance_insights} />
+            ) : null}
           </div>
-        )}
+        ) : null}
 
         {/* Competitive Analysis (brand search) */}
-        {aiResponse?.niche_performance_insights && !!aiResponse?.brand_alignment_notes && (
-          <CompetitiveAnalysis
-            nicheInsights={aiResponse.niche_performance_insights}
-          />
-        )}
+        {Boolean(aiResponse?.niche_performance_insights && aiResponse?.brand_alignment_notes) ? (
+          <CompetitiveAnalysis nicheInsights={aiResponse!.niche_performance_insights!} />
+        ) : null}
 
         {/* Big movers — who's making noise in this space */}
-        {aiResponse?.big_movers && aiResponse.big_movers.length > 0 && (
-          <BigMovers movers={aiResponse.big_movers} />
-        )}
+        {Boolean(aiResponse?.big_movers?.length) ? (
+          <BigMovers movers={aiResponse!.big_movers!} />
+        ) : null}
 
         {/* Benchmark ad format recommendations */}
-        {clientInfo?.industry && (
+        {clientInfo?.industry ? (
           <BenchmarkRecommendations industry={clientInfo.industry} />
-        )}
+        ) : null}
 
         {/* Source browser — browse posts by platform */}
-        {search.platform_data && (search.platform_data as Record<string, unknown>).sources && (
+        {Boolean(
+          search.platform_data && (search.platform_data as Record<string, unknown>).sources,
+        ) ? (
           <SourceBrowser sources={(search.platform_data as Record<string, unknown>).sources as PlatformSource[]} />
-        )}
+        ) : null}
 
-        {hasSerp(search) && search.serp_data && (
+        {hasSerp(search) && search.serp_data ? (
           <SourcesPanel serpData={search.serp_data} />
-        )}
+        ) : null}
 
         {/* Explore related topics */}
         <RelatedTopics searchId={search.id} />

@@ -192,7 +192,7 @@ async function saveKandyTemplateRow(row: KandyRow): Promise<{ error: Error | nul
     return null;
   };
 
-  let err = await run(row);
+  const err = await run(row);
   if (!err) return { error: null };
 
   const isCheck =

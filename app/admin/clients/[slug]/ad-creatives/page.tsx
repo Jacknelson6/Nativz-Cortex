@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { AdCreativesView } from '@/components/ad-creatives/ad-creatives-view';
@@ -25,13 +26,22 @@ export default async function AdCreativesPage({
     .eq('client_id', client.id);
 
   return (
-    <AdCreativesView
-      clientId={client.id}
-      clientName={client.name ?? ''}
-      clientSlug={client.slug ?? slug}
-      websiteUrl={client.website_url}
-      brandDnaStatus={client.brand_dna_status}
-      creativeCount={count ?? 0}
-    />
+    <Suspense
+      fallback={
+        <div className="p-6 max-w-7xl mx-auto space-y-4 animate-pulse">
+          <div className="h-8 w-40 rounded-lg bg-surface border border-nativz-border" />
+          <div className="h-72 rounded-xl bg-surface border border-nativz-border" />
+        </div>
+      }
+    >
+      <AdCreativesView
+        clientId={client.id}
+        clientName={client.name ?? ''}
+        clientSlug={client.slug ?? slug}
+        websiteUrl={client.website_url}
+        brandDnaStatus={client.brand_dna_status}
+        creativeCount={count ?? 0}
+      />
+    </Suspense>
   );
 }

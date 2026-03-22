@@ -536,7 +536,7 @@ export async function POST(req: NextRequest) {
 
     const readable = new ReadableStream({
       async start(controller) {
-        let currentMessages = [...apiMessages];
+        const currentMessages = [...apiMessages];
         let response = openRouterRes;
         let toolCallCount = 0;
         const MAX_TOOL_CALLS = 5;

@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 
     // Enrich with used_by user info
     const usedByIds = (invites ?? []).filter(i => i.used_by).map(i => i.used_by);
-    let usedByMap: Record<string, { email: string; full_name: string }> = {};
+    const usedByMap: Record<string, { email: string; full_name: string }> = {};
     if (usedByIds.length > 0) {
       const { data: usedByUsers } = await adminClient
         .from('users')

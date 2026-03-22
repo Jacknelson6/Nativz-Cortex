@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 import { getVaultClients } from '@/lib/vault/reader';
@@ -41,5 +42,16 @@ export default async function AdminNewSearchPage() {
   // Fetch merged history
   const historyItems = await fetchHistory({ limit: 10 });
 
-  return <ResearchHub clients={clients} historyItems={historyItems} />;
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6 max-w-5xl mx-auto space-y-4 animate-pulse">
+          <div className="h-8 w-56 rounded-lg bg-surface border border-nativz-border" />
+          <div className="h-96 rounded-xl bg-surface border border-nativz-border" />
+        </div>
+      }
+    >
+      <ResearchHub clients={clients} historyItems={historyItems} />
+    </Suspense>
+  );
 }

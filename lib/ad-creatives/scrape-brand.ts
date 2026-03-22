@@ -6,6 +6,7 @@ import type { CrawledPage } from '@/lib/brand-dna/types';
 import { extractColorPalette, extractLogoUrls } from '@/lib/brand-dna/extract-visuals';
 import { extractLogo } from './extract-logo';
 import { extractRichProducts } from './extract-products-rich';
+import { isJunkProductName } from './product-name-filters';
 
 export type ScrapedBrand = {
   name: string;
@@ -68,6 +69,7 @@ export async function scrapeBrandAndProducts(url: string): Promise<ScrapeBrandRe
 
 function isPlausibleProduct(p: ScrapedProduct, artifact: RegExp): boolean {
   if (p.name.length < 3 || artifact.test(p.name)) return false;
+  if (isJunkProductName(p.name)) return false;
   if (p.imageUrl) return true;
   if (p.description && p.description.length >= 24) return true;
   return false;
@@ -207,17 +209,17 @@ export function extractProducts(html: string, baseUrl: string): ScrapedProduct[]
   const products: ScrapedProduct[] = [];
 
   // 1. JSON-LD (highest signal)
-  products.push(...extractJsonLdProducts(html));
+  products.push(...extractJsonLdProducts(html, baseUrl));
 
   // 2. Microdata, WooCommerce-style cards, figures
   products.push(...extractRichProducts(html, baseUrl));
 
   // 3. OG product
-  const ogProduct = extractOgProduct(html);
+  const ogProduct = extractOgProduct(html, baseUrl);
   if (ogProduct) products.push(ogProduct);
 
   // 4. Alt-text heuristics
-  products.push(...extractHeuristicProducts(html));
+  products.push(...extractHeuristicProducts(html, baseUrl));
 
   // Deduplicate by name
   const seen = new Set<string>();
@@ -231,7 +233,29 @@ export function extractProducts(html: string, baseUrl: string): ScrapedProduct[]
     .slice(0, 30);
 }
 
-function extractJsonLdProducts(html: string): ScrapedProduct[] {
+function normalizeJsonLdImage(image: unknown, baseUrl: string): string | null {
+  if (image == null) return null;
+  if (typeof image === 'string') {
+    try {
+      return new URL(image, baseUrl).href.replace(/^http:\/\//, 'https://');
+    } catch {
+      return null;
+    }
+  }
+  if (Array.isArray(image)) {
+    for (const entry of image) {
+      const u = normalizeJsonLdImage(entry, baseUrl);
+      if (u) return u;
+    }
+    return null;
+  }
+  if (typeof image === 'object' && image !== null && 'url' in image) {
+    return normalizeJsonLdImage((image as { url: unknown }).url, baseUrl);
+  }
+  return null;
+}
+
+function extractJsonLdProducts(html: string, baseUrl: string): ScrapedProduct[] {
   const products: ScrapedProduct[] = [];
   const scriptRegex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
 
@@ -249,8 +273,8 @@ function extractJsonLdProducts(html: string): ScrapedProduct[] {
         ) {
           products.push({
             name: item.name ?? '',
-            imageUrl: Array.isArray(item.image) ? item.image[0] : (item.image ?? null),
-            description: item.description ?? '',
+            imageUrl: normalizeJsonLdImage(item.image, baseUrl),
+            description: typeof item.description === 'string' ? item.description : '',
             price: extractJsonLdPrice(item),
           });
         }
@@ -262,8 +286,8 @@ function extractJsonLdProducts(html: string): ScrapedProduct[] {
             if (product.name) {
               products.push({
                 name: product.name,
-                imageUrl: Array.isArray(product.image) ? product.image[0] : (product.image ?? null),
-                description: product.description ?? '',
+                imageUrl: normalizeJsonLdImage(product.image, baseUrl),
+                description: typeof product.description === 'string' ? product.description : '',
                 price: extractJsonLdPrice(product),
               });
             }
@@ -294,16 +318,26 @@ function extractJsonLdPrice(item: Record<string, unknown>): string | null {
   return null;
 }
 
-function extractOgProduct(html: string): ScrapedProduct | null {
+function extractOgProduct(html: string, baseUrl: string): ScrapedProduct | null {
   const ogType = extractMeta(html, 'og:type');
   if (ogType !== 'product' && ogType !== 'og:product') return null;
 
   const name = extractMeta(html, 'og:title');
   if (!name) return null;
 
+  const rawImg = extractMeta(html, 'og:image');
+  let imageUrl: string | null = null;
+  if (rawImg) {
+    try {
+      imageUrl = new URL(rawImg, baseUrl).href.replace(/^http:\/\//, 'https://');
+    } catch {
+      imageUrl = null;
+    }
+  }
+
   return {
     name,
-    imageUrl: extractMeta(html, 'og:image') ?? null,
+    imageUrl,
     description: extractMeta(html, 'og:description') ?? '',
     price:
       extractMeta(html, 'product:price:amount') ??
@@ -312,7 +346,7 @@ function extractOgProduct(html: string): ScrapedProduct | null {
   };
 }
 
-function extractHeuristicProducts(html: string): ScrapedProduct[] {
+function extractHeuristicProducts(html: string, baseUrl: string): ScrapedProduct[] {
   const products: ScrapedProduct[] = [];
 
   // Look for images with alt text containing product-like keywords
@@ -325,9 +359,10 @@ function extractHeuristicProducts(html: string): ScrapedProduct[] {
   while ((imgMatch = imgRegex.exec(html)) !== null) {
     const alt = decodeEntities(imgMatch[1]);
     if (productKeywords.test(alt) || productKeywords.test(getContext(html, imgMatch.index, 200))) {
+      const resolved = resolveUrl(imgMatch[2], baseUrl).replace(/^http:\/\//, 'https://');
       products.push({
         name: alt,
-        imageUrl: imgMatch[2],
+        imageUrl: resolved,
         description: '',
         price: null,
       });
@@ -338,12 +373,13 @@ function extractHeuristicProducts(html: string): ScrapedProduct[] {
     const alt = decodeEntities(imgMatch[2]);
     const src = imgMatch[1];
     if (
-      !products.some((p) => p.imageUrl === src) &&
+      !products.some((p) => p.imageUrl?.includes(src.slice(0, 40))) &&
       (productKeywords.test(alt) || productKeywords.test(getContext(html, imgMatch.index, 200)))
     ) {
+      const resolved = resolveUrl(src, baseUrl).replace(/^http:\/\//, 'https://');
       products.push({
         name: alt,
-        imageUrl: src,
+        imageUrl: resolved,
         description: '',
         price: null,
       });

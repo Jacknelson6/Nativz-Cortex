@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isMondayConfigured, fetchMondayClients, parseMondayClient } from '@/lib/monday/client';
+import type { ParsedMondayClient } from '@/lib/monday/sync';
 
 export const maxDuration = 30;
 
-let cachedData: any = null;
+let cachedData: ParsedMondayClient[] | null = null;
 let cachedAt = 0;
 
 /**

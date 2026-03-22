@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Textarea } from '@/components/ui/input';
 import { createClient } from '@/lib/supabase/client';
+import type { ParsedMondayClient } from '@/lib/monday/sync';
 
 interface ClientOption {
   id: string;
@@ -64,9 +65,11 @@ export function ScheduleShootsModal({ open, onClose, initialClientId }: Schedule
         fetch('/api/clients/monday-cache').then((r) => r.ok ? r.json() : []),
       ]);
       
+      const mondayClients = (Array.isArray(mondayRes) ? mondayRes : []) as ParsedMondayClient[];
+
       if (clientsRes.data) {
         const enriched = clientsRes.data.map((client) => {
-          const mClient = mondayRes.find((m: any) => m.name.toLowerCase() === client.name.toLowerCase());
+          const mClient = mondayClients.find((m) => m.name.toLowerCase() === client.name.toLowerCase());
           return {
             ...client,
             agency: mClient?.agency || 'Nativz',

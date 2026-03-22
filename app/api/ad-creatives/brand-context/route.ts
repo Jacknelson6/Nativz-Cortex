@@ -70,6 +70,7 @@ export async function PATCH(req: Request) {
       .eq('id', existing.id);
 
     if (error) {
+      console.error('PATCH /api/ad-creatives/brand-context update:', error);
       return NextResponse.json({ error: 'Failed to save' }, { status: 500 });
     }
   } else {
@@ -79,6 +80,8 @@ export async function PATCH(req: Request) {
       type: 'brand_profile',
       title: `Ad creative brand context — ${brand.name}`,
       content: `Manually saved brand context for ad generation.`,
+      source: 'manual',
+      created_by: user.id,
       metadata: {
         ad_creative_context: {
           brand: {
@@ -96,6 +99,7 @@ export async function PATCH(req: Request) {
     });
 
     if (error) {
+      console.error('PATCH /api/ad-creatives/brand-context insert:', error);
       return NextResponse.json({ error: 'Failed to save' }, { status: 500 });
     }
   }

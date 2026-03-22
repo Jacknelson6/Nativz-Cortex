@@ -247,26 +247,27 @@ export function TemplateGrid({
         </div>
       )}
 
-      {/* Recommendation banner */}
+      {/* Recommendation banner — filter is auto-applied via useEffect; clarify it’s the vertical axis */}
       {templateMode === 'kandy' && recommendedVertical && recommendedVertical !== 'general' && (
-        <div className="rounded-lg border border-accent/20 bg-accent-surface/20 px-3 py-2 flex items-center gap-2">
-          <Sparkles size={14} className="text-accent-text shrink-0" />
-          <p className="text-xs text-text-secondary">
-            <span className="font-medium text-accent-text">Recommended:</span>{' '}
-            Showing {VERTICAL_LABELS[recommendedVertical] ?? recommendedVertical} templates based on your brand.
+        <div className="rounded-xl border border-accent/25 bg-gradient-to-r from-accent/10 via-accent/5 to-transparent px-4 py-3 flex items-start gap-3">
+          <Sparkles size={16} className="text-accent-text shrink-0 mt-0.5" />
+          <p className="text-xs text-text-secondary leading-relaxed">
+            <span className="font-medium text-accent-text">Suggested vertical:</span>{' '}
+            {VERTICAL_LABELS[recommendedVertical] ?? recommendedVertical}. The catalog is filtered by template vertical
+            (not the filename you see on each card).{' '}
             <button
               type="button"
               onClick={() => setVerticalFilter('all')}
-              className="ml-1.5 text-text-muted hover:text-text-primary underline cursor-pointer"
+              className="text-accent-text hover:underline cursor-pointer font-medium"
             >
-              Show all
+              Show all verticals
             </button>
           </p>
         </div>
       )}
 
       {/* Filter bar */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap rounded-xl border border-nativz-border/80 bg-background/40 p-2">
         {/* Aspect ratio filter buttons */}
         <div className="flex items-center gap-1 bg-surface rounded-xl p-1">
           {RATIO_SECTIONS.map(({ ratio, label, icon: Icon }) => {
@@ -467,6 +468,13 @@ export function TemplateGrid({
 // Template card
 // ---------------------------------------------------------------------------
 
+function formatTemplateLabel(collectionName: string | undefined, vertical: string | undefined): string {
+  const raw = (collectionName ?? 'Template').replace(/^[—–\-•]\s*/, '').trim();
+  const v = vertical ? VERTICAL_LABELS[vertical] ?? vertical : '';
+  if (v && raw.length < 3) return v;
+  return raw || v || 'Template';
+}
+
 function TemplateCard({
   template,
   selected,
@@ -476,28 +484,31 @@ function TemplateCard({
   selected: boolean;
   onToggle: (id: string) => void;
 }) {
+  const label = formatTemplateLabel(template.collection_name, template.vertical);
   return (
     <button
       type="button"
       onClick={() => onToggle(template.id)}
-      className={`relative rounded-lg overflow-hidden border transition-all cursor-pointer group ${
+      className={`relative rounded-xl overflow-hidden border transition-all duration-150 cursor-pointer group shadow-sm hover:shadow-md hover:-translate-y-0.5 ${
         selected
-          ? 'border-accent ring-2 ring-accent/30'
-          : 'border-nativz-border hover:border-accent/30'
+          ? 'border-accent ring-2 ring-accent/35 shadow-[0_0_0_1px_rgba(4,107,210,0.2)]'
+          : 'border-nativz-border/90 hover:border-accent/40'
       }`}
     >
       {selected && (
-        <div className="absolute top-1 right-1 z-10 h-5 w-5 rounded-full bg-accent flex items-center justify-center shadow-sm">
-          <Check size={12} className="text-white" />
+        <div className="absolute top-1.5 right-1.5 z-10 h-6 w-6 rounded-full bg-accent flex items-center justify-center shadow-md">
+          <Check size={13} className="text-white" strokeWidth={2.5} />
         </div>
       )}
-      <div className="aspect-square bg-background">
+      <div className="aspect-square bg-gradient-to-b from-background to-surface">
         {template.image_url ? (
           <img
             src={template.image_url}
-            alt={template.collection_name ?? 'Template'}
-            className="h-full w-full object-cover"
+            alt=""
+            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
             loading="lazy"
+            referrerPolicy="no-referrer"
+            aria-hidden
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-text-muted/30">
@@ -505,8 +516,13 @@ function TemplateCard({
           </div>
         )}
       </div>
-      <div className="px-1.5 py-1 bg-surface">
-        <p className="text-[10px] text-text-muted truncate">{template.collection_name ?? 'Template'}</p>
+      <div className="px-2 py-1.5 bg-surface/95 border-t border-nativz-border/60 space-y-0.5">
+        <p className="text-[10px] font-medium text-text-secondary truncate leading-tight" title={label}>
+          {label}
+        </p>
+        {template.vertical ? (
+          <p className="text-[9px] text-text-muted/80 truncate">{VERTICAL_LABELS[template.vertical] ?? template.vertical}</p>
+        ) : null}
       </div>
     </button>
   );

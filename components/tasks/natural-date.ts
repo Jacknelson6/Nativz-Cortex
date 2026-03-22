@@ -72,9 +72,9 @@ function parseOrdinal(s: string): number | null {
 
 function nthWeekdayOfMonth(year: number, month: number, weekday: number, nth: number): Date | null {
   const first = new Date(year, month, 1);
-  let dayOfFirst = first.getDay();
-  let firstOccurrence = 1 + ((weekday - dayOfFirst + 7) % 7);
-  let day = firstOccurrence + (nth - 1) * 7;
+  const dayOfFirst = first.getDay();
+  const firstOccurrence = 1 + ((weekday - dayOfFirst + 7) % 7);
+  const day = firstOccurrence + (nth - 1) * 7;
   if (day > new Date(year, month + 1, 0).getDate()) return null;
   return new Date(year, month, day);
 }
@@ -184,7 +184,7 @@ export function parseNaturalDate(input: string): string | null {
     // "next [month]" — e.g. "next january" → 1st of that month
     const monthIdx = parseMonthName(nextDayMatch[1]);
     if (monthIdx !== -1) {
-      let year = today.getFullYear();
+      const year = today.getFullYear();
       const candidate = new Date(year, monthIdx, 1);
       if (candidate <= today) candidate.setFullYear(year + 1);
       // If it's the current month, go to next year
@@ -231,7 +231,7 @@ export function parseNaturalDate(input: string): string | null {
   if (midMatch) {
     const monthIdx = parseMonthName(midMatch[1]);
     if (monthIdx !== -1) {
-      let year = today.getFullYear();
+      const year = today.getFullYear();
       const candidate = new Date(year, monthIdx, 15);
       if (candidate < today) candidate.setFullYear(year + 1);
       return toDateStr(candidate);
@@ -244,7 +244,7 @@ export function parseNaturalDate(input: string): string | null {
   if (endOfMatch) {
     const monthIdx = parseMonthName(endOfMatch[1]);
     if (monthIdx !== -1) {
-      let year = today.getFullYear();
+      const year = today.getFullYear();
       const candidate = new Date(year, monthIdx + 1, 0); // last day
       if (candidate < today) candidate.setFullYear(year + 1);
       return toDateStr(candidate);
@@ -259,7 +259,7 @@ export function parseNaturalDate(input: string): string | null {
     const dayWordIdx = parseDayName(nthDayMonthMatch[2]);
     const monthWordIdx = parseMonthName(nthDayMonthMatch[3]);
     if (dayWordIdx !== -1 && monthWordIdx !== -1 && nth >= 1 && nth <= 5) {
-      let year = today.getFullYear();
+      const year = today.getFullYear();
       let candidate = nthWeekdayOfMonth(year, monthWordIdx, dayWordIdx, nth);
       if (!candidate || candidate < today) {
         candidate = nthWeekdayOfMonth(year + 1, monthWordIdx, dayWordIdx, nth);
@@ -276,7 +276,7 @@ export function parseNaturalDate(input: string): string | null {
     if (monthIdx !== -1) {
       const day = parseInt(monthDayMatch[2]);
       if (day >= 1 && day <= 31) {
-        let year = today.getFullYear();
+        const year = today.getFullYear();
         const candidate = new Date(year, monthIdx, day);
         if (candidate < today) candidate.setFullYear(year + 1);
         return toDateStr(candidate);
@@ -291,7 +291,7 @@ export function parseNaturalDate(input: string): string | null {
     const day = parseInt(dayMonthMatch[1]);
     const monthIdx = parseMonthName(dayMonthMatch[2]);
     if (monthIdx !== -1 && day >= 1 && day <= 31) {
-      let year = today.getFullYear();
+      const year = today.getFullYear();
       const candidate = new Date(year, monthIdx, day);
       if (candidate < today) candidate.setFullYear(year + 1);
       return toDateStr(candidate);
@@ -328,7 +328,7 @@ export function parseNaturalDate(input: string): string | null {
     const m = parseInt(slashMatch[1]) - 1;
     const d = parseInt(slashMatch[2]);
     if (m >= 0 && m <= 11 && d >= 1 && d <= 31) {
-      let year = today.getFullYear();
+      const year = today.getFullYear();
       const candidate = new Date(year, m, d);
       if (candidate < today) candidate.setFullYear(year + 1);
       return toDateStr(candidate);
@@ -583,7 +583,7 @@ export function parseRecurrence(input: string): RecurrenceRule | null {
 
   // "every weekday/workday"
   if (working === 'every weekday' || working === 'every workday') {
-    let d = new Date(today);
+    const d = new Date(today);
     while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
     return { pattern: 'every weekday', fromCompletion, firstDueDate: startDate ?? toDateStr(d) };
   }
@@ -651,7 +651,7 @@ export function parseRecurrence(input: string): RecurrenceRule | null {
       const monthIdx = parseMonthName(everyMDMatch[1]);
       const day = parseInt(everyMDMatch[2]);
       if (monthIdx !== -1 && day >= 1 && day <= 31) {
-        let candidate = new Date(today.getFullYear(), monthIdx, day);
+        const candidate = new Date(today.getFullYear(), monthIdx, day);
         if (candidate <= today) candidate.setFullYear(candidate.getFullYear() + 1);
         return { pattern: `every ${MONTH_ABBREVS[monthIdx]} ${day}`, fromCompletion, firstDueDate: startDate ?? toDateStr(candidate) };
       }

@@ -22,6 +22,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Agent/plugin hooks use CommonJS require(); not part of the Next app bundle
+    ".claude/**",
+    // Git submodule — lint the app repo only
+    "ac-knowledge-graph/**",
   ]),
 ]);
 

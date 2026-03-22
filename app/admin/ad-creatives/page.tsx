@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 import { getVaultClients } from '@/lib/vault/reader';
@@ -82,5 +83,16 @@ export default async function AdCreativesPage() {
     })
     .filter((rc) => rc.slug); // Only include clients that exist
 
-  return <AdCreativesHub clients={clients} recentClients={recentClients} />;
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6 max-w-7xl mx-auto space-y-4 animate-pulse">
+          <div className="h-8 w-48 rounded-lg bg-surface border border-nativz-border" />
+          <div className="h-64 rounded-2xl bg-surface border border-nativz-border" />
+        </div>
+      }
+    >
+      <AdCreativesHub clients={clients} recentClients={recentClients} />
+    </Suspense>
+  );
 }

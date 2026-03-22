@@ -12,6 +12,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import type { BrandContext } from '../lib/knowledge/brand-context';
+import type { AdPromptSchema, OnScreenText } from '../lib/ad-creatives/types';
+import type { QAIssue } from '../lib/ad-creatives/qa-check';
 
 const envPath = resolve(process.cwd(), '.env.local');
 const envContent = readFileSync(envPath, 'utf-8');
@@ -174,7 +177,7 @@ Products: Gourmet artisan toasts, smoothie bowls, cold-pressed juices`;
   let copyVariations;
   try {
     copyVariations = await generateAdCopy({
-      brandContext: testBrandContext as any,
+      brandContext: testBrandContext as BrandContext,
       productService: batchConfig.productService,
       offer: batchConfig.offer,
       count: templates.length,
@@ -203,12 +206,12 @@ Products: Gourmet artisan toasts, smoothie bowls, cold-pressed juices`;
     try {
       const MAX_QA_RETRIES = 2;
       let imageBuffer: Buffer | null = null;
-      let qaResult = { passed: false, issues: [] as any[], extractedText: [] as string[], confidence: 0 };
+      let qaResult = { passed: false, issues: [] as QAIssue[], extractedText: [] as string[], confidence: 0 };
 
       for (let attempt = 0; attempt <= MAX_QA_RETRIES; attempt++) {
         const prompt = assembleImagePrompt({
-          brandContext: testBrandContext as any,
-          promptSchema: template.prompt_schema as any,
+          brandContext: testBrandContext as BrandContext,
+          promptSchema: template.prompt_schema as AdPromptSchema,
           productService: batchConfig.productService,
           offer: batchConfig.offer,
           onScreenText: copy,
@@ -304,8 +307,8 @@ Products: Gourmet artisan toasts, smoothie bowls, cold-pressed juices`;
         .update({ completed_count: i + 1 })
         .eq('id', batch.id);
         
-    } catch (err: any) {
-      console.error(`  ✗ Generation failed:`, err.message ?? err);
+    } catch (err: unknown) {
+      console.error(`  ✗ Generation failed:`, err instanceof Error ? err.message : err);
       await supabase.from('ad_generation_batches')
         .update({ failed_count: 1 })
         .eq('id', batch.id);
@@ -325,8 +328,8 @@ Products: Gourmet artisan toasts, smoothie bowls, cold-pressed juices`;
     .eq('batch_id', batch.id);
   
   console.log(`Generated ${creatives?.length ?? 0} creatives`);
-  creatives?.forEach(c => {
-    const text = c.on_screen_text as any;
+  creatives?.forEach((c) => {
+    const text = c.on_screen_text as OnScreenText | null;
     console.log(`  ✓ ${text?.headline ?? 'no headline'} — ${c.image_url.substring(0, 80)}...`);
   });
   

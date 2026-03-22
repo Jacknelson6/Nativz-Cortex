@@ -106,7 +106,7 @@ export const SECTIONS = [
 ] as const;
 
 // Endpoints are defined without sectionSlug, then mapped below
-interface RawEndpoint extends Omit<ApiEndpoint, 'sectionSlug'> {}
+type RawEndpoint = Omit<ApiEndpoint, 'sectionSlug'>;
 
 const RAW_ENDPOINTS: RawEndpoint[] = [
   // ─── 1. Auth & Account ───

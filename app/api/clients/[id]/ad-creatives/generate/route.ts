@@ -13,11 +13,25 @@ const manualTextSchema = z.object({
   cta: z.string().min(1).max(100),
 });
 
+/** Empty string / bad URL from scrapers → null so Zod does not reject the batch. */
+const nullableImageUrl = z.preprocess((val) => {
+  if (val === '' || val === undefined) return null;
+  if (typeof val !== 'string') return null;
+  try {
+    const u = new URL(val);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return val;
+  } catch {
+    return null;
+  }
+}, z.union([z.string().url(), z.null()]));
+
 const productInfoSchema = z.object({
   product: z.object({
     name: z.string().min(1).max(200),
-    imageUrl: z.string().url().nullable(),
-    description: z.string().max(500),
+    imageUrl: nullableImageUrl,
+    /** Scraped catalog copy is often longer than 500 chars */
+    description: z.string().max(8000),
   }),
   offer: z.string().max(300),
   cta: z.string().max(100),
@@ -27,6 +41,11 @@ const templateVariationSchema = z.object({
   templateId: z.string().uuid(),
   count: z.number().int().min(1).max(10),
 });
+
+const optionalBrandUrl = z.preprocess((val) => {
+  if (val === '' || val === undefined || val === null) return undefined;
+  return val;
+}, z.string().url().optional());
 
 const bodySchema = z.object({
   // v2: per-template variation counts (preferred)
@@ -41,7 +60,7 @@ const bodySchema = z.object({
   onScreenTextMode: z.enum(['ai_generate', 'manual']),
   manualText: manualTextSchema.optional(),
   products: z.array(productInfoSchema).max(20).optional(),
-  brandUrl: z.string().url().optional(),
+  brandUrl: optionalBrandUrl,
   placeholderConfig: z.object({
     brandColors: z.array(z.string()).optional(),
     templateThumbnails: z.array(z.object({

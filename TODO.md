@@ -31,6 +31,10 @@
 - [x] Ad scraper: HTTP→HTTPS URL rewrite, filter non-product artifacts
 - [x] Template catalog: display names + formatted section headings
 
+### Tooling / hygiene (2026-03-20)
+- [x] ESLint: 36 **errors** cleared — hooks order (ideas PDF export), `no-explicit-any`, `prefer-const`, `no-unescaped-entities`, empty interface; ignore `.claude/**` + `ac-knowledge-graph/**` for app-only lint
+- [x] `results-client.tsx`: React 19 + TS — replace `string && <Component />` / `object && <Component />` with ternaries or `Boolean(...) ?` so children are not inferred as `unknown`
+
 ### Remaining QA Items
 - [x] Topic search expansion — built (API + UI + pre-fill from URL params)
 - [x] Search processing progress — fixed (error state, retry button, timeout)

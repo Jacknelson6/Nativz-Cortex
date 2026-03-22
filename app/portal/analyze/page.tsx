@@ -62,7 +62,7 @@ export default async function PortalAnalyzePage() {
     }
 
     // Get first thumbnail per board
-    let boardThumbnails: Record<string, string> = {};
+    const boardThumbnails: Record<string, string> = {};
     if (allBoards.length > 0) {
       const boardIds = allBoards.map((b) => b.id);
       const { data: thumbItems } = await adminClient

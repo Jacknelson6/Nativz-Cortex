@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Plus, Link, Loader2, Check, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,29 @@ interface ProductGridProps {
   onAddProduct: (product: ScrapedProduct) => void;
   /** Shown above the grid when data comes from Brand DNA, etc. */
   dataSourceHint?: string;
+}
+
+function ProductThumb({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  const onErr = useCallback(() => setFailed(true), []);
+  if (failed) {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center gap-1 bg-background text-text-muted/40">
+        <Package size={22} />
+        <span className="text-[9px] px-1 text-center leading-tight">Image blocked or missing</span>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="h-full w-full object-cover"
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={onErr}
+    />
+  );
 }
 
 export function ProductGrid({ products, selectedIndices, onToggle, onAddProduct, dataSourceHint }: ProductGridProps) {
@@ -111,14 +134,8 @@ export function ProductGrid({ products, selectedIndices, onToggle, onAddProduct,
 
               {/* Image */}
               {product.imageUrl ? (
-                <div className="aspect-square rounded-lg overflow-hidden bg-background mb-2">
-                  <img
-                    src={product.imageUrl}
-                    alt={product.name}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
+                <div className="aspect-square rounded-lg overflow-hidden bg-background mb-2 ring-1 ring-white/[0.06]">
+                  <ProductThumb src={product.imageUrl} alt={product.name} />
                 </div>
               ) : (
                 <div className="aspect-square rounded-lg bg-background mb-2 flex items-center justify-center">

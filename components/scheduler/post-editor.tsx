@@ -314,7 +314,9 @@ export function PostEditor({
             </button>
           </div>
           <div className="p-5">
-            <p className="text-xs text-text-muted mb-3">Scrub through the video to find the perfect frame, then click "Use this frame".</p>
+            <p className="text-xs text-text-muted mb-3">
+              Scrub through the video to find the perfect frame, then click &ldquo;Use this frame&rdquo;.
+            </p>
             <div className="rounded-xl overflow-hidden bg-black flex items-center justify-center">
               <video
                 ref={coverVideoRef}

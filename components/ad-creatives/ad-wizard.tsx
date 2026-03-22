@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Loader2,
   Square,
@@ -21,11 +21,14 @@ import { TemplateGrid } from './template-grid';
 import { VariationStrip } from './variation-strip';
 import { BrandMediaPanel } from './brand-media-panel';
 import { BrandDnaGuidelinePanel } from './brand-dna-guideline-panel';
+import { BrandDnaWizardRail } from './brand-dna-wizard-rail';
 import { PromptReview, type PromptPreviewData } from './prompt-review';
 import type { AdPromptTemplate, AspectRatio, KandyTemplate } from '@/lib/ad-creatives/types';
 import type { WizardTemplate } from '@/lib/ad-creatives/wizard-template';
 import { adPromptRowToWizardTemplate, withKandyOrigin } from '@/lib/ad-creatives/wizard-template';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
+import { isStrongProductCandidate } from '@/lib/ad-creatives/product-name-filters';
+import { formatApiValidationError } from '@/lib/utils/format-api-validation-error';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,14 +70,38 @@ const VERTICAL_KEYWORDS: Record<string, string[]> = {
   general: [], // fallback
 };
 
+/** Noisy SaaS tokens: substring match false-positives (e.g. "app" in "application") — require whole word. */
+const SAAS_WHOLE_WORD = new Set(['app', 'ai', 'api', 'crm', 'erp', 'b2b']);
+
+function keywordMatches(text: string, kw: string, vertical: string): boolean {
+  const k = kw.toLowerCase();
+  if (k.includes(' ')) return text.includes(k);
+  if (vertical === 'saas' && SAAS_WHOLE_WORD.has(k)) {
+    try {
+      return new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text);
+    } catch {
+      return text.includes(k);
+    }
+  }
+  return text.includes(k);
+}
+
 function detectVertical(description: string, brandName: string): string {
   const text = `${description} ${brandName}`.toLowerCase();
   let bestMatch = 'general';
   let bestScore = 0;
 
+  const weights: Record<string, number> = {
+    food_beverage: 1.35,
+    health_wellness: 1.2,
+    ecommerce: 1.1,
+  };
+
   for (const [vertical, keywords] of Object.entries(VERTICAL_KEYWORDS)) {
     if (vertical === 'general') continue;
-    const score = keywords.filter((kw) => text.includes(kw)).length;
+    const raw = keywords.filter((kw) => keywordMatches(text, kw, vertical)).length;
+    const w = weights[vertical] ?? 1;
+    const score = raw * w;
     if (score > bestScore) {
       bestScore = score;
       bestMatch = vertical;
@@ -120,9 +147,17 @@ export function AdWizard({
   // Brand
   const [brand, setBrand] = useState<ScrapedBrand | null>(initialBrand ?? null);
   const [scrapedProducts, setScrapedProducts] = useState<ScrapedProduct[]>(initialProducts ?? []);
-  const [selectedProductIndices, setSelectedProductIndices] = useState<Set<number>>(
-    new Set(initialProducts?.map((_, i) => i) ?? []),
+  const [selectedProductIndices, setSelectedProductIndices] = useState<Set<number>>(new Set());
+  const productDefaultsAppliedRef = useRef(false);
+
+  const productsFingerprint = useMemo(
+    () => initialProducts?.map((p) => `${p.name}\u0000${p.imageUrl ?? ''}`).join('\n') ?? '',
+    [initialProducts],
   );
+
+  useEffect(() => {
+    productDefaultsAppliedRef.current = false;
+  }, [clientId, productsFingerprint]);
 
   // Templates — Kandy catalog vs client ad library (scraped / uploaded prompt templates)
   const [templateMode, setTemplateMode] = useState<'kandy' | 'ad_library'>('kandy');
@@ -163,11 +198,22 @@ export function AdWizard({
   }, [initialBrand]);
 
   useEffect(() => {
-    if (initialProducts && initialProducts.length > 0) {
-      setScrapedProducts(initialProducts);
-      setSelectedProductIndices(new Set(initialProducts.map((_, i) => i)));
+    if (!initialProducts?.length) {
+      setScrapedProducts([]);
+      setSelectedProductIndices(new Set());
+      return;
     }
-  }, [initialProducts]);
+    setScrapedProducts(initialProducts);
+    if (productDefaultsAppliedRef.current) return;
+    productDefaultsAppliedRef.current = true;
+    const preferred = new Set<number>();
+    initialProducts.forEach((p, i) => {
+      if (isStrongProductCandidate(p)) preferred.add(i);
+    });
+    setSelectedProductIndices(
+      preferred.size > 0 ? preferred : new Set(initialProducts.map((_, i) => i)),
+    );
+  }, [initialProducts, productsFingerprint]);
 
   useEffect(() => {
     if (initialMediaUrls && initialMediaUrls.length > 0) {
@@ -318,9 +364,13 @@ export function AdWizard({
           aspectRatio,
           onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
           manualText: copyMode === 'manual' ? {
-            headline: manualHeadline || brand.name,
-            subheadline: manualSubheadline,
-            cta: manualCta || 'Learn more',
+            headline: (manualHeadline.trim() || brand.name).slice(0, 200),
+            subheadline: (
+              manualSubheadline.trim() ||
+              brand.description.trim().slice(0, 120) ||
+              brand.name
+            ).slice(0, 300),
+            cta: (manualCta.trim() || 'Learn more').slice(0, 100),
           } : undefined,
         }),
       });
@@ -349,8 +399,24 @@ export function AdWizard({
 
     try {
       const selectedProducts = Array.from(selectedProductIndices).map((i) => scrapedProducts[i]).filter(Boolean);
+
+      function sanitizeProductImageUrl(u: string | null): string | null {
+        if (!u?.trim()) return null;
+        try {
+          const parsed = new URL(u);
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+          return u.trim();
+        } catch {
+          return null;
+        }
+      }
+
       const productConfigs = selectedProducts.map((p) => ({
-        product: { name: p.name, imageUrl: p.imageUrl, description: p.description },
+        product: {
+          name: p.name.slice(0, 200),
+          imageUrl: sanitizeProductImageUrl(p.imageUrl),
+          description: (p.description ?? '').slice(0, 8000),
+        },
         offer: offerText,
         cta: '',
       }));
@@ -386,10 +452,14 @@ export function AdWizard({
       };
 
       if (copyMode === 'manual') {
+        const sub =
+          manualSubheadline.trim() ||
+          brand.description.trim().slice(0, 120) ||
+          brand.name;
         body.manualText = {
-          headline: manualHeadline || brand.name,
-          subheadline: manualSubheadline || brand.description.slice(0, 100),
-          cta: manualCta || 'Learn more',
+          headline: (manualHeadline.trim() || brand.name).slice(0, 200),
+          subheadline: sub.slice(0, 300),
+          cta: (manualCta.trim() || 'Learn more').slice(0, 100),
         };
       }
 
@@ -401,7 +471,7 @@ export function AdWizard({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? 'Generation failed');
+        throw new Error(formatApiValidationError(data));
       }
 
       const data = await res.json();
@@ -411,6 +481,7 @@ export function AdWizard({
       if (onGenerationStart && batchId) {
         onGenerationStart(batchId, placeholderConfig);
       }
+      setGenerating(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Generation failed');
       setGenerating(false);
@@ -435,7 +506,14 @@ export function AdWizard({
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
+    <div
+      className={
+        brandContextSource === 'brand_dna'
+          ? 'flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px] lg:gap-8 lg:items-start w-full max-w-[1600px] mx-auto px-1'
+          : 'max-w-4xl mx-auto space-y-4'
+      }
+    >
+      <div className="min-w-0 space-y-4">
       <div className="flex items-center justify-between gap-3 px-1">
         <p className="text-xs text-text-muted">
           Step {flowIdx + 1} of {FLOW_STEPS.length}
@@ -783,6 +861,11 @@ export function AdWizard({
             Back
           </Button>
         </div>
+      )}
+      </div>
+
+      {brandContextSource === 'brand_dna' && (
+        <BrandDnaWizardRail clientId={clientId} clientSlug={clientSlug} />
       )}
     </div>
   );
