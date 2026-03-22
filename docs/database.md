@@ -209,3 +209,4 @@ Video idea submissions with status tracking.
 | Brave Search | `BRAVE_SEARCH_API_KEY` |
 | Vercel | `NEXT_PUBLIC_APP_URL` |
 | Vault (GitHub) | `VAULT_GITHUB_TOKEN`, `VAULT_GITHUB_OWNER`, `VAULT_GITHUB_REPO` |
+| Knowledge graph (GitHub → Supabase sync) | `GITHUB_VAULT_TOKEN`; optional `KNOWLEDGE_GRAPH_GITHUB_REPO` (default `Jacknelson6/knowledge-graph`) |

@@ -5,6 +5,7 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { KNOWLEDGE_GRAPH_GITHUB_REPO } from '@/lib/knowledge/github-repo';
 import { writeNodeToGitHub } from '@/lib/knowledge/github-sync';
 import { slugifyNodeId } from '@/lib/knowledge/graph-queries';
 import type { KnowledgeNode } from '@/lib/knowledge/graph-queries';
@@ -145,7 +146,7 @@ export async function syncBrandDNAToKnowledgeGraph(
       connections,
       client_id: clientId,
       metadata: {},
-      source_repo: 'Jacknelson6/ac-knowledge-graph',
+      source_repo: KNOWLEDGE_GRAPH_GITHUB_REPO,
       source_path: `nodes/${nodeId.replace(':', '/')}.md`,
       source_sha: null,
       sync_status: 'synced',

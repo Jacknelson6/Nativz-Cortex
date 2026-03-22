@@ -9,9 +9,9 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { writeFile as vaultWriteFile, readFile as vaultReadFile } from '@/lib/vault/github';
 import type { KnowledgeNode } from './graph-queries';
+import { KNOWLEDGE_GRAPH_GITHUB_REPO } from './github-repo';
 
 const GITHUB_API = 'https://api.github.com';
-const DEFAULT_REPO = 'Jacknelson6/ac-knowledge-graph';
 const BRANCH = 'main';
 
 // ---------------------------------------------------------------------------
@@ -124,7 +124,9 @@ export interface SyncStats {
   errors: number;
 }
 
-export async function syncFromGitHub(repoSlug: string = DEFAULT_REPO): Promise<SyncStats> {
+export async function syncFromGitHub(
+  repoSlug: string = KNOWLEDGE_GRAPH_GITHUB_REPO,
+): Promise<SyncStats> {
   const token = getToken();
   const stats: SyncStats = { added: 0, updated: 0, unchanged: 0, errors: 0 };
 
@@ -314,7 +316,7 @@ export async function writeNodeToGitHub(node: KnowledgeNode): Promise<void> {
     const filePath = node.source_path ?? generateFilePath(node);
 
     // Determine which repo to write to
-    const repo = node.source_repo ?? DEFAULT_REPO;
+    const repo = node.source_repo ?? KNOWLEDGE_GRAPH_GITHUB_REPO;
 
     // Try to get existing file SHA for updates
     let existingSha: string | undefined;

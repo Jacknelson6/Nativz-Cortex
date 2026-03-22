@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { KNOWLEDGE_GRAPH_GITHUB_REPO } from '@/lib/knowledge/github-repo';
 import { syncFromGitHub } from '@/lib/knowledge/github-sync';
 
 const syncSchema = z.object({
@@ -14,7 +15,7 @@ const syncSchema = z.object({
  * Trigger GitHub → Supabase incremental sync for the knowledge graph.
  *
  * Auth: admin role OR x-sync-secret header matching SYNC_SECRET env var.
- * Body: { repo?: string } — defaults to "Jacknelson6/ac-knowledge-graph"
+ * Body: { repo?: string } — defaults to KNOWLEDGE_GRAPH_GITHUB_REPO (see lib/knowledge/github-repo.ts)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const repo = parsed.data.repo ?? 'Jacknelson6/ac-knowledge-graph';
+    const repo = parsed.data.repo ?? KNOWLEDGE_GRAPH_GITHUB_REPO;
     const stats = await syncFromGitHub(repo);
 
     return NextResponse.json(stats);
