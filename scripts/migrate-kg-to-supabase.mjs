@@ -24,7 +24,8 @@ import { join, relative, resolve } from 'path';
 const PROJECT_ROOT = resolve(import.meta.dirname, '..');
 const VAULT_ROOT = join(PROJECT_ROOT, 'ac-knowledge-graph', 'vault');
 const ENV_FILE = join(PROJECT_ROOT, '.env.local');
-const SOURCE_REPO = process.env.KNOWLEDGE_GRAPH_GITHUB_REPO || 'Jacknelson6/knowledge-graph';
+const SOURCE_REPO =
+  process.env.KNOWLEDGE_GRAPH_GITHUB_REPO || 'Jacknelson6/Cortex-Knowledge-Graph';
 const BATCH_SIZE = 500;
 
 // Known frontmatter keys that map directly to columns (everything else → metadata)

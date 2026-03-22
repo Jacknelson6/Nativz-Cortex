@@ -35,7 +35,7 @@ create table knowledge_nodes (
   content       text not null default '',      -- markdown body (no frontmatter)
   metadata      jsonb not null default '{}',   -- kind-specific data (source_path, service_type, etc.)
   client_id     uuid references clients(id),   -- NULL = agency-wide, non-NULL = client-specific
-  source_repo   text,                          -- GitHub repo slug ("Jacknelson6/knowledge-graph"; env KNOWLEDGE_GRAPH_GITHUB_REPO in app)
+  source_repo   text,                          -- GitHub repo slug ("Jacknelson6/Cortex-Knowledge-Graph"; env KNOWLEDGE_GRAPH_GITHUB_REPO in app)
   source_path   text,                          -- path within repo ("vault/skills/google-ads-sop.md")
   source_sha    text,                          -- last synced git blob SHA (for incremental sync)
   sync_status   text default 'synced',         -- synced | pending | failed (for async GitHub write-back)
