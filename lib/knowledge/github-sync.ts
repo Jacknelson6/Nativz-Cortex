@@ -2,17 +2,23 @@
  * Bidirectional sync between GitHub (AC Knowledge Graph repo) and Supabase.
  *
  * - syncFromGitHub: incremental import using Git Trees API (SHA comparison)
+ * - Strict mirror (default): deletes knowledge_nodes rows under each source’s
+ *   pathPrefixes when the file no longer exists in Git (see sync-sources.ts).
+ * - Ingest normalization (kg-ingest-normalize): maps legacy kinds → ALLOWED_NODE_KINDS,
+ *   slugifies ids, derives title from # heading when missing, coerces list fields.
  * - writeNodeToGitHub: write-back a single node after create/edit in the app
  * - formatNodeAsMarkdown: formats a KnowledgeNode as YAML-frontmatter markdown
  */
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import { writeFile as vaultWriteFile, readFile as vaultReadFile } from '@/lib/vault/github';
 import type { KnowledgeNode } from './graph-queries';
 import { KNOWLEDGE_GRAPH_GITHUB_REPO } from './github-repo';
+import type { KnowledgeSyncSource } from './sync-sources';
+import { getKnowledgeSyncSources, shouldPruneKnowledgeOrphans } from './sync-sources';
+import { normalizeKnowledgeIngest } from './kg-ingest-normalize';
 
 const GITHUB_API = 'https://api.github.com';
-const BRANCH = 'main';
+const DEFAULT_BRANCH = 'main';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -122,17 +128,21 @@ export interface SyncStats {
   updated: number;
   unchanged: number;
   errors: number;
+  /** Rows removed from knowledge_nodes (strict mirror — file gone from Git). */
+  removed: number;
 }
 
-export async function syncFromGitHub(
-  repoSlug: string = KNOWLEDGE_GRAPH_GITHUB_REPO,
-): Promise<SyncStats> {
+/**
+ * Incremental sync for one configured source (repo + path prefixes + optional id namespace).
+ */
+export async function syncKnowledgeSource(source: KnowledgeSyncSource): Promise<SyncStats> {
+  const repoSlug = source.repo;
+  const branch = source.branch ?? DEFAULT_BRANCH;
   const token = getToken();
-  const stats: SyncStats = { added: 0, updated: 0, unchanged: 0, errors: 0 };
+  const stats: SyncStats = { added: 0, updated: 0, unchanged: 0, errors: 0, removed: 0 };
 
-  // 1. Fetch full tree via Trees API (single call)
   const treeRes = await fetch(
-    `${GITHUB_API}/repos/${repoSlug}/git/trees/${BRANCH}?recursive=1`,
+    `${GITHUB_API}/repos/${repoSlug}/git/trees/${branch}?recursive=1`,
     { headers: ghHeaders(token) },
   );
 
@@ -144,14 +154,15 @@ export async function syncFromGitHub(
   const treeData = await treeRes.json();
   const allEntries: TreeEntry[] = treeData.tree ?? [];
 
-  // 2. Filter for .md files in vault/ directory
   const mdFiles = allEntries.filter(
-    (e) => e.type === 'blob' && e.path.startsWith('vault/') && e.path.endsWith('.md'),
+    (e) =>
+      e.type === 'blob' &&
+      e.path.endsWith('.md') &&
+      source.pathPrefixes.some((prefix) => e.path.startsWith(prefix)),
   );
 
-  if (mdFiles.length === 0) return stats;
+  const syncedPaths = new Set(mdFiles.map((e) => e.path));
 
-  // 3. Query existing nodes from this repo
   const admin = createAdminClient();
   const { data: existingRows } = await admin
     .from('knowledge_nodes')
@@ -165,7 +176,6 @@ export async function syncFromGitHub(
     }
   }
 
-  // 4. Determine which files need fetching
   const toFetch: TreeEntry[] = [];
   for (const entry of mdFiles) {
     const existing = existingMap.get(entry.path);
@@ -178,18 +188,15 @@ export async function syncFromGitHub(
     }
   }
 
-  // 5. Fetch and upsert changed files (batched to avoid rate limits)
   const BATCH_SIZE = 10;
   for (let i = 0; i < toFetch.length; i += BATCH_SIZE) {
     const batch = toFetch.slice(i, i + BATCH_SIZE);
 
     const results = await Promise.allSettled(
       batch.map(async (entry) => {
-        // Fetch file content via blob API
         const blobRes = await fetch(entry.url, { headers: ghHeaders(token) });
 
         if (blobRes.status === 403) {
-          // Rate limited
           throw new Error('GitHub rate limit hit');
         }
 
@@ -215,46 +222,31 @@ export async function syncFromGitHub(
 
       try {
         const { frontmatter: fm, body } = parseFrontmatter(content);
-
-        // Derive the node ID
-        const kind = (fm.kind as string) ?? deriveKindFromPath(entry.path);
-        const slug =
-          (fm.id as string) ??
-          entry.path
-            .replace(/^vault\//, '')
-            .replace(/\.md$/, '')
-            .replace(/^[^/]+\//, '') // strip kind directory
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/(^-|-$)/g, '');
-        const nodeId = `${kind}:${slug}`;
-        const title = (fm.title as string) ?? slug.replace(/-/g, ' ');
-
-        const domain = Array.isArray(fm.domain)
-          ? fm.domain
-          : typeof fm.domain === 'string'
-            ? [fm.domain]
-            : [];
-        const tags = Array.isArray(fm.tags)
-          ? fm.tags
-          : typeof fm.tags === 'string'
-            ? [fm.tags]
-            : [];
-        const connections = Array.isArray(fm.connections)
-          ? fm.connections
-          : typeof fm.connections === 'string'
-            ? [fm.connections]
-            : [];
+        const derived = deriveKindAndSlugFromSourcePath(entry.path, source, fm);
+        const normalized = normalizeKnowledgeIngest({
+          rawKind: derived.kind,
+          rawSlug: derived.slug,
+          titleFromFm: typeof fm.title === 'string' ? fm.title : undefined,
+          body,
+          domain: fm.domain,
+          tags: fm.tags,
+          connections: fm.connections,
+        });
 
         const existing = existingMap.get(entry.path);
+        const logicalId =
+          existing?.id ??
+          (source.idNamespace
+            ? `${source.idNamespace}:${normalized.kind}:${normalized.slug}`
+            : `${normalized.kind}:${normalized.slug}`);
 
         const nodeData = {
-          id: existing?.id ?? nodeId,
-          kind,
-          title,
-          domain,
-          tags,
-          connections,
+          id: logicalId,
+          kind: normalized.kind,
+          title: normalized.title,
+          domain: normalized.domain,
+          tags: normalized.tags,
+          connections: normalized.connections,
           content: body.trim(),
           metadata: {} as Record<string, unknown>,
           source_repo: repoSlug,
@@ -264,7 +256,6 @@ export async function syncFromGitHub(
           updated_at: new Date().toISOString(),
         };
 
-        // Preserve any extra frontmatter fields in metadata
         const knownKeys = new Set([
           'id',
           'kind',
@@ -280,13 +271,19 @@ export async function syncFromGitHub(
             nodeData.metadata[k] = v;
           }
         }
+        if (source.idNamespace) {
+          nodeData.metadata.source_collection = source.idNamespace;
+        }
+        if (normalized.ingest_kind_raw) {
+          nodeData.metadata.ingest_kind_raw = normalized.ingest_kind_raw;
+        }
 
         const { error } = await admin.from('knowledge_nodes').upsert(nodeData, {
           onConflict: 'id',
         });
 
         if (error) {
-          console.error(`Upsert failed for ${nodeId}:`, error.message);
+          console.error(`Upsert failed for ${logicalId}:`, error.message);
           stats.errors++;
         } else {
           existing ? stats.updated++ : stats.added++;
@@ -298,7 +295,55 @@ export async function syncFromGitHub(
     }
   }
 
+  if (shouldPruneKnowledgeOrphans(source)) {
+    stats.removed = await pruneOrphanedKnowledgeNodes(
+      admin,
+      repoSlug,
+      source.pathPrefixes,
+      syncedPaths,
+    );
+  }
+
   return stats;
+}
+
+/**
+ * Sync every entry in KNOWLEDGE_GRAPH_SYNC_SOURCES (or the legacy default).
+ */
+export async function syncAllKnowledgeSources(): Promise<Record<string, SyncStats>> {
+  const sources = getKnowledgeSyncSources();
+  const out: Record<string, SyncStats> = {};
+  for (const source of sources) {
+    const key = `${source.repo}::${source.pathPrefixes.join('|')}`;
+    out[key] = await syncKnowledgeSource(source);
+  }
+  return out;
+}
+
+/**
+ * Sync by repo slug. If the repo appears multiple times in config (different prefixes),
+ * runs each slice sequentially and returns aggregated counts.
+ */
+export async function syncFromGitHub(repoSlug: string = KNOWLEDGE_GRAPH_GITHUB_REPO): Promise<SyncStats> {
+  const matches = getKnowledgeSyncSources().filter((s) => s.repo === repoSlug);
+  if (matches.length === 0) {
+    return syncKnowledgeSource({
+      repo: repoSlug,
+      pathPrefixes: ['vault/'],
+      branch: DEFAULT_BRANCH,
+    });
+  }
+
+  const aggregate: SyncStats = { added: 0, updated: 0, unchanged: 0, errors: 0, removed: 0 };
+  for (const source of matches) {
+    const st = await syncKnowledgeSource(source);
+    aggregate.added += st.added;
+    aggregate.updated += st.updated;
+    aggregate.unchanged += st.unchanged;
+    aggregate.errors += st.errors;
+    aggregate.removed += st.removed;
+  }
+  return aggregate;
 }
 
 // ---------------------------------------------------------------------------
@@ -322,7 +367,7 @@ export async function writeNodeToGitHub(node: KnowledgeNode): Promise<void> {
     let existingSha: string | undefined;
     try {
       const existingRes = await fetch(
-        `${GITHUB_API}/repos/${repo}/contents/${encodeURIPath(filePath)}?ref=${BRANCH}`,
+        `${GITHUB_API}/repos/${repo}/contents/${encodeURIPath(filePath)}?ref=${DEFAULT_BRANCH}`,
         { headers: ghHeaders(token) },
       );
       if (existingRes.ok) {
@@ -337,7 +382,7 @@ export async function writeNodeToGitHub(node: KnowledgeNode): Promise<void> {
     const putBody: Record<string, string> = {
       message: `Update ${node.title} via Cortex`,
       content: Buffer.from(markdown, 'utf-8').toString('base64'),
-      branch: BRANCH,
+      branch: DEFAULT_BRANCH,
     };
     if (existingSha) putBody.sha = existingSha;
 
@@ -439,19 +484,117 @@ export function formatNodeAsMarkdown(node: KnowledgeNode): string {
 }
 
 // ---------------------------------------------------------------------------
+// Strict mirror — remove nodes whose Git file disappeared
+// ---------------------------------------------------------------------------
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+async function pruneOrphanedKnowledgeNodes(
+  admin: AdminClient,
+  repoSlug: string,
+  pathPrefixes: string[],
+  syncedPaths: Set<string>,
+): Promise<number> {
+  const { data: rows, error } = await admin
+    .from('knowledge_nodes')
+    .select('id, source_path')
+    .eq('source_repo', repoSlug);
+
+  if (error) {
+    console.error('[knowledge-sync] prune: failed to list nodes:', error.message);
+    return 0;
+  }
+
+  const toDelete = (rows ?? []).filter((r) => {
+    const p = r.source_path;
+    if (!p || typeof p !== 'string') return false;
+    const underPrefix = pathPrefixes.some((prefix) => p.startsWith(prefix));
+    if (!underPrefix) return false;
+    return !syncedPaths.has(p);
+  });
+
+  const DELETE_BATCH = 80;
+  let deleted = 0;
+  for (let i = 0; i < toDelete.length; i += DELETE_BATCH) {
+    const batch = toDelete.slice(i, i + DELETE_BATCH);
+    const ids = batch.map((b) => b.id);
+    const { error: delErr } = await admin.from('knowledge_nodes').delete().in('id', ids);
+    if (delErr) {
+      console.error('[knowledge-sync] prune: delete batch failed:', delErr.message);
+      continue;
+    }
+    deleted += batch.length;
+  }
+
+  if (deleted > 0) {
+    console.log(`[knowledge-sync] prune: removed ${deleted} orphan node(s) for ${repoSlug}`);
+  }
+
+  return deleted;
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function deriveKindFromPath(filePath: string): string {
-  // vault/skills/foo.md → skill (de-pluralize)
-  const parts = filePath.replace(/^vault\//, '').split('/');
-  if (parts.length < 2) return 'note';
+function stripLongestPathPrefix(path: string, prefixes: string[]): string | null {
+  const sorted = [...prefixes].sort((a, b) => b.length - a.length);
+  for (const p of sorted) {
+    if (path.startsWith(p)) return path.slice(p.length);
+  }
+  return null;
+}
 
-  const dir = parts[0].toLowerCase();
-  // Simple de-pluralize: remove trailing 's'
-  if (dir.endsWith('ies')) return dir.slice(0, -3) + 'y'; // methodologies → methodology
-  if (dir.endsWith('s') && !dir.endsWith('ss')) return dir.slice(0, -1);
-  return dir;
+function slugifySegment(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+function depluralizeDir(dir: string): string {
+  const d = dir.toLowerCase();
+  if (d.endsWith('ies')) return d.slice(0, -3) + 'y';
+  if (d.endsWith('s') && !d.endsWith('ss')) return d.slice(0, -1);
+  return d;
+}
+
+/**
+ * Maps a repo file path + source config to kind and slug, mirroring the legacy
+ * vault rule: first directory under the root = kind folder; remainder = slug path.
+ */
+function deriveKindAndSlugFromSourcePath(
+  fullPath: string,
+  source: KnowledgeSyncSource,
+  fm: KGFrontmatter,
+): { kind: string; slug: string } {
+  const rel = stripLongestPathPrefix(fullPath, source.pathPrefixes);
+  if (!rel) {
+    return { kind: 'note', slug: slugifySegment(fullPath.replace(/\.md$/, '')) };
+  }
+
+  const withoutMd = rel.endsWith('.md') ? rel.slice(0, -3) : rel;
+  const segments = withoutMd.split('/').filter(Boolean);
+
+  if (segments.length === 0) {
+    return { kind: source.defaultKind ?? 'note', slug: 'untitled' };
+  }
+
+  if (segments.length === 1) {
+    const kind =
+      (fm.kind as string) ?? source.defaultKind ?? 'note';
+    const slug =
+      (fm.id as string) ?? slugifySegment(segments[0] ?? 'untitled');
+    return { kind, slug };
+  }
+
+  const kindDir = segments[0] ?? 'note';
+  const kind = (fm.kind as string) ?? depluralizeDir(kindDir);
+  const tail = segments.slice(1).join('/');
+  const slug =
+    (fm.id as string) ??
+    slugifySegment(tail || (segments[segments.length - 1] ?? kindDir));
+  return { kind, slug };
 }
 
 function generateFilePath(node: KnowledgeNode): string {

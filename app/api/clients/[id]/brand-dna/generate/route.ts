@@ -37,6 +37,16 @@ export async function POST(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    const admin = createAdminClient();
+    const { data: actor } = await admin
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    if (!actor || actor.role !== 'admin') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     // Rate limit: 10 requests per minute per user for AI endpoints
     const rl = rateLimitByUser(user.id, '/api/clients/brand-dna/generate', 'ai');
     if (!rl.allowed) {
@@ -75,8 +85,6 @@ export async function POST(
       parsed.data.uploadedContent === null || parsed.data.uploadedContent === undefined
         ? undefined
         : parsed.data.uploadedContent;
-
-    const admin = createAdminClient();
 
     // Verify client exists
     const { data: client } = await admin.from('clients').select('id').eq('id', clientId).single();

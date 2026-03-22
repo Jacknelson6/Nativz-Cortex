@@ -6,12 +6,17 @@
  * the legacy single-source default: KNOWLEDGE_GRAPH_GITHUB_REPO + vault/** only,
  * with ids `kind:slug` (no namespace).
  *
- * Example (primary vault + AC docs site):
+ * Strict mirror (default on): after each sync, rows in `knowledge_nodes` with
+ * matching `source_repo` and `source_path` under this source’s `pathPrefixes`
+ * but absent from the Git tree are deleted. Disable globally with
+ * KNOWLEDGE_GRAPH_STRICT_MIRROR=false, or per entry with "strictMirror": false.
+ *
+ * Example (primary vault + AC docs — Markdown lives in ac-docs/knowledge/):
  * [
  *   { "repo": "Jacknelson6/Cortex-Knowledge-Graph", "pathPrefixes": ["vault/"] },
  *   {
  *     "repo": "Anderson-Collaborative/ac-docs",
- *     "pathPrefixes": ["docs/"],
+ *     "pathPrefixes": ["knowledge/"],
  *     "idNamespace": "ac-docs",
  *     "defaultKind": "playbook"
  *   }
@@ -32,6 +37,11 @@ export interface KnowledgeSyncSource {
   idNamespace?: string;
   /** Used when a file sits directly under a prefix (no subfolder), e.g. docs/index.md */
   defaultKind?: string;
+  /**
+   * When false, skip orphan deletes for this slice (Git tree is not authoritative).
+   * Omit for default strict mirror (unless KNOWLEDGE_GRAPH_STRICT_MIRROR=false).
+   */
+  strictMirror?: boolean;
 }
 
 const DEFAULT_BRANCH = 'main';
@@ -61,6 +71,7 @@ function parseSourcesJson(raw: string): KnowledgeSyncSource[] | null {
         typeof o.defaultKind === 'string' && o.defaultKind.trim() !== ''
           ? o.defaultKind.trim()
           : undefined;
+      const strictMirror = typeof o.strictMirror === 'boolean' ? o.strictMirror : undefined;
 
       out.push({
         repo,
@@ -68,6 +79,7 @@ function parseSourcesJson(raw: string): KnowledgeSyncSource[] | null {
         branch: branch || DEFAULT_BRANCH,
         idNamespace,
         defaultKind,
+        strictMirror,
       });
     }
     return out;
@@ -106,4 +118,19 @@ export function getKnowledgeSyncSourceForRepo(repoFullName: string): KnowledgeSy
 export function branchRefMatchesSource(ref: string, source: KnowledgeSyncSource): boolean {
   const branch = source.branch ?? DEFAULT_BRANCH;
   return ref === `refs/heads/${branch}`;
+}
+
+/**
+ * Whether to delete DB rows that no longer exist in Git for each sync source.
+ * Default true; set KNOWLEDGE_GRAPH_STRICT_MIRROR=false or 0 to disable all pruning.
+ */
+export function isKnowledgeStrictMirrorEnabled(): boolean {
+  const v = process.env.KNOWLEDGE_GRAPH_STRICT_MIRROR?.trim().toLowerCase();
+  if (v === 'false' || v === '0' || v === 'off') return false;
+  return true;
+}
+
+/** Per-source strict mirror: global on, and source did not opt out. */
+export function shouldPruneKnowledgeOrphans(source: KnowledgeSyncSource): boolean {
+  return isKnowledgeStrictMirrorEnabled() && source.strictMirror !== false;
 }

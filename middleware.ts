@@ -82,6 +82,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/scheduler/connect/callback') ||
     pathname.startsWith('/api/monday/webhook') ||
     pathname.startsWith('/api/vault/webhook') ||
+    pathname.startsWith('/api/knowledge/webhook') ||
     pathname.startsWith('/api/google/callback') ||
     pathname.startsWith('/api/team/invite/validate') ||
     pathname.startsWith('/api/team/invite/accept') ||
@@ -117,6 +118,19 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
+    // JSON APIs must not redirect to HTML login — clients expect { error } and show "Request failed" on HTML.
+    if (pathname.startsWith('/api/')) {
+      const res = NextResponse.json(
+        {
+          error: 'Unauthorized',
+          hint: 'Sign in again — your session may have expired.',
+        },
+        { status: 401 },
+      );
+      setCorsHeaders(res, requestOrigin);
+      setRateLimitHeaders(res);
+      return res;
+    }
     if (pathname.startsWith('/admin')) {
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }

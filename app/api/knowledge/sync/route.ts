@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+
+export const maxDuration = 300;
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { KNOWLEDGE_GRAPH_GITHUB_REPO } from '@/lib/knowledge/github-repo';
-import { syncFromGitHub } from '@/lib/knowledge/github-sync';
+import { syncAllKnowledgeSources, syncFromGitHub } from '@/lib/knowledge/github-sync';
 
 const syncSchema = z.object({
   repo: z.string().optional(),
+  /** When true, sync every entry in KNOWLEDGE_GRAPH_SYNC_SOURCES (legacy default counts as one). */
+  all: z.boolean().optional(),
 });
 
 /**
@@ -15,7 +19,8 @@ const syncSchema = z.object({
  * Trigger GitHub → Supabase incremental sync for the knowledge graph.
  *
  * Auth: admin role OR x-sync-secret header matching SYNC_SECRET env var.
- * Body: { repo?: string } — defaults to KNOWLEDGE_GRAPH_GITHUB_REPO (see lib/knowledge/github-repo.ts)
+ * Body: { repo?: string, all?: boolean } — default single repo is KNOWLEDGE_GRAPH_GITHUB_REPO;
+ * set all: true to sync every configured source (see KNOWLEDGE_GRAPH_SYNC_SOURCES).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -50,6 +55,11 @@ export async function POST(request: NextRequest) {
         { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
         { status: 400 },
       );
+    }
+
+    if (parsed.data.all) {
+      const results = await syncAllKnowledgeSources();
+      return NextResponse.json({ all: true, results });
     }
 
     const repo = parsed.data.repo ?? KNOWLEDGE_GRAPH_GITHUB_REPO;
