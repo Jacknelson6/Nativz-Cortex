@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ArrowLeft, Search, Globe, Sparkles, Loader2, Plus, X } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { useClientAdminShell } from '@/components/clients/client-admin-shell-context';
 
 interface VaultHeaderProps {
   clientId: string;
@@ -22,6 +23,7 @@ export function VaultHeader({
   onSearchChange,
   onEntriesChanged,
 }: VaultHeaderProps) {
+  const shell = useClientAdminShell();
   const [scraping, setScraping] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -104,12 +106,14 @@ export function VaultHeader({
   return (
     <div className="flex items-center justify-between px-4 py-2.5 border-b border-nativz-border bg-background shrink-0">
       <div className="flex items-center gap-3">
-        <Link
-          href={`/admin/clients?client=${clientSlug}`}
-          className="text-text-muted hover:text-text-secondary transition-colors p-1 rounded-lg hover:bg-surface-hover"
-        >
-          <ArrowLeft size={16} />
-        </Link>
+        {!shell && (
+          <Link
+            href={`/admin/clients/${clientSlug}`}
+            className="text-text-muted hover:text-text-secondary transition-colors p-1 rounded-lg hover:bg-surface-hover"
+          >
+            <ArrowLeft size={16} />
+          </Link>
+        )}
         <h1 className="text-sm font-semibold text-text-primary">
           {clientName}&apos;s vault
         </h1>

@@ -68,6 +68,8 @@ export interface ClientProfileFormProps {
   ideaCount: number;
   knowledgeSummary?: { type: string; count: number }[];
   inModal?: boolean;
+  /** Full-page client workspace (sidebar layout) — hide back link and horizontal section nav. */
+  embeddedInShell?: boolean;
 }
 
 export function ClientProfileForm({
@@ -81,6 +83,7 @@ export function ClientProfileForm({
   ideaCount,
   knowledgeSummary,
   inModal,
+  embeddedInShell,
 }: ClientProfileFormProps) {
   const slug = client.slug;
   const clientId = client.id;
@@ -151,17 +154,15 @@ export function ClientProfileForm({
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         industry,
         target_audience: targetAudience || null,
         brand_voice: brandVoice || null,
         topic_keywords: topicKeywords.split(',').map((k) => k.trim()).filter(Boolean),
         logo_url: logoUrl || null,
         website_url: websiteUrl.trim() || null,
-        feature_flags: { can_search: canSearch, can_view_reports: canViewReports, can_edit_preferences: canEditPreferences, can_submit_ideas: canSubmitIdeas },
         preferences: p || {},
         monthly_boosting_budget: boostingBudget.trim() ? Number(boostingBudget.trim()) : null,
-        is_active: isActive,
         services,
         health_score: null as string | null,
         agency: agency.trim() || null,
@@ -169,6 +170,15 @@ export function ClientProfileForm({
         google_drive_branding_url: googleDriveBrandingUrl.trim() || null,
         google_drive_calendars_url: googleDriveCalendarsUrl.trim() || null,
       };
+      if (!embeddedInShell) {
+        payload.feature_flags = {
+          can_search: canSearch,
+          can_view_reports: canViewReports,
+          can_edit_preferences: canEditPreferences,
+          can_submit_ideas: canSubmitIdeas,
+        };
+        payload.is_active = isActive;
+      }
       const res = await fetch(`/api/clients/${clientId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -180,9 +190,13 @@ export function ClientProfileForm({
     finally { setSaving(false); }
   }
 
+  const showBreadcrumbs = !inModal && !embeddedInShell;
+  const showBackLink = !inModal && !embeddedInShell;
+  const showQuickNav = !embeddedInShell;
+
   return (
     <div className="p-6 space-y-8 max-w-5xl mx-auto">
-      {!inModal && (
+      {showBreadcrumbs && (
         <Breadcrumbs items={[
           { label: 'Clients', href: '/admin/clients' },
           { label: clientName },
@@ -193,7 +207,7 @@ export function ClientProfileForm({
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4 min-w-0">
-            {!inModal && (
+            {showBackLink && (
               <Link href="/admin/clients" className="shrink-0 text-text-muted hover:text-text-secondary transition-colors mt-1">
                 <ArrowLeft size={20} />
               </Link>
@@ -239,54 +253,55 @@ export function ClientProfileForm({
           </div>
         </div>
 
-        {/* Quick navigation — shown in modal (Clients list) and on any full-page profile */}
-        <nav
-          className={`flex flex-wrap items-center gap-1 border-b border-nativz-border-light pb-3 -mt-2 ${inModal ? 'pt-1' : ''}`}
-          aria-label="Client sections"
-        >
-          <Link
-            href={`/admin/clients/${slug}/brand-dna`}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-accent-text bg-accent-surface/25 border border-accent-border/35 hover:bg-accent-surface/45 transition-colors"
+        {showQuickNav && (
+          <nav
+            className={`flex flex-wrap items-center gap-1 border-b border-nativz-border-light pb-3 -mt-2 ${inModal ? 'pt-1' : ''}`}
+            aria-label="Client sections"
           >
-            <Dna size={14} />
-            Brand DNA
-          </Link>
-          <Link
-            href={`/admin/clients/${slug}/knowledge`}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-          >
-            <BookOpen size={14} />
-            Knowledge
-          </Link>
-          <Link
-            href={`/admin/clients/${slug}/ideas`}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-          >
-            <Lightbulb size={14} />
-            Ideas
-          </Link>
-          <Link
-            href={`/admin/clients/${slug}/ad-creatives`}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-          >
-            <Palette size={14} />
-            Ad creatives
-          </Link>
-          <Link
-            href={`/admin/clients/${slug}/ideas/generate`}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-          >
-            <Wand2 size={14} />
-            Idea generator
-          </Link>
-          <Link
-            href={`/admin/clients/${slug}/settings`}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-          >
-            <Settings2 size={14} />
-            Settings
-          </Link>
-        </nav>
+            <Link
+              href={`/admin/clients/${slug}/brand-dna`}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-accent-text bg-accent-surface/25 border border-accent-border/35 hover:bg-accent-surface/45 transition-colors"
+            >
+              <Dna size={14} />
+              Brand DNA
+            </Link>
+            <Link
+              href={`/admin/clients/${slug}/knowledge`}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            >
+              <BookOpen size={14} />
+              Knowledge
+            </Link>
+            <Link
+              href={`/admin/clients/${slug}/ideas`}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            >
+              <Lightbulb size={14} />
+              Ideas
+            </Link>
+            <Link
+              href={`/admin/clients/${slug}/ad-creatives`}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            >
+              <Palette size={14} />
+              Ad creatives
+            </Link>
+            <Link
+              href={`/admin/clients/${slug}/ideas/generate`}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            >
+              <Wand2 size={14} />
+              Idea generator
+            </Link>
+            <Link
+              href={`/admin/clients/${slug}/settings`}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            >
+              <Settings2 size={14} />
+              Settings
+            </Link>
+          </nav>
+        )}
 
         {editingLogo && (
           <Card className="max-w-xs">
@@ -458,20 +473,23 @@ export function ClientProfileForm({
         searches={searches}
       />
 
-      {/* Integrations */}
-      <SectionLabel icon={Plug} label="Integrations" />
-      <ConnectedAccounts clientId={clientId} hasUpPromote={!!client.uppromote_api_key} />
+      {/* Integrations + portal admin — sidebar Settings when using client workspace */}
+      {!embeddedInShell && (
+        <>
+          <SectionLabel icon={Plug} label="Integrations" />
+          <ConnectedAccounts clientId={clientId} hasUpPromote={!!client.uppromote_api_key} />
 
-      {/* Settings */}
-      <SectionLabel icon={Settings2} label="Settings" />
-      <PortalAccessCard
-        clientId={clientId}
-        canSearch={canSearch} setCanSearch={setCanSearch}
-        canViewReports={canViewReports} setCanViewReports={setCanViewReports}
-        canEditPreferences={canEditPreferences} setCanEditPreferences={setCanEditPreferences}
-        canSubmitIdeas={canSubmitIdeas} setCanSubmitIdeas={setCanSubmitIdeas}
-      />
-      <DangerZone clientId={clientId} clientName={clientName} isActive={isActive} setIsActive={setIsActive} />
+          <SectionLabel icon={Settings2} label="Settings" />
+          <PortalAccessCard
+            clientId={clientId}
+            canSearch={canSearch} setCanSearch={setCanSearch}
+            canViewReports={canViewReports} setCanViewReports={setCanViewReports}
+            canEditPreferences={canEditPreferences} setCanEditPreferences={setCanEditPreferences}
+            canSubmitIdeas={canSubmitIdeas} setCanSubmitIdeas={setCanSubmitIdeas}
+          />
+          <DangerZone clientId={clientId} clientName={clientName} isActive={isActive} setIsActive={setIsActive} />
+        </>
+      )}
     </div>
   );
 }

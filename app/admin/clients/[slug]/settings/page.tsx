@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import { ClientSettingsSubpage } from '@/components/clients/client-settings-subpage';
 
 export default async function AdminClientSettingsPage({
   params,
@@ -6,5 +6,5 @@ export default async function AdminClientSettingsPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  redirect(`/admin/clients/${slug}`);
+  return <ClientSettingsSubpage slug={slug} />;
 }

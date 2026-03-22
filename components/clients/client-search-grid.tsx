@@ -1,15 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Building2, Search, UserX, LayoutGrid, List, Trash2, Loader2, X, Eye } from 'lucide-react';
+import { Search, UserX, LayoutGrid, List, Trash2, Loader2, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { HealthBadge } from '@/components/clients/health-badge';
 import { AgencyBadge } from '@/components/clients/agency-badge';
 import { ClientLogo } from '@/components/clients/client-logo';
-import { ClientProfileForm } from '@/components/clients/client-profile-form';
-import type { ClientProfileFormProps } from '@/components/clients/client-profile-form';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { toast } from 'sonner';
 
@@ -234,98 +232,6 @@ function ClientCard({
   );
 }
 
-// ─── Client detail modal ────────────────────────────────────────────────────────
-
-function ClientDetailModal({ slug, onClose }: { slug: string; onClose: () => void }) {
-  const [data, setData] = useState<ClientProfileFormProps | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, []);
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(`/api/clients/${slug}`);
-        if (!res.ok) {
-          const d = await res.json();
-          throw new Error(d.error || 'Failed to load client');
-        }
-        const d = await res.json();
-        setData(d);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load');
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, [slug]);
-
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') onClose();
-  }, [onClose]);
-
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Centered modal */}
-      <div
-        ref={panelRef}
-        className="relative w-full max-w-5xl max-h-[90vh] bg-background rounded-2xl border border-nativz-border overflow-y-auto animate-[modalScaleIn_200ms_ease-out]"
-        style={{ boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}
-      >
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="sticky top-4 right-4 z-10 float-right mr-4 mt-4 rounded-lg p-2 bg-surface-hover/80 backdrop-blur text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
-          aria-label="Close"
-        >
-          <X size={18} />
-        </button>
-
-        {loading && (
-          <div className="flex items-center justify-center h-64">
-            <Loader2 size={24} className="animate-spin text-accent-text" />
-          </div>
-        )}
-
-        {error && (
-          <div className="flex items-center justify-center h-64 text-sm text-red-400">
-            {error}
-          </div>
-        )}
-
-        {data && (
-          <ClientProfileForm
-            client={data.client}
-            portalContacts={data.portalContacts}
-            strategy={data.strategy}
-            searches={data.searches}
-            recentShoots={data.recentShoots}
-            recentMoodboards={data.recentMoodboards}
-            ideas={data.ideas}
-            ideaCount={data.ideaCount}
-            knowledgeSummary={data.knowledgeSummary}
-            inModal
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Grid ──────────────────────────────────────────────────────────────────────
 
 type AgencyFilter = 'all' | 'nativz' | 'ac';
@@ -337,17 +243,12 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
     rawClients.map((c) => ({ ...c, services: normalizeServices(c.services) })),
   );
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(
-    searchParams.get('client'),
-  );
 
-  // Sync URL param → modal state
+  const legacyClientParam = searchParams.get('client');
   useEffect(() => {
-    const clientParam = searchParams.get('client');
-    if (clientParam && clientParam !== selectedSlug) {
-      setSelectedSlug(clientParam);
-    }
-  }, [searchParams]);
+    if (!legacyClientParam) return;
+    router.replace(`/admin/clients/${encodeURIComponent(legacyClientParam)}`);
+  }, [legacyClientParam, router]);
 
   const [query, setQuery] = useState('');
   const [agencyFilter, setAgencyFilter] = useState<AgencyFilter>('all');
@@ -454,13 +355,13 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
             listView ? (
               <div className="space-y-1">
                 {active.map((client, i) => (
-                  <ClientCard key={client.slug} client={client} i={i} listView onDelete={handleDelete} deleting={deletingId === client.dbId} onClick={() => setSelectedSlug(client.slug)} />
+                  <ClientCard key={client.slug} client={client} i={i} listView onDelete={handleDelete} deleting={deletingId === client.dbId} onClick={() => router.push(`/admin/clients/${client.slug}`)} />
                 ))}
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {active.map((client, i) => (
-                  <ClientCard key={client.slug} client={client} i={i} onDelete={handleDelete} deleting={deletingId === client.dbId} onClick={() => setSelectedSlug(client.slug)} />
+                  <ClientCard key={client.slug} client={client} i={i} onDelete={handleDelete} deleting={deletingId === client.dbId} onClick={() => router.push(`/admin/clients/${client.slug}`)} />
                 ))}
               </div>
             )
@@ -475,13 +376,13 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
               {listView ? (
                 <div className="space-y-1">
                   {inactive.map((client, i) => (
-                    <ClientCard key={client.slug} client={client} i={i} dimmed listView onDelete={handleDelete} deleting={deletingId === client.dbId} onClick={() => setSelectedSlug(client.slug)} />
+                    <ClientCard key={client.slug} client={client} i={i} dimmed listView onDelete={handleDelete} deleting={deletingId === client.dbId} onClick={() => router.push(`/admin/clients/${client.slug}`)} />
                   ))}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {inactive.map((client, i) => (
-                    <ClientCard key={client.slug} client={client} i={i} dimmed onDelete={handleDelete} deleting={deletingId === client.dbId} onClick={() => setSelectedSlug(client.slug)} />
+                    <ClientCard key={client.slug} client={client} i={i} dimmed onDelete={handleDelete} deleting={deletingId === client.dbId} onClick={() => router.push(`/admin/clients/${client.slug}`)} />
                   ))}
                 </div>
               )}
@@ -490,17 +391,6 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
         </div>
       )}
 
-      {/* Client detail slide-over */}
-      {selectedSlug && (
-        <ClientDetailModal slug={selectedSlug} onClose={() => {
-          setSelectedSlug(null);
-          // Clear URL param without navigation
-          const params = new URLSearchParams(searchParams.toString());
-          params.delete('client');
-          const qs = params.toString();
-          router.replace(`/admin/clients${qs ? `?${qs}` : ''}`, { scroll: false });
-        }} />
-      )}
     </>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { Upload, Check, Loader2, Square, Smartphone, RectangleVertical, Sparkles, Library } from 'lucide-react';
+import { Upload, Check, Loader2, Square, Smartphone, RectangleVertical, Sparkles, Library, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import type { AdCategory, AspectRatio, AdVertical } from '@/lib/ad-creatives/types';
@@ -252,15 +252,15 @@ export function TemplateGrid({
         <div className="rounded-xl border border-accent/25 bg-gradient-to-r from-accent/10 via-accent/5 to-transparent px-4 py-3 flex items-start gap-3">
           <Sparkles size={16} className="text-accent-text shrink-0 mt-0.5" />
           <p className="text-xs text-text-secondary leading-relaxed">
-            <span className="font-medium text-accent-text">Suggested vertical:</span>{' '}
-            {VERTICAL_LABELS[recommendedVertical] ?? recommendedVertical}. The catalog is filtered by template vertical
-            (not the filename you see on each card).{' '}
+            <span className="font-medium text-accent-text">Suggested industry:</span>{' '}
+            {VERTICAL_LABELS[recommendedVertical] ?? recommendedVertical}. Templates below are filtered to match
+            brands in this industry (only industries with catalog templates are suggested).{' '}
             <button
               type="button"
               onClick={() => setVerticalFilter('all')}
               className="text-accent-text hover:underline cursor-pointer font-medium"
             >
-              Show all verticals
+              Show all industries
             </button>
           </p>
         </div>
@@ -311,18 +311,33 @@ export function TemplateGrid({
           </select>
         )}
 
-        {/* Vertical filter */}
+        {/* Industry filter — options are only verticals present in the loaded templates */}
         {uniqueVerticals.length > 1 && (
-          <select
-            value={verticalFilter}
-            onChange={(e) => setVerticalFilter(e.target.value as AdVertical | 'all')}
-            className="rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-xs text-text-secondary"
-          >
-            <option value="all">All verticals</option>
-            {uniqueVerticals.map((v) => (
-              <option key={v} value={v}>{VERTICAL_LABELS[v] ?? v}</option>
-            ))}
-          </select>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-text-muted/90 px-0.5">
+              Industry
+            </span>
+            <div className="relative">
+              <select
+                value={verticalFilter}
+                onChange={(e) => setVerticalFilter(e.target.value as AdVertical | 'all')}
+                className="min-w-[9.5rem] cursor-pointer appearance-none rounded-lg bg-background/70 pl-2.5 pr-8 py-1.5 text-xs text-text-primary ring-1 ring-inset ring-white/[0.06] border-0 hover:bg-background/90 focus:outline-none focus:ring-2 focus:ring-accent/35"
+                aria-label="Filter catalog by industry"
+              >
+                <option value="all">All industries</option>
+                {uniqueVerticals.map((v) => (
+                  <option key={v} value={v}>
+                    {VERTICAL_LABELS[v] ?? v}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={14}
+                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-text-muted/70"
+                aria-hidden
+              />
+            </div>
+          </div>
         )}
 
         {/* Upload + Import buttons */}
@@ -468,13 +483,6 @@ export function TemplateGrid({
 // Template card
 // ---------------------------------------------------------------------------
 
-function formatTemplateLabel(collectionName: string | undefined, vertical: string | undefined): string {
-  const raw = (collectionName ?? 'Template').replace(/^[—–\-•]\s*/, '').trim();
-  const v = vertical ? VERTICAL_LABELS[vertical] ?? vertical : '';
-  if (v && raw.length < 3) return v;
-  return raw || v || 'Template';
-}
-
 function TemplateCard({
   template,
   selected,
@@ -484,7 +492,6 @@ function TemplateCard({
   selected: boolean;
   onToggle: (id: string) => void;
 }) {
-  const label = formatTemplateLabel(template.collection_name, template.vertical);
   return (
     <button
       type="button"
@@ -516,13 +523,10 @@ function TemplateCard({
           </div>
         )}
       </div>
-      <div className="px-2 py-1.5 bg-surface/95 border-t border-nativz-border/60 space-y-0.5">
-        <p className="text-[10px] font-medium text-text-secondary truncate leading-tight" title={label}>
-          {label}
-        </p>
-        {template.vertical ? (
-          <p className="text-[9px] text-text-muted/80 truncate">{VERTICAL_LABELS[template.vertical] ?? template.vertical}</p>
-        ) : null}
+      <div className="flex items-center justify-center gap-1 px-1.5 py-1 bg-surface/95 border-t border-nativz-border/60">
+        <span className="text-[9px] font-medium tabular-nums text-text-muted/90 uppercase tracking-wide">
+          {template.format || template.aspect_ratio}
+        </span>
       </div>
     </button>
   );

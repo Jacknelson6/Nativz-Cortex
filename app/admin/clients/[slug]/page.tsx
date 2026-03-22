@@ -1,14 +1,10 @@
-import { redirect } from 'next/navigation';
+import { ClientProfilePageClient } from '@/components/clients/client-profile-page-client';
 
-/**
- * Client detail pages now live in the modal on /admin/clients.
- * This page redirects to the clients list with the modal auto-opened.
- */
-export default async function ClientDetailRedirect({
+export default async function AdminClientOverviewPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  redirect(`/admin/clients?client=${slug}`);
+  return <ClientProfilePageClient slug={slug} />;
 }

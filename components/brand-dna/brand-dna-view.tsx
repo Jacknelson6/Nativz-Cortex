@@ -14,6 +14,7 @@ import { BrandDNASectionEditor } from './brand-dna-section-editor';
 import { Markdown } from '@/components/ai/markdown';
 import { formatRelativeTime } from '@/lib/utils/format';
 import type { BrandGuidelineMetadata } from '@/lib/knowledge/types';
+import { useClientAdminShell } from '@/components/clients/client-admin-shell-context';
 
 interface BrandDNAViewProps {
   clientId: string;
@@ -38,6 +39,7 @@ export function BrandDNAView({
   brandDnaStatus,
   guideline,
 }: BrandDNAViewProps) {
+  const shell = useClientAdminShell();
   const router = useRouter();
   const [generateOpen, setGenerateOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -77,12 +79,14 @@ export function BrandDNAView({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link
-            href={`/admin/clients/${clientSlug}`}
-            className="text-text-muted hover:text-text-secondary transition-colors"
-          >
-            <ArrowLeft size={20} />
-          </Link>
+          {!shell && (
+            <Link
+              href={`/admin/clients/${clientSlug}`}
+              className="text-text-muted hover:text-text-secondary transition-colors"
+            >
+              <ArrowLeft size={20} />
+            </Link>
+          )}
           <div>
             <h1 className="text-xl font-semibold text-text-primary">Brand DNA</h1>
             <p className="text-sm text-text-muted">{clientName}</p>

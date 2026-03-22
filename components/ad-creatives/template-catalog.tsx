@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Star, Loader2, Upload } from 'lucide-react';
+import { ChevronDown, Loader2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog } from '@/components/ui/dialog';
@@ -50,14 +50,22 @@ interface TemplateCatalogProps {
   refreshKey?: number;
 }
 
-export function TemplateCatalog({ clientId, onShowBulkImport, refreshKey }: TemplateCatalogProps) {
+function filterSelectClassName(): string {
+  return [
+    'min-w-[10.5rem] max-w-[14rem] cursor-pointer appearance-none rounded-lg',
+    'bg-background/70 pl-3 pr-9 py-2 text-sm text-text-primary',
+    'ring-1 ring-inset ring-white/[0.06] border-0 shadow-sm',
+    'transition-[box-shadow,background-color] hover:bg-background/90 hover:ring-white/[0.1]',
+    'focus:outline-none focus:ring-2 focus:ring-accent/35 focus:ring-offset-0 focus:bg-background',
+  ].join(' ');
+}
+
+export function TemplateCatalog({ clientId: _clientId, onShowBulkImport, refreshKey }: TemplateCatalogProps) {
   const [templates, setTemplates] = useState<KandyTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [verticalFilter, setVerticalFilter] = useState<AdVertical | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<AdCategory | 'all'>('all');
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<KandyTemplate | null>(null);
-  const [togglingFav, setTogglingFav] = useState<string | null>(null);
 
   const fetchTemplates = useCallback(async () => {
     try {
@@ -77,40 +85,43 @@ export function TemplateCatalog({ clientId, onShowBulkImport, refreshKey }: Temp
     fetchTemplates();
   }, [fetchTemplates, refreshKey]);
 
-  const toggleFavorite = async (id: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    const template = templates.find((t) => t.id === id);
-    if (!template) return;
-
-    const next = !template.is_favorite;
-    setTogglingFav(id);
-    setTemplates((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, is_favorite: next } : t)),
-    );
-
-    try {
-      await fetch(`/api/ad-creatives/templates/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_favorite: next }),
-      });
-    } catch {
-      setTemplates((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, is_favorite: !next } : t)),
-      );
-    } finally {
-      setTogglingFav(null);
+  /** Industries that actually have ≥1 template (dropdown only lists these). */
+  const verticalsPresent = useMemo(() => {
+    const found = new Set<string>();
+    for (const t of templates) {
+      if (t.vertical) found.add(t.vertical);
     }
-  };
+    return AD_VERTICALS.filter((v) => found.has(v));
+  }, [templates]);
+
+  const categoriesPresent = useMemo(() => {
+    const found = new Set<string>();
+    for (const t of templates) {
+      if (t.ad_category) found.add(t.ad_category);
+    }
+    return AD_CATEGORIES.filter((c) => found.has(c));
+  }, [templates]);
 
   const filtered = useMemo(() => {
     return templates.filter((t) => {
       if (verticalFilter !== 'all' && t.vertical !== verticalFilter) return false;
       if (categoryFilter !== 'all' && t.ad_category !== categoryFilter) return false;
-      if (favoritesOnly && !t.is_favorite) return false;
       return true;
     });
-  }, [templates, verticalFilter, categoryFilter, favoritesOnly]);
+  }, [templates, verticalFilter, categoryFilter]);
+
+  // Reset filters if catalog changes and current value no longer exists
+  useEffect(() => {
+    if (verticalFilter !== 'all' && !verticalsPresent.includes(verticalFilter)) {
+      setVerticalFilter('all');
+    }
+  }, [verticalFilter, verticalsPresent]);
+
+  useEffect(() => {
+    if (categoryFilter !== 'all' && !categoriesPresent.includes(categoryFilter)) {
+      setCategoryFilter('all');
+    }
+  }, [categoryFilter, categoriesPresent]);
 
   // Group by vertical
   const grouped = useMemo(() => {
@@ -126,10 +137,10 @@ export function TemplateCatalog({ clientId, onShowBulkImport, refreshKey }: Temp
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <Skeleton className="h-9 w-32" />
-          <Skeleton className="h-9 w-32" />
-          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-9 w-36" />
+          <Skeleton className="h-9 w-36" />
         </div>
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="space-y-3">
@@ -163,54 +174,73 @@ export function TemplateCatalog({ clientId, onShowBulkImport, refreshKey }: Temp
 
   return (
     <div className="space-y-6">
-      {/* Filter bar */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Filter bar — only industries / types that exist in the catalog */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:flex-wrap">
         {onShowBulkImport && (
           <button
             onClick={onShowBulkImport}
-            className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90 cursor-pointer"
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90 cursor-pointer self-start"
           >
             <Upload size={14} />
             Bulk import
           </button>
         )}
-        <select
-          value={verticalFilter}
-          onChange={(e) => setVerticalFilter(e.target.value as AdVertical | 'all')}
-          className="appearance-none rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none"
-        >
-          <option value="all">All verticals</option>
-          {AD_VERTICALS.map((v) => (
-            <option key={v} value={v}>
-              {VERTICAL_LABELS[v]}
-            </option>
-          ))}
-        </select>
 
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value as AdCategory | 'all')}
-          className="appearance-none rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none"
-        >
-          <option value="all">All categories</option>
-          {AD_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {CATEGORY_LABELS[c]}
-            </option>
-          ))}
-        </select>
+        {verticalsPresent.length > 0 && (
+          <div className="flex flex-col gap-1 min-w-0">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-text-muted/90">
+              Sort by industry
+            </span>
+            <div className="relative">
+              <select
+                value={verticalFilter}
+                onChange={(e) => setVerticalFilter(e.target.value as AdVertical | 'all')}
+                className={filterSelectClassName()}
+                aria-label="Filter templates by industry"
+              >
+                <option value="all">All industries</option>
+                {verticalsPresent.map((v) => (
+                  <option key={v} value={v}>
+                    {VERTICAL_LABELS[v]}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={16}
+                className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted/70"
+                aria-hidden
+              />
+            </div>
+          </div>
+        )}
 
-        <button
-          onClick={() => setFavoritesOnly(!favoritesOnly)}
-          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all cursor-pointer border ${
-            favoritesOnly
-              ? 'border-amber-500/40 bg-amber-500/15 text-amber-400'
-              : 'border-nativz-border bg-surface text-text-muted hover:text-text-secondary'
-          }`}
-        >
-          <Star size={14} className={favoritesOnly ? 'fill-amber-400' : ''} />
-          Favorites
-        </button>
+        {categoriesPresent.length > 1 && (
+          <div className="flex flex-col gap-1 min-w-0">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-text-muted/90">
+              Template type
+            </span>
+            <div className="relative">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value as AdCategory | 'all')}
+                className={filterSelectClassName()}
+                aria-label="Filter by template type"
+              >
+                <option value="all">All types</option>
+                {categoriesPresent.map((c) => (
+                  <option key={c} value={c}>
+                    {CATEGORY_LABELS[c]}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={16}
+                className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted/70"
+                aria-hidden
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Grouped sections */}
@@ -233,40 +263,20 @@ export function TemplateCatalog({ clientId, onShowBulkImport, refreshKey }: Temp
                 >
                   <img
                     src={template.image_url}
-                    alt={template.collection_name}
+                    alt=""
                     className="w-full aspect-square object-cover"
                     loading="lazy"
                   />
-                  <div className="p-3 space-y-2">
-                    <p className="text-xs font-medium text-text-primary truncate">
-                      {CATEGORY_LABELS[template.ad_category]} — {template.collection_name}
-                    </p>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <Badge variant="info" className="text-[10px]">
+                  <div className="flex items-center justify-center gap-1.5 flex-wrap px-2 py-2 bg-surface/95 border-t border-nativz-border/60">
+                    <Badge variant="default" className="text-[10px] font-normal">
+                      {template.format || template.aspect_ratio}
+                    </Badge>
+                    {template.ad_category ? (
+                      <Badge variant="info" className="text-[10px] font-normal">
                         {CATEGORY_LABELS[template.ad_category]}
                       </Badge>
-                      <Badge variant="default" className="text-[10px]">
-                        {template.format || template.aspect_ratio}
-                      </Badge>
-                    </div>
+                    ) : null}
                   </div>
-
-                  {/* Favorite star */}
-                  <button
-                    onClick={(e) => toggleFavorite(template.id, e)}
-                    disabled={togglingFav === template.id}
-                    className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 hover:bg-black/60 transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-                    aria-label={template.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
-                  >
-                    <Star
-                      size={14}
-                      className={
-                        template.is_favorite
-                          ? 'fill-amber-400 text-amber-400'
-                          : 'text-white'
-                      }
-                    />
-                  </button>
                 </div>
               ))}
             </div>
@@ -278,14 +288,18 @@ export function TemplateCatalog({ clientId, onShowBulkImport, refreshKey }: Temp
       <Dialog
         open={selectedTemplate !== null}
         onClose={() => setSelectedTemplate(null)}
-        title={selectedTemplate?.collection_name ?? 'Template'}
+        title="Template preview"
         maxWidth="2xl"
       >
         {selectedTemplate && (
           <div className="space-y-4">
+            <p className="text-sm text-text-muted leading-relaxed">
+              Reference layout for static ad generation. Prompt and layout details are built when you generate ads, not
+              stored on the template card.
+            </p>
             <img
               src={selectedTemplate.image_url}
-              alt={selectedTemplate.collection_name}
+              alt=""
               className="w-full rounded-xl"
             />
             <div className="flex items-center gap-2 flex-wrap">
@@ -298,14 +312,6 @@ export function TemplateCatalog({ clientId, onShowBulkImport, refreshKey }: Temp
               <Badge variant="default">
                 {selectedTemplate.aspect_ratio}
               </Badge>
-            </div>
-            <div className="rounded-lg bg-background border border-nativz-border p-4">
-              <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">
-                Prompt schema
-              </p>
-              <pre className="text-xs text-text-secondary leading-relaxed whitespace-pre-wrap font-mono max-h-64 overflow-y-auto">
-                {JSON.stringify(selectedTemplate.prompt_schema, null, 2)}
-              </pre>
             </div>
           </div>
         )}

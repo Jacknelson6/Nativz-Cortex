@@ -187,8 +187,21 @@ export function AdWizard({
   // Generate
   const [generating, setGenerating] = useState(false);
 
-  // Recommended vertical based on brand
+  // Recommended vertical from brand copy — only if Nativz catalog has templates for that industry
   const recommendedVertical = brand ? detectVertical(brand.description, brand.name) : null;
+
+  const kandyVerticalsWithTemplates = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of templates) {
+      if (t.templateOrigin === 'kandy' && t.vertical) s.add(t.vertical);
+    }
+    return s;
+  }, [templates]);
+
+  const effectiveRecommendedVertical = useMemo(() => {
+    if (!recommendedVertical || recommendedVertical === 'general') return null;
+    return kandyVerticalsWithTemplates.has(recommendedVertical) ? recommendedVertical : null;
+  }, [recommendedVertical, kandyVerticalsWithTemplates]);
 
   // Update brand from parent when it changes
   useEffect(() => {
@@ -653,7 +666,7 @@ export function AdWizard({
                   onToggle={toggleTemplate}
                   clientId={clientId}
                   onTemplatesRefresh={fetchTemplates}
-                  recommendedVertical={recommendedVertical}
+                  recommendedVertical={effectiveRecommendedVertical}
                 />
               )}
             </div>

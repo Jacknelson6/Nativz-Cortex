@@ -1,6 +1,4 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { IdeaTriageList } from '@/components/ideas/idea-triage-list';
 import { PageError } from '@/components/shared/page-error';
@@ -35,14 +33,6 @@ export default async function AdminClientIdeasPage({
 
     return (
       <div className="p-6 max-w-3xl mx-auto">
-        <Link
-          href={`/admin/clients/${slug}`}
-          className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text-secondary transition-colors mb-4"
-        >
-          <ArrowLeft size={16} />
-          Back to {client.name}
-        </Link>
-
         <IdeaTriageList
           submissions={(ideas || []) as IdeaSubmission[]}
           clientName={client.name}
