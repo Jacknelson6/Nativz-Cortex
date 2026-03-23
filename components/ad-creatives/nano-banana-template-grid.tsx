@@ -1,8 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Check, Loader2, Search } from 'lucide-react';
-import { NANO_BANANA_TYPE_GROUPS } from '@/lib/ad-creatives/nano-banana/catalog';
+import { useMemo } from 'react';
+import { Check, Loader2 } from 'lucide-react';
 import type { NanoCatalogListItem } from '@/lib/ad-creatives/nano-banana/to-wizard-template';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -29,16 +28,10 @@ export function NanoBananaTemplateGrid({
   selectedIds,
   onToggle,
 }: NanoBananaTemplateGridProps) {
-  const [query, setQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('all');
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return items
-      .filter((it) => (typeFilter === 'all' ? true : it.nanoType === typeFilter))
-      .filter((it) => (q ? it.name.toLowerCase().includes(q) || it.slug.includes(q) : true))
-      .sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [items, query, typeFilter]);
+  const sorted = useMemo(
+    () => [...items].sort((a, b) => a.sortOrder - b.sortOrder),
+    [items],
+  );
 
   if (loading) {
     return (
@@ -51,38 +44,8 @@ export function NanoBananaTemplateGrid({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <p className="text-sm text-text-muted max-w-xl leading-relaxed">
-          Global styles — no layout reference image is sent to the model. Add product photos on the brand step when you
-          want exact packshots in-frame.
-        </p>
-        <div className="flex flex-wrap gap-2 shrink-0">
-          <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search styles…"
-              className="w-full sm:w-44 rounded-lg border border-nativz-border bg-background pl-8 pr-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
-            />
-          </div>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
-          >
-            <option value="all">All types</option>
-            {NANO_BANANA_TYPE_GROUPS.map((g) => (
-              <option key={g} value={g}>
-                {TYPE_LABELS[g] ?? g}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {filtered.map((it) => {
+        {sorted.map((it) => {
           const selected = selectedIds.has(it.slug);
           return (
             <button
@@ -122,8 +85,8 @@ export function NanoBananaTemplateGrid({
         })}
       </div>
 
-      {filtered.length === 0 && (
-        <p className="text-sm text-text-muted text-center py-8">No styles match your filters.</p>
+      {sorted.length === 0 && (
+        <p className="text-sm text-text-muted text-center py-8">No styles in the catalog.</p>
       )}
     </div>
   );

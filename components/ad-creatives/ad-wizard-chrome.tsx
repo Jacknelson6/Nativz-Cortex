@@ -28,8 +28,7 @@ export const AD_WIZARD_STEP_META = [
     id: 'templates' as const,
     title: 'Templates',
     shortTitle: 'Templates',
-    description:
-      'Pick Nativz Kandy layouts or ads you imported from a competitor Meta Ad Library page for this client.',
+    description: '',
   },
   {
     id: 'format' as const,
@@ -162,11 +161,14 @@ export function WizardStepHeader({
   description: string;
   aside?: ReactNode;
 }) {
+  const showDescription = description.trim().length > 0;
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-nativz-border/80 pb-4 mb-6">
-      <div className="min-w-0 space-y-1.5">
+      <div className={`min-w-0 ${showDescription ? 'space-y-1.5' : ''}`}>
         <h2 className="text-base font-semibold text-text-primary tracking-tight">{title}</h2>
-        <p className="text-sm text-text-muted leading-relaxed max-w-2xl">{description}</p>
+        {showDescription ? (
+          <p className="text-sm text-text-muted leading-relaxed max-w-2xl">{description}</p>
+        ) : null}
       </div>
       {aside ? <div className="shrink-0">{aside}</div> : null}
     </div>

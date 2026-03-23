@@ -4,22 +4,8 @@ import { useState, useRef, useCallback } from 'react';
 import { Upload, Check, Loader2, Square, Smartphone, RectangleVertical, Library, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import type { AdCategory, AspectRatio, AdVertical } from '@/lib/ad-creatives/types';
-import { AD_CATEGORIES } from '@/lib/ad-creatives/types';
+import type { AspectRatio, AdVertical } from '@/lib/ad-creatives/types';
 import type { WizardTemplate } from '@/lib/ad-creatives/wizard-template';
-
-const AD_CATEGORY_LABELS: Record<AdCategory, string> = {
-  promotional: 'Promotional',
-  brand_awareness: 'Brand awareness',
-  product_showcase: 'Product showcase',
-  testimonial: 'Testimonial',
-  seasonal: 'Seasonal',
-  retargeting: 'Retargeting',
-  lead_generation: 'Lead generation',
-  event: 'Event',
-  educational: 'Educational',
-  comparison: 'Comparison',
-};
 
 interface TemplateGridProps {
   templates: WizardTemplate[];
@@ -63,7 +49,6 @@ export function TemplateGrid({
   const [brandFilter, setBrandFilter] = useState<string | 'all'>('all');
   const [uploading, setUploading] = useState(false);
   const [libraryUrl, setLibraryUrl] = useState('');
-  const [libraryCategory, setLibraryCategory] = useState<AdCategory>('promotional');
   const [scrapingLibrary, setScrapingLibrary] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -122,7 +107,7 @@ export function TemplateGrid({
       const res = await fetch(`/api/clients/${clientId}/ad-creatives/templates/scrape`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: u, ad_category: libraryCategory }),
+        body: JSON.stringify({ url: u, ad_category: 'promotional' }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Scrape failed');
@@ -151,28 +136,9 @@ export function TemplateGrid({
       <div className="rounded-xl border border-accent/20 bg-accent/5 p-4 space-y-3">
           <div className="flex items-start gap-2">
             <Library size={18} className="text-accent-text shrink-0 mt-0.5" />
-            <div className="space-y-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary">Import from Meta Ad Library</p>
-              <p className="text-xs text-text-muted leading-relaxed">
-                Paste the full URL of a Meta Ad Library search or advertiser page. We pull static image URLs from the
-                page when they appear in the HTML (heavy JS pages may return few results — use image upload as a
-                fallback).
-              </p>
-            </div>
+            <p className="text-sm font-medium text-text-primary pt-0.5">Import from Meta Ad Library</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-            <select
-              aria-label="Ad category for scraped templates"
-              value={libraryCategory}
-              onChange={(e) => setLibraryCategory(e.target.value as AdCategory)}
-              className="rounded-lg border border-nativz-border bg-background px-3 py-2 text-xs text-text-secondary shrink-0 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30"
-            >
-              {AD_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {AD_CATEGORY_LABELS[c]}
-                </option>
-              ))}
-            </select>
             <input
               value={libraryUrl}
               onChange={(e) => setLibraryUrl(e.target.value)}

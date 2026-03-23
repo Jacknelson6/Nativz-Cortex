@@ -150,7 +150,7 @@ export function AdWizard({
   const [variations, setVariations] = useState<Map<string, number>>(new Map());
 
   /** Client library vs global Nano Banana catalog */
-  const [templateSource, setTemplateSource] = useState<'client' | 'nano'>('client');
+  const [templateSource, setTemplateSource] = useState<'client' | 'nano'>('nano');
   const [nanoCatalog, setNanoCatalog] = useState<NanoCatalogListItem[]>([]);
   const [loadingNanoCatalog, setLoadingNanoCatalog] = useState(false);
 
@@ -823,8 +823,8 @@ export function AdWizard({
                   setVariations(new Map());
                 }}
                 options={[
-                  { value: 'client' as const, label: 'Client library', icon: LayoutGrid },
                   { value: 'nano' as const, label: 'Nano Banana', icon: Sparkles },
+                  { value: 'client' as const, label: 'Client library', icon: LayoutGrid },
                 ]}
               />
               {templateSource === 'nano' ? (
