@@ -3,6 +3,10 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchAffiliateAnalyticsRange } from '@/lib/affiliates/fetch-affiliate-analytics-range';
 import { parseAffiliateDigestRecipients } from '@/lib/affiliates/parse-digest-recipients';
+import {
+  isoWeekKeyForInstantInTimeZone,
+  matchesAffiliateDigestSchedule,
+} from '@/lib/affiliates/digest-schedule';
 import { syncClientAffiliates } from '@/lib/uppromote/sync';
 import { sendAffiliateWeeklyReportEmail } from '@/lib/email/resend';
 
@@ -25,8 +29,12 @@ function isVercelProduction(): boolean {
 }
 
 /**
- * GET /api/cron/weekly-affiliate-report (Vercel cron — Wednesdays)
+ * GET /api/cron/weekly-affiliate-report (Vercel cron — every 15 minutes)
  * POST /api/cron/weekly-affiliate-report (manual — admin session or CRON_SECRET)
+ *
+ * Cron: for each eligible client, sends only when local day/time matches
+ * `affiliate_digest_*` schedule and ISO week key differs from `affiliate_digest_last_sent_week_key`.
+ * Manual POST sends all eligible clients immediately (no schedule or week dedup).
  *
  * For each active client with UpPromote + `affiliate_digest_email_enabled` and non-empty
  * `affiliate_digest_recipients`: syncs UpPromote, then emails the past-7-day affiliate report.
@@ -62,10 +70,14 @@ async function handler(request: NextRequest) {
     const testRedirect = !isVercelProduction() && overrideToRaw ? overrideToRaw : undefined;
 
     const admin = createAdminClient();
+    const isCronTrigger = hasCronAuth;
+    const now = new Date();
 
     const { data: clients, error: qErr } = await admin
       .from('clients')
-      .select('id, name, uppromote_api_key, affiliate_digest_email_enabled, affiliate_digest_recipients')
+      .select(
+        'id, name, uppromote_api_key, affiliate_digest_email_enabled, affiliate_digest_recipients, affiliate_digest_timezone, affiliate_digest_send_day_of_week, affiliate_digest_send_hour, affiliate_digest_send_minute, affiliate_digest_last_sent_week_key',
+      )
       .eq('is_active', true)
       .eq('affiliate_digest_email_enabled', true)
       .not('uppromote_api_key', 'is', null);
@@ -100,6 +112,32 @@ async function handler(request: NextRequest) {
     }> = [];
 
     for (const c of targets) {
+      const tz = (c.affiliate_digest_timezone as string | null)?.trim() || 'UTC';
+      const dow = Number(c.affiliate_digest_send_day_of_week ?? 3);
+      const hour = Number(c.affiliate_digest_send_hour ?? 14);
+      const minute = Number(c.affiliate_digest_send_minute ?? 0);
+      const lastWeek = (c.affiliate_digest_last_sent_week_key as string | null)?.trim() ?? null;
+
+      if (isCronTrigger) {
+        const currentWeekKey = isoWeekKeyForInstantInTimeZone(now, tz);
+        if (!currentWeekKey) {
+          results.push({
+            clientId: c.id,
+            name: c.name ?? c.id,
+            ok: false,
+            step: 'schedule',
+            error: 'Could not resolve digest week for timezone',
+          });
+          continue;
+        }
+        if (lastWeek === currentWeekKey) {
+          continue;
+        }
+        if (!matchesAffiliateDigestSchedule(now, tz, dow, hour, minute)) {
+          continue;
+        }
+      }
+
       const productionRecipients = parseAffiliateDigestRecipients(c.affiliate_digest_recipients);
       const to = testRedirect ? [testRedirect] : productionRecipients;
       const isTestOverride = Boolean(testRedirect);
@@ -158,6 +196,16 @@ async function handler(request: NextRequest) {
           messageId: sendResult.data?.id,
           recipients: to,
         });
+
+        if (isCronTrigger) {
+          const weekKey = isoWeekKeyForInstantInTimeZone(new Date(), tz);
+          if (weekKey) {
+            await admin
+              .from('clients')
+              .update({ affiliate_digest_last_sent_week_key: weekKey })
+              .eq('id', c.id);
+          }
+        }
       } catch (err) {
         results.push({
           clientId: c.id,

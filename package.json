@@ -25,6 +25,7 @@
     "supabase:apply-061": "tsx scripts/exec-sql-file.ts supabase/migrations/061_clients_affiliate_digest_email.sql",
     "supabase:apply-062": "tsx scripts/exec-sql-file.ts supabase/migrations/062_admin_workspace_modules.sql",
     "supabase:apply-063": "tsx scripts/exec-sql-file.ts supabase/migrations/063_client_ad_generation_settings.sql",
+    "supabase:apply-064": "tsx scripts/exec-sql-file.ts supabase/migrations/064_affiliate_digest_schedule.sql",
     "kandy:sync-rankprompt-packs": "tsx scripts/sync-rankprompt-template-packs.ts"
   },
   "dependencies": {

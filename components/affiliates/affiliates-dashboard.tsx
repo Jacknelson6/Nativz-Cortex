@@ -134,6 +134,11 @@ export function AffiliatesDashboard() {
           upPromoteConnected={selectedClient?.hasUppromote ?? false}
           affiliateDigestEnabled={selectedClient?.affiliate_digest_email_enabled}
           affiliateDigestRecipients={selectedClient?.affiliate_digest_recipients}
+          affiliateDigestTimezone={selectedClient?.affiliate_digest_timezone}
+          affiliateDigestSendDayOfWeek={selectedClient?.affiliate_digest_send_day_of_week}
+          affiliateDigestSendHour={selectedClient?.affiliate_digest_send_hour}
+          affiliateDigestSendMinute={selectedClient?.affiliate_digest_send_minute}
+          affiliateDigestLastSentWeekKey={selectedClient?.affiliate_digest_last_sent_week_key}
           onSaved={() => {
             void refreshClients();
           }}

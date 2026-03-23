@@ -11,6 +11,11 @@ type ClientPayload = {
   has_affiliate_integration?: boolean;
   affiliate_digest_email_enabled?: boolean;
   affiliate_digest_recipients?: string | null;
+  affiliate_digest_timezone?: string;
+  affiliate_digest_send_day_of_week?: number;
+  affiliate_digest_send_hour?: number;
+  affiliate_digest_send_minute?: number;
+  affiliate_digest_last_sent_week_key?: string | null;
 };
 
 export function ClientNotificationsSubpage({ slug }: { slug: string }) {
@@ -77,6 +82,11 @@ export function ClientNotificationsSubpage({ slug }: { slug: string }) {
         upPromoteConnected={!!client.has_affiliate_integration}
         affiliateDigestEnabled={client.affiliate_digest_email_enabled}
         affiliateDigestRecipients={client.affiliate_digest_recipients}
+        affiliateDigestTimezone={client.affiliate_digest_timezone}
+        affiliateDigestSendDayOfWeek={client.affiliate_digest_send_day_of_week}
+        affiliateDigestSendHour={client.affiliate_digest_send_hour}
+        affiliateDigestSendMinute={client.affiliate_digest_send_minute}
+        affiliateDigestLastSentWeekKey={client.affiliate_digest_last_sent_week_key}
         onSaved={() => setReloadKey((k) => k + 1)}
       />
 

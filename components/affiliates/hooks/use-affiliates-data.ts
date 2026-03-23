@@ -14,6 +14,11 @@ interface ClientOption {
   logoUrl?: string | null;
   affiliate_digest_email_enabled?: boolean;
   affiliate_digest_recipients?: string | null;
+  affiliate_digest_timezone?: string;
+  affiliate_digest_send_day_of_week?: number;
+  affiliate_digest_send_hour?: number;
+  affiliate_digest_send_minute?: number;
+  affiliate_digest_last_sent_week_key?: string | null;
 }
 
 export interface AffiliateKpis {
@@ -142,6 +147,17 @@ export function useAffiliatesData() {
         logoUrl: (c.logo_url as string) ?? null,
         affiliate_digest_email_enabled: Boolean(c.affiliate_digest_email_enabled),
         affiliate_digest_recipients: (c.affiliate_digest_recipients as string) ?? null,
+        affiliate_digest_timezone: (c.affiliate_digest_timezone as string) ?? 'UTC',
+        affiliate_digest_send_day_of_week:
+          typeof c.affiliate_digest_send_day_of_week === 'number'
+            ? c.affiliate_digest_send_day_of_week
+            : 3,
+        affiliate_digest_send_hour:
+          typeof c.affiliate_digest_send_hour === 'number' ? c.affiliate_digest_send_hour : 14,
+        affiliate_digest_send_minute:
+          typeof c.affiliate_digest_send_minute === 'number' ? c.affiliate_digest_send_minute : 0,
+        affiliate_digest_last_sent_week_key:
+          (c.affiliate_digest_last_sent_week_key as string) ?? null,
       }));
       const list = all.filter((c) => c.services.includes('Affiliates'));
       setClients(list);

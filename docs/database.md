@@ -53,8 +53,13 @@ Client records with feature flags and preferences.
 | `is_active` | bool | Soft delete flag |
 | `hide_from_roster` | bool | When true, client is omitted from admin/portal pickers (used for ad creatives URL-only Brand DNA persistence) |
 | `uppromote_api_key` | text | UpPromote API key (admin-only; not exposed on client JSON) |
-| `affiliate_digest_email_enabled` | bool | Weekly affiliate performance email (Wed UTC); requires UpPromote + recipients |
+| `affiliate_digest_email_enabled` | bool | Weekly affiliate performance email; requires UpPromote + recipients |
 | `affiliate_digest_recipients` | text | Comma-separated emails for that digest |
+| `affiliate_digest_timezone` | text | IANA zone for send window (default UTC) |
+| `affiliate_digest_send_day_of_week` | smallint | 0=Sun … 6=Sat in that zone |
+| `affiliate_digest_send_hour` | smallint | Local hour 0–23 |
+| `affiliate_digest_send_minute` | smallint | Local minute 0–59 (15-min cron buckets) |
+| `affiliate_digest_last_sent_week_key` | text | ISO week id `YYYY-Www` after last cron send (dedup) |
 | `admin_workspace_modules` | jsonb | Per-client **access** to admin workspace areas (`brand-dna`, `moodboard`, `knowledge`, `ideas`, `idea-generator`, `ad-creatives`). `false` = no access (nav hidden, page URLs 404). Missing keys default to allowed. Overview and Settings always allowed. |
 
 ### `users`

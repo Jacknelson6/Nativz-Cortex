@@ -7,6 +7,7 @@ import {
   normalizeAdminWorkspaceModules,
   parseFullAdminWorkspaceModulesForPatch,
 } from '@/lib/clients/admin-workspace-modules';
+import { isValidIanaTimeZone } from '@/lib/affiliates/digest-schedule';
 
 /**
  * GET /api/clients/[id]
@@ -44,7 +45,7 @@ export async function GET(
     const { data: dbClient } = await adminClient
       .from('clients')
       .select(
-        'id, name, slug, industry, organization_id, logo_url, website_url, target_audience, brand_voice, topic_keywords, is_active, feature_flags, health_score, agency, services, description, google_drive_branding_url, google_drive_calendars_url, preferences, monthly_boosting_budget, uppromote_api_key, affiliate_digest_email_enabled, affiliate_digest_recipients, admin_workspace_modules',
+        'id, name, slug, industry, organization_id, logo_url, website_url, target_audience, brand_voice, topic_keywords, is_active, feature_flags, health_score, agency, services, description, google_drive_branding_url, google_drive_calendars_url, preferences, monthly_boosting_budget, uppromote_api_key, affiliate_digest_email_enabled, affiliate_digest_recipients, affiliate_digest_timezone, affiliate_digest_send_day_of_week, affiliate_digest_send_hour, affiliate_digest_send_minute, affiliate_digest_last_sent_week_key, admin_workspace_modules',
       )
       .eq(isUuid ? 'id' : 'slug', id)
       .single();
@@ -84,6 +85,11 @@ export async function GET(
       uppromote_api_key?: string | null;
       affiliate_digest_email_enabled?: boolean | null;
       affiliate_digest_recipients?: string | null;
+      affiliate_digest_timezone?: string | null;
+      affiliate_digest_send_day_of_week?: number | null;
+      affiliate_digest_send_hour?: number | null;
+      affiliate_digest_send_minute?: number | null;
+      affiliate_digest_last_sent_week_key?: string | null;
     };
 
     return NextResponse.json({
@@ -110,6 +116,15 @@ export async function GET(
         has_affiliate_integration: isAdmin ? Boolean(row.uppromote_api_key) : undefined,
         affiliate_digest_email_enabled: isAdmin ? Boolean(row.affiliate_digest_email_enabled) : undefined,
         affiliate_digest_recipients: isAdmin ? (row.affiliate_digest_recipients ?? null) : undefined,
+        affiliate_digest_timezone: isAdmin ? (row.affiliate_digest_timezone ?? 'UTC') : undefined,
+        affiliate_digest_send_day_of_week: isAdmin
+          ? (row.affiliate_digest_send_day_of_week ?? 3)
+          : undefined,
+        affiliate_digest_send_hour: isAdmin ? (row.affiliate_digest_send_hour ?? 14) : undefined,
+        affiliate_digest_send_minute: isAdmin ? (row.affiliate_digest_send_minute ?? 0) : undefined,
+        affiliate_digest_last_sent_week_key: isAdmin
+          ? (row.affiliate_digest_last_sent_week_key ?? null)
+          : undefined,
         admin_workspace_modules: isAdmin
           ? normalizeAdminWorkspaceModules(
               (dbClient as { admin_workspace_modules?: unknown }).admin_workspace_modules,
@@ -206,6 +221,10 @@ export async function PATCH(
       'monthly_boosting_budget',
       'affiliate_digest_email_enabled',
       'affiliate_digest_recipients',
+      'affiliate_digest_timezone',
+      'affiliate_digest_send_day_of_week',
+      'affiliate_digest_send_hour',
+      'affiliate_digest_send_minute',
       'admin_workspace_modules',
     ];
 
@@ -234,6 +253,47 @@ export async function PATCH(
         );
       }
       updates.admin_workspace_modules = parsed;
+    }
+
+    if ('affiliate_digest_timezone' in updates) {
+      const tz = String(updates.affiliate_digest_timezone ?? '').trim();
+      if (!isValidIanaTimeZone(tz)) {
+        return NextResponse.json(
+          { error: 'affiliate_digest_timezone must be a valid IANA time zone' },
+          { status: 400 },
+        );
+      }
+      updates.affiliate_digest_timezone = tz;
+    }
+    if ('affiliate_digest_send_day_of_week' in updates) {
+      const d = Number(updates.affiliate_digest_send_day_of_week);
+      if (!Number.isInteger(d) || d < 0 || d > 6) {
+        return NextResponse.json(
+          { error: 'affiliate_digest_send_day_of_week must be an integer 0–6 (Sunday–Saturday)' },
+          { status: 400 },
+        );
+      }
+      updates.affiliate_digest_send_day_of_week = d;
+    }
+    if ('affiliate_digest_send_hour' in updates) {
+      const h = Number(updates.affiliate_digest_send_hour);
+      if (!Number.isInteger(h) || h < 0 || h > 23) {
+        return NextResponse.json(
+          { error: 'affiliate_digest_send_hour must be an integer 0–23' },
+          { status: 400 },
+        );
+      }
+      updates.affiliate_digest_send_hour = h;
+    }
+    if ('affiliate_digest_send_minute' in updates) {
+      const m = Number(updates.affiliate_digest_send_minute);
+      if (!Number.isInteger(m) || m < 0 || m > 59) {
+        return NextResponse.json(
+          { error: 'affiliate_digest_send_minute must be an integer 0–59' },
+          { status: 400 },
+        );
+      }
+      updates.affiliate_digest_send_minute = m;
     }
 
     if (Object.keys(updates).length === 0) {
