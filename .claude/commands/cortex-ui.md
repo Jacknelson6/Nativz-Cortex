@@ -1,8 +1,10 @@
-# Bedrock + Shadcn — full UI workflow
+# Cortex UI — Shadcn + Bedrock e2e workflow
 
-> **Versioned in this repo** — Cloning [Nativz-Cortex](https://github.com/Jacknelson6/Nativz-Cortex) includes `.claude/skills/bedrock/` and this command. **Full React Bits source** lives in the separate **[bedrock](https://github.com/Jacknelson6/bedrock)** skill repo — clone that to `~/.claude/skills/bedrock` per its README.
+> **Slash command: `/cortex-ui`** (use this in Cursor/Claude Code — **not** `/bedrock`) so you don’t stack duplicates next to the global **[bedrock](https://github.com/Jacknelson6/bedrock)** React Bits skill, which also registers as `/bedrock`.
 
-You are running the **Bedrock** workflow for this project. Follow it end-to-end.
+> **Versioned in this repo** — [Nativz-Cortex](https://github.com/Jacknelson6/Nativz-Cortex) includes `.claude/skills/bedrock/` (skill id **`cortex-ui-e2e`**) and this command. **Full React Bits source** lives upstream — clone [Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock) to `~/.claude/skills/bedrock` per its README.
+
+You are running the **Cortex UI (Shadcn + Bedrock)** workflow for this project. Follow it end-to-end.
 
 ## Load these (in order)
 
@@ -13,7 +15,7 @@ You are running the **Bedrock** workflow for this project. Follow it end-to-end.
 5. **`.claude/skills/bedrock/references/composition-with-bedrock.md`** before layering Motion / React Bits.
 6. For **in-product Nativz UI**: **`.claude/skills/frontend-patterns/SKILL.md`** and **`docs/detail-design-patterns.md`** as needed.
 
-**Cursor:** same files apply; **`.cursor/rules/bedrock-e2e-ui.mdc`** when working under `app/**` or `components/**`.
+**Cursor:** **`.cursor/rules/cortex-ui-e2e.mdc`** when working under `app/**` or `components/**`.
 
 ## React Bits source (global install)
 
@@ -25,4 +27,4 @@ Run **`npm run build`** and **`npm run lint`** (and fix issues) unless the user 
 
 ## User request
 
-Continue from what the user asked in the message that invoked `/bedrock`.
+Continue from what the user asked in the message that invoked **`/cortex-ui`**.

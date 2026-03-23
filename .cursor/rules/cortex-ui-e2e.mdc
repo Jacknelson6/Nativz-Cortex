@@ -1,5 +1,5 @@
 ---
-description: Full-page and e2e UI — Shadcn pipeline, Bedrock motion, bold restrained design. Use when building marketing sites, landing pages, app shells, or multi-section flows in Cursor.
+description: Full-page and e2e UI — Shadcn pipeline, Bedrock motion, bold restrained design. Use when building marketing sites, landing pages, app shells, or multi-section flows in Cursor. (Skill id cortex-ui-e2e — use slash /cortex-ui, not /bedrock.)
 globs: app/**/*.tsx, app/**/*.ts, components/**/*.tsx
 alwaysApply: false
 ---
@@ -8,7 +8,7 @@ alwaysApply: false
 
 When the task is **a whole page, site section stack, or greenfield UI flow** (not a one-line tweak), **read and follow** the project skill:
 
-1. **`.claude/skills/bedrock/SKILL.md`**
+1. **`.claude/skills/bedrock/SKILL.md`** (skill name **`cortex-ui-e2e`** — avoids clashing with global `/bedrock`)
 2. **`.claude/skills/bedrock/references/single-prompt-playbook.md`** (checklist — do not skip verify)
 3. **`.claude/skills/bedrock/references/design-doctrine.md`** (typography, delight, cohesion)
 4. **`.claude/skills/bedrock/references/shadcn-blocks-pipeline.md`** when running `npx shadcn add`

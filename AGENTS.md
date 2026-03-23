@@ -53,4 +53,4 @@ When the task is a **whole page, marketing site, landing flow, or multi-section 
 
 **Pipeline:** Shadcn blocks/primitives first → lock **type + spacing** → then **at most one or two** deliberate Bedrock/React Bits surprises so the result feels **bold but calm**, not overwhelming.
 
-**Cursor:** **`.cursor/rules/bedrock-e2e-ui.mdc`** reinforces this when editing under `app/**` or `components/**`. Full React Bits source: **[github.com/Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock)** installed to `~/.claude/skills/bedrock` if needed.
+**Cursor:** Use slash **`/cortex-ui`** (not `/bedrock` — that’s the global React Bits skill). Rule **`.cursor/rules/cortex-ui-e2e.mdc`** applies when editing under `app/**` or `components/**`. Full React Bits source: **[github.com/Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock)** → `~/.claude/skills/bedrock` if needed.

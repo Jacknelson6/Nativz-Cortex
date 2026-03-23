@@ -64,6 +64,7 @@ Extend the **Bedrock** skill (animated UI via React Bits / Motion / GSAP / Three
 ## Rollout
 
 - [x] Add `.claude/skills/bedrock/` in repo: `SKILL.md`, `PRD.md`, `references/*`.
+- [x] Skill id **`cortex-ui-e2e`** (not `bedrock`) + slash **`/cortex-ui`** — avoids duplicate `/bedrock` entries in Cursor next to global [Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock).
 - [ ] (Optional) Install **upstream** Bedrock for full React Bits corpus: [github.com/Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock) → `~/.claude/skills/bedrock`.
 - [ ] (Optional) Add `lib/utils.ts` + `clsx`/`tailwind-merge` if shadcn CLI requires `cn` (project hygiene).
 

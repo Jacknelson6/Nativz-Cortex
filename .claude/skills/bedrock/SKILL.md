@@ -1,14 +1,16 @@
 ---
-name: bedrock
+name: cortex-ui-e2e
 description: >
-  Use when building ANY React/Next.js frontend in Cursor or Claude Code — especially full landing pages, marketing sites, e2e multi-section flows, app shells, dashboards, heroes, pricing, auth layouts, or "ship the whole site in one prompt."
-  Enforces a design doctrine: typography-first, Shadcn blocks for skeleton and trust, then 1–2 deliberate Bedrock/React Bits moments for surprising delight without overwhelm.
-  Trigger on: bold design, distinctive typography, cohesive components, delightful UI, not boring, not generic AI look, premium feel, modern SaaS site, complete page, greenfield UI, shadcn blocks, React Bits, motion, micro-interactions, Cursor rules bedrock-e2e-ui.
+  Nativz Cortex: full React/Next.js UI shipping — Shadcn blocks + typography-first design doctrine + selective Bedrock/React Bits motion. Use for landing pages, marketing sites, e2e multi-section flows, app shells, dashboards, "ship the whole site in one prompt."
+  In Cursor use slash command /cortex-ui (NOT /bedrock — that name is reserved for the global Jacknelson6/bedrock React Bits skill to avoid duplicate menu entries).
+  Trigger on: cortex-ui, shadcn pipeline, e2e UI, bold typography, delightful cohesive design, premium landing, greenfield pages, composable blocks, React Bits layered on shadcn.
   Always read references/design-doctrine.md and references/single-prompt-playbook.md for e2e ships.
   For React Bits source, NEVER read full ~/.claude/skills/bedrock/source/*.txt files — grep for component delimiters then Read with offset+limit (max ~300 lines), or use reactbits.dev.
 ---
 
-# Bedrock + Shadcn — ship UI end-to-end
+# Cortex UI e2e — Shadcn + Bedrock
+
+> **Cursor / slash command:** Use **`/cortex-ui`** for this workflow. Do **not** register a second skill named `bedrock` here — the global **[bedrock](https://github.com/Jacknelson6/bedrock)** skill already owns **`/bedrock`** (React Bits catalog). This skill’s id is **`cortex-ui-e2e`**.
 
 > **Canonical motion skill (upstream):** **[github.com/Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock)** — React Bits source (`source/`), category references, templates, scripts. Install globally:
 > `git clone https://github.com/Jacknelson6/bedrock.git ~/.claude/skills/bedrock`
@@ -31,7 +33,8 @@ description: >
 
 ## Cursor
 
-- **`.cursor/rules/bedrock-e2e-ui.mdc`** — applies when editing `app/**` and `components/**`; restates pipeline + delight budget.
+- **`.cursor/rules/cortex-ui-e2e.mdc`** — applies when editing `app/**` and `components/**`; restates pipeline + delight budget.
+- **`.claude/commands/cortex-ui.md`** — slash **`/cortex-ui`** (distinct from global **`/bedrock`**).
 - **`AGENTS.md`** — project-wide reminder to load this skill for full-page / e2e UI work.
 
 ## Core rules
@@ -84,8 +87,8 @@ If those paths are missing, install **[Jacknelson6/bedrock](https://github.com/J
 
 This **Nativz Cortex** repo carries the skill and slash command in git:
 
-- **`.claude/skills/bedrock/`** — SKILL + PRD + `references/` (anyone who clones gets the same workflow).
-- **`.claude/commands/bedrock.md`** — **`/bedrock`** in Claude Code (project-scoped).
+- **`.claude/skills/bedrock/`** — SKILL + PRD + `references/` (skill id **`cortex-ui-e2e`**; folder name unchanged for paths).
+- **`.claude/commands/cortex-ui.md`** — **`/cortex-ui`** (project-scoped; avoids duplicate **`/bedrock`** entries next to global Bedrock).
 
 No separate install step for those files. For **React Bits source + full references**, clone **[github.com/Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock)** to `~/.claude/skills/bedrock` (per upstream README).
 
