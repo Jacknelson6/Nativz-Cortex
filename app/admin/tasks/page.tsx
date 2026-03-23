@@ -189,7 +189,7 @@ export default function AdminTasksPage() {
 
   if (loading) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="cortex-page-gutter space-y-6">
         <div className="h-8 w-32 bg-surface rounded animate-pulse" />
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -203,7 +203,7 @@ export default function AdminTasksPage() {
   const todayHasTasks = overdueTasks.length > 0 || todayTasks.length > 0;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="cortex-page-gutter max-w-4xl mx-auto">
       <TaskDetailPanel
         task={selectedTask}
         onClose={() => setSelectedTask(null)}
@@ -216,7 +216,7 @@ export default function AdminTasksPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">
+          <h1 className="ui-page-title">
             {view === 'today' ? 'Today' : view === 'upcoming' ? 'Upcoming' : 'All tasks'}
           </h1>
           <p className="text-sm text-text-muted mt-0.5 flex items-center gap-1.5">

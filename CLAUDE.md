@@ -20,6 +20,14 @@ npx tsc --noEmit     # Type-check
 npm run kandy:upload # Local Kandy export folders → Supabase kandy_templates (see scripts/upload-kandy-templates.ts)
 npm run kandy:analyze # Backfill prompt_schema for templates missing analysis
 npm run supabase:apply-053 # Run migration 053 SQL via Postgres (needs SUPABASE_DB_URL in .env.local — Dashboard → Database → URI)
+npm run test:e2e       # Playwright — full matrix (see tests/*.spec.ts); dev server must return 200 on GET /api/health
+npm run test:e2e:routes # Redirect + API security only (no login UI shells)
+npm run test:e2e:shells # Login page UI smoke + health retry
+# Full signed-in crawl (admin: all static routes + first client + history links + first presentation; portal: all static routes):
+#   E2E_ADMIN_EMAIL=… E2E_ADMIN_PASSWORD=… npm run test:e2e
+#   E2E_PORTAL_EMAIL=… E2E_PORTAL_PASSWORD=… npm run test:e2e
+# PLAYWRIGHT_SKIP_WEBSERVER=1 — do not spawn `npm run dev` (use when you already have a server)
+# PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 — alternate origin
 ```
 
 ## Reference Docs

@@ -41,7 +41,7 @@ export function IdeaTriageList({ submissions: initial, clientName }: IdeaTriageL
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-text-primary">
+        <h1 className="ui-page-title">
           Ideas from {clientName}
         </h1>
         <p className="mt-1 text-sm text-text-muted">Review and triage ideas submitted by the client.</p>

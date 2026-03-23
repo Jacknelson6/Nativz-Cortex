@@ -1,0 +1,58 @@
+/**
+ * Static app routes for E2E redirect / crawl coverage.
+ * Dynamic segments ([slug], [id], …) are omitted — those are covered indirectly or via authenticated crawl.
+ */
+
+/** Expect unauthenticated session → final URL matches /admin/login */
+export const ADMIN_PROTECTED_ROUTES: string[] = [
+  '/admin/dashboard',
+  '/admin/clients',
+  '/admin/clients/new',
+  '/admin/clients/onboard',
+  '/admin/search/new',
+  '/admin/settings',
+  '/admin/settings/calendar',
+  '/admin/settings/usage',
+  '/admin/shoots',
+  '/admin/calendar',
+  '/admin/analytics',
+  '/admin/analytics/social',
+  '/admin/analytics/affiliates',
+  '/admin/ideas',
+  '/admin/ideas/generate',
+  '/admin/pipeline',
+  '/admin/tasks',
+  '/admin/meetings',
+  '/admin/knowledge',
+  '/admin/nerd',
+  '/admin/nerd/api',
+  '/admin/scheduler',
+  '/admin/presentations',
+  '/admin/ad-creatives',
+  '/admin/team',
+];
+
+/** Expect unauthenticated session → final URL matches /portal/login */
+export const PORTAL_PROTECTED_ROUTES: string[] = [
+  '/portal/dashboard',
+  '/portal/search/new',
+  '/portal/reports',
+  '/portal/settings',
+  '/portal/preferences',
+  '/portal/ideas',
+  '/portal/knowledge',
+  '/portal/calendar',
+  '/portal/notifications',
+  '/portal/brand',
+  '/portal/analyze',
+  '/portal/nerd',
+];
+
+/** Every static admin `page.tsx` (no `[param]`) — post-login E2E crawl. */
+export const ADMIN_E2E_FULL_STATIC_ROUTES: string[] = [
+  ...ADMIN_PROTECTED_ROUTES,
+  '/admin/analysis',
+];
+
+/** Full portal static shells for post-login crawl. */
+export const PORTAL_E2E_FULL_STATIC_ROUTES: string[] = [...PORTAL_PROTECTED_ROUTES];

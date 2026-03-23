@@ -41,6 +41,10 @@ interface CreativeGalleryProps {
   onBatchComplete?: () => void;
   /** Opens generate wizard pre-filled from the selected creative (Brand DNA ready only). */
   onCreateMoreLikeThis?: (creative: AdCreative) => void;
+  /** When true, parent should hide the sticky-bar Generate button (CTA is shown in the empty state). */
+  onGalleryEmptyForCtaChange?: (isEmpty: boolean) => void;
+  /** Opens the generate wizard from the empty-state CTA. */
+  onOpenGenerateWizard?: () => void;
 }
 
 export function CreativeGallery({
@@ -50,6 +54,8 @@ export function CreativeGallery({
   placeholderConfig,
   onBatchComplete,
   onCreateMoreLikeThis,
+  onGalleryEmptyForCtaChange,
+  onOpenGenerateWizard,
 }: CreativeGalleryProps) {
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,6 +91,14 @@ export function CreativeGallery({
   useEffect(() => {
     fetchCreatives();
   }, [fetchCreatives]);
+
+  useEffect(() => {
+    if (!onGalleryEmptyForCtaChange) return;
+    // While loading, keep parent unchanged (avoids header CTA flicker when re-entering gallery).
+    if (loading) return;
+    const empty = creatives.length === 0 && !activeBatchId;
+    onGalleryEmptyForCtaChange(empty);
+  }, [loading, creatives.length, activeBatchId, onGalleryEmptyForCtaChange]);
 
   // Poll for batch progress when actively generating
   useEffect(() => {
@@ -348,10 +362,7 @@ export function CreativeGallery({
                 </h2>
                 <p className="text-sm leading-relaxed text-text-muted">
                   {brandDnaReady ? (
-                    <>
-                      Use <span className="text-text-secondary font-medium">Generate creatives</span> in the top bar
-                      — finished ads appear in this grid as they complete.
-                    </>
+                    <>Finished ads appear in this grid as each image completes.</>
                   ) : (
                     <>
                       Complete your brand kit on the{' '}
@@ -361,6 +372,18 @@ export function CreativeGallery({
                   )}
                 </p>
               </div>
+              {brandDnaReady && onOpenGenerateWizard && (
+                <Button
+                  type="button"
+                  size="lg"
+                  shape="pill"
+                  className="mt-2 w-full max-w-xs shadow-lg shadow-accent/15 sm:w-auto"
+                  onClick={() => onOpenGenerateWizard()}
+                >
+                  <Sparkles size={18} strokeWidth={1.75} />
+                  Generate creatives
+                </Button>
+              )}
             </div>
           </div>
         </div>

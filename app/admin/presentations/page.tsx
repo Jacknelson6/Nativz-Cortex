@@ -222,11 +222,11 @@ export default function PresentationsPage() {
   const archived = presentations.filter((p) => p.status === 'archived');
 
   return (
-    <div className="p-6 space-y-8">
+    <div className="cortex-page-gutter space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Presentations</h1>
+          <h1 className="ui-page-title">Presentations</h1>
           <p className="text-sm text-text-muted mt-1">Sales tools, tier lists, and client presentations</p>
         </div>
         <Button onClick={() => setShowCreate(!showCreate)}>

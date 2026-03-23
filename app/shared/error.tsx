@@ -16,7 +16,7 @@ export default function SharedError({
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="text-center space-y-4 max-w-md px-6">
-        <h1 className="text-2xl font-semibold text-text-primary">
+        <h1 className="ui-page-title">
           Link expired or invalid
         </h1>
         <p className="text-text-muted">

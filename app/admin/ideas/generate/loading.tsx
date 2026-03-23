@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function IdeaGeneratorLoading() {
   return (
-    <div className="p-6">
+    <div className="cortex-page-gutter">
       <div className="max-w-5xl mx-auto pt-4 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">

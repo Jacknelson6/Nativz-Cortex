@@ -55,6 +55,8 @@ async function selectEphemeralClientId(
 
 /**
  * Find or create a roster-hidden client used to persist Brand DNA for ad creatives URL-only flows.
+ * Rows use `hide_from_roster: true` (migration 054) so they appear in Ad creatives / APIs by id but not on
+ * `/admin/clients` or other roster UIs (`selectClientsWithRosterVisibility`).
  */
 export async function findOrCreateEphemeralBrandClient(
   admin: AdminClient,

@@ -45,7 +45,7 @@ export default async function PortalCalendarPage() {
 
     if ((client.feature_flags as unknown as Record<string, boolean>).can_view_calendar === false) {
       return (
-        <div className="p-6">
+        <div className="cortex-page-gutter">
           <EmptyState
             icon={<Lock size={24} />}
             title="Calendar not enabled"
@@ -67,9 +67,9 @@ export default async function PortalCalendarPage() {
     const allPosts = (posts ?? []) as ScheduledPost[];
 
     return (
-      <div className="p-6 max-w-3xl mx-auto">
+      <div className="cortex-page-gutter max-w-3xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-text-primary flex items-center gap-2.5">
+          <h1 className="ui-page-title flex items-center gap-2.5">
             <CalendarDays size={20} className="text-accent-text" />
             Content calendar
           </h1>

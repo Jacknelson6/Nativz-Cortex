@@ -341,7 +341,9 @@ export function SidebarTrigger({ className = '' }: { className?: string }) {
 
 export function SidebarInset({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <main className={`flex-1 min-w-0 overflow-x-hidden overflow-y-auto bg-background ${className}`}>
+    <main
+      className={`cortex-main flex-1 min-w-0 overflow-x-hidden overflow-y-auto bg-background ${className}`}
+    >
       {children}
     </main>
   );

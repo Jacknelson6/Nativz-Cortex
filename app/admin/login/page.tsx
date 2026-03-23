@@ -98,7 +98,7 @@ State of the art<br />content intelligence.
       {/* Right — login form */}
       <div className="relative flex flex-1 flex-col min-h-0">
         {/* Home link */}
-        <div className="p-6">
+        <div className="cortex-page-gutter">
           <a
             href={isAC ? 'https://andersoncollaborative.com' : 'https://nativz.io'}
             className={`inline-flex items-center gap-1.5 text-sm transition-colors ${

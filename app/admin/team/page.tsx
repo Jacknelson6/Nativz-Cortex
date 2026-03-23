@@ -114,7 +114,7 @@ export default async function TeamPage() {
     }
 
     return (
-      <div className="p-6 space-y-6">
+      <div className="cortex-page-gutter space-y-6">
         <TeamGrid
           initialMembers={members}
           assignmentsByMember={assignmentsByMember}

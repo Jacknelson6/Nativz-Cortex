@@ -308,7 +308,7 @@ export function KnowledgeExplorer() {
       <div className="flex items-center justify-between px-5 py-3 border-b border-nativz-border bg-surface shrink-0">
         <div className="flex items-center gap-4">
           <div>
-            <h1 className="text-lg font-bold text-text-primary">Knowledge graph</h1>
+            <h1 className="ui-section-title">Knowledge graph</h1>
             <p className="text-xs text-text-muted mt-0.5">
               {graphData.nodes.length} nodes &middot; {graphData.edges.length} connections
             </p>

@@ -30,7 +30,7 @@ export default async function SectionPage({ params }: { params: Promise<{ sectio
   const Icon = ICON_MAP[section.icon];
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="cortex-page-gutter max-w-5xl mx-auto space-y-6">
       {/* Section header */}
       <div>
         <div className="flex items-center gap-3 mb-2">
@@ -41,7 +41,7 @@ export default async function SectionPage({ params }: { params: Promise<{ sectio
           )}
           <div>
             <div className="flex items-center gap-2.5">
-              <h1 className="text-xl font-bold text-text-primary">{section.title}</h1>
+              <h1 className="ui-page-title-md">{section.title}</h1>
               <Badge variant="info">{endpoints.length} endpoint{endpoints.length !== 1 ? 's' : ''}</Badge>
             </div>
             <p className="text-sm text-text-muted mt-0.5">{section.description}</p>

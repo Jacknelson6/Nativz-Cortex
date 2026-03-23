@@ -17,7 +17,7 @@ export default async function PortalIdeasPage() {
 
     if (!client.feature_flags.can_submit_ideas) {
       return (
-        <div className="p-6">
+        <div className="cortex-page-gutter">
           <EmptyState
             icon={<Lock size={24} />}
             title="Ideas not enabled"
@@ -46,7 +46,7 @@ export default async function PortalIdeasPage() {
     ]);
 
     return (
-      <div className="p-6 max-w-3xl mx-auto">
+      <div className="cortex-page-gutter max-w-3xl mx-auto">
         <PortalIdeasTabs
           clientId={client.id}
           submissions={(ideasResult.data || []) as IdeaSubmission[]}

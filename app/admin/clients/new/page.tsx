@@ -143,13 +143,13 @@ export default function AdminNewClientPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl">
+    <div className="cortex-page-gutter space-y-6 max-w-2xl">
       <div className="flex items-center gap-3">
         <Link href="/admin/clients" className="text-text-muted hover:text-text-secondary transition-colors">
           <ArrowLeft size={20} />
         </Link>
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">Add client</h1>
+          <h1 className="ui-page-title-md">Add client</h1>
           <p className="text-sm text-text-muted">Create a new client to run searches for</p>
         </div>
       </div>

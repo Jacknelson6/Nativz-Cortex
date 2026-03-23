@@ -182,7 +182,7 @@ export default function SharedCalendarPage({
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <AlertCircle size={48} className="text-red-400 mx-auto mb-4" />
-          <h1 className="text-lg font-semibold text-text-primary">{error}</h1>
+          <h1 className="ui-section-title">{error}</h1>
           <p className="text-sm text-text-muted mt-1">This review link may have expired or been deactivated.</p>
         </div>
       </div>
@@ -193,7 +193,7 @@ export default function SharedCalendarPage({
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="border-b border-nativz-border bg-surface px-6 py-4">
-        <h1 className="text-lg font-semibold text-text-primary">{clientName} — Content calendar</h1>
+        <h1 className="ui-section-title">{clientName} — Content calendar</h1>
         <p className="text-sm text-text-muted mt-0.5">
           Review scheduled posts and leave feedback. {posts.length} post{posts.length !== 1 ? 's' : ''} total.
         </p>

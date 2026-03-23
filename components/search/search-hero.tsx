@@ -108,7 +108,7 @@ const INDUSTRIES = [
 export function SearchHero() {
   return (
     <>
-      <h1 className="text-3xl font-bold text-text-primary">
+      <h1 className="ui-page-title-hero">
         Research{' '}
         <TextFlip
           words={INDUSTRIES}

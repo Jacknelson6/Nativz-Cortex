@@ -32,7 +32,7 @@ export default async function AdminClientIdeasPage({
       .limit(200);
 
     return (
-      <div className="p-6 max-w-3xl mx-auto">
+      <div className="cortex-page-gutter max-w-3xl mx-auto">
         <IdeaTriageList
           submissions={(ideas || []) as IdeaSubmission[]}
           clientName={client.name}

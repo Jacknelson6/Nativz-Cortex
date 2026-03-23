@@ -55,10 +55,10 @@ export default async function AdminDashboardPage() {
     const now = new Date();
 
     return (
-      <div className="p-6 space-y-5">
+      <div className="cortex-page-gutter space-y-5">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
+          <h1 className="ui-page-title">Dashboard</h1>
           <p className="text-sm text-text-muted mt-0.5">
             {now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>

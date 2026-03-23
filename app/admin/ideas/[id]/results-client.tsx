@@ -470,7 +470,7 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
             <Sparkles size={20} className="text-accent2-text" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-text-primary">
+            <h1 className="ui-page-title-md">
               {ideas.length} {generation.concept ? generation.concept : 'video'} ideas
               {searchQuery ? ` from ${searchQuery} research` : ''}
             </h1>

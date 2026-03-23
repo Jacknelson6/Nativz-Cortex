@@ -28,7 +28,7 @@ export default async function AdCreativesPage({
   return (
     <Suspense
       fallback={
-        <div className="p-6 max-w-7xl mx-auto space-y-4 animate-pulse">
+        <div className="cortex-page-gutter max-w-7xl mx-auto space-y-4 animate-pulse">
           <div className="h-8 w-40 rounded-lg bg-surface border border-nativz-border" />
           <div className="h-72 rounded-xl bg-surface border border-nativz-border" />
         </div>

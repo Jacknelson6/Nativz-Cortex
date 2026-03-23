@@ -353,7 +353,7 @@ export default function PipelinePageClient({
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-nativz-border bg-surface shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold text-text-primary">
+          <h1 className="ui-section-title">
             Content pipeline
             {stageParam && (
               <span className="ml-2 text-sm font-medium text-accent-text capitalize">&middot; {stageParam}</span>

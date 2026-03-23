@@ -95,7 +95,7 @@ export default function VideoAnalysisPage({ params }: { params: Promise<{ id: st
   const platformClass = PLATFORM_COLORS[platform] ?? 'bg-gray-600 text-white';
 
   return (
-    <div className="p-6 pb-12">
+    <div className="cortex-page-gutter pb-12">
       <div className="mx-auto max-w-[800px]">
         {/* Back button */}
         <button
@@ -122,7 +122,7 @@ export default function VideoAnalysisPage({ params }: { params: Promise<{ id: st
             )}
 
             <div className="min-w-0 flex-1">
-              <h1 className="text-lg font-semibold text-text-primary leading-snug line-clamp-2">
+              <h1 className="ui-section-title leading-snug line-clamp-2">
                 {item.title ?? 'Untitled video'}
               </h1>
 

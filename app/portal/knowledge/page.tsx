@@ -16,7 +16,7 @@ export default async function PortalKnowledgePage() {
 
     if ((client.feature_flags as unknown as Record<string, boolean>).can_view_knowledge === false) {
       return (
-        <div className="p-6">
+        <div className="cortex-page-gutter">
           <EmptyState
             icon={<Lock size={24} />}
             title="Knowledge base not enabled"
@@ -36,7 +36,7 @@ export default async function PortalKnowledgePage() {
       .limit(200);
 
     return (
-      <div className="p-6 max-w-3xl mx-auto">
+      <div className="cortex-page-gutter max-w-3xl mx-auto">
         <KnowledgeClient clientId={client.id} entries={entries ?? []} />
       </div>
     );

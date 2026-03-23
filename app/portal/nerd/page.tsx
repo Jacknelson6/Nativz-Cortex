@@ -15,7 +15,7 @@ export default async function PortalNerdPage() {
 
     if ((client.feature_flags as unknown as Record<string, boolean>).can_use_nerd === false) {
       return (
-        <div className="p-6">
+        <div className="cortex-page-gutter">
           <EmptyState
             icon={<Lock size={24} />}
             title="The Nerd is not enabled"

@@ -98,7 +98,7 @@ export function SocialResultsEditor({
         </div>
       </div>
 
-      <div className="p-6 max-w-6xl mx-auto">
+      <div className="cortex-page-gutter max-w-6xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-8">
           {/* Left: Controls */}
           <div className="space-y-4">

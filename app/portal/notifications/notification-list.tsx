@@ -81,7 +81,7 @@ export function PortalNotificationList({ notifications: initialNotifications }: 
     <>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary flex items-center gap-2.5">
+          <h1 className="ui-page-title flex items-center gap-2.5">
             <Bell size={20} className="text-accent-text" />
             Notifications
           </h1>

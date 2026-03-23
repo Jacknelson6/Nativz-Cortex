@@ -144,7 +144,7 @@ export function TeamGrid({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
+          <h1 className="ui-page-title flex items-center gap-2">
             <Users size={22} className="text-accent-text" />
             Team
           </h1>

@@ -61,7 +61,7 @@ export function CalendarHeader({
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-b border-nativz-border bg-surface">
       {/* Left: title + nav */}
       <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold text-text-primary whitespace-nowrap">
+        <h1 className="ui-section-title whitespace-nowrap">
           {getHeaderLabel(currentDate, view)}
         </h1>
         <div className="flex items-center gap-1">

@@ -117,7 +117,7 @@ export function SocialAuditEditor({
         <div className="flex items-center justify-between border-b border-nativz-border px-4 py-3">
           <div className="flex items-center gap-3">
             <button onClick={onBack} className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors"><ArrowLeft size={18} /></button>
-            <h1 className="text-lg font-bold text-foreground">Social audit setup</h1>
+            <h1 className="ui-section-title">Social audit setup</h1>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-text-muted">{saving ? 'Saving...' : 'Saved'}</span>
@@ -294,7 +294,7 @@ export function SocialAuditEditor({
         <div className="max-w-5xl mx-auto space-y-8">
           {/* Header */}
           <div className="text-center space-y-2">
-            <h1 className="text-3xl font-bold text-foreground">{audit.business_name || 'Social media'} audit</h1>
+            <h1 className="ui-page-title-hero">{audit.business_name || 'Social media'} audit</h1>
             <p className="text-text-muted">What your social presence looks like today vs. what it could look like in {timelineMonths} months with Nativz</p>
           </div>
 

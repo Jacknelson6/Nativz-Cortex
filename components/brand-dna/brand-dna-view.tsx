@@ -75,7 +75,7 @@ export function BrandDNAView({
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="cortex-page-gutter max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -88,7 +88,7 @@ export function BrandDNAView({
             </Link>
           )}
           <div>
-            <h1 className="text-xl font-semibold text-text-primary">Brand DNA</h1>
+            <h1 className="ui-page-title-md">Brand DNA</h1>
             <p className="text-sm text-text-muted">{clientName}</p>
           </div>
           {metadata && <CompletenessBadge metadata={metadata} size="md" />}

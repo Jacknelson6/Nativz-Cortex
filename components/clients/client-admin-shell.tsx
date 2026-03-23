@@ -131,7 +131,7 @@ export function ClientAdminShell({
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover border border-nativz-border">
               <Building2 size={16} className="text-accent-text" />
             </div>
-            <h1 className="text-sm font-semibold text-text-primary truncate" title={clientName}>
+            <h1 className="ui-chrome-title truncate" title={clientName}>
               {clientName}
             </h1>
           </div>

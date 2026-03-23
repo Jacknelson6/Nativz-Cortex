@@ -31,7 +31,7 @@ export default function RootLayout({
       <head>
         <meta name="theme-color" content="#0f1117" />
       </head>
-      <body className={`${jakarta.variable} antialiased`}>
+      <body className={`${jakarta.variable} font-sans antialiased`}>
         <BrandModeProvider>
           {children}
         </BrandModeProvider>

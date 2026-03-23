@@ -53,9 +53,9 @@ export default async function PortalReportsPage() {
   const items = searches || [];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="cortex-page-gutter space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-text-primary">Reports</h1>
+        <h1 className="ui-page-title">Reports</h1>
         {result.client.feature_flags.can_search && (
           <Link href="/portal/search/new">
             <Button>

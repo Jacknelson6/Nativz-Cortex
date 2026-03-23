@@ -18,7 +18,7 @@ export default async function PortalAnalyzePage() {
 
     if ((client.feature_flags as unknown as Record<string, boolean>).can_view_analyze === false) {
       return (
-        <div className="p-6">
+        <div className="cortex-page-gutter">
           <EmptyState
             icon={<Lock size={24} />}
             title="Analyze not enabled"
@@ -82,9 +82,9 @@ export default async function PortalAnalyzePage() {
     }
 
     return (
-      <div className="p-6 max-w-5xl mx-auto">
+      <div className="cortex-page-gutter max-w-5xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-text-primary flex items-center gap-2.5">
+          <h1 className="ui-page-title flex items-center gap-2.5">
             <Microscope size={20} className="text-accent-text" />
             Analyze
           </h1>

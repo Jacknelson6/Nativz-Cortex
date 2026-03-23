@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
@@ -67,7 +68,7 @@ export default function PortalLoginPage() {
           </div>
         )}
 
-        <div className="rounded-xl bg-surface p-6 shadow-sm border border-nativz-border">
+        <Card className="shadow-sm">
           <form onSubmit={handleLogin} className="space-y-4">
             <Input
               id="email"
@@ -96,7 +97,7 @@ export default function PortalLoginPage() {
               {loading ? 'Signing in...' : 'Sign in'}
             </Button>
           </form>
-        </div>
+        </Card>
       </div>
     </div>
   );

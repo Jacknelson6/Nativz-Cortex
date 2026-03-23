@@ -64,7 +64,7 @@ export function IdeaGeneratorWithClientSelector({ clients }: IdeaGeneratorWithCl
           <Sparkles size={20} className="text-accent-text" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">Idea generator</h1>
+          <h1 className="ui-page-title-md">Idea generator</h1>
           <p className="text-sm text-text-secondary">
             Generate AI-powered video ideas from brand context and research
           </p>

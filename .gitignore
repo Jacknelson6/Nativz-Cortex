@@ -67,3 +67,4 @@ supabase/.temp/
 vectors.db
 vectors.db-shm
 vectors.db-wal
+/test-results/

@@ -33,10 +33,10 @@ export default async function ApiDocsPage() {
   const sectionCounts = getSectionCounts();
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-8">
+    <div className="cortex-page-gutter max-w-5xl mx-auto space-y-8">
       {/* Hero */}
       <div>
-        <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
+        <h1 className="ui-page-title flex items-center gap-2">
           <Key size={22} className="text-blue-400" />
           API reference
         </h1>

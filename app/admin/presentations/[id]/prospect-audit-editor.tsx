@@ -128,7 +128,7 @@ export function ProspectAuditEditor({
               <div className="w-16 h-16 rounded-2xl bg-cyan-500/15 flex items-center justify-center mx-auto">
                 <Search size={28} className="text-cyan-400" />
               </div>
-              <h1 className="text-2xl font-bold text-foreground">Prospect audit</h1>
+              <h1 className="ui-page-title">Prospect audit</h1>
               <p className="text-sm text-text-muted max-w-md mx-auto">
                 Enter a prospect&apos;s social media URL or website. We&apos;ll analyze their content strategy, identify their pillars, and generate recommendations.
               </p>

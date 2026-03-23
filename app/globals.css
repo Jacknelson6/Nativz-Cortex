@@ -25,6 +25,10 @@
   /* Focus ring glow */
   --focus-ring: rgba(4, 107, 210, 0.15);
 
+  /* Destructive (aligned with danger buttons) */
+  --error: #dc2626;
+  --error-hover: #b91c1c;
+
   /* Shadow depth tokens */
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -100,6 +104,7 @@
 
   /* Error — AC red */
   --error: #E54B4B;
+  --error-hover: #c73d3d;
 
   /* Shadows — lighter for light theme */
   --shadow-card: 0 1px 3px rgba(0, 22, 31, 0.06), 0 1px 2px rgba(0, 22, 31, 0.04);
@@ -159,6 +164,8 @@
   --color-accent2-text: var(--accent2-text);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-error: var(--error);
+  --color-error-hover: var(--error-hover);
 
   --shadow-card: var(--shadow-card);
   --shadow-card-hover: var(--shadow-card-hover);
@@ -169,7 +176,58 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+/* ── Typography scale (use across app for SaaS consistency) ── */
+@layer components {
+  /* Product app shell — applied to <main> next to sidebars */
+  .cortex-main {
+    @apply text-sm text-text-primary antialiased;
+  }
+
+  /* Standard page outer gutter (most admin/portal pages) */
+  .cortex-page-gutter {
+    @apply p-6 sm:p-8;
+  }
+
+  .ui-page-title {
+    @apply text-2xl font-semibold tracking-tight text-text-primary;
+  }
+
+  .ui-page-title-md {
+    @apply text-xl font-semibold tracking-tight text-text-primary;
+  }
+
+  .ui-page-title-hero {
+    @apply text-3xl font-semibold tracking-tight text-text-primary;
+  }
+  .ui-section-title {
+    @apply text-lg font-semibold tracking-tight text-text-primary;
+  }
+
+  /* Dense shell headers (sidebar chrome, vault breadcrumb title) */
+  .ui-chrome-title {
+    @apply text-sm font-semibold tracking-tight text-text-primary;
+  }
+  .ui-card-title {
+    @apply text-base font-semibold text-text-primary;
+  }
+  .ui-label {
+    @apply text-sm font-medium text-text-secondary;
+  }
+  .ui-body {
+    @apply text-sm text-text-primary;
+  }
+  .ui-muted {
+    @apply text-sm text-text-muted;
+  }
+  .ui-caption {
+    @apply text-xs text-text-muted;
+  }
+  /* Calendar / dense grids — weekday row (add uppercase in markup when labels are Mon Tue …) */
+  .ui-cal-weekday {
+    @apply text-center text-[10px] font-medium tracking-wider text-text-muted;
+  }
 }
 
 /* Scrollbar styling */
@@ -205,6 +263,18 @@ body {
 }
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out forwards;
+}
+
+/* Radix Popover — components/ui/popover (shadcn-style enter) */
+@keyframes cortex-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* Fade + slide in from below for progressive reveal */

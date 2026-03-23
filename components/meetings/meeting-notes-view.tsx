@@ -179,10 +179,10 @@ export function MeetingNotesView({
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="cortex-page-gutter space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">Meetings</h1>
+          <h1 className="ui-page-title-md">Meetings</h1>
           <p className="text-sm text-text-muted mt-0.5">
             Fyxer notes grouped by cadence; filter by client, prospect, or company name.
           </p>

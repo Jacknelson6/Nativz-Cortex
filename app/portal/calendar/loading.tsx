@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PortalCalendarLoading() {
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
+    <div className="cortex-page-gutter max-w-3xl mx-auto space-y-6">
       <div className="space-y-2">
         <Skeleton className="h-7 w-44" />
         <Skeleton className="h-4 w-56" />

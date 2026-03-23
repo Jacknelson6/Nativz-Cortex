@@ -68,10 +68,10 @@ export function PortalBrandDNAView({ clientName, guideline }: PortalBrandDNAView
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="cortex-page-gutter max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">Your Brand DNA</h1>
+          <h1 className="ui-page-title-md">Your Brand DNA</h1>
           <p className="text-sm text-text-muted">{clientName}</p>
         </div>
         {metadata && <CompletenessBadge metadata={metadata} size="md" />}

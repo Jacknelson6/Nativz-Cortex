@@ -195,7 +195,7 @@ export function ClientProfileForm({
   const showQuickNav = !embeddedInShell;
 
   return (
-    <div className="p-6 space-y-8 max-w-5xl mx-auto">
+    <div className="cortex-page-gutter space-y-8 max-w-5xl mx-auto">
       {showBreadcrumbs && (
         <Breadcrumbs items={[
           { label: 'Clients', href: '/admin/clients' },
@@ -231,7 +231,7 @@ export function ClientProfileForm({
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="truncate text-2xl font-semibold text-text-primary">{clientName}</h1>
+                <h1 className="truncate ui-page-title">{clientName}</h1>
                 <AgencyBadge agency={agency} />
                 {client.organization_id && (
                   <ImpersonateButton organizationId={client.organization_id} clientSlug={slug} />

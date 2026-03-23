@@ -2,6 +2,7 @@
 // Lightweight brand + product scraper for the ad wizard
 // ---------------------------------------------------------------------------
 
+import * as cheerio from 'cheerio';
 import type { CrawledPage } from '@/lib/brand-dna/types';
 import { dedupeHexList, cssColorToHex } from '@/lib/brand-dna/color-palette';
 import { extractColorPalette, extractLogoUrls } from '@/lib/brand-dna/extract-visuals';
@@ -9,12 +10,16 @@ import { extractLogo } from './extract-logo';
 import { extractRichProducts } from './extract-products-rich';
 import { isJunkProductName } from './product-name-filters';
 
+/** Used by `crawl-site` to pick extraction heuristics. */
+export type BusinessType = 'retail' | 'restaurant' | 'service' | 'saas';
+
 export type ScrapedBrand = {
   name: string;
   logoUrl: string | null;
   colors: string[];
   description: string;
   url: string;
+  businessType?: BusinessType;
 };
 
 export type ScrapedProduct = {
@@ -231,6 +236,183 @@ export function extractProducts(html: string, baseUrl: string): ScrapedProduct[]
       return true;
     })
     .slice(0, 30);
+}
+
+/**
+ * Classify site shape for full-site crawls: menu-heavy, service listings, SaaS, or retail/e‑com.
+ */
+export function detectBusinessType(html: string, url: string): BusinessType {
+  let pathAndHost = '';
+  try {
+    const u = new URL(url);
+    pathAndHost = `${u.hostname}${u.pathname}`.toLowerCase();
+  } catch {
+    pathAndHost = url.toLowerCase();
+  }
+
+  const sample = html.slice(0, Math.min(html.length, 450_000));
+
+  if (
+    /\/(menu|food|eat|order|catering)(\/|$|\?)/i.test(pathAndHost) ||
+    /"@type"\s*:\s*"(Restaurant|FoodEstablishment|Menu)"/i.test(sample) ||
+    (/MenuItem/i.test(sample) && /\bmenu\b/i.test(sample.slice(0, 80_000)))
+  ) {
+    return 'restaurant';
+  }
+
+  if (
+    /\b(acai|toast bar|juice bar|smoothie bowl|fast-casual|grab and go)\b/i.test(sample.slice(0, 120_000)) ||
+    (/\b(cafe|café|kitchen|brunch|diner)\b/i.test(sample.slice(0, 80_000)) &&
+      /\b(order|pickup|delivery|menu)\b/i.test(sample.slice(0, 80_000)))
+  ) {
+    return 'restaurant';
+  }
+
+  if (
+    /"@type"\s*:\s*"(SoftwareApplication|WebApplication)"/i.test(sample) ||
+    /\/(pricing|plans|features)(\/|$|\?)/i.test(pathAndHost)
+  ) {
+    if (/\b(restaurant|cafe|kitchen|grill|pizza)\b/i.test(pathAndHost)) return 'restaurant';
+    return 'saas';
+  }
+
+  if (
+    /\/services?(\/|$|\?)/i.test(pathAndHost) ||
+    /"@type"\s*:\s*"(Service|ProfessionalService)"/i.test(sample) ||
+    /\bour services\b/i.test(sample.slice(0, 120_000))
+  ) {
+    if (/\b(shop|store|add to cart|cart)\b/i.test(sample.slice(0, 80_000))) return 'retail';
+    return 'service';
+  }
+
+  return 'retail';
+}
+
+function mergeScrapedProductsByName(lists: ScrapedProduct[][]): ScrapedProduct[] {
+  const seen = new Set<string>();
+  const out: ScrapedProduct[] = [];
+  for (const list of lists) {
+    for (const p of list) {
+      const key = p.name.toLowerCase().trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
+    }
+  }
+  return out;
+}
+
+function cleanSnippet(s: string): string {
+  return decodeEntities(s.replace(/\s+/g, ' ').trim());
+}
+
+function extractMenuDomCandidates(html: string, baseUrl: string): ScrapedProduct[] {
+  const $ = cheerio.load(html);
+  const out: ScrapedProduct[] = [];
+  const seen = new Set<string>();
+
+  function push(p: ScrapedProduct) {
+    const k = p.name.toLowerCase().trim();
+    if (!k || k.length < 3 || seen.has(k)) return;
+    if (isJunkProductName(p.name)) return;
+    seen.add(k);
+    out.push(p);
+  }
+
+  const selectors =
+    '.menu-item, [class*="menu__item"], [class*="menu-item"], [data-menu-item], .product-card, article[class*="menu"], li.w-menu-item';
+
+  $(selectors).each((_, el) => {
+    const scope = $(el);
+    const imgEl = scope.find('img').first();
+    const name =
+      cleanSnippet(scope.find('h2, h3, h4, .heading, .title, .name, [class*="title"]').first().text()) ||
+      cleanSnippet(imgEl.attr('alt') ?? '');
+    if (!name || name.length > 120) return;
+
+    let imageUrl: string | null = null;
+    if (imgEl.length) {
+      for (const attr of ['src', 'data-src', 'data-lazy-src', 'data-original'] as const) {
+        const raw = imgEl.attr(attr);
+        if (!raw || raw.startsWith('data:')) continue;
+        try {
+          imageUrl = new URL(raw, baseUrl).href.replace(/^http:\/\//, 'https://');
+          break;
+        } catch {
+          /* skip */
+        }
+      }
+    }
+
+    const description = cleanSnippet(scope.find('p, .description, [class*="description"]').first().text());
+    const priceText = cleanSnippet(scope.find('[class*="price"], .cost, [itemprop="price"]').first().text());
+    const price = priceText.length > 0 ? priceText.slice(0, 40) : null;
+
+    push({
+      name,
+      imageUrl,
+      description: description.slice(0, 500),
+      price,
+    });
+  });
+
+  return out;
+}
+
+function extractJsonLdServices(html: string, baseUrl: string): ScrapedProduct[] {
+  const products: ScrapedProduct[] = [];
+  const scriptRegex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+
+  let match;
+  while ((match = scriptRegex.exec(html)) !== null) {
+    try {
+      const data = JSON.parse(match[1]);
+      const items = Array.isArray(data) ? data : data['@graph'] ?? [data];
+
+      for (const item of items) {
+        if (!item || typeof item !== 'object') continue;
+        const rawType = (item as Record<string, unknown>)['@type'];
+        const types = (Array.isArray(rawType) ? rawType : [rawType]).filter(Boolean) as string[];
+        const typeStr = types.join(' ');
+        if (!/service|professional/i.test(typeStr)) continue;
+
+        const name = (item as Record<string, unknown>).name;
+        if (typeof name !== 'string' || name.length < 2) continue;
+
+        products.push({
+          name: decodeEntities(name),
+          imageUrl: normalizeJsonLdImage((item as Record<string, unknown>).image, baseUrl),
+          description:
+            typeof (item as Record<string, unknown>).description === 'string'
+              ? decodeEntities((item as Record<string, unknown>).description as string)
+              : '',
+          price: extractJsonLdPrice(item as Record<string, unknown>),
+        });
+      }
+    } catch {
+      /* invalid JSON-LD */
+    }
+  }
+
+  return products;
+}
+
+/** Restaurant / menu-forward merge of DOM hints + generic product extraction. */
+export function extractMenuItems(html: string, baseUrl: string): ScrapedProduct[] {
+  const merged = mergeScrapedProductsByName([
+    extractMenuDomCandidates(html, baseUrl),
+    extractProducts(html, baseUrl),
+  ]);
+  return merged.slice(0, 40);
+}
+
+/** Agency / SaaS / services: JSON-LD Service rows + generic extraction. */
+export function extractServiceItems(html: string, baseUrl: string): ScrapedProduct[] {
+  const merged = mergeScrapedProductsByName([
+    extractJsonLdServices(html, baseUrl),
+    extractProducts(html, baseUrl),
+  ]);
+  return merged.slice(0, 40);
 }
 
 function normalizeJsonLdImage(image: unknown, baseUrl: string): string | null {

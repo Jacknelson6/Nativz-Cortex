@@ -6,8 +6,9 @@ Activated when working on React components, pages, or UI elements.
 
 - All chart components must be client components (`'use client'`)
 - Use `<Card interactive>` when wrapping a card in a `<Link>`
-- Glass buttons for primary search actions, glow buttons for settings CTAs
-- Brand colors: blue `#046BD2`, purple `#8B5CF6`
+- **Typography:** prefer `ui-page-title`, `ui-section-title`, `ui-label`, `ui-body`, `ui-muted`, `ui-caption`, `ui-cal-weekday` from `app/globals.css` for consistent hierarchy
+- **Buttons:** default `@/components/ui/button`; GlassButton for hero search, GlowButton for settings CTAs
+- Brand colors: CSS tokens (`accent`, `accent2`, …); root uses `font-sans` (Plus Jakarta Sans)
 - Dark theme: `bg-surface` cards on `bg-background`, `accent-text` for active states
 
 ## Copy Rules

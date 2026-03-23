@@ -19,6 +19,7 @@ export type RecentClient = {
 type AdCreativesDbClientRow = {
   id: string;
   slug: string;
+  name: string;
   logo_url: string | null;
   website_url: string | null;
   is_active: boolean;
@@ -32,7 +33,7 @@ export default async function AdCreativesPage() {
   const [vaultClients, rosterResult, { data: recentBatches }] = await Promise.all([
     getVaultClients(),
     selectClientsWithRosterVisibility<AdCreativesDbClientRow>(supabase, {
-      select: 'id, slug, logo_url, website_url, is_active, brand_dna_status',
+      select: 'id, slug, name, logo_url, website_url, is_active, brand_dna_status',
       onlyActive: true,
     }),
     supabase
@@ -52,7 +53,7 @@ export default async function AdCreativesPage() {
     const vault = vaultClients.find((v) => v.slug === db.slug);
     return {
       id: db.id,
-      name: vault?.name || db.slug,
+      name: vault?.name || db.name || db.slug,
       slug: db.slug,
       logo_url: db.logo_url,
       website_url: db.website_url ?? null,
@@ -60,6 +61,8 @@ export default async function AdCreativesPage() {
       agency: vault?.agency,
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
+
+  const rosterClientById = new Map(clients.map((c) => [c.id, c]));
 
   // Build recent clients from batches
   const clientCreativeCounts = new Map<string, number>();
@@ -69,27 +72,58 @@ export default async function AdCreativesPage() {
     clientCreativeCounts.set(cid, (clientCreativeCounts.get(cid) ?? 0) + count);
   }
 
-  const recentClients: RecentClient[] = [...clientCreativeCounts.entries()]
+  const topRecentIds = [...clientCreativeCounts.entries()]
     .filter(([, count]) => count > 0)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 6)
-    .map(([cid, count]) => {
-      const client = clients.find((c) => c.id === cid);
+    .map(([cid]) => cid);
+
+  const idsNotOnRoster = topRecentIds.filter((id) => !rosterClientById.has(id));
+
+  type RecentRow = { id: string; slug: string; name: string; logo_url: string | null; website_url: string | null };
+  const hiddenRecentById = new Map<string, RecentRow>();
+  if (idsNotOnRoster.length > 0) {
+    const { data: hiddenRows } = await supabase
+      .from('clients')
+      .select('id, slug, name, logo_url, website_url')
+      .in('id', idsNotOnRoster);
+    for (const row of hiddenRows ?? []) {
+      hiddenRecentById.set(row.id, row as RecentRow);
+    }
+  }
+
+  const recentClients: RecentClient[] = topRecentIds
+    .map((cid) => {
+      const count = clientCreativeCounts.get(cid) ?? 0;
+      if (count <= 0) return null;
+      const roster = rosterClientById.get(cid);
+      if (roster) {
+        return {
+          clientId: cid,
+          slug: roster.slug,
+          name: roster.name,
+          logo_url: roster.logo_url,
+          website_url: roster.website_url,
+          creativeCount: count,
+        };
+      }
+      const hidden = hiddenRecentById.get(cid);
+      if (!hidden?.slug) return null;
       return {
         clientId: cid,
-        slug: client?.slug ?? '',
-        name: client?.name ?? 'Unknown',
-        logo_url: client?.logo_url ?? null,
-        website_url: client?.website_url ?? null,
+        slug: hidden.slug,
+        name: hidden.name?.trim() || hidden.slug,
+        logo_url: hidden.logo_url,
+        website_url: hidden.website_url ?? null,
         creativeCount: count,
       };
     })
-    .filter((rc) => rc.slug); // Only include clients that exist
+    .filter((rc): rc is RecentClient => rc != null);
 
   return (
     <Suspense
       fallback={
-        <div className="p-6 max-w-7xl mx-auto space-y-4 animate-pulse">
+        <div className="cortex-page-gutter max-w-7xl mx-auto space-y-4 animate-pulse">
           <div className="h-8 w-48 rounded-lg bg-surface border border-nativz-border" />
           <div className="h-64 rounded-2xl bg-surface border border-nativz-border" />
         </div>

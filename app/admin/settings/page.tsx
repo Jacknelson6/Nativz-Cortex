@@ -206,18 +206,18 @@ export default function AdminSettingsPage() {
   }
 
   if (loading) {
-    return <div className="p-6 text-sm text-text-muted">Loading...</div>;
+    return <div className="cortex-page-gutter text-sm text-text-muted">Loading...</div>;
   }
 
   if (!user) {
-    return <div className="p-6 text-sm text-red-400">Could not load account.</div>;
+    return <div className="cortex-page-gutter text-sm text-red-400">Could not load account.</div>;
   }
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
       {/* Left sidebar nav */}
       <nav className="hidden lg:flex flex-col w-56 shrink-0 border-r border-nativz-border p-4 overflow-y-auto">
-        <h1 className="text-lg font-semibold text-text-primary mb-1">Settings</h1>
+        <h1 className="ui-section-title mb-1">Settings</h1>
         <p className="text-xs text-text-muted mb-6">Manage your account</p>
         <ul className="space-y-0.5">
           {SECTIONS.map((s) => {
@@ -248,7 +248,7 @@ export default function AdminSettingsPage() {
       <div className="max-w-2xl mx-auto p-6 space-y-10">
         {/* Mobile header */}
         <div className="lg:hidden">
-          <h1 className="text-2xl font-semibold text-text-primary">Settings</h1>
+          <h1 className="ui-page-title">Settings</h1>
           <p className="text-sm text-text-muted mt-0.5">Manage your account</p>
         </div>
 

@@ -69,6 +69,7 @@ export function AdCreativesView({
   const [wizardSeedCreative, setWizardSeedCreative] = useState<AdCreative | null>(null);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [placeholderConfig, setPlaceholderConfig] = useState<PlaceholderConfig | null>(null);
+  const [galleryEmptyForCta, setGalleryEmptyForCta] = useState(false);
 
   const tabParam = searchParams.get('tab') as Tab | null;
   const brandDnaReady = brandDnaStatus === 'active' || brandDnaStatus === 'draft';
@@ -213,7 +214,7 @@ export function AdCreativesView({
   }, []);
 
   return (
-    <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-8">
+    <div className="cortex-page-gutter max-w-7xl mx-auto space-y-8">
       <div className="sticky top-0 z-40 -mx-6 sm:-mx-8 px-6 sm:px-8 pt-1 pb-2">
         <div className="rounded-2xl border border-white/[0.1] bg-surface/65 shadow-[0_12px_40px_-18px_rgba(0,0,0,0.65)] backdrop-blur-xl supports-[backdrop-filter]:bg-surface/55">
           <div className="flex flex-col gap-3 p-3 sm:p-4">
@@ -233,7 +234,7 @@ export function AdCreativesView({
                     Ad creatives
                   </p>
                   <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                    <h1 className="truncate text-lg font-semibold tracking-tight text-text-primary sm:text-xl">
+                    <h1 className="truncate ui-section-title sm:text-xl">
                       {clientName}
                     </h1>
                     {creativeCount > 0 && (
@@ -248,10 +249,7 @@ export function AdCreativesView({
               {activeTab === 'gallery' && (
                 <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
                   {brandDnaReady ? (
-                    <>
-                      <p className="hidden text-right text-[11px] text-text-muted sm:block sm:max-w-[220px]">
-                        Run the wizard to create a new batch of static ads.
-                      </p>
+                    !galleryEmptyForCta ? (
                       <Button
                         type="button"
                         size="lg"
@@ -262,7 +260,7 @@ export function AdCreativesView({
                         <Sparkles size={18} strokeWidth={1.75} />
                         Generate creatives
                       </Button>
-                    </>
+                    ) : null
                   ) : (
                     <Button
                       type="button"
@@ -327,6 +325,8 @@ export function AdCreativesView({
             setPlaceholderConfig(null);
           }}
           onCreateMoreLikeThis={brandDnaReady ? handleCreateMoreLikeThis : undefined}
+          onGalleryEmptyForCtaChange={setGalleryEmptyForCta}
+          onOpenGenerateWizard={brandDnaReady ? () => setWizardOpen(true) : undefined}
         />
       )}
 

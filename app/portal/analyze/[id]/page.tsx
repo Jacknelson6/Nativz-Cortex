@@ -43,7 +43,7 @@ export default async function PortalAnalyzeBoardPage({
       .order('created_at', { ascending: true });
 
     return (
-      <div className="p-6 max-w-5xl mx-auto">
+      <div className="cortex-page-gutter max-w-5xl mx-auto">
         <div className="mb-6">
           <Link
             href="/portal/analyze"
@@ -52,7 +52,7 @@ export default async function PortalAnalyzeBoardPage({
             <ArrowLeft size={14} />
             Back to boards
           </Link>
-          <h1 className="text-2xl font-semibold text-text-primary">{board.name}</h1>
+          <h1 className="ui-page-title">{board.name}</h1>
           {board.description && (
             <p className="mt-1 text-sm text-text-muted">{board.description}</p>
           )}

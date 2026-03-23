@@ -6,14 +6,14 @@ import * as cheerio from 'cheerio';
 import { dedupeHexList } from '@/lib/brand-dna/color-palette';
 import { extractProducts, extractMenuItems, extractServiceItems, extractColors, extractMeta, detectBusinessType } from './scrape-brand';
 import { extractLogo } from './extract-logo';
-import type { ScrapedBrand, ScrapedProduct } from './scrape-brand';
+import type { BusinessType, ScrapedBrand, ScrapedProduct } from './scrape-brand';
 
 export interface CrawlResult {
   brand: ScrapedBrand;
   products: ScrapedProduct[];
   mediaUrls: string[];
   pagesCrawled: number;
-  businessType: import('./scrape-brand').BusinessType;
+  businessType: BusinessType;
 }
 
 interface CrawlOptions {

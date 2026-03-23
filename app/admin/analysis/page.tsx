@@ -163,12 +163,12 @@ export default function MoodboardPage() {
   }
 
   return (
-    <div className="p-6 space-y-12">
+    <div className="cortex-page-gutter space-y-12">
       {/* Header + Cards — centered like research page */}
       <div className="flex flex-col items-center justify-center pt-8">
         <div className="w-full max-w-3xl">
           <div className="text-center mb-10">
-            <h1 className="text-3xl font-bold text-foreground">What would you like to analyze?</h1>
+            <h1 className="ui-page-title-hero">What would you like to analyze?</h1>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

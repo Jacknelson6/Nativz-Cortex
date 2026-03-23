@@ -51,7 +51,7 @@ export default async function IdeaGenerationResultsPage({
   }
 
   return (
-    <div className="p-6">
+    <div className="cortex-page-gutter">
       <div className="max-w-5xl mx-auto">
         <IdeasResultsClient
           generation={generation}

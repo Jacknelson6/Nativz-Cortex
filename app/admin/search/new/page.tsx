@@ -45,7 +45,7 @@ export default async function AdminNewSearchPage() {
   return (
     <Suspense
       fallback={
-        <div className="p-6 max-w-5xl mx-auto space-y-4 animate-pulse">
+        <div className="cortex-page-gutter max-w-5xl mx-auto space-y-4 animate-pulse">
           <div className="h-8 w-56 rounded-lg bg-surface border border-nativz-border" />
           <div className="h-96 rounded-xl bg-surface border border-nativz-border" />
         </div>

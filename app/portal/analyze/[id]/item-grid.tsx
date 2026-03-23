@@ -96,7 +96,7 @@ export function PortalAnalyzeItemGrid({ items }: PortalAnalyzeItemGridProps) {
               <X size={18} />
             </button>
 
-            <div className="p-6 space-y-5">
+            <div className="cortex-page-gutter space-y-5">
               {/* Header */}
               <div>
                 <div className="flex items-center gap-2 mb-1">

@@ -260,7 +260,7 @@ export function IdeasHubView({ initialIdeas, clients, searchId, searchQuery, sea
   }, []);
 
   return (
-    <div className="p-6 space-y-12">
+    <div className="cortex-page-gutter space-y-12">
       {/* Generator — centered like topic search */}
       <div className="flex flex-col items-center justify-center pt-8">
         <div className="w-full max-w-4xl">

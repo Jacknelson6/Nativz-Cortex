@@ -29,3 +29,15 @@ export function isValidWebsiteUrl(normalized: string): boolean {
     return false;
   }
 }
+
+/** If user input is a usable website, returns normalized URL and a short display label (hostname). */
+export function tryParseUserWebsite(raw: string): { normalized: string; displayLabel: string } | null {
+  const normalized = normalizeWebsiteUrl(raw);
+  if (!isValidWebsiteUrl(normalized)) return null;
+  try {
+    const host = new URL(normalized).hostname.replace(/^www\./i, '');
+    return { normalized, displayLabel: host || normalized };
+  } catch {
+    return null;
+  }
+}

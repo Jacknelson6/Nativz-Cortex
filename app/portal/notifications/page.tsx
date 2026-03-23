@@ -17,7 +17,7 @@ export default async function PortalNotificationsPage() {
 
     if ((client.feature_flags as unknown as Record<string, boolean>).can_view_notifications === false) {
       return (
-        <div className="p-6">
+        <div className="cortex-page-gutter">
           <EmptyState
             icon={<Lock size={24} />}
             title="Notifications not enabled"
@@ -48,7 +48,7 @@ export default async function PortalNotificationsPage() {
       .limit(50);
 
     return (
-      <div className="p-6 max-w-3xl mx-auto">
+      <div className="cortex-page-gutter max-w-3xl mx-auto">
         <PortalNotificationList notifications={notifications ?? []} />
       </div>
     );

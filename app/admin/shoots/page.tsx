@@ -369,11 +369,11 @@ export default function AdminShootsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="cortex-page-gutter space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Shoots</h1>
+          <h1 className="ui-page-title">Shoots</h1>
           <p className="text-sm text-text-muted mt-0.5">
             {getMonthName(currentMonth)} — content shoots and key dates
           </p>

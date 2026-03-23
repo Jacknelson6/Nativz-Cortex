@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PortalPreferencesLoading() {
   return (
-    <div className="p-6 space-y-6 max-w-2xl mx-auto">
+    <div className="cortex-page-gutter space-y-6 max-w-2xl mx-auto">
       <div>
         <Skeleton className="h-7 w-48" />
         <Skeleton className="h-4 w-72 mt-2" />

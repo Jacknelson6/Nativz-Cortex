@@ -180,7 +180,7 @@ function SharedMoodboardCanvas() {
           <div className="rounded-2xl bg-surface border border-nativz-border p-4 shadow-elevated">
             <Lock size={28} className="text-text-muted" />
           </div>
-          <h1 className="text-lg font-semibold text-text-primary">This board is password protected</h1>
+          <h1 className="ui-section-title">This board is password protected</h1>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <form
             onSubmit={(e) => { e.preventDefault(); fetchBoard(password); }}
@@ -224,7 +224,7 @@ function SharedMoodboardCanvas() {
         <div className="flex items-center gap-3">
           <span className="text-sm font-bold text-accent-text">Nativz</span>
           <span className="text-nativz-border">|</span>
-          <h1 className="text-sm font-semibold text-text-primary">{boardData.board.name}</h1>
+          <h1 className="ui-chrome-title">{boardData.board.name}</h1>
           {boardData.board.client_name && (
             <span className="rounded-full bg-accent-surface px-2.5 py-0.5 text-[10px] font-medium text-accent-text">
               {boardData.board.client_name}

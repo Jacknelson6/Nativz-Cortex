@@ -94,7 +94,7 @@ export function KnowledgeClient({ clientId, entries: initialEntries }: Knowledge
     <>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary flex items-center gap-2.5">
+          <h1 className="ui-page-title flex items-center gap-2.5">
             <Brain size={20} className="text-accent-text" />
             Knowledge
           </h1>

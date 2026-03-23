@@ -205,7 +205,7 @@ export function IdeaGenerator({ clients, onIdeasSaved, initialSearchId, initialS
             <Sparkles size={24} className="text-accent2-text" />
           </div>
         </div>
-        <h1 className="text-2xl font-semibold text-text-primary">Generate video ideas</h1>
+        <h1 className="ui-page-title">Generate video ideas</h1>
         <p className="text-sm text-text-secondary max-w-md mx-auto">
           AI-powered ideas from brand context, strategy, and optional reference videos
         </p>

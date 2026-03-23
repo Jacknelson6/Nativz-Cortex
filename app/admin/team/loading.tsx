@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function TeamLoading() {
   return (
-    <div className="p-6 space-y-6">
+    <div className="cortex-page-gutter space-y-6">
       <div>
         <Skeleton className="h-7 w-24" />
         <Skeleton className="h-4 w-40 mt-1" />

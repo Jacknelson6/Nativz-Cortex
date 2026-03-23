@@ -109,7 +109,7 @@ export default function PresentationEditorPage() {
 
   if (loading) {
     return (
-      <div className="p-6 space-y-4">
+      <div className="cortex-page-gutter space-y-4">
         <div className="h-8 w-48 rounded bg-surface-hover animate-pulse" />
         <div className="h-[600px] rounded-xl bg-surface-hover animate-pulse" />
       </div>

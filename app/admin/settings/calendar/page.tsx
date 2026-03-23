@@ -8,7 +8,7 @@ import { ShootEventsList } from '@/components/calendar/shoot-events-list';
 
 export default function CalendarSettingsPage() {
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-6">
+    <div className="cortex-page-gutter max-w-2xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/admin/settings">
           <Button variant="ghost" size="sm">
@@ -16,7 +16,7 @@ export default function CalendarSettingsPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Calendar & shoots</h1>
+          <h1 className="ui-page-title">Calendar & shoots</h1>
           <p className="text-sm text-text-muted mt-0.5">
             Connect your calendar to auto-detect shoots and generate content plans
           </p>

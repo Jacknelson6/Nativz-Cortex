@@ -72,7 +72,7 @@ export function ContentWizard({
                 <Sparkles size={24} className="text-accent2-text" />
               </div>
             </div>
-            <h1 className="text-2xl font-semibold text-text-primary">Create content</h1>
+            <h1 className="ui-page-title">Create content</h1>
             <p className="text-sm text-text-secondary max-w-md mx-auto">
               Generate content pillars and video ideas powered by AI brand context
             </p>

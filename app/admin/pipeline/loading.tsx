@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PipelineLoading() {
   return (
-    <div className="p-6 space-y-4">
+    <div className="cortex-page-gutter space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Skeleton className="h-7 w-40" />

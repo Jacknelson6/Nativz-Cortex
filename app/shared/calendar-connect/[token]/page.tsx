@@ -80,7 +80,7 @@ export default function CalendarConnectPage() {
                 <Calendar size={28} />
               </div>
               <div>
-                <h1 className="text-lg font-semibold text-text-primary mb-1">
+                <h1 className="ui-section-title mb-1">
                   Connect your calendar
                 </h1>
                 <p className="text-sm text-text-muted">

@@ -70,10 +70,10 @@ export default async function PortalDashboardPage() {
     const recentReports = ('data' in recentResult ? recentResult.data : []) || [];
 
     return (
-      <div className="p-6 space-y-6">
+      <div className="cortex-page-gutter space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-text-primary">
+            <h1 className="ui-page-title">
               Welcome back{fullName ? `, ${fullName.split(' ')[0]}` : ''}
             </h1>
             <p className="text-sm text-text-muted">{clientName}</p>

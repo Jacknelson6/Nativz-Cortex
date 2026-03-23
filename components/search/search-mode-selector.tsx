@@ -136,7 +136,7 @@ export function SearchModeSelector({
     <div className="w-full">
       {/* Header */}
       <div className="text-center mb-10">
-        <h1 className="text-3xl font-bold text-foreground">What would you like to research today?</h1>
+        <h1 className="ui-page-title-hero">What would you like to research today?</h1>
       </div>
 
       {/* Cards */}

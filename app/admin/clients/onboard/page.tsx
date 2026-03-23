@@ -55,11 +55,11 @@ export default function OnboardWizardPage() {
   }, []);
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="cortex-page-gutter max-w-3xl mx-auto">
       {/* Page title — fades out after step 1 */}
       {currentStep === 'input' && (
         <div className="text-center mb-2 animate-fade-slide-in">
-          <h1 className="text-2xl font-semibold text-text-primary">Onboard a new client</h1>
+          <h1 className="ui-page-title">Onboard a new client</h1>
           <p className="text-sm text-text-muted mt-1">
             From URL to full content strategy in 5 minutes
           </p>

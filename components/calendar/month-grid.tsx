@@ -67,10 +67,7 @@ export function MonthGrid({ currentDate, events, onDayClick, onEventClick }: Mon
       {/* Weekday headers */}
       <div className="grid grid-cols-7 border-b border-nativz-border">
         {WEEKDAYS.map((day) => (
-          <div
-            key={day}
-            className="px-2 py-2 text-center text-[10px] font-medium text-text-muted uppercase tracking-wider"
-          >
+          <div key={day} className="ui-cal-weekday uppercase px-2 py-2">
             {day}
           </div>
         ))}

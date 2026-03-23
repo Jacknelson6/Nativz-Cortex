@@ -4,10 +4,13 @@
 
 - Card-based layout: `bg-surface` cards on `bg-background`, accent colors for active states and CTAs
 - **Brand mode toggle**: click sidebar logo to switch between Nativz (dark/blue) and Anderson Collaborative (light/teal)
-- **Never hardcode colors** — use CSS variable tokens: `--accent`, `--accent2`, `--background`, `--surface`, `--text-primary`, `--text-secondary`, `--text-muted`, `--focus-ring`
+- **Never hardcode colors** — use CSS variable tokens: `--accent`, `--accent2`, `--background`, `--surface`, `--text-primary`, `--text-secondary`, `--text-muted`, `--focus-ring`, `--error`, `--error-hover`
 - Primary accent: `accent` / `accent-text` / `accent-surface` (blue in Nativz, teal in AC)
 - Secondary accent: `accent2` / `accent2-text` / `accent2-surface` (purple in Nativz, teal in AC)
-- Focus rings: `focus:shadow-[0_0_0_3px_var(--focus-ring)]`
+- Focus rings: match inputs and buttons — `focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background` plus `focus-visible:shadow-[0_0_0_3px_var(--focus-ring)]` where applicable
+- **Typography utilities** (`app/globals.css` `@layer components`): `ui-page-title`, `ui-section-title`, `ui-card-title`, `ui-label`, `ui-body`, `ui-muted`, `ui-caption`, `ui-cal-weekday` — prefer these (or the same token classes inline) so font size, weight, and color stay aligned across SaaS surfaces
+- **Buttons**: default to `@/components/ui/button` — `primary` (gradient + `btn-shimmer`) for main CTAs, `secondary` / `outline` / `ghost` for hierarchy, `danger` uses `--error` tokens. Reserve **GlassButton** for hero search-style actions and **GlowButton** for settings CTAs (see below)
+- **Body font**: root layout uses `font-sans` (Plus Jakarta Sans via `next/font` → `--font-geist-sans`); avoid introducing second sans families in product UI
 - All UI copy uses **sentence case** (only capitalize first word + proper nouns)
 - Glass buttons (`components/ui/glass-button.tsx`) for primary search actions
 - Glow buttons (`components/ui/glow-button.tsx`) for settings CTAs

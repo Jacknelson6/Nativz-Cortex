@@ -117,7 +117,7 @@ export default function SharedPostReviewPage({
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <AlertCircle size={48} className="text-red-400 mx-auto mb-4" />
-          <h1 className="text-lg font-semibold text-text-primary">{error ?? 'Post not found'}</h1>
+          <h1 className="ui-section-title">{error ?? 'Post not found'}</h1>
           <p className="text-sm text-text-muted mt-1">This review link may have expired.</p>
         </div>
       </div>
@@ -134,7 +134,7 @@ export default function SharedPostReviewPage({
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <h1 className="text-lg font-semibold text-text-primary mb-1">Post review</h1>
+        <h1 className="ui-section-title mb-1">Post review</h1>
         <p className="text-sm text-text-muted mb-6">
           Review this post and approve or request changes
         </p>

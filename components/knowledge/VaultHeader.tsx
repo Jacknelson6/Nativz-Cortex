@@ -114,7 +114,7 @@ export function VaultHeader({
             <ArrowLeft size={16} />
           </Link>
         )}
-        <h1 className="text-sm font-semibold text-text-primary">
+        <h1 className="ui-chrome-title">
           {clientName}&apos;s vault
         </h1>
       </div>

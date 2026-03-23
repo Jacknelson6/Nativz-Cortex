@@ -99,7 +99,7 @@ export default function SharedReportPage({
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <AlertCircle size={48} className="text-red-400 mx-auto mb-4" />
-          <h1 className="text-lg font-semibold text-text-primary">
+          <h1 className="ui-section-title">
             {error ?? 'Report not found'}
           </h1>
           <p className="text-sm text-text-muted mt-1">
@@ -124,7 +124,7 @@ export default function SharedReportPage({
       <div className="max-w-3xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-xl font-semibold text-text-primary">
+          <h1 className="ui-page-title-md">
             Performance report
           </h1>
           <p className="text-sm text-text-secondary">{data.clientName}</p>

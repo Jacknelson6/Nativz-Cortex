@@ -154,9 +154,9 @@ export function DateTimePicker({ date, time, onDateChange, onTimeChange }: DateT
       <button
         type="button"
         onClick={() => setOpenPanel(openPanel === 'date' ? null : 'date')}
-        className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs transition-colors cursor-pointer ${
+        className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
           openPanel === 'date'
-            ? 'border-accent-text/50 bg-surface text-text-primary'
+            ? 'border-accent/50 bg-surface text-text-primary'
             : 'border-nativz-border bg-surface text-text-primary hover:border-accent/50'
         }`}
       >
@@ -168,9 +168,9 @@ export function DateTimePicker({ date, time, onDateChange, onTimeChange }: DateT
       <button
         type="button"
         onClick={() => setOpenPanel(openPanel === 'time' ? null : 'time')}
-        className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs transition-colors cursor-pointer ${
+        className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
           openPanel === 'time'
-            ? 'border-accent-text/50 bg-surface text-text-primary'
+            ? 'border-accent/50 bg-surface text-text-primary'
             : 'border-nativz-border bg-surface text-text-primary hover:border-accent/50'
         }`}
       >
@@ -205,7 +205,7 @@ export function DateTimePicker({ date, time, onDateChange, onTimeChange }: DateT
           {/* Weekday headers */}
           <div className="grid grid-cols-7 px-2">
             {WEEKDAYS.map((d, i) => (
-              <div key={i} className="text-center text-[10px] font-medium text-text-muted py-1">
+              <div key={i} className="ui-cal-weekday py-1">
                 {d}
               </div>
             ))}
@@ -232,9 +232,9 @@ export function DateTimePicker({ date, time, onDateChange, onTimeChange }: DateT
                     }
                     ${!inMonth && !isPast ? 'text-text-muted/40' : ''}
                     ${isSelected
-                      ? 'bg-accent-text text-white font-medium'
+                      ? 'bg-accent text-white font-medium'
                       : isToday
-                        ? 'border border-accent-text/50 text-accent-text'
+                        ? 'border border-accent/50 text-accent-text'
                         : isPast
                           ? ''
                           : inMonth

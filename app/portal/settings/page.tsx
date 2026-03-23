@@ -35,8 +35,8 @@ export default async function PortalSettingsPage() {
   } | undefined;
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl">
-      <h1 className="text-xl font-semibold text-text-primary">Settings</h1>
+    <div className="cortex-page-gutter space-y-6 max-w-2xl">
+      <h1 className="ui-page-title-md">Settings</h1>
 
       {/* Account info */}
       <Card>
