@@ -4,9 +4,6 @@ import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibili
 import { getVaultClients } from '@/lib/vault/reader';
 import { AdCreativesHub } from '@/components/ad-creatives/ad-creatives-hub';
 
-/** Uses service-role Supabase + vault; must not static-prerender (Preview builds without env would fail). */
-export const dynamic = 'force-dynamic';
-
 export type RecentClient = {
   clientId: string;
   slug: string;

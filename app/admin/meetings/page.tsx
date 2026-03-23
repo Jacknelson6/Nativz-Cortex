@@ -4,8 +4,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { MeetingNotesView } from '@/components/meetings/meeting-notes-view';
 import MeetingsLoading from './loading';
 
-export const dynamic = 'force-dynamic';
-
 export default async function MeetingsPage() {
   const supabase = await createServerSupabaseClient();
   const {

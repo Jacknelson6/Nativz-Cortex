@@ -15,3 +15,6 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # 0.10.33+ breaks webpack resolution ("Exports field key should be relative path…")
+    ignore:
+      - dependency-name: "@mediapipe/tasks-vision"
