@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
 import { z } from 'zod';
 
 const PatchSchema = z.object({
@@ -41,7 +42,7 @@ export async function GET() {
       .single();
 
     return NextResponse.json({
-      model: settings?.ai_model ?? 'anthropic/claude-3.5-haiku',
+      model: settings?.ai_model ?? DEFAULT_OPENROUTER_MODEL,
       fallbackModels: settings?.ai_fallback_models ?? [],
       updatedAt: settings?.updated_at ?? null,
     });

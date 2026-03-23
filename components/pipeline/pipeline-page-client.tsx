@@ -356,7 +356,12 @@ export default function PipelinePageClient({
           <h1 className="ui-section-title">
             Content pipeline
             {stageParam && (
-              <span className="ml-2 text-sm font-medium text-accent-text capitalize">&middot; {stageParam}</span>
+              <span className="ml-2 text-sm font-medium text-accent-text">
+                &middot;{' '}
+                {stageParam === 'scheduling'
+                  ? 'Approvals & handoff'
+                  : stageParam.charAt(0).toUpperCase() + stageParam.slice(1)}
+              </span>
             )}
           </h1>
           <div className="flex items-center gap-1">

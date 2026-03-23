@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { buildPortalFeatureFlags } from '@/lib/portal/feature-flags';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,8 +32,10 @@ export default async function PortalSettingsPage() {
     target_audience: string | null;
     brand_voice: string | null;
     topic_keywords: string[] | null;
-    feature_flags: { can_search: boolean; can_view_reports: boolean; can_edit_preferences: boolean; can_submit_ideas: boolean } | null;
+    feature_flags: unknown;
   } | undefined;
+
+  const featureAccess = client ? buildPortalFeatureFlags(client.feature_flags) : null;
 
   return (
     <div className="cortex-page-gutter space-y-6 max-w-2xl">
@@ -89,32 +92,38 @@ export default async function PortalSettingsPage() {
       )}
 
       {/* Feature access */}
-      {client?.feature_flags && (
+      {featureAccess && (
         <Card>
           <h2 className="text-base font-semibold text-text-primary mb-4">Feature access</h2>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm text-text-secondary">Topic search</span>
-              <Badge variant={client.feature_flags.can_search ? 'success' : 'default'}>
-                {client.feature_flags.can_search ? 'Enabled' : 'Disabled'}
+              <Badge variant={featureAccess.can_search ? 'success' : 'default'}>
+                {featureAccess.can_search ? 'Enabled' : 'Disabled'}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-text-secondary">View reports</span>
-              <Badge variant={client.feature_flags.can_view_reports ? 'success' : 'default'}>
-                {client.feature_flags.can_view_reports ? 'Enabled' : 'Disabled'}
+              <Badge variant={featureAccess.can_view_reports ? 'success' : 'default'}>
+                {featureAccess.can_view_reports ? 'Enabled' : 'Disabled'}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-text-secondary">Edit preferences</span>
-              <Badge variant={client.feature_flags.can_edit_preferences ? 'success' : 'default'}>
-                {client.feature_flags.can_edit_preferences ? 'Enabled' : 'Disabled'}
+              <Badge variant={featureAccess.can_edit_preferences ? 'success' : 'default'}>
+                {featureAccess.can_edit_preferences ? 'Enabled' : 'Disabled'}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-text-secondary">Submit ideas</span>
-              <Badge variant={client.feature_flags.can_submit_ideas ? 'success' : 'default'}>
-                {client.feature_flags.can_submit_ideas ? 'Enabled' : 'Disabled'}
+              <Badge variant={featureAccess.can_submit_ideas ? 'success' : 'default'}>
+                {featureAccess.can_submit_ideas ? 'Enabled' : 'Disabled'}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-text-secondary">REST API</span>
+              <Badge variant={featureAccess.can_use_api ? 'success' : 'default'}>
+                {featureAccess.can_use_api ? 'Enabled' : 'Disabled'}
               </Badge>
             </div>
           </div>

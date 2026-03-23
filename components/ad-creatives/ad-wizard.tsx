@@ -10,7 +10,6 @@ import {
   Type,
   Zap,
   Eye,
-  Library,
   LayoutGrid,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -24,15 +23,17 @@ import { BrandDnaGuidelinePanel } from './brand-dna-guideline-panel';
 import { BrandDnaWizardRail } from './brand-dna-wizard-rail';
 import { AdCreativeGuidelineUploads } from './ad-creative-guideline-uploads';
 import { PromptReview, type PromptPreviewData } from './prompt-review';
+import { BatchCtaField } from './batch-cta-field';
+import { DEFAULT_BATCH_CTA } from '@/lib/ad-creatives/batch-cta-presets';
 import {
   AD_GENERATE_MAX_PRODUCTS,
   type AdCreative,
   type AdPromptTemplate,
   type AspectRatio,
-  type KandyTemplate,
+  type BrandLayoutMode,
 } from '@/lib/ad-creatives/types';
 import type { WizardTemplate } from '@/lib/ad-creatives/wizard-template';
-import { adPromptRowToWizardTemplate, withKandyOrigin } from '@/lib/ad-creatives/wizard-template';
+import { adPromptRowToWizardTemplate } from '@/lib/ad-creatives/wizard-template';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
 import { isStrongProductCandidate } from '@/lib/ad-creatives/product-name-filters';
 import { formatApiValidationError } from '@/lib/utils/format-api-validation-error';
@@ -44,8 +45,45 @@ import {
   WizardSegmentedControl,
   WizardStepHeader,
 } from './ad-wizard-chrome';
+import { NanoBananaTemplateGrid } from './nano-banana-template-grid';
+import type { NanoCatalogListItem } from '@/lib/ad-creatives/nano-banana/to-wizard-template';
+import { nanoCatalogItemToWizardTemplate } from '@/lib/ad-creatives/nano-banana/to-wizard-template';
+import type { AdBatchPlaceholderConfig } from '@/lib/ad-creatives/placeholder-config';
 
 const WIZARD_ASPECT_RATIOS = new Set<AspectRatio>(['1:1', '9:16', '4:5']);
+
+function buildNanoGlobalVariations(
+  selectedIds: Set<string>,
+  variationMap: Map<string, number>,
+  catalog: NanoCatalogListItem[],
+): { slug: string; count: number }[] {
+  return [...selectedIds]
+    .map((slug) => ({
+      slug,
+      count: variationMap.get(slug) ?? 2,
+      order: catalog.find((n) => n.slug === slug)?.sortOrder ?? 999,
+    }))
+    .sort((a, b) => a.order - b.order)
+    .map(({ slug, count }) => ({ slug, count }));
+}
+
+function firstSelectedProductImageUrl(
+  scrapedProducts: ScrapedProduct[],
+  selectedProductIndices: Set<number>,
+): string | undefined {
+  const sorted = [...selectedProductIndices].sort((a, b) => a - b);
+  for (const i of sorted) {
+    const u = scrapedProducts[i]?.imageUrl?.trim();
+    if (!u) continue;
+    try {
+      const parsed = new URL(u);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return u;
+    } catch {
+      /* skip */
+    }
+  }
+  return undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,74 +103,8 @@ interface AdWizardProps {
   clientSlug?: string;
   /** When set (e.g. gallery “Create more like this”), wizard pre-fills from this creative. */
   seedCreative?: AdCreative | null;
-  onGenerationStart?: (batchId: string, placeholderConfig: {
-    brandColors: string[];
-    templateThumbnails: { templateId: string; imageUrl: string; variationIndex: number }[];
-  }) => void;
+  onGenerationStart?: (batchId: string, placeholderConfig: AdBatchPlaceholderConfig) => void;
 }
-
-// ---------------------------------------------------------------------------
-// Vertical detection from brand description
-// ---------------------------------------------------------------------------
-
-const VERTICAL_KEYWORDS: Record<string, string[]> = {
-  ecommerce: ['shop', 'store', 'ecommerce', 'e-commerce', 'retail', 'buy', 'sale', 'discount', 'coupon', 'merch', 'clothing', 'apparel', 'jewelry', 'accessories', 'products', 'cattle', 'ranch', 'meat', 'beef', 'farm', 'livestock', 'poultry', 'seafood', 'wholesale', 'direct-to-consumer', 'd2c', 'dtc', 'subscription box'],
-  saas: ['software', 'saas', 'app', 'platform', 'digital', 'cloud', 'ai', 'tool', 'automation', 'api', 'dashboard', 'analytics', 'crm', 'erp', 'b2b'],
-  health_wellness: ['health', 'beauty', 'wellness', 'skincare', 'cosmetic', 'supplement', 'vitamin', 'fitness', 'spa', 'clinic', 'medical', 'pharma', 'organic', 'natural'],
-  fashion: ['fashion', 'style', 'designer', 'luxury', 'boutique', 'couture', 'dress', 'wear', 'trend'],
-  food_beverage: ['food', 'restaurant', 'cafe', 'coffee', 'drink', 'beverage', 'catering', 'kitchen', 'recipe', 'menu', 'toast', 'juice', 'bar', 'grill', 'bakery'],
-  finance: ['finance', 'bank', 'invest', 'insurance', 'mortgage', 'loan', 'credit', 'wealth', 'gold', 'currency', 'crypto', 'fund', 'capital'],
-  real_estate: ['real estate', 'property', 'home', 'house', 'apartment', 'condo', 'realtor', 'listing', 'rental'],
-  automotive: ['auto', 'car', 'vehicle', 'motor', 'dealer', 'truck', 'tire', 'mechanic'],
-  education: ['education', 'school', 'university', 'course', 'learning', 'tutor', 'academy', 'training'],
-  local_service: ['plumbing', 'electric', 'roofing', 'hvac', 'landscap', 'cleaning', 'repair', 'contractor', 'handyman', 'pest', 'moving'],
-  general: [], // fallback
-};
-
-/** Noisy SaaS tokens: substring match false-positives (e.g. "app" in "application") — require whole word. */
-const SAAS_WHOLE_WORD = new Set(['app', 'ai', 'api', 'crm', 'erp', 'b2b']);
-
-function keywordMatches(text: string, kw: string, vertical: string): boolean {
-  const k = kw.toLowerCase();
-  if (k.includes(' ')) return text.includes(k);
-  if (vertical === 'saas' && SAAS_WHOLE_WORD.has(k)) {
-    try {
-      return new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text);
-    } catch {
-      return text.includes(k);
-    }
-  }
-  return text.includes(k);
-}
-
-function detectVertical(description: string, brandName: string): string {
-  const text = `${description} ${brandName}`.toLowerCase();
-  let bestMatch = 'general';
-  let bestScore = 0;
-
-  const weights: Record<string, number> = {
-    food_beverage: 1.35,
-    health_wellness: 1.2,
-    ecommerce: 1.1,
-  };
-
-  for (const [vertical, keywords] of Object.entries(VERTICAL_KEYWORDS)) {
-    if (vertical === 'general') continue;
-    const raw = keywords.filter((kw) => keywordMatches(text, kw, vertical)).length;
-    const w = weights[vertical] ?? 1;
-    const score = raw * w;
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = vertical;
-    }
-  }
-
-  return bestMatch;
-}
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 
 const RATIO_OPTIONS: { value: AspectRatio; label: string; icon: typeof Square }[] = [
   { value: '1:1', label: 'Square', icon: Square },
@@ -169,8 +141,7 @@ export function AdWizard({
     productDefaultsAppliedRef.current = false;
   }, [clientId, productsFingerprint]);
 
-  // Templates — Kandy catalog vs client ad library (scraped / uploaded prompt templates)
-  const [templateMode, setTemplateMode] = useState<'kandy' | 'ad_library'>('kandy');
+  // Templates — client ad library (scraped / uploaded prompt templates)
   const [templates, setTemplates] = useState<WizardTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set());
@@ -178,12 +149,20 @@ export function AdWizard({
   // Per-template variations
   const [variations, setVariations] = useState<Map<string, number>>(new Map());
 
+  /** Client library vs global Nano Banana catalog */
+  const [templateSource, setTemplateSource] = useState<'client' | 'nano'>('client');
+  const [nanoCatalog, setNanoCatalog] = useState<NanoCatalogListItem[]>([]);
+  const [loadingNanoCatalog, setLoadingNanoCatalog] = useState(false);
+
   // Copy & format
   const [copyMode, setCopyMode] = useState<'ai' | 'manual'>('ai');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
+  const [brandLayoutMode, setBrandLayoutMode] = useState<BrandLayoutMode>('reference_image');
   const [manualHeadline, setManualHeadline] = useState('');
   const [manualSubheadline, setManualSubheadline] = useState('');
   const [manualCta, setManualCta] = useState('');
+  /** Shared CTA for every variation when using AI copy */
+  const [batchCta, setBatchCta] = useState(DEFAULT_BATCH_CTA);
 
   // Brand media
   const [mediaUrls, setMediaUrls] = useState<string[]>(initialMediaUrls ?? []);
@@ -194,6 +173,8 @@ export function AdWizard({
   // Mode: auto vs interactive
   const [mode, setMode] = useState<'auto' | 'interactive'>('auto');
   const [promptPreviews, setPromptPreviews] = useState<PromptPreviewData[] | null>(null);
+  /** Reuse preview API’s one-shot brief on generate to avoid a second LLM call */
+  const [previewCreativeBrief, setPreviewCreativeBrief] = useState<string | null>(null);
   const [loadingPreviews, setLoadingPreviews] = useState(false);
 
   // Generate
@@ -204,22 +185,6 @@ export function AdWizard({
   /** Passed as `styleDirectionGlobal` — prior full image prompt (capped server-side). */
   const [repeatStyleDirection, setRepeatStyleDirection] = useState<string | null>(null);
   const seedTemplateAppliedRef = useRef<string | null>(null);
-
-  // Recommended vertical from brand copy — only if Nativz catalog has templates for that industry
-  const recommendedVertical = brand ? detectVertical(brand.description, brand.name) : null;
-
-  const kandyVerticalsWithTemplates = useMemo(() => {
-    const s = new Set<string>();
-    for (const t of templates) {
-      if (t.templateOrigin === 'kandy' && t.vertical) s.add(t.vertical);
-    }
-    return s;
-  }, [templates]);
-
-  const effectiveRecommendedVertical = useMemo(() => {
-    if (!recommendedVertical || recommendedVertical === 'general') return null;
-    return kandyVerticalsWithTemplates.has(recommendedVertical) ? recommendedVertical : null;
-  }, [recommendedVertical, kandyVerticalsWithTemplates]);
 
   // Update brand from parent when it changes
   useEffect(() => {
@@ -272,7 +237,6 @@ export function AdWizard({
     setManualHeadline(seedCreative.on_screen_text?.headline ?? '');
     setManualSubheadline(seedCreative.on_screen_text?.subheadline ?? '');
     setManualCta(seedCreative.on_screen_text?.cta ?? '');
-    setTemplateMode(seedCreative.template_source === 'kandy' ? 'kandy' : 'ad_library');
     const ps = seedCreative.product_service?.trim();
     setProductServiceOverride(ps || null);
     const pu = seedCreative.prompt_used?.trim();
@@ -285,10 +249,37 @@ export function AdWizard({
   }, [seedCreative]);
 
   useEffect(() => {
-    if (!seedCreative || loadingTemplates) return;
+    if (!seedCreative) return;
+
+    const meta = seedCreative.metadata;
+    const globalSlug =
+      meta &&
+      typeof meta === 'object' &&
+      'global_slug' in meta &&
+      typeof (meta as { global_slug: unknown }).global_slug === 'string'
+        ? (meta as { global_slug: string }).global_slug.trim()
+        : '';
+
+    if (globalSlug) {
+      setTemplateSource('nano');
+      if (seedTemplateAppliedRef.current === seedCreative.id) return;
+      setSelectedTemplateIds(new Set([globalSlug]));
+      setVariations(new Map([[globalSlug, 2]]));
+      seedTemplateAppliedRef.current = seedCreative.id;
+      return;
+    }
+
+    if (loadingTemplates) return;
     if (templates.length === 0) return;
+    setTemplateSource('client');
 
     const tid = seedCreative.template_id;
+    if (!tid) {
+      toast.message('This creative used a global catalog style — pick templates before generating.');
+      const tIdx = AD_WIZARD_STEP_META.findIndex((s) => s.id === 'templates');
+      if (tIdx >= 0) setFlowIdx(tIdx);
+      return;
+    }
     const exists = templates.some((t) => t.id === tid);
     if (!exists) {
       toast.message('Original template not found — pick a layout before generating.');
@@ -316,18 +307,9 @@ export function AdWizard({
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
-      const [kRes, cRes] = await Promise.all([
-        fetch('/api/ad-creatives/templates?limit=2000'),
-        fetch(`/api/clients/${clientId}/ad-creatives/templates?limit=500`),
-      ]);
-
-      const kandyRaw = kRes.ok ? ((await kRes.json()) as { templates?: KandyTemplate[] }).templates ?? [] : [];
+      const cRes = await fetch(`/api/clients/${clientId}/ad-creatives/templates?limit=2000`);
       const customRows = cRes.ok ? ((await cRes.json()) as { templates?: AdPromptTemplate[] }).templates ?? [] : [];
-
-      const kandy: WizardTemplate[] = kandyRaw.map((t) => withKandyOrigin(t));
-      const custom: WizardTemplate[] = customRows.map((row) => adPromptRowToWizardTemplate(row));
-
-      setTemplates([...kandy, ...custom]);
+      setTemplates(customRows.map((row) => adPromptRowToWizardTemplate(row)));
     } catch {
       toast.error('Could not load templates. Refresh the page or try again.');
     } finally {
@@ -339,10 +321,25 @@ export function AdWizard({
     fetchTemplates();
   }, [fetchTemplates]);
 
-  function toggleTemplate(id: string) {
-    const picked = templates.find((t) => t.id === id);
-    const origin = picked?.templateOrigin ?? 'kandy';
+  const fetchNanoCatalog = useCallback(async () => {
+    setLoadingNanoCatalog(true);
+    try {
+      const res = await fetch('/api/ad-creatives/global-templates');
+      const data = (await res.json()) as { templates?: NanoCatalogListItem[] };
+      setNanoCatalog(Array.isArray(data.templates) ? data.templates : []);
+    } catch {
+      toast.error('Could not load global templates.');
+      setNanoCatalog([]);
+    } finally {
+      setLoadingNanoCatalog(false);
+    }
+  }, []);
 
+  useEffect(() => {
+    void fetchNanoCatalog();
+  }, [fetchNanoCatalog]);
+
+  function toggleTemplate(id: string) {
     setSelectedTemplateIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -353,10 +350,6 @@ export function AdWizard({
           return nextVm;
         });
       } else {
-        for (const tid of [...next]) {
-          const ot = templates.find((t) => t.id === tid);
-          if (ot && (ot.templateOrigin ?? 'kandy') !== origin) next.delete(tid);
-        }
         next.add(id);
         setVariations((vm) => new Map(vm).set(id, 2));
       }
@@ -440,31 +433,69 @@ export function AdWizard({
         count: variations.get(t.id) ?? 2,
       }));
 
+      const globalTemplateVariations =
+        templateSource === 'nano'
+          ? buildNanoGlobalVariations(selectedTemplateIds, variations, nanoCatalog)
+          : null;
+
       const res = await fetch(`/api/clients/${clientId}/ad-creatives/preview-prompts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          templateVariations,
-          templateSource: activeTemplateSource,
-          productService: effectiveProductService || brand.name,
-          offer: offerText,
-          aspectRatio,
-          onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
-          manualText: copyMode === 'manual' ? {
-            headline: (manualHeadline.trim() || brand.name).slice(0, 200),
-            subheadline: (
-              manualSubheadline.trim() ||
-              brand.description.trim().slice(0, 120) ||
-              brand.name
-            ).slice(0, 300),
-            cta: (manualCta.trim() || 'Learn more').slice(0, 100),
-          } : undefined,
-        }),
+        body: JSON.stringify(
+          templateSource === 'nano'
+            ? {
+                globalTemplateVariations,
+                productService: effectiveProductService || brand.name,
+                offer: offerText,
+                aspectRatio,
+                onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
+                manualText: copyMode === 'manual' ? {
+                  headline: (manualHeadline.trim() || brand.name).slice(0, 200),
+                  subheadline: (
+                    manualSubheadline.trim() ||
+                    brand.description.trim().slice(0, 120) ||
+                    brand.name
+                  ).slice(0, 300),
+                  cta: (manualCta.trim() || 'Learn more').slice(0, 100),
+                } : undefined,
+                ...(repeatStyleDirection?.trim()
+                  ? { styleDirectionGlobal: repeatStyleDirection.trim() }
+                  : {}),
+                ...(copyMode === 'ai'
+                  ? { batchCta: (batchCta.trim() || DEFAULT_BATCH_CTA).slice(0, 30) }
+                  : {}),
+              }
+            : {
+                templateVariations,
+                productService: effectiveProductService || brand.name,
+                offer: offerText,
+                aspectRatio,
+                onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
+                manualText: copyMode === 'manual' ? {
+                  headline: (manualHeadline.trim() || brand.name).slice(0, 200),
+                  subheadline: (
+                    manualSubheadline.trim() ||
+                    brand.description.trim().slice(0, 120) ||
+                    brand.name
+                  ).slice(0, 300),
+                  cta: (manualCta.trim() || 'Learn more').slice(0, 100),
+                } : undefined,
+                ...(repeatStyleDirection?.trim()
+                  ? { styleDirectionGlobal: repeatStyleDirection.trim() }
+                  : {}),
+                ...(copyMode === 'ai'
+                  ? { batchCta: (batchCta.trim() || DEFAULT_BATCH_CTA).slice(0, 30) }
+                  : {}),
+                brandLayoutMode,
+              },
+        ),
       });
 
       if (!res.ok) throw new Error('Failed to generate previews');
       const data = await res.json();
       setPromptPreviews(data.previews ?? []);
+      const b = typeof data.creativeBrief === 'string' ? data.creativeBrief.trim() : '';
+      setPreviewCreativeBrief(b.length > 0 ? b : null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to preview prompts');
     } finally {
@@ -476,8 +507,18 @@ export function AdWizard({
   // Generate
   // ---------------------------------------------------------------------------
 
-  const selectedTemplates = templates.filter((t) => selectedTemplateIds.has(t.id));
-  const activeTemplateSource = templateMode === 'kandy' ? ('kandy' as const) : ('custom' as const);
+  const selectedTemplates = useMemo(() => {
+    if (templateSource === 'nano') {
+      const out: ReturnType<typeof nanoCatalogItemToWizardTemplate>[] = [];
+      for (const slug of selectedTemplateIds) {
+        const item = nanoCatalog.find((n) => n.slug === slug);
+        if (item) out.push(nanoCatalogItemToWizardTemplate(item));
+      }
+      return out;
+    }
+    return templates.filter((t) => selectedTemplateIds.has(t.id));
+  }, [templateSource, selectedTemplateIds, templates, nanoCatalog]);
+
   const totalAds = selectedTemplates.reduce((sum, t) => sum + (variations.get(t.id) ?? 2), 0);
 
   async function handleGenerate(editedPreviews?: PromptPreviewData[] | null) {
@@ -509,12 +550,14 @@ export function AdWizard({
     try {
       const selectedProducts = Array.from(selectedProductIndices).map((i) => scrapedProducts[i]).filter(Boolean);
 
-      if (selectedProducts.length > AD_GENERATE_MAX_PRODUCTS) {
+      if (selectedProducts.length > AD_GENERATE_MAX_PRODUCTS && templateSource !== 'nano') {
         toast.message(
           `Including the first ${AD_GENERATE_MAX_PRODUCTS} of ${selectedProducts.length} selected products in this batch. Deselect extras or run generation again for the rest.`,
         );
       }
       const productsForBatch = selectedProducts.slice(0, AD_GENERATE_MAX_PRODUCTS);
+      const productsForRequest =
+        templateSource === 'nano' ? productsForBatch.slice(0, 1) : productsForBatch;
 
       function sanitizeProductImageUrl(u: string | null): string | null {
         if (!u?.trim()) return null;
@@ -527,7 +570,7 @@ export function AdWizard({
         }
       }
 
-      const productConfigs = productsForBatch.map((p) => ({
+      const productConfigs = productsForRequest.map((p) => ({
         product: {
           name: p.name.slice(0, 200),
           imageUrl: sanitizeProductImageUrl(p.imageUrl),
@@ -542,37 +585,77 @@ export function AdWizard({
         count: variations.get(t.id) ?? 2,
       }));
 
-      // Build placeholder config for gallery
-      const placeholderConfig = {
-        brandColors: brand.colors.slice(0, 4),
-        templateThumbnails: templateVariations.flatMap((tv) => {
-          const tmpl = templates.find((t) => t.id === tv.templateId);
-          return Array.from({ length: tv.count }, (_, i) => ({
-            templateId: tv.templateId,
-            imageUrl: tmpl?.image_url ?? '',
-            variationIndex: i,
-          }));
-        }),
-      };
+      const nanoGtv =
+        templateSource === 'nano'
+          ? buildNanoGlobalVariations(selectedTemplateIds, variations, nanoCatalog)
+          : null;
 
-      const body: Record<string, unknown> = {
-        templateVariations,
-        templateSource: activeTemplateSource,
-        productService:
-          effectiveProductService ||
-          brand.name ||
-          productsForBatch.map((p) => p.name).join(', ') ||
-          'Product',
-        offer: offerText,
-        onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
-        aspectRatio,
-        products: productConfigs,
-        brandUrl: brand.url,
-        placeholderConfig,
-      };
+      const placeholderConfig: AdBatchPlaceholderConfig =
+        templateSource === 'nano' && nanoGtv
+          ? {
+              brandColors: brand.colors.slice(0, 4),
+              skeletonOnly: true,
+              templateThumbnails: nanoGtv.flatMap((tv) =>
+                Array.from({ length: tv.count }, (_, i) => ({
+                  templateId: tv.slug,
+                  imageUrl: '',
+                  variationIndex: i,
+                })),
+              ),
+            }
+          : {
+              brandColors: brand.colors.slice(0, 4),
+              templateThumbnails: templateVariations.flatMap((tv) => {
+                const tmpl = templates.find((t) => t.id === tv.templateId);
+                return Array.from({ length: tv.count }, (_, i) => ({
+                  templateId: tv.templateId,
+                  imageUrl: tmpl?.image_url ?? '',
+                  variationIndex: i,
+                }));
+              }),
+            };
+
+      const nanoProductImageUrl = firstSelectedProductImageUrl(scrapedProducts, selectedProductIndices);
+
+      const body: Record<string, unknown> =
+        templateSource === 'nano' && nanoGtv
+          ? {
+              globalTemplateVariations: nanoGtv,
+              productService:
+                effectiveProductService ||
+                brand.name ||
+                productsForRequest.map((p) => p.name).join(', ') ||
+                'Product',
+              offer: offerText,
+              onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
+              aspectRatio,
+              products: productConfigs,
+              brandUrl: brand.url,
+              placeholderConfig,
+              ...(nanoProductImageUrl ? { productImageUrls: [nanoProductImageUrl] } : {}),
+            }
+          : {
+              templateVariations,
+              productService:
+                effectiveProductService ||
+                brand.name ||
+                productsForBatch.map((p) => p.name).join(', ') ||
+                'Product',
+              offer: offerText,
+              onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
+              aspectRatio,
+              products: productConfigs,
+              brandUrl: brand.url,
+              placeholderConfig,
+              brandLayoutMode,
+            };
 
       if (repeatStyleDirection?.trim()) {
         body.styleDirectionGlobal = repeatStyleDirection.trim();
+      }
+
+      if (copyMode === 'ai') {
+        body.batchCta = (batchCta.trim() || DEFAULT_BATCH_CTA).slice(0, 30);
       }
 
       if (copyMode === 'manual') {
@@ -585,6 +668,10 @@ export function AdWizard({
           subheadline: sub.slice(0, 300),
           cta: (manualCta.trim() || 'Learn more').slice(0, 100),
         };
+      }
+
+      if (previewCreativeBrief) {
+        body.creativeBrief = previewCreativeBrief;
       }
 
       if (editedPreviews?.length) {
@@ -617,6 +704,7 @@ export function AdWizard({
         onGenerationStart(batchId, placeholderConfig);
       }
       setPromptPreviews(null);
+      setPreviewCreativeBrief(null);
       setGenerating(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Generation failed');
@@ -641,6 +729,9 @@ export function AdWizard({
         if (scrapedProducts.length === 0) return true;
         return selectedProductIndices.size > 0;
       case 'templates':
+        if (templateSource === 'nano') {
+          return selectedTemplateIds.size > 0 && !loadingNanoCatalog;
+        }
         return selectedTemplateIds.size > 0 && !loadingTemplates;
       default:
         return true;
@@ -725,18 +816,25 @@ export function AdWizard({
           {currentStep.id === 'templates' && (
             <div className="space-y-6">
               <WizardSegmentedControl
-                value={templateMode}
-                onChange={(mode) => {
-                  setTemplateMode(mode);
+                value={templateSource}
+                onChange={(src) => {
+                  setTemplateSource(src);
                   setSelectedTemplateIds(new Set());
                   setVariations(new Map());
                 }}
                 options={[
-                  { value: 'kandy' as const, label: 'Nativz catalog', icon: LayoutGrid },
-                  { value: 'ad_library' as const, label: 'Ad library', icon: Library },
+                  { value: 'client' as const, label: 'Client library', icon: LayoutGrid },
+                  { value: 'nano' as const, label: 'Nano Banana', icon: Sparkles },
                 ]}
               />
-              {loadingTemplates ? (
+              {templateSource === 'nano' ? (
+                <NanoBananaTemplateGrid
+                  items={nanoCatalog}
+                  loading={loadingNanoCatalog}
+                  selectedIds={selectedTemplateIds}
+                  onToggle={toggleTemplate}
+                />
+              ) : loadingTemplates ? (
                 <div className="flex flex-col items-center justify-center gap-3 py-16 text-text-muted">
                   <Loader2 size={28} className="animate-spin opacity-80" />
                   <p className="text-sm">Loading templates…</p>
@@ -744,34 +842,64 @@ export function AdWizard({
               ) : (
                 <TemplateGrid
                   templates={templates}
-                  templateMode={templateMode}
                   selectedIds={selectedTemplateIds}
                   onToggle={toggleTemplate}
                   clientId={clientId}
                   onTemplatesRefresh={fetchTemplates}
-                  recommendedVertical={effectiveRecommendedVertical}
                 />
               )}
             </div>
           )}
 
           {currentStep.id === 'format' && (
-            <div className="flex flex-wrap gap-2">
-              {RATIO_OPTIONS.map(({ value, label, icon: Icon }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setAspectRatio(value)}
-                  className={`inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all cursor-pointer min-w-[120px] justify-center ${
-                    aspectRatio === value
-                      ? 'border-accent-border bg-accent-surface text-accent-text shadow-[0_0_0_1px_rgba(59,130,246,0.15)]'
-                      : 'border-nativz-border bg-background/60 text-text-muted hover:border-accent/25 hover:text-text-secondary'
-                  }`}
-                >
-                  <Icon size={16} className="opacity-90" />
-                  {label}
-                </button>
-              ))}
+            <div className="space-y-6">
+              <div>
+                <p className="text-sm font-medium text-text-primary mb-3">Aspect ratio</p>
+                <div className="flex flex-wrap gap-2">
+                  {RATIO_OPTIONS.map(({ value, label, icon: Icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setAspectRatio(value)}
+                      className={`inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all cursor-pointer min-w-[120px] justify-center ${
+                        aspectRatio === value
+                          ? 'border-accent-border bg-accent-surface text-accent-text shadow-[0_0_0_1px_rgba(59,130,246,0.15)]'
+                          : 'border-nativz-border bg-background/60 text-text-muted hover:border-accent/25 hover:text-text-secondary'
+                      }`}
+                    >
+                      <Icon size={16} className="opacity-90" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {templateSource !== 'nano' && (
+                <div className="space-y-2 pt-2 border-t border-nativz-border/80 max-w-xl">
+                  <label htmlFor="wizard-brand-layout" className="text-sm font-medium text-text-primary">
+                    Layout reference for image model
+                  </label>
+                  <select
+                    id="wizard-brand-layout"
+                    value={brandLayoutMode}
+                    onChange={(e) => setBrandLayoutMode(e.target.value as BrandLayoutMode)}
+                    className="w-full rounded-xl border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
+                  >
+                    <option value="reference_image">Template screenshot + JSON prompt (default)</option>
+                    <option value="schema_only">Schema only (no template PNG)</option>
+                    <option value="schema_plus_wireframe">Schema + zone wireframe</option>
+                  </select>
+                  <p className="text-[11px] text-text-muted leading-relaxed">
+                    Full ad (copy, hero, brand mark) is generated in one Gemini pass. Default uses the template PNG as a
+                    loose layout guide plus the assembled prompt. Use schema only if the reference keeps pulling wrong
+                    heroes.
+                  </p>
+                </div>
+              )}
+              {templateSource === 'nano' && (
+                <p className="text-[11px] text-text-muted leading-relaxed max-w-xl pt-2 border-t border-nativz-border/80">
+                  Nano Banana uses global style prompts only — no client template screenshot is sent to the model.
+                </p>
+              )}
             </div>
           )}
 
@@ -800,31 +928,44 @@ export function AdWizard({
               />
 
               {copyMode === 'ai' && (
-                <p className="text-sm text-text-muted rounded-xl border border-nativz-border bg-background/40 px-4 py-3 leading-relaxed">
-                  We&apos;ll write headlines, subheads, and CTAs from your brand voice. Each variation gets distinct copy.
-                </p>
+                <div className="rounded-xl border border-nativz-border bg-background/40 px-4 py-4">
+                  <BatchCtaField
+                    id="wizard-batch-cta"
+                    value={batchCta}
+                    onChange={setBatchCta}
+                  />
+                </div>
               )}
 
               {copyMode === 'manual' && (
-                <div className="space-y-3 rounded-xl border border-nativz-border bg-background/40 p-4">
-                  <input
-                    value={manualHeadline}
-                    onChange={(e) => setManualHeadline(e.target.value)}
-                    placeholder="Headline (e.g. Real gold. Real value.)"
-                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted/45 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
-                  />
-                  <input
-                    value={manualSubheadline}
-                    onChange={(e) => setManualSubheadline(e.target.value)}
-                    placeholder="Subheadline (optional)"
-                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted/45 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
-                  />
-                  <input
-                    value={manualCta}
-                    onChange={(e) => setManualCta(e.target.value)}
-                    placeholder="CTA (e.g. Shop now)"
-                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted/45 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
-                  />
+                <div className="space-y-5 rounded-xl border border-nativz-border bg-background/40 p-4">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-text-primary">Headline</p>
+                    <input
+                      value={manualHeadline}
+                      onChange={(e) => setManualHeadline(e.target.value)}
+                      placeholder="e.g. Show up when buyers ask AI for recommendations"
+                      className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted/45 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-text-primary">Subheadline</p>
+                    <input
+                      value={manualSubheadline}
+                      onChange={(e) => setManualSubheadline(e.target.value)}
+                      placeholder="e.g. Track citations and share of voice across answer engines"
+                      className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted/45 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
+                    />
+                  </div>
+                  <div className="space-y-2 pt-1 border-t border-nativz-border/80">
+                    <p className="text-sm font-medium text-text-primary">Call to action</p>
+                    <input
+                      value={manualCta}
+                      onChange={(e) => setManualCta(e.target.value)}
+                      placeholder="e.g. Try for free"
+                      className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted/45 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -844,11 +985,30 @@ export function AdWizard({
                   <span className="font-semibold tabular-nums">{totalAds}</span>
                   {' '}
                   {totalAds === 1 ? 'ad' : 'ads'} · {aspectLabel} ·{' '}
-                  {copyMode === 'ai' ? 'AI copy' : 'Manual copy'}
+                  {copyMode === 'ai'
+                    ? `AI copy · CTA: ${batchCta.trim() || DEFAULT_BATCH_CTA}`
+                    : 'Manual copy'}
+                  {' · '}
+                  {templateSource === 'nano'
+                    ? 'Nano Banana (global style)'
+                    : brandLayoutMode === 'schema_only'
+                      ? 'Schema only'
+                      : brandLayoutMode === 'schema_plus_wireframe'
+                        ? 'Schema + wireframe'
+                        : 'Template + JSON prompt'}
                 </p>
                 <p className="text-xs text-text-muted leading-relaxed">
-                  Adjust per-template variation counts below. Use interactive mode if you want to edit prompts before
-                  images run.
+                  {templateSource === 'nano' && scrapedProducts.length > 0 ? (
+                    <>
+                      The first selected product with a valid image URL is used as the primary packshot reference. Adjust
+                      selection order on the products step if needed.
+                    </>
+                  ) : (
+                    <>
+                      Adjust per-template variation counts below. Use interactive mode if you want to edit prompts before
+                      images run.
+                    </>
+                  )}
                 </p>
               </div>
 
@@ -871,7 +1031,10 @@ export function AdWizard({
                   value={mode}
                   onChange={(m) => {
                     setMode(m);
-                    if (m === 'auto') setPromptPreviews(null);
+                    if (m === 'auto') {
+                      setPromptPreviews(null);
+                      setPreviewCreativeBrief(null);
+                    }
                   }}
                   options={[
                     { value: 'auto' as const, label: 'Auto', icon: Zap },
@@ -886,7 +1049,10 @@ export function AdWizard({
                   onApproveAll={(edited) => {
                     void handleGenerate(edited);
                   }}
-                  onCancel={() => setPromptPreviews(null)}
+                  onCancel={() => {
+                    setPromptPreviews(null);
+                    setPreviewCreativeBrief(null);
+                  }}
                   generating={generating}
                 />
               )}

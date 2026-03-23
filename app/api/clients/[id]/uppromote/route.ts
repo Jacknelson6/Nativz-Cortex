@@ -102,7 +102,11 @@ export async function DELETE(
 
     const { error: updateError } = await admin
       .from('clients')
-      .update({ uppromote_api_key: null })
+      .update({
+        uppromote_api_key: null,
+        affiliate_digest_email_enabled: false,
+        affiliate_digest_recipients: null,
+      })
       .eq('id', clientId);
 
     if (updateError) {

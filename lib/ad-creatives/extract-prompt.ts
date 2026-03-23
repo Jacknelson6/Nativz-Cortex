@@ -53,7 +53,9 @@ Important rules:
 - Describe visual patterns generically — do NOT reference specific brand names, products, or copy from the original ad
 - Focus on the STRUCTURAL and STYLISTIC decisions that can be replicated with different content
 - Be precise about spatial relationships and proportions
-- For contentBlocks, list every distinct text/visual block you can identify`;
+- For contentBlocks, list every distinct text/visual block you can identify
+- Never use design-token shorthand that could be mistaken for ad copy (e.g. avoid the exact phrases "accent-colored", "primary-colored", "Accent-colored" as standalone descriptions — say "small rounded tag using the accent color" instead)
+- Typography fields describe type treatment only — they must never read like UI labels that could be painted on a new ad`;
 
 const adPromptSchemaValidator = z.object({
   layout: z.object({

@@ -266,7 +266,10 @@ export function PlatformSources({ sources }: PlatformSourcesProps) {
         <div className="mb-4">
           {activeTab === 'all' && (
             <div className="flex items-center gap-2 mb-3">
-              {(() => { const I = PLATFORM_CONFIG.tiktok.icon; return <I size={14} className="text-teal-400" />; })()}
+              {(() => {
+                const I = PLATFORM_CONFIG.tiktok.icon;
+                return <I size={14} />;
+              })()}
               <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wide">TikTok ({tiktokSources.length})</h4>
             </div>
           )}

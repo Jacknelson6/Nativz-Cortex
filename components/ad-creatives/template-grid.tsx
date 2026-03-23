@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { Upload, Check, Loader2, Square, Smartphone, RectangleVertical, Sparkles, Library, ChevronDown } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { Upload, Check, Loader2, Square, Smartphone, RectangleVertical, Library, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import type { AdCategory, AspectRatio, AdVertical } from '@/lib/ad-creatives/types';
@@ -23,14 +23,11 @@ const AD_CATEGORY_LABELS: Record<AdCategory, string> = {
 
 interface TemplateGridProps {
   templates: WizardTemplate[];
-  /** Catalog vs scraped / uploaded client templates */
-  templateMode: 'kandy' | 'ad_library';
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
   clientId: string;
-  /** Refetch Kandy + client templates after bulk upload or ad library scrape */
+  /** Refetch client templates after bulk upload or ad library scrape */
   onTemplatesRefresh?: () => void;
-  recommendedVertical?: string | null;
 }
 
 const RATIO_SECTIONS: { ratio: AspectRatio; label: string; icon: typeof Square }[] = [
@@ -54,48 +51,24 @@ const VERTICAL_LABELS: Record<string, string> = {
 
 export function TemplateGrid({
   templates,
-  templateMode,
   selectedIds,
   onToggle,
   clientId,
   onTemplatesRefresh,
-  recommendedVertical,
 }: TemplateGridProps) {
-  const visible = useMemo(() => {
-    if (templateMode === 'ad_library') return templates.filter((t) => t.templateOrigin === 'custom');
-    return templates;
-  }, [templates, templateMode]);
+  const visible = templates;
 
   const [activeRatioFilter, setActiveRatioFilter] = useState<AspectRatio | 'all'>('all');
   const [verticalFilter, setVerticalFilter] = useState<AdVertical | 'all'>('all');
   const [brandFilter, setBrandFilter] = useState<string | 'all'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [importingUrl, setImportingUrl] = useState(false);
-  const [importUrl, setImportUrl] = useState('');
   const [libraryUrl, setLibraryUrl] = useState('');
   const [libraryCategory, setLibraryCategory] = useState<AdCategory>('promotional');
   const [scrapingLibrary, setScrapingLibrary] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Auto-set vertical filter when recommendation is detected
-  useEffect(() => {
-    if (recommendedVertical && recommendedVertical !== 'general') {
-      setVerticalFilter(recommendedVertical as AdVertical);
-    }
-  }, [recommendedVertical]);
-
   const grouped = groupByRatio(visible);
-
-  const customTemplates = visible.filter(
-    (t) =>
-      t.templateOrigin === 'custom' ||
-      t.collection_name === 'Custom' ||
-      t.collection_name === 'Uploaded' ||
-      t.collection_name === 'Imported' ||
-      t.collection_name === 'Ad library',
-  );
 
   const uniqueBrands = [...new Set(visible.map((t) => t.source_brand).filter(Boolean))] as string[];
 
@@ -170,39 +143,12 @@ export function TemplateGrid({
     }
   }
 
-  async function handleImportUrl() {
-    if (!importUrl.trim()) return;
-    setImportingUrl(true);
-    try {
-      const res = await fetch('/api/ad-creatives/templates/import-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: importUrl.trim() }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? 'Import failed');
-      }
-      const data = await res.json();
-      if (data.template) {
-        toast.success(`Imported from ${data.template.source_brand ?? 'URL'}`);
-        onTemplatesRefresh?.();
-        setImportUrl('');
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Import failed');
-    } finally {
-      setImportingUrl(false);
-    }
-  }
-
   // Unique verticals for filter dropdown
   const uniqueVerticals = [...new Set(visible.map((t) => t.vertical).filter(Boolean))] as AdVertical[];
 
   return (
     <div className="space-y-4">
-      {templateMode === 'ad_library' && (
-        <div className="rounded-xl border border-accent/20 bg-accent/5 p-4 space-y-3">
+      <div className="rounded-xl border border-accent/20 bg-accent/5 p-4 space-y-3">
           <div className="flex items-start gap-2">
             <Library size={18} className="text-accent-text shrink-0 mt-0.5" />
             <div className="space-y-1 min-w-0">
@@ -245,26 +191,6 @@ export function TemplateGrid({
             </Button>
           </div>
         </div>
-      )}
-
-      {/* Recommendation banner — filter is auto-applied via useEffect; clarify it’s the vertical axis */}
-      {templateMode === 'kandy' && recommendedVertical && recommendedVertical !== 'general' && (
-        <div className="rounded-xl border border-accent/25 bg-gradient-to-r from-accent/10 via-accent/5 to-transparent px-4 py-3 flex items-start gap-3">
-          <Sparkles size={16} className="text-accent-text shrink-0 mt-0.5" />
-          <p className="text-xs text-text-secondary leading-relaxed">
-            <span className="font-medium text-accent-text">Suggested industry:</span>{' '}
-            {VERTICAL_LABELS[recommendedVertical] ?? recommendedVertical}. Templates below are filtered to match
-            brands in this industry (only industries with catalog templates are suggested).{' '}
-            <button
-              type="button"
-              onClick={() => setVerticalFilter('all')}
-              className="text-accent-text hover:underline cursor-pointer font-medium"
-            >
-              Show all industries
-            </button>
-          </p>
-        </div>
-      )}
 
       {/* Filter bar */}
       <div className="flex items-center gap-2 flex-wrap rounded-xl border border-nativz-border/80 bg-background/40 p-2">
@@ -362,23 +288,11 @@ export function TemplateGrid({
         </div>
       </div>
 
-      {templateMode === 'ad_library' && visible.length === 0 && (
+      {visible.length === 0 && (
         <p className="text-sm text-text-muted text-center py-10 rounded-xl border border-dashed border-nativz-border px-4">
           No templates yet for this client. Scrape a Meta Ad Library URL above, or upload reference ad images with{' '}
           <span className="text-text-secondary">Upload</span>.
         </p>
-      )}
-
-      {/* Custom uploads (shown alongside Kandy catalog) */}
-      {templateMode === 'kandy' && customTemplates.length > 0 && (
-        <div>
-          <h4 className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">Your uploads</h4>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-            {customTemplates.map((t) => (
-              <TemplateCard key={t.id} template={t} selected={selectedIds.has(t.id)} onToggle={onToggle} />
-            ))}
-          </div>
-        </div>
       )}
 
       {/* Ratio sections */}
@@ -393,26 +307,6 @@ export function TemplateGrid({
         // Apply brand filter
         if (brandFilter !== 'all') {
           sectionTemplates = sectionTemplates.filter((t) => t.source_brand === brandFilter);
-        }
-
-        // Apply search
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
-          sectionTemplates = sectionTemplates.filter((t) =>
-            (t.collection_name ?? '').toLowerCase().includes(q) ||
-            (t.source_brand ?? '').toLowerCase().includes(q),
-          );
-        }
-
-        if (templateMode === 'kandy') {
-          sectionTemplates = sectionTemplates.filter(
-            (t) =>
-              t.templateOrigin !== 'custom' &&
-              t.collection_name !== 'Custom' &&
-              t.collection_name !== 'Uploaded' &&
-              t.collection_name !== 'Imported' &&
-              t.collection_name !== 'Ad library',
-          );
         }
 
         if (sectionTemplates.length === 0) return null;
@@ -443,25 +337,6 @@ export function TemplateGrid({
           </div>
         );
       })}
-
-      {templateMode === 'kandy' && (
-        <div className="rounded-xl border border-nativz-border bg-surface/50 p-4 space-y-2">
-          <p className="text-xs text-text-muted">Import a single reference into the Nativz catalog from Instagram, Facebook, or any page with an Open Graph image:</p>
-          <div className="flex gap-2">
-            <input
-              value={importUrl}
-              onChange={(e) => setImportUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleImportUrl()}
-              placeholder="https://instagram.com/p/... or any image URL"
-              className="flex-1 rounded-lg border border-nativz-border bg-background px-3 py-2 text-xs text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30"
-              disabled={importingUrl}
-            />
-            <Button size="sm" onClick={handleImportUrl} disabled={importingUrl || !importUrl.trim()}>
-              {importingUrl ? <Loader2 size={14} className="animate-spin" /> : 'Import'}
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* Drop zone overlay for drag-drop */}
       <div

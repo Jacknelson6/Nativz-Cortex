@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logActivity } from '@/lib/activity';
+import { viewerMayUseRestApi } from '@/lib/portal/viewer-api-access';
 
 /**
  * DELETE /api/api-keys/[id]
@@ -24,6 +25,14 @@ export async function DELETE(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const allowed = await viewerMayUseRestApi(user.id);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'API access is disabled for your organization. Contact your Nativz team.' },
+        { status: 403 },
+      );
     }
 
     const admin = createAdminClient();

@@ -5,6 +5,8 @@ import { Loader2, RefreshCw } from 'lucide-react';
 interface GalleryPlaceholderProps {
   brandColors: string[];
   templateThumbnailUrl?: string;
+  /** When true, omit template thumbnail under the skeleton (Nano Banana gallery). */
+  skeletonOnly?: boolean;
   status: 'generating' | 'completed' | 'failed';
   imageUrl?: string;
   onRetry?: () => void;
@@ -13,6 +15,7 @@ interface GalleryPlaceholderProps {
 export function GalleryPlaceholder({
   brandColors,
   templateThumbnailUrl,
+  skeletonOnly = false,
   status,
   imageUrl,
   onRetry,
@@ -69,7 +72,7 @@ export function GalleryPlaceholder({
         }}
       >
         {/* Template thumbnail hint */}
-        {templateThumbnailUrl && (
+        {!skeletonOnly && templateThumbnailUrl && (
           <img
             src={templateThumbnailUrl}
             alt=""

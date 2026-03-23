@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DateRangePicker } from '@/components/reporting/date-range-picker';
 import { useAffiliatesData } from './hooks/use-affiliates-data';
 import { AffiliateReportBuilder } from './affiliate-report-builder';
+import { AffiliateWeeklyDigestSettings } from '@/components/clients/affiliate-weekly-digest-settings';
 import type { AffiliateKpis, SnapshotPoint, TopAffiliate, PendingPayout } from './hooks/use-affiliates-data';
 
 function formatCurrency(value: number) {
@@ -59,6 +60,7 @@ export function AffiliatesDashboard() {
     dataLoading,
     syncing,
     syncNow,
+    refreshClients,
   } = useAffiliatesData();
 
   const [reportOpen, setReportOpen] = useState(false);
@@ -125,6 +127,18 @@ export function AffiliatesDashboard() {
           </Button>
         )}
       </div>
+
+      {selectedClientId ? (
+        <AffiliateWeeklyDigestSettings
+          clientId={selectedClientId}
+          upPromoteConnected={selectedClient?.hasUppromote ?? false}
+          affiliateDigestEnabled={selectedClient?.affiliate_digest_email_enabled}
+          affiliateDigestRecipients={selectedClient?.affiliate_digest_recipients}
+          onSaved={() => {
+            void refreshClients();
+          }}
+        />
+      ) : null}
 
       {!selectedClientId ? (
         <p className="text-center text-text-muted py-16">

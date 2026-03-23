@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { IdeaTriageList } from '@/components/ideas/idea-triage-list';
 import { PageError } from '@/components/shared/page-error';
 import type { IdeaSubmission } from '@/lib/types/database';
+import { requireAdminWorkspaceModuleAccess } from '@/lib/clients/require-admin-workspace-module-access';
 
 export default async function AdminClientIdeasPage({
   params,
@@ -10,6 +11,7 @@ export default async function AdminClientIdeasPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  await requireAdminWorkspaceModuleAccess(slug, 'ideas');
 
   try {
     const adminClient = createAdminClient();

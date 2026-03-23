@@ -42,7 +42,7 @@ Client records with feature flags and preferences.
 | `topic_keywords` | text[] | Topic keyword array |
 | `website_url` | text | Client website |
 | `organization_id` | uuid | Links to org for portal access |
-| `feature_flags` | jsonb | `{ can_search, can_view_reports, can_edit_preferences, can_submit_ideas }` |
+| `feature_flags` | jsonb | Portal capabilities; merged with defaults on read. Keys include `can_search`, `can_view_reports`, `can_edit_preferences`, `can_submit_ideas`, `can_view_notifications`, `can_view_calendar`, `can_view_analyze`, `can_view_knowledge`, `can_use_nerd`, `can_use_api` (REST API keys; default true) |
 | `preferences` | jsonb | Brand preferences (content types, posting frequency, etc.) |
 | `health_score` | text | Rating: `'not_good'`, `'fair'`, `'good'`, `'great'`, `'excellent'` |
 | `agency` | text | Which Nativz agency (e.g. Nativz, AC) |
@@ -52,6 +52,10 @@ Client records with feature flags and preferences.
 | `google_drive_calendars_url` | text | Link to content calendars on Google Drive |
 | `is_active` | bool | Soft delete flag |
 | `hide_from_roster` | bool | When true, client is omitted from admin/portal pickers (used for ad creatives URL-only Brand DNA persistence) |
+| `uppromote_api_key` | text | UpPromote API key (admin-only; not exposed on client JSON) |
+| `affiliate_digest_email_enabled` | bool | Weekly affiliate performance email (Wed UTC); requires UpPromote + recipients |
+| `affiliate_digest_recipients` | text | Comma-separated emails for that digest |
+| `admin_workspace_modules` | jsonb | Per-client **access** to admin workspace areas (`brand-dna`, `moodboard`, `knowledge`, `ideas`, `idea-generator`, `ad-creatives`). `false` = no access (nav hidden, page URLs 404). Missing keys default to allowed. Overview and Settings always allowed. |
 
 ### `users`
 App users with role-based access.
@@ -205,7 +209,7 @@ Video idea submissions with status tracking.
 | Service | Env Vars |
 |---------|----------|
 | Supabase | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
-| OpenRouter | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (default: `anthropic/claude-sonnet-4-5`) |
+| OpenRouter | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (optional; app default: `nvidia/nemotron-3-super-120b-a12b:free` when DB `agency_settings.ai_model` is empty) |
 | Brave Search | `BRAVE_SEARCH_API_KEY` |
 | Vercel | `NEXT_PUBLIC_APP_URL` |
 | Vault (GitHub) | `VAULT_GITHUB_TOKEN`, `VAULT_GITHUB_OWNER`, `VAULT_GITHUB_REPO` |

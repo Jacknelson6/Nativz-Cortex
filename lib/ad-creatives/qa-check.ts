@@ -9,6 +9,13 @@
 
 import sharp from 'sharp';
 import type { OnScreenText } from './types';
+import { resolveOfferForAdImage } from './resolve-offer-for-ad';
+import {
+  extractLikelyUrlsFromStrings,
+  intendedCopyAllowsUrlOnImage,
+  surfaceUrlAllowedByCopy,
+  surfaceUrlConflictsWithCanonical,
+} from './ad-surface-url-scan';
 
 const GOOGLE_AI_ENDPOINT =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
@@ -43,6 +50,8 @@ interface QACheckParams {
   offer: string | null;
   brandName: string;
   productService: string;
+  /** Official site from Brand DNA — used to flag wrong domains (e.g. .ai vs .com). */
+  canonicalClientWebsiteUrl?: string | null;
   expectedWidth?: number;
   expectedHeight?: number;
 }
@@ -59,9 +68,13 @@ export async function qaCheckAd(params: QACheckParams): Promise<QAResult> {
     offer,
     brandName,
     productService,
+    canonicalClientWebsiteUrl,
     expectedWidth,
     expectedHeight,
   } = params;
+
+  const offerForImage = resolveOfferForAdImage(offer, intendedText);
+  const intendedAllowsUrl = intendedCopyAllowsUrlOnImage(intendedText, offerForImage);
 
   const issues: QAIssue[] = [];
 
@@ -108,7 +121,14 @@ export async function qaCheckAd(params: QACheckParams): Promise<QAResult> {
 
   const base64 = imageBuffer.toString('base64');
 
-  const prompt = buildQAPrompt({ intendedText, offer, brandName, productService });
+  const prompt = buildQAPrompt({
+    intendedText,
+    offer: offerForImage,
+    brandName,
+    productService,
+    canonicalClientWebsiteUrl: canonicalClientWebsiteUrl ?? null,
+    intendedAllowsUrl,
+  });
 
   try {
     const res = await fetch(`${GOOGLE_AI_ENDPOINT}?key=${apiKey}`, {
@@ -220,15 +240,15 @@ export async function qaCheckAd(params: QACheckParams): Promise<QAResult> {
       }
     }
 
-    // ----- Offer accuracy check -----
-    if (offer && qaData.offerFound) {
-      const similarity = textSimilarity(offer, qaData.offerFound);
+    // ----- Offer accuracy check (only when offer should appear on image) -----
+    if (offerForImage && qaData.offerFound) {
+      const similarity = textSimilarity(offerForImage, qaData.offerFound);
       if (similarity < 0.8) {
         issues.push({
           type: 'misspelling',
           severity: 'error',
-          description: `Offer text doesn't match — "${qaData.offerFound}" should be "${offer}"`,
-          expected: offer,
+          description: `Offer text doesn't match — "${qaData.offerFound}" should be "${offerForImage}"`,
+          expected: offerForImage,
           found: qaData.offerFound,
         });
       }
@@ -278,6 +298,47 @@ export async function qaCheckAd(params: QACheckParams): Promise<QAResult> {
       }
     }
 
+    // ----- URLs / domains (programmatic on OCR strings — catches wrong TLDs) -----
+    const extractedList = (qaData.extractedTexts ?? []) as string[];
+    const urlCandidates = extractLikelyUrlsFromStrings([
+      ...extractedList,
+      extractedList.join(' '),
+    ]);
+    const canon = canonicalClientWebsiteUrl?.trim() || null;
+    const seenUrl = new Set<string>();
+    for (const u of urlCandidates) {
+      const key = u.toLowerCase();
+      if (seenUrl.has(key)) continue;
+      seenUrl.add(key);
+
+      if (!intendedAllowsUrl) {
+        issues.push({
+          type: 'fabricated_info',
+          severity: 'error',
+          description: `URL or domain must not appear on this static ad (not in approved copy): ${u}`,
+          found: u,
+        });
+        continue;
+      }
+
+      if (!surfaceUrlAllowedByCopy(u, intendedText, offerForImage)) {
+        issues.push({
+          type: 'fabricated_info',
+          severity: 'error',
+          description: `URL or domain is not in approved copy: ${u}`,
+          found: u,
+        });
+      } else if (canon && surfaceUrlConflictsWithCanonical(u, canon)) {
+        issues.push({
+          type: 'fabricated_info',
+          severity: 'error',
+          description: `Wrong website on ad — "${u}" does not match official ${canon}`,
+          found: u,
+          expected: canon,
+        });
+      }
+    }
+
     const score = qaData.overallScore ?? 50;
     const hasErrors = issues.some((i) => i.severity === 'error');
     const passed = !hasErrors && score >= 60;
@@ -303,8 +364,17 @@ function buildQAPrompt(params: {
   offer: string | null;
   brandName: string;
   productService: string;
+  canonicalClientWebsiteUrl: string | null;
+  intendedAllowsUrl: boolean;
 }): string {
-  const { intendedText, offer, brandName, productService } = params;
+  const {
+    intendedText,
+    offer,
+    brandName,
+    productService,
+    canonicalClientWebsiteUrl,
+    intendedAllowsUrl,
+  } = params;
 
   return `You are a QA reviewer for advertising creatives. Analyze this ad image thoroughly.
 
@@ -336,12 +406,14 @@ The intended text for this ad was:
 ${offer ? `- Offer: "${offer}"` : '- No offer text'}
 - Brand: "${brandName}"
 - Product/service being advertised: "${productService}"
+- Official brand website (for judging wrong domains only — this URL is usually NOT on the image): "${canonicalClientWebsiteUrl ?? 'not provided'}"
+- Intended copy ${intendedAllowsUrl ? 'may include an explicit URL (http/https or www.)' : 'does NOT include any URL — no domain or www. footer should appear'}
 
 Check for ALL of the following:
 
 1. **WRONG BRAND/PRODUCT** — text mentioning brands or products that are NOT "${brandName}" (e.g., reference template text leaked through). This is the #1 critical failure — score 0.
 
-2. **DUPLICATE LOGOS** — Check if "${brandName}" logo or wordmark appears more than once (common when one is composited and another is AI-rendered). Set duplicateLogos=true if found.
+2. **DUPLICATE LOGOS** — Set duplicateLogos=true if a stylized logo mark or wordmark appears TWO OR MORE times as separate graphic treatments (e.g. drawn logo in the hero plus a corner logo, favicon strip + wordmark + corner mark, or two different logo styles). Plain-text "${brandName}" inside the intended headline/subheadline/CTA/offer strings only does NOT count as an extra logo. If there is exactly ONE small logo graphic in the bottom-right and no other logo marks or app icons elsewhere, duplicateLogos=false (headline words may still name the brand).
 
 3. **MISSPELLINGS** — (e.g., "Handcanfted" instead of "Handcrafted"). Check headline, subheadline, CTA, and all other text.
 
@@ -351,9 +423,9 @@ Check for ALL of the following:
 
 6. **WRONG PRODUCT IMAGERY** — The product/imagery shown should relate to "${productService}". If the ad is for "${productService}" but shows something completely unrelated, set wrongProduct=true.
 
-7. **OFFER ACCURACY** — If an offer was intended ("${offer ?? 'none'}"), verify it renders correctly. "15% off" shouldn't become "50% off" or "15% on". Even small number changes are critical errors.
+7. **OFFER ACCURACY** — ${offer ? `An offer line was intended ("${offer}"). It must appear once (plain text) and match — no extra parentheses or quotes around it.` : 'No separate offer line was required (it was folded into the subheadline). Do not flag a missing offer.'}
 
-8. **FABRICATED CONTACT INFO** — Flag ANY phone numbers, email addresses, physical addresses, or URLs visible on the image. AI commonly fabricates these. List each one in fabricatedContactInfo array.
+8. **FABRICATED CONTACT INFO** — Flag ANY phone numbers, email addresses, physical addresses, or URLs visible on the image. AI commonly fabricates these. List each one in fabricatedContactInfo array. ${intendedAllowsUrl ? 'If a URL is allowed, it must match intended copy exactly; otherwise flag wrong or extra domains.' : 'For this ad format, ANY visible URL or domain (including www.brand.ai when official is .com) is a critical error — list in fabricatedContactInfo.'}
 
 9. **INAPPROPRIATE CONTENT** — Content that doesn't match the brand's industry/tone for "${productService}".
 
@@ -362,9 +434,27 @@ Check for ALL of the following:
     - Text with unreadable contrast against background
     - Text cut off at edges of the image
     - Key elements obscured or poorly placed
-    List any problems in compositionIssues array.
+    - Oversized empty cards, browser chrome, or panels framing unusually small headline/subhead copy (bad “big box, tiny text” layout) — list in compositionIssues
+    - The same sentence repeated multiple times as duplicate UI labels — compositionIssues
+    - Fake or placeholder UI (e.g. buttons labeled "Optional", hex codes as fake KPIs, unreadable multi-window dashboards) that hurts ad quality — list in compositionIssues or issues as appropriate.
 
-Be VERY strict about #1 (wrong brand) and #7 (offer accuracy). These are critical failures.`;
+11. **FAKE PRODUCT CHROME** — If the hero shows detailed app UI, LLM vendor tiles, SOAP/medical charting, EHR “transcript” panels, or workflow diagrams that do not match "${productService}", set wrongProduct=true or add a composition issue.
+
+12. **DUPLICATE CTA / REPEATED TAGLINE** — If the CTA phrase appears on more than one button, or inside a fake floating card as well as the real CTA, add an issue. If the subheadline theme is repeated as a second banner (e.g. same idea in two zones), add composition_issue.
+
+13. **BOTTOM-RIGHT TYPOGRAPHY** — If the brand name appears as plain text in the bottom-right logo corner *in addition to* a logo lockup (stacked duplicate), set duplicateLogos=true.
+
+14. **DECORATIVE PUNCTUATION** — Headline should not have trailing periods or odd colored punctuation unless present in the intended headline string above.
+
+15. **WRONG DOMAIN** — If you see any domain on the image and the official site is "${canonicalClientWebsiteUrl ?? 'unknown'}", flag a mismatch (e.g. .ai vs .com) as fabricated_info.
+
+16. **CTA FORMAT** — The CTA must read as a real button or pill. If it appears only as a hashtag (e.g. #Tryforfree) or plain link text with no button shape, add compositionIssues.
+
+17. **TEMPLATE / DESIGN LEAKS** — Visible labels like "Accent-colored", "Primary-colored", or bare placeholder tags are failures — add compositionIssues or issues.
+
+18. **SUBHEAD GARBLE** — If the subheadline is duplicated, stuttered, or clearly broken mid-sentence, add compositionIssues or misspelling.
+
+Be VERY strict about #1 (wrong brand). ${offer ? 'Be strict about #7 (offer accuracy).' : ''}`;
 }
 
 // ---------------------------------------------------------------------------

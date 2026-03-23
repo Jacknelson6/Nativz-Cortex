@@ -7,15 +7,21 @@ import { getBrandContext } from '@/lib/knowledge/brand-context';
 import { assembleImagePrompt } from './assemble-prompt';
 import { generateAdImage } from './generate-image';
 import { generateAdCopy } from './generate-copy';
-import { compositeAd } from './composite-ad';
-import { qaCheckAd } from './qa-check';
+import { generateCreativeBrief } from './generate-creative-brief';
+import { buildLayoutWireframePng } from './layout-wireframe';
+import { qaCheckAd, type QAIssue } from './qa-check';
+import { buildQaRetryStyleSuffix } from './qa-retry-hint';
+import { getClientAdGenerationSettings } from './client-ad-generation-settings';
+import { buildNanoBananaImagePrompt } from './nano-banana/build-nano-prompt';
+import { fillNanoBananaTemplate } from './nano-banana/fill-template';
+import { assertValidNanoBananaSlugs, getNanoBananaBySlug } from './nano-banana/catalog';
 import { ASPECT_RATIOS } from './types';
 import type {
   AdGenerationBatch,
   AdGenerationConfig,
+  AdPromptSchema,
   AdPromptTemplate,
   CreativeOverride,
-  KandyTemplate,
   OnScreenText,
 } from './types';
 
@@ -46,6 +52,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
 
   const typedBatch = batch as AdGenerationBatch;
   const config = typedBatch.config as AdGenerationConfig;
+  const isGlobalNano = (config.globalTemplateVariations?.length ?? 0) > 0;
 
   console.log(`[orchestrate-batch] starting batch ${batchId} for client ${typedBatch.client_id}`);
 
@@ -59,8 +66,12 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
     // 2. Resolve brand context
     const brandContext = await getBrandContext(typedBatch.client_id);
 
-    // 3. Resolve templates
-    const templates = await resolveTemplates(config);
+    // 3. Client modifier (Nano path — concatenated first in text prompt)
+    const adGenSettings = await getClientAdGenerationSettings(typedBatch.client_id);
+
+    // 4. Resolve templates (client UUID rows vs global Nano Banana catalog)
+    const clientTemplates = isGlobalNano ? [] : await resolveTemplates(config, typedBatch.client_id);
+    const globalEntries = isGlobalNano ? resolveGlobalNanoEntries(config) : [];
 
     // 4. Generate copy if needed (skipped when full creativeOverrides from prompt review)
     const maxVariations = config.templateVariations
@@ -83,6 +94,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
           productService: config.productService,
           offer: config.offer || null,
           count: maxVariations,
+          fixedCta: config.batchCta?.trim() ? config.batchCta.trim() : null,
         });
       } else {
         const staticText = config.onScreenText as OnScreenText;
@@ -93,10 +105,13 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
     }
 
     // 5. Build work items (template x variation)
-    const workItems = buildWorkItems(templates, copyVariations, config, overrideMap);
+    const workItems = isGlobalNano
+      ? buildGlobalWorkItems(globalEntries, copyVariations, config, overrideMap)
+      : buildClientWorkItems(clientTemplates, copyVariations, config, overrideMap);
 
     console.log(
-      `[orchestrate-batch] batch ${batchId}: ${workItems.length} work items across ${templates.length} template(s)`,
+      `[orchestrate-batch] batch ${batchId}: ${workItems.length} work items ` +
+        (isGlobalNano ? `(Nano global × ${globalEntries.length} styles)` : `across ${clientTemplates.length} template(s)`),
     );
 
     // Update total count based on actual work items
@@ -105,20 +120,38 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
       .update({ total_count: workItems.length })
       .eq('id', batchId);
 
-    // 6. Resolve dimensions, product images, and logo for compositing
+    // 6. Dimensions + product refs for multimodal (no post-render compositing)
     const dimensions = ASPECT_RATIOS.find((r) => r.value === config.aspectRatio) ?? ASPECT_RATIOS[0];
     const fullCtx = brandContext.toFullContext();
     const vi = fullCtx.visualIdentity;
 
-    // Collect real product images from Brand DNA
     const productImageUrls: string[] = [];
-    if (vi.screenshots.length > 0) {
+    if (config.productImageUrls && config.productImageUrls.length > 0) {
+      productImageUrls.push(...config.productImageUrls.slice(0, 3));
+    } else if (vi.screenshots.length > 0) {
       productImageUrls.push(...vi.screenshots.slice(0, 2).map((s) => s.url));
     }
 
-    // Resolve primary logo URL (composited in post-processing for pixel-perfect branding)
-    const primaryLogo = vi.logos.find((l) => l.variant === 'primary') ?? vi.logos[0] ?? null;
-    const logoUrl = primaryLogo?.url ?? null;
+    const layoutMode = isGlobalNano ? 'schema_only' : (config.brandLayoutMode ?? 'reference_image');
+
+    let creativeBriefParagraph = config.creativeBrief?.trim() ?? '';
+    if (!creativeBriefParagraph) {
+      creativeBriefParagraph = (
+        await generateCreativeBrief({
+          brandContext,
+          productService: config.productService,
+          offer: config.offer || null,
+        })
+      ).trim();
+      if (creativeBriefParagraph) {
+        const nextConfig: AdGenerationConfig = { ...config, creativeBrief: creativeBriefParagraph };
+        await admin
+          .from('ad_generation_batches')
+          .update({ config: nextConfig as unknown as Record<string, unknown> })
+          .eq('id', batchId);
+        Object.assign(config, nextConfig);
+      }
+    }
 
     // 7. Process with concurrency control
     let completedCount = 0;
@@ -133,41 +166,64 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
           let imageBuffer: Buffer | null = null;
           let lastPrompt = '';
           let qaResult = { passed: true, issues: [] as { type: string; description: string }[], extractedText: [] as string[], confidence: 0 };
+          let qaRetryStyleSuffix = '';
 
           for (let attempt = 0; attempt <= MAX_QA_RETRIES; attempt++) {
-            const prompt = assembleImagePrompt({
-              brandContext,
-              promptSchema: item.promptSchema,
-              productService: config.productService,
-              offer: config.offer || null,
-              onScreenText: item.onScreenText,
-              aspectRatio: config.aspectRatio,
-              styleDirection: item.styleDirection,
-            });
+            const styleDirection = [item.styleDirection, qaRetryStyleSuffix].filter(Boolean).join('\n\n');
+            const brandRefs = isGlobalNano ? [] : (fullCtx.creativeReferenceImageUrls ?? []);
+            const refUrl =
+              item.mode === 'client' && layoutMode === 'reference_image'
+                ? item.referenceImageUrl ?? undefined
+                : undefined;
+
+            let layoutWireframePng: Buffer | undefined;
+            if (item.mode === 'client' && layoutMode === 'schema_plus_wireframe') {
+              layoutWireframePng = await buildLayoutWireframePng(
+                dimensions.width,
+                dimensions.height,
+                item.promptSchema,
+              );
+            }
+
+            let prompt: string;
+            if (item.mode === 'global') {
+              const filled = fillNanoBananaTemplate(item.nanoPromptTemplate, {
+                onScreenText: item.onScreenText,
+                productService: config.productService,
+                offer: config.offer ?? '',
+              });
+              prompt = buildNanoBananaImagePrompt({
+                imagePromptModifier: adGenSettings.image_prompt_modifier,
+                brandContext,
+                filledTemplateBody: filled,
+                aspectRatio: config.aspectRatio,
+                productService: config.productService,
+                offer: config.offer || null,
+                creativeBrief: creativeBriefParagraph || undefined,
+                styleDirection: styleDirection || undefined,
+              });
+            } else {
+              prompt = assembleImagePrompt({
+                brandContext,
+                promptSchema: item.promptSchema,
+                productService: config.productService,
+                offer: config.offer || null,
+                onScreenText: item.onScreenText,
+                aspectRatio: config.aspectRatio,
+                styleDirection: styleDirection || undefined,
+                creativeBrief: creativeBriefParagraph || undefined,
+              });
+            }
             lastPrompt = prompt;
 
-            const brandRefs = fullCtx.creativeReferenceImageUrls ?? [];
-
-            const baseImageBuffer = await generateAdImage({
+            imageBuffer = await generateAdImage({
               prompt,
-              referenceImageUrl: item.referenceImageUrl ?? undefined,
+              referenceImageUrl: refUrl,
+              layoutWireframePng,
               productImageUrls: productImageUrls.length > 0 ? productImageUrls : undefined,
               brandReferenceImageUrls: brandRefs.length > 0 ? brandRefs : undefined,
               aspectRatio: config.aspectRatio,
             });
-
-            if (logoUrl) {
-              imageBuffer = await compositeAd({
-                baseImage: baseImageBuffer,
-                textOverlay: null,
-                logoUrl,
-                logoPosition: 'bottom-left',
-                width: dimensions.width,
-                height: dimensions.height,
-              });
-            } else {
-              imageBuffer = baseImageBuffer;
-            }
 
             // QA: verify text is about the right brand, not copied from reference
             qaResult = await qaCheckAd({
@@ -176,6 +232,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
               offer: config.offer || null,
               brandName: brandContext.clientName,
               productService: config.productService,
+              canonicalClientWebsiteUrl: brandContext.clientWebsiteUrl,
               expectedWidth: dimensions.width,
               expectedHeight: dimensions.height,
             });
@@ -185,6 +242,10 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
             console.warn(
               `[orchestrate-batch] QA failed (attempt ${attempt + 1}): ${qaResult.issues.map(i => i.description).join('; ')}`,
             );
+
+            if (attempt < MAX_QA_RETRIES) {
+              qaRetryStyleSuffix = buildQaRetryStyleSuffix(qaResult.issues as QAIssue[]);
+            }
           }
 
           if (!imageBuffer) throw new Error('No image generated');
@@ -216,8 +277,8 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
             id: creativeId,
             batch_id: batchId,
             client_id: typedBatch.client_id,
-            template_id: item.templateId,
-            template_source: item.templateSource,
+            template_id: item.mode === 'global' ? null : item.templateKey,
+            template_source: item.mode === 'global' ? 'global' : 'custom',
             image_url: imageUrl,
             aspect_ratio: config.aspectRatio,
             prompt_used: lastPrompt,
@@ -226,10 +287,13 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
             offer: config.offer ?? '',
             is_favorite: false,
             metadata: {
-              model: 'gemini-2.0-flash-preview-image-generation',
+              model: process.env.GEMINI_IMAGE_MODEL?.trim() || 'gemini-3.1-flash-image-preview',
+              brand_layout_mode: layoutMode,
+              image_pipeline: item.mode === 'global' ? 'nano_banana' : 'gemini_native',
               qa_passed: qaResult.passed,
               qa_score: qaResult.confidence,
               qa_issues: qaResult.issues.length > 0 ? qaResult.issues : undefined,
+              ...(item.mode === 'global' ? { global_slug: item.templateKey } : {}),
             },
           });
 
@@ -242,7 +306,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
           failedCount++;
           const msg = err instanceof Error ? err.message : String(err);
           console.error(
-            `[orchestrate-batch] creative failed — batchId=${batchId} templateId=${item.templateId} source=${item.templateSource}: ${msg}`,
+            `[orchestrate-batch] creative failed — batchId=${batchId} templateKey=${item.templateKey}: ${msg}`,
           );
         }
 
@@ -302,42 +366,54 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
 
 interface ResolvedTemplate {
   id: string;
-  source: 'kandy' | 'custom';
-  promptSchema: KandyTemplate['prompt_schema'];
+  promptSchema: AdPromptSchema;
   referenceImageUrl: string | null;
 }
 
-async function resolveTemplates(config: AdGenerationConfig): Promise<ResolvedTemplate[]> {
+interface ResolvedGlobalTemplate {
+  slug: string;
+  name: string;
+  promptTemplate: string;
+}
+
+function resolveGlobalNanoEntries(config: AdGenerationConfig): ResolvedGlobalTemplate[] {
+  const gtv = config.globalTemplateVariations ?? [];
+  const slugs = [...new Set(gtv.map((g) => g.slug))];
+  assertValidNanoBananaSlugs(slugs);
+  return slugs.map((slug) => {
+    const entry = getNanoBananaBySlug(slug);
+    if (!entry) throw new Error(`Missing Nano catalog entry: ${slug}`);
+    return {
+      slug: entry.slug,
+      name: entry.name,
+      promptTemplate: entry.promptTemplate,
+    };
+  });
+}
+
+async function resolveTemplates(
+  config: AdGenerationConfig,
+  clientId: string,
+): Promise<ResolvedTemplate[]> {
   const admin = createAdminClient();
 
-  if (config.templateSource === 'kandy') {
-    const { data, error } = await admin
-      .from('kandy_templates')
-      .select('*')
-      .in('id', config.templateIds)
-      .eq('is_active', true);
-
-    if (error) throw new Error(`Failed to fetch Kandy templates: ${error.message}`);
-
-    return (data as KandyTemplate[]).map((t) => ({
-      id: t.id,
-      source: 'kandy' as const,
-      promptSchema: t.prompt_schema,
-      referenceImageUrl: t.image_url,
-    }));
-  }
-
-  // Custom templates
   const { data, error } = await admin
     .from('ad_prompt_templates')
     .select('*')
+    .eq('client_id', clientId)
     .in('id', config.templateIds);
 
-  if (error) throw new Error(`Failed to fetch custom templates: ${error.message}`);
+  if (error) throw new Error(`Failed to fetch ad templates: ${error.message}`);
 
-  return (data as AdPromptTemplate[]).map((t) => ({
+  const rows = (data ?? []) as AdPromptTemplate[];
+  if (rows.length !== config.templateIds.length) {
+    throw new Error(
+      'One or more templates were not found for this client. They may have been deleted after the batch was queued.',
+    );
+  }
+
+  return rows.map((t) => ({
     id: t.id,
-    source: 'custom' as const,
     promptSchema: t.prompt_schema,
     referenceImageUrl: t.reference_image_url,
   }));
@@ -347,20 +423,31 @@ async function resolveTemplates(config: AdGenerationConfig): Promise<ResolvedTem
 // Work item builder
 // ---------------------------------------------------------------------------
 
-interface WorkItem {
-  templateId: string;
-  templateSource: 'kandy' | 'custom';
-  promptSchema: KandyTemplate['prompt_schema'];
-  referenceImageUrl: string | null;
-  onScreenText: OnScreenText;
-  styleDirection?: string;
-}
+type WorkItem =
+  | {
+      mode: 'client';
+      templateKey: string;
+      promptSchema: AdPromptSchema;
+      referenceImageUrl: string | null;
+      onScreenText: OnScreenText;
+      styleDirection?: string;
+    }
+  | {
+      mode: 'global';
+      templateKey: string;
+      nanoPromptTemplate: string;
+      onScreenText: OnScreenText;
+      styleDirection?: string;
+    };
 
 function overrideKey(templateId: string, variationIndex: number): string {
   return `${templateId}:${variationIndex}`;
 }
 
 function expectedWorkItemCount(config: AdGenerationConfig): number {
+  if (config.globalTemplateVariations && config.globalTemplateVariations.length > 0) {
+    return config.globalTemplateVariations.reduce((sum, g) => sum + g.count, 0);
+  }
   if (config.templateVariations && config.templateVariations.length > 0) {
     return config.templateVariations.reduce((sum, tv) => sum + tv.count, 0);
   }
@@ -390,7 +477,36 @@ function buildCreativeOverrideMap(
   return map;
 }
 
-function buildWorkItems(
+function buildGlobalWorkItems(
+  entries: ResolvedGlobalTemplate[],
+  copyVariations: OnScreenText[],
+  config: AdGenerationConfig,
+  overrideMap: Map<string, { onScreenText: OnScreenText; styleDirection?: string }> | null,
+): WorkItem[] {
+  const items: WorkItem[] = [];
+  const entryBySlug = new Map(entries.map((e) => [e.slug, e]));
+  const globalStyle = config.styleDirectionGlobal?.trim() || undefined;
+  const gtv = config.globalTemplateVariations ?? [];
+
+  for (const tv of gtv) {
+    const entry = entryBySlug.get(tv.slug);
+    if (!entry) continue;
+    for (let i = 0; i < tv.count; i++) {
+      const fromOverride = overrideMap?.get(overrideKey(entry.slug, i));
+      const copy = fromOverride?.onScreenText ?? copyVariations[i % copyVariations.length];
+      items.push({
+        mode: 'global',
+        templateKey: entry.slug,
+        nanoPromptTemplate: entry.promptTemplate,
+        onScreenText: copy,
+        styleDirection: fromOverride?.styleDirection ?? globalStyle,
+      });
+    }
+  }
+  return items;
+}
+
+function buildClientWorkItems(
   templates: ResolvedTemplate[],
   copyVariations: OnScreenText[],
   config: AdGenerationConfig,
@@ -409,8 +525,8 @@ function buildWorkItems(
         const fromOverride = overrideMap?.get(overrideKey(template.id, i));
         const copy = fromOverride?.onScreenText ?? copyVariations[i % copyVariations.length];
         items.push({
-          templateId: template.id,
-          templateSource: template.source,
+          mode: 'client',
+          templateKey: template.id,
           promptSchema: template.promptSchema,
           referenceImageUrl: template.referenceImageUrl,
           onScreenText: copy,
@@ -427,8 +543,8 @@ function buildWorkItems(
       const fromOverride = overrideMap?.get(overrideKey(template.id, i));
       const copy = fromOverride?.onScreenText ?? copyVariations[i % copyVariations.length];
       items.push({
-        templateId: template.id,
-        templateSource: template.source,
+        mode: 'client',
+        templateKey: template.id,
         promptSchema: template.promptSchema,
         referenceImageUrl: template.referenceImageUrl,
         onScreenText: copy,
@@ -452,7 +568,7 @@ async function runWithConcurrency<T>(
   let activeCount = 0;
   let index = 0;
 
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<void>((resolve) => {
     if (items.length === 0) {
       resolve();
       return;

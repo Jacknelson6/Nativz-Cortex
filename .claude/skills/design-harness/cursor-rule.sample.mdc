@@ -1,0 +1,67 @@
+---
+description: Design Harness — 4-layer design system for non-designers. Skills (Impeccable, Emil, Interface Design) + Agent Canvases (Paper, Pencil) + Inspiration (Variant, Mobbin) + Implementation Doctrine (typography-first, delight budget, Shadcn pipeline, Bedrock motion). Copy to .cursor/rules/design-harness.mdc.
+globs: app/**/*.tsx, app/**/*.ts, components/**/*.tsx, src/**/*.tsx
+alwaysApply: false
+---
+
+# Design Harness (Cursor)
+
+For **full pages, landing sites, marketing pages, or any UI shipping**, follow the installed skill (default path **`~/.claude/skills/design-harness/`**):
+
+1. **`SKILL.md`** — full 4-layer system
+
+## Quick Reference
+
+### Before Writing JSX
+- Lock **font pairing** (display + body) and **delight budget** (1 hero, 1 mid-page max)
+- Typography is 60% of "premium" — fix fonts and spacing before any motion
+
+### Design Skills (install these)
+- **Impeccable** (impeccable.style) — `/audit`, `/polish`, `/delight`. Run `/audit` before every ship.
+- **Emil Kowalski** (emilkowal.ski/skill) — animations and UI polish from Linear/Vercel
+- **Interface Design** (interface-design.dev) — persistent design specs between sessions
+- **Northstone App UI** (github.com/Jacknelson6/northstone-app-ui) — Shadcn + Bedrock pipeline
+
+### Agent Canvases
+- **Paper** (paper.design) — HTML/CSS-native, MCP tools, design-as-code
+- **Pencil** (pencil.dev) — Git-diffable .pen format, agent swarm mode
+
+### Implementation Rules
+- **Shadcn blocks first** for skeleton (`npx shadcn@latest add <block>`)
+- **One visual system** across sections (same radius, borders, button weight)
+- **Motion is seasoning**: at most 1 ambient background (hero/footer only)
+- **No magnetic hovers** (Magnet/MagnetLines) — hard ban
+- **Ring technique** over solid borders: `ring-1 ring-gray-950/10 shadow-md`
+- **Neutral grays**, not slate/zinc
+- Use `motion/react` not `framer-motion`
+- `'use client'` on motion leaves, `dynamic()` for WebGL
+
+### Delight Budget
+| 1× hero | Typographic treatment, SplitText, single ambient bg, or asymmetric layout |
+| 1× mid-page | Scroll reveal on ONE section or gentle fade-in |
+| 1× footer | Logo loop, marquee, quiet motion |
+| BANNED | Multiple WebGL + parallax + grain + sparkles + gradient text stacking |
+
+### Shipping Checklist
+```
+0   — Scope (marketing vs dashboard vs auth)
+0.5 — Design lock (fonts, delight budget, what stays calm)
+1   — Skeleton (Shadcn blocks, scaffold routes)
+2   — Tokens (project design system / CSS variables)
+3   — Motion pass (1 hero moment + 1 optional mid-page)
+3.5 — Cohesion (strip weakest effect if >2 "wow", unify radii)
+4   — Content & assets (real copy, next/image, metadata)
+5   — Verify (build + lint + dev smoke)
+```
+
+### Before Ship Checks
+- [ ] One sentence: audience + promise?
+- [ ] One focal point above the fold?
+- [ ] More than 2 special effects? Remove the weakest.
+- [ ] Mobile simplifies?
+- [ ] Looks good WITHOUT animation?
+
+### Related Skills
+- **web-design-system** — CSS/Tailwind techniques (ring, Inter variable, split hero, wells)
+- **northstone-app-ui** — Shadcn + Bedrock full implementation
+- **bedrock** — React Bits motion catalog

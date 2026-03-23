@@ -1,6 +1,7 @@
 import { logUsage, calculateCost } from './usage';
 import { checkCostBudget } from './cost-guard';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { DEFAULT_OPENROUTER_MODEL } from './openrouter-default-model';
 
 export interface AICompletionResponse {
   text: string;
@@ -29,9 +30,11 @@ interface CompletionOptions {
   /** User context for per-user usage tracking */
   userId?: string;
   userEmail?: string;
+  /** OpenRouter ids to try first, before agency primary + fallbacks (deduped). */
+  modelPreference?: string[];
 }
 
-// Pricing for openrouter/hunter-alpha (currently free)
+// Pricing for primary OpenRouter path (often free tier / $0 tracked)
 const PRICE_PER_INPUT_TOKEN = 0;
 const PRICE_PER_OUTPUT_TOKEN = 0;
 
@@ -68,7 +71,7 @@ export async function getActiveModel(): Promise<{ primary: string; fallbacks: st
     console.error('Failed to fetch active model from DB, using fallback:', err);
   }
 
-  const fallback = process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-haiku';
+  const fallback = process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL;
   cachedModel = fallback;
   cachedFallbacks = [];
   cachedModelAt = now;
@@ -127,6 +130,16 @@ async function callOpenRouter(
 
 export async function createCompletion(options: CompletionOptions): Promise<AICompletionResponse> {
   const { primary, fallbacks } = await getActiveModel();
+  const pref = (options.modelPreference ?? [])
+    .map((m) => m.trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const m of [...pref, primary, ...fallbacks]) {
+    if (seen.has(m)) continue;
+    seen.add(m);
+    ordered.push(m);
+  }
 
   // Check cost budget before making the AI call
   if (options.feature) {
@@ -139,11 +152,9 @@ export async function createCompletion(options: CompletionOptions): Promise<AICo
     }
   }
 
-  // Try primary model, then each fallback in order
-  const modelsToTry = [primary, ...fallbacks];
   let lastError: Error | null = null;
 
-  for (const model of modelsToTry) {
+  for (const model of ordered) {
     try {
       const { data } = await callOpenRouter(model, options);
 
@@ -190,11 +201,21 @@ export async function createCompletion(options: CompletionOptions): Promise<AICo
       };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      // Don't retry on budget/credits errors
-      if (lastError.message.includes('budget exceeded') || lastError.message.includes('credits exhausted')) {
+      // Internal monthly budget — do not burn more attempts
+      if (lastError.message.includes('budget exceeded')) {
         throw lastError;
       }
-      console.warn(`Model ${model} failed, ${modelsToTry.indexOf(model) < modelsToTry.length - 1 ? 'trying next fallback' : 'no more fallbacks'}:`, lastError.message);
+      // OpenRouter 402 / credits: often account-wide or per-model; try next model (e.g. :free slug) before giving up
+      const creditsExhausted = lastError.message.includes('credits exhausted');
+      const moreModels = ordered.indexOf(model) < ordered.length - 1;
+      if (creditsExhausted && !moreModels) {
+        throw lastError;
+      }
+      if (creditsExhausted && moreModels) {
+        console.warn(`Model ${model} insufficient credits (402), trying next in chain:`, lastError.message);
+        continue;
+      }
+      console.warn(`Model ${model} failed, ${moreModels ? 'trying next fallback' : 'no more fallbacks'}:`, lastError.message);
     }
   }
 

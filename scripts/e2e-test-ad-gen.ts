@@ -4,7 +4,7 @@
  * 1. Pick a client (Toastique)
  * 2. Generate Brand DNA for them
  * 3. Wait for Brand DNA to complete
- * 4. Pick 2 Kandy templates with prompt_schemas
+ * 4. Pick 2 client ad_prompt_templates with prompt_schemas
  * 5. Generate a batch of 2 ad creatives
  * 6. Wait for batch to complete
  * 7. Verify the generated images exist
@@ -68,25 +68,25 @@ async function main() {
   // Step 2: Pick templates with analyzed prompts
   console.log('Step 2: Finding analyzed templates...');
   const { data: templates } = await supabase
-    .from('kandy_templates')
-    .select('id, collection_name, page_index, image_url, prompt_schema, ad_category')
+    .from('ad_prompt_templates')
+    .select('id, name, reference_image_url, prompt_schema, ad_category')
+    .eq('client_id', TOASTIQUE_ID)
     .not('prompt_schema', 'is', null)
     .limit(2);
   
   if (!templates?.length) {
-    console.error('  ✗ No analyzed templates found. Run analysis first.');
+    console.error('  ✗ No analyzed templates for this client. Upload or scrape reference ads first.');
     process.exit(1);
   }
   
   console.log(`  Found ${templates.length} analyzed templates:`);
-  templates.forEach(t => console.log(`    - ${t.collection_name} page ${t.page_index} (${t.ad_category ?? 'unknown category'})`));
+  templates.forEach(t => console.log(`    - ${t.name} (${t.ad_category ?? 'unknown category'})`));
   
   // Step 3: Create a generation batch directly (bypassing API since we don't have auth cookie)
   console.log('\nStep 3: Creating generation batch...');
   
   const batchConfig = {
     templateIds: templates.map(t => t.id),
-    templateSource: 'kandy',
     productService: 'Artisan toast bar with fresh ingredients and cold-pressed juices',
     offer: '15% off your first order',
     aspectRatio: '1:1',
@@ -117,7 +117,6 @@ async function main() {
   const { assembleImagePrompt } = await import('../lib/ad-creatives/assemble-prompt');
   const { generateAdImage } = await import('../lib/ad-creatives/generate-image');
   const { generateAdCopy } = await import('../lib/ad-creatives/generate-copy');
-  const { compositeAd } = await import('../lib/ad-creatives/composite-ad');
   const { qaCheckAd } = await import('../lib/ad-creatives/qa-check');
   
   // Real Toastique brand context (scraped from toastique.com)
@@ -196,14 +195,12 @@ Products: Gourmet artisan toasts, smoothie bowls, cold-pressed juices`;
     console.log('  Using fallback copy');
   }
   
-  const logoUrl = testBrandContext.visualIdentity.logos[0]?.url ?? null;
-
-  // Generate images — Gemini renders full ad with text matching template layout, then logo composited
+  // Generate images — single Gemini pass (type, hero, brand mark on canvas)
   for (let i = 0; i < templates.length; i++) {
     const template = templates[i];
     const copy = copyVariations[i] ?? copyVariations[0];
 
-    console.log(`\n  Generating image ${i + 1}/${templates.length} (template page ${template.page_index})...`);
+    console.log(`\n  Generating image ${i + 1}/${templates.length} (${template.name})...`);
 
     try {
       const MAX_QA_RETRIES = 2;
@@ -225,26 +222,12 @@ Products: Gourmet artisan toasts, smoothie bowls, cold-pressed juices`;
 
         const productImageUrls = testBrandContext.visualIdentity.screenshots.map(s => s.url);
 
-        const baseImageBuffer = await generateAdImage({
+        imageBuffer = await generateAdImage({
           prompt,
-          referenceImageUrl: template.image_url,
+          referenceImageUrl: template.reference_image_url,
           productImageUrls,
           aspectRatio: batchConfig.aspectRatio,
         });
-
-        // Composite logo
-        if (logoUrl) {
-          imageBuffer = await compositeAd({
-            baseImage: baseImageBuffer,
-            textOverlay: null,
-            logoUrl,
-            logoPosition: 'bottom-left',
-            width: 1080,
-            height: 1080,
-          });
-        } else {
-          imageBuffer = baseImageBuffer;
-        }
 
         console.log(`  ✓ Image: ${imageBuffer.length} bytes. Running QA...`);
 
@@ -254,6 +237,10 @@ Products: Gourmet artisan toasts, smoothie bowls, cold-pressed juices`;
           intendedText: copy,
           offer: batchConfig.offer ?? null,
           brandName: 'Toastique',
+          productService: batchConfig.productService,
+          canonicalClientWebsiteUrl: testBrandContext.clientWebsiteUrl,
+          expectedWidth: 1080,
+          expectedHeight: 1080,
         });
 
         console.log(`  QA: score=${qaResult.confidence}, passed=${qaResult.passed}, issues=${qaResult.issues.length}`);
@@ -288,7 +275,7 @@ Products: Gourmet artisan toasts, smoothie bowls, cold-pressed juices`;
         batch_id: batch.id,
         client_id: TOASTIQUE_ID,
         template_id: template.id,
-        template_source: 'kandy',
+        template_source: 'custom',
         image_url: urlData.publicUrl,
         aspect_ratio: batchConfig.aspectRatio,
         prompt_used: 'QA-verified generation',

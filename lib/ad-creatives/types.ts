@@ -111,6 +111,10 @@ export type OnScreenText = {
   cta: string;
 };
 
+/** How layout prior is supplied to image generation (default: reference_image — Kandy/template PNG + JSON prompt). */
+export const BRAND_LAYOUT_MODES = ['schema_only', 'schema_plus_wireframe', 'reference_image'] as const;
+export type BrandLayoutMode = (typeof BRAND_LAYOUT_MODES)[number];
+
 export type ProductInfo = {
   name: string;
   imageUrl: string | null;
@@ -130,6 +134,7 @@ export type TemplateVariation = {
 
 /** Per-creative copy from interactive prompt review (must match template × variation slots). */
 export type CreativeOverride = {
+  /** Client template UUID or global Nano Banana `slug` */
   templateId: string;
   variationIndex: number;
   headline: string;
@@ -139,17 +144,39 @@ export type CreativeOverride = {
   styleNotes?: string;
 };
 
+/** Global Nano Banana catalog — per-slug counts (admin wizard). */
+export type GlobalTemplateVariation = {
+  slug: string;
+  count: number;
+};
+
+export const ADVERTISING_TYPES = [
+  'product_dtc',
+  'saas_service',
+  'marketplace',
+  'local_service',
+] as const;
+export type AdvertisingType = (typeof ADVERTISING_TYPES)[number];
+
 export type AdGenerationConfig = {
   aspectRatio: AspectRatio;
   /** @deprecated Use templateVariations instead */
   numVariations?: number;
   /** Per-template variation counts (v2) */
   templateVariations?: TemplateVariation[];
+  /**
+   * Global Nano Banana styles (mutually exclusive with client `templateVariations` / `templateIds`).
+   */
+  globalTemplateVariations?: GlobalTemplateVariation[];
   productService: string;
   offer: string;
   onScreenText: OnScreenText | 'ai_generate';
   templateIds: string[];
-  templateSource: 'kandy' | 'custom';
+  /**
+   * Explicit product photos for the image model (batch-level single product).
+   * When set, overrides default screenshot slice from brand context.
+   */
+  productImageUrls?: string[];
   /** Wizard-sourced product list (optional — backwards compatible) */
   products?: ProductOfferConfig[];
   /** Brand URL that was scraped for context */
@@ -164,13 +191,30 @@ export type AdGenerationConfig = {
    * Used for “create more like this” from a prior creative’s full prompt.
    */
   styleDirectionGlobal?: string;
+  /**
+   * When `onScreenText` is `ai_generate`, if set, every variation uses this exact CTA (headline/subhead still vary).
+   * Omit for legacy behavior (model may vary CTAs).
+   */
+  batchCta?: string;
+  /**
+   * Layout prior for image generation. Default `reference_image` (template PNG + JSON-assembled prompt).
+   * `schema_only` / `schema_plus_wireframe` are opt-ins when you want less template leakage.
+   */
+  brandLayoutMode?: BrandLayoutMode;
+  /**
+   * One batch-level creative direction paragraph (optional). If omitted, orchestrator generates once and may persist on the batch.
+   */
+  creativeBrief?: string;
 };
 
 // ---------------------------------------------------------------------------
 // Row Types
 // ---------------------------------------------------------------------------
 
-export type KandyTemplate = {
+/**
+ * Normalized template shape for the ad wizard grid (backed by `ad_prompt_templates` rows).
+ */
+export type AdCreativeTemplate = {
   id: string;
   collection_name: string;
   canva_design_id: string;
@@ -220,8 +264,8 @@ export type AdCreative = {
   id: string;
   batch_id: string;
   client_id: string;
-  template_id: string;
-  template_source: 'kandy' | 'custom';
+  template_id: string | null;
+  template_source: 'kandy' | 'custom' | 'global';
   image_url: string;
   aspect_ratio: AspectRatio;
   prompt_used: string;

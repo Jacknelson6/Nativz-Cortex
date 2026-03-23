@@ -2,18 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { cookies } from 'next/headers';
 import type { ClientPreferences } from '@/lib/types/database';
-
-interface FeatureFlags {
-  can_search: boolean;
-  can_view_reports: boolean;
-  can_edit_preferences: boolean;
-  can_submit_ideas: boolean;
-  can_view_notifications: boolean;
-  can_view_calendar: boolean;
-  can_view_analyze: boolean;
-  can_view_knowledge: boolean;
-  can_use_nerd: boolean;
-}
+import { buildPortalFeatureFlags, type FeatureFlags } from '@/lib/portal/feature-flags';
 
 interface PortalClient {
   id: string;
@@ -31,22 +20,6 @@ interface PortalClientResult {
 
 export type { FeatureFlags, PortalClient, PortalClientResult };
 
-const DEFAULT_FLAGS: FeatureFlags = {
-  can_search: true,
-  can_view_reports: true,
-  can_edit_preferences: true,
-  can_submit_ideas: true,
-  can_view_notifications: true,
-  can_view_calendar: false,
-  can_view_analyze: false,
-  can_view_knowledge: true,
-  can_use_nerd: false,
-};
-
-function buildFlags(raw: unknown): FeatureFlags {
-  return { ...DEFAULT_FLAGS, ...(raw as Partial<FeatureFlags> ?? {}) };
-}
-
 function toPortalClientResult(
   client: { id: string; name: string; slug: string; industry: string; feature_flags: unknown; preferences: unknown },
   organizationId: string,
@@ -54,7 +27,7 @@ function toPortalClientResult(
   return {
     client: {
       ...client,
-      feature_flags: buildFlags(client.feature_flags),
+      feature_flags: buildPortalFeatureFlags(client.feature_flags),
       preferences: client.preferences as ClientPreferences | null,
     },
     organizationId,
@@ -99,7 +72,6 @@ export async function getPortalClient(): Promise<PortalClientResult | null> {
   const activeClientId = cookieStore.get('x-portal-active-client')?.value;
 
   if (activeClientId) {
-    // Verify user has access via user_client_access
     const { data: access } = await adminClient
       .from('user_client_access')
       .select('client_id, organization_id')
@@ -119,7 +91,6 @@ export async function getPortalClient(): Promise<PortalClientResult | null> {
         return toPortalClientResult(client, access.organization_id);
       }
     }
-    // Cookie points to an invalid/revoked client — fall through to default
   }
 
   // ── 3. Default: first accessible client from user_client_access ──────────

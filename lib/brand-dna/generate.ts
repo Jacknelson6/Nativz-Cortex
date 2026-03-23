@@ -9,6 +9,8 @@ import { extractProductCatalog } from './extract-products';
 import { compileBrandDocument } from './compile-document';
 import type { BrandDNARawData, ProgressCallback } from './types';
 import type { BrandLogo, BrandScreenshot } from '@/lib/knowledge/types';
+import { getClientAdGenerationSettings, upsertClientImagePromptModifier } from '@/lib/ad-creatives/client-ad-generation-settings';
+import { generateImagePromptModifierFromDNA } from '@/lib/ad-creatives/generate-image-prompt-modifier';
 
 /**
  * Orchestrate the full Brand DNA generation pipeline:
@@ -37,13 +39,13 @@ export async function generateBrandDNA(
     .eq('id', clientId);
 
   try {
-    // Get client name
-    const { data: client } = await admin
+    const { data: clientRow } = await admin
       .from('clients')
-      .select('name')
+      .select('name, industry')
       .eq('id', clientId)
       .single();
-    const clientName = client?.name ?? 'Unknown';
+    const clientName = clientRow?.name ?? 'Unknown';
+    const clientIndustry = typeof clientRow?.industry === 'string' ? clientRow.industry : '';
 
     // Step 1: Crawl
     await onProgress('crawling', 10, 'Crawling website...');
@@ -136,6 +138,22 @@ export async function generateBrandDNA(
 
     // Invalidate cached brand context
     invalidateBrandContext(clientId);
+
+    // Image prompt modifier — same run as DNA: uses `compiled` directly (no getBrandContext)
+    try {
+      const adSettings = await getClientAdGenerationSettings(clientId);
+      const modifier = await generateImagePromptModifierFromDNA({
+        advertisingType: adSettings.advertising_type,
+        compiled,
+        clientName,
+        clientIndustry,
+      });
+      if (modifier) {
+        await upsertClientImagePromptModifier({ clientId, imagePromptModifier: modifier });
+      }
+    } catch (modErr) {
+      console.error('[brand-dna] image prompt modifier failed (non-fatal):', modErr);
+    }
 
     // Sync hub to agency knowledge graph (non-fatal)
     try {

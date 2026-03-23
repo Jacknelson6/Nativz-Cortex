@@ -1,8 +1,14 @@
 'use client';
 
 import { createContext, useContext } from 'react';
+import type { AdminWorkspaceToggleKey } from '@/lib/clients/admin-workspace-modules';
 
-export type ClientAdminShellValue = { slug: string; clientName: string };
+export type ClientAdminShellValue = {
+  slug: string;
+  clientName: string;
+  /** Normalized visibility for admin workspace nav (sidebar + mobile). */
+  adminWorkspaceModules: Record<AdminWorkspaceToggleKey, boolean>;
+};
 
 const ClientAdminShellContext = createContext<ClientAdminShellValue | null>(null);
 

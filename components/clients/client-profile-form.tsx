@@ -18,12 +18,13 @@ import { AgencyBadge } from '@/components/clients/agency-badge';
 import { ClientContactsCard } from '@/components/clients/client-contacts-card';
 import { ClientStrategyCard } from '@/components/clients/client-strategy-card';
 import { ConnectedAccounts } from '@/components/clients/connected-accounts';
-import { KnowledgeThumbnail } from '@/components/knowledge/KnowledgeThumbnail';
 import { ProfileField, SectionLabel } from './client-profile-fields';
 import { PortalAccessCard, DangerZone } from './client-settings-section';
 import { ImpersonateButton } from './impersonate-button';
 import type { ClientStrategy } from '@/lib/types/strategy';
 import type { ClientPreferences } from '@/lib/types/database';
+import { isAdminWorkspaceNavVisible } from '@/lib/clients/admin-workspace-modules';
+import type { AdminWorkspaceToggleKey } from '@/lib/clients/admin-workspace-modules';
 
 type HealthScore = 'not_good' | 'fair' | 'good' | 'great' | 'excellent';
 
@@ -52,15 +53,17 @@ export interface ClientProfileData {
   google_drive_branding_url: string | null;
   google_drive_calendars_url: string | null;
   preferences: ClientPreferences | null;
-  uppromote_api_key?: string | null;
+  has_affiliate_integration?: boolean;
+  affiliate_digest_email_enabled?: boolean;
+  affiliate_digest_recipients?: string | null;
   monthly_boosting_budget?: number | null;
+  admin_workspace_modules?: Record<AdminWorkspaceToggleKey, boolean> | null;
 }
 
 export interface ClientProfileFormProps {
   client: ClientProfileData;
   portalContacts: Array<{ id: string; full_name: string; email: string; avatar_url: string | null; job_title: string | null; last_login: string | null }>;
   strategy: ClientStrategy | null;
-  knowledgeSummary?: { type: string; count: number }[];
   inModal?: boolean;
   /** Full-page client workspace (sidebar layout) — hide back link and horizontal section nav. */
   embeddedInShell?: boolean;
@@ -70,7 +73,6 @@ export function ClientProfileForm({
   client,
   portalContacts,
   strategy: initialStrategy,
-  knowledgeSummary,
   inModal,
   embeddedInShell,
 }: ClientProfileFormProps) {
@@ -91,7 +93,6 @@ export function ClientProfileForm({
   const [description, setDescription] = useState(client.description ?? '');
 
   const [agency, setAgency] = useState(client.agency ?? '');
-  const [services, setServices] = useState<string[]>(client.services ?? []);
   const [googleDriveBrandingUrl, setGoogleDriveBrandingUrl] = useState(client.google_drive_branding_url ?? '');
   const [googleDriveCalendarsUrl, setGoogleDriveCalendarsUrl] = useState(client.google_drive_calendars_url ?? '');
 
@@ -103,11 +104,6 @@ export function ClientProfileForm({
   const [editingBrand, setEditingBrand] = useState(false);
   const [editingLogo, setEditingLogo] = useState(false);
 
-  const flags = client.feature_flags;
-  const [canSearch, setCanSearch] = useState(flags?.can_search ?? true);
-  const [canViewReports, setCanViewReports] = useState(flags?.can_view_reports ?? true);
-  const [canEditPreferences, setCanEditPreferences] = useState(flags?.can_edit_preferences ?? false);
-  const [canSubmitIdeas, setCanSubmitIdeas] = useState(flags?.can_submit_ideas ?? false);
   const [isActive, setIsActive] = useState(client.is_active);
 
   const abbreviation = clientName
@@ -152,7 +148,6 @@ export function ClientProfileForm({
         website_url: websiteUrl.trim() || null,
         preferences: p || {},
         monthly_boosting_budget: boostingBudget.trim() ? Number(boostingBudget.trim()) : null,
-        services,
         health_score: null as string | null,
         agency: agency.trim() || null,
         description: description.trim() || null,
@@ -160,12 +155,6 @@ export function ClientProfileForm({
         google_drive_calendars_url: googleDriveCalendarsUrl.trim() || null,
       };
       if (!embeddedInShell) {
-        payload.feature_flags = {
-          can_search: canSearch,
-          can_view_reports: canViewReports,
-          can_edit_preferences: canEditPreferences,
-          can_submit_ideas: canSubmitIdeas,
-        };
         payload.is_active = isActive;
       }
       const res = await fetch(`/api/clients/${clientId}`, {
@@ -247,48 +236,66 @@ export function ClientProfileForm({
             className={`flex flex-wrap items-center gap-1 border-b border-nativz-border-light pb-3 -mt-2 ${inModal ? 'pt-1' : ''}`}
             aria-label="Client sections"
           >
-            <Link
-              href={`/admin/clients/${slug}/brand-dna`}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-accent-text bg-accent-surface/25 border border-accent-border/35 hover:bg-accent-surface/45 transition-colors"
-            >
-              <Dna size={14} />
-              Brand DNA
-            </Link>
-            <Link
-              href={`/admin/clients/${slug}/knowledge`}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-            >
-              <BookOpen size={14} />
-              Knowledge
-            </Link>
-            <Link
-              href={`/admin/clients/${slug}/ideas`}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-            >
-              <Lightbulb size={14} />
-              Ideas
-            </Link>
-            <Link
-              href={`/admin/clients/${slug}/ad-creatives`}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-            >
-              <Palette size={14} />
-              Ad creatives
-            </Link>
-            <Link
-              href={`/admin/clients/${slug}/ideas/generate`}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-            >
-              <Wand2 size={14} />
-              Idea generator
-            </Link>
-            <Link
-              href={`/admin/clients/${slug}/settings`}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-            >
-              <Settings2 size={14} />
-              Settings
-            </Link>
+            {(
+              [
+                {
+                  key: 'brand-dna',
+                  href: `/admin/clients/${slug}/brand-dna`,
+                  label: 'Brand DNA',
+                  Icon: Dna,
+                  variant: 'accent' as const,
+                },
+                {
+                  key: 'knowledge',
+                  href: `/admin/clients/${slug}/knowledge`,
+                  label: 'Knowledge',
+                  Icon: BookOpen,
+                  variant: 'default' as const,
+                },
+                {
+                  key: 'ideas',
+                  href: `/admin/clients/${slug}/ideas`,
+                  label: 'Ideas',
+                  Icon: Lightbulb,
+                  variant: 'default' as const,
+                },
+                {
+                  key: 'ad-creatives',
+                  href: `/admin/clients/${slug}/ad-creatives`,
+                  label: 'Ad creatives',
+                  Icon: Palette,
+                  variant: 'default' as const,
+                },
+                {
+                  key: 'idea-generator',
+                  href: `/admin/clients/${slug}/ideas/generate`,
+                  label: 'Idea generator',
+                  Icon: Wand2,
+                  variant: 'default' as const,
+                },
+                {
+                  key: 'settings',
+                  href: `/admin/clients/${slug}/settings`,
+                  label: 'Settings',
+                  Icon: Settings2,
+                  variant: 'default' as const,
+                },
+              ] as const
+            )
+              .filter((item) => isAdminWorkspaceNavVisible(client.admin_workspace_modules, item.key))
+              .map((item) => {
+                const Icon = item.Icon;
+                const className =
+                  item.variant === 'accent'
+                    ? 'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-accent-text bg-accent-surface/25 border border-accent-border/35 hover:bg-accent-surface/45 transition-colors'
+                    : 'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors';
+                return (
+                  <Link key={item.key} href={item.href} className={className}>
+                    <Icon size={14} />
+                    {item.label}
+                  </Link>
+                );
+              })}
           </nav>
         )}
 
@@ -318,7 +325,7 @@ export function ClientProfileForm({
                 <Button type="button" variant="ghost" size="sm" onClick={() => {
                   setWebsiteUrl(client.website_url || ''); setDescription(client.description ?? '');
                   setTargetAudience(client.target_audience || ''); setBrandVoice(client.brand_voice || '');
-                  setTopicKeywords((client.topic_keywords || []).join(', ')); setServices(client.services ?? []);
+                  setTopicKeywords((client.topic_keywords || []).join(', '));
                   setIndustry(client.industry || ''); setAgency(client.agency ?? '');
                   setGoogleDriveBrandingUrl(client.google_drive_branding_url ?? '');
                   setGoogleDriveCalendarsUrl(client.google_drive_calendars_url ?? '');
@@ -362,17 +369,16 @@ export function ClientProfileForm({
               <Input id="topic_keywords" label="Topic keywords (comma-separated)" value={topicKeywords} onChange={(e) => setTopicKeywords(e.target.value)} placeholder="fitness, nutrition, wellness" />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">Services</label>
-                  <div className="flex flex-wrap gap-2">
-                    {['SMM', 'Paid Media', 'Editing', 'Affiliates'].map((svc) => {
-                      const active = services.includes(svc);
-                      return (
-                        <button key={svc} type="button" onClick={() => setServices((prev) => active ? prev.filter((s) => s !== svc) : [...prev, svc])} className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all cursor-pointer ${active ? 'bg-accent/15 text-accent-text border border-accent/30 shadow-[0_0_8px_var(--focus-ring)]' : 'bg-surface-hover text-text-muted border border-nativz-border hover:border-nativz-border-light hover:text-text-secondary'}`}>
-                          {svc}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <span className="block text-sm font-medium text-text-secondary mb-2">Services</span>
+                  <p className="text-xs text-text-muted mb-2">
+                    Contracted services, portal features, and admin sidebar modules are configured in Settings.
+                  </p>
+                  <Link
+                    href={`/admin/clients/${slug}/settings`}
+                    className="text-sm font-medium text-accent-text hover:underline"
+                  >
+                    Open access & services
+                  </Link>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">Boosting budget</label>
@@ -397,8 +403,8 @@ export function ClientProfileForm({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <span className="block text-xs font-medium text-text-muted mb-1.5">Services</span>
-                  {services.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">{services.map((svc) => <Badge key={svc} variant="default">{svc}</Badge>)}</div>
+                  {(client.services ?? []).length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">{(client.services ?? []).map((svc) => <Badge key={svc} variant="default">{svc}</Badge>)}</div>
                   ) : (
                     <p className="text-sm text-text-muted italic">Not set</p>
                   )}
@@ -417,52 +423,19 @@ export function ClientProfileForm({
 
       </form>
 
-      {/* Knowledge & Contacts */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-text-primary">Knowledge base</h2>
-            <Link href={`/admin/clients/${slug}/knowledge`}>
-              <Button size="sm" variant="outline">
-                <BookOpen size={14} />
-                View
-              </Button>
-            </Link>
-          </div>
-          {knowledgeSummary && knowledgeSummary.length > 0 ? (
-            <Link href={`/admin/clients/${slug}/knowledge`} className="block group">
-              <div className="rounded-lg overflow-hidden border border-nativz-border bg-background hover:border-accent/30 transition-all">
-                <KnowledgeThumbnail nodes={knowledgeSummary.flatMap((item) => Array.from({ length: item.count }, () => ({ type: item.type })))} />
-              </div>
-              <div className="flex items-center gap-3 mt-2.5 px-0.5">
-                {knowledgeSummary.slice(0, 4).map((item) => (
-                  <span key={item.type} className="text-[11px] text-text-muted">
-                    {item.count} {item.type.replace(/_/g, ' ')}{item.count !== 1 ? 's' : ''}
-                  </span>
-                ))}
-              </div>
-            </Link>
-          ) : (
-            <p className="text-sm text-text-muted">No knowledge entries yet.</p>
-          )}
-        </Card>
-        <ClientContactsCard clientId={clientId} clientName={clientName} vaultContacts={[]} portalContacts={portalContacts} />
-      </div>
+      <ClientContactsCard clientId={clientId} clientName={clientName} vaultContacts={[]} portalContacts={portalContacts} />
 
       {/* Integrations + portal admin — sidebar Settings when using client workspace */}
       {!embeddedInShell && (
         <>
           <SectionLabel icon={Plug} label="Integrations" />
-          <ConnectedAccounts clientId={clientId} hasUpPromote={!!client.uppromote_api_key} />
+          <ConnectedAccounts
+            clientId={clientId}
+            hasAffiliateIntegration={client.has_affiliate_integration}
+          />
 
           <SectionLabel icon={Settings2} label="Settings" />
-          <PortalAccessCard
-            clientId={clientId}
-            canSearch={canSearch} setCanSearch={setCanSearch}
-            canViewReports={canViewReports} setCanViewReports={setCanViewReports}
-            canEditPreferences={canEditPreferences} setCanEditPreferences={setCanEditPreferences}
-            canSubmitIdeas={canSubmitIdeas} setCanSubmitIdeas={setCanSubmitIdeas}
-          />
+          <PortalAccessCard clientId={clientId} />
           <DangerZone clientId={clientId} clientName={clientName} isActive={isActive} setIsActive={setIsActive} />
         </>
       )}

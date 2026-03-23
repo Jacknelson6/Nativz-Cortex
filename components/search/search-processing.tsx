@@ -57,11 +57,11 @@ function buildStages(platforms: string[], volume: string): Stage[] {
   if (platforms.includes('reddit')) add('Scanning Reddit discussions', <MessageSquare size={14} />, isDeep ? 15000 : isMedium ? 8000 : 3000);
   if (platforms.includes('youtube')) {
     const YT = PLATFORM_CONFIG.youtube.icon;
-    add('Fetching YouTube videos & transcripts', <YT size={14} className="text-red-400" />, isDeep ? 30000 : isMedium ? 15000 : 5000);
+    add('Fetching YouTube videos & transcripts', <YT size={14} />, isDeep ? 30000 : isMedium ? 15000 : 5000);
   }
   if (platforms.includes('tiktok')) {
     const TT = PLATFORM_CONFIG.tiktok.icon;
-    add('Scraping TikTok & comments', <TT size={14} className="text-teal-400" />, isDeep ? 45000 : isMedium ? 20000 : 8000);
+    add('Scraping TikTok & comments', <TT size={14} />, isDeep ? 45000 : isMedium ? 20000 : 8000);
   }
   add('Computing analytics', <Brain size={14} />, isDeep ? 5000 : 3000);
   add('Generating video ideas with AI', <Sparkles size={14} />, isDeep ? 20000 : isMedium ? 12000 : 8000);

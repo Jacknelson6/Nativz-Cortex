@@ -5,6 +5,8 @@
 // Usage: npx tsx scripts/analyze-kandy-templates.ts
 //        npx tsx scripts/analyze-kandy-templates.ts --limit 20    # process at most 20
 //        npx tsx scripts/analyze-kandy-templates.ts --dry-run     # list templates without processing
+//        npx tsx scripts/analyze-kandy-templates.ts --digital-products   # Kandy Digital Products book only
+//        npx tsx scripts/analyze-kandy-templates.ts --digital-products --no-dedupe  # all rows (usually 3× per page)
 
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -101,6 +103,7 @@ Return ONLY valid JSON matching this exact structure — no markdown, no explana
 Important rules:
 - Describe visual patterns generically — do NOT reference specific brand names, products, or copy
 - Focus on STRUCTURAL and STYLISTIC decisions that can be replicated with different content
+- The commercial subject in the image (e.g. clothing, food) may be arbitrary — describe it as "hero subject zone" or similar when layout matters more than that exact category
 - Be precise about spatial relationships and proportions`;
 
 async function extractAdPromptFromUrl(imageUrl: string): Promise<Record<string, unknown>> {
@@ -210,9 +213,23 @@ interface TemplateRow {
   vertical: string;
 }
 
+function dedupeByCollectionPage(rows: TemplateRow[]): TemplateRow[] {
+  const seen = new Set<string>();
+  const out: TemplateRow[] = [];
+  for (const t of rows) {
+    const key = `${t.collection_name}:${t.page_index}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const isDryRun = args.includes('--dry-run');
+  const digitalProducts = args.includes('--digital-products');
+  const noDedupe = args.includes('--no-dedupe');
   const limitIdx = args.indexOf('--limit');
   const limit = limitIdx !== -1 ? parseInt(args[limitIdx + 1], 10) : undefined;
 
@@ -223,17 +240,37 @@ async function main() {
     .is('prompt_schema', null)
     .eq('is_active', true)
     .order('collection_name')
-    .order('page_index');
+    .order('page_index')
+    .order('id');
 
-  if (limit) {
+  if (digitalProducts) {
+    query = query.or(
+      'collection_name.ilike.Digital Products%,source_brand.eq."Kandy - Digital Products"',
+    );
+  }
+
+  /** Dedupe needs full row set from DB; apply --limit after dedupe. */
+  const limitAfterDedupe = Boolean(digitalProducts && !noDedupe && limit);
+  if (limit && !limitAfterDedupe) {
     query = query.limit(limit);
   }
 
-  const { data: templates, error } = await query;
+  const { data: rawTemplates, error } = await query;
 
   if (error) {
     console.error('Failed to fetch templates:', error.message);
     process.exit(1);
+  }
+
+  let templates = rawTemplates as TemplateRow[] | null;
+  if (digitalProducts && templates?.length && !noDedupe) {
+    const before = templates.length;
+    templates = dedupeByCollectionPage(templates);
+    console.log(`Digital Products: ${before} rows → ${templates.length} unique pages (collection + page_index).`);
+    if (limit) {
+      templates = templates.slice(0, limit);
+      console.log(`After --limit ${limit}: ${templates.length} template(s) to analyze.`);
+    }
   }
 
   if (!templates || templates.length === 0) {

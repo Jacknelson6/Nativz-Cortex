@@ -65,11 +65,11 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
   const showBrandSwitcher = brands && brands.length > 1 && activeBrandId;
 
   return (
-    <Sidebar>
-      <SidebarHeader>
+    <Sidebar variant="portal">
+      <SidebarHeader className="border-b border-white/[0.06]">
         <Link
           href="/portal/dashboard"
-          className={`flex items-center hover:opacity-80 transition-opacity duration-150 mb-3 ${
+          className={`flex items-center hover:opacity-90 transition-opacity duration-150 mb-3 ${
             open ? 'flex-col -space-y-0.5' : 'justify-center'
           }`}
         >
@@ -82,7 +82,7 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
             priority
           />
           {open && (
-            <span className="text-[10px] font-bold text-text-secondary tracking-[0.3em] uppercase">
+            <span className="text-[10px] font-semibold text-text-muted tracking-[0.28em] uppercase">
               Portal
             </span>
           )}
@@ -101,12 +101,18 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
         {featureFlags?.can_search !== false && (
           <Link href="/portal/search/new">
             {open ? (
-              <Button shape="pill" className="w-full">
+              <Button
+                shape="pill"
+                className="w-full border border-white/[0.08] bg-white/[0.04] text-text-primary shadow-none hover:bg-white/[0.08] hover:border-white/[0.12]"
+              >
                 <Search size={16} />
                 New search
               </Button>
             ) : (
-              <Button shape="pill" className="w-full !px-0 justify-center">
+              <Button
+                shape="pill"
+                className="w-full !px-0 justify-center border border-white/[0.08] bg-white/[0.04] shadow-none hover:bg-white/[0.08]"
+              >
                 <Search size={16} />
               </Button>
             )}
@@ -114,17 +120,17 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
         )}
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="px-2.5">
         <SidebarGroup>
-          <SidebarMenu>
+          <SidebarMenu className="gap-1.5">
             {navItems.map((item) => {
               const active = pathname === item.href || pathname.startsWith(item.href + '/');
               return (
                 <SidebarMenuItem key={item.href}>
-                  <Link href={item.href}>
-                    <SidebarMenuButton isActive={active} tooltip={item.label}>
-                      <item.icon size={18} className="shrink-0" />
-                      {open && <span className="truncate">{item.label}</span>}
+                  <Link href={item.href} className="block w-full">
+                    <SidebarMenuButton isActive={active} tooltip={item.label} variant="portal">
+                      <item.icon size={18} className="shrink-0 opacity-90" />
+                      {open && <span className="truncate font-medium">{item.label}</span>}
                     </SidebarMenuButton>
                   </Link>
                 </SidebarMenuItem>
@@ -134,18 +140,19 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter className="border-white/[0.06]">
         <button
+          type="button"
           onClick={toggleSidebar}
-          className={`flex items-center rounded-lg text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors mb-2 ${
-            open ? 'gap-2 px-2.5 py-1.5 w-full text-xs' : 'w-full justify-center py-1.5'
+          className={`flex items-center rounded-lg border border-transparent text-text-muted transition-colors mb-2 hover:border-white/[0.06] hover:bg-white/[0.04] hover:text-text-secondary ${
+            open ? 'gap-2 px-2.5 py-2 w-full text-xs' : 'w-full justify-center py-2'
           } cursor-pointer`}
         >
           <PanelLeftClose size={14} className={`transition-transform duration-200 ${open ? '' : 'rotate-180'}`} />
           {open && <span>Collapse</span>}
         </button>
 
-        <SidebarSeparator />
+        <SidebarSeparator className="bg-white/[0.06]" />
 
         <SidebarAccount
           userName={userName}

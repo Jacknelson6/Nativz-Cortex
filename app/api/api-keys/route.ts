@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateApiKey } from '@/lib/api-keys/generate';
 import { logActivity } from '@/lib/activity';
+import { viewerMayUseRestApi } from '@/lib/portal/viewer-api-access';
 
 const VALID_SCOPES = ['tasks', 'clients', 'shoots', 'scheduler', 'search', 'team', 'calendar'] as const;
 
@@ -28,6 +29,14 @@ export async function GET() {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const allowed = await viewerMayUseRestApi(user.id);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'API access is disabled for your organization. Contact your Nativz team.' },
+        { status: 403 },
+      );
     }
 
     const admin = createAdminClient();
@@ -67,6 +76,14 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const allowed = await viewerMayUseRestApi(user.id);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'API access is disabled for your organization. Contact your Nativz team.' },
+        { status: 403 },
+      );
     }
 
     const body = await request.json();

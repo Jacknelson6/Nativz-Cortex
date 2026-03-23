@@ -18,6 +18,7 @@ import { BrandDnaTabReadyPanel } from './brand-dna-tab-ready-panel';
 import { Dialog } from '@/components/ui/dialog';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
 import type { AdCreative } from '@/lib/ad-creatives/types';
+import type { AdBatchPlaceholderConfig } from '@/lib/ad-creatives/placeholder-config';
 import type { RecentClient } from '@/app/admin/ad-creatives/page';
 import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
 
@@ -39,11 +40,6 @@ interface ClientWithSlug extends ClientOption {
 interface AdCreativesHubProps {
   clients: ClientWithSlug[];
   recentClients?: RecentClient[];
-}
-
-interface PlaceholderConfig {
-  brandColors: string[];
-  templateThumbnails: { templateId: string; imageUrl: string; variationIndex: number }[];
 }
 
 const TABS: { key: Tab; label: string; icon: typeof Image }[] = [
@@ -88,7 +84,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
 
   // Generation state (passed from wizard → gallery)
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
-  const [placeholderConfig, setPlaceholderConfig] = useState<PlaceholderConfig | null>(null);
+  const [placeholderConfig, setPlaceholderConfig] = useState<AdBatchPlaceholderConfig | null>(null);
   const [adWizardOpen, setAdWizardOpen] = useState(false);
   const [wizardSeedCreative, setWizardSeedCreative] = useState<AdCreative | null>(null);
 
@@ -337,7 +333,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
   }
 
   // Called by wizard when generation starts
-  function handleGenerationStart(batchId: string, config: PlaceholderConfig) {
+  function handleGenerationStart(batchId: string, config: AdBatchPlaceholderConfig) {
     setActiveBatchId(batchId);
     setPlaceholderConfig(config);
     setAdWizardOpen(false);

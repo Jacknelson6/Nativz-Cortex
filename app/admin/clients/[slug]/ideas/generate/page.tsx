@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { IdeaGenerator } from '@/components/knowledge/IdeaGenerator';
+import { requireAdminWorkspaceModuleAccess } from '@/lib/clients/require-admin-workspace-module-access';
 
 export default async function GenerateIdeasPage({
   params,
@@ -8,6 +9,8 @@ export default async function GenerateIdeasPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  await requireAdminWorkspaceModuleAccess(slug, 'idea-generator');
+
   const supabase = createAdminClient();
 
   const { data: client } = await supabase

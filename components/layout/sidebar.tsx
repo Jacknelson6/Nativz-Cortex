@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { usePathname } from 'next/navigation';
 import { PanelLeft } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -120,20 +121,30 @@ export function SidebarProvider({ defaultOpen = true, children }: SidebarProvide
 // Sidebar
 // ---------------------------------------------------------------------------
 
-interface SidebarProps extends HTMLAttributes<HTMLElement> {
+type ShellVariant = 'default' | 'portal';
+
+interface SidebarProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
   children: ReactNode;
+  /** `portal` — darker rail, low-opacity borders (client portal shell). */
+  variant?: ShellVariant;
 }
 
-export function Sidebar({ children, className = '', ...props }: SidebarProps) {
+export function Sidebar({ children, className = '', variant = 'default', ...props }: SidebarProps) {
   const { state, open, openMobile, setOpenMobile } = useSidebar();
+
+  const shell =
+    variant === 'portal'
+      ? 'border-r border-white/[0.06] bg-[#12141a]'
+      : 'border-r border-nativz-border bg-surface';
 
   return (
     <>
       {/* Desktop sidebar */}
       <aside
         data-state={state}
+        data-shell={variant}
         suppressHydrationWarning
-        className={`sticky top-0 h-screen hidden md:flex flex-col border-r border-nativz-border bg-surface shrink-0 transition-[width] duration-200 ease-out overflow-hidden ${className}`}
+        className={`sticky top-0 h-screen hidden md:flex flex-col shrink-0 transition-[width] duration-200 ease-out overflow-hidden ${shell} ${className}`}
         style={{ width: open ? 'var(--sidebar-width)' : 'var(--sidebar-width-icon)' }}
         {...props}
       >
@@ -149,7 +160,7 @@ export function Sidebar({ children, className = '', ...props }: SidebarProps) {
               onClick={() => setOpenMobile(false)}
             />
             <aside
-              className="fixed inset-y-0 left-0 z-50 flex flex-col bg-surface border-r border-nativz-border shadow-elevated animate-[slideInLeft_200ms_cubic-bezier(0.16,1,0.3,1)_forwards]"
+              className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r shadow-elevated animate-[slideInLeft_200ms_cubic-bezier(0.16,1,0.3,1)_forwards] ${shell}`}
               style={{ width: SIDEBAR_WIDTH_MOBILE }}
             >
               {children}
@@ -167,7 +178,7 @@ export function Sidebar({ children, className = '', ...props }: SidebarProps) {
 
 export function SidebarHeader({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`shrink-0 p-3 ${className}`}>
+    <div className={cn('shrink-0 p-3', className)}>
       {children}
     </div>
   );
@@ -175,7 +186,7 @@ export function SidebarHeader({ children, className = '' }: { children: ReactNod
 
 export function SidebarFooter({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`shrink-0 border-t border-nativz-border p-3 ${className}`}>
+    <div className={cn('shrink-0 border-t border-nativz-border p-3', className)}>
       {children}
     </div>
   );
@@ -183,7 +194,7 @@ export function SidebarFooter({ children, className = '' }: { children: ReactNod
 
 export function SidebarContent({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`flex-1 overflow-y-auto overflow-x-hidden px-3 py-1 ${className}`}>
+    <div className={cn('flex-1 overflow-y-auto overflow-x-hidden px-3 py-1', className)}>
       {children}
     </div>
   );
@@ -241,25 +252,41 @@ interface SidebarMenuButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   isActive?: boolean;
   tooltip?: string;
   asChild?: boolean;
+  /**
+   * `portal` — bordered row cards when expanded (matches client portal settings mockup);
+   * icon-only rail when collapsed.
+   */
+  variant?: ShellVariant;
 }
 
 export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButtonProps>(
-  ({ children, isActive, tooltip, className = '', ...props }, ref) => {
+  ({ children, isActive, tooltip, className = '', variant = 'default', ...props }, ref) => {
     const { open } = useSidebar();
     const [showTooltip, setShowTooltip] = useState(false);
+
+    const layout = open ? 'gap-2.5 px-2.5' : 'justify-center px-0';
+
+    const defaultStyles = isActive
+      ? 'bg-accent-surface text-text-primary font-semibold'
+      : 'text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium';
+
+    const portalExpanded = isActive
+      ? 'border border-accent-border/35 bg-accent/10 text-text-primary font-semibold shadow-[0_0_20px_-8px_rgba(59,130,246,0.35)]'
+      : 'border border-white/[0.06] bg-white/[0.02] text-text-secondary hover:border-white/[0.1] hover:bg-white/[0.04] hover:text-text-primary font-medium';
+
+    const portalCollapsed = isActive
+      ? 'text-accent-text bg-accent/12'
+      : 'text-text-muted hover:bg-white/[0.06] hover:text-text-secondary';
+
+    const shellStyles =
+      variant === 'portal' ? (open ? portalExpanded : portalCollapsed) : defaultStyles;
 
     return (
       <button
         ref={ref}
         data-active={isActive ? true : undefined}
         suppressHydrationWarning
-        className={`relative flex w-full items-center rounded-lg text-sm transition-colors min-h-[40px] cursor-pointer ${
-          open ? 'gap-2.5 px-2.5' : 'justify-center px-0'
-        } ${
-          isActive
-            ? 'bg-accent-surface text-text-primary font-semibold'
-            : 'text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium'
-        } ${className}`}
+        className={`relative flex w-full items-center rounded-lg text-sm transition-[color,background-color,border-color,box-shadow] duration-150 min-h-[40px] cursor-pointer ${layout} ${shellStyles} ${className}`}
         onMouseEnter={() => !open && setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         {...props}
@@ -286,7 +313,7 @@ SidebarMenuButton.displayName = 'SidebarMenuButton';
 // ---------------------------------------------------------------------------
 
 export function SidebarSeparator({ className = '' }: { className?: string }) {
-  return <div className={`my-2 h-px bg-nativz-border ${className}`} />;
+  return <div className={cn('my-2 h-px bg-nativz-border', className)} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -339,11 +366,22 @@ export function SidebarTrigger({ className = '' }: { className?: string }) {
 // SidebarInset — main content area next to sidebar
 // ---------------------------------------------------------------------------
 
-export function SidebarInset({ children, className = '' }: { children: ReactNode; className?: string }) {
+export function SidebarInset({
+  children,
+  className = '',
+  variant = 'default',
+}: {
+  children: ReactNode;
+  className?: string;
+  variant?: ShellVariant;
+}) {
+  const shell =
+    variant === 'portal'
+      ? 'bg-[#0e1016] bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(59,130,246,0.06),transparent_55%)]'
+      : 'bg-background';
+
   return (
-    <main
-      className={`cortex-main flex-1 min-w-0 overflow-x-hidden overflow-y-auto bg-background ${className}`}
-    >
+    <main className={cn('cortex-main flex-1 min-w-0 overflow-x-hidden overflow-y-auto', shell, className)}>
       {children}
     </main>
   );

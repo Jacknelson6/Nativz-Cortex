@@ -1,4 +1,11 @@
-import { AD_CATEGORIES, type AdCategory, type AdPromptSchema, type AdPromptTemplate, type AdVertical, type KandyTemplate } from './types';
+import {
+  AD_CATEGORIES,
+  type AdCategory,
+  type AdCreativeTemplate,
+  type AdPromptSchema,
+  type AdPromptTemplate,
+  type AdVertical,
+} from './types';
 
 const DEFAULT_CUSTOM_VERTICAL: AdVertical = 'ecommerce';
 
@@ -43,19 +50,11 @@ function coerceAdCategory(value: unknown): AdCategory {
   return 'promotional';
 }
 
-export type WizardTemplate = KandyTemplate & { templateOrigin: 'kandy' | 'custom' };
+export type WizardTemplate = AdCreativeTemplate;
 
-export function withKandyOrigin(t: KandyTemplate): WizardTemplate {
-  return { ...t, templateOrigin: 'kandy' };
-}
-
-/**
- * Map a client-scoped ad_prompt_templates row into the same shape the template grid uses for Kandy cards.
- */
-/** Strip wizard-only field for APIs that expect `KandyTemplate`. */
-export function wizardTemplateToKandy(t: WizardTemplate): KandyTemplate {
-  const { templateOrigin: _o, ...rest } = t;
-  return rest;
+/** Strip to the plain template row shape (e.g. for preview APIs). */
+export function wizardTemplateToRow(t: WizardTemplate): AdCreativeTemplate {
+  return t;
 }
 
 export function adPromptRowToWizardTemplate(row: AdPromptTemplate): WizardTemplate {
@@ -81,6 +80,5 @@ export function adPromptRowToWizardTemplate(row: AdPromptTemplate): WizardTempla
     is_active: true,
     created_at: row.created_at,
     source_brand: row.tags?.includes('ad_library_scrape') ? 'Ad library scrape' : 'Your uploads',
-    templateOrigin: 'custom',
   };
 }

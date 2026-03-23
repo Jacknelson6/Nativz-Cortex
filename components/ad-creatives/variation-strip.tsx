@@ -1,10 +1,10 @@
 'use client';
 
 import { X, Minus, Plus } from 'lucide-react';
-import type { KandyTemplate } from '@/lib/ad-creatives/types';
+import type { AdCreativeTemplate } from '@/lib/ad-creatives/types';
 
 interface VariationStripProps {
-  templates: KandyTemplate[];
+  templates: AdCreativeTemplate[];
   variations: Map<string, number>;
   onVariationChange: (templateId: string, count: number) => void;
   onRemove: (templateId: string) => void;

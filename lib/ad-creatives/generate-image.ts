@@ -2,8 +2,15 @@
 // Static Ad Generation — Image Generation via Google AI Studio
 // ---------------------------------------------------------------------------
 
-const GOOGLE_AI_ENDPOINT =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent';
+import { REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION } from './gemini-static-ad-prompt';
+
+/** Image-capable Gemini model (Google AI Studio). Override with GEMINI_IMAGE_MODEL if needed. */
+const DEFAULT_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
+
+function imageGenerationEndpoint(): string {
+  const model = (process.env.GEMINI_IMAGE_MODEL ?? DEFAULT_IMAGE_MODEL).trim();
+  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+}
 
 const MAX_RETRIES = 2;
 const TIMEOUT_MS = 90_000;
@@ -11,6 +18,8 @@ const TIMEOUT_MS = 90_000;
 interface GenerateAdImageParams {
   prompt: string;
   referenceImageUrl?: string;
+  /** Grayscale zone map from `buildLayoutWireframePng` — spatial hint only */
+  layoutWireframePng?: Buffer;
   productImageUrls?: string[];
   /** Extra brand images (mood boards, packaging, guideline shots) from client uploads */
   brandReferenceImageUrls?: string[];
@@ -108,19 +117,30 @@ async function buildParts(params: GenerateAdImageParams): Promise<GeminiContentP
     }
   }
 
-  // 3. Template style reference (layout/composition guide only)
+  // 3. Generated wireframe (zone map — no text)
+  if (params.layoutWireframePng && params.layoutWireframePng.length > 0) {
+    parts.push({
+      inlineData: {
+        mimeType: 'image/png',
+        data: params.layoutWireframePng.toString('base64'),
+      },
+    });
+    parts.push({
+      text:
+        'The above image is a grayscale WIREFRAME — tinted rectangles only, no letters. It approximates zones for headline block, hero visual, and CTA area. Use it as loose spatial guidance for composition and negative space; do NOT trace visible boxes as hard UI chrome. Render the complete ad per the final text prompt (typography, hero, CTA, single brand mark) — the wireframe is spatial hint only.\n\n',
+    });
+  }
+
+  // 4. Template style reference (layout/composition guide only) — only when caller opts in
   if (params.referenceImageUrl) {
     const ref = await fetchImageAsBase64(params.referenceImageUrl);
     if (ref) {
       parts.push({ inlineData: ref });
-      parts.push({
-        text: `The above image is a LAYOUT REFERENCE ONLY — use it for visual structure (where text goes, where images go, overall composition style).
-
-CRITICAL: You MUST NOT copy ANY text from this reference image. Every word in the reference is from a DIFFERENT brand and MUST be replaced. The ONLY text allowed in your output is what is explicitly specified in the prompt below. If you see text like "TRY ECHOS", "CAN'T SLEEP", or any other words in the reference — IGNORE them completely. Replace ALL text with the brand-specific content below.\n\n`,
-      });
+      parts.push({ text: REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION });
     }
   }
 
+  // 5. Text prompt last
   parts.push({ text: params.prompt });
 
   return parts;
@@ -130,7 +150,7 @@ async function callGeminiImageGeneration(
   apiKey: string,
   parts: GeminiContentPart[],
 ): Promise<Buffer> {
-  const url = `${GOOGLE_AI_ENDPOINT}?key=${apiKey}`;
+  const url = `${imageGenerationEndpoint()}?key=${apiKey}`;
 
   const body = {
     contents: [{ role: 'user', parts }],
@@ -176,16 +196,22 @@ async function callGeminiImageGeneration(
   }
 
   const responseParts = candidates[0]?.content?.parts ?? [];
-  const imagePart = responseParts.find(
-    (p: { inlineData?: { data: string; mimeType: string } }) => p.inlineData?.data,
-  );
 
-  if (!imagePart?.inlineData?.data) {
-    // Check if there's a text-only response (e.g. safety block)
+  function inlineImageB64(p: Record<string, unknown>): string | undefined {
+    const camel = p.inlineData as { data?: string } | undefined;
+    if (camel?.data) return camel.data;
+    const snake = p.inline_data as { data?: string } | undefined;
+    return snake?.data;
+  }
+
+  const imagePart = responseParts.find((p: Record<string, unknown>) => inlineImageB64(p));
+  const b64 = imagePart ? inlineImageB64(imagePart as Record<string, unknown>) : undefined;
+
+  if (!b64) {
     const textPart = responseParts.find((p: { text?: string }) => p.text);
     const reason = textPart?.text ?? 'no image data in response';
     throw new Error(`Gemini did not return an image: ${reason}`);
   }
 
-  return Buffer.from(imagePart.inlineData.data, 'base64');
+  return Buffer.from(b64, 'base64');
 }

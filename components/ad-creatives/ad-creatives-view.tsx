@@ -15,6 +15,7 @@ import { BrandDnaTabReadyPanel } from './brand-dna-tab-ready-panel';
 import { Dialog } from '@/components/ui/dialog';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
 import type { AdCreative } from '@/lib/ad-creatives/types';
+import type { AdBatchPlaceholderConfig } from '@/lib/ad-creatives/placeholder-config';
 import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
 import { useClientAdminShell } from '@/components/clients/client-admin-shell-context';
 
@@ -37,11 +38,6 @@ interface AdCreativesViewProps {
   brandDnaStatus?: string | null;
   creativeCount: number;
 }
-
-type PlaceholderConfig = {
-  brandColors: string[];
-  templateThumbnails: { templateId: string; imageUrl: string; variationIndex: number }[];
-};
 
 export function AdCreativesView({
   clientId,
@@ -68,7 +64,7 @@ export function AdCreativesView({
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardSeedCreative, setWizardSeedCreative] = useState<AdCreative | null>(null);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
-  const [placeholderConfig, setPlaceholderConfig] = useState<PlaceholderConfig | null>(null);
+  const [placeholderConfig, setPlaceholderConfig] = useState<AdBatchPlaceholderConfig | null>(null);
   const [galleryEmptyForCta, setGalleryEmptyForCta] = useState(false);
 
   const tabParam = searchParams.get('tab') as Tab | null;
@@ -198,7 +194,7 @@ export function AdCreativesView({
   );
 
   const handleGenerationStart = useCallback(
-    (batchId: string, config: PlaceholderConfig) => {
+    (batchId: string, config: AdBatchPlaceholderConfig) => {
       setActiveBatchId(batchId);
       setPlaceholderConfig(config);
       setWizardOpen(false);

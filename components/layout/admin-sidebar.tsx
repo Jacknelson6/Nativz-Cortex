@@ -21,11 +21,10 @@ import {
   ImagePlus,
   Presentation,
   Brain,
-  Film,
   Scissors,
   ThumbsUp,
   Megaphone,
-  CalendarClock,
+  Camera,
   Mic2,
   List,
   RefreshCw,
@@ -75,14 +74,21 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       {
         href: '/admin/pipeline',
-        label: 'Pipeline',
+        label: 'Monthly pipeline',
         icon: Workflow,
         children: [
+          { href: '/admin/pipeline', label: 'All stages', icon: Workflow },
+          { href: '/admin/shoots', label: 'Shoot calendar', icon: Camera },
           { href: '/admin/pipeline?stage=editing', label: 'Editing', icon: Scissors },
-          { href: '/admin/scheduler', label: 'Scheduling', icon: CalendarClock },
+          {
+            href: '/admin/pipeline?stage=scheduling',
+            label: 'Approvals & handoff',
+            icon: ThumbsUp,
+          },
           { href: '/admin/pipeline?stage=boosting', label: 'Boosting', icon: Megaphone },
         ],
       },
+      { href: '/admin/scheduler', label: 'Post scheduler', icon: Send },
       { href: '/admin/search/new', label: 'Research', icon: Telescope },
       { href: '/admin/analysis', label: 'Analysis', icon: Clapperboard },
       { href: '/admin/ad-creatives', label: 'Ad creatives', icon: ImagePlus },
@@ -126,6 +132,11 @@ const NAV_SECTIONS: NavSection[] = [
 function isActivePath(pathname: string, href: string, searchParams?: URLSearchParams) {
   if (href === '/admin/search/new') {
     return pathname.startsWith('/admin/search') || pathname.startsWith('/admin/ideas');
+  }
+
+  // Pipeline root "All stages" shares /admin/pipeline with ?stage=… filtered views
+  if (href === '/admin/pipeline' && pathname === '/admin/pipeline') {
+    return !searchParams?.get('stage');
   }
 
   // Handle hrefs with query params (e.g. /admin/pipeline?stage=editing)
@@ -267,7 +278,7 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
 
                 return (
                   <SidebarMenuItem key={item.href}>
-                    <Link href={item.children ? item.children[0].href : item.href}>
+                    <Link href={item.href}>
                       <SidebarMenuButton isActive={active} tooltip={item.label}>
                         <item.icon size={18} className="shrink-0" />
                         {open && <span className="truncate">{item.label}</span>}

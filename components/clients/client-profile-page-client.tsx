@@ -7,7 +7,6 @@ import { ClientProfileForm, type ClientProfileFormProps } from '@/components/cli
 export function ClientProfilePageClient({ slug }: { slug: string }) {
   const [data, setData] = useState<ClientProfileFormProps | null>(null);
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -47,5 +46,7 @@ export function ClientProfilePageClient({ slug }: { slug: string }) {
     );
   }
 
-  return <ClientProfileForm {...data} embeddedInShell />;
+  return (
+    <ClientProfileForm {...data} embeddedInShell />
+  );
 }

@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronDown, Loader2, Upload } from 'lucide-react';
+import { ChevronDown, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog } from '@/components/ui/dialog';
-import type { KandyTemplate, AdVertical, AdCategory } from '@/lib/ad-creatives/types';
+import type { AdCreativeTemplate, AdPromptTemplate, AdVertical, AdCategory } from '@/lib/ad-creatives/types';
 import { AD_VERTICALS, AD_CATEGORIES } from '@/lib/ad-creatives/types';
+import { adPromptRowToWizardTemplate } from '@/lib/ad-creatives/wizard-template';
 
 const VERTICAL_LABELS: Record<AdVertical, string> = {
   ecommerce: 'E-commerce',
@@ -45,7 +46,7 @@ const CATEGORY_LABELS: Record<AdCategory, string> = {
 };
 
 interface TemplateCatalogProps {
-  clientId?: string;
+  clientId: string;
   onShowBulkImport?: () => void;
   refreshKey?: number;
 }
@@ -60,26 +61,33 @@ function filterSelectClassName(): string {
   ].join(' ');
 }
 
-export function TemplateCatalog({ clientId: _clientId, onShowBulkImport, refreshKey }: TemplateCatalogProps) {
-  const [templates, setTemplates] = useState<KandyTemplate[]>([]);
+export function TemplateCatalog({ clientId, onShowBulkImport, refreshKey }: TemplateCatalogProps) {
+  const [templates, setTemplates] = useState<AdCreativeTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [verticalFilter, setVerticalFilter] = useState<AdVertical | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<AdCategory | 'all'>('all');
-  const [selectedTemplate, setSelectedTemplate] = useState<KandyTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<AdCreativeTemplate | null>(null);
 
   const fetchTemplates = useCallback(async () => {
+    if (!clientId.trim()) {
+      setTemplates([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
-      const res = await fetch('/api/ad-creatives/templates?limit=2000');
+      const res = await fetch(`/api/clients/${clientId}/ad-creatives/templates?limit=2000`);
       if (res.ok) {
-        const data = await res.json();
-        setTemplates(data.templates ?? []);
+        const data = (await res.json()) as { templates?: AdPromptTemplate[] };
+        const rows = data.templates ?? [];
+        setTemplates(rows.map((row) => adPromptRowToWizardTemplate(row)));
       }
     } catch {
       // Silently fail
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [clientId]);
 
   useEffect(() => {
     fetchTemplates();
@@ -125,7 +133,7 @@ export function TemplateCatalog({ clientId: _clientId, onShowBulkImport, refresh
 
   // Group by vertical
   const grouped = useMemo(() => {
-    const map = new Map<string, KandyTemplate[]>();
+    const map = new Map<string, AdCreativeTemplate[]>();
     for (const t of filtered) {
       const key = t.vertical;
       if (!map.has(key)) map.set(key, []);
@@ -156,17 +164,24 @@ export function TemplateCatalog({ clientId: _clientId, onShowBulkImport, refresh
     );
   }
 
-  if (templates.length === 0) {
+  if (!clientId.trim()) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-surface mb-4">
-          <Loader2 size={28} className="text-accent-text animate-spin" />
-        </div>
-        <h2 className="text-lg font-semibold text-text-primary mb-2">
-          Template catalog is being prepared...
-        </h2>
+        <h2 className="text-lg font-semibold text-text-primary mb-2">Choose a client</h2>
         <p className="text-sm text-text-muted max-w-md">
-          Templates are being loaded from the Kandy library. Check back shortly.
+          Reference ads and prompt templates are stored per client. Select a client to browse their library.
+        </p>
+      </div>
+    );
+  }
+
+  if (!loading && templates.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <h2 className="text-lg font-semibold text-text-primary mb-2">No reference ads yet</h2>
+        <p className="text-sm text-text-muted max-w-md">
+          Upload winning ads or scrape the Meta Ad Library from the generate flow to build this client’s template
+          library.
         </p>
       </div>
     );

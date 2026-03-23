@@ -12,6 +12,8 @@ interface ClientOption {
   services: string[];
   agency?: string | null;
   logoUrl?: string | null;
+  affiliate_digest_email_enabled?: boolean;
+  affiliate_digest_recipients?: string | null;
 }
 
 export interface AffiliateKpis {
@@ -125,34 +127,38 @@ export function useAffiliatesData() {
   const [recentReferrals, setRecentReferrals] = useState<RecentReferral[]>([]);
   const [pendingPayouts, setPendingPayouts] = useState<PendingPayout[]>([]);
 
-  // Fetch clients
-  useEffect(() => {
-    async function fetchClients() {
-      try {
-        const res = await fetch('/api/clients');
-        const data = await res.json();
-        const raw = Array.isArray(data) ? data : data.clients ?? [];
-        const all: ClientOption[] = raw.map((c: Record<string, unknown>) => ({
-          id: c.id as string,
-          name: c.name as string,
-          slug: c.slug as string,
-          hasUppromote: !!(c.uppromote_api_key),
-          services: Array.isArray(c.services) ? (c.services as string[]) : [],
-          agency: (c.agency as string) ?? null,
-          logoUrl: (c.logo_url as string) ?? null,
-        }));
-        // Only show clients with Affiliates service enabled
-        const list = all.filter((c) => c.services.includes('Affiliates'));
-        setClients(list);
-        if (list.length > 0) setSelectedClientId(list[0].id);
-      } catch {
-        toast.error('Failed to load clients');
-      } finally {
-        setLoading(false);
-      }
+  const refreshClients = useCallback(async () => {
+    try {
+      const res = await fetch('/api/clients');
+      const data = await res.json();
+      const raw = Array.isArray(data) ? data : data.clients ?? [];
+      const all: ClientOption[] = raw.map((c: Record<string, unknown>) => ({
+        id: c.id as string,
+        name: c.name as string,
+        slug: c.slug as string,
+        hasUppromote: !!(c.uppromote_api_key),
+        services: Array.isArray(c.services) ? (c.services as string[]) : [],
+        agency: (c.agency as string) ?? null,
+        logoUrl: (c.logo_url as string) ?? null,
+        affiliate_digest_email_enabled: Boolean(c.affiliate_digest_email_enabled),
+        affiliate_digest_recipients: (c.affiliate_digest_recipients as string) ?? null,
+      }));
+      const list = all.filter((c) => c.services.includes('Affiliates'));
+      setClients(list);
+      setSelectedClientId((prev) => {
+        if (prev && list.some((c) => c.id === prev)) return prev;
+        return list[0]?.id ?? '';
+      });
+    } catch {
+      toast.error('Failed to load clients');
+    } finally {
+      setLoading(false);
     }
-    fetchClients();
   }, []);
+
+  useEffect(() => {
+    refreshClients();
+  }, [refreshClients]);
 
   const dateRange = getDateRange(datePreset, customRange);
 
@@ -222,5 +228,6 @@ export function useAffiliatesData() {
     dataLoading,
     syncing,
     syncNow,
+    refreshClients,
   };
 }

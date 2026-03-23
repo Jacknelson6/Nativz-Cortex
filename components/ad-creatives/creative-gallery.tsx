@@ -11,6 +11,7 @@ import { GalleryPlaceholder } from './gallery-placeholder';
 import { Dialog } from '@/components/ui/dialog';
 import { downloadCreativesAsZip } from '@/lib/ad-creatives/bulk-download-creatives';
 import type { AdCreative } from '@/lib/ad-creatives/types';
+import type { AdBatchPlaceholderConfig } from '@/lib/ad-creatives/placeholder-config';
 
 const BULK_MAX = 50;
 
@@ -27,17 +28,12 @@ function formatBatchDate(iso: string): string {
 
 type FilterTab = 'all' | 'favorites';
 
-interface PlaceholderConfig {
-  brandColors: string[];
-  templateThumbnails: { templateId: string; imageUrl: string; variationIndex: number }[];
-}
-
 interface CreativeGalleryProps {
   clientId: string;
   /** When false, empty state points users to the Brand DNA tab (CTA lives in the parent toolbar). */
   brandDnaReady?: boolean;
   activeBatchId?: string | null;
-  placeholderConfig?: PlaceholderConfig | null;
+  placeholderConfig?: AdBatchPlaceholderConfig | null;
   onBatchComplete?: () => void;
   /** Opens generate wizard pre-filled from the selected creative (Brand DNA ready only). */
   onCreateMoreLikeThis?: (creative: AdCreative) => void;
@@ -525,6 +521,7 @@ export function CreativeGallery({
                     <GalleryPlaceholder
                       brandColors={placeholderConfig.brandColors}
                       templateThumbnailUrl={thumb.imageUrl}
+                      skeletonOnly={placeholderConfig.skeletonOnly}
                       status="generating"
                     />
                   </div>
@@ -572,6 +569,7 @@ export function CreativeGallery({
                     <GalleryPlaceholder
                       brandColors={placeholderConfig.brandColors}
                       templateThumbnailUrl={placeholderConfig.templateThumbnails[completedInBatch.length + i]?.imageUrl}
+                      skeletonOnly={placeholderConfig.skeletonOnly}
                       status="generating"
                     />
                   </div>

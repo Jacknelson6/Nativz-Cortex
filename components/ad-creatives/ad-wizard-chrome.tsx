@@ -45,9 +45,9 @@ export const AD_WIZARD_STEP_META = [
   },
   {
     id: 'copy' as const,
-    title: 'Headlines & CTAs',
+    title: 'Headline, subheadline & CTA',
     shortTitle: 'Copy',
-    description: 'AI-generated variations or your own headline, subheadline, and CTA.',
+    description: 'Headline and subheadline first (unique per ad with AI); one shared call to action for the batch.',
   },
   {
     id: 'generate' as const,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { viewerMayUseRestApi } from '@/lib/portal/viewer-api-access';
 import { hashApiKey } from './generate';
 import { checkRateLimit } from './rate-limit';
 
@@ -59,6 +60,11 @@ export async function validateApiKey(
 
   if (key.expires_at && new Date(key.expires_at) < new Date()) {
     return { error: NextResponse.json({ error: 'API key expired' }, { status: 401 }) };
+  }
+
+  const apiOk = await viewerMayUseRestApi(key.user_id);
+  if (!apiOk) {
+    return { error: NextResponse.json({ error: 'API access is disabled for this account' }, { status: 403 }) };
   }
 
   // Check scope

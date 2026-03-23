@@ -1,0 +1,43 @@
+---
+description: Design Harness — 4-layer design workflow (skills, canvases, inspiration, implementation doctrine). Use with northstone-app-ui for Cortex UI; read vendored SKILL for full system.
+globs: app/**/*.tsx, app/**/*.ts, components/**/*.tsx
+alwaysApply: false
+---
+
+# Design Harness (Nativz Cortex)
+
+For **full pages, landing flows, marketing UI, or any substantial interface work**, read the vendored skill:
+
+**`.claude/skills/design-harness/SKILL.md`**
+
+Then apply **this repo’s** implementation path:
+
+1. **`.cursor/rules/northstone-app-ui.mdc`** — Shadcn pipeline, Bedrock motion, typography-first doctrine for Cortex
+2. **`.claude/skills/bedrock/SKILL.md`** + **`references/design-doctrine.md`** + **`references/single-prompt-playbook.md`**
+3. **`docs/conventions.md`** and **`docs/detail-design-patterns.md`** for UI copy, dark theme, and established tokens
+
+**Project precedence:** Where the harness suggests generic stacks (e.g. “neutral grays, not slate/zinc”), **follow Cortex conventions** — this app already standardizes on dark surfaces, accent, and existing Tailwind tokens.
+
+## Quick reference (from harness)
+
+### Before writing JSX
+- Lock **font pairing** (display + body) and **delight budget** (about 1 hero moment + 1 optional mid-page; calm elsewhere)
+- Typography and spacing before heavy motion
+
+### Implementation habits
+- **Shadcn blocks first** for structure (`npx shadcn@latest add <block>`)
+- **One visual system** across sections (radius, borders, button weight)
+- **Motion is seasoning** — not wallpaper
+- **No magnetic hovers** (Magnet / MagnetLines) — hard ban (see `design-doctrine.md`)
+- **Verify:** `npm run build` + `npm run lint` after substantive UI
+
+### External layers (optional installs)
+- **Impeccable** (impeccable.style), **Emil Kowalski** (emilkowal.ski/skill), **Interface Design** (interface-design.dev), **UI Skills** (ui-skills.com) — borrowed expertise; see full `SKILL.md` for links and when to use each
+- **Paper** (paper.design), **Pencil** (pencil.dev) — agent-native design surfaces
+- **Variant**, **Mobbin**, **Awwwards**, **Cosmos** — inspiration / taste training (see `SKILL.md`)
+
+### Related in-repo skills
+- **web-design-system** (optional external) — CSS/Tailwind techniques referenced from upstream harness README
+- **northstone-app-ui** / **bedrock** — primary Cortex shipping stack
+
+Upstream repo: [github.com/Jacknelson6/design-harness](https://github.com/Jacknelson6/design-harness)

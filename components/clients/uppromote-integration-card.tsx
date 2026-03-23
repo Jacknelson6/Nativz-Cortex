@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Handshake, Check, X, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { UpPromoteLogo } from '@/components/integrations/uppromote-logo';
 
 export function UpPromoteIntegrationCard({
   clientId,
@@ -64,9 +65,12 @@ export function UpPromoteIntegrationCard({
 
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-4">
-        <Handshake size={16} className="text-accent-text" />
-        <h2 className="text-base font-semibold text-text-primary">Affiliate integration</h2>
+      <div className="flex items-center gap-3 mb-4">
+        <UpPromoteLogo size={40} className="h-10 w-10 ring-1 ring-white/10" />
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">UpPromote</h2>
+          <p className="text-xs text-text-muted">Affiliate integration</p>
+        </div>
       </div>
 
       {connected ? (

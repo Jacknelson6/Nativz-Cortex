@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 // ── Pricing per token ───────────────────────────────────────────────────────
 
 const PRICING: Record<string, { input: number; output: number }> = {
+  // OpenRouter — default / free-tier completions (tracked at $0 until priced)
+  'nvidia/nemotron-3-super-120b-a12b:free': { input: 0, output: 0 },
   // OpenRouter — Hunter Alpha (writing, currently free)
   'openrouter/hunter-alpha': { input: 0, output: 0 },
   // OpenRouter — Healer Alpha (multimodal, currently free)

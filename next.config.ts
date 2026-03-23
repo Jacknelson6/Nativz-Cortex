@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      // Browsers still request /favicon.ico; Cortex uses file-based `app/icon.png`.
+      { source: '/favicon.ico', destination: '/icon.png', permanent: false },
+    ];
+  },
   compiler: {
     // Strip console.log/warn/info/debug in production (keep console.error)
     removeConsole: process.env.NODE_ENV === 'production'

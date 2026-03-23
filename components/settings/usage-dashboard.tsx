@@ -103,6 +103,7 @@ function formatNumber(n: number): string {
 }
 
 const MODEL_LABELS: Record<string, string> = {
+  'nvidia/nemotron-3-super-120b-a12b:free': 'NVIDIA Nemotron 3 Super (free)',
   'openrouter/hunter-alpha': 'Hunter Alpha',
   'openrouter/healer-alpha': 'Healer Alpha',
   'anthropic/claude-sonnet-4-5': 'Claude Sonnet 4.5',

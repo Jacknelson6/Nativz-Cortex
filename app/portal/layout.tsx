@@ -9,6 +9,7 @@ import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
 import { ImpersonationBanner } from '@/components/portal/impersonation-banner';
 import { BrandModeProvider } from '@/components/layout/brand-mode-provider';
 import type { FeatureFlags } from '@/lib/portal/get-portal-client';
+import { buildPortalFeatureFlags } from '@/lib/portal/feature-flags';
 
 interface PortalBrand {
   id: string;
@@ -29,17 +30,7 @@ const getCachedPortalUser = unstable_cache(
       .single();
     if (!userData) return null;
 
-    let featureFlags: FeatureFlags = {
-      can_search: true,
-      can_view_reports: true,
-      can_edit_preferences: true,
-      can_submit_ideas: true,
-      can_view_notifications: true,
-      can_view_calendar: false,
-      can_view_analyze: false,
-      can_view_knowledge: true,
-      can_use_nerd: false,
-    };
+    let featureFlags: FeatureFlags = buildPortalFeatureFlags(null);
 
     if (userData.organization_id) {
       const { data: clients } = await adminClient
@@ -49,8 +40,8 @@ const getCachedPortalUser = unstable_cache(
         .eq('is_active', true)
         .limit(1);
 
-      if (clients?.[0]?.feature_flags) {
-        featureFlags = { ...featureFlags, ...(clients[0].feature_flags as FeatureFlags) };
+      if (clients?.[0]) {
+        featureFlags = buildPortalFeatureFlags(clients[0].feature_flags);
       }
 
       const agency = (clients?.[0]?.agency as string | null) ?? null;
@@ -123,20 +114,9 @@ async function getPortalBrands(userId: string): Promise<{
   }
 
   const activeClient = clients?.find((c) => c.id === activeBrand?.id);
-  const defaultFlags: FeatureFlags = {
-    can_search: true,
-    can_view_reports: true,
-    can_edit_preferences: true,
-    can_submit_ideas: true,
-    can_view_notifications: true,
-    can_view_calendar: false,
-    can_view_analyze: false,
-    can_view_knowledge: true,
-    can_use_nerd: false,
-  };
 
   const activeFeatureFlags = activeClient
-    ? { ...defaultFlags, ...(activeClient.feature_flags as Partial<FeatureFlags> ?? {}) }
+    ? buildPortalFeatureFlags(activeClient.feature_flags)
     : null;
 
   return {
@@ -179,22 +159,12 @@ export default async function PortalLayout({
   const avatarUrl = cached?.avatarUrl || null;
 
   // Feature flags: prefer active brand's flags (multi-brand), fall back to cached user flags
-  let featureFlags: FeatureFlags = {
-    can_search: true,
-    can_view_reports: true,
-    can_edit_preferences: true,
-    can_submit_ideas: true,
-    can_view_notifications: true,
-    can_view_calendar: false,
-    can_view_analyze: false,
-    can_view_knowledge: true,
-    can_use_nerd: false,
-  };
+  let featureFlags: FeatureFlags = buildPortalFeatureFlags(null);
 
   if (brandData.activeFeatureFlags) {
     featureFlags = brandData.activeFeatureFlags;
   } else if (cached?.featureFlags) {
-    featureFlags = cached.featureFlags;
+    featureFlags = buildPortalFeatureFlags(cached.featureFlags);
   }
 
   // Lock brand mode based on active brand's agency
@@ -212,7 +182,7 @@ export default async function PortalLayout({
           brands={brandData.brands}
           activeBrandId={brandData.activeBrandId}
         />
-        <SidebarInset>
+        <SidebarInset variant="portal">
           <PortalHeader />
           {children}
         </SidebarInset>

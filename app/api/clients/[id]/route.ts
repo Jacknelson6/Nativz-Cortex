@@ -3,16 +3,20 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { syncClientProfileToVault, removeClientFromVault } from '@/lib/vault/sync';
 import { logActivity } from '@/lib/activity';
+import {
+  normalizeAdminWorkspaceModules,
+  parseFullAdminWorkspaceModulesForPatch,
+} from '@/lib/clients/admin-workspace-modules';
 
 /**
  * GET /api/clients/[id]
  *
- * Fetch a single client's full profile including portal contacts, strategy, and a knowledge
- * entry summary. Supports lookup by UUID or slug.
+ * Fetch a single client's full profile including portal contacts and strategy.
+ * Supports lookup by UUID or slug.
  *
  * @auth Required (any authenticated user)
  * @param id - Client UUID or slug
- * @returns {{ client: Client, portalContacts: User[], strategy: ClientStrategy | null, knowledgeSummary: { type: string, count: number }[] }}
+ * @returns {{ client: Client, portalContacts: User[], strategy: ClientStrategy | null }}
  */
 export async function GET(
   _request: NextRequest,
@@ -39,7 +43,9 @@ export async function GET(
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     const { data: dbClient } = await adminClient
       .from('clients')
-      .select('id, name, slug, industry, organization_id, logo_url, website_url, target_audience, brand_voice, topic_keywords, is_active, feature_flags, health_score, agency, services, description, google_drive_branding_url, google_drive_calendars_url, preferences, monthly_boosting_budget')
+      .select(
+        'id, name, slug, industry, organization_id, logo_url, website_url, target_audience, brand_voice, topic_keywords, is_active, feature_flags, health_score, agency, services, description, google_drive_branding_url, google_drive_calendars_url, preferences, monthly_boosting_budget, uppromote_api_key, affiliate_digest_email_enabled, affiliate_digest_recipients, admin_workspace_modules',
+      )
       .eq(isUuid ? 'id' : 'slug', id)
       .single();
 
@@ -54,7 +60,7 @@ export async function GET(
 
     const clientId = dbClient.id;
 
-    const [contactsResult, { data: strategyData }, { data: knowledgeEntries }] = await Promise.all([
+    const [contactsResult, { data: strategyData }] = await Promise.all([
       dbClient.organization_id
         ? adminClient
             .from('users')
@@ -71,11 +77,14 @@ export async function GET(
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
-      adminClient
-        .from('client_knowledge_entries')
-        .select('type')
-        .eq('client_id', clientId),
     ]);
+
+    const isAdmin = userData?.role === 'admin';
+    const row = dbClient as {
+      uppromote_api_key?: string | null;
+      affiliate_digest_email_enabled?: boolean | null;
+      affiliate_digest_recipients?: string | null;
+    };
 
     return NextResponse.json({
       client: {
@@ -98,18 +107,17 @@ export async function GET(
         google_drive_calendars_url: dbClient.google_drive_calendars_url ?? null,
         preferences: dbClient.preferences ?? null,
         monthly_boosting_budget: (dbClient as { monthly_boosting_budget?: number | null }).monthly_boosting_budget ?? null,
+        has_affiliate_integration: isAdmin ? Boolean(row.uppromote_api_key) : undefined,
+        affiliate_digest_email_enabled: isAdmin ? Boolean(row.affiliate_digest_email_enabled) : undefined,
+        affiliate_digest_recipients: isAdmin ? (row.affiliate_digest_recipients ?? null) : undefined,
+        admin_workspace_modules: isAdmin
+          ? normalizeAdminWorkspaceModules(
+              (dbClient as { admin_workspace_modules?: unknown }).admin_workspace_modules,
+            )
+          : undefined,
       },
       portalContacts: contactsResult.data || [],
       strategy: strategyData ?? null,
-      knowledgeSummary: (() => {
-        const typeCounts = new Map<string, number>();
-        for (const entry of knowledgeEntries ?? []) {
-          typeCounts.set(entry.type, (typeCounts.get(entry.type) ?? 0) + 1);
-        }
-        return Array.from(typeCounts.entries())
-          .map(([type, count]) => ({ type, count }))
-          .sort((a, b) => b.count - a.count);
-      })(),
     });
   } catch (error) {
     console.error('GET /api/clients/[id] error:', error);
@@ -170,6 +178,12 @@ export async function PATCH(
 
     const body = await request.json();
 
+    let existingFeatureFlags: Record<string, unknown> = {};
+    if ('feature_flags' in body) {
+      const { data: curRow } = await adminClient.from('clients').select('feature_flags').eq('id', id).single();
+      existingFeatureFlags = (curRow?.feature_flags as Record<string, unknown>) ?? {};
+    }
+
     // Only allow updating specific fields
     const allowedFields = [
       'industry',
@@ -190,13 +204,36 @@ export async function PATCH(
       'google_drive_branding_url',
       'google_drive_calendars_url',
       'monthly_boosting_budget',
+      'affiliate_digest_email_enabled',
+      'affiliate_digest_recipients',
+      'admin_workspace_modules',
     ];
 
     const updates: Record<string, unknown> = {};
     for (const field of allowedFields) {
-      if (field in body) {
+      if (field in body && field !== 'admin_workspace_modules' && field !== 'feature_flags') {
         updates[field] = body[field];
       }
+    }
+
+    if ('feature_flags' in body) {
+      updates.feature_flags = {
+        ...existingFeatureFlags,
+        ...(body.feature_flags as Record<string, unknown>),
+      };
+    }
+
+    if ('admin_workspace_modules' in body) {
+      const parsed = parseFullAdminWorkspaceModulesForPatch(
+        (body as { admin_workspace_modules?: unknown }).admin_workspace_modules,
+      );
+      if (!parsed) {
+        return NextResponse.json(
+          { error: 'admin_workspace_modules must include all workspace toggles as booleans' },
+          { status: 400 },
+        );
+      }
+      updates.admin_workspace_modules = parsed;
     }
 
     if (Object.keys(updates).length === 0) {

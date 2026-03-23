@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ClientAdminShell } from '@/components/clients/client-admin-shell';
+import { normalizeAdminWorkspaceModules } from '@/lib/clients/admin-workspace-modules';
 
 export default async function AdminClientSlugLayout({
   children,
@@ -28,7 +29,7 @@ export default async function AdminClientSlugLayout({
 
   const { data: client } = await admin
     .from('clients')
-    .select('id, name, slug, organization_id')
+    .select('id, name, slug, organization_id, admin_workspace_modules')
     .eq('slug', slug)
     .single();
 
@@ -45,6 +46,9 @@ export default async function AdminClientSlugLayout({
       value={{
         slug: client.slug ?? slug,
         clientName: client.name ?? slug,
+        adminWorkspaceModules: normalizeAdminWorkspaceModules(
+          (client as { admin_workspace_modules?: unknown }).admin_workspace_modules,
+        ),
       }}
     >
       {children}

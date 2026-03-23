@@ -17,8 +17,15 @@
     "test:e2e:full-admin": "playwright test tests/admin-authenticated-crawl.spec.ts",
     "test:e2e:full-portal": "playwright test tests/portal-authenticated-crawl.spec.ts",
     "kandy:upload": "tsx scripts/upload-kandy-templates.ts",
+    "kandy:clear": "tsx scripts/clear-kandy-templates.ts",
     "kandy:analyze": "tsx scripts/analyze-kandy-templates.ts",
-    "supabase:apply-053": "tsx scripts/exec-sql-file.ts supabase/migrations/053_kandy_templates_vertical_expand.sql"
+    "export:rankprompt-digital-pack": "tsx scripts/export-digital-products-rankprompt-json.ts",
+    "supabase:apply-053": "tsx scripts/exec-sql-file.ts supabase/migrations/053_kandy_templates_vertical_expand.sql",
+    "supabase:apply-059": "tsx scripts/exec-sql-file.ts supabase/migrations/059_kandy_rankprompt_prompt_pack_url.sql",
+    "supabase:apply-061": "tsx scripts/exec-sql-file.ts supabase/migrations/061_clients_affiliate_digest_email.sql",
+    "supabase:apply-062": "tsx scripts/exec-sql-file.ts supabase/migrations/062_admin_workspace_modules.sql",
+    "supabase:apply-063": "tsx scripts/exec-sql-file.ts supabase/migrations/063_client_ad_generation_settings.sql",
+    "kandy:sync-rankprompt-packs": "tsx scripts/sync-rankprompt-template-packs.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

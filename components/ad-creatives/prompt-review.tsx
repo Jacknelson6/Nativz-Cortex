@@ -111,14 +111,14 @@ export function PromptReview({ previews, onApproveAll, onCancel, generating }: P
             {/* Expanded editor */}
             {expandedIndex === i && (
               <div className="border-t border-nativz-border p-4 space-y-3">
-                {/* Copy fields */}
-                <div className="grid grid-cols-3 gap-2">
+                {/* Copy fields — headline and subheadline first, then CTA (matches wizard + on-ad hierarchy) */}
+                <div className="space-y-3">
                   <div>
                     <label className="text-[10px] text-text-muted uppercase tracking-wide">Headline</label>
                     <input
                       value={preview.copy.headline}
                       onChange={(e) => updateCopy(i, 'headline', e.target.value)}
-                      className="w-full mt-1 rounded-lg border border-nativz-border bg-background px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent/50"
+                      className="w-full mt-1 rounded-lg border border-nativz-border bg-background px-2.5 py-1.5 text-sm text-text-primary outline-none focus:border-accent/50"
                     />
                   </div>
                   <div>
@@ -126,15 +126,15 @@ export function PromptReview({ previews, onApproveAll, onCancel, generating }: P
                     <input
                       value={preview.copy.subheadline}
                       onChange={(e) => updateCopy(i, 'subheadline', e.target.value)}
-                      className="w-full mt-1 rounded-lg border border-nativz-border bg-background px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent/50"
+                      className="w-full mt-1 rounded-lg border border-nativz-border bg-background px-2.5 py-1.5 text-sm text-text-primary outline-none focus:border-accent/50"
                     />
                   </div>
-                  <div>
-                    <label className="text-[10px] text-text-muted uppercase tracking-wide">CTA</label>
+                  <div className="pt-2 border-t border-nativz-border/70">
+                    <label className="text-[10px] text-text-muted uppercase tracking-wide">Call to action</label>
                     <input
                       value={preview.copy.cta}
                       onChange={(e) => updateCopy(i, 'cta', e.target.value)}
-                      className="w-full mt-1 rounded-lg border border-nativz-border bg-background px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent/50"
+                      className="w-full mt-1 rounded-lg border border-nativz-border bg-background px-2.5 py-1.5 text-sm text-text-primary outline-none focus:border-accent/50"
                     />
                   </div>
                 </div>

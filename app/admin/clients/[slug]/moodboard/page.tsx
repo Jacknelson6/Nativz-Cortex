@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ClientMoodboardEmpty } from '@/components/clients/client-moodboard-empty';
 import { ClientMoodboardWorkspace } from '@/components/clients/client-moodboard-workspace';
+import { requireAdminWorkspaceModuleAccess } from '@/lib/clients/require-admin-workspace-module-access';
 
 export default async function ClientMoodboardPage({
   params,
@@ -9,6 +10,8 @@ export default async function ClientMoodboardPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  await requireAdminWorkspaceModuleAccess(slug, 'moodboard');
+
   const admin = createAdminClient();
 
   const { data: client } = await admin

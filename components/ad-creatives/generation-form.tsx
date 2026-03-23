@@ -7,7 +7,6 @@ import {
   Info,
   Sparkles,
   Loader2,
-  LayoutGrid,
   Square,
   RectangleVertical,
   Smartphone,
@@ -17,8 +16,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { GenerationProgress } from './generation-progress';
-import type { KandyTemplate, AspectRatio } from '@/lib/ad-creatives/types';
+import type { AdCreativeTemplate, AspectRatio, BrandLayoutMode, AdPromptTemplate } from '@/lib/ad-creatives/types';
 import { ASPECT_RATIOS } from '@/lib/ad-creatives/types';
+import { adPromptRowToWizardTemplate } from '@/lib/ad-creatives/wizard-template';
+import { BatchCtaField } from './batch-cta-field';
+import { DEFAULT_BATCH_CTA } from '@/lib/ad-creatives/batch-cta-presets';
 
 type CopyMode = 'ai' | 'manual';
 
@@ -68,7 +70,7 @@ function CollapsibleSection({ title, number, defaultOpen = true, children }: Col
 
 export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFormProps) {
   // Template selection
-  const [templates, setTemplates] = useState<KandyTemplate[]>([]);
+  const [templates, setTemplates] = useState<AdCreativeTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set());
 
@@ -81,9 +83,11 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
   const [headline, setHeadline] = useState('');
   const [subheadline, setSubheadline] = useState('');
   const [cta, setCta] = useState('');
+  const [batchCta, setBatchCta] = useState(DEFAULT_BATCH_CTA);
 
   // Format
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
+  const [brandLayoutMode, setBrandLayoutMode] = useState<BrandLayoutMode>('reference_image');
   const [numVariations, setNumVariations] = useState(3);
 
   // Generation state
@@ -92,17 +96,18 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
 
   const fetchTemplates = useCallback(async () => {
     try {
-      const res = await fetch('/api/ad-creatives/templates');
+      const res = await fetch(`/api/clients/${clientId}/ad-creatives/templates?limit=2000`);
       if (res.ok) {
-        const data = await res.json();
-        setTemplates(data.templates ?? []);
+        const data = (await res.json()) as { templates?: AdPromptTemplate[] };
+        const rows = data.templates ?? [];
+        setTemplates(rows.map((row) => adPromptRowToWizardTemplate(row)));
       }
     } catch {
       // Silently fail
     } finally {
       setLoadingTemplates(false);
     }
-  }, []);
+  }, [clientId]);
 
   useEffect(() => {
     fetchTemplates();
@@ -124,21 +129,24 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
 
   async function handleGenerate() {
     if (!isValid) return;
+
     setGenerating(true);
 
     try {
       const body: Record<string, unknown> = {
         templateIds: Array.from(selectedTemplateIds),
-        templateSource: 'kandy' as const,
         productService: productService.trim(),
         offer: offer.trim(),
         onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
         aspectRatio,
         numVariations,
+        brandLayoutMode,
       };
 
       if (copyMode === 'manual') {
         body.manualText = { headline, subheadline, cta };
+      } else {
+        body.batchCta = (batchCta.trim() || DEFAULT_BATCH_CTA).slice(0, 30);
       }
 
       const res = await fetch(`/api/clients/${clientId}/ad-creatives/generate`, {
@@ -280,34 +288,37 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
           </div>
 
           {copyMode === 'ai' ? (
-            <div className="flex items-start gap-2 rounded-lg bg-accent-surface/50 border border-accent/20 px-4 py-3">
-              <Info size={14} className="text-accent-text mt-0.5 shrink-0" />
-              <p className="text-xs text-accent-text leading-relaxed">
-                Headlines and CTAs will be generated from your brand voice and the selected template styles.
-              </p>
+            <div className="rounded-lg border border-nativz-border bg-surface/50 px-4 py-4">
+              <BatchCtaField id="hub-batch-cta" value={batchCta} onChange={setBatchCta} />
+              <div className="mt-4 flex items-start gap-2 rounded-lg bg-accent-surface/50 border border-accent/20 px-3 py-2.5">
+                <Info size={14} className="text-accent-text mt-0.5 shrink-0" />
+                <p className="text-xs text-accent-text leading-relaxed">
+                  Copy follows headline, then subheadline, then your shared CTA — same order as on the finished creative.
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <Input
                 id="headline"
                 label="Headline"
                 value={headline}
                 onChange={(e) => setHeadline(e.target.value)}
-                placeholder="e.g., Feel the difference"
+                placeholder="e.g., Show up in AI-generated answers"
               />
               <Input
                 id="subheadline"
                 label="Subheadline"
                 value={subheadline}
                 onChange={(e) => setSubheadline(e.target.value)}
-                placeholder="e.g., Premium ingredients, naturally sourced"
+                placeholder="e.g., Track citations when buyers ask assistants for picks"
               />
               <Input
                 id="cta"
                 label="Call to action"
                 value={cta}
                 onChange={(e) => setCta(e.target.value)}
-                placeholder="e.g., Shop now"
+                placeholder="e.g., Try for free"
               />
             </div>
           )}
@@ -370,6 +381,26 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
               className="block w-24 rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
             <p className="text-[11px] text-text-muted">Between 1 and 20 variations per batch</p>
+          </div>
+
+          <div className="space-y-2 pt-2 border-t border-nativz-border max-w-xl">
+            <label htmlFor="hub-brand-layout" className="block text-sm font-medium text-text-secondary">
+              Layout reference
+            </label>
+            <select
+              id="hub-brand-layout"
+              value={brandLayoutMode}
+              onChange={(e) => setBrandLayoutMode(e.target.value as BrandLayoutMode)}
+              className="w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            >
+              <option value="reference_image">Template screenshot + JSON (default)</option>
+              <option value="schema_only">Schema only</option>
+              <option value="schema_plus_wireframe">Schema + wireframe</option>
+            </select>
+            <p className="text-[11px] text-text-muted leading-relaxed">
+              One Gemini pass renders type, visuals, and brand mark. Default uses the template PNG as a loose layout
+              guide.
+            </p>
           </div>
         </div>
       </CollapsibleSection>

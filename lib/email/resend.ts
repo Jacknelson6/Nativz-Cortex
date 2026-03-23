@@ -1,29 +1,16 @@
 import { Resend } from 'resend';
 import { logUsage } from '@/lib/ai/usage';
+import { EMAIL_BRAND as BRAND, nativzEmailLogoUrl } from '@/lib/email/brand-tokens';
+import { buildAffiliateWeeklyReportCardHtml } from '@/lib/email/templates/affiliate-weekly-report-html';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const FROM_ADDRESS = 'Nativz Cortex <notifications@nativz.io>';
 
-// ── Brand tokens (from Nativz Brand Guide) ──────────────────────────────────
-const BRAND = {
-  bgDark: '#000C11',
-  bgCard: '#01151D',
-  borderCard: 'rgba(255,255,255,0.06)',
-  textPrimary: '#FFFFFF',
-  textBody: '#D1D5DB',
-  textMuted: '#9CA3AF',
-  textFooter: '#617792',
-  blue: '#00AEEF',      // Brand blue — the "z"
-  blueCta: '#046BD2',   // CTA button blue
-  blueHover: '#045CB4', // Hover state
-  blueSurface: 'rgba(0,174,239,0.10)',
-  fontStack: '"futura-pt", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Oxygen-Sans", Ubuntu, Cantarell, "Helvetica Neue", sans-serif',
-};
-
 // ── Shared layout ────────────────────────────────────────────────────────────
 
 function layout(content: string) {
+  const logoSrc = nativzEmailLogoUrl();
   return `
 <!DOCTYPE html>
 <html>
@@ -34,12 +21,6 @@ function layout(content: string) {
   <link rel="stylesheet" href="https://use.typekit.net/your-kit-id.css" />
   <style>
     body { margin: 0; padding: 0; background: ${BRAND.bgDark}; font-family: ${BRAND.fontStack}; -webkit-font-smoothing: antialiased; }
-    .wrapper { max-width: 520px; margin: 0 auto; padding: 48px 24px; }
-
-    /* Header strip */
-    .header { text-align: center; padding-bottom: 32px; }
-    .header img { display: inline-block; }
-
     /* Card */
     .card { background: ${BRAND.bgCard}; border: 1px solid ${BRAND.borderCard}; border-radius: 16px; padding: 36px 32px; }
 
@@ -88,18 +69,40 @@ function layout(content: string) {
     .footer-line { display: block; width: 40px; height: 2px; background: ${BRAND.blue}; opacity: 0.2; margin: 0 auto 16px; border-radius: 1px; }
   </style>
 </head>
-<body>
-  <div class="wrapper">
-    <div class="header">
-      <img src="https://cortex.nativz.io/nativz-logo.png" alt="Nativz" width="110" />
-    </div>
-    ${content}
-    <div class="footer">
-      <div class="footer-line"></div>
-      <p>&copy; ${new Date().getFullYear()} Nativz &middot; <a href="https://cortex.nativz.io">cortex.nativz.io</a></p>
-      <p style="margin-top:8px;"><a href="https://nativz.io">nativz.io</a></p>
-    </div>
-  </div>
+<body style="margin:0;padding:0;background-color:${BRAND.bgDark};">
+  <!-- Table shell: Gmail strips body backgrounds; bgcolor + td styles keep the white logo visible. -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${BRAND.bgDark}" style="background-color:${BRAND.bgDark};">
+    <tr>
+      <td align="center" style="padding:48px 24px;background-color:${BRAND.bgDark};">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background-color:${BRAND.bgDark};">
+          <tr>
+            <td align="center" style="padding:0 0 16px;background-color:${BRAND.bgDark};">
+              <!-- White header panel: marketing JPG has an opaque white canvas — don’t float it on dark (harsh box). -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;border-radius:16px;border:1px solid #e5e7eb;">
+                <tr>
+                  <td align="center" style="padding:28px 40px;background-color:#ffffff;border-radius:16px;">
+                    <img src="${logoSrc}" width="200" height="80" alt="Nativz" style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;max-width:200px;height:auto;width:auto;" />
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:${BRAND.bgDark};">
+              ${content}
+            </td>
+          </tr>
+          <tr>
+            <td align="center" class="footer" style="background-color:${BRAND.bgDark};padding-top:36px;">
+              <div class="footer-line"></div>
+              <p>&copy; ${new Date().getFullYear()} Nativz &middot; <a href="https://cortex.nativz.io">cortex.nativz.io</a></p>
+              <p style="margin-top:8px;"><a href="https://nativz.io">nativz.io</a></p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`;
 }
@@ -246,6 +249,53 @@ export async function sendWelcomeEmail(opts: {
         </table>
       </div>
     `),
+  });
+
+  logUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  }).catch(() => {});
+
+  return result;
+}
+
+// ── Weekly affiliate analytics report ─────────────────────────────────────────
+
+export async function sendAffiliateWeeklyReportEmail(opts: {
+  to: string[];
+  clientName: string;
+  rangeLabel: string;
+  kpis: {
+    newAffiliates: number;
+    totalAffiliates: number;
+    activeAffiliates: number;
+    referralsInPeriod: number;
+    periodRevenue: number;
+    totalClicks: number;
+  };
+  topAffiliates: { name: string; revenue: number; referrals: number }[];
+  isTestOverride: boolean;
+}) {
+  const subjectPrefix = opts.isTestOverride ? '[Test] ' : '';
+  const subject = `${subjectPrefix}Weekly affiliate report — ${opts.clientName} (${opts.rangeLabel})`;
+
+  const cardHtml = buildAffiliateWeeklyReportCardHtml({
+    clientName: opts.clientName,
+    rangeLabel: opts.rangeLabel,
+    kpis: opts.kpis,
+    topAffiliates: opts.topAffiliates,
+  });
+
+  const result = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: opts.to,
+    subject,
+    html: layout(cardHtml),
   });
 
   logUsage({

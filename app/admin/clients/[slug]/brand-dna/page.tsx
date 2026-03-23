@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { BrandDNAView } from '@/components/brand-dna/brand-dna-view';
+import { requireAdminWorkspaceModuleAccess } from '@/lib/clients/require-admin-workspace-module-access';
 
 export default async function BrandDNAPage({
   params,
@@ -8,6 +9,8 @@ export default async function BrandDNAPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  await requireAdminWorkspaceModuleAccess(slug, 'brand-dna');
+
   const admin = createAdminClient();
 
   const { data: client } = await admin

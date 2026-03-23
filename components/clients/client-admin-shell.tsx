@@ -19,6 +19,10 @@ import {
   ClientAdminShellProvider,
   type ClientAdminShellValue,
 } from '@/components/clients/client-admin-shell-context';
+import {
+  isAdminWorkspaceNavVisible,
+  type AdminWorkspaceToggleKey,
+} from '@/lib/clients/admin-workspace-modules';
 
 const NAV = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard, path: '' },
@@ -51,11 +55,18 @@ function isNavActive(pathname: string | null, slug: string, path: string) {
   return pathname === full || pathname.startsWith(`${full}/`);
 }
 
-function SidebarNav({ slug }: { slug: string }) {
+function SidebarNav({
+  slug,
+  modules,
+}: {
+  slug: string;
+  modules: Record<AdminWorkspaceToggleKey, boolean>;
+}) {
   const pathname = usePathname();
+  const items = NAV.filter((item) => isAdminWorkspaceNavVisible(modules, item.key));
   return (
     <ul className="space-y-0.5">
-      {NAV.map((item) => {
+      {items.map((item) => {
         const href = navHref(slug, item.path);
         const active = isNavActive(pathname, slug, item.path);
         const Icon = item.icon;
@@ -79,12 +90,19 @@ function SidebarNav({ slug }: { slug: string }) {
   );
 }
 
-function MobileNav({ slug }: { slug: string }) {
+function MobileNav({
+  slug,
+  modules,
+}: {
+  slug: string;
+  modules: Record<AdminWorkspaceToggleKey, boolean>;
+}) {
   const pathname = usePathname();
+  const items = NAV.filter((item) => isAdminWorkspaceNavVisible(modules, item.key));
   return (
     <div className="lg:hidden border-b border-nativz-border bg-background px-3 py-2 overflow-x-auto">
       <div className="flex gap-1 min-w-max pb-1">
-        {NAV.map((item) => {
+        {items.map((item) => {
           const href = navHref(slug, item.path);
           const active = isNavActive(pathname, slug, item.path);
           const Icon = item.icon;
@@ -121,14 +139,14 @@ export function ClientAdminShell({
   value: ClientAdminShellValue;
   children: React.ReactNode;
 }) {
-  const { slug, clientName } = value;
+  const { slug, clientName, adminWorkspaceModules } = value;
   const pathname = usePathname();
   const moodboardInline = isClientMoodboardRoute(pathname, slug);
 
   return (
     <ClientAdminShellProvider value={value}>
       <div className="flex h-[calc(100vh-3.5rem)] flex-col lg:flex-row">
-        <MobileNav slug={slug} />
+        <MobileNav slug={slug} modules={adminWorkspaceModules} />
         <nav className="hidden lg:flex w-56 shrink-0 flex-col border-r border-nativz-border p-4 overflow-y-auto">
           <Link
             href="/admin/clients"
@@ -146,7 +164,7 @@ export function ClientAdminShell({
             </h1>
           </div>
           <p className="text-[11px] text-text-muted mb-4">Client workspace</p>
-          <SidebarNav slug={slug} />
+          <SidebarNav slug={slug} modules={adminWorkspaceModules} />
         </nav>
         <div
           className={cn(

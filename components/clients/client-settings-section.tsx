@@ -5,11 +5,9 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   AlertTriangle, Trash2, Power, Link2, Copy, Check,
-  Loader2, UserPlus, Users, X, Clock, CheckCircle2,
-  XCircle, RotateCcw,
+  Loader2, UserPlus, Users, X, RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Toggle } from '@/components/ui/toggle';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
@@ -323,54 +321,18 @@ function PortalUsersSection({ clientId }: { clientId: string }) {
 
 // ─── Portal Access Card (exported) ───────────────────────────────────────────
 
-export function PortalAccessCard({
-  clientId,
-  canSearch,
-  setCanSearch,
-  canViewReports,
-  setCanViewReports,
-  canEditPreferences,
-  setCanEditPreferences,
-  canSubmitIdeas,
-  setCanSubmitIdeas,
-}: {
-  clientId: string;
-  canSearch: boolean;
-  setCanSearch: (v: boolean) => void;
-  canViewReports: boolean;
-  setCanViewReports: (v: boolean) => void;
-  canEditPreferences: boolean;
-  setCanEditPreferences: (v: boolean) => void;
-  canSubmitIdeas: boolean;
-  setCanSubmitIdeas: (v: boolean) => void;
-}) {
+/** Invites and portal user list. Feature flags and API access live in Settings → Access & services. */
+export function PortalAccessCard({ clientId }: { clientId: string }) {
   return (
     <Card>
-      <h2 className="text-base font-semibold text-text-primary mb-5">Portal access</h2>
+      <h2 className="text-base font-semibold text-text-primary mb-5">Portal users</h2>
 
       <div className="space-y-6">
-        {/* Invite Management */}
         <InviteManagement clientId={clientId} />
 
-        {/* Divider */}
         <div className="border-t border-white/[0.06]" />
 
-        {/* Portal Users */}
         <PortalUsersSection clientId={clientId} />
-
-        {/* Divider */}
-        <div className="border-t border-white/[0.06]" />
-
-        {/* Feature Flags */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium text-text-primary">Feature permissions</h3>
-          <div className="space-y-4">
-            <Toggle checked={canSearch} onChange={setCanSearch} label="Can run topic searches" description="Allow this client's portal users to run new searches" />
-            <Toggle checked={canViewReports} onChange={setCanViewReports} label="Can view approved reports" description="Show approved reports in the client portal" />
-            <Toggle checked={canEditPreferences} onChange={setCanEditPreferences} label="Can edit brand preferences" description="Allow portal users to update tone, topics, and seasonal priorities" />
-            <Toggle checked={canSubmitIdeas} onChange={setCanSubmitIdeas} label="Can submit ideas" description="Allow portal users to submit content ideas and requests" />
-          </div>
-        </div>
       </div>
     </Card>
   );

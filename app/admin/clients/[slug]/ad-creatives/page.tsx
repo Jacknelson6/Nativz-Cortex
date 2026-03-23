@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { AdCreativesView } from '@/components/ad-creatives/ad-creatives-view';
+import { requireAdminWorkspaceModuleAccess } from '@/lib/clients/require-admin-workspace-module-access';
 
 export default async function AdCreativesPage({
   params,
@@ -9,6 +10,8 @@ export default async function AdCreativesPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  await requireAdminWorkspaceModuleAccess(slug, 'ad-creatives');
+
   const admin = createAdminClient();
 
   const { data: client } = await admin
