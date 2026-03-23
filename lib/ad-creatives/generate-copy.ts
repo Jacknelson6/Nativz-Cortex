@@ -87,7 +87,7 @@ Return exactly ${count} sets as JSON.`;
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
     ],
-    maxTokens: 1024,
+    maxTokens: Math.min(8192, 400 + count * 100),
     feature: 'ad_copy_generation',
   });
 

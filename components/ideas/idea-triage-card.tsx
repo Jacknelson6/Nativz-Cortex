@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Archive, MessageSquare, ChevronDown, ExternalLink, Clock, Save, Trash2 } from 'lucide-react';
+import { Archive, RotateCcw, MessageSquare, ChevronDown, ExternalLink, Clock, Save, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,8 +19,6 @@ interface IdeaTriageCardProps {
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'info' | 'success' | 'warning' }> = {
   new: { label: 'New', variant: 'warning' },
-  reviewed: { label: 'Reviewed', variant: 'info' },
-  accepted: { label: 'Accepted', variant: 'success' },
   archived: { label: 'Archived', variant: 'default' },
 };
 
@@ -50,7 +48,9 @@ export function IdeaTriageCard({ idea, onUpdate, onDelete }: IdeaTriageCardProps
       }
       const updated = await res.json();
       onUpdate(updated);
-      toast.success(`Idea ${status === 'accepted' ? 'accepted' : status === 'archived' ? 'archived' : 'updated'}.`);
+      toast.success(
+        status === 'archived' ? 'Idea archived.' : status === 'new' ? 'Idea restored.' : 'Idea updated.',
+      );
     } catch {
       toast.error('Something went wrong.');
     } finally {
@@ -173,27 +173,7 @@ export function IdeaTriageCard({ idea, onUpdate, onDelete }: IdeaTriageCardProps
 
               {/* Actions */}
               <div className="flex items-center gap-2 pt-1">
-                {idea.status !== 'accepted' && (
-                  <Button
-                    size="sm"
-                    onClick={() => handleStatusChange('accepted')}
-                    disabled={saving}
-                  >
-                    <Check size={14} />
-                    Accept
-                  </Button>
-                )}
-                {idea.status !== 'reviewed' && idea.status !== 'accepted' && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => handleStatusChange('reviewed')}
-                    disabled={saving}
-                  >
-                    Mark reviewed
-                  </Button>
-                )}
-                {idea.status !== 'archived' && (
+                {idea.status === 'new' && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -202,6 +182,17 @@ export function IdeaTriageCard({ idea, onUpdate, onDelete }: IdeaTriageCardProps
                   >
                     <Archive size={14} />
                     Archive
+                  </Button>
+                )}
+                {idea.status === 'archived' && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleStatusChange('new')}
+                    disabled={saving}
+                  >
+                    <RotateCcw size={14} />
+                    Restore
                   </Button>
                 )}
                 <div className="flex-1" />

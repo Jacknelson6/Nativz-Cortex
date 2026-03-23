@@ -99,6 +99,10 @@ const TYPE_COLORS: Record<string, string> = {
 const DEFAULT_COLOR = '#64748b';
 const DIMMED_COLOR = '#1a1d2e';
 const BG_COLOR = '#0a0e1a';
+/** Subtle edges on dark canvas — same spirit as `AgencyKnowledgeGraph` (Nativz theme). */
+const EDGE_COLOR = '#1e2338';
+const EDGE_HOVER_COLOR = 'rgba(160,165,180,0.6)';
+const EDGE_SELECTED_COLOR = 'rgba(140,145,160,0.4)';
 
 // ── Build graph data ─────────────────────────────────────────────────────────
 
@@ -156,8 +160,8 @@ function buildGraphologyGraph(data: KnowledgeGraphData, nodeSize: number): Graph
     if (seenEdges.has(key)) continue;
     seenEdges.add(key);
     graph.addEdge(sourceId, targetId, {
-      size: 0.4,
-      color: 'rgba(140,140,160,0.5)',
+      size: 0.3,
+      color: EDGE_COLOR,
     });
   }
 
@@ -254,9 +258,10 @@ export function KnowledgeGraph({
         labelSize: 12,
         labelWeight: '500',
         labelColor: { color: '#f1f5f9' },
-        labelRenderedSizeThreshold: 6,
+        // Match agency explorer: avoid labeling every tiny node (was default 6 → cluttered “annotations”).
+        labelRenderedSizeThreshold: 100,
         defaultNodeColor: DEFAULT_COLOR,
-        defaultEdgeColor: 'rgba(140,140,160,0.5)',
+        defaultEdgeColor: EDGE_COLOR,
         stagePadding: 60,
         enableEdgeEvents: true,
         defaultNodeType: 'dark',
@@ -373,14 +378,19 @@ export function KnowledgeGraph({
 
         if (isHoverEdge) {
           res.hidden = false;
-          res.color = 'rgba(160,165,180,0.6)';
+          res.color = EDGE_HOVER_COLOR;
           res.size = 0.8;
+          res.zIndex = 1;
         } else if (isSelectedEdge && !hoveredNeighbors) {
           res.hidden = false;
-          res.color = 'rgba(140,145,160,0.4)';
+          res.color = EDGE_SELECTED_COLOR;
           res.size = 0.6;
-        } else {
+        } else if (hoveredNeighbors) {
           res.hidden = true;
+        } else {
+          res.hidden = false;
+          res.color = EDGE_COLOR;
+          res.size = 0.3;
         }
 
         return res;

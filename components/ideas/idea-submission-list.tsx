@@ -17,9 +17,7 @@ interface IdeaSubmissionListProps {
 }
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'info' | 'success' | 'warning' }> = {
-  new: { label: 'Submitted', variant: 'default' },
-  reviewed: { label: 'Reviewed', variant: 'info' },
-  accepted: { label: 'Accepted', variant: 'success' },
+  new: { label: 'Active', variant: 'default' },
   archived: { label: 'Archived', variant: 'default' },
 };
 
@@ -40,10 +38,10 @@ export function IdeaSubmissionList({ clientId, submissions }: IdeaSubmissionList
         <div>
           <h1 className="ui-page-title flex items-center gap-2.5">
             <Lightbulb size={20} className="text-yellow-400" />
-            Ideas
+            Your ideas
           </h1>
           <p className="mt-1 text-sm text-text-muted">
-            Share trending things you&apos;ve seen, content ideas, or requests for your team.
+            Share trends, content ideas, or requests — your team saves and follows up from here.
           </p>
         </div>
         <Button onClick={() => setDialogOpen(true)}>

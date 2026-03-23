@@ -40,7 +40,7 @@ export function PortalIdeasTabs({ clientId, submissions, savedIdeas }: PortalIde
         >
           <span className="flex items-center justify-center gap-1.5">
             <Lightbulb size={14} />
-            Submitted
+            Your ideas
             {submissions.length > 0 && (
               <span className="rounded-full bg-accent-surface px-1.5 py-0.5 text-[10px] font-bold text-accent-text">
                 {submissions.length}

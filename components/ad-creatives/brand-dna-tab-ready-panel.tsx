@@ -97,7 +97,8 @@ export function BrandDnaTabReadyPanel({
     });
   }
 
-  const canRecrawl = (websiteUrl?.trim().length ?? 0) > 0 && brandDnaStatus !== 'generating';
+  const canRegenerateBrandDna =
+    (websiteUrl?.trim().length ?? 0) > 0 && brandDnaStatus !== 'generating';
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -107,10 +108,10 @@ export function BrandDnaTabReadyPanel({
         const d = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(typeof d.error === 'string' ? d.error : 'Refresh failed');
       }
-      toast.success('Re-crawl started — refresh this page when it finishes');
+      toast.success('Regenerating brand DNA — refresh this page when it finishes');
       router.refresh();
     } catch (refreshErr) {
-      toast.error(refreshErr instanceof Error ? refreshErr.message : 'Re-crawl failed');
+      toast.error(refreshErr instanceof Error ? refreshErr.message : 'Could not start regeneration');
     } finally {
       setRefreshing(false);
     }
@@ -181,10 +182,10 @@ export function BrandDnaTabReadyPanel({
               Open gallery
             </Button>
             <div className="flex flex-wrap gap-2 sm:justify-end">
-              {canRecrawl ? (
+              {canRegenerateBrandDna ? (
                 <Button type="button" variant="outline" size="sm" onClick={() => void handleRefresh()} disabled={refreshing}>
                   <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-                  {refreshing ? 'Starting…' : 'Re-run crawl'}
+                  {refreshing ? 'Regenerating…' : 'Regenerate brand DNA'}
                 </Button>
               ) : null}
               {clientSlug ? (

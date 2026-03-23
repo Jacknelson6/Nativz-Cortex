@@ -7,12 +7,12 @@ import { logActivity } from '@/lib/activity';
 /**
  * GET /api/clients/[id]
  *
- * Fetch a single client's full profile including recent searches, ideas, shoots, moodboards,
- * portal contacts, strategy, and a knowledge entry summary. Supports lookup by UUID or slug.
+ * Fetch a single client's full profile including portal contacts, strategy, and a knowledge
+ * entry summary. Supports lookup by UUID or slug.
  *
  * @auth Required (any authenticated user)
  * @param id - Client UUID or slug
- * @returns {{ client: Client, portalContacts: User[], strategy: ClientStrategy | null, searches: TopicSearch[], recentShoots: ShootEvent[], recentMoodboards: MoodboardBoard[], ideas: IdeaSubmission[], ideaCount: number, knowledgeSummary: { type: string, count: number }[] }}
+ * @returns {{ client: Client, portalContacts: User[], strategy: ClientStrategy | null, knowledgeSummary: { type: string, count: number }[] }}
  */
 export async function GET(
   _request: NextRequest,
@@ -54,33 +54,7 @@ export async function GET(
 
     const clientId = dbClient.id;
 
-    const [
-      { data: searchData },
-      { data: ideasData },
-      { count: ideasCount },
-      contactsResult,
-      { data: strategyData },
-      { data: shoots },
-      { data: moodboards },
-      { data: knowledgeEntries },
-    ] = await Promise.all([
-      adminClient
-        .from('topic_searches')
-        .select('id, query, status, search_mode, created_at, approved_at')
-        .eq('client_id', clientId)
-        .order('created_at', { ascending: false })
-        .limit(20),
-      adminClient
-        .from('idea_submissions')
-        .select('id, title, category, status, created_at, submitted_by')
-        .eq('client_id', clientId)
-        .order('created_at', { ascending: false })
-        .limit(5),
-      adminClient
-        .from('idea_submissions')
-        .select('*', { count: 'exact', head: true })
-        .eq('client_id', clientId)
-        .in('status', ['new', 'reviewed']),
+    const [contactsResult, { data: strategyData }, { data: knowledgeEntries }] = await Promise.all([
       dbClient.organization_id
         ? adminClient
             .from('users')
@@ -97,18 +71,6 @@ export async function GET(
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
-      adminClient
-        .from('shoot_events')
-        .select('id, title, shoot_date, location')
-        .eq('client_id', clientId)
-        .order('shoot_date', { ascending: false })
-        .limit(3),
-      adminClient
-        .from('moodboard_boards')
-        .select('id, name, created_at, updated_at')
-        .eq('client_id', clientId)
-        .order('updated_at', { ascending: false })
-        .limit(3),
       adminClient
         .from('client_knowledge_entries')
         .select('type')
@@ -139,11 +101,6 @@ export async function GET(
       },
       portalContacts: contactsResult.data || [],
       strategy: strategyData ?? null,
-      searches: searchData || [],
-      recentShoots: shoots || [],
-      recentMoodboards: moodboards || [],
-      ideas: ideasData || [],
-      ideaCount: ideasCount ?? 0,
       knowledgeSummary: (() => {
         const typeCounts = new Map<string, number>();
         for (const entry of knowledgeEntries ?? []) {
@@ -316,9 +273,11 @@ export async function DELETE(
 
     // Delete related records first, then the client. Tables with NO ACTION / missing
     // cascade on client_id (todos, tasks, moodboard_boards) are covered here and by
-    // migration 056_client_delete_cascade_fks.sql. shoot_events has no migration in-repo
-    // but exists in production and can block deletes without an explicit delete.
+    // migration 056_client_delete_cascade_fks.sql. knowledge_nodes (Brand DNA / KG sync)
+    // is deleted here and via migration 057 ON DELETE CASCADE. shoot_events has no
+    // migration in-repo but exists in production and can block deletes without an explicit delete.
     const relatedDeletes = await Promise.all([
+      adminClient.from('knowledge_nodes').delete().eq('client_id', id),
       adminClient.from('moodboard_boards').delete().eq('client_id', id),
       adminClient.from('todos').delete().eq('client_id', id),
       adminClient.from('tasks').delete().eq('client_id', id),

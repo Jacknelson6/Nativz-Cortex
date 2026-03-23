@@ -272,5 +272,29 @@ export async function GET(req: Request) {
     return NextResponse.json({ status: 'generating', clientId });
   }
 
+  // Client already has a kit but wizard context failed to build (race / metadata) — do not poll as "generating" forever
+  if (crow?.brand_dna_status === 'draft' || crow?.brand_dna_status === 'active') {
+    return NextResponse.json({
+      status: 'ready',
+      source: 'brand_dna',
+      clientId,
+      brand: null,
+      products: [],
+      mediaUrls: [],
+    });
+  }
+
+  // Job row shows completion but guideline lookup missed above — unstick polling
+  if (lastJob?.status === 'completed') {
+    return NextResponse.json({
+      status: 'ready',
+      source: 'live_scrape',
+      clientId,
+      brand: null,
+      products: [],
+      mediaUrls: [],
+    });
+  }
+
   return NextResponse.json({ status: 'generating', clientId });
 }

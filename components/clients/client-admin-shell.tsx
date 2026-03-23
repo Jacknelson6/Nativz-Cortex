@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { cn } from '@/lib/utils/cn';
 import {
   ArrowLeft,
   BookOpen,
@@ -107,6 +108,12 @@ function MobileNav({ slug }: { slug: string }) {
   );
 }
 
+function isClientMoodboardRoute(pathname: string | null, slug: string) {
+  if (!pathname) return false;
+  const base = `/admin/clients/${slug}/moodboard`;
+  return pathname === base || pathname.startsWith(`${base}/`);
+}
+
 export function ClientAdminShell({
   value,
   children,
@@ -115,6 +122,9 @@ export function ClientAdminShell({
   children: React.ReactNode;
 }) {
   const { slug, clientName } = value;
+  const pathname = usePathname();
+  const moodboardInline = isClientMoodboardRoute(pathname, slug);
+
   return (
     <ClientAdminShellProvider value={value}>
       <div className="flex h-[calc(100vh-3.5rem)] flex-col lg:flex-row">
@@ -138,7 +148,14 @@ export function ClientAdminShell({
           <p className="text-[11px] text-text-muted mb-4">Client workspace</p>
           <SidebarNav slug={slug} />
         </nav>
-        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto">{children}</div>
+        <div
+          className={cn(
+            'min-h-0 min-w-0 flex-1',
+            moodboardInline ? 'flex flex-col overflow-hidden' : 'overflow-y-auto',
+          )}
+        >
+          {children}
+        </div>
       </div>
     </ClientAdminShellProvider>
   );

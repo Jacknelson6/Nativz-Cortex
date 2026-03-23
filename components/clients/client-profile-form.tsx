@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Building2, Save, Sparkles, Loader2,
-  Clock, Pencil, X, Settings2, ExternalLink, DollarSign,
+  Pencil, X, Settings2, ExternalLink, DollarSign,
   BookOpen, Lightbulb, Wand2, Plug, Palette, Dna,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -20,7 +20,6 @@ import { ClientStrategyCard } from '@/components/clients/client-strategy-card';
 import { ConnectedAccounts } from '@/components/clients/connected-accounts';
 import { KnowledgeThumbnail } from '@/components/knowledge/KnowledgeThumbnail';
 import { ProfileField, SectionLabel } from './client-profile-fields';
-import { ClientActivityCards } from './client-activity-cards';
 import { PortalAccessCard, DangerZone } from './client-settings-section';
 import { ImpersonateButton } from './impersonate-button';
 import type { ClientStrategy } from '@/lib/types/strategy';
@@ -61,11 +60,6 @@ export interface ClientProfileFormProps {
   client: ClientProfileData;
   portalContacts: Array<{ id: string; full_name: string; email: string; avatar_url: string | null; job_title: string | null; last_login: string | null }>;
   strategy: ClientStrategy | null;
-  searches: Array<{ id: string; query: string; status: string; search_mode: string; created_at: string; approved_at: string | null }>;
-  recentShoots: Array<{ id: string; title: string; shoot_date: string; location: string | null }>;
-  recentMoodboards: Array<{ id: string; name: string; created_at: string; updated_at: string }>;
-  ideas: Array<{ id: string; title: string; category: string; status: string; created_at: string; submitted_by: string | null }>;
-  ideaCount: number;
   knowledgeSummary?: { type: string; count: number }[];
   inModal?: boolean;
   /** Full-page client workspace (sidebar layout) — hide back link and horizontal section nav. */
@@ -76,11 +70,6 @@ export function ClientProfileForm({
   client,
   portalContacts,
   strategy: initialStrategy,
-  searches,
-  recentShoots,
-  recentMoodboards,
-  ideas,
-  ideaCount,
   knowledgeSummary,
   inModal,
   embeddedInShell,
@@ -459,19 +448,6 @@ export function ClientProfileForm({
         </Card>
         <ClientContactsCard clientId={clientId} clientName={clientName} vaultContacts={[]} portalContacts={portalContacts} />
       </div>
-
-      {/* Activity */}
-      <SectionLabel icon={Clock} label="Activity" />
-      <ClientActivityCards
-        slug={slug}
-        clientId={clientId}
-        clientName={clientName}
-        recentShoots={recentShoots}
-        recentMoodboards={recentMoodboards}
-        ideas={ideas}
-        ideaCount={ideaCount}
-        searches={searches}
-      />
 
       {/* Integrations + portal admin — sidebar Settings when using client workspace */}
       {!embeddedInShell && (

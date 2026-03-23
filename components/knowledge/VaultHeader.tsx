@@ -115,7 +115,7 @@ export function VaultHeader({
           </Link>
         )}
         <h1 className="ui-chrome-title">
-          {clientName}&apos;s vault
+          {clientName.trim() ? `${clientName} knowledge base` : 'Knowledge base'}
         </h1>
       </div>
 

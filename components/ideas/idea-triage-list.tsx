@@ -14,9 +14,8 @@ interface IdeaTriageListProps {
 const FILTER_OPTIONS = [
   { value: 'all', label: 'All' },
   { value: 'new', label: 'New' },
-  { value: 'accepted', label: 'Accepted' },
   { value: 'archived', label: 'Archived' },
-];
+] as const;
 
 export function IdeaTriageList({ submissions: initial, clientName }: IdeaTriageListProps) {
   const [submissions, setSubmissions] = useState(initial);
@@ -26,7 +25,6 @@ export function IdeaTriageList({ submissions: initial, clientName }: IdeaTriageL
   const counts = {
     all: submissions.length,
     new: submissions.filter((s) => s.status === 'new').length,
-    accepted: submissions.filter((s) => s.status === 'accepted').length,
     archived: submissions.filter((s) => s.status === 'archived').length,
   };
 
@@ -41,10 +39,10 @@ export function IdeaTriageList({ submissions: initial, clientName }: IdeaTriageL
   return (
     <div>
       <div className="mb-6">
-        <h1 className="ui-page-title">
-          Ideas from {clientName}
-        </h1>
-        <p className="mt-1 text-sm text-text-muted">Review and triage ideas submitted by the client.</p>
+        <h1 className="ui-page-title">Saved ideas</h1>
+        <p className="mt-1 text-sm text-text-muted">
+          Ideas saved for {clientName} — from the team, the idea generator, or the client portal.
+        </p>
       </div>
 
       {/* Filter tabs */}
@@ -61,8 +59,8 @@ export function IdeaTriageList({ submissions: initial, clientName }: IdeaTriageL
             }`}
           >
             {opt.label}
-            {counts[opt.value as keyof typeof counts] > 0 && (
-              <span className="ml-1.5 opacity-70">{counts[opt.value as keyof typeof counts]}</span>
+            {counts[opt.value] > 0 && (
+              <span className="ml-1.5 opacity-70">{counts[opt.value]}</span>
             )}
           </button>
         ))}
@@ -71,8 +69,12 @@ export function IdeaTriageList({ submissions: initial, clientName }: IdeaTriageL
       {filtered.length === 0 ? (
         <EmptyState
           icon={<Lightbulb size={24} />}
-          title={filter === 'all' ? 'No ideas submitted yet' : `No ${filter} ideas`}
-          description={filter === 'all' ? `${clientName} hasn't submitted any ideas yet.` : 'Try a different filter.'}
+          title={filter === 'all' ? 'No saved ideas yet' : `No ${filter} ideas`}
+          description={
+            filter === 'all'
+              ? `Nothing saved for ${clientName} yet. Ideas from the portal or your team will show up here.`
+              : 'Try a different filter.'
+          }
         />
       ) : (
         <div className="space-y-3">

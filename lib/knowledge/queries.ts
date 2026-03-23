@@ -212,87 +212,8 @@ export async function getKnowledgeGraph(clientId: string): Promise<KnowledgeGrap
     }
   }
 
-  // ── Merge agency knowledge_nodes (domains + playbooks) ──────────────────
-
-  const admin = createAdminClient();
-  const { data: agencyNodes } = await admin
-    .from('knowledge_nodes')
-    .select('id, kind, title')
-    .in('kind', ['domain', 'playbook'])
-    .limit(100);
-
-  if (agencyNodes && agencyNodes.length > 0) {
-    // Add agency nodes as external nodes so they appear in the graph
-    for (const node of agencyNodes) {
-      externalNodes.push({
-        id: node.id as string,
-        type: (node.kind as string) as 'entry',
-        title: (node.title as string) ?? '',
-        subtitle: (node.kind as string) ?? '',
-        created_at: '',
-      });
-    }
-
-    // Build smart edges: connect client entries to relevant domain nodes
-    // based on content type and title keywords
-    const domainMap: Record<string, string[]> = {
-      'domain:seo': ['seo', 'search engine', 'keyword', 'ranking', 'backlink', 'sitemap', 'crawl', 'organic'],
-      'domain:paid-media': ['ads', 'paid', 'ppc', 'cpc', 'roas', 'campaign', 'retarget', 'media buy', 'ctv', 'display'],
-      'domain:content': ['content', 'blog', 'article', 'copy', 'video', 'podcast', 'editorial'],
-      'domain:social': ['social', 'instagram', 'tiktok', 'youtube', 'linkedin', 'facebook', 'twitter', 'influencer'],
-      'domain:email': ['email', 'newsletter', 'drip', 'nurture', 'klaviyo', 'mailchimp'],
-      'domain:analytics': ['analytics', 'reporting', 'dashboard', 'kpi', 'tracking', 'attribution', 'data'],
-      'domain:cro': ['conversion', 'landing page', 'cro', 'a/b test', 'ux', 'signup', 'funnel'],
-      'domain:brand': ['brand', 'identity', 'logo', 'design', 'positioning', 'messaging'],
-    };
-
-    for (const entry of entries) {
-      const titleLower = entry.title.toLowerCase();
-      const typeLower = entry.type.toLowerCase();
-
-      for (const [domainId, keywords] of Object.entries(domainMap)) {
-        const matches = keywords.some((kw) => titleLower.includes(kw) || typeLower.includes(kw));
-        if (matches) {
-          const key = [entry.id, domainId].sort().join(':');
-          if (!existingKeys.has(key)) {
-            existingKeys.add(key);
-            links.push({
-              id: `domain-link-${key}`,
-              client_id: clientId,
-              source_id: entry.id,
-              source_type: 'entry',
-              target_id: domainId,
-              target_type: 'entry',
-              label: 'relates_to',
-              created_at: '',
-            });
-          }
-          break; // One domain edge per entry
-        }
-      }
-    }
-
-    // Connect brand_profile entries to the Brand domain
-    for (const entry of entries) {
-      if (entry.type === 'brand_profile' || entry.type === 'brand_guideline') {
-        const domainId = 'domain:brand';
-        const key = [entry.id, domainId].sort().join(':');
-        if (!existingKeys.has(key)) {
-          existingKeys.add(key);
-          links.push({
-            id: `domain-link-${key}`,
-            client_id: clientId,
-            source_id: entry.id,
-            source_type: 'entry',
-            target_id: domainId,
-            target_type: 'entry',
-            label: 'brand_data',
-            created_at: '',
-          });
-        }
-      }
-    }
-  }
+  // Client knowledge graph: only this client’s entries + linked entities (contacts, searches, etc.).
+  // Agency-wide knowledge_nodes (playbooks, domain hubs) stay on /admin/nerd/knowledge — not here.
 
   return { entries, links, externalNodes };
 }

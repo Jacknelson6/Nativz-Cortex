@@ -62,7 +62,7 @@ export interface IdeaSubmission {
   description: string | null;
   source_url: string | null;
   category: 'trending' | 'content_idea' | 'request' | 'trending_topic' | 'other';
-  status: 'new' | 'reviewed' | 'accepted' | 'archived';
+  status: 'new' | 'archived';
   admin_notes: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;

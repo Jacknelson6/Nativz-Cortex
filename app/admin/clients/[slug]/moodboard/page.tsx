@@ -1,6 +1,7 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ClientMoodboardEmpty } from '@/components/clients/client-moodboard-empty';
+import { ClientMoodboardWorkspace } from '@/components/clients/client-moodboard-workspace';
 
 export default async function ClientMoodboardPage({
   params,
@@ -30,7 +31,7 @@ export default async function ClientMoodboardPage({
     .maybeSingle();
 
   if (board?.id) {
-    redirect(`/admin/analysis/${board.id}`);
+    return <ClientMoodboardWorkspace boardId={board.id} clientSlug={slug} />;
   }
 
   return (

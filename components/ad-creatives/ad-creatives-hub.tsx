@@ -293,10 +293,15 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
         if (!res.ok) return;
         const data = await res.json();
         if (data.status === 'ready') {
-          setBrand(data.brand ?? null);
-          setScrapedProducts(data.products ?? []);
-          setMediaUrls(data.mediaUrls ?? []);
-          setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
+          // Unstick poll may return ready with null brand when guideline lags; keep quick-scrape fallback
+          setBrand((prev) => (data.brand != null ? data.brand : prev));
+          setScrapedProducts((prev) =>
+            Array.isArray(data.products) && data.products.length > 0 ? data.products : prev,
+          );
+          setMediaUrls((prev) =>
+            Array.isArray(data.mediaUrls) && data.mediaUrls.length > 0 ? data.mediaUrls : prev,
+          );
+          if (data.source) setBrandContextSource(data.source as BrandContextSource);
           setScanning(false);
           clearBrandPoll();
         } else if (data.status === 'failed') {
@@ -509,21 +514,25 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
         <GenerationBanner clientId={resolvedClientId} onViewGallery={() => setTab('gallery')} />
       )}
 
-      {resolvedClientId && isScanning && (
-        <div className="flex items-center gap-3 rounded-xl border border-accent/20 bg-accent/[0.06] px-4 py-3 text-sm text-text-secondary">
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent-text" />
-          <div>
-            <p className="font-medium text-text-primary">
-              {clientLikelyUsesBrandDna
-                ? 'Loading brand from Brand DNA…'
-                : 'Running Brand DNA on your site…'}
-            </p>
-            <p className="text-xs text-text-muted mt-0.5">
-              When it&apos;s ready, open the gallery to generate ads.
-            </p>
+      {/* Crawl / DNA poll notice — only on gallery or templates; Brand DNA tab has its own panels, and a saved kit makes this copy redundant */}
+      {resolvedClientId &&
+        isScanning &&
+        activeTab !== 'generate' &&
+        !clientDnaReady && (
+          <div className="flex items-center gap-3 rounded-xl border border-accent/20 bg-accent/[0.06] px-4 py-3 text-sm text-text-secondary">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent-text" />
+            <div>
+              <p className="font-medium text-text-primary">
+                {clientLikelyUsesBrandDna
+                  ? 'Loading brand from Brand DNA…'
+                  : 'Running Brand DNA on your site…'}
+              </p>
+              <p className="text-xs text-text-muted mt-0.5">
+                When it&apos;s ready, open the gallery to generate ads.
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Bulk import panel */}
       {showBulkImport && activeTab === 'templates' && (

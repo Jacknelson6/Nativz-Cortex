@@ -38,19 +38,19 @@ export async function GET(
 }
 
 const ideaTriageSchema = z.object({
-  status: z.enum(['new', 'reviewed', 'accepted', 'archived']).optional(),
+  status: z.enum(['new', 'archived']).optional(),
   admin_notes: z.string().max(2000).optional().nullable(),
 });
 
 /**
  * PATCH /api/ideas/[id]
  *
- * Triage an idea submission — update its status (new, reviewed, accepted, archived)
- * and/or add admin notes. Records the reviewer's ID and timestamp when status changes.
+ * Update an idea submission — set status to `new` or `archived`, and/or admin notes.
+ * Records the reviewer ID and timestamp when status changes.
  *
  * @auth Required (admin)
  * @param id - Idea submission UUID
- * @body status - New status ('new' | 'reviewed' | 'accepted' | 'archived')
+ * @body status - New status ('new' | 'archived')
  * @body admin_notes - Internal admin notes (max 2000 chars)
  * @returns {IdeaSubmission} Updated idea submission record
  */

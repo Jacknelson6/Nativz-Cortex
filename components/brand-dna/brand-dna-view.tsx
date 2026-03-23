@@ -50,8 +50,11 @@ export function BrandDNAView({
 
   const metadata = (localMetadata ?? guideline?.metadata ?? null) as Record<string, unknown> | null;
 
-  const canRecrawl =
-    websiteUrl.trim().length > 0 && brandDnaStatus !== 'generating';
+  /** Refresh hits the same pipeline as generate — only offer it once a kit exists (not on empty state). */
+  const canRegenerateBrandDna =
+    websiteUrl.trim().length > 0 &&
+    brandDnaStatus !== 'generating' &&
+    guideline != null;
 
   function handleSectionSaved(updated: Partial<BrandGuidelineMetadata>) {
     setLocalMetadata((prev) => prev ? { ...prev, ...updated } : (updated as BrandGuidelineMetadata));
@@ -65,10 +68,10 @@ export function BrandDNAView({
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error ?? 'Refresh failed');
       }
-      toast.success('Re-crawl started — you can leave this page; refresh when it finishes');
+      toast.success('Regenerating brand DNA — you can leave this page; refresh when it finishes');
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Re-crawl failed');
+      toast.error(err instanceof Error ? err.message : 'Could not start regeneration');
     } finally {
       setRefreshing(false);
     }
@@ -100,12 +103,12 @@ export function BrandDNAView({
               Updated {formatRelativeTime(guideline.updated_at ?? guideline.created_at)}
             </span>
           )}
-          {canRecrawl && (
+          {canRegenerateBrandDna ? (
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
               <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-              {refreshing ? 'Starting…' : 'Re-run crawl'}
+              {refreshing ? 'Regenerating…' : 'Regenerate brand DNA'}
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -148,7 +151,7 @@ export function BrandDNAView({
           </p>
           {!websiteUrl.trim() && (
             <p className="text-xs text-text-muted mb-4 max-w-md">
-              Add a website URL on the client profile to run a crawl.
+              Add a website URL on the client profile before generating Brand DNA.
             </p>
           )}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -156,12 +159,6 @@ export function BrandDNAView({
               <Globe size={14} />
               Generate Brand DNA
             </Button>
-            {canRecrawl && !guideline && (
-              <Button type="button" variant="outline" onClick={handleRefresh} disabled={refreshing}>
-                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-                {refreshing ? 'Starting…' : 'Re-run crawl'}
-              </Button>
-            )}
           </div>
         </div>
       )}

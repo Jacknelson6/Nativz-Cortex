@@ -32,9 +32,9 @@ export function ClientMoodboardEmpty({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Failed to create moodboard');
       }
-      const board = await res.json() as { id: string };
+      await res.json();
       toast.success('Moodboard created');
-      router.push(`/admin/analysis/${board.id}`);
+      router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create moodboard');
     } finally {
