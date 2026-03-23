@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { BrandDNACards } from '@/components/brand-dna/brand-dna-cards';
+import { AdCreativeGuidelineUploads } from './ad-creative-guideline-uploads';
 
 interface BrandDnaWizardRailProps {
   clientId: string;
@@ -59,11 +60,14 @@ export function BrandDnaWizardRail({ clientId, clientSlug, className = '' }: Bra
               href={`/admin/clients/${clientSlug}/brand-dna`}
               className="text-[11px] font-medium text-accent-text hover:underline shrink-0"
             >
-              Edit full page
+              Client page
             </Link>
           ) : null}
         </div>
 
+        <div className="border-t border-nativz-border/80 p-2">
+          <AdCreativeGuidelineUploads clientId={clientId} variant="compact" />
+        </div>
         <div className="max-h-[min(42vh,360px)] sm:max-h-[min(50vh,440px)] lg:max-h-[min(78vh,720px)] overflow-y-auto overscroll-contain p-2 pb-4 [scrollbar-width:thin]">
           {loading && (
             <div className="flex items-center justify-center gap-2 py-10 text-xs text-text-muted">
@@ -78,8 +82,9 @@ export function BrandDnaWizardRail({ clientId, clientSlug, className = '' }: Bra
             <BrandDNACards metadata={metadata} clientId={clientId} editable={false} />
           )}
           {!loading && !err && !metadata && (
-            <p className="text-xs text-text-muted py-4 px-2 text-center">
-              No Brand DNA metadata yet. Run generation from the client&apos;s Brand DNA page.
+            <p className="text-xs text-text-muted py-4 px-2 text-center leading-relaxed">
+              No Brand DNA metadata yet. Run generation from the <span className="text-text-secondary">Brand DNA</span>{' '}
+              tab in ad creatives, or from the client&apos;s Brand DNA page.
             </p>
           )}
         </div>

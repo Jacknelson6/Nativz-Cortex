@@ -115,7 +115,10 @@ export interface BrandScreenshot {
   description: string;
 }
 
-/** What the offering actually is — affiliate/ambassador programs are not core services. */
+/**
+ * What the offering is in the catalog UI (product / service / other).
+ * Legacy stored values may still include affiliate_program | ambassador_program | partnership — treat as other when editing.
+ */
 export type ProductOfferingType =
   | 'product'
   | 'service'

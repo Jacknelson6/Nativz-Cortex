@@ -159,6 +159,8 @@ async function main() {
       { name: 'Smoothie Bowls', description: 'Handcrafted acai and smoothie bowls with fresh fruit toppings' },
       { name: 'Cold-Pressed Juices', description: 'Fresh cold-pressed juices and smoothies' },
     ],
+    creativeSupplementBlock: '',
+    creativeReferenceImageUrls: [],
     toPromptBlock: function() {
       return `Brand: Toastique — Gourmet toast, smoothie bowl, and juice franchise
 Colors: Gold #b18b5b (primary), Sage Green #b4d5b6 (secondary), Dark Charcoal #353d46 (text), Cream #f7f4ee (background)

@@ -146,10 +146,13 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
             });
             lastPrompt = prompt;
 
+            const brandRefs = fullCtx.creativeReferenceImageUrls ?? [];
+
             const baseImageBuffer = await generateAdImage({
               prompt,
               referenceImageUrl: item.referenceImageUrl ?? undefined,
               productImageUrls: productImageUrls.length > 0 ? productImageUrls : undefined,
+              brandReferenceImageUrls: brandRefs.length > 0 ? brandRefs : undefined,
               aspectRatio: config.aspectRatio,
             });
 

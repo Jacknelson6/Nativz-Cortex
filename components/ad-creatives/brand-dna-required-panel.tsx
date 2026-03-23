@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Dna,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { OnboardWizard } from '@/components/brand-dna/onboard-wizard';
+import { BrandDNAProgress } from '@/components/brand-dna/brand-dna-progress';
 
 interface BrandDnaRequiredPanelProps {
   clientId: string;
@@ -19,19 +21,84 @@ interface BrandDnaRequiredPanelProps {
   brandDnaStatus: string | null | undefined;
   /** Client profile website — pre-fills the generate wizard when set. */
   websiteUrl?: string | null;
+  /** For “view on client page” while generating or in helper copy. */
+  clientSlug?: string;
+  /** After user activates Brand DNA in the wizard — keep them on this tab to see the full inline kit. */
+  onBrandDnaActivated?: () => void;
 }
 
 /**
- * Full-page Brand DNA setup for ad creatives: run generation inline (no separate modal).
+ * Brand DNA setup inside ad creatives: generate, progress, review, and activate — same data as the client Brand DNA route.
  */
 export function BrandDnaRequiredPanel({
   clientId,
   clientName,
   brandDnaStatus,
   websiteUrl,
+  clientSlug,
+  onBrandDnaActivated,
 }: BrandDnaRequiredPanelProps) {
   const router = useRouter();
   const isGenerating = brandDnaStatus === 'generating';
+
+  if (isGenerating) {
+    return (
+      <div className="space-y-6">
+        <section className="rounded-2xl border border-nativz-border bg-surface p-6 sm:p-8">
+          <div className="mb-6 text-center sm:text-left">
+            <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-accent-text">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Generating
+            </div>
+            <h2 className="mt-4 text-xl font-semibold tracking-tight text-text-primary sm:text-2xl">
+              Building Brand DNA for {clientName}
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-muted">
+              When this run finishes, the full kit (cards and guideline) appears on this{' '}
+              <span className="text-text-secondary">Brand DNA</span> tab.{' '}
+              {clientSlug ? (
+                <>
+                  You can also follow the same profile on{' '}
+                  <Link
+                    href={`/admin/clients/${clientSlug}/brand-dna`}
+                    className="font-medium text-accent-text underline-offset-2 hover:underline"
+                  >
+                    the client&apos;s Brand DNA page
+                  </Link>
+                  .
+                </>
+              ) : (
+                'The client profile has the same Brand DNA view whenever you need it.'
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-nativz-border/80 bg-background/25 p-5 sm:p-6">
+            <BrandDNAProgress
+              clientId={clientId}
+              onComplete={() => router.refresh()}
+              navigateAwayHint="Safe to switch browser tabs — come back here and use refresh when the job completes."
+            />
+          </div>
+
+          <div className="mt-6 flex flex-wrap justify-center gap-3 sm:justify-start">
+            <Button type="button" variant="outline" size="sm" className="border-nativz-border" onClick={() => router.refresh()}>
+              <RefreshCw size={14} />
+              Refresh status
+            </Button>
+            {clientSlug ? (
+              <Link
+                href={`/admin/clients/${clientSlug}/brand-dna`}
+                className="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:bg-surface-hover"
+              >
+                View on client page
+              </Link>
+            ) : null}
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 lg:space-y-10">
@@ -47,34 +114,28 @@ export function BrandDnaRequiredPanel({
         <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[1.15fr_minmax(0,1fr)] lg:items-center lg:gap-12">
           <div className="space-y-5">
             <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-accent-text">
-              {isGenerating ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Generating
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Step before ads
-                </>
-              )}
+              <Sparkles className="h-3.5 w-3.5" />
+              Step before ads
             </div>
             <div>
               <h2 className="text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl">
-                Build a Brand DNA kit for{' '}
-                <span className="text-accent-text">{clientName}</span>
+                Build a Brand DNA kit for <span className="text-accent-text">{clientName}</span>
               </h2>
               <p className="mt-3 max-w-xl text-sm leading-relaxed text-text-muted">
-                {isGenerating ? (
+                Generate once here — colors, logos, voice, products, and the full guideline stay on this tab.{' '}
+                {clientSlug ? (
                   <>
-                    Analysis is running on the server. You can leave this tab — when it finishes, tap{' '}
-                    <span className="text-text-secondary">Refresh</span> to open the ad wizard.
+                    Prefer the dedicated view? Open{' '}
+                    <Link
+                      href={`/admin/clients/${clientSlug}/brand-dna`}
+                      className="font-medium text-accent-text underline-offset-2 hover:underline"
+                    >
+                      Brand DNA on the client page
+                    </Link>
+                    — it&apos;s the same profile.
                   </>
                 ) : (
-                  <>
-                    We pull colors, logos, voice, and products from the site (and any files you add) so
-                    generated ads stay on-brand. Run it once here — no need to jump to another page.
-                  </>
+                  'You can open the same profile from the client page anytime.'
                 )}
               </p>
             </div>
@@ -110,30 +171,22 @@ export function BrandDnaRequiredPanel({
                 Refresh status
               </Button>
               <p className="text-[11px] text-text-muted">
-                After Brand DNA is <span className="text-text-secondary">draft</span> or{' '}
-                <span className="text-text-secondary">active</span>, this tab loads the ad wizard automatically.
+                After status is <span className="text-text-secondary">draft</span> or{' '}
+                <span className="text-text-secondary">active</span>, this tab shows the full Brand kit and you can run ads
+                from the gallery.
               </p>
             </div>
           </div>
           <div className="relative flex min-h-[200px] items-center justify-center lg:min-h-[280px]">
             <div className="absolute inset-0 rounded-2xl border border-dashed border-nativz-border/60 bg-background/20" />
-            <div
-              className={`relative flex h-36 w-36 items-center justify-center rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/20 to-accent/5 shadow-[0_0_40px_-12px_rgba(59,130,246,0.5)] sm:h-44 sm:w-44 ${isGenerating ? 'animate-pulse' : ''}`}
-            >
-              {isGenerating ? (
-                <Loader2 className="h-14 w-14 text-accent-text animate-spin" strokeWidth={1.5} />
-              ) : (
-                <Dna className="h-14 w-14 text-accent-text" strokeWidth={1.5} />
-              )}
+            <div className="relative flex h-36 w-36 items-center justify-center rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/20 to-accent/5 shadow-[0_0_40px_-12px_rgba(59,130,246,0.5)] sm:h-44 sm:w-44">
+              <Dna className="h-14 w-14 text-accent-text" strokeWidth={1.5} />
             </div>
           </div>
         </div>
       </section>
 
-      <section
-        aria-label="Brand DNA generation"
-        className="border-t border-nativz-border/60 pt-8 lg:pt-10"
-      >
+      <section aria-label="Brand DNA generation" className="border-t border-nativz-border/60 pt-8 lg:pt-10">
         <OnboardWizard
           open
           layout="inline"
@@ -142,6 +195,7 @@ export function BrandDnaRequiredPanel({
           existingClientId={clientId}
           existingClientName={clientName}
           initialWebsiteUrl={websiteUrl}
+          onAfterActivate={onBrandDnaActivated}
         />
       </section>
     </div>

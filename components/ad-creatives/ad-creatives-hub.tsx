@@ -143,11 +143,6 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
   // Resolve the client ID for API calls
   const resolvedClientId = clientId ?? (brand ? findClientByUrl(clients, brand.url) : null);
   const resolvedClient = resolvedClientId ? clients.find((c) => c.id === resolvedClientId) : null;
-  const brandDnaReady =
-    !resolvedClientId ||
-    resolvedClient?.brand_dna_status === 'active' ||
-    resolvedClient?.brand_dna_status === 'draft';
-
   const clientDnaReady =
     !!resolvedClient &&
     (resolvedClient.brand_dna_status === 'active' || resolvedClient.brand_dna_status === 'draft');
@@ -521,48 +516,114 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
 
   return (
     <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleReset}
-            aria-label="Start over — pick a different website or client"
-            className="text-text-muted hover:text-text-secondary transition-colors cursor-pointer rounded-lg p-1 -m-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted mb-1">
-              Content
-            </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-text-primary">Ad creatives</h1>
-            <p className="text-sm text-text-muted flex flex-wrap items-center gap-2">
-              <span>{brand?.name ?? selectedClient?.name ?? 'Unknown brand'}</span>
-              {brandContextSource === 'brand_dna' && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent-text">
-                  <Sparkles size={10} />
-                  Brand DNA
-                </span>
+      {/* Sticky glass navbar: wayfinding + tabs + gallery CTA (no floating bottom chat bar) */}
+      <div className="sticky top-0 z-40 -mx-6 sm:-mx-8 px-6 sm:px-8 pt-1 pb-2">
+        <div className="rounded-2xl border border-white/[0.1] bg-surface/65 shadow-[0_12px_40px_-18px_rgba(0,0,0,0.65)] backdrop-blur-xl supports-[backdrop-filter]:bg-surface/55">
+          <div className="flex flex-col gap-3 p-3 sm:p-4">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-2.5 sm:items-center">
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  aria-label="Start over — pick a different website or client"
+                  className="mt-0.5 shrink-0 text-text-muted transition-colors hover:text-text-secondary cursor-pointer rounded-lg p-1 -m-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 sm:mt-0"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+                    Ad creatives
+                  </p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <h1 className="truncate text-lg font-semibold tracking-tight text-text-primary sm:text-xl">
+                      {brand?.name ?? selectedClient?.name ?? 'Unknown brand'}
+                    </h1>
+                    {brand && (
+                      <div className="flex items-center gap-1">
+                        {brand.colors.slice(0, 4).map((color, i) => (
+                          <div
+                            key={`${color}-${i}`}
+                            className="h-3.5 w-3.5 rounded-full border border-white/10 sm:h-4 sm:w-4"
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                    {brandContextSource === 'brand_dna' && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent-text">
+                        <Sparkles size={10} />
+                        Brand DNA
+                      </span>
+                    )}
+                    {brandContextSource === 'knowledge_cache' && (
+                      <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-text-muted">
+                        Cached crawl
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {activeTab === 'gallery' && resolvedClientId && (
+                <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+                  {clientDnaReady ? (
+                    <>
+                      <p className="hidden text-right text-[11px] text-text-muted sm:block sm:max-w-[220px]">
+                        Run the wizard to create a new batch of static ads.
+                      </p>
+                      <Button
+                        type="button"
+                        size="lg"
+                        shape="pill"
+                        className="w-full shadow-lg shadow-accent/15 sm:w-auto"
+                        onClick={() => setAdWizardOpen(true)}
+                      >
+                        <Sparkles size={18} strokeWidth={1.75} />
+                        Generate creatives
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      shape="pill"
+                      className="w-full border-white/15 bg-background/30 backdrop-blur-sm sm:w-auto"
+                      onClick={() => setTab('generate')}
+                    >
+                      <Dna size={16} />
+                      Finish brand kit
+                    </Button>
+                  )}
+                </div>
               )}
-              {brandContextSource === 'knowledge_cache' && (
-                <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-text-muted">
-                  Cached crawl
-                </span>
-              )}
-            </p>
-          </div>
-          {brand && (
-            <div className="flex items-center gap-1.5 ml-2">
-              {brand.colors.slice(0, 4).map((color, i) => (
-                <div
-                  key={`${color}-${i}`}
-                  className="h-4 w-4 rounded-full border border-white/10"
-                  style={{ backgroundColor: color }}
-                />
+            </div>
+
+            <div
+              className="flex flex-wrap items-center gap-1 rounded-xl border border-white/[0.06] bg-background/25 p-1 backdrop-blur-sm"
+              role="tablist"
+              aria-label="Ad creatives sections"
+            >
+              {TABS.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === key}
+                  onClick={() => setTab(key)}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all cursor-pointer sm:px-4 sm:text-sm ${
+                    activeTab === key
+                      ? 'bg-accent/[0.16] text-accent-text shadow-sm ring-1 ring-accent/20'
+                      : 'text-text-muted hover:bg-background/40 hover:text-text-secondary'
+                  }`}
+                >
+                  <Icon size={15} />
+                  {label}
+                </button>
               ))}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -570,25 +631,6 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
       {resolvedClientId && (
         <GenerationBanner clientId={resolvedClientId} onViewGallery={() => setTab('gallery')} />
       )}
-
-      {/* Tab bar */}
-      <div className="flex items-center gap-1 rounded-full border border-nativz-border/80 bg-surface/90 p-1 w-fit shadow-sm backdrop-blur-sm">
-        {TABS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all cursor-pointer ${
-              activeTab === key
-                ? 'bg-accent/[0.14] text-accent-text shadow-sm ring-1 ring-accent/25'
-                : 'text-text-muted hover:text-text-secondary hover:bg-background/50'
-            }`}
-          >
-            <Icon size={15} />
-            {label}
-          </button>
-        ))}
-      </div>
 
       {resolvedClientId && isScanning && (
         <div className="flex items-center gap-3 rounded-xl border border-accent/20 bg-accent/[0.06] px-4 py-3 text-sm text-text-secondary">
@@ -624,12 +666,17 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
           clientName={resolvedClient.name ?? ''}
           brandDnaStatus={resolvedClient.brand_dna_status}
           websiteUrl={resolvedClient.website_url}
+          clientSlug={resolvedClient.slug}
+          onBrandDnaActivated={() => setTab('generate', { replace: true })}
         />
       )}
       {activeTab === 'generate' && resolvedClientId && clientDnaReady && resolvedClient && (
         <BrandDnaTabReadyPanel
+          clientId={resolvedClientId}
           clientName={resolvedClient.name ?? 'Client'}
           clientSlug={resolvedClient.slug}
+          websiteUrl={resolvedClient.website_url}
+          brandDnaStatus={resolvedClient.brand_dna_status}
           onOpenGallery={() => setTab('gallery')}
         />
       )}
@@ -649,8 +696,6 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
         <CreativeGallery
           clientId={resolvedClientId}
           brandDnaReady={clientDnaReady}
-          onOpenAdWizard={() => setAdWizardOpen(true)}
-          onGoToBrandKit={() => setTab('generate')}
           activeBatchId={activeBatchId}
           placeholderConfig={placeholderConfig}
           onBatchComplete={() => {

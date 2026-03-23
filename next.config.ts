@@ -52,6 +52,7 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: '*.tiktokcdn.com' },
       { protocol: 'https', hostname: '*.monday.com' },
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
+      { protocol: 'https', hostname: 'images.unsplash.com' },
     ],
   },
   serverExternalPackages: ['ffmpeg-static', 'fluent-ffmpeg', '@resvg/resvg-js'],

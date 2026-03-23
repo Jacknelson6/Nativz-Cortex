@@ -1,0 +1,25 @@
+---
+description: Full-page and e2e UI — Shadcn pipeline, Bedrock motion, bold restrained design. Use when building marketing sites, landing pages, app shells, or multi-section flows in Cursor.
+globs: app/**/*.tsx, app/**/*.ts, components/**/*.tsx
+alwaysApply: false
+---
+
+# E2E UI — Shadcn + Bedrock (Cursor)
+
+When the task is **a whole page, site section stack, or greenfield UI flow** (not a one-line tweak), **read and follow** the project skill:
+
+1. **`.claude/skills/bedrock/SKILL.md`**
+2. **`.claude/skills/bedrock/references/single-prompt-playbook.md`** (checklist — do not skip verify)
+3. **`.claude/skills/bedrock/references/design-doctrine.md`** (typography, delight, cohesion)
+4. **`.claude/skills/bedrock/references/shadcn-blocks-pipeline.md`** when running `npx shadcn add`
+
+**Pipeline:** Shadcn blocks/primitives **first** (structure, a11y) → then **one** strong design direction (type + spacing) → then **Bedrock/React Bits** only for **1–2 deliberate surprises** (never wallpaper).
+
+**Non‑negotiables**
+
+- **Typography leads:** Pick an explicit pairing + scale before animation. No default Inter-only stack for marketing surfaces unless the product already mandates it.
+- **Delight budget:** At most **one** hero‑level surprise (e.g. split headline **or** ambient background **or** one scroll choreo — not all three).
+- **Fit over novelty:** Every block must feel like **one product**; if a section fights the last, simplify.
+- **End state:** `npm run build` + `npm run lint` after substantive UI.
+
+Upstream React Bits source: **[github.com/Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock)** → `~/.claude/skills/bedrock` if installed.

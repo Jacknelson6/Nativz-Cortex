@@ -11,34 +11,32 @@ function pickAllowedImageUrl(raw: unknown, allowList: string[]): string | undefi
   return allowList.includes(t) ? t : undefined;
 }
 
-const OFFERING_TYPES: ProductOfferingType[] = [
-  'product',
-  'service',
-  'affiliate_program',
-  'ambassador_program',
-  'partnership',
-  'other',
-];
+const OFFERING_TYPES: ProductOfferingType[] = ['product', 'service', 'other'];
 
 function normalizeOfferingType(raw: unknown): ProductOfferingType | undefined {
   if (typeof raw !== 'string') return undefined;
   const s = raw.toLowerCase().trim().replace(/\s+/g, '_');
   if (OFFERING_TYPES.includes(s as ProductOfferingType)) return s as ProductOfferingType;
-  if (s.includes('affiliate') || s.includes('referral_partner') || s.includes('partner_program')) {
-    return 'affiliate_program';
-  }
-  if (s.includes('ambassador') || s.includes('creator_program') || s.includes('street_team')) {
-    return 'ambassador_program';
+  // Affiliate / ambassador / partnership-style offerings → other (no separate taxonomy)
+  if (
+    s.includes('affiliate') ||
+    s.includes('referral_partner') ||
+    s.includes('partner_program') ||
+    s.includes('ambassador') ||
+    s.includes('creator_program') ||
+    s.includes('street_team') ||
+    s.includes('partnership')
+  ) {
+    return 'other';
   }
   if (s.includes('service') && !s.includes('product')) return 'service';
   if (s.includes('product')) return 'product';
-  if (s.includes('partnership')) return 'partnership';
   return undefined;
 }
 
 /**
  * Extract product/service catalog from crawled pages using AI.
- * Image URLs must come from HTML (allowlist). Classifies offerings vs affiliate/ambassador programs.
+ * Image URLs must come from HTML (allowlist). Offering type is product | service | other (partner-style rows use other).
  */
 export async function extractProductCatalog(pages: CrawledPage[]): Promise<ProductItem[]> {
   const productPages = pages.filter((p) => p.pageType === 'product');
@@ -59,24 +57,21 @@ export async function extractProductCatalog(pages: CrawledPage[]): Promise<Produ
       ? `\n\nAllowed imageUrl values (copy exactly, or use null):\n${allowList.map((u) => `- ${u}`).join('\n')}`
       : '\n\nNo product images were found in page HTML; use null for imageUrl on every item.';
 
-  const systemPrompt = `You are a product analyst examining a company's website. Extract DISTINCT products, services, and partner programs mentioned in the content. Return a JSON array where each item has:
+  const systemPrompt = `You are a product analyst examining a company's website. Extract DISTINCT products, services, and partner-style programs mentioned in the content. Return a JSON array where each item has:
 
 {
   "name": "Short name",
   "description": "2-4 sentences: what it is, who it's for, key benefit or proof points if visible on the page",
   "price": "price if visible (e.g. '$39/mo', '$299', 'Free'), or null",
   "category": "e.g. 'Software', 'Skincare', 'Consulting', 'Partner program'",
-  "offering_type": "one of: product | service | affiliate_program | ambassador_program | partnership | other",
+  "offering_type": "exactly one of: product | service | other",
   "imageUrl": null or a string copied EXACTLY from the allowed list below
 }
 
 Classification rules for offering_type (critical):
 - **product**: physical or digital goods sold to customers (SKUs, plans as a productized SKU).
 - **service**: custom work, agency retainers, professional services, done-for-you offerings.
-- **affiliate_program**: earn commission, referral partners, "affiliates", revenue share for promoters — NOT the core paid service.
-- **ambassador_program**: brand ambassadors, creator programs, street teams, campus reps — community promotion, not the main consulting/service line.
-- **partnership**: B2B partnerships, integrations, reseller agreements (when not clearly affiliate).
-- **other**: if unclear.
+- **other**: affiliate or ambassador programs, B2B partnerships, integrations, reseller deals, or anything that is not clearly a core product or service offering — use this bucket; do not invent sub-types.
 
 Rules:
 - Prefer items with clear names on the page. Cap at 32 items; prioritize homepage + product pages.

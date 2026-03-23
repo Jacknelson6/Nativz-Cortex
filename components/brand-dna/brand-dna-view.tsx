@@ -6,7 +6,7 @@ import { RefreshCw, Clock, Sparkles, Globe, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { BrandDNACards } from './brand-dna-cards';
+import { BrandDNACards, BRAND_DNA_BENTO_SURFACE } from './brand-dna-cards';
 import { CompletenessBadge } from './completeness-badge';
 import { OnboardWizard } from './onboard-wizard';
 import { BrandDNAProgress } from './brand-dna-progress';
@@ -129,8 +129,8 @@ export function BrandDNAView({
           />
 
           {/* Full guideline document */}
-          <div className="rounded-xl border border-nativz-border bg-surface p-6">
-            <h3 className="text-sm font-semibold text-text-primary mb-4">Full brand guideline</h3>
+          <div className={`${BRAND_DNA_BENTO_SURFACE} p-3 sm:p-4`}>
+            <h3 className="mb-3 text-sm font-semibold text-text-primary">Full brand guideline</h3>
             <div className="prose prose-invert prose-sm max-w-none text-text-secondary">
               <Markdown content={guideline.content} />
             </div>

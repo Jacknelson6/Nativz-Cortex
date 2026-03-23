@@ -64,13 +64,21 @@ Rules:
 - Match the brand's tone and vocabulary exactly
 - Do not use generic filler — every word should earn its place`;
 
+  const supplement = brandContext.creativeSupplementBlock?.trim();
+  const supplementBlock =
+    supplement && supplement.length > 0
+      ? `\n\nUPLOADED BRAND MATERIALS (follow claims, vocabulary, and offer language where relevant):\n${
+          supplement.length > 6000 ? `${supplement.slice(0, 6000)}\n...(truncated)` : supplement
+        }`
+      : '';
+
   const userPrompt = `Generate ${count} unique sets of ad copy for the following:
 
 Brand: ${brandContext.clientName}
 Industry: ${brandContext.clientIndustry}
 Product/Service: ${productService}${offer ? `\nOffer: ${offer}` : ''}
 
-${toneGuidance ? `BRAND VOICE GUIDELINES:\n${toneGuidance}` : ''}
+${toneGuidance ? `BRAND VOICE GUIDELINES:\n${toneGuidance}` : ''}${supplementBlock}
 
 Return exactly ${count} sets as JSON.`;
 

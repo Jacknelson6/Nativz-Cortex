@@ -540,15 +540,25 @@ function VerbalForm({
 // Products form
 // ---------------------------------------------------------------------------
 
+/** Not shown in the picker — legacy rows normalize to `other` on save */
+const OFFERING_TYPES_EXCLUDED_FROM_UI: ProductOfferingType[] = [
+  'affiliate_program',
+  'ambassador_program',
+  'partnership',
+];
+
 const OFFERING_TYPE_OPTIONS: { value: ProductOfferingType | ''; label: string }[] = [
   { value: '', label: 'Offering type' },
   { value: 'product', label: 'Product' },
   { value: 'service', label: 'Service' },
-  { value: 'affiliate_program', label: 'Affiliate program' },
-  { value: 'ambassador_program', label: 'Ambassador program' },
-  { value: 'partnership', label: 'Partnership' },
   { value: 'other', label: 'Other' },
 ];
+
+function selectValueForOfferingType(ot?: ProductOfferingType): string {
+  if (!ot) return '';
+  if (OFFERING_TYPES_EXCLUDED_FROM_UI.includes(ot)) return '';
+  return ot;
+}
 
 function ProductsForm({
   clientId,
@@ -588,7 +598,15 @@ function ProductsForm({
   }
 
   async function handleSave() {
-    const filtered = products.filter((p) => p.name.trim());
+    const filtered = products
+      .filter((p) => p.name.trim())
+      .map((p) => ({
+        ...p,
+        offeringType:
+          p.offeringType && OFFERING_TYPES_EXCLUDED_FROM_UI.includes(p.offeringType)
+            ? 'other'
+            : p.offeringType,
+      }));
     setSaving(true);
     const ok = await saveBrandDNA(clientId, { products: filtered });
     setSaving(false);
@@ -639,12 +657,12 @@ function ProductsForm({
                   />
                 </div>
                 <select
-                  value={product.offeringType ?? ''}
+                  value={selectValueForOfferingType(product.offeringType)}
                   onChange={(e) => update(i, 'offeringType', e.target.value)}
                   className="w-full rounded bg-background text-[11px] text-text-muted border border-nativz-border px-1.5 py-1 outline-none focus:border-accent/50"
                 >
                   {OFFERING_TYPE_OPTIONS.map((o) => (
-                    <option key={o.label} value={o.value}>
+                    <option key={o.value || 'placeholder'} value={o.value}>
                       {o.label}
                     </option>
                   ))}

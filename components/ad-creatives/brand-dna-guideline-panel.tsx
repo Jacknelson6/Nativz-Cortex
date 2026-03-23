@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Loader2, FileText } from 'lucide-react';
 import { Markdown } from '@/components/ai/markdown';
+import { BRAND_DNA_BENTO_SURFACE } from '@/components/brand-dna/brand-dna-cards';
 
 interface BrandDnaGuidelinePanelProps {
   clientId: string;
@@ -46,11 +47,11 @@ export function BrandDnaGuidelinePanel({ clientId, clientSlug }: BrandDnaGuideli
   }, [clientId]);
 
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-background/50 overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.06] px-3 py-2.5 bg-white/[0.03]">
-        <div className="flex items-center gap-2 min-w-0">
-          <FileText size={14} className="text-accent-text shrink-0" />
-          <p className="text-xs font-medium text-text-primary truncate">Full brand guideline</p>
+    <div className={`${BRAND_DNA_BENTO_SURFACE} overflow-hidden`}>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.04] px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <FileText size={14} className="shrink-0 text-text-muted" />
+          <p className="truncate text-xs font-medium text-text-primary">Full brand guideline</p>
           <span className="text-[10px] text-text-muted hidden sm:inline">(same document as Brand DNA)</span>
         </div>
         {clientSlug ? (

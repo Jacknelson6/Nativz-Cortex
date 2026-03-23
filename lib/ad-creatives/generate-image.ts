@@ -12,6 +12,8 @@ interface GenerateAdImageParams {
   prompt: string;
   referenceImageUrl?: string;
   productImageUrls?: string[];
+  /** Extra brand images (mood boards, packaging, guideline shots) from client uploads */
+  brandReferenceImageUrls?: string[];
   aspectRatio: string;
 }
 
@@ -91,7 +93,22 @@ async function buildParts(params: GenerateAdImageParams): Promise<GeminiContentP
     }
   }
 
-  // 2. Template style reference (layout/composition guide only)
+  // 2. Uploaded brand reference images (after product shots, before layout template)
+  const brandRefs = params.brandReferenceImageUrls ?? [];
+  if (brandRefs.length > 0) {
+    const fetched = await Promise.all(brandRefs.slice(0, 5).map(fetchImageAsBase64));
+    const valid = fetched.filter(Boolean) as { mimeType: string; data: string }[];
+    if (valid.length > 0) {
+      for (const img of valid) {
+        parts.push({ inlineData: img });
+      }
+      parts.push({
+        text: `The above ${valid.length > 1 ? 'images are supplementary brand references' : 'image is a supplementary brand reference'} (mood, packaging, photography style, or guideline examples). Use them for color mood, composition, and on-brand visual language — not for copying any text or third-party logos from those images.\n\n`,
+      });
+    }
+  }
+
+  // 3. Template style reference (layout/composition guide only)
   if (params.referenceImageUrl) {
     const ref = await fetchImageAsBase64(params.referenceImageUrl);
     if (ref) {

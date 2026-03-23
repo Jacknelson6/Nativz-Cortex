@@ -6,6 +6,9 @@ import {
 } from 'lucide-react';
 import type { BrandColor, BrandFont, BrandLogo, ProductItem } from '@/lib/knowledge/types';
 
+/** Surface, radius, and hairline border shared by bento cards and full-guideline blocks */
+export const BRAND_DNA_BENTO_SURFACE = 'rounded-xl border border-white/[0.06] bg-white/[0.02]';
+
 interface BrandDNACardsProps {
   metadata: Record<string, unknown>;
   clientId: string;
@@ -137,7 +140,7 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
         onEdit={() => onEditSection?.('Target audience')}
       >
         {targetAudience ? (
-          <ScrollableText>{targetAudience}</ScrollableText>
+          <LineClampText lines={6}>{targetAudience}</LineClampText>
         ) : (
           <p className="text-xs text-text-muted/60">No audience data</p>
         )}
@@ -203,7 +206,7 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
         className="sm:col-span-2 lg:col-span-2"
       >
         {positioning ? (
-          <ScrollableText className="max-h-[10rem]">{positioning}</ScrollableText>
+          <LineClampText lines={10}>{positioning}</LineClampText>
         ) : (
           <p className="text-xs text-text-muted/60">No positioning data</p>
         )}
@@ -212,21 +215,17 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
   );
 }
 
-/** Long DNA copy: scroll instead of hard ellipsis so layout stays predictable */
-function ScrollableText({
-  children,
-  className = 'max-h-[7.5rem]',
-}: {
-  children: string;
-  className?: string;
-}) {
-  return (
-    <p
-      className={`text-xs leading-relaxed text-text-secondary overflow-y-auto overscroll-contain pr-0.5 [scrollbar-width:thin] ${className}`}
-    >
-      {children}
-    </p>
-  );
+const LINE_CLAMP_BY_LINES: Record<number, string> = {
+  4: 'line-clamp-4',
+  6: 'line-clamp-6',
+  8: 'line-clamp-8',
+  10: 'line-clamp-[10]',
+};
+
+/** Truncates long DNA copy with ellipsis — cards stay non-scrollable */
+function LineClampText({ children, lines }: { children: string; lines: 4 | 6 | 8 | 10 }) {
+  const clamp = LINE_CLAMP_BY_LINES[lines] ?? 'line-clamp-6';
+  return <p className={`text-xs leading-relaxed text-text-secondary ${clamp}`}>{children}</p>;
 }
 
 // ---------------------------------------------------------------------------
@@ -250,10 +249,10 @@ function BentoCard({
   onEdit?: () => void;
   className?: string;
 }) {
-  return (
-    <div
-      className={`group relative flex h-full min-h-0 flex-col rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 ${className}`}
-    >
+  const canEdit = Boolean(editable && onEdit);
+
+  const body = (
+    <>
       <div className="mb-2 min-h-0 flex-1">{children}</div>
       <div className="mt-auto flex shrink-0 items-center justify-between border-t border-white/[0.04] pt-2">
         <div className="flex items-center gap-1.5">
@@ -261,21 +260,35 @@ function BentoCard({
           <span className="text-[11px] font-medium text-text-muted">{title}</span>
         </div>
         <div className="flex items-center gap-1">
-          {verified && (
+          {verified ? (
             <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/15">
               <Check size={8} className="text-emerald-400" />
             </div>
-          )}
-          {editable && (
-            <button
-              onClick={onEdit}
-              className="opacity-0 group-hover:opacity-100 p-1 rounded text-text-muted hover:text-text-primary transition-all cursor-pointer"
-            >
+          ) : null}
+          {canEdit ? (
+            <span className="text-text-muted/70" aria-hidden>
               <Pencil size={10} />
-            </button>
-          )}
+            </span>
+          ) : null}
         </div>
       </div>
-    </div>
+    </>
   );
+
+  const surface = `group relative flex h-full min-h-0 w-full flex-col ${BRAND_DNA_BENTO_SURFACE} p-3 font-[inherit] text-left ${className}`;
+
+  if (canEdit) {
+    return (
+      <button
+        type="button"
+        className={`${surface} cursor-pointer transition-[background-color,box-shadow] hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
+        onClick={onEdit}
+        aria-label={`Edit ${title}`}
+      >
+        {body}
+      </button>
+    );
+  }
+
+  return <div className={surface}>{body}</div>;
 }

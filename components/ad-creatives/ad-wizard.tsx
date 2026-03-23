@@ -22,6 +22,7 @@ import { VariationStrip } from './variation-strip';
 import { BrandMediaPanel } from './brand-media-panel';
 import { BrandDnaGuidelinePanel } from './brand-dna-guideline-panel';
 import { BrandDnaWizardRail } from './brand-dna-wizard-rail';
+import { AdCreativeGuidelineUploads } from './ad-creative-guideline-uploads';
 import { PromptReview, type PromptPreviewData } from './prompt-review';
 import { AD_GENERATE_MAX_PRODUCTS, type AdPromptTemplate, type AspectRatio, type KandyTemplate } from '@/lib/ad-creatives/types';
 import type { WizardTemplate } from '@/lib/ad-creatives/wizard-template';
@@ -609,6 +610,9 @@ export function AdWizard({
               )}
               {brand && brandContextSource === 'brand_dna' && clientId && (
                 <BrandDnaGuidelinePanel clientId={clientId} clientSlug={clientSlug} />
+              )}
+              {brand && clientId && (
+                <AdCreativeGuidelineUploads clientId={clientId} />
               )}
               {brand && mediaUrls.length > 0 && (
                 <div className="pt-6 border-t border-nativz-border/80 space-y-3">

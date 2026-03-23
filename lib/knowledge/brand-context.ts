@@ -57,6 +57,16 @@ export interface BrandContext {
   positioning: string | null;
   /** Full guideline metadata (if from guideline) */
   metadata: BrandGuidelineMetadata | null;
+  /**
+   * Text from imported files (markdown, notes, etc.) for prompts — not the main guideline body.
+   * Populated from `client_knowledge_entries` with source=imported, type=document.
+   */
+  creativeSupplementBlock: string;
+  /**
+   * Public URLs of imported brand images (logos, mood boards, packaging) for image-model reference.
+   * From source=imported, type=brand_asset.
+   */
+  creativeReferenceImageUrls: string[];
 
   /** Serialize for AI prompt injection (text only, no images) */
   toPromptBlock: () => string;
@@ -75,6 +85,8 @@ export interface BrandContextFull {
   positioning: string | null;
   guidelineContent: string | null;
   metadata: BrandGuidelineMetadata | null;
+  creativeSupplementBlock: string;
+  creativeReferenceImageUrls: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -107,8 +119,8 @@ export async function getBrandContext(clientId: string): Promise<BrandContext> {
 
   const admin = createAdminClient();
 
-  // Fetch client record + brand guideline in parallel
-  const [clientResult, guidelineResult] = await Promise.all([
+  // Fetch client, brand guideline, and imported creative supplements in parallel
+  const [clientResult, guidelineResult, importedResult] = await Promise.all([
     admin
       .from('clients')
       .select('name, industry, target_audience, brand_voice, topic_keywords, website_url, preferences, description')
@@ -123,6 +135,14 @@ export async function getBrandContext(clientId: string): Promise<BrandContext> {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    admin
+      .from('client_knowledge_entries')
+      .select('type, title, content, metadata, created_at')
+      .eq('client_id', clientId)
+      .eq('source', 'imported')
+      .in('type', ['document', 'brand_asset'])
+      .order('created_at', { ascending: false })
+      .limit(80),
   ]);
 
   const client = clientResult.data;
@@ -133,21 +153,93 @@ export async function getBrandContext(clientId: string): Promise<BrandContext> {
   const guideline = guidelineResult.data as KnowledgeEntry | null;
   const meta = (guideline?.metadata ?? null) as BrandGuidelineMetadata | null;
   const prefs = client.preferences as Record<string, unknown> | null;
+  const supplemental = buildCreativeSupplementFromImportedRows(importedResult.data ?? []);
 
   let context: BrandContext;
 
   if (guideline && meta) {
     // Build from brand guideline
-    context = buildFromGuideline(client, guideline, meta);
+    context = buildFromGuideline(client, guideline, meta, supplemental);
   } else {
     // Fallback: build from raw client fields
-    context = buildFromClientFields(client);
+    context = buildFromClientFields(client, supplemental);
   }
 
   // Cache result
   cache.set(clientId, { data: context, expiry: Date.now() + CACHE_TTL_MS });
 
   return context;
+}
+
+// ---------------------------------------------------------------------------
+// Imported files → creative prompts (same pipeline as Brand DNA upload)
+// ---------------------------------------------------------------------------
+
+type ImportedKnowledgeRow = {
+  type: string;
+  title: string | null;
+  content: string | null;
+  metadata: unknown;
+};
+
+const CREATIVE_SUPPLEMENT_TEXT_BUDGET = 14_000;
+const CREATIVE_SUPPLEMENT_MAX_PER_DOC = 4_500;
+const CREATIVE_SUPPLEMENT_MAX_IMAGES = 14;
+
+function buildCreativeSupplementFromImportedRows(rows: ImportedKnowledgeRow[]): {
+  creativeSupplementBlock: string;
+  creativeReferenceImageUrls: string[];
+} {
+  const imageUrls: string[] = [];
+  const textParts: string[] = [];
+  let budget = CREATIVE_SUPPLEMENT_TEXT_BUDGET;
+
+  for (const row of rows) {
+    if (row.type === 'brand_asset') {
+      const meta = row.metadata as Record<string, unknown> | null;
+      const url = meta?.file_url;
+      if (
+        typeof url === 'string' &&
+        url.startsWith('http') &&
+        !imageUrls.includes(url) &&
+        imageUrls.length < CREATIVE_SUPPLEMENT_MAX_IMAGES
+      ) {
+        imageUrls.push(url);
+      }
+    }
+
+    if (row.type === 'document') {
+      const title = (row.title ?? 'Document').trim() || 'Document';
+      const content = (row.content ?? '').trim();
+      const isPdfPlaceholder =
+        /^PDF document uploaded:/i.test(content) ||
+        (content.length < 160 && /pending|extraction/i.test(content));
+
+      let body: string;
+      if (content.length > 80 && !isPdfPlaceholder) {
+        const sliceLen = Math.min(CREATIVE_SUPPLEMENT_MAX_PER_DOC, Math.max(0, budget - title.length - 24));
+        body = sliceLen > 0 ? content.slice(0, sliceLen) : '';
+      } else {
+        body =
+          '(Uploaded file on record — follow formal brand guideline conventions: typography, color discipline, and campaign tone implied by the filename and any Brand DNA above.)';
+      }
+
+      const chunk = `## ${title}\n${body}`;
+      if (body && chunk.length <= budget) {
+        textParts.push(chunk);
+        budget -= chunk.length + 2;
+      } else if (body && budget > 80) {
+        const short = `## ${title}\n${body.slice(0, Math.max(0, budget - title.length - 8))}…`;
+        textParts.push(short);
+        budget = 0;
+      }
+    }
+  }
+
+  return {
+    creativeSupplementBlock: textParts.join('\n\n'),
+    creativeReferenceImageUrls: imageUrls,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +250,7 @@ function buildFromGuideline(
   client: Record<string, unknown>,
   guideline: KnowledgeEntry,
   meta: BrandGuidelineMetadata,
+  supplemental: { creativeSupplementBlock: string; creativeReferenceImageUrls: string[] },
 ): BrandContext {
   const visualIdentity: VisualIdentity = {
     colors: meta.colors ?? [],
@@ -196,10 +289,15 @@ function buildFromGuideline(
     audience: { summary: meta.target_audience_summary ?? (client.target_audience as string) ?? null },
     positioning: meta.competitive_positioning ?? null,
     metadata: meta,
+    creativeSupplementBlock: supplemental.creativeSupplementBlock,
+    creativeReferenceImageUrls: supplemental.creativeReferenceImageUrls,
   });
 }
 
-function buildFromClientFields(client: Record<string, unknown>): BrandContext {
+function buildFromClientFields(
+  client: Record<string, unknown>,
+  supplemental: { creativeSupplementBlock: string; creativeReferenceImageUrls: string[] },
+): BrandContext {
   const prefs = client.preferences as Record<string, unknown> | null;
 
   const verbalIdentity: VerbalIdentity = {
@@ -235,6 +333,8 @@ function buildFromClientFields(client: Record<string, unknown>): BrandContext {
     audience: { summary: (client.target_audience as string) ?? null },
     positioning: null,
     metadata: null,
+    creativeSupplementBlock: supplemental.creativeSupplementBlock,
+    creativeReferenceImageUrls: supplemental.creativeReferenceImageUrls,
   });
 }
 
@@ -259,6 +359,8 @@ function attachMethods(data: BrandContextData): BrandContext {
       positioning: data.positioning,
       guidelineContent: data.guidelineContent,
       metadata: data.metadata,
+      creativeSupplementBlock: data.creativeSupplementBlock,
+      creativeReferenceImageUrls: data.creativeReferenceImageUrls,
     }),
   };
 }
@@ -350,6 +452,12 @@ Industry: ${ctx.clientIndustry}${ctx.clientWebsiteUrl ? `\nWebsite: ${ctx.client
       ? ctx.guidelineContent.substring(0, 4000) + '\n...(truncated)'
       : ctx.guidelineContent;
     sections.push(`<brand_guideline_document>\n${truncated}\n</brand_guideline_document>`);
+  }
+
+  if (ctx.creativeSupplementBlock.trim()) {
+    const raw = ctx.creativeSupplementBlock;
+    const truncated = raw.length > 6000 ? `${raw.slice(0, 6000)}\n...(truncated)` : raw;
+    sections.push(`<uploaded_brand_materials>\n${truncated}\n</uploaded_brand_materials>`);
   }
 
   sections.push('</brand_dna>');

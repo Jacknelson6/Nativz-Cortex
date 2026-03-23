@@ -5,6 +5,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { ArrowLeft, Dna, Image, LayoutGrid, Loader2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { CreativeGallery } from './creative-gallery';
 import { TemplateCatalog } from './template-catalog';
 import { AdWizard } from './ad-wizard';
@@ -205,46 +206,96 @@ export function AdCreativesView({
 
   return (
     <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-8">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {!shell && (
-            <Link
-              href={`/admin/clients/${clientSlug}`}
-              aria-label="Back to client profile"
-              className="text-text-muted hover:text-text-secondary transition-colors rounded-lg p-1 -m-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-            >
-              <ArrowLeft size={20} />
-            </Link>
-          )}
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted mb-1">Content</p>
-            <h1 className="text-2xl font-semibold tracking-tight text-text-primary">Ad creatives</h1>
-            <p className="text-sm text-text-muted mt-0.5">{clientName}</p>
-          </div>
-          {creativeCount > 0 && (
-            <span className="text-[11px] text-text-muted rounded-full bg-background border border-nativz-border px-2 py-0.5">
-              {creativeCount} {creativeCount === 1 ? 'creative' : 'creatives'}
-            </span>
-          )}
-        </div>
-      </div>
+      <div className="sticky top-0 z-40 -mx-6 sm:-mx-8 px-6 sm:px-8 pt-1 pb-2">
+        <div className="rounded-2xl border border-white/[0.1] bg-surface/65 shadow-[0_12px_40px_-18px_rgba(0,0,0,0.65)] backdrop-blur-xl supports-[backdrop-filter]:bg-surface/55">
+          <div className="flex flex-col gap-3 p-3 sm:p-4">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-2.5 sm:items-center">
+                {!shell && (
+                  <Link
+                    href={`/admin/clients/${clientSlug}`}
+                    aria-label="Back to client profile"
+                    className="mt-0.5 shrink-0 text-text-muted transition-colors hover:text-text-secondary rounded-lg p-1 -m-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 sm:mt-0"
+                  >
+                    <ArrowLeft size={20} />
+                  </Link>
+                )}
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+                    Ad creatives
+                  </p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                    <h1 className="truncate text-lg font-semibold tracking-tight text-text-primary sm:text-xl">
+                      {clientName}
+                    </h1>
+                    {creativeCount > 0 && (
+                      <span className="shrink-0 text-[10px] text-text-muted rounded-full border border-white/10 bg-background/30 px-2 py-0.5 backdrop-blur-sm">
+                        {creativeCount} {creativeCount === 1 ? 'creative' : 'creatives'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-      <div className="flex items-center gap-1 rounded-full border border-nativz-border/80 bg-surface/90 p-1 w-fit shadow-sm backdrop-blur-sm">
-        {TABS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all cursor-pointer ${
-              activeTab === key
-                ? 'bg-accent/[0.14] text-accent-text shadow-sm ring-1 ring-accent/25'
-                : 'text-text-muted hover:text-text-secondary hover:bg-background/50'
-            }`}
-          >
-            <Icon size={15} />
-            {label}
-          </button>
-        ))}
+              {activeTab === 'gallery' && (
+                <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+                  {brandDnaReady ? (
+                    <>
+                      <p className="hidden text-right text-[11px] text-text-muted sm:block sm:max-w-[220px]">
+                        Run the wizard to create a new batch of static ads.
+                      </p>
+                      <Button
+                        type="button"
+                        size="lg"
+                        shape="pill"
+                        className="w-full shadow-lg shadow-accent/15 sm:w-auto"
+                        onClick={() => setWizardOpen(true)}
+                      >
+                        <Sparkles size={18} strokeWidth={1.75} />
+                        Generate creatives
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      shape="pill"
+                      className="w-full border-white/15 bg-background/30 backdrop-blur-sm sm:w-auto"
+                      onClick={() => setTab('generate')}
+                    >
+                      <Dna size={16} />
+                      Finish brand kit
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div
+              className="flex flex-wrap items-center gap-1 rounded-xl border border-white/[0.06] bg-background/25 p-1 backdrop-blur-sm"
+              role="tablist"
+              aria-label="Ad creatives sections"
+            >
+              {TABS.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === key}
+                  onClick={() => setTab(key)}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all cursor-pointer sm:px-4 sm:text-sm ${
+                    activeTab === key
+                      ? 'bg-accent/[0.16] text-accent-text shadow-sm ring-1 ring-accent/20'
+                      : 'text-text-muted hover:bg-background/40 hover:text-text-secondary'
+                  }`}
+                >
+                  <Icon size={15} />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {showBulkImport && activeTab === 'templates' && (
@@ -261,8 +312,6 @@ export function AdCreativesView({
         <CreativeGallery
           clientId={clientId}
           brandDnaReady={brandDnaReady}
-          onOpenAdWizard={() => setWizardOpen(true)}
-          onGoToBrandKit={() => setTab('generate')}
           activeBatchId={activeBatchId}
           placeholderConfig={placeholderConfig}
           onBatchComplete={() => {
@@ -286,13 +335,18 @@ export function AdCreativesView({
           clientName={clientName}
           brandDnaStatus={brandDnaStatus}
           websiteUrl={websiteUrl}
+          clientSlug={clientSlug}
+          onBrandDnaActivated={() => setTab('generate')}
         />
       )}
 
       {activeTab === 'generate' && brandDnaReady && (
         <BrandDnaTabReadyPanel
+          clientId={clientId}
           clientName={clientName}
           clientSlug={clientSlug}
+          websiteUrl={websiteUrl}
+          brandDnaStatus={brandDnaStatus}
           onOpenGallery={() => setTab('gallery')}
         />
       )}

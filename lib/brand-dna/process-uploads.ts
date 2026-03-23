@@ -103,6 +103,24 @@ export async function processUploadedFiles(
           created_by: null,
         });
         entryIds.push(entry.id);
+      } else if (
+        file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        file.name.toLowerCase().endsWith('.docx')
+      ) {
+        const entry = await createKnowledgeEntry({
+          client_id: clientId,
+          type: 'document',
+          title: file.name.replace(/\.docx$/i, ''),
+          content: `Word document uploaded: ${file.name}. Content extraction pending.`,
+          metadata: {
+            original_filename: file.name,
+            mime_type: file.type,
+            status: 'pending_extraction',
+          },
+          source: 'imported',
+          created_by: null,
+        });
+        entryIds.push(entry.id);
       }
     } catch (err) {
       console.error(`[brand-dna] Failed to process ${file.name}:`, err);

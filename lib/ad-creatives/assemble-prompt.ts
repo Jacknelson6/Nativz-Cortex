@@ -111,6 +111,14 @@ export function assembleImagePrompt(config: AssemblePromptConfig): string {
     );
   }
 
+  const supplement = brandContext.creativeSupplementBlock?.trim();
+  if (supplement) {
+    const capped = supplement.length > 8000 ? `${supplement.slice(0, 8000)}\n...(truncated)` : supplement;
+    sections.push(
+      `ADDITIONAL BRAND MATERIALS (from uploaded guidelines, PDFs, notes, and internal docs — honor typography, color, claims, and tone):\n${capped}`,
+    );
+  }
+
   return sections.join('\n\n');
 }
 
@@ -240,6 +248,14 @@ export function assembleImagePromptTextFree(config: AssembleTextFreePromptConfig
       `5. Beautiful, clean product photography composition with intentional negative space for later text overlay.\n` +
       `6. The ${textLayout} portion should subtly darken or have natural shadow — this is where text goes later.`
   );
+
+  const supplement = brandContext.creativeSupplementBlock?.trim();
+  if (supplement) {
+    const capped = supplement.length > 6000 ? `${supplement.slice(0, 6000)}\n...(truncated)` : supplement;
+    sections.push(
+      `ADDITIONAL BRAND MATERIALS (uploaded references — mood, palette, packaging cues):\n${capped}`,
+    );
+  }
 
   return sections.join('\n\n');
 }

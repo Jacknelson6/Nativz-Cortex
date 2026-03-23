@@ -42,3 +42,15 @@ Verify written code by:
 - Checking for lint errors
 - Smoke testing and checking for runtime errors with Playwright
 - Taking screenshots and verifying the UI is as expected
+
+## Full-page and e2e UI (Shadcn + Bedrock)
+
+When the task is a **whole page, marketing site, landing flow, or multi-section app shell** (not a tiny UI tweak), treat it as a **product design** problem, not a component dump:
+
+1. Read **`.claude/skills/bedrock/SKILL.md`**
+2. Read **`.claude/skills/bedrock/references/design-doctrine.md`** (typography, delight budget, cohesion)
+3. Run **`.claude/skills/bedrock/references/single-prompt-playbook.md`** end-to-end, including **`npm run build`** and **`npm run lint`**
+
+**Pipeline:** Shadcn blocks/primitives first → lock **type + spacing** → then **at most one or two** deliberate Bedrock/React Bits surprises so the result feels **bold but calm**, not overwhelming.
+
+**Cursor:** **`.cursor/rules/bedrock-e2e-ui.mdc`** reinforces this when editing under `app/**` or `components/**`. Full React Bits source: **[github.com/Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock)** installed to `~/.claude/skills/bedrock` if needed.

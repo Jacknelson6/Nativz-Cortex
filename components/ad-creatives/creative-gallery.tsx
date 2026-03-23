@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Dna, Sparkles, Filter, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Filter, Images, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreativeCard } from './creative-card';
 import { GalleryPlaceholder } from './gallery-placeholder';
@@ -29,71 +28,16 @@ interface PlaceholderConfig {
 
 interface CreativeGalleryProps {
   clientId: string;
-  /** When false, the floating bar nudges users to the Brand DNA tab instead of opening the ad wizard. */
+  /** When false, empty state points users to the Brand DNA tab (CTA lives in the parent toolbar). */
   brandDnaReady?: boolean;
-  /** Opens the ad generation wizard (typically in a modal). */
-  onOpenAdWizard: () => void;
-  /** Switch to the Brand DNA tab to finish or refresh the brand kit. */
-  onGoToBrandKit: () => void;
   activeBatchId?: string | null;
   placeholderConfig?: PlaceholderConfig | null;
   onBatchComplete?: () => void;
 }
 
-function GalleryGenerateBar({
-  brandDnaReady,
-  onOpenAdWizard,
-  onGoToBrandKit,
-}: {
-  brandDnaReady: boolean;
-  onOpenAdWizard: () => void;
-  onGoToBrandKit: () => void;
-}) {
-  return (
-    <div
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center pb-[max(1rem,env(safe-area-inset-bottom))] px-4"
-      role="region"
-      aria-label="Generate ads"
-    >
-      <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-white/[0.1] bg-surface/80 px-4 py-3 shadow-[0_20px_56px_-16px_rgba(0,0,0,0.75)] backdrop-blur-xl sm:px-5 sm:py-4">
-        {brandDnaReady ? (
-          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            <p className="text-center text-xs text-text-muted sm:text-left sm:max-w-[14rem]">
-              Run the step-by-step wizard to create a new batch of static ads.
-            </p>
-            <Button
-              type="button"
-              size="lg"
-              shape="pill"
-              className="shrink-0 shadow-lg shadow-accent/20"
-              onClick={onOpenAdWizard}
-            >
-              <Sparkles size={18} strokeWidth={1.75} />
-              Generate creatives
-            </Button>
-          </div>
-        ) : (
-          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            <p className="flex items-center justify-center gap-2 text-center text-xs text-text-muted sm:justify-start sm:text-left">
-              <Dna size={14} className="shrink-0 text-accent-text" />
-              Finish your brand kit on the Brand DNA tab before generating ads.
-            </p>
-            <Button type="button" variant="outline" shape="pill" className="shrink-0" onClick={onGoToBrandKit}>
-              <Dna size={14} />
-              Brand DNA tab
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function CreativeGallery({
   clientId,
   brandDnaReady = true,
-  onOpenAdWizard,
-  onGoToBrandKit,
   activeBatchId,
   placeholderConfig,
   onBatchComplete,
@@ -239,7 +183,7 @@ export function CreativeGallery({
   if (creatives.length === 0 && !activeBatchId) {
     return (
       <>
-        <div className="flex flex-col items-center justify-center py-10 sm:py-14 px-4 pb-28">
+        <div className="flex flex-col items-center justify-center py-10 sm:py-14 px-4">
           <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-nativz-border/70 bg-surface px-8 py-14 text-center shadow-[0_28px_80px_-40px_rgba(0,0,0,0.75)]">
             <div
               className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_85%_55%_at_50%_-25%,rgba(59,130,246,0.14),transparent)]"
@@ -252,7 +196,7 @@ export function CreativeGallery({
             <div className="relative space-y-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Gallery</p>
               <div className="mx-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-2xl border border-accent/20 bg-gradient-to-br from-accent/20 to-accent/[0.06] shadow-[0_0_40px_-12px_rgba(59,130,246,0.45)]">
-                <Sparkles size={30} className="text-accent-text" strokeWidth={1.5} />
+                <Images size={30} className="text-accent-text" strokeWidth={1.5} />
               </div>
               <div className="space-y-2">
                 <h2 className="text-xl font-semibold tracking-tight text-text-primary sm:text-2xl">
@@ -261,7 +205,7 @@ export function CreativeGallery({
                 <p className="text-sm leading-relaxed text-text-muted">
                   {brandDnaReady ? (
                     <>
-                      Use <span className="text-text-secondary font-medium">Generate creatives</span> in the bar below
+                      Use <span className="text-text-secondary font-medium">Generate creatives</span> in the top bar
                       — finished ads appear in this grid as they complete.
                     </>
                   ) : (
@@ -276,18 +220,13 @@ export function CreativeGallery({
             </div>
           </div>
         </div>
-        <GalleryGenerateBar
-          brandDnaReady={brandDnaReady}
-          onOpenAdWizard={onOpenAdWizard}
-          onGoToBrandKit={onGoToBrandKit}
-        />
       </>
     );
   }
 
   return (
     <>
-    <div className="space-y-4 pb-28">
+    <div className="space-y-4">
       {/* Filter bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1 bg-surface rounded-lg p-0.5">
@@ -458,11 +397,6 @@ export function CreativeGallery({
         )}
       </Dialog>
     </div>
-    <GalleryGenerateBar
-      brandDnaReady={brandDnaReady}
-      onOpenAdWizard={onOpenAdWizard}
-      onGoToBrandKit={onGoToBrandKit}
-    />
     </>
   );
 }

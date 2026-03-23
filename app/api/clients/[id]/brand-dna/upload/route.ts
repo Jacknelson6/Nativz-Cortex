@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { processUploadedFiles } from '@/lib/brand-dna/process-uploads';
 import { validateFileSignature } from '@/lib/security/validate-file-type';
+import { invalidateBrandContext } from '@/lib/knowledge/brand-context';
 
 export const maxDuration = 60;
 
@@ -37,8 +38,8 @@ export async function POST(
     return NextResponse.json({ error: 'No files provided' }, { status: 400 });
   }
 
-  if (fileEntries.length > 20) {
-    return NextResponse.json({ error: 'Maximum 20 files per upload' }, { status: 400 });
+  if (fileEntries.length > 40) {
+    return NextResponse.json({ error: 'Maximum 40 files per upload' }, { status: 400 });
   }
 
   const ALLOWED_TYPES = new Set([
@@ -86,5 +87,6 @@ export async function POST(
   }
 
   const result = await processUploadedFiles(clientId, files);
+  invalidateBrandContext(clientId);
   return NextResponse.json(result);
 }

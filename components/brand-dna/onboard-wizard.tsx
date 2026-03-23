@@ -7,9 +7,10 @@ import {
   Palette, Type, ShoppingBag, Users, Target, FileText, Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Markdown } from '@/components/ai/markdown';
 import { WizardShell } from '@/components/research/wizard-shell';
 import { GlassButton } from '@/components/ui/glass-button';
-import { BrandDNACards } from './brand-dna-cards';
+import { BrandDNACards, BRAND_DNA_BENTO_SURFACE } from './brand-dna-cards';
 import { BrandDNAProgress } from './brand-dna-progress';
 import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
 import {
@@ -72,6 +73,8 @@ interface OnboardWizardProps {
   /** `inline` = embedded on ad creatives (no full-screen modal). */
   layout?: 'modal' | 'inline';
   className?: string;
+  /** After activating Brand DNA for an existing client (e.g. keep Brand DNA tab selected in ad creatives). */
+  onAfterActivate?: () => void;
 }
 
 export function OnboardWizard({
@@ -82,6 +85,7 @@ export function OnboardWizard({
   initialWebsiteUrl,
   layout = 'modal',
   className = '',
+  onAfterActivate,
 }: OnboardWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -125,7 +129,7 @@ export function OnboardWizard({
     toast.message('Brand DNA is still generating', {
       description:
         layout === 'inline'
-          ? 'You can switch tabs or leave this page. Use Refresh below when status is draft or active to start ads.'
+          ? 'You can switch tabs or leave this page. When it finishes, open the Brand DNA tab here to see the full kit — it’s the same data as on the client profile.'
           : 'You can keep working elsewhere. Reopen this wizard from ad creatives when it’s ready.',
     });
     if (layout === 'modal') {
@@ -331,6 +335,7 @@ export function OnboardWizard({
         body: JSON.stringify({ brand_dna_status: 'active' }),
       });
       toast.success('Brand DNA activated');
+      onAfterActivate?.();
       handleClose();
       if (existingClientId) {
         router.refresh();
@@ -341,7 +346,7 @@ export function OnboardWizard({
     } catch {
       toast.error('Failed to activate Brand DNA');
     }
-  }, [clientId, existingClientId, router, handleClose]);
+  }, [clientId, existingClientId, router, handleClose, onAfterActivate]);
 
   const totalSteps = existingClientId ? 3 : 4;
   const displayStep = step;
@@ -451,7 +456,7 @@ export function OnboardWizard({
           onContinueInBackground={continueInBackground}
           navigateAwayHint={
             layout === 'inline'
-              ? 'This page stays open — refresh the ad creatives tab when generation finishes to unlock the ad wizard.'
+              ? 'When this finishes, review and activate below — your full Brand kit stays on this tab. The same profile is always available from the client Brand DNA page.'
               : undefined
           }
         />
@@ -479,6 +484,17 @@ export function OnboardWizard({
             clientId={clientId}
           />
         )}
+
+        {brandDNA &&
+        typeof (brandDNA as { content?: unknown }).content === 'string' &&
+        (brandDNA as { content: string }).content.trim().length > 0 ? (
+          <div className={`mt-6 ${BRAND_DNA_BENTO_SURFACE} p-3 sm:p-4`}>
+            <h3 className="mb-3 text-sm font-semibold text-text-primary">Full brand guideline</h3>
+            <div className="prose prose-invert prose-sm max-h-[min(45vh,420px)] max-w-none overflow-y-auto overscroll-contain pr-1 text-text-secondary [scrollbar-width:thin]">
+              <Markdown content={(brandDNA as { content: string }).content} />
+            </div>
+          </div>
+        ) : null}
 
         <div className="flex justify-end mt-6">
           <GlassButton onClick={handleConfirm}>
