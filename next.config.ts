@@ -16,8 +16,9 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   experimental: {
+    // Omit lucide-react: webpack server chunks can reference missing
+    // ./vendor-chunks/lucide-react.js after HMR or in some RSC graphs (Next 15.5 + webpack).
     optimizePackageImports: [
-      'lucide-react',
       'framer-motion',
       'date-fns',
       'recharts',
