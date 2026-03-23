@@ -27,6 +27,8 @@ See **`design-doctrine.md`** first for typography leadership, delight budget, an
 - You would stack **multiple** WebGL backgrounds on one page.
 - Motion replaces **clear typography** — fix fonts and spacing first (see global Bedrock `style-profiles.md` if available).
 
+**Never use in this repo (Northstone App UI):** **Magnet**, **MagnetLines**, or any magnetic / cursor-pull hover — banned in `design-doctrine.md`. Use ordinary hover feedback instead.
+
 ## File structure (recommended)
 
 ```

@@ -1,12 +1,18 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Filter, Images, Loader2 } from 'lucide-react';
+import { Copy, Heart, Images, Loader2, Sparkles, Trash2, Download, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { CreativeCard } from './creative-card';
 import { GalleryPlaceholder } from './gallery-placeholder';
 import { Dialog } from '@/components/ui/dialog';
-import type { AdCreative, AspectRatio } from '@/lib/ad-creatives/types';
+import { downloadCreativesAsZip } from '@/lib/ad-creatives/bulk-download-creatives';
+import type { AdCreative } from '@/lib/ad-creatives/types';
+
+const BULK_MAX = 50;
 
 function formatBatchDate(iso: string): string {
   const d = new Date(iso);
@@ -33,6 +39,8 @@ interface CreativeGalleryProps {
   activeBatchId?: string | null;
   placeholderConfig?: PlaceholderConfig | null;
   onBatchComplete?: () => void;
+  /** Opens generate wizard pre-filled from the selected creative (Brand DNA ready only). */
+  onCreateMoreLikeThis?: (creative: AdCreative) => void;
 }
 
 export function CreativeGallery({
@@ -41,14 +49,24 @@ export function CreativeGallery({
   activeBatchId,
   placeholderConfig,
   onBatchComplete,
+  onCreateMoreLikeThis,
 }: CreativeGalleryProps) {
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
-  const [aspectFilter, setAspectFilter] = useState<AspectRatio | 'all'>('all');
   const [selectedCreative, setSelectedCreative] = useState<AdCreative | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkWorking, setBulkWorking] = useState(false);
   const [batchCreativeIds, setBatchCreativeIds] = useState<Set<string>>(new Set());
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const { confirm: confirmBulkDelete, dialog: bulkDeleteDialog } = useConfirm({
+    title: 'Delete selected creatives',
+    description: 'These ads will be permanently removed. This cannot be undone.',
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
 
   const fetchCreatives = useCallback(async () => {
     try {
@@ -131,6 +149,11 @@ export function CreativeGallery({
 
   const deleteCreative = async (id: string) => {
     setCreatives((prev) => prev.filter((c) => c.id !== id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     await fetch(`/api/clients/${clientId}/ad-creatives`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -140,11 +163,132 @@ export function CreativeGallery({
     });
   };
 
-  const filtered = creatives.filter((c) => {
-    if (filterTab === 'favorites' && !c.is_favorite) return false;
-    if (aspectFilter !== 'all' && c.aspect_ratio !== aspectFilter) return false;
-    return true;
-  });
+  const filtered = useMemo(() => {
+    return creatives.filter((c) => {
+      if (filterTab === 'favorites' && !c.is_favorite) return false;
+      return true;
+    });
+  }, [creatives, filterTab]);
+
+  const selectableCreatives = useMemo(
+    () => filtered.filter((c) => !batchCreativeIds.has(c.id)),
+    [filtered, batchCreativeIds],
+  );
+
+  useEffect(() => {
+    const allow = new Set(selectableCreatives.map((c) => c.id));
+    setSelectedIds((prev) => {
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (allow.has(id)) next.add(id);
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [selectableCreatives]);
+
+  function exitSelectionMode() {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }
+
+  function toggleCreativeSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else {
+        if (next.size >= BULK_MAX) {
+          toast.message(`You can select up to ${BULK_MAX} ads at once.`);
+          return prev;
+        }
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function selectAllVisible() {
+    const ids = selectableCreatives.map((c) => c.id).slice(0, BULK_MAX);
+    setSelectedIds(new Set(ids));
+    if (selectableCreatives.length > BULK_MAX) {
+      toast.message(`Only the first ${BULK_MAX} visible ads were selected. Deselect some or run another batch.`);
+    }
+  }
+
+  async function bulkSetFavorite(isFavorite: boolean) {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setBulkWorking(true);
+    const idSet = new Set(ids);
+    const prev = creatives.map((c) => ({ id: c.id, f: c.is_favorite }));
+    setCreatives((list) =>
+      list.map((c) => (idSet.has(c.id) ? { ...c, is_favorite: isFavorite } : c)),
+    );
+    try {
+      const res = await fetch(`/api/clients/${clientId}/ad-creatives`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ creativeIds: ids, is_favorite: isFavorite }),
+      });
+      if (!res.ok) throw new Error('Update failed');
+      const data = await res.json().catch(() => ({}));
+      const n = typeof data.updatedCount === 'number' ? data.updatedCount : ids.length;
+      toast.success(isFavorite ? `Added ${n} to favorites` : `Removed ${n} from favorites`);
+    } catch {
+      setCreatives((list) =>
+        list.map((c) => {
+          const p = prev.find((x) => x.id === c.id);
+          return p ? { ...c, is_favorite: p.f } : c;
+        }),
+      );
+      toast.error('Could not update favorites');
+    } finally {
+      setBulkWorking(false);
+    }
+  }
+
+  async function bulkDownloadZip() {
+    const chosen = creatives.filter((c) => selectedIds.has(c.id));
+    if (chosen.length === 0) return;
+    setBulkWorking(true);
+    try {
+      const { added, skipped } = await downloadCreativesAsZip(chosen, `ad-creatives-${clientId.slice(0, 8)}`);
+      if (skipped > 0) {
+        toast.message(`Downloaded ${added} files in the zip. ${skipped} could not be fetched.`);
+      } else {
+        toast.success(`Downloaded ${added} creatives as a zip`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Download failed');
+    } finally {
+      setBulkWorking(false);
+    }
+  }
+
+  async function bulkDelete() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const ok = await confirmBulkDelete();
+    if (!ok) return;
+    setBulkWorking(true);
+    setCreatives((prev) => prev.filter((c) => !selectedIds.has(c.id)));
+    setSelectedIds(new Set());
+    try {
+      const res = await fetch(`/api/clients/${clientId}/ad-creatives`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ creativeIds: ids }),
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      const data = await res.json().catch(() => ({}));
+      const n = typeof data.deletedCount === 'number' ? data.deletedCount : ids.length;
+      toast.success(`Deleted ${n} creatives`);
+    } catch {
+      fetchCreatives();
+      toast.error('Could not delete some creatives');
+    } finally {
+      setBulkWorking(false);
+    }
+  }
 
   // Group filtered creatives by batch_id, preserving newest-first order
   const batchGroups = useMemo(() => {
@@ -226,14 +370,19 @@ export function CreativeGallery({
 
   return (
     <>
+    {bulkDeleteDialog}
     <div className="space-y-4">
       {/* Filter bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1 bg-surface rounded-lg p-0.5">
           {(['all', 'favorites'] as const).map((tab) => (
             <button
               key={tab}
-              onClick={() => setFilterTab(tab)}
+              type="button"
+              onClick={() => {
+                setFilterTab(tab);
+                if (selectionMode) exitSelectionMode();
+              }}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
                 filterTab === tab
                   ? 'bg-background text-text-primary shadow-sm'
@@ -244,23 +393,98 @@ export function CreativeGallery({
             </button>
           ))}
         </div>
-
-        <div className="flex items-center gap-2">
-          <Filter size={14} className="text-text-muted" />
-          <select
-            value={aspectFilter}
-            onChange={(e) => setAspectFilter(e.target.value as AspectRatio | 'all')}
-            className="appearance-none rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-xs text-text-primary transition-colors focus:border-accent focus:outline-none"
-          >
-            <option value="all">All formats</option>
-            <option value="1:1">Square (1:1)</option>
-            <option value="9:16">Story (9:16)</option>
-            <option value="4:5">Portrait (4:5)</option>
-            <option value="16:9">Landscape (16:9)</option>
-            <option value="1.91:1">Facebook / Google</option>
-          </select>
-        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant={selectionMode ? 'secondary' : 'outline'}
+          className="h-8 text-xs border-nativz-border"
+          onClick={() => {
+            if (selectionMode) exitSelectionMode();
+            else setSelectionMode(true);
+          }}
+        >
+          {selectionMode ? 'Cancel' : 'Select'}
+        </Button>
       </div>
+
+      {selectionMode && (
+        <div className="flex flex-col gap-3 rounded-xl border border-nativz-border bg-surface/80 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-text-primary">
+              {selectedIds.size === 0
+                ? 'Tap creatives to select'
+                : `${selectedIds.size} selected`}
+            </span>
+            <span className="text-[11px] text-text-muted">Max {BULK_MAX} at once</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              disabled={selectableCreatives.length === 0 || bulkWorking}
+              onClick={selectAllVisible}
+            >
+              Select all visible
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 text-xs gap-1"
+              disabled={selectedIds.size === 0 || bulkWorking}
+              onClick={() => setSelectedIds(new Set())}
+            >
+              <X size={14} />
+              Clear
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1"
+              disabled={selectedIds.size === 0 || bulkWorking}
+              onClick={() => void bulkDownloadZip()}
+            >
+              <Download size={14} />
+              Download zip
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1"
+              disabled={selectedIds.size === 0 || bulkWorking}
+              onClick={() => void bulkSetFavorite(true)}
+            >
+              <Heart size={14} />
+              Favorite
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1"
+              disabled={selectedIds.size === 0 || bulkWorking}
+              onClick={() => void bulkSetFavorite(false)}
+            >
+              Unfavorite
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="danger"
+              className="h-8 text-xs gap-1"
+              disabled={selectedIds.size === 0 || bulkWorking}
+              onClick={() => void bulkDelete()}
+            >
+              <Trash2 size={14} />
+              Delete
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Batch-grouped grid */}
       <div className="space-y-6">
@@ -345,6 +569,10 @@ export function CreativeGallery({
                         onFavorite={() => toggleFavorite(creative.id)}
                         onDelete={() => deleteCreative(creative.id)}
                         onClick={() => setSelectedCreative(creative)}
+                        selectionMode={selectionMode}
+                        selected={selectedIds.has(creative.id)}
+                        onToggleSelect={() => toggleCreativeSelected(creative.id)}
+                        onOpenDetail={() => setSelectedCreative(creative)}
                       />
                     )}
                   </div>
@@ -384,13 +612,59 @@ export function CreativeGallery({
                   {selectedCreative.on_screen_text.subheadline}
                 </p>
               )}
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex flex-wrap items-center gap-2 pt-1">
                 <span className="text-[11px] text-text-muted rounded-full bg-background border border-nativz-border px-2 py-0.5">
                   {selectedCreative.aspect_ratio}
                 </span>
-                <span className="text-[11px] text-text-muted rounded-full bg-background border border-nativz-border px-2 py-0.5">
+                <span className="text-[11px] text-text-muted rounded-full bg-background border border-nativz-border px-2 py-0.5 max-w-[min(100%,280px)] truncate">
                   {selectedCreative.product_service}
                 </span>
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-nativz-border/60">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Image prompt</p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs text-text-muted hover:text-text-secondary"
+                    disabled={!selectedCreative.prompt_used?.trim()}
+                    onClick={async () => {
+                      const text = selectedCreative.prompt_used?.trim() ?? '';
+                      if (!text) return;
+                      try {
+                        await navigator.clipboard.writeText(text);
+                        toast.success('Prompt copied');
+                      } catch {
+                        toast.error('Could not copy');
+                      }
+                    }}
+                  >
+                    <Copy size={14} />
+                    Copy
+                  </Button>
+                </div>
+                <div className="rounded-xl border border-nativz-border bg-background/40 px-3 py-2 max-h-40 overflow-y-auto">
+                  <pre className="text-[11px] leading-relaxed text-text-secondary whitespace-pre-wrap font-sans">
+                    {selectedCreative.prompt_used?.trim() || 'No prompt was stored for this creative.'}
+                  </pre>
+                </div>
+                {brandDnaReady && onCreateMoreLikeThis && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    shape="pill"
+                    className="w-full sm:w-auto gap-2 border border-nativz-border bg-background/50 hover:bg-background/70"
+                    onClick={() => {
+                      onCreateMoreLikeThis(selectedCreative);
+                      setSelectedCreative(null);
+                    }}
+                  >
+                    <Sparkles size={15} className="text-accent-text" />
+                    Create more like this
+                  </Button>
+                )}
               </div>
             </div>
           </div>

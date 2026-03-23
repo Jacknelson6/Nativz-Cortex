@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Heart, Trash2, Download } from 'lucide-react';
+import { Check, Eye, Heart, Trash2, Download } from 'lucide-react';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import type { AdCreative } from '@/lib/ad-creatives/types';
 
@@ -9,10 +9,24 @@ interface CreativeCardProps {
   creative: AdCreative;
   onFavorite: () => void;
   onDelete: () => void;
+  /** Opens the detail dialog (normal mode) or toggles selection (selection mode). */
   onClick: () => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+  onOpenDetail?: () => void;
 }
 
-export function CreativeCard({ creative, onFavorite, onDelete, onClick }: CreativeCardProps) {
+export function CreativeCard({
+  creative,
+  onFavorite,
+  onDelete,
+  onClick,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+  onOpenDetail,
+}: CreativeCardProps) {
   const [hovered, setHovered] = useState(false);
 
   const { confirm, dialog } = useConfirm({
@@ -45,15 +59,45 @@ export function CreativeCard({ creative, onFavorite, onDelete, onClick }: Creati
     document.body.removeChild(link);
   }
 
+  function handleCardClick() {
+    if (selectionMode) onToggleSelect?.();
+    else onClick();
+  }
+
+  function handleCheckboxClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    onToggleSelect?.();
+  }
+
   return (
     <>
       {dialog}
       <div
-        className="group relative rounded-xl bg-surface overflow-hidden cursor-pointer border border-nativz-border transition-all hover:border-accent/40 hover:shadow-card-hover"
+        className={`group relative rounded-xl bg-surface overflow-hidden cursor-pointer border transition-all hover:shadow-card-hover ${
+          selected
+            ? 'border-accent ring-2 ring-accent/50'
+            : 'border-nativz-border hover:border-accent/40'
+        }`}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        onClick={onClick}
+        onClick={handleCardClick}
       >
+        {selectionMode && (
+          <button
+            type="button"
+            onClick={handleCheckboxClick}
+            className={`absolute left-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-md border shadow-md transition-colors cursor-pointer ${
+              selected
+                ? 'border-accent bg-accent text-white'
+                : 'border-white/40 bg-black/55 text-white hover:bg-black/70'
+            }`}
+            aria-label={selected ? 'Deselect creative' : 'Select creative'}
+            aria-pressed={selected}
+          >
+            {selected ? <Check size={16} strokeWidth={2.5} /> : null}
+          </button>
+        )}
+
         <img
           src={creative.image_url}
           alt={creative.on_screen_text?.headline || 'Ad creative'}
@@ -61,40 +105,56 @@ export function CreativeCard({ creative, onFavorite, onDelete, onClick }: Creati
           loading="lazy"
         />
 
-        {/* Hover overlay */}
-        <div
-          className={`absolute inset-0 bg-black/60 flex items-center justify-center gap-3 transition-opacity duration-200 ${
-            hovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
-          }`}
-        >
+        {selectionMode && onOpenDetail && (
           <button
-            onClick={handleFavorite}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 hover:bg-white/25 transition-colors cursor-pointer"
-            aria-label={creative.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenDetail();
+            }}
+            className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-md border border-white/40 bg-black/55 text-white shadow-md hover:bg-black/70 transition-colors cursor-pointer"
+            aria-label="View creative details"
           >
-            <Heart
-              size={18}
-              className={creative.is_favorite ? 'fill-red-500 text-red-500' : 'text-white'}
-            />
+            <Eye size={15} />
           </button>
-          <button
-            onClick={handleDownload}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 hover:bg-white/25 transition-colors cursor-pointer"
-            aria-label="Download creative"
+        )}
+
+        {/* Hover overlay — hidden in selection mode to avoid clashing with bulk actions */}
+        {!selectionMode && (
+          <div
+            className={`absolute inset-0 bg-black/60 flex items-center justify-center gap-3 transition-opacity duration-200 ${
+              hovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
           >
-            <Download size={18} className="text-white" />
-          </button>
-          <button
-            onClick={handleDelete}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 hover:bg-red-500/40 transition-colors cursor-pointer"
-            aria-label="Delete creative"
-          >
-            <Trash2 size={18} className="text-white" />
-          </button>
-        </div>
+            <button
+              onClick={handleFavorite}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 hover:bg-white/25 transition-colors cursor-pointer"
+              aria-label={creative.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              <Heart
+                size={18}
+                className={creative.is_favorite ? 'fill-red-500 text-red-500' : 'text-white'}
+              />
+            </button>
+            <button
+              onClick={handleDownload}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 hover:bg-white/25 transition-colors cursor-pointer"
+              aria-label="Download creative"
+            >
+              <Download size={18} className="text-white" />
+            </button>
+            <button
+              onClick={handleDelete}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 hover:bg-red-500/40 transition-colors cursor-pointer"
+              aria-label="Delete creative"
+            >
+              <Trash2 size={18} className="text-white" />
+            </button>
+          </div>
+        )}
 
         {/* Favorite indicator (always visible when favorited) */}
-        {creative.is_favorite && !hovered && (
+        {creative.is_favorite && !hovered && !selectionMode && (
           <div className="absolute top-2 right-2">
             <Heart size={14} className="fill-red-500 text-red-500 drop-shadow-md" />
           </div>

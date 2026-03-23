@@ -259,8 +259,9 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
     try {
       const res = await fetch(`/api/clients/${dbId}`, { method: 'DELETE' });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? 'Failed to delete');
+        const data = (await res.json()) as { error?: string; details?: string };
+        const msg = [data.error ?? 'Failed to delete', data.details].filter(Boolean).join(' — ');
+        throw new Error(msg);
       }
       setAllClients((prev) => prev.filter((c) => c.dbId !== dbId));
       toast.success('Client deleted');

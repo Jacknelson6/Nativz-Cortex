@@ -415,8 +415,10 @@ export function DangerZone({
     try {
       const res = await fetch(`/api/clients/${clientId}`, { method: 'DELETE' });
       if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || 'Failed to delete client');
+        const data = (await res.json()) as { error?: string; details?: string };
+        toast.error(
+          [data.error || 'Failed to delete client', data.details].filter(Boolean).join(' — '),
+        );
         return;
       }
       toast.success(`${clientName} deleted permanently`);

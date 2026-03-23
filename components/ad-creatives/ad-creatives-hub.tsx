@@ -26,6 +26,7 @@ import { BrandDnaRequiredPanel } from './brand-dna-required-panel';
 import { BrandDnaTabReadyPanel } from './brand-dna-tab-ready-panel';
 import { Dialog } from '@/components/ui/dialog';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
+import type { AdCreative } from '@/lib/ad-creatives/types';
 import type { RecentClient } from '@/app/admin/ad-creatives/page';
 import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
 
@@ -131,6 +132,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [placeholderConfig, setPlaceholderConfig] = useState<PlaceholderConfig | null>(null);
   const [adWizardOpen, setAdWizardOpen] = useState(false);
+  const [wizardSeedCreative, setWizardSeedCreative] = useState<AdCreative | null>(null);
 
   // Tab state (only shown after context is set)
   const [showBulkImport, setShowBulkImport] = useState(false);
@@ -367,6 +369,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     setPlaceholderConfig(null);
     setBrandContextSource(null);
     setAdWizardOpen(false);
+    setWizardSeedCreative(null);
     router.replace(pathname, { scroll: false });
   }
 
@@ -379,8 +382,14 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     setActiveBatchId(batchId);
     setPlaceholderConfig(config);
     setAdWizardOpen(false);
+    setWizardSeedCreative(null);
     setTab('gallery', { replace: true });
   }
+
+  const handleCreateMoreLikeThis = useCallback((creative: AdCreative) => {
+    setWizardSeedCreative(creative);
+    setAdWizardOpen(true);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Landing — URL or client picker
@@ -702,6 +711,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
             setActiveBatchId(null);
             setPlaceholderConfig(null);
           }}
+          onCreateMoreLikeThis={clientDnaReady ? handleCreateMoreLikeThis : undefined}
         />
       )}
       {activeTab === 'gallery' && !resolvedClientId && (
@@ -719,7 +729,10 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
 
       <Dialog
         open={adWizardOpen && !!resolvedClientId}
-        onClose={() => setAdWizardOpen(false)}
+        onClose={() => {
+          setAdWizardOpen(false);
+          setWizardSeedCreative(null);
+        }}
         maxWidth="full"
         className="max-h-[min(92vh,940px)] sm:max-w-[min(96vw,1440px)]"
         bodyClassName="flex max-h-[min(92vh,940px)] flex-col overflow-hidden p-0"
@@ -740,6 +753,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
               initialProducts={scrapedProducts}
               initialMediaUrls={mediaUrls}
               brandContextSource={brandContextSource ?? undefined}
+              seedCreative={wizardSeedCreative}
               onGenerationStart={handleGenerationStart}
             />
           )}

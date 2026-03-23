@@ -43,7 +43,7 @@ Verify written code by:
 - Smoke testing and checking for runtime errors with Playwright
 - Taking screenshots and verifying the UI is as expected
 
-## Full-page and e2e UI (Shadcn + Bedrock)
+## Full-page and e2e UI — Northstone App UI (Shadcn + Bedrock)
 
 When the task is a **whole page, marketing site, landing flow, or multi-section app shell** (not a tiny UI tweak), treat it as a **product design** problem, not a component dump:
 
@@ -53,4 +53,4 @@ When the task is a **whole page, marketing site, landing flow, or multi-section 
 
 **Pipeline:** Shadcn blocks/primitives first → lock **type + spacing** → then **at most one or two** deliberate Bedrock/React Bits surprises so the result feels **bold but calm**, not overwhelming.
 
-**Cursor:** Use slash **`/cortex-ui`** (not `/bedrock` — that’s the global React Bits skill). Rule **`.cursor/rules/cortex-ui-e2e.mdc`** applies when editing under `app/**` or `components/**`. Full React Bits source: **[github.com/Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock)** → `~/.claude/skills/bedrock` if needed.
+**Cursor:** Use slash **`/northstone-app-ui`** (not `/bedrock` — that’s the global React Bits skill). Rule **`.cursor/rules/northstone-app-ui.mdc`** applies when editing under `app/**` or `components/**`. Full React Bits source: **[github.com/Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock)** → `~/.claude/skills/bedrock` if needed.

@@ -1,14 +1,14 @@
 ---
-description: Full-page and e2e UI — Shadcn pipeline, Bedrock motion, bold restrained design. Use when building marketing sites, landing pages, app shells, or multi-section flows in Cursor. (Skill id cortex-ui-e2e — use slash /cortex-ui, not /bedrock.)
+description: Northstone App UI — full-page and e2e UI with Shadcn pipeline, Bedrock motion, bold restrained design. Marketing sites, landing pages, app shells, multi-section flows in Cursor. (Skill id northstone-app-ui — slash /northstone-app-ui, not /bedrock.)
 globs: app/**/*.tsx, app/**/*.ts, components/**/*.tsx
 alwaysApply: false
 ---
 
-# E2E UI — Shadcn + Bedrock (Cursor)
+# Northstone App UI — Shadcn + Bedrock (Cursor)
 
 When the task is **a whole page, site section stack, or greenfield UI flow** (not a one-line tweak), **read and follow** the project skill:
 
-1. **`.claude/skills/bedrock/SKILL.md`** (skill name **`cortex-ui-e2e`** — avoids clashing with global `/bedrock`)
+1. **`.claude/skills/bedrock/SKILL.md`** (skill id **`northstone-app-ui`** — same content as **[northstone-app-ui](https://github.com/Jacknelson6/northstone-app-ui)** for multi-repo use)
 2. **`.claude/skills/bedrock/references/single-prompt-playbook.md`** (checklist — do not skip verify)
 3. **`.claude/skills/bedrock/references/design-doctrine.md`** (typography, delight, cohesion)
 4. **`.claude/skills/bedrock/references/shadcn-blocks-pipeline.md`** when running `npx shadcn add`
@@ -19,6 +19,7 @@ When the task is **a whole page, site section stack, or greenfield UI flow** (no
 
 - **Typography leads:** Pick an explicit pairing + scale before animation. No default Inter-only stack for marketing surfaces unless the product already mandates it.
 - **Delight budget:** At most **one** hero‑level surprise (e.g. split headline **or** ambient background **or** one scroll choreo — not all three).
+- **No magnetic hovers:** Never Magnet / MagnetLines / cursor-pull UI — see `design-doctrine.md`.
 - **Fit over novelty:** Every block must feel like **one product**; if a section fights the last, simplify.
 - **End state:** `npm run build` + `npm run lint` after substantive UI.
 

@@ -1,21 +1,23 @@
 ---
-name: cortex-ui-e2e
+name: northstone-app-ui
 description: >
-  Nativz Cortex: full React/Next.js UI shipping — Shadcn blocks + typography-first design doctrine + selective Bedrock/React Bits motion. Use for landing pages, marketing sites, e2e multi-section flows, app shells, dashboards, "ship the whole site in one prompt."
-  In Cursor use slash command /cortex-ui (NOT /bedrock — that name is reserved for the global Jacknelson6/bedrock React Bits skill to avoid duplicate menu entries).
-  Trigger on: cortex-ui, shadcn pipeline, e2e UI, bold typography, delightful cohesive design, premium landing, greenfield pages, composable blocks, React Bits layered on shadcn.
+  Northstone App UI — full React/Next.js shipping (vendored in Cortex; standalone repo for other projects): Shadcn blocks + typography-first design doctrine + selective Bedrock/React Bits motion. Landing pages, marketing sites, e2e multi-section flows, app shells, dashboards, "ship the whole site in one prompt."
+  In Cursor use slash /northstone-app-ui (NOT /bedrock — reserved for global Jacknelson6/bedrock React Bits skill).
+  Trigger on: Northstone App UI, northstone-app-ui, northstone, shadcn pipeline, e2e UI, bold typography, delightful cohesive design, premium landing, greenfield pages, composable blocks, React Bits layered on shadcn.
   Always read references/design-doctrine.md and references/single-prompt-playbook.md for e2e ships.
   For React Bits source, NEVER read full ~/.claude/skills/bedrock/source/*.txt files — grep for component delimiters then Read with offset+limit (max ~300 lines), or use reactbits.dev.
 ---
 
-# Cortex UI e2e — Shadcn + Bedrock
+# Northstone App UI — Shadcn + Bedrock
 
-> **Cursor / slash command:** Use **`/cortex-ui`** for this workflow. Do **not** register a second skill named `bedrock` here — the global **[bedrock](https://github.com/Jacknelson6/bedrock)** skill already owns **`/bedrock`** (React Bits catalog). This skill’s id is **`cortex-ui-e2e`**.
+> **Cursor / slash command:** Use **`/northstone-app-ui`** for this workflow. Do **not** register a second skill named `bedrock` here — the global **[bedrock](https://github.com/Jacknelson6/bedrock)** skill already owns **`/bedrock`** (React Bits catalog). This skill’s id is **`northstone-app-ui`**.
 
 > **Canonical motion skill (upstream):** **[github.com/Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock)** — React Bits source (`source/`), category references, templates, scripts. Install globally:
 > `git clone https://github.com/Jacknelson6/bedrock.git ~/.claude/skills/bedrock`
 >
-> **This folder (Nativz Cortex)** extends that workflow with **Shadcn blocks + single-prompt playbook**; it does **not** duplicate the large `source/*.txt` files.
+> **This folder** (`.claude/skills/bedrock/`) carries **Shadcn blocks + single-prompt playbook** for Nativz Cortex; it does **not** duplicate the large `source/*.txt` files.
+>
+> **Same skill, any repo:** **[github.com/Jacknelson6/northstone-app-ui](https://github.com/Jacknelson6/northstone-app-ui)** — clone to `~/.claude/skills/northstone-app-ui` for projects outside Cortex; keep this vendored copy in sync when you change the standalone repo.
 
 > **Product intent:** One coherent workflow — **Shadcn (open blocks + primitives) for the skeleton**, **Bedrock/React Bits for motion where it earns the complexity**. See **`PRD.md`** in this folder for goals, requirements, and risks.
 
@@ -33,8 +35,8 @@ description: >
 
 ## Cursor
 
-- **`.cursor/rules/cortex-ui-e2e.mdc`** — applies when editing `app/**` and `components/**`; restates pipeline + delight budget.
-- **`.claude/commands/cortex-ui.md`** — slash **`/cortex-ui`** (distinct from global **`/bedrock`**).
+- **`.cursor/rules/northstone-app-ui.mdc`** — applies when editing `app/**` and `components/**`; restates pipeline + delight budget.
+- **`.claude/commands/northstone-app-ui.md`** — slash **`/northstone-app-ui`** (distinct from global **`/bedrock`**).
 - **`AGENTS.md`** — project-wide reminder to load this skill for full-page / e2e UI work.
 
 ## Core rules
@@ -78,6 +80,7 @@ If those paths are missing, install **[Jacknelson6/bedrock](https://github.com/J
 
 ## Gotchas (high signal)
 
+- **No magnetic hovers:** Do **not** use React Bits **Magnet** / **MagnetLines** (or similar cursor-pull effects) under **Northstone App UI** — **hard ban** in `references/design-doctrine.md`.
 - **`lib/utils.ts` / `cn`**: This repo’s `components.json` expects `@/lib/utils` — if missing, add `cn` + `clsx`/`tailwind-merge` or run `shadcn init` and merge carefully.
 - **Duplicate Buttons**: Cortex already has custom `@/components/ui/button` — when mixing shadcn and Cortex, **one primary system per route**; adapt imports or wrap, don’t fork silently.
 - **Tailwind v4**: Project uses `app/globals.css` + empty tailwind config string in `components.json` — prefer CLI output that matches existing CSS variables.
@@ -85,15 +88,12 @@ If those paths are missing, install **[Jacknelson6/bedrock](https://github.com/J
 
 ## From a GitHub clone
 
-This **Nativz Cortex** repo carries the skill and slash command in git:
-
-- **`.claude/skills/bedrock/`** — SKILL + PRD + `references/` (skill id **`cortex-ui-e2e`**; folder name unchanged for paths).
-- **`.claude/commands/cortex-ui.md`** — **`/cortex-ui`** (project-scoped; avoids duplicate **`/bedrock`** entries next to global Bedrock).
-
-No separate install step for those files. For **React Bits source + full references**, clone **[github.com/Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock)** to `~/.claude/skills/bedrock` (per upstream README).
+- **Inside Nativz Cortex:** **`.claude/skills/bedrock/`** (skill id **`northstone-app-ui`**) + **`.claude/commands/northstone-app-ui.md`** (`/northstone-app-ui`) + **`.cursor/rules/northstone-app-ui.mdc`**.
+- **Other machines / repos:** clone **[github.com/Jacknelson6/northstone-app-ui](https://github.com/Jacknelson6/northstone-app-ui)** per that repo’s **`README.md`**.
+- **React Bits source:** clone **[github.com/Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock)** to `~/.claude/skills/bedrock` (per upstream README).
 
 ## Relation to [Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock) on GitHub
 
 - **Upstream repo** — MIT; `SKILL.md`, `references/`, `templates/`, `source/reactbits-*.txt`, `scripts/`.
 - **This Nativz folder** — **Shadcn + E2E playbook + Nativz token notes** only; merge mentally with upstream when both exist.
-- **Load order:** Use **this `SKILL.md`** for Shadcn/checklist in Cortex; use **upstream files** for component source and style profiles.
+- **Load order:** Use **this `SKILL.md`** (Northstone App UI) for Shadcn/checklist in this repo; use **upstream files** for component source and style profiles.

@@ -275,7 +275,8 @@ export async function PATCH(
 /**
  * DELETE /api/clients/[id]
  *
- * Permanently delete a client and all related records (searches, ideas, strategies, invite tokens).
+ * Permanently delete a client and related rows (moodboards, todos, tasks, searches, ideas,
+ * strategies, invites, shoot events when present, then client).
  * Also removes the client folder from the Obsidian vault (non-blocking).
  *
  * @auth Required (admin)
@@ -313,13 +314,32 @@ export async function DELETE(
       .eq('id', id)
       .single();
 
-    // Delete related records first, then the client
-    await Promise.all([
+    // Delete related records first, then the client. Tables with NO ACTION / missing
+    // cascade on client_id (todos, tasks, moodboard_boards) are covered here and by
+    // migration 056_client_delete_cascade_fks.sql. shoot_events has no migration in-repo
+    // but exists in production and can block deletes without an explicit delete.
+    const relatedDeletes = await Promise.all([
+      adminClient.from('moodboard_boards').delete().eq('client_id', id),
+      adminClient.from('todos').delete().eq('client_id', id),
+      adminClient.from('tasks').delete().eq('client_id', id),
       adminClient.from('topic_searches').delete().eq('client_id', id),
       adminClient.from('idea_submissions').delete().eq('client_id', id),
       adminClient.from('client_strategies').delete().eq('client_id', id),
       adminClient.from('invite_tokens').delete().eq('client_id', id),
+      adminClient.from('shoot_events').delete().eq('client_id', id),
     ]);
+
+    const firstRelatedError = relatedDeletes.find((r) => r.error)?.error;
+    if (firstRelatedError) {
+      console.error('Error deleting client-related rows:', firstRelatedError);
+      return NextResponse.json(
+        {
+          error: 'Failed to delete client',
+          details: firstRelatedError.message,
+        },
+        { status: 500 },
+      );
+    }
 
     const { error: deleteError } = await adminClient
       .from('clients')
@@ -328,7 +348,13 @@ export async function DELETE(
 
     if (deleteError) {
       console.error('Error deleting client:', deleteError);
-      return NextResponse.json({ error: 'Failed to delete client' }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: 'Failed to delete client',
+          details: deleteError.message,
+        },
+        { status: 500 },
+      );
     }
 
     // Audit log: client deletion

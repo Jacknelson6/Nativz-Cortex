@@ -11,14 +11,43 @@ const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(24),
 });
 
-const patchSchema = z.object({
+const singlePatchSchema = z.object({
   creativeId: z.string().uuid(),
   is_favorite: z.boolean(),
 });
 
-const deleteSchema = z.object({
+const bulkPatchSchema = z.object({
+  creativeIds: z.array(z.string().uuid()).min(1).max(50),
+  is_favorite: z.boolean(),
+});
+
+const patchSchema = z.union([singlePatchSchema, bulkPatchSchema]);
+
+const singleDeleteSchema = z.object({
   creativeId: z.string().uuid(),
 });
+
+const bulkDeleteSchema = z.object({
+  creativeIds: z.array(z.string().uuid()).min(1).max(50),
+});
+
+const deleteSchema = z.union([singleDeleteSchema, bulkDeleteSchema]);
+
+async function removeAdCreativeStorageFile(
+  admin: ReturnType<typeof createAdminClient>,
+  imageUrl: string | null,
+): Promise<void> {
+  if (!imageUrl) return;
+  try {
+    const url = new URL(imageUrl);
+    const match = url.pathname.match(/\/storage\/v1\/object\/public\/ad-creatives\/(.+)/);
+    if (match) {
+      await admin.storage.from('ad-creatives').remove([match[1]]);
+    }
+  } catch {
+    console.warn('Failed to delete storage file for creative URL:', imageUrl);
+  }
+}
 
 /**
  * GET /api/clients/[id]/ad-creatives
@@ -92,9 +121,8 @@ export async function GET(
  *
  * @auth Required
  * @param id - Client UUID
- * @body creativeId - UUID of the creative to update
- * @body is_favorite - Boolean favorite status
- * @returns {{ creative: AdCreative }}
+ * @body creativeId + is_favorite (single) or creativeIds (1–50) + is_favorite (bulk)
+ * @returns {{ creative }} (single) or {{ updatedCount, ids }} (bulk)
  */
 export async function PATCH(
   request: NextRequest,
@@ -113,6 +141,24 @@ export async function PATCH(
     }
 
     const admin = createAdminClient();
+
+    if ('creativeIds' in parsed.data) {
+      const { creativeIds, is_favorite } = parsed.data;
+      const { data: updated, error } = await admin
+        .from('ad_creatives')
+        .update({ is_favorite })
+        .in('id', creativeIds)
+        .eq('client_id', clientId)
+        .select('id');
+
+      if (error) {
+        console.error('PATCH /api/clients/[id]/ad-creatives bulk update:', error);
+        return NextResponse.json({ error: 'Failed to update creatives' }, { status: 500 });
+      }
+
+      return NextResponse.json({ updatedCount: updated?.length ?? 0, ids: (updated ?? []).map((r) => r.id) });
+    }
+
     const { data: creative, error } = await admin
       .from('ad_creatives')
       .update({ is_favorite: parsed.data.is_favorite })
@@ -139,8 +185,8 @@ export async function PATCH(
  *
  * @auth Required (admin)
  * @param id - Client UUID
- * @body creativeId - UUID of the creative to delete
- * @returns {{ success: true }}
+ * @body creativeId (single) or creativeIds (1–50) (bulk)
+ * @returns {{ success: true }} or {{ success: true, deletedCount }} (bulk)
  */
 export async function DELETE(
   request: NextRequest,
@@ -160,7 +206,42 @@ export async function DELETE(
 
     const admin = createAdminClient();
 
-    // Fetch the creative to get the storage path before deleting
+    if ('creativeIds' in parsed.data) {
+      const { creativeIds } = parsed.data;
+      const { data: rows, error: fetchErr } = await admin
+        .from('ad_creatives')
+        .select('id, image_url')
+        .in('id', creativeIds)
+        .eq('client_id', clientId);
+
+      if (fetchErr) {
+        console.error('DELETE /api/clients/[id]/ad-creatives bulk fetch:', fetchErr);
+        return NextResponse.json({ error: 'Failed to load creatives' }, { status: 500 });
+      }
+
+      if (!rows?.length) {
+        return NextResponse.json({ error: 'No matching creatives found' }, { status: 404 });
+      }
+
+      for (const row of rows) {
+        await removeAdCreativeStorageFile(admin, row.image_url);
+      }
+
+      const ids = rows.map((r) => r.id);
+      const { error: deleteErr } = await admin
+        .from('ad_creatives')
+        .delete()
+        .in('id', ids)
+        .eq('client_id', clientId);
+
+      if (deleteErr) {
+        console.error('Failed to delete creatives:', deleteErr);
+        return NextResponse.json({ error: 'Failed to delete creatives' }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, deletedCount: ids.length });
+    }
+
     const { data: creative, error: fetchErr } = await admin
       .from('ad_creatives')
       .select('id, image_url')
@@ -172,23 +253,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Creative not found' }, { status: 404 });
     }
 
-    // Delete the storage file if it's in our bucket
-    if (creative.image_url) {
-      try {
-        const url = new URL(creative.image_url);
-        // Extract the storage path from the public URL
-        // Format: .../storage/v1/object/public/ad-creatives/<path>
-        const match = url.pathname.match(/\/storage\/v1\/object\/public\/ad-creatives\/(.+)/);
-        if (match) {
-          await admin.storage.from('ad-creatives').remove([match[1]]);
-        }
-      } catch {
-        // Non-fatal: log but continue with DB deletion
-        console.warn('Failed to delete storage file for creative:', creative.id);
-      }
-    }
+    await removeAdCreativeStorageFile(admin, creative.image_url);
 
-    // Delete the DB record
     const { error: deleteErr } = await admin
       .from('ad_creatives')
       .delete()

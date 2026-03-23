@@ -159,6 +159,11 @@ export type AdGenerationConfig = {
    * Populated from interactive prompt review approvals.
    */
   creativeOverrides?: CreativeOverride[];
+  /**
+   * Appended to every image prompt as USER STYLE DIRECTION when a slot has no per-override styleNotes.
+   * Used for “create more like this” from a prior creative’s full prompt.
+   */
+  styleDirectionGlobal?: string;
 };
 
 // ---------------------------------------------------------------------------

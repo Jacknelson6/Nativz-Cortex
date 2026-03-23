@@ -1,10 +1,12 @@
-# Cortex UI — Shadcn + Bedrock e2e workflow
+# Northstone App UI — Shadcn + Bedrock e2e workflow
 
-> **Slash command: `/cortex-ui`** (use this in Cursor/Claude Code — **not** `/bedrock`) so you don’t stack duplicates next to the global **[bedrock](https://github.com/Jacknelson6/bedrock)** React Bits skill, which also registers as `/bedrock`.
+> **Slash command: `/northstone-app-ui`** (use this in Cursor/Claude Code — **not** `/bedrock`) so you don’t stack duplicates next to the global **[bedrock](https://github.com/Jacknelson6/bedrock)** React Bits skill, which also registers as `/bedrock`.
 
-> **Versioned in this repo** — [Nativz-Cortex](https://github.com/Jacknelson6/Nativz-Cortex) includes `.claude/skills/bedrock/` (skill id **`cortex-ui-e2e`**) and this command. **Full React Bits source** lives upstream — clone [Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock) to `~/.claude/skills/bedrock` per its README.
+> **Versioned in this repo** — [Nativz-Cortex](https://github.com/Jacknelson6/Nativz-Cortex) includes `.claude/skills/bedrock/` (skill id **`northstone-app-ui`**) and this command. **Full React Bits source** lives upstream — clone [Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock) to `~/.claude/skills/bedrock` per its README.
 
-You are running the **Cortex UI (Shadcn + Bedrock)** workflow for this project. Follow it end-to-end.
+You are running the **Northstone App UI** workflow (Shadcn + Bedrock) for this project. Follow it end-to-end.
+
+**Banned:** magnetic hovers (React Bits Magnet, MagnetLines, cursor-pull). See `design-doctrine.md`.
 
 ## Load these (in order)
 
@@ -15,7 +17,7 @@ You are running the **Cortex UI (Shadcn + Bedrock)** workflow for this project. 
 5. **`.claude/skills/bedrock/references/composition-with-bedrock.md`** before layering Motion / React Bits.
 6. For **in-product Nativz UI**: **`.claude/skills/frontend-patterns/SKILL.md`** and **`docs/detail-design-patterns.md`** as needed.
 
-**Cursor:** **`.cursor/rules/cortex-ui-e2e.mdc`** when working under `app/**` or `components/**`.
+**Cursor:** **`.cursor/rules/northstone-app-ui.mdc`** when working under `app/**` or `components/**`.
 
 ## React Bits source (global install)
 
@@ -27,4 +29,4 @@ Run **`npm run build`** and **`npm run lint`** (and fix issues) unless the user 
 
 ## User request
 
-Continue from what the user asked in the message that invoked **`/cortex-ui`**.
+Continue from what the user asked in the message that invoked **`/northstone-app-ui`**.

@@ -24,7 +24,13 @@ import { BrandDnaGuidelinePanel } from './brand-dna-guideline-panel';
 import { BrandDnaWizardRail } from './brand-dna-wizard-rail';
 import { AdCreativeGuidelineUploads } from './ad-creative-guideline-uploads';
 import { PromptReview, type PromptPreviewData } from './prompt-review';
-import { AD_GENERATE_MAX_PRODUCTS, type AdPromptTemplate, type AspectRatio, type KandyTemplate } from '@/lib/ad-creatives/types';
+import {
+  AD_GENERATE_MAX_PRODUCTS,
+  type AdCreative,
+  type AdPromptTemplate,
+  type AspectRatio,
+  type KandyTemplate,
+} from '@/lib/ad-creatives/types';
 import type { WizardTemplate } from '@/lib/ad-creatives/wizard-template';
 import { adPromptRowToWizardTemplate, withKandyOrigin } from '@/lib/ad-creatives/wizard-template';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
@@ -38,6 +44,8 @@ import {
   WizardSegmentedControl,
   WizardStepHeader,
 } from './ad-wizard-chrome';
+
+const WIZARD_ASPECT_RATIOS = new Set<AspectRatio>(['1:1', '9:16', '4:5']);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,6 +63,8 @@ interface AdWizardProps {
   brandContextSource?: BrandContextSource;
   /** For “Edit in Brand DNA” link in the inline guideline panel. */
   clientSlug?: string;
+  /** When set (e.g. gallery “Create more like this”), wizard pre-fills from this creative. */
+  seedCreative?: AdCreative | null;
   onGenerationStart?: (batchId: string, placeholderConfig: {
     brandColors: string[];
     templateThumbnails: { templateId: string; imageUrl: string; variationIndex: number }[];
@@ -141,6 +151,7 @@ export function AdWizard({
   initialMediaUrls,
   brandContextSource,
   clientSlug,
+  seedCreative,
   onGenerationStart,
 }: AdWizardProps) {
   // Brand
@@ -187,6 +198,12 @@ export function AdWizard({
 
   // Generate
   const [generating, setGenerating] = useState(false);
+
+  /** Overrides `brand.name` in API bodies when seeding from an existing creative. */
+  const [productServiceOverride, setProductServiceOverride] = useState<string | null>(null);
+  /** Passed as `styleDirectionGlobal` — prior full image prompt (capped server-side). */
+  const [repeatStyleDirection, setRepeatStyleDirection] = useState<string | null>(null);
+  const seedTemplateAppliedRef = useRef<string | null>(null);
 
   // Recommended vertical from brand copy — only if Nativz catalog has templates for that industry
   const recommendedVertical = brand ? detectVertical(brand.description, brand.name) : null;
@@ -237,6 +254,60 @@ export function AdWizard({
       });
     }
   }, [initialMediaUrls]);
+
+  useEffect(() => {
+    if (!seedCreative) {
+      seedTemplateAppliedRef.current = null;
+      setProductServiceOverride(null);
+      setRepeatStyleDirection(null);
+      return;
+    }
+
+    seedTemplateAppliedRef.current = null;
+
+    const ar = seedCreative.aspect_ratio;
+    setAspectRatio(WIZARD_ASPECT_RATIOS.has(ar) ? ar : '1:1');
+    setOfferText(seedCreative.offer ?? '');
+    setCopyMode('manual');
+    setManualHeadline(seedCreative.on_screen_text?.headline ?? '');
+    setManualSubheadline(seedCreative.on_screen_text?.subheadline ?? '');
+    setManualCta(seedCreative.on_screen_text?.cta ?? '');
+    setTemplateMode(seedCreative.template_source === 'kandy' ? 'kandy' : 'ad_library');
+    const ps = seedCreative.product_service?.trim();
+    setProductServiceOverride(ps || null);
+    const pu = seedCreative.prompt_used?.trim();
+    setRepeatStyleDirection(pu ? pu.slice(0, 4000) : null);
+
+    const genIdx = AD_WIZARD_STEP_META.findIndex((s) => s.id === 'generate');
+    setFlowIdx(genIdx >= 0 ? genIdx : 0);
+
+    toast.success('Loaded this creative’s settings. Review and run a new batch.');
+  }, [seedCreative]);
+
+  useEffect(() => {
+    if (!seedCreative || loadingTemplates) return;
+    if (templates.length === 0) return;
+
+    const tid = seedCreative.template_id;
+    const exists = templates.some((t) => t.id === tid);
+    if (!exists) {
+      toast.message('Original template not found — pick a layout before generating.');
+      const tIdx = AD_WIZARD_STEP_META.findIndex((s) => s.id === 'templates');
+      if (tIdx >= 0) setFlowIdx(tIdx);
+      return;
+    }
+
+    if (seedTemplateAppliedRef.current === seedCreative.id) return;
+
+    setSelectedTemplateIds(new Set([tid]));
+    setVariations(new Map([[tid, 2]]));
+    seedTemplateAppliedRef.current = seedCreative.id;
+  }, [seedCreative, loadingTemplates, templates]);
+
+  const effectiveProductService = useMemo(
+    () => (productServiceOverride?.trim() || brand?.name || '').trim(),
+    [productServiceOverride, brand?.name],
+  );
 
   // ---------------------------------------------------------------------------
   // Templates
@@ -375,7 +446,7 @@ export function AdWizard({
         body: JSON.stringify({
           templateVariations,
           templateSource: activeTemplateSource,
-          productService: brand.name,
+          productService: effectiveProductService || brand.name,
           offer: offerText,
           aspectRatio,
           onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
@@ -487,7 +558,11 @@ export function AdWizard({
       const body: Record<string, unknown> = {
         templateVariations,
         templateSource: activeTemplateSource,
-        productService: brand.name ?? productsForBatch.map((p) => p.name).join(', '),
+        productService:
+          effectiveProductService ||
+          brand.name ||
+          productsForBatch.map((p) => p.name).join(', ') ||
+          'Product',
         offer: offerText,
         onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
         aspectRatio,
@@ -495,6 +570,10 @@ export function AdWizard({
         brandUrl: brand.url,
         placeholderConfig,
       };
+
+      if (repeatStyleDirection?.trim()) {
+        body.styleDirectionGlobal = repeatStyleDirection.trim();
+      }
 
       if (copyMode === 'manual') {
         const sub =

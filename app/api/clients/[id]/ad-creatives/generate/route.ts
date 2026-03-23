@@ -81,6 +81,8 @@ const bodySchema = z.object({
   }).optional(),
   /** Full set from prompt review — one per template × variation slot */
   creativeOverrides: z.array(creativeOverrideSchema).max(120).optional(),
+  /** Applied to each variation unless overridden by creativeOverrides[].styleNotes */
+  styleDirectionGlobal: z.string().max(4000).optional(),
 }).refine(
   (data) => data.onScreenTextMode !== 'manual' || data.manualText !== undefined,
   { message: 'manualText is required when onScreenTextMode is "manual"', path: ['manualText'] },
@@ -167,6 +169,7 @@ export async function POST(
     brandUrl,
     placeholderConfig,
     creativeOverrides,
+    styleDirectionGlobal,
   } = parsed.data;
 
   // Normalize to templateVariations format
@@ -190,6 +193,7 @@ export async function POST(
     ...(products && { products }),
     ...(brandUrl && { brandUrl }),
     ...(creativeOverrides && creativeOverrides.length > 0 ? { creativeOverrides } : {}),
+    ...(styleDirectionGlobal?.trim() ? { styleDirectionGlobal: styleDirectionGlobal.trim() } : {}),
   };
 
   // Create batch record

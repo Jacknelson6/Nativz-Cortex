@@ -19,12 +19,16 @@ Ship sites that feel **intentionally designed**: a clear typographic voice, conf
 - **Adapt blocks to one system:** Same radius family, same border language, same button weight across sections. If shadcn outputs `rounded-md` everywhere but you want `rounded-2xl` on marketing, **standardize in one pass** (don’t mix five radii).
 - **Nativz in-app surfaces:** align to `frontend-patterns` (sentence case, `bg-surface`, `accent-text`). **Standalone marketing** in this repo may use CSS variables from `globals.css` consistently instead of random hex.
 
+## Hard bans (Northstone App UI — non-negotiable)
+
+- **No magnetic hovers** — Do **not** use React Bits **Magnet**, **MagnetLines**, or any “element follows cursor / pulls toward pointer” behavior. It reads as gimmicky and hurts calm, confident UI. Prefer static layout + clear hover states (`opacity`, `border`, `scale` ≤1.02, or shadcn defaults).
+
 ## 3. Delight budget (surprise without fatigue)
 
 | Budget | Allowed |
 |--------|---------|
 | **1× hero** | One of: strong typographic treatment / SplitText-style entrance / single ambient background / asymmetric layout |
-| **1× mid-page** | Scroll reveal on **one** section, or a subtle cursor/magnetic moment on **one** CTA cluster |
+| **1× mid-page** | Scroll reveal on **one** section, or a **non-cursor-chasing** micro-motion (e.g. gentle fade-in) — **not** magnetic hovers |
 | **1× footer or social proof** | Logo loop, marquee, or quiet motion — **low** frequency |
 | **Not allowed in one page** | Multiple WebGL backgrounds + parallax + grain + sparkles + gradient text everywhere |
 

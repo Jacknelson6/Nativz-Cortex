@@ -398,6 +398,7 @@ function buildWorkItems(
 ): WorkItem[] {
   const items: WorkItem[] = [];
   const templateById = new Map(templates.map((t) => [t.id, t]));
+  const globalStyle = config.styleDirectionGlobal?.trim() || undefined;
 
   /** Match preview-prompts + wizard: same order as `templateVariations` (not DB `.in()` order). */
   if (config.templateVariations && config.templateVariations.length > 0) {
@@ -413,7 +414,7 @@ function buildWorkItems(
           promptSchema: template.promptSchema,
           referenceImageUrl: template.referenceImageUrl,
           onScreenText: copy,
-          styleDirection: fromOverride?.styleDirection,
+          styleDirection: fromOverride?.styleDirection ?? globalStyle,
         });
       }
     }
@@ -431,7 +432,7 @@ function buildWorkItems(
         promptSchema: template.promptSchema,
         referenceImageUrl: template.referenceImageUrl,
         onScreenText: copy,
-        styleDirection: fromOverride?.styleDirection,
+        styleDirection: fromOverride?.styleDirection ?? globalStyle,
       });
     }
   }

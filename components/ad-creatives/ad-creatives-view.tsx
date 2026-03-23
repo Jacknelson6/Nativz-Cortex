@@ -14,6 +14,7 @@ import { BrandDnaRequiredPanel } from './brand-dna-required-panel';
 import { BrandDnaTabReadyPanel } from './brand-dna-tab-ready-panel';
 import { Dialog } from '@/components/ui/dialog';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
+import type { AdCreative } from '@/lib/ad-creatives/types';
 import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
 import { useClientAdminShell } from '@/components/clients/client-admin-shell-context';
 
@@ -65,6 +66,7 @@ export function AdCreativesView({
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardSeedCreative, setWizardSeedCreative] = useState<AdCreative | null>(null);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [placeholderConfig, setPlaceholderConfig] = useState<PlaceholderConfig | null>(null);
 
@@ -199,10 +201,16 @@ export function AdCreativesView({
       setActiveBatchId(batchId);
       setPlaceholderConfig(config);
       setWizardOpen(false);
+      setWizardSeedCreative(null);
       setTab('gallery');
     },
     [setTab],
   );
+
+  const handleCreateMoreLikeThis = useCallback((creative: AdCreative) => {
+    setWizardSeedCreative(creative);
+    setWizardOpen(true);
+  }, []);
 
   return (
     <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-8">
@@ -318,6 +326,7 @@ export function AdCreativesView({
             setActiveBatchId(null);
             setPlaceholderConfig(null);
           }}
+          onCreateMoreLikeThis={brandDnaReady ? handleCreateMoreLikeThis : undefined}
         />
       )}
 
@@ -353,7 +362,10 @@ export function AdCreativesView({
 
       <Dialog
         open={wizardOpen}
-        onClose={() => setWizardOpen(false)}
+        onClose={() => {
+          setWizardOpen(false);
+          setWizardSeedCreative(null);
+        }}
         maxWidth="full"
         className="max-h-[min(92vh,940px)] sm:max-w-[min(96vw,1440px)]"
         bodyClassName="flex max-h-[min(92vh,940px)] flex-col overflow-hidden p-0"
@@ -374,6 +386,7 @@ export function AdCreativesView({
               initialProducts={scrapedProducts}
               initialMediaUrls={mediaUrls}
               brandContextSource={brandContextSource ?? undefined}
+              seedCreative={wizardSeedCreative}
               onGenerationStart={handleGenerationStart}
             />
           )}
