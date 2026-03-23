@@ -5,6 +5,8 @@ import { Loader2, Mail, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { TimePicker15 } from '@/components/ui/time-picker-15';
+import { cn } from '@/lib/utils/cn';
 import {
   AFFILIATE_DIGEST_CUSTOM_TIMEZONE,
   AFFILIATE_DIGEST_TIMEZONE_PRESETS,
@@ -14,15 +16,7 @@ import { isValidIanaTimeZone } from '@/lib/affiliates/digest-schedule';
 const ROW_CLASS =
   'flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3';
 
-const WEEKDAY_OPTIONS: { value: number; label: string }[] = [
-  { value: 0, label: 'Sunday' },
-  { value: 1, label: 'Monday' },
-  { value: 2, label: 'Tuesday' },
-  { value: 3, label: 'Wednesday' },
-  { value: 4, label: 'Thursday' },
-  { value: 5, label: 'Friday' },
-  { value: 6, label: 'Saturday' },
-];
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
@@ -197,37 +191,42 @@ export function AffiliateWeeklyDigestSettings({
               className="w-full rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20 disabled:opacity-50"
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-text-muted">Time zone</label>
-              <select
-                value={timezonePreset}
-                onChange={(e) => setTimezonePreset(e.target.value)}
-                disabled={!digestEnabled}
-                className="w-full rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20 disabled:opacity-50"
-              >
-                {AFFILIATE_DIGEST_TIMEZONE_PRESETS.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-                <option value={AFFILIATE_DIGEST_CUSTOM_TIMEZONE}>Custom (IANA)…</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-text-muted">Day of week</label>
-              <select
-                value={sendDay}
-                onChange={(e) => setSendDay(Number(e.target.value))}
-                disabled={!digestEnabled}
-                className="w-full rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20 disabled:opacity-50"
-              >
-                {WEEKDAY_OPTIONS.map((d) => (
-                  <option key={d.value} value={d.value}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-text-muted">Time zone</label>
+            <select
+              value={timezonePreset}
+              onChange={(e) => setTimezonePreset(e.target.value)}
+              disabled={!digestEnabled}
+              className="w-full max-w-md rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20 disabled:opacity-50"
+            >
+              {AFFILIATE_DIGEST_TIMEZONE_PRESETS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+              <option value={AFFILIATE_DIGEST_CUSTOM_TIMEZONE}>Custom (IANA)…</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-text-muted">Day of week</p>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Day of week">
+              {WEEKDAY_SHORT.map((label, value) => (
+                <button
+                  key={label}
+                  type="button"
+                  disabled={!digestEnabled}
+                  onClick={() => setSendDay(value)}
+                  className={cn(
+                    'min-w-[2.75rem] rounded-lg px-2 py-2 text-xs font-medium transition-colors',
+                    sendDay === value
+                      ? 'bg-accent text-white shadow-sm'
+                      : 'border border-nativz-border bg-surface-hover text-text-secondary hover:border-accent/30 hover:text-text-primary',
+                    'disabled:cursor-not-allowed disabled:opacity-50',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
           {timezonePreset === AFFILIATE_DIGEST_CUSTOM_TIMEZONE && (
@@ -244,17 +243,18 @@ export function AffiliateWeeklyDigestSettings({
             </div>
           )}
           <div className="space-y-1 max-w-xs">
-            <label className="text-xs font-medium text-text-muted">Send time (local to time zone)</label>
-            <input
-              type="time"
-              step={900}
+            <label htmlFor="affiliate-digest-send-time" className="text-xs font-medium text-text-muted">
+              Send time (local to time zone)
+            </label>
+            <TimePicker15
+              id="affiliate-digest-send-time"
               value={timeValue}
-              onChange={(e) => setTimeValue(e.target.value)}
+              onChange={setTimeValue}
               disabled={!digestEnabled}
-              className="w-full rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20 disabled:opacity-50"
             />
             <p className="text-[11px] text-text-muted leading-relaxed">
-              15-minute steps match the platform cron. Defaults match the old schedule: Wednesday 14:00 UTC.
+              Scroll columns pick hour, quarter-hour, and AM/PM. Matches the 15-minute platform cron. Defaults: Wednesday
+              14:00 UTC.
             </p>
           </div>
           {affiliateDigestLastSentWeekKey ? (
