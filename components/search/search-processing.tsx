@@ -79,7 +79,6 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
   const [elapsed, setElapsed] = useState(0);
   const [emailSent, setEmailSent] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
-  const [apiStarted, setApiStarted] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const hasStarted = useRef(false);
   const apiErrorRef = useRef(false);
@@ -147,11 +146,26 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
     }, 100);
   }
 
+  async function pollUntilTerminal(maxAttempts = 450): Promise<void> {
+    for (let i = 0; i < maxAttempts; i += 1) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const res = await fetch(`/api/search/${searchId}`);
+      if (!res.ok) continue;
+      const row = await res.json();
+      if (row.status === 'completed') return;
+      if (row.status === 'failed') {
+        throw new Error(row.summary || 'Search failed.');
+      }
+    }
+    throw new Error(
+      'This search is still running. Leave this tab open, or return in a few minutes.'
+    );
+  }
+
   async function runProcess() {
     setError('');
     setApiError(null);
     apiErrorRef.current = false;
-    setApiStarted(true);
     startProgress();
 
     try {
@@ -159,7 +173,29 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
       const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 min timeout
       const res = await fetch(`/api/search/${searchId}/process`, { method: 'POST', signal: controller.signal });
       clearTimeout(timeoutId);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 202) {
+        clearIntervals();
+        setStageIndex(stagesRef.current.length - 2);
+        setProgress(88);
+        try {
+          await pollUntilTerminal();
+        } catch (pollErr) {
+          const msg =
+            pollErr instanceof Error ? pollErr.message : 'Something went wrong while waiting for results.';
+          setError(msg);
+          setApiError(msg);
+          return;
+        }
+        setProgress(100);
+        setStageIndex(stagesRef.current.length - 1);
+        setDone(true);
+        setTimeout(() => {
+          router.push(`${redirectPrefix}/search/${searchId}`);
+        }, 800);
+        return;
+      }
 
       if (!res.ok) {
         clearIntervals();
@@ -190,7 +226,28 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
   useEffect(() => {
     if (hasStarted.current) return;
     hasStarted.current = true;
-    runProcess();
+
+    (async () => {
+      try {
+        const check = await fetch(`/api/search/${searchId}`);
+        if (check.ok) {
+          const s = await check.json();
+          if (s.status === 'completed') {
+            router.replace(`${redirectPrefix}/search/${searchId}`);
+            return;
+          }
+          if (s.status === 'failed') {
+            setError(s.summary || 'Search failed.');
+            setApiError(s.summary || 'Search failed.');
+            return;
+          }
+        }
+      } catch {
+        // Continue to kick processing
+      }
+      runProcess();
+    })();
+
     return () => clearIntervals();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -199,7 +256,6 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
     hasStarted.current = false;
     setError('');
     setApiError(null);
-    setApiStarted(false);
     runProcess();
   }
 

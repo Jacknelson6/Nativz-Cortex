@@ -1,6 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import type { TopicSearch } from '@/lib/types/search';
 import { extractVideoCandidatesFromSearch } from '@/lib/ideation/extract-video-candidates';
 import { AdminResultsClient } from './results-client';
@@ -29,6 +29,10 @@ export default async function AdminSearchResultsPage({
 
   if (error || !search) {
     notFound();
+  }
+
+  if (search.status === 'processing' || search.status === 'pending') {
+    redirect(`/admin/search/${id}/processing`);
   }
 
   const adminClient = createAdminClient();

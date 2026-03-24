@@ -53,9 +53,17 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
 
   // Poll processing items until they complete, then refresh server data
   useEffect(() => {
-    const processingIds = optimisticItems
-      .filter((item) => item.status === 'processing')
+    const fromOptimistic = optimisticItems
+      .filter((item) => item.status === 'processing' || item.status === 'pending')
       .map((item) => item.id);
+    const fromHistory = historyItems
+      .filter(
+        (item) =>
+          (item.type === 'topic' || item.type === 'brand_intel') &&
+          (item.status === 'processing' || item.status === 'pending')
+      )
+      .map((item) => item.id);
+    const processingIds = [...new Set([...fromOptimistic, ...fromHistory])];
 
     if (processingIds.length === 0) {
       if (pollingRef.current) {
@@ -85,7 +93,7 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [optimisticItems, router]);
+  }, [optimisticItems, historyItems, router]);
 
   const allItems = [...optimisticItems, ...historyItems];
 
@@ -98,7 +106,7 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
       clientName: item.clientName,
       clientId: null,
       createdAt: new Date().toISOString(),
-      href: `/admin/search/${item.id}`,
+      href: `/admin/search/${item.id}/processing`,
     }, ...prev]);
   }, []);
 

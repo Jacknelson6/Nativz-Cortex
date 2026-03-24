@@ -18,6 +18,9 @@ import { createNotification } from '@/lib/notifications/create';
 
 export const maxDuration = 300;
 
+/** How long a processing lease is considered active before another worker may reclaim (ms). */
+const PROCESS_LEASE_MS = 15 * 60 * 1000;
+
 /**
  * Build a set of all URLs present in the SERP data for validation.
  */
@@ -107,6 +110,43 @@ export async function POST(
 
     if (search.status !== 'processing') {
       return NextResponse.json({ error: 'Search is not in processing state' }, { status: 400 });
+    }
+
+    // Single-flight: one active pipeline per search (extra POSTs from refresh/tabs get 202 + poll).
+    const leaseNow = new Date().toISOString();
+    const staleBefore = new Date(Date.now() - PROCESS_LEASE_MS).toISOString();
+
+    const { data: claimedFresh } = await adminClient
+      .from('topic_searches')
+      .update({ processing_started_at: leaseNow })
+      .eq('id', id)
+      .eq('status', 'processing')
+      .is('processing_started_at', null)
+      .select('id');
+
+    let claimed = !!(claimedFresh && claimedFresh.length > 0);
+
+    if (!claimed) {
+      const { data: claimedStale } = await adminClient
+        .from('topic_searches')
+        .update({ processing_started_at: leaseNow })
+        .eq('id', id)
+        .eq('status', 'processing')
+        .lt('processing_started_at', staleBefore)
+        .select('id');
+      claimed = !!(claimedStale && claimedStale.length > 0);
+    }
+
+    if (!claimed) {
+      const { data: latest } = await adminClient
+        .from('topic_searches')
+        .select('status')
+        .eq('id', id)
+        .single();
+      if (latest?.status === 'completed') {
+        return NextResponse.json({ status: 'completed' });
+      }
+      return NextResponse.json({ status: 'processing' }, { status: 202 });
     }
 
     // Fetch optional client context + brand preferences
@@ -400,6 +440,7 @@ export async function POST(
         .from('topic_searches')
         .update({
           status: 'completed',
+          processing_started_at: null,
           summary: aiResponse.summary,
           metrics,
           emotions: aiResponse.emotions,
@@ -453,6 +494,7 @@ export async function POST(
         .from('topic_searches')
         .update({
           status: 'failed',
+          processing_started_at: null,
           summary: aiError instanceof Error
             ? `Search failed: ${aiError.message}`
             : 'Search failed due to an unknown error',

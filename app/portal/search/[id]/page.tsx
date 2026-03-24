@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { ArrowLeft, Clock, ClockIcon } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Badge } from '@/components/ui/badge';
@@ -59,6 +59,10 @@ export default async function PortalSearchResultsPage({
   } else {
     // No client attached — portal users shouldn't see unattached searches
     notFound();
+  }
+
+  if (search.status === 'processing' || search.status === 'pending') {
+    redirect(`/portal/search/${id}/processing`);
   }
 
   // If not approved, show pending state

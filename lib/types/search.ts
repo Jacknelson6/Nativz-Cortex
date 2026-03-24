@@ -128,6 +128,8 @@ export interface TopicSearch {
   created_by: string | null;
   created_at: string;
   completed_at: string | null;
+  /** Set while POST /process holds the single-flight lease; cleared when done. */
+  processing_started_at?: string | null;
   // v2 fields
   platforms?: SearchPlatform[];
   search_version?: number;

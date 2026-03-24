@@ -54,7 +54,10 @@ export async function fetchHistory({
         clientName: (client as { name: string } | null)?.name ?? null,
         clientId: s.client_id,
         createdAt: s.created_at,
-        href: `/admin/search/${s.id}`,
+        href:
+          s.status === 'processing' || s.status === 'pending'
+            ? `/admin/search/${s.id}/processing`
+            : `/admin/search/${s.id}`,
       });
     }
   }
