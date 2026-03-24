@@ -14,20 +14,13 @@ import { BenchmarkCard } from '@/lib/benchmarks/charts/benchmark-card';
 import { BenchmarkSectionBody } from '@/lib/benchmarks/benchmark-section-body';
 import type { BenchmarkConfig } from '../types';
 
-interface Slide {
-  title: string;
-  body: string;
-  image_url?: string | null;
-}
-
 export default function PresentModePage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
 
-  const [presentationType, setPresentationType] = useState<string>('slides');
-  const [slides, setSlides] = useState<Slide[]>([]);
   const [benchmarkConfig, setBenchmarkConfig] = useState<BenchmarkConfig | null>(null);
+  const [unsupported, setUnsupported] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -37,25 +30,24 @@ export default function PresentModePage() {
         const res = await fetch(`/api/presentations/${id}`);
         if (!res.ok) throw new Error();
         const data = await res.json();
-        setPresentationType(data.type ?? 'slides');
-
-        if (data.type === 'benchmarks') {
-          const config = data.audit_data as BenchmarkConfig | undefined;
-          setBenchmarkConfig(
-            config && Array.isArray(config.section_order) && Array.isArray(config.visible_sections)
-              ? {
-                  ...config,
-                  section_order: mergeBenchmarkSectionOrder(config.section_order),
-                }
-              : {
-                  visible_sections: [...DEFAULT_VISIBLE_SECTIONS],
-                  section_order: [...DEFAULT_SECTION_ORDER],
-                  active_vertical_filter: null,
-                }
-          );
-        } else {
-          setSlides(data.slides ?? []);
+        if (data.type !== 'benchmarks') {
+          setUnsupported(true);
+          setLoading(false);
+          return;
         }
+        const config = data.audit_data as BenchmarkConfig | undefined;
+        setBenchmarkConfig(
+          config && Array.isArray(config.section_order) && Array.isArray(config.visible_sections)
+            ? {
+                ...config,
+                section_order: mergeBenchmarkSectionOrder(config.section_order),
+              }
+            : {
+                visible_sections: [...DEFAULT_VISIBLE_SECTIONS],
+                section_order: [...DEFAULT_SECTION_ORDER],
+                active_vertical_filter: null,
+              }
+        );
       } catch {
         toast.error('Failed to load presentation');
         router.push(`/admin/presentations/${id}`);
@@ -66,7 +58,6 @@ export default function PresentModePage() {
     load();
   }, [id, router]);
 
-  // Compute benchmark slides
   const benchmarkSlides = benchmarkConfig
     ? benchmarkConfig.section_order
         .filter((sid) => benchmarkConfig.visible_sections.includes(sid))
@@ -74,7 +65,7 @@ export default function PresentModePage() {
         .filter(Boolean)
     : [];
 
-  const totalSlides = presentationType === 'benchmarks' ? benchmarkSlides.length : slides.length;
+  const totalSlides = benchmarkSlides.length;
 
   const goNext = useCallback(() => {
     setCurrentIndex((i) => Math.min(i + 1, totalSlides - 1));
@@ -90,13 +81,25 @@ export default function PresentModePage() {
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goNext(); }
-      if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev(); }
+      if (e.key === 'ArrowRight' || e.key === ' ') {
+        e.preventDefault();
+        goNext();
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        goPrev();
+      }
       if (e.key === 'Escape') exit();
     }
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
   }, [goNext, goPrev, exit]);
+
+  useEffect(() => {
+    if (!unsupported) return;
+    toast.error('Present mode only supports creative benchmarks decks.');
+    router.replace(`/admin/presentations/${id}`);
+  }, [unsupported, router, id]);
 
   if (loading) {
     return (
@@ -106,125 +109,48 @@ export default function PresentModePage() {
     );
   }
 
+  if (unsupported) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+        <p className="text-white/60 text-sm">Redirecting…</p>
+      </div>
+    );
+  }
+
   if (totalSlides === 0) {
     return (
       <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
-        <p className="text-white/60">
-          {presentationType === 'benchmarks'
-            ? 'No benchmark sections visible'
-            : 'No slides in this presentation'}
-        </p>
+        <p className="text-white/60">No benchmark sections visible</p>
       </div>
     );
   }
 
-  // ─── Benchmarks present mode ────────────────────────────────────────────────
-
-  if (presentationType === 'benchmarks') {
-    const section = benchmarkSlides[currentIndex]!;
-
-    return (
-      <div className="fixed inset-0 z-50 bg-[#0a0a0f] flex flex-col">
-        {/* Close button */}
-        <button
-          onClick={exit}
-          className="cursor-pointer absolute top-4 right-4 z-10 rounded-full p-2 text-white/30 hover:text-white/70 hover:bg-white/10 transition-colors"
-        >
-          <X size={20} />
-        </button>
-
-        {/* Section content */}
-        <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
-          <div className="max-w-[1100px] w-full animate-fade-in">
-            <BenchmarkCard section={section}>
-              <BenchmarkSectionBody
-                section={section}
-                activeFilter={benchmarkConfig?.active_vertical_filter ?? null}
-              />
-            </BenchmarkCard>
-          </div>
-        </div>
-
-        {/* Navigation bar */}
-        <div className="flex items-center justify-between px-6 py-4">
-          <button
-            onClick={goPrev}
-            disabled={currentIndex === 0}
-            className="cursor-pointer flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-white/50 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:pointer-events-none"
-          >
-            <ChevronLeft size={16} />
-            Previous
-          </button>
-
-          {/* Progress */}
-          <div className="flex items-center gap-1.5">
-            {benchmarkSlides.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentIndex(i)}
-                className={`cursor-pointer h-1.5 rounded-full transition-all ${
-                  i === currentIndex ? 'w-6 bg-accent-text' : 'w-1.5 bg-white/20 hover:bg-white/40'
-                }`}
-              />
-            ))}
-          </div>
-
-          <button
-            onClick={goNext}
-            disabled={currentIndex === totalSlides - 1}
-            className="cursor-pointer flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-white/50 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:pointer-events-none"
-          >
-            Next
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ─── Slides present mode (original) ─────────────────────────────────────────
-
-  const slide = slides[currentIndex];
+  const section = benchmarkSlides[currentIndex]!;
 
   return (
     <div className="fixed inset-0 z-50 bg-[#0a0a0f] flex flex-col">
-      {/* Close button */}
       <button
+        type="button"
         onClick={exit}
         className="cursor-pointer absolute top-4 right-4 z-10 rounded-full p-2 text-white/30 hover:text-white/70 hover:bg-white/10 transition-colors"
       >
         <X size={20} />
       </button>
 
-      {/* Slide content */}
-      <div className="flex-1 flex items-center justify-center p-12">
-        <div className="max-w-4xl w-full space-y-8 text-center">
-          {slide.image_url && (
-            <div className="flex justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={slide.image_url}
-                alt=""
-                className="max-h-[40vh] rounded-xl object-contain"
-              />
-            </div>
-          )}
-          {slide.title && (
-            <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight">
-              {slide.title}
-            </h1>
-          )}
-          {slide.body && (
-            <div className="text-lg md:text-xl text-white/70 leading-relaxed whitespace-pre-wrap max-w-3xl mx-auto">
-              {slide.body}
-            </div>
-          )}
+      <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
+        <div className="max-w-[1100px] w-full animate-fade-in">
+          <BenchmarkCard section={section}>
+            <BenchmarkSectionBody
+              section={section}
+              activeFilter={benchmarkConfig?.active_vertical_filter ?? null}
+            />
+          </BenchmarkCard>
         </div>
       </div>
 
-      {/* Navigation bar */}
       <div className="flex items-center justify-between px-6 py-4">
         <button
+          type="button"
           onClick={goPrev}
           disabled={currentIndex === 0}
           className="cursor-pointer flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-white/50 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:pointer-events-none"
@@ -233,11 +159,11 @@ export default function PresentModePage() {
           Previous
         </button>
 
-        {/* Progress */}
         <div className="flex items-center gap-1.5">
-          {slides.map((_, i) => (
+          {benchmarkSlides.map((_, i) => (
             <button
               key={i}
+              type="button"
               onClick={() => setCurrentIndex(i)}
               className={`cursor-pointer h-1.5 rounded-full transition-all ${
                 i === currentIndex ? 'w-6 bg-accent-text' : 'w-1.5 bg-white/20 hover:bg-white/40'
@@ -247,8 +173,9 @@ export default function PresentModePage() {
         </div>
 
         <button
+          type="button"
           onClick={goNext}
-          disabled={currentIndex === slides.length - 1}
+          disabled={currentIndex === totalSlides - 1}
           className="cursor-pointer flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-white/50 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:pointer-events-none"
         >
           Next

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Presentation, Plus, MoreHorizontal, Clock, Trash2, Archive, ArchiveRestore,
-  Copy, Pencil, FileText, ListOrdered, BarChart3, BarChart2, ChevronRight, Search, Instagram,
+  Copy, Pencil, BarChart2,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,27 +17,20 @@ interface PresentationItem {
   id: string;
   title: string;
   description: string | null;
-  type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks' | 'prospect_audit' | 'social_results';
+  type: string;
   client_id: string | null;
   client_name: string | null;
-  slides: { title: string; body: string; image_url?: string | null }[];
-  tiers: { id: string; name: string; color: string }[];
-  tier_items: { id: string; title: string; thumbnail_url?: string | null; tier_id?: string | null }[];
+  audit_data?: { visible_sections?: string[] } | null;
   status: 'draft' | 'ready' | 'archived';
   tags: string[];
   created_at: string;
   updated_at: string;
 }
 
-const DEFAULT_TIERS = [
-  { id: 's', name: 'S', color: '#ff7f7f' },
-  { id: 'a', name: 'A', color: '#ffbf7f' },
-  { id: 'b', name: 'B', color: '#ffdf7f' },
-  { id: 'c', name: 'C', color: '#ffff7f' },
-  { id: 'd', name: 'D', color: '#bfff7f' },
-  { id: 'e', name: 'E', color: '#7fbfff' },
-  { id: 'f', name: 'F', color: '#7f7fff' },
-];
+function visibleSectionCount(p: PresentationItem): number {
+  const n = p.audit_data?.visible_sections?.length;
+  return typeof n === 'number' && n > 0 ? n : DEFAULT_VISIBLE_SECTIONS.length;
+}
 
 export default function PresentationsPage() {
   const router = useRouter();
@@ -59,7 +52,9 @@ export default function PresentationsPage() {
       const res = await fetch('/api/presentations');
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setPresentations(data);
+      setPresentations(
+        (data as PresentationItem[]).filter((p) => p.type === 'benchmarks')
+      );
     } catch {
       toast.error('Failed to load presentations');
     } finally {
@@ -71,69 +66,29 @@ export default function PresentationsPage() {
     fetchPresentations();
   }, [fetchPresentations]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     if (!menuOpenId) return;
-    function handleClick() { setMenuOpenId(null); }
+    function handleClick() {
+      setMenuOpenId(null);
+    }
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, [menuOpenId]);
 
-  async function handleCreate(type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks' | 'prospect_audit' | 'social_results') {
+  async function handleCreate() {
     try {
-      const titles: Record<string, string> = {
-        slides: 'Untitled presentation',
-        tier_list: 'Untitled tier list',
-        social_audit: 'Social audit',
-        benchmarks: 'Creative benchmarks 2026',
-        prospect_audit: 'Prospect audit',
-        social_results: 'Instagram social results',
-      };
-      const body: Record<string, unknown> = {
-        title: titles[type],
-        type,
-      };
-      if (type === 'slides') {
-        body.slides = [{ title: '', body: '' }];
-      } else if (type === 'tier_list') {
-        body.tiers = DEFAULT_TIERS;
-        body.tier_items = [];
-      } else if (type === 'social_audit') {
-        body.audit_data = { profiles: [], competitors: [], projections: {}, step: 'wizard' };
-      } else if (type === 'benchmarks') {
-        body.audit_data = {
-          visible_sections: [...DEFAULT_VISIBLE_SECTIONS],
-          section_order: [...DEFAULT_SECTION_ORDER],
-          active_vertical_filter: null,
-        };
-      } else if (type === 'prospect_audit') {
-        body.audit_data = {
-          url: '',
-          status: 'idle',
-          profile: null,
-          content_pillars: [],
-          visual_styles: [],
-          posting_cadence: null,
-          hook_strategies: [],
-          recommendations: [],
-          scraped_content: [],
-          analyzed_at: null,
-        };
-      } else if (type === 'social_results') {
-        body.audit_data = {
-          instagram_handle: '',
-          status: 'idle',
-          before: null,
-          after: null,
-          timeline_months: 3,
-          generated_at: null,
-        };
-      }
-
       const res = await fetch('/api/presentations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          title: 'Creative benchmarks 2026',
+          type: 'benchmarks',
+          audit_data: {
+            visible_sections: [...DEFAULT_VISIBLE_SECTIONS],
+            section_order: [...DEFAULT_SECTION_ORDER],
+            active_vertical_filter: null,
+          },
+        }),
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -165,11 +120,9 @@ export default function PresentationsPage() {
         body: JSON.stringify({
           title: `${p.title} (copy)`,
           description: p.description,
-          type: p.type,
+          type: 'benchmarks',
           client_id: p.client_id,
-          slides: p.slides,
-          tiers: p.tiers,
-          tier_items: p.tier_items,
+          audit_data: p.audit_data ?? {},
           tags: p.tags,
         }),
       });
@@ -210,75 +163,66 @@ export default function PresentationsPage() {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
-  const typeConfig = {
-    slides: { icon: FileText, label: 'Slides', accentClass: 'bg-accent-surface', iconColor: 'text-accent-text' },
-    tier_list: { icon: ListOrdered, label: 'Tier list', accentClass: 'bg-accent2-surface', iconColor: 'text-accent2-text' },
-    social_audit: { icon: BarChart3, label: 'Social audit', accentClass: 'bg-emerald-500/15', iconColor: 'text-emerald-400' },
-    benchmarks: { icon: BarChart2, label: 'Benchmarks', accentClass: 'bg-orange-500/15', iconColor: 'text-orange-400' },
-    prospect_audit: { icon: Search, label: 'Prospect audit', accentClass: 'bg-cyan-500/15', iconColor: 'text-cyan-400' },
-    social_results: { icon: Instagram, label: 'Social results', accentClass: 'bg-pink-500/15', iconColor: 'text-pink-400' },
-  };
-
   const active = presentations.filter((p) => p.status !== 'archived');
   const archived = presentations.filter((p) => p.status === 'archived');
 
   return (
     <div className="cortex-page-gutter space-y-8">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="ui-page-title">Presentations</h1>
-          <p className="text-sm text-text-muted mt-1">Sales tools, tier lists, and client presentations</p>
+          <p className="text-sm text-text-muted mt-1">
+            Creative benchmarks 2026 — interactive charts for live and client calls
+          </p>
         </div>
-        <Button onClick={() => setShowCreate(!showCreate)}>
+        <Button
+          onClick={() => {
+            setShowCreate(true);
+          }}
+        >
           <Plus size={14} />
           New
         </Button>
       </div>
 
-      {/* Create modal */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowCreate(false)} />
-          <div className="relative w-full max-w-xl rounded-2xl border border-nativz-border bg-surface shadow-2xl animate-modal-pop-in p-6 space-y-5">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
+            onClick={() => setShowCreate(false)}
+            aria-hidden
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-nativz-border bg-surface shadow-2xl animate-modal-pop-in p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-text-primary">Create new presentation</h2>
-              <button onClick={() => setShowCreate(false)} className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              <h2 className="text-lg font-semibold text-text-primary">New deck</h2>
+              <button
+                type="button"
+                onClick={() => setShowCreate(false)}
+                className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
-            <p className="text-sm text-text-muted -mt-2">Choose a presentation type to get started</p>
-            <div className="grid grid-cols-1 gap-2">
-              {[
-                { type: 'slides' as const, label: 'Slide deck', desc: 'Create a presentation with slides, images, and speaker notes', icon: FileText, color: 'rgba(4, 107, 210, 0.15)', iconColor: 'text-accent-text', bgColor: 'bg-accent-surface' },
-                { type: 'tier_list' as const, label: 'Tier list', desc: 'Rank content with drag-and-drop tiers for visual demos on calls', icon: ListOrdered, color: 'rgba(168, 85, 247, 0.15)', iconColor: 'text-accent2-text', bgColor: 'bg-accent2-surface' },
-                { type: 'social_audit' as const, label: 'Social audit', desc: 'Before & after analysis with real social data and growth projections', icon: BarChart3, color: 'rgba(16, 185, 129, 0.15)', iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10' },
-                { type: 'benchmarks' as const, label: 'Creative benchmarks', desc: 'Interactive charts and tables from $1.3B in ad spend data', icon: BarChart2, color: 'rgba(249, 115, 22, 0.15)', iconColor: 'text-orange-400', bgColor: 'bg-orange-500/15' },
-                { type: 'prospect_audit' as const, label: 'Prospect audit', desc: 'Audit a prospect\'s social presence, content pillars, and ad strategy', icon: Search, color: 'rgba(6, 182, 212, 0.15)', iconColor: 'text-cyan-400', bgColor: 'bg-cyan-500/15' },
-                { type: 'social_results' as const, label: 'Social results visualizer', desc: 'Show prospects their Instagram before & after 3 months with Nativz', icon: Instagram, color: 'rgba(236, 72, 153, 0.15)', iconColor: 'text-pink-400', bgColor: 'bg-pink-500/10' },
-              ].map(({ type, label, desc, icon: Icon, iconColor, bgColor }) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => { setShowCreate(false); handleCreate(type); }}
-                  className="cursor-pointer flex items-center gap-4 rounded-xl border border-nativz-border bg-surface px-4 py-4 text-left hover:bg-surface-hover hover:border-nativz-border/80 transition-all hover:scale-[1.01] active:scale-[0.99]"
-                >
-                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${bgColor} shrink-0`}>
-                    <Icon size={20} className={iconColor} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-semibold text-text-primary">{label}</h3>
-                    <p className="text-xs text-text-muted mt-0.5">{desc}</p>
-                  </div>
-                  <ChevronRight size={16} className="text-text-muted shrink-0" />
-                </button>
-              ))}
-            </div>
+            <p className="text-sm text-text-muted">
+              Opens the creative benchmarks editor with all sections; toggle visibility and reorder before Present.
+            </p>
+            <Button
+              className="w-full"
+              onClick={() => {
+                setShowCreate(false);
+                void handleCreate();
+              }}
+            >
+              <BarChart2 size={14} />
+              Create creative benchmarks deck
+            </Button>
           </div>
         </div>
       )}
 
-      {/* Loading */}
       {loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
@@ -295,118 +239,114 @@ export default function PresentationsPage() {
         </div>
       )}
 
-      {/* Active presentations */}
       {!loading && active.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {active.map((p, i) => {
-            const tc = typeConfig[p.type] ?? typeConfig.slides;
-            const TypeIcon = tc.icon;
-            const itemCount = p.type === 'tier_list'
-              ? (p.tier_items ?? []).length
-              : (p.slides ?? []).length;
-            const itemLabel = p.type === 'tier_list' ? 'items' : 'slides';
-
-            return (
-              <div
-                key={p.id}
-                className="animate-stagger-in min-w-0"
-                style={{ animationDelay: `${i * 40}ms` }}
-              >
-                <div className="relative group rounded-xl border border-nativz-border bg-surface shadow-card hover:shadow-elevated transition-all duration-300 hover:border-transparent hover:ring-1 hover:ring-accent/40">
-                  {/* Tier list color bar */}
-                  {p.type === 'tier_list' && (p.tiers ?? []).length > 0 && (
-                    <div className="h-1.5 flex overflow-hidden rounded-t-xl">
-                      {(p.tiers ?? []).map((tier: { id: string; color: string }) => (
-                        <div key={tier.id} className="flex-1" style={{ backgroundColor: tier.color + '80' }} />
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Top row: icon + badges + ellipsis (always visible) */}
-                  <div className="flex items-center gap-2 px-4 pt-4 pb-1">
-                    <div className={`flex h-9 w-9 items-center justify-center rounded-lg shrink-0 ${tc.accentClass}`}>
-                      <TypeIcon size={16} className={tc.iconColor} />
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                      <span className="rounded-full bg-surface-hover border border-nativz-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-text-muted whitespace-nowrap">
-                        {tc.label}
-                      </span>
-                    </div>
-                    <div className="relative shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMenuOpenId(menuOpenId === p.id ? null : p.id);
-                        }}
-                        className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
-                      >
-                        <MoreHorizontal size={16} />
-                      </button>
-
-                      {menuOpenId === p.id && (
-                        <div className="absolute right-0 top-full z-20 mt-1 min-w-[140px] rounded-lg border border-nativz-border bg-surface py-1 shadow-dropdown animate-fade-in">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); router.push(`/admin/presentations/${p.id}`); }}
-                            className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors"
-                          >
-                            <Pencil size={12} /> Edit
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDuplicate(p); }}
-                            className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors"
-                          >
-                            <Copy size={12} /> Duplicate
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleArchive(p); }}
-                            className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors"
-                          >
-                            {p.status === 'archived' ? <ArchiveRestore size={12} /> : <Archive size={12} />}
-                            {p.status === 'archived' ? 'Unarchive' : 'Archive'}
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDelete(p.id); }}
-                            className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-red-400 hover:bg-surface-hover transition-colors"
-                          >
-                            <Trash2 size={12} /> Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
+          {active.map((p, i) => (
+            <div
+              key={p.id}
+              className="animate-stagger-in min-w-0"
+              style={{ animationDelay: `${i * 40}ms` }}
+            >
+              <div className="relative group rounded-xl border border-nativz-border bg-surface shadow-card hover:shadow-elevated transition-all duration-300 hover:border-transparent hover:ring-1 hover:ring-accent/40">
+                <div className="flex items-center gap-2 px-4 pt-4 pb-1">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg shrink-0 bg-orange-500/15">
+                    <BarChart2 size={16} className="text-orange-400" />
                   </div>
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <span className="rounded-full bg-surface-hover border border-nativz-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-text-muted whitespace-nowrap">
+                      Benchmarks
+                    </span>
+                  </div>
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuOpenId(menuOpenId === p.id ? null : p.id);
+                      }}
+                      className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
+                    >
+                      <MoreHorizontal size={16} />
+                    </button>
 
-                  {/* Clickable content area */}
-                  <button
-                    onClick={() => router.push(`/admin/presentations/${p.id}`)}
-                    className="cursor-pointer w-full text-left px-4 pb-4 pt-1 space-y-2"
-                  >
-                    <h3 className="text-base font-semibold text-text-primary truncate group-hover:text-accent-text transition-colors">
-                      {p.title}
-                    </h3>
-                    <div className="flex items-center gap-3 text-[11px] text-text-muted">
-                      {p.client_name && (
-                        <span className="rounded-full bg-accent2-surface px-2 py-0.5 text-accent2-text font-medium">
-                          {p.client_name}
-                        </span>
-                      )}
-                      <span className="flex items-center gap-1">
-                        <Presentation size={10} />
-                        {itemCount} {itemLabel}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock size={10} />
-                        {formatDate(p.updated_at)}
-                      </span>
-                    </div>
-                  </button>
+                    {menuOpenId === p.id && (
+                      <div className="absolute right-0 top-full z-20 mt-1 min-w-[140px] rounded-lg border border-nativz-border bg-surface py-1 shadow-dropdown animate-fade-in">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/admin/presentations/${p.id}`);
+                          }}
+                          className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors"
+                        >
+                          <Pencil size={12} /> Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDuplicate(p);
+                          }}
+                          className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors"
+                        >
+                          <Copy size={12} /> Duplicate
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleArchive(p);
+                          }}
+                          className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors"
+                        >
+                          {p.status === 'archived' ? <ArchiveRestore size={12} /> : <Archive size={12} />}
+                          {p.status === 'archived' ? 'Unarchive' : 'Archive'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDelete(p.id);
+                          }}
+                          className="cursor-pointer flex items-center gap-2 w-full px-3 py-1.5 text-xs text-red-400 hover:bg-surface-hover transition-colors"
+                        >
+                          <Trash2 size={12} /> Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => router.push(`/admin/presentations/${p.id}`)}
+                  className="cursor-pointer w-full text-left px-4 pb-4 pt-1 space-y-2"
+                >
+                  <h3 className="text-base font-semibold text-text-primary truncate group-hover:text-accent-text transition-colors">
+                    {p.title}
+                  </h3>
+                  <div className="flex items-center gap-3 text-[11px] text-text-muted">
+                    {p.client_name && (
+                      <span className="rounded-full bg-accent2-surface px-2 py-0.5 text-accent2-text font-medium">
+                        {p.client_name}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <Presentation size={10} />
+                      {visibleSectionCount(p)} sections
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock size={10} />
+                      {formatDate(p.updated_at)}
+                    </span>
+                  </div>
+                </button>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Archived */}
       {!loading && archived.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wide">Archived</h2>
@@ -414,18 +354,20 @@ export default function PresentationsPage() {
             {archived.map((p) => (
               <div key={p.id} className="relative group rounded-xl border border-nativz-border/50 bg-surface/50 overflow-hidden">
                 <button
+                  type="button"
                   onClick={() => router.push(`/admin/presentations/${p.id}`)}
                   className="cursor-pointer w-full text-left p-4 space-y-2 opacity-60 hover:opacity-80 transition-opacity"
                 >
                   <h3 className="text-sm font-semibold text-text-primary truncate">{p.title}</h3>
                   <div className="flex items-center gap-2 text-[11px] text-text-muted">
-                    <span className="uppercase font-bold">{typeConfig[p.type]?.label ?? 'Slides'}</span>
+                    <span className="uppercase font-bold">Benchmarks</span>
                     <span>{formatDate(p.updated_at)}</span>
                   </div>
                 </button>
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
-                    onClick={() => handleArchive(p)}
+                    type="button"
+                    onClick={() => void handleArchive(p)}
                     className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors"
                     title="Unarchive"
                   >
@@ -438,16 +380,19 @@ export default function PresentationsPage() {
         </div>
       )}
 
-      {/* Empty */}
       {!loading && presentations.length === 0 && (
         <EmptyState
           icon={<Presentation size={32} />}
-          title="No presentations yet"
-          description="Create slide decks, tier lists, and other visual tools to close more sales."
+          title="No benchmark decks yet"
+          description="Create a creative benchmarks presentation for live walkthroughs and client calls."
           action={
-            <Button onClick={() => setShowCreate(true)}>
+            <Button
+              onClick={() => {
+                void handleCreate();
+              }}
+            >
               <Plus size={14} />
-              Create your first presentation
+              Create benchmark deck
             </Button>
           }
         />
