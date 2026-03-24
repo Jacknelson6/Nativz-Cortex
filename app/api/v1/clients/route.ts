@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { validateApiKey } from '@/lib/api-keys/validate';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
-import { createLateProfile } from '@/lib/posting/late';
+import { createLateProfile } from '@/lib/posting';
 
 const onboardSchema = z.object({
   name: z.string().min(1),

@@ -1,0 +1,314 @@
+[
+  {
+    "chart_id": "CH-001",
+    "title": "Relationship between weekly ad volume and number of winning creatives",
+    "type": "scatter",
+    "source": {
+      "pdf_page": 5,
+      "pdf_figure_label": null,
+      "notebook_cell": "Creative Volume section",
+      "notes": "Narrative + scatter described in PDF; no point-level data exported; relationship verified from notebook."
+    },
+    "unit": "mixed",
+    "dimensions": ["account", "spend_tier"],
+    "measures": ["avgCreativesPerWeek", "winnerCount"],
+    "definitions": {
+      "winner": "Spend ≥10× account median and ≥$500",
+      "mid_range": "≥28 days of spend, not winner",
+      "loser": "Turned off before 28 days"
+    },
+    "privacy": {
+      "is_public_in_pdf": true,
+      "suppression_applied": true,
+      "suppression_rule_ref": "SOURCE_MAP.md#SUPPRESSION_RULES",
+      "redactions": ["No point-level scatter data in output; aggregate relationship only"]
+    },
+    "data_table_ref": "LLM_DATA_APPENDIX.md#CH-001"
+  },
+  {
+    "chart_id": "CH-002",
+    "title": "Spend concentration (spend per ad distribution)",
+    "type": "histogram",
+    "source": {
+      "pdf_page": 6,
+      "pdf_figure_label": null,
+      "notebook_cell": null,
+      "notes": "Distribution of spend per ad; exact bins not reproduced to avoid tail identification."
+    },
+    "unit": "usd",
+    "dimensions": ["creative"],
+    "measures": ["spendUSD"],
+    "definitions": {
+      "winner": "Spend ≥10× account median and ≥$500",
+      "mid_range": "≥28 days of spend, not winner",
+      "loser": "Turned off before 28 days"
+    },
+    "privacy": {
+      "is_public_in_pdf": true,
+      "suppression_applied": true,
+      "suppression_rule_ref": "SOURCE_MAP.md#SUPPRESSION_RULES",
+      "redactions": ["Histogram bins/counts not tabulated in appendix to avoid reconstruction of distribution tail"]
+    },
+    "data_table_ref": "LLM_DATA_APPENDIX.md#CH-002"
+  },
+  {
+    "chart_id": "CH-003",
+    "title": "Spend tier — average testing volume and average hit rate",
+    "type": "table",
+    "source": {
+      "pdf_page": 6,
+      "pdf_figure_label": null,
+      "notebook_cell": null,
+      "notes": "Extracted from PDF table; notebook can verify tier-level aggregates."
+    },
+    "unit": "mixed",
+    "dimensions": ["spend_tier"],
+    "measures": ["avg_testing_volume_per_week", "avg_hit_rate_percent"],
+    "definitions": {
+      "winner": "Spend ≥10× account median and ≥$500",
+      "mid_range": "≥28 days of spend, not winner",
+      "loser": "Turned off before 28 days"
+    },
+    "privacy": {
+      "is_public_in_pdf": true,
+      "suppression_applied": false,
+      "suppression_rule_ref": null,
+      "redactions": []
+    },
+    "data_table_ref": "LLM_DATA_APPENDIX.md#CH-003"
+  },
+  {
+    "chart_id": "CH-004",
+    "title": "Hit rate explanation (hypothetical Account A vs Account B)",
+    "type": "table",
+    "source": {
+      "pdf_page": 7,
+      "pdf_figure_label": null,
+      "notebook_cell": null,
+      "notes": "Hypothetical example only; no real account data."
+    },
+    "unit": "mixed",
+    "dimensions": [],
+    "measures": ["launches", "winners", "hit_rate_percent"],
+    "definitions": {
+      "winner": "Spend ≥10× account median and ≥$500",
+      "mid_range": "≥28 days of spend, not winner",
+      "loser": "Turned off before 28 days"
+    },
+    "privacy": {
+      "is_public_in_pdf": true,
+      "suppression_applied": false,
+      "suppression_rule_ref": null,
+      "redactions": ["Example is hypothetical; no real accounts"]
+    },
+    "data_table_ref": "LLM_DATA_APPENDIX.md#CH-004"
+  },
+  {
+    "chart_id": "CH-005",
+    "title": "Portfolio breakdown — % creatives that are losers, mid-range, winners by spend tier",
+    "type": "stacked_bar",
+    "source": {
+      "pdf_page": 8,
+      "pdf_figure_label": null,
+      "notebook_cell": null,
+      "notes": "Extracted from PDF; portfolio composition by tier."
+    },
+    "unit": "percent",
+    "dimensions": ["spend_tier"],
+    "measures": ["pct_loser", "pct_mid_range", "pct_winner"],
+    "definitions": {
+      "winner": "Spend ≥10× account median and ≥$500",
+      "mid_range": "≥28 days of spend, not winner",
+      "loser": "Turned off before 28 days"
+    },
+    "privacy": {
+      "is_public_in_pdf": true,
+      "suppression_applied": false,
+      "suppression_rule_ref": null,
+      "redactions": []
+    },
+    "data_table_ref": "LLM_DATA_APPENDIX.md#CH-005"
+  },
+  {
+    "chart_id": "CH-006",
+    "title": "Spend allocation — % of spend to losers, mid-range, winners by spend tier",
+    "type": "stacked_bar",
+    "source": {
+      "pdf_page": 9,
+      "pdf_figure_label": null,
+      "notebook_cell": null,
+      "notes": "Extracted from PDF; Large tier values may have column alignment ambiguity (see SOURCE_MAP Open Questions)."
+    },
+    "unit": "percent",
+    "dimensions": ["spend_tier"],
+    "measures": ["pct_spend_loser", "pct_spend_mid_range", "pct_spend_winner"],
+    "definitions": {
+      "winner": "Spend ≥10× account median and ≥$500",
+      "mid_range": "≥28 days of spend, not winner",
+      "loser": "Turned off before 28 days"
+    },
+    "privacy": {
+      "is_public_in_pdf": true,
+      "suppression_applied": false,
+      "suppression_rule_ref": null,
+      "redactions": []
+    },
+    "data_table_ref": "LLM_DATA_APPENDIX.md#CH-006"
+  },
+  {
+    "chart_id": "CH-007",
+    "title": "Average weekly testing volume by industry vertical and spend tier",
+    "type": "heatmap",
+    "source": {
+      "pdf_page": 10,
+      "pdf_figure_label": null,
+      "notebook_cell": null,
+      "notes": "Heatmap; verticals with <50 accounts remapped to Other (MIN_ACCOUNTS_FOR_BRAND_CATEGORY)."
+    },
+    "unit": "count",
+    "dimensions": ["vertical", "spend_tier"],
+    "measures": ["median_or_mean_creatives_per_week"],
+    "definitions": {
+      "winner": "Spend ≥10× account median and ≥$500",
+      "mid_range": "≥28 days of spend, not winner",
+      "loser": "Turned off before 28 days"
+    },
+    "privacy": {
+      "is_public_in_pdf": true,
+      "suppression_applied": true,
+      "suppression_rule_ref": "SOURCE_MAP.md#SUPPRESSION_RULES",
+      "redactions": ["Verticals with <50 accounts remapped to Other"]
+    },
+    "data_table_ref": "LLM_DATA_APPENDIX.md#CH-007"
+  },
+  {
+    "chart_id": "CH-008",
+    "title": "Top 25% vs all accounts — creative volume and winners per month by spend tier",
+    "type": "table",
+    "source": {
+      "pdf_page": 11,
+      "pdf_figure_label": null,
+      "notebook_cell": null,
+      "notes": "Top 25% = winner count percentile ≥0.75 within tier."
+    },
+    "unit": "mixed",
+    "dimensions": ["spend_tier"],
+    "measures": ["all_creative_vol", "top25_creative_vol", "all_winners_per_mo", "top25_winners_per_mo"],
+    "definitions": {
+      "winner": "Spend ≥10× account median and ≥$500",
+      "mid_range": "≥28 days of spend, not winner",
+      "loser": "Turned off before 28 days"
+    },
+    "privacy": {
+      "is_public_in_pdf": true,
+      "suppression_applied": false,
+      "suppression_rule_ref": null,
+      "redactions": []
+    },
+    "data_table_ref": "LLM_DATA_APPENDIX.md#CH-008"
+  },
+  {
+    "chart_id": "CH-009",
+    "title": "Top visual styles — hit rate and spend use ratio",
+    "type": "table",
+    "source": {
+      "pdf_page": 14,
+      "pdf_figure_label": null,
+      "notebook_cell": "Format Deep Dive; vf_leaderboard filtered by MIN_ACCOUNTS_FOR_FORMAT",
+      "notes": "Only visual formats with ≥50 accounts included."
+    },
+    "unit": "mixed",
+    "dimensions": ["visual_format"],
+    "measures": ["winner_count", "mid_range_count", "hit_rate_percent", "pct_creative", "pct_spend", "spend_use_ratio"],
+    "definitions": {
+      "winner": "Spend ≥10× account median and ≥$500",
+      "mid_range": "≥28 days of spend, not winner",
+      "loser": "Turned off before 28 days"
+    },
+    "privacy": {
+      "is_public_in_pdf": true,
+      "suppression_applied": true,
+      "suppression_rule_ref": "SOURCE_MAP.md#SUPPRESSION_RULES",
+      "redactions": ["Segments with <50 accounts excluded"]
+    },
+    "data_table_ref": "LLM_DATA_APPENDIX.md#CH-009"
+  },
+  {
+    "chart_id": "CH-010",
+    "title": "Top visual styles by vertical",
+    "type": "table",
+    "source": {
+      "pdf_page": "15-20",
+      "pdf_figure_label": null,
+      "notebook_cell": "Format Deep Dive by brand category",
+      "notes": "Per-vertical leaderboards; same MIN_ACCOUNTS_FOR_FORMAT where applied."
+    },
+    "unit": "mixed",
+    "dimensions": ["vertical", "visual_format"],
+    "measures": ["hit_rate_percent", "spend_use_ratio"],
+    "definitions": {
+      "winner": "Spend ≥10× account median and ≥$500",
+      "mid_range": "≥28 days of spend, not winner",
+      "loser": "Turned off before 28 days"
+    },
+    "privacy": {
+      "is_public_in_pdf": true,
+      "suppression_applied": true,
+      "suppression_rule_ref": "SOURCE_MAP.md#SUPPRESSION_RULES",
+      "redactions": ["Verticals <50 accounts → Other; format segments <50 accounts excluded where applicable"]
+    },
+    "data_table_ref": "LLM_DATA_APPENDIX.md#CH-010"
+  },
+  {
+    "chart_id": "CH-011",
+    "title": "Top hooks & headlines — hit rate and spend use ratio",
+    "type": "table",
+    "source": {
+      "pdf_page": 21,
+      "pdf_figure_label": null,
+      "notebook_cell": "hh_leaderboard, hh_leaderboard_hit; MIN_ACCOUNTS_FOR_FORMAT",
+      "notes": "Hook/headline tactic = coalesced hook + headline; ≥50 accounts per segment."
+    },
+    "unit": "mixed",
+    "dimensions": ["hook_headline_tactic"],
+    "measures": ["winner_count", "mid_range_count", "hit_rate_percent", "pct_creative", "pct_spend", "spend_use_ratio"],
+    "definitions": {
+      "winner": "Spend ≥10× account median and ≥$500",
+      "mid_range": "≥28 days of spend, not winner",
+      "loser": "Turned off before 28 days"
+    },
+    "privacy": {
+      "is_public_in_pdf": true,
+      "suppression_applied": true,
+      "suppression_rule_ref": "SOURCE_MAP.md#SUPPRESSION_RULES",
+      "redactions": ["Segments with <50 accounts excluded"]
+    },
+    "data_table_ref": "LLM_DATA_APPENDIX.md#CH-011"
+  },
+  {
+    "chart_id": "CH-012",
+    "title": "Top asset types — hit rate and spend use ratio",
+    "type": "table",
+    "source": {
+      "pdf_page": 22,
+      "pdf_figure_label": null,
+      "notebook_cell": "at_leaderboard, at_leaderboard_hit, at_leaderboard_spend; MIN_ACCOUNTS_FOR_FORMAT",
+      "notes": "Asset type leaderboards; ≥50 accounts per segment."
+    },
+    "unit": "mixed",
+    "dimensions": ["asset_type"],
+    "measures": ["winner_count", "mid_range_count", "hit_rate_percent", "pct_creative", "pct_spend", "spend_use_ratio"],
+    "definitions": {
+      "winner": "Spend ≥10× account median and ≥$500",
+      "mid_range": "≥28 days of spend, not winner",
+      "loser": "Turned off before 28 days"
+    },
+    "privacy": {
+      "is_public_in_pdf": true,
+      "suppression_applied": true,
+      "suppression_rule_ref": "SOURCE_MAP.md#SUPPRESSION_RULES",
+      "redactions": ["Segments with <50 accounts excluded"]
+    },
+    "data_table_ref": "LLM_DATA_APPENDIX.md#CH-012"
+  }
+]

@@ -213,7 +213,7 @@ Video idea submissions with status tracking.
 
 | Service | Env Vars |
 |---------|----------|
-| Supabase | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
+| Supabase | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or dashboard `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`), `SUPABASE_SERVICE_ROLE_KEY` |
 | OpenRouter | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (optional; app default: `nvidia/nemotron-3-super-120b-a12b:free` when DB `agency_settings.ai_model` is empty) |
 | Brave Search | `BRAVE_SEARCH_API_KEY` |
 | Vercel | `NEXT_PUBLIC_APP_URL` |

@@ -30,6 +30,8 @@ export interface MoodboardBoard {
   name: string;
   description: string | null;
   client_id: string | null;
+  /** When set, this board was created from this topic search (ideation pipeline). */
+  source_topic_search_id?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

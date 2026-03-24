@@ -6,10 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Clock, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Markdown } from '@/components/ai/markdown';
-import { BrandDNACards, BRAND_DNA_BENTO_SURFACE } from '@/components/brand-dna/brand-dna-cards';
+import { BrandDNACards } from '@/components/brand-dna/brand-dna-cards';
 import { BrandDNASectionEditor } from '@/components/brand-dna/brand-dna-section-editor';
-import { CompletenessBadge } from '@/components/brand-dna/completeness-badge';
 import { formatRelativeTime } from '@/lib/utils/format';
 import type { BrandGuidelineMetadata } from '@/lib/knowledge/types';
 import { AdCreativeGuidelineUploads } from './ad-creative-guideline-uploads';
@@ -163,13 +161,11 @@ export function BrandDnaTabReadyPanel({
       <div className="space-y-6">
         <div className="flex flex-col gap-4 rounded-2xl border border-nativz-border bg-surface p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
           <div className="min-w-0 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold text-text-primary">Brand DNA</h2>
-              <CompletenessBadge metadata={metadata} size="md" />
-            </div>
+            <h2 className="text-lg font-semibold text-text-primary">
+              {clientName.trim() ? `${clientName.trim()} brand DNA` : 'Brand DNA'}
+            </h2>
             <p className="text-sm text-text-muted">
-              Colors, voice, and assets for <span className="font-medium text-text-secondary">{clientName}</span>. Same
-              Brand DNA as on the client profile — edits apply everywhere in Cortex.
+              Colors, voice, and assets. Same Brand DNA as on the client profile — edits apply everywhere in Cortex.
             </p>
             <span className="flex items-center gap-1 text-xs text-text-muted">
               <Clock size={12} />
@@ -204,12 +200,18 @@ export function BrandDnaTabReadyPanel({
 
         <BrandDNACards metadata={metadata} clientId={clientId} editable onEditSection={setEditingSection} />
 
-        <div className={`${BRAND_DNA_BENTO_SURFACE} p-3 sm:p-4`}>
-          <h3 className="mb-3 text-sm font-semibold text-text-primary">Full brand guideline</h3>
-          <div className="prose prose-invert prose-sm max-h-[min(50vh,480px)] max-w-none overflow-y-auto overscroll-contain pr-1 text-text-secondary [scrollbar-width:thin]">
-            <Markdown content={payload.content} />
-          </div>
-        </div>
+        {clientSlug ? (
+          <p className="text-center text-xs text-text-muted">
+            For the{' '}
+            <Link
+              href={`/admin/clients/${clientSlug}/brand-dna`}
+              className="font-medium text-accent-text hover:underline"
+            >
+              full guideline document
+            </Link>
+            , open Brand DNA on the client profile.
+          </p>
+        ) : null}
       </div>
 
       {editingSection ? (

@@ -9,6 +9,7 @@ import type {
   BrandColor, BrandFont, BrandLogo, ProductItem, ProductOfferingType,
   BrandGuidelineMetadata,
 } from '@/lib/knowledge/types';
+import { dispatchBrandDnaUpdated } from '@/lib/brand-dna/brand-dna-updated-event';
 
 interface BrandDNASectionEditorProps {
   section: string;
@@ -121,6 +122,9 @@ async function saveBrandDNA(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ metadata: patch }),
   });
+  if (res.ok) {
+    dispatchBrandDnaUpdated(clientId);
+  }
   return res.ok;
 }
 
@@ -173,54 +177,77 @@ function ColorsForm({
     }
   }
 
+  const rowGrid =
+    'md:grid md:grid-cols-[2.75rem_6.5rem_minmax(0,1fr)_7.5rem_2.5rem] md:gap-x-3 md:items-center md:gap-y-0';
+
   return (
     <div className="space-y-3">
-      <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+      <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1 [scrollbar-width:thin]">
+        <div
+          className="hidden md:grid md:grid-cols-[2.75rem_6.5rem_minmax(0,1fr)_7.5rem_2.5rem] md:gap-x-3 px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted/90"
+          aria-hidden
+        >
+          <span />
+          <span>Hex</span>
+          <span>Name</span>
+          <span>Role</span>
+          <span className="text-center" />
+        </div>
         {colors.map((color, i) => (
-          <div key={i} className="flex items-center gap-3 rounded-lg border border-nativz-border bg-background px-3 py-2">
-            {/* Hex picker */}
-            <div className="relative shrink-0">
-              <div
-                className="h-9 w-9 rounded-lg border border-white/10 cursor-pointer"
-                style={{ backgroundColor: color.hex }}
-              />
+          <div
+            key={i}
+            className={`rounded-xl border border-nativz-border bg-surface/50 p-3 space-y-2.5 ${rowGrid}`}
+          >
+            <div className="flex items-center gap-3 md:contents">
+              <div className="relative shrink-0 justify-self-start">
+                <div
+                  className="h-10 w-10 rounded-lg border border-white/15 shadow-inner cursor-pointer md:h-9 md:w-9"
+                  style={{ backgroundColor: color.hex }}
+                />
+                <input
+                  type="color"
+                  value={color.hex}
+                  onChange={(e) => update(i, 'hex', e.target.value)}
+                  className="absolute inset-0 cursor-pointer opacity-0 w-full h-full rounded-lg"
+                  aria-label={`Pick color ${i + 1}`}
+                />
+              </div>
               <input
-                type="color"
+                type="text"
                 value={color.hex}
                 onChange={(e) => update(i, 'hex', e.target.value)}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                placeholder="#3b82f6"
+                className="flex-1 min-w-0 rounded-lg border border-nativz-border bg-background px-2.5 py-2 text-xs font-mono text-text-primary tabular-nums outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 md:w-full md:flex-none"
               />
             </div>
-            <input
-              type="text"
-              value={color.hex}
-              onChange={(e) => update(i, 'hex', e.target.value)}
-              placeholder="#3b82f6"
-              className="w-24 rounded bg-transparent text-xs font-mono text-text-secondary border-none outline-none focus:ring-1 focus:ring-accent/50 px-1 py-0.5"
-            />
             <input
               type="text"
               value={color.name}
               onChange={(e) => update(i, 'name', e.target.value)}
               placeholder="Color name"
-              className="flex-1 rounded bg-transparent text-sm text-text-primary border-none outline-none focus:ring-1 focus:ring-accent/50 px-1 py-0.5"
+              className="w-full min-w-0 rounded-lg border border-nativz-border bg-background px-2.5 py-2 text-sm text-text-primary outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 md:min-w-0"
             />
-            <select
-              value={color.role}
-              onChange={(e) => update(i, 'role', e.target.value)}
-              className="text-xs text-text-muted bg-background rounded border border-nativz-border px-1.5 py-0.5 outline-none focus:border-accent/50"
-            >
-              {COLOR_ROLES.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => remove(i)}
-              className="shrink-0 text-text-muted hover:text-red-400 transition-colors cursor-pointer"
-            >
-              <X size={14} />
-            </button>
+            <div className="flex items-center gap-2 md:contents">
+              <select
+                value={color.role}
+                onChange={(e) => update(i, 'role', e.target.value)}
+                className="min-h-[2.25rem] flex-1 rounded-lg border border-nativz-border bg-background px-2.5 py-2 text-xs capitalize text-text-primary outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 md:w-full md:min-w-0"
+              >
+                {COLOR_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent text-text-muted transition-colors hover:border-red-500/25 hover:bg-red-500/10 hover:text-red-400 md:mx-auto"
+                aria-label={`Remove color ${i + 1}`}
+              >
+                <X size={16} strokeWidth={2} />
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -672,6 +699,22 @@ function ProductsForm({
                   value={product.imageUrl ?? ''}
                   onChange={(e) => update(i, 'imageUrl', e.target.value)}
                   placeholder="Image URL (optional)"
+                  className="w-full rounded bg-transparent text-[11px] text-text-muted border-b border-nativz-border/50 outline-none focus:border-accent/50 px-1 py-0.5"
+                />
+                <input
+                  type="text"
+                  value={product.cta ?? ''}
+                  onChange={(e) => update(i, 'cta', e.target.value)}
+                  placeholder="CTA on ad (optional, e.g. Shop now)"
+                  maxLength={100}
+                  className="w-full rounded bg-transparent text-[11px] text-text-muted border-b border-nativz-border/50 outline-none focus:border-accent/50 px-1 py-0.5"
+                />
+                <input
+                  type="text"
+                  value={product.offer ?? ''}
+                  onChange={(e) => update(i, 'offer', e.target.value)}
+                  placeholder="Offer for this product (optional, e.g. 20% off today)"
+                  maxLength={300}
                   className="w-full rounded bg-transparent text-[11px] text-text-muted border-b border-nativz-border/50 outline-none focus:border-accent/50 px-1 py-0.5"
                 />
               </div>

@@ -1,4 +1,5 @@
 import { createCompletion } from '@/lib/ai/client';
+import { BRAND_DNA_AI_TIMEOUT_MS } from './constants';
 import type { BrandDNARawData, CompiledBrandDNA } from './types';
 import type { BrandGuidelineMetadata } from '@/lib/knowledge/types';
 import { mergeProductAppendix } from './product-catalog-md';
@@ -134,6 +135,7 @@ Rules:
     ],
     maxTokens: 6000,
     feature: 'brand_dna_compile',
+    timeoutMs: BRAND_DNA_AI_TIMEOUT_MS,
   });
 
   const content = mergeProductAppendix(result.text, products);

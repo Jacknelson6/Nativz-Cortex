@@ -64,7 +64,12 @@ supabase/.temp/
 
 # screenshots
 *.png
+# Nano Banana template previews (catalog: lib/ad-creatives/nano-banana/catalog-data.ts)
+!public/nano-banana-previews/*.png
 vectors.db
 vectors.db-shm
 vectors.db-wal
 /test-results/
+
+# Local absolute paths to Goldback product shots (regenerate: find … > scripts/.goldback-idaho-image-pool.txt)
+scripts/.goldback-idaho-image-pool.txt

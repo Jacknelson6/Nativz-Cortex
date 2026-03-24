@@ -3,7 +3,7 @@
 import { Building2 } from 'lucide-react';
 import { ClientLogo } from '@/components/clients/client-logo';
 import type { ClientOption } from '@/components/ui/client-picker';
-import type { RecentClient } from '@/app/admin/ad-creatives/page';
+import type { RecentClient } from '@/lib/ad-creatives/recent-client';
 import { Card } from '@/components/ui/card';
 
 function agencyLabel(agency: string | null | undefined): string | null {

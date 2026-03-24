@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { notFound } from 'next/navigation';
 import type { TopicSearch } from '@/lib/types/search';
+import { extractVideoCandidatesFromSearch } from '@/lib/ideation/extract-video-candidates';
 import { AdminResultsClient } from './results-client';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 
@@ -99,6 +100,21 @@ export default async function AdminSearchResultsPage({
     .order('created_at', { ascending: false })
     .limit(5);
 
+  const videoCandidates = extractVideoCandidatesFromSearch(search as TopicSearch);
+
+  const { data: linkedBoardsRaw, error: linkedBoardsError } = await adminClient
+    .from('moodboard_boards')
+    .select('id, name, updated_at')
+    .eq('source_topic_search_id', id)
+    .is('archived_at', null)
+    .order('updated_at', { ascending: false })
+    .limit(5);
+
+  if (linkedBoardsError) {
+    console.warn('Linked moodboards query (run migration 066 if column missing):', linkedBoardsError.message);
+  }
+  const linkedBoards = linkedBoardsError ? [] : (linkedBoardsRaw ?? []);
+
   return (
     <>
       <div className="px-6 pt-6">
@@ -118,6 +134,8 @@ export default async function AdminSearchResultsPage({
           count: g.count,
           createdAt: g.created_at,
         }))}
+        linkedBoards={linkedBoards.map((b) => ({ id: b.id, name: b.name ?? 'Board' }))}
+        videoCandidateCount={videoCandidates.length}
       />
     </>
   );

@@ -69,7 +69,7 @@ export function TodoWidget() {
       setTeamMembers(m);
       sessionStorage.setItem('todo-widget', JSON.stringify({ tasks: t, clients: c, team: m }));
     } catch {
-      console.error('Failed to load todo widget data');
+      console.warn('Failed to load todo widget data');
     } finally {
       setLoading(false);
     }
@@ -81,7 +81,7 @@ export function TodoWidget() {
       const data = await res.json();
       setTasks(data.tasks ?? (Array.isArray(data) ? data : []));
     } catch {
-      console.error('Failed to fetch tasks');
+      console.warn('Failed to fetch tasks');
     }
   }
 

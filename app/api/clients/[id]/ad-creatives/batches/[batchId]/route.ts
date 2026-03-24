@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { sortAdCreativesForBatch } from '@/lib/ad-creatives/sort-creatives';
+import type { AdCreative } from '@/lib/ad-creatives/types';
 
 /**
  * GET /api/clients/[id]/ad-creatives/batches/[batchId]
@@ -40,17 +42,18 @@ export async function GET(
     const { data: creatives, error: creativesErr } = await admin
       .from('ad_creatives')
       .select('id, batch_id, client_id, template_id, template_source, image_url, aspect_ratio, on_screen_text, product_service, offer, is_favorite, metadata, created_at')
-      .eq('batch_id', batchId)
-      .order('created_at', { ascending: true });
+      .eq('batch_id', batchId);
 
     if (creativesErr) {
       console.error('Failed to fetch creatives for batch:', creativesErr);
       return NextResponse.json({ error: 'Failed to fetch creatives' }, { status: 500 });
     }
 
+    const ordered = sortAdCreativesForBatch((creatives ?? []) as AdCreative[]);
+
     return NextResponse.json({
       batch,
-      creatives: creatives ?? [],
+      creatives: ordered,
     });
   } catch (error) {
     console.error('GET /api/clients/[id]/ad-creatives/batches/[batchId] error:', error);

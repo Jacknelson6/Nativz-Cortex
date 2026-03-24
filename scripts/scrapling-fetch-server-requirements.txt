@@ -1,0 +1,3 @@
+# pip install -r scripts/scrapling-fetch-server-requirements.txt
+# scrapling install
+scrapling[fetchers]>=0.4.0,<0.5

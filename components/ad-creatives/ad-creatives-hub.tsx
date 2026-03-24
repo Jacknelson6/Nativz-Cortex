@@ -13,14 +13,19 @@ import { TemplateCatalog } from './template-catalog';
 import { AdWizard } from './ad-wizard';
 import { BulkTemplateImport } from './bulk-template-import';
 import { GenerationBanner } from './generation-banner';
+import { FloatingGenerateCreativesButton } from './floating-generate-button';
 import { BrandDnaRequiredPanel } from './brand-dna-required-panel';
 import { BrandDnaTabReadyPanel } from './brand-dna-tab-ready-panel';
 import { Dialog } from '@/components/ui/dialog';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
 import type { AdCreative } from '@/lib/ad-creatives/types';
 import type { AdBatchPlaceholderConfig } from '@/lib/ad-creatives/placeholder-config';
-import type { RecentClient } from '@/app/admin/ad-creatives/page';
+import type { RecentClient } from '@/lib/ad-creatives/recent-client';
 import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
+import {
+  NATIVZ_BRAND_DNA_UPDATED_EVENT,
+  type NativzBrandDnaUpdatedDetail,
+} from '@/lib/brand-dna/brand-dna-updated-event';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,6 +64,10 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const brandRef = useRef<ScrapedBrand | null>(null);
+  const brandContextSourceRef = useRef<BrandContextSource | null>(null);
+  const clientsRef = useRef(clients);
+  clientsRef.current = clients;
 
   const clearBrandPoll = useCallback(() => {
     if (pollIntervalRef.current) {
@@ -78,7 +87,6 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
   const [scanning, setScanning] = useState(false);
   const [brand, setBrand] = useState<ScrapedBrand | null>(null);
   const [scrapedProducts, setScrapedProducts] = useState<ScrapedProduct[]>([]);
-  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [clientId, setClientId] = useState<string | null>(null);
   const [brandContextSource, setBrandContextSource] = useState<BrandContextSource | null>(null);
 
@@ -91,7 +99,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
   // Tab state (only shown after context is set)
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [templateRefreshKey, setTemplateRefreshKey] = useState(0);
-  const [galleryEmptyForCta, setGalleryEmptyForCta] = useState(false);
+  const [brandContextRefreshKey, setBrandContextRefreshKey] = useState(0);
 
   const selectedClient = clients.find((c) => c.id === clientId);
   const hasContext = brand !== null || clientId !== null;
@@ -134,6 +142,72 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     [router, pathname, searchParams, resolvedClientId, clientDnaReady],
   );
 
+  useEffect(() => {
+    brandRef.current = brand;
+    brandContextSourceRef.current = brandContextSource;
+  }, [brand, brandContextSource]);
+
+  useEffect(() => {
+    function onBrandDnaUpdated(e: Event) {
+      const d = (e as CustomEvent<NativzBrandDnaUpdatedDetail>).detail;
+      if (!d?.clientId) return;
+      if (d.clientId === clientId || d.clientId === resolvedClientId) {
+        setBrand(null);
+        setBrandContextSource(null);
+        setBrandContextRefreshKey((k) => k + 1);
+      }
+    }
+    window.addEventListener(NATIVZ_BRAND_DNA_UPDATED_EVENT, onBrandDnaUpdated);
+    return () => window.removeEventListener(NATIVZ_BRAND_DNA_UPDATED_EVENT, onBrandDnaUpdated);
+  }, [clientId, resolvedClientId]);
+
+  const prevAdWizardOpen = useRef(false);
+  useEffect(() => {
+    if (adWizardOpen && !prevAdWizardOpen.current) {
+      setBrandContextRefreshKey((k) => k + 1);
+    }
+    prevAdWizardOpen.current = adWizardOpen;
+  }, [adWizardOpen]);
+
+  const pollForBrandContext = useCallback(
+    (pollClientId: string) => {
+      clearBrandPoll();
+      pollIntervalRef.current = setInterval(async () => {
+        try {
+          const params = new URLSearchParams();
+          params.set('clientId', pollClientId);
+          const res = await fetch(`/api/ad-creatives/crawl-brand?${params.toString()}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.status === 'ready') {
+            setBrand((prev) => (data.brand != null ? data.brand : prev));
+            setScrapedProducts((prev) =>
+              Array.isArray(data.products) && data.products.length > 0 ? data.products : prev,
+            );
+            if (data.source) setBrandContextSource(data.source as BrandContextSource);
+            setScanning(false);
+            clearBrandPoll();
+          } else if (data.status === 'failed') {
+            toast.error(typeof data.error === 'string' ? data.error : 'Brand DNA generation failed');
+            setScanning(false);
+            clearBrandPoll();
+          }
+        } catch {
+          // Keep polling
+        }
+      }, 3000);
+
+      pollTimeoutRef.current = setTimeout(() => {
+        clearBrandPoll();
+        setScanning(false);
+        toast.message(
+          'Brand DNA is still processing. You can leave this page and come back, or refresh in a few minutes.',
+        );
+      }, 300_000);
+    },
+    [clearBrandPoll],
+  );
+
   // ---------------------------------------------------------------------------
   // Scan brand (uses new crawl-brand API with knowledge caching)
   // ---------------------------------------------------------------------------
@@ -152,7 +226,6 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     setScanning(true);
     setBrand(null);
     setScrapedProducts([]);
-    setMediaUrls([]);
     setBrandContextSource(null);
 
     try {
@@ -184,13 +257,11 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
       if (data.status === 'cached' || data.status === 'ready') {
         setBrand(data.brand ?? null);
         setScrapedProducts(data.products ?? []);
-        setMediaUrls(data.mediaUrls ?? []);
         setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
         setScanning(false);
       } else if (data.status === 'generating') {
         setBrand(data.brand ?? null);
         setScrapedProducts(data.products ?? []);
-        setMediaUrls(data.mediaUrls ?? []);
         setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
         const pollId = (data.clientId as string) ?? null;
         if (pollId) pollForBrandContext(pollId);
@@ -209,6 +280,7 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
 
   async function handleClientSelect(id: string | null) {
     clearBrandPoll();
+    setScanning(false);
     setClientId(id);
     if (!id) return;
 
@@ -216,7 +288,6 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     setBrand(null);
     setStartQuery('');
     setScrapedProducts([]);
-    setMediaUrls([]);
     setBrandContextSource(null);
 
     const client = clients.find((c) => c.id === id);
@@ -231,98 +302,88 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
     nextParams.set('tab', nextTab);
     router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
 
-    // Auto-scan client's website URL for brand context
     const url = client?.website_url;
     if (!url?.trim()) {
       toast.message(
         "Add a website URL on this client's profile (or finish Brand DNA) to load brand context here.",
       );
-      return;
     }
+  }
 
-    setScanning(true);
-    try {
-      const res = await fetch('/api/ad-creatives/crawl-brand', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, clientId: id }),
-      });
+  useEffect(() => {
+    if (!adWizardOpen || !resolvedClientId) return;
 
-      const data = await res.json().catch(() => ({}));
+    const client = clientsRef.current.find((c) => c.id === resolvedClientId);
+    const url = client?.website_url?.trim();
 
-      if (!res.ok) {
-        toast.error(typeof data.error === 'string' ? data.error : 'Could not load brand context');
+    let cancelled = false;
+
+    async function loadWizardContext() {
+      if (!url) {
+        toast.message(
+          "Add a website URL on this client's profile (or finish Brand DNA) to load brand context for the wizard.",
+        );
         setScanning(false);
         return;
       }
 
-      if (data.clientId && data.clientId !== id) setClientId(data.clientId as string);
-
-      if (data.status === 'cached' || data.status === 'ready') {
-        setBrand(data.brand ?? null);
-        setScrapedProducts(data.products ?? []);
-        setMediaUrls(data.mediaUrls ?? []);
-        setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
-        setScanning(false);
-      } else if (data.status === 'generating') {
-        setBrand(data.brand ?? null);
-        setScrapedProducts(data.products ?? []);
-        setMediaUrls(data.mediaUrls ?? []);
-        setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
-        pollForBrandContext((data.clientId as string) ?? id);
-      } else {
-        setScanning(false);
-      }
-    } catch {
-      toast.error('Could not load brand context');
-      setScanning(false);
-    }
-  }
-
-  function pollForBrandContext(pollClientId: string) {
-    clearBrandPoll();
-    pollIntervalRef.current = setInterval(async () => {
+      setScanning(true);
       try {
-        const params = new URLSearchParams();
-        params.set('clientId', pollClientId);
-        const res = await fetch(`/api/ad-creatives/crawl-brand?${params.toString()}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.status === 'ready') {
-          // Unstick poll may return ready with null brand when guideline lags; keep quick-scrape fallback
-          setBrand((prev) => (data.brand != null ? data.brand : prev));
-          setScrapedProducts((prev) =>
-            Array.isArray(data.products) && data.products.length > 0 ? data.products : prev,
-          );
-          setMediaUrls((prev) =>
-            Array.isArray(data.mediaUrls) && data.mediaUrls.length > 0 ? data.mediaUrls : prev,
-          );
-          if (data.source) setBrandContextSource(data.source as BrandContextSource);
+        const res = await fetch('/api/ad-creatives/crawl-brand', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, clientId: resolvedClientId }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+
+        if (!res.ok) {
+          toast.error(typeof data.error === 'string' ? data.error : 'Could not load brand context');
           setScanning(false);
-          clearBrandPoll();
-        } else if (data.status === 'failed') {
-          toast.error(typeof data.error === 'string' ? data.error : 'Brand DNA generation failed');
+          return;
+        }
+
+        if (data.clientId && data.clientId !== resolvedClientId) {
+          setClientId(data.clientId as string);
+        }
+
+        if (data.status === 'cached' || data.status === 'ready') {
+          setBrand(data.brand ?? null);
+          setScrapedProducts(data.products ?? []);
+          setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
           setScanning(false);
-          clearBrandPoll();
+        } else if (data.status === 'generating') {
+          setBrand(data.brand ?? null);
+          setScrapedProducts(data.products ?? []);
+          setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
+          pollForBrandContext((data.clientId as string) ?? resolvedClientId);
+        } else {
+          setScanning(false);
         }
       } catch {
-        // Keep polling
+        if (!cancelled) {
+          toast.error('Could not load brand context');
+          setScanning(false);
+        }
       }
-    }, 3000);
+    }
 
-    pollTimeoutRef.current = setTimeout(() => {
+    void loadWizardContext();
+
+    return () => {
+      cancelled = true;
       clearBrandPoll();
       setScanning(false);
-      toast.message('Brand DNA is still processing. You can leave this page and come back, or refresh in a few minutes.');
-    }, 300_000);
-  }
+    };
+  }, [adWizardOpen, resolvedClientId, brandContextRefreshKey, clearBrandPoll, pollForBrandContext]);
 
   function handleReset() {
     clearBrandPoll();
+    setScanning(false);
     setBrand(null);
     setStartQuery('');
     setScrapedProducts([]);
-    setMediaUrls([]);
     setClientId(null);
     setActiveBatchId(null);
     setPlaceholderConfig(null);
@@ -447,33 +508,18 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
                 </div>
               </div>
 
-              {activeTab === 'gallery' && resolvedClientId && (
+              {activeTab === 'gallery' && resolvedClientId && !clientDnaReady && (
                 <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
-                  {clientDnaReady ? (
-                    !galleryEmptyForCta ? (
-                      <Button
-                        type="button"
-                        size="lg"
-                        shape="pill"
-                        className="w-full shadow-lg shadow-accent/15 sm:w-auto"
-                        onClick={() => setAdWizardOpen(true)}
-                      >
-                        <Sparkles size={18} strokeWidth={1.75} />
-                        Generate creatives
-                      </Button>
-                    ) : null
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      shape="pill"
-                      className="w-full border-white/15 bg-background/30 backdrop-blur-sm sm:w-auto"
-                      onClick={() => setTab('generate')}
-                    >
-                      <Dna size={16} />
-                      Finish brand kit
-                    </Button>
-                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    shape="pill"
+                    className="w-full border-white/15 bg-background/30 backdrop-blur-sm sm:w-auto"
+                    onClick={() => setTab('generate')}
+                  >
+                    <Dna size={16} />
+                    Finish brand kit
+                  </Button>
                 </div>
               )}
             </div>
@@ -505,10 +551,8 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
         </div>
       </div>
 
-      {/* Active generation banner */}
-      {resolvedClientId && (
-        <GenerationBanner clientId={resolvedClientId} onViewGallery={() => setTab('gallery')} />
-      )}
+      {/* In-flight batch notice — hidden on gallery (skeleton grid shows progress). */}
+      {resolvedClientId && activeTab !== 'gallery' && <GenerationBanner clientId={resolvedClientId} />}
 
       {/* Crawl / DNA poll notice — only on gallery or templates; Brand DNA tab has its own panels, and a saved kit makes this copy redundant */}
       {resolvedClientId &&
@@ -585,10 +629,13 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
             setPlaceholderConfig(null);
           }}
           onCreateMoreLikeThis={clientDnaReady ? handleCreateMoreLikeThis : undefined}
-          onGalleryEmptyForCtaChange={setGalleryEmptyForCta}
-          onOpenGenerateWizard={clientDnaReady ? () => setAdWizardOpen(true) : undefined}
         />
       )}
+
+      <FloatingGenerateCreativesButton
+        visible={activeTab === 'gallery' && !!resolvedClientId && clientDnaReady}
+        onClick={() => setAdWizardOpen(true)}
+      />
       {activeTab === 'gallery' && !resolvedClientId && (
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
           <p className="text-sm text-text-muted">Gallery is available for saved clients. Generated ads will appear here.</p>
@@ -605,11 +652,13 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
       <Dialog
         open={adWizardOpen && !!resolvedClientId}
         onClose={() => {
+          clearBrandPoll();
+          setScanning(false);
           setAdWizardOpen(false);
           setWizardSeedCreative(null);
         }}
         maxWidth="full"
-        className="max-h-[min(92vh,940px)] sm:max-w-[min(96vw,1440px)]"
+        className="max-h-[min(92vh,940px)] sm:max-w-6xl"
         bodyClassName="flex max-h-[min(92vh,940px)] flex-col overflow-hidden p-0"
       >
         <div className="flex flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
@@ -623,10 +672,8 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
           ) : (
             <AdWizard
               clientId={resolvedClientId!}
-              clientSlug={resolvedClient?.slug}
               initialBrand={brand ?? undefined}
               initialProducts={scrapedProducts}
-              initialMediaUrls={mediaUrls}
               brandContextSource={brandContextSource ?? undefined}
               seedCreative={wizardSeedCreative}
               onGenerationStart={handleGenerationStart}

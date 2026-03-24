@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { DEFAULT_SECTION_ORDER, DEFAULT_VISIBLE_SECTIONS } from '@/lib/benchmarks/sections';
 
 interface PresentationItem {
   id: string;
@@ -101,8 +102,8 @@ export default function PresentationsPage() {
         body.audit_data = { profiles: [], competitors: [], projections: {}, step: 'wizard' };
       } else if (type === 'benchmarks') {
         body.audit_data = {
-          visible_sections: ['CH-003', 'CH-005', 'CH-006', 'CH-007', 'CH-008', 'CH-009', 'CH-010', 'CH-011', 'CH-012'],
-          section_order: ['CH-003', 'CH-005', 'CH-006', 'CH-007', 'CH-008', 'CH-009', 'CH-010', 'CH-011', 'CH-012'],
+          visible_sections: [...DEFAULT_VISIBLE_SECTIONS],
+          section_order: [...DEFAULT_SECTION_ORDER],
           active_vertical_filter: null,
         };
       } else if (type === 'prospect_audit') {

@@ -11,6 +11,7 @@ import {
   Zap,
   Eye,
   LayoutGrid,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -18,9 +19,7 @@ import { BrandEditor } from './brand-editor';
 import { ProductGrid } from './product-grid';
 import { TemplateGrid } from './template-grid';
 import { VariationStrip } from './variation-strip';
-import { BrandMediaPanel } from './brand-media-panel';
-import { BrandDnaGuidelinePanel } from './brand-dna-guideline-panel';
-import { BrandDnaWizardRail } from './brand-dna-wizard-rail';
+import { BrandDnaWizardPanel, BrandDnaWizardRail } from './brand-dna-wizard-rail';
 import { AdCreativeGuidelineUploads } from './ad-creative-guideline-uploads';
 import { PromptReview, type PromptPreviewData } from './prompt-review';
 import { BatchCtaField } from './batch-cta-field';
@@ -49,8 +48,16 @@ import { NanoBananaTemplateGrid } from './nano-banana-template-grid';
 import type { NanoCatalogListItem } from '@/lib/ad-creatives/nano-banana/to-wizard-template';
 import { nanoCatalogItemToWizardTemplate } from '@/lib/ad-creatives/nano-banana/to-wizard-template';
 import type { AdBatchPlaceholderConfig } from '@/lib/ad-creatives/placeholder-config';
+import {
+  aggregateSlotOrderToGlobalVariations,
+  buildMetaPerformanceSlotOrder,
+  NANO_BULK_META_STYLE_DIRECTION,
+} from '@/lib/ad-creatives/nano-banana/bulk-presets';
 
 const WIZARD_ASPECT_RATIOS = new Set<AspectRatio>(['1:1', '9:16', '4:5']);
+const NANO_BULK_MIN = 1;
+const NANO_BULK_MAX = 200;
+const MAX_NANO_PRODUCT_IMAGE_URLS = 12;
 
 function buildNanoGlobalVariations(
   selectedIds: Set<string>,
@@ -85,6 +92,52 @@ function firstSelectedProductImageUrl(
   return undefined;
 }
 
+function collectValidProductImageUrls(
+  scrapedProducts: ScrapedProduct[],
+  selectedProductIndices: Set<number>,
+  max: number,
+): string[] {
+  const sorted = [...selectedProductIndices].sort((a, b) => a - b);
+  const out: string[] = [];
+  for (const i of sorted) {
+    const u = scrapedProducts[i]?.imageUrl?.trim();
+    if (!u) continue;
+    try {
+      const parsed = new URL(u);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') continue;
+      out.push(u);
+      if (out.length >= max) break;
+    } catch {
+      /* skip */
+    }
+  }
+  return out;
+}
+
+/** Same order as {@link collectValidProductImageUrls} so per-product CTA/offer align with rotated images. */
+function selectedProductsWithValidImageUrls(
+  scrapedProducts: ScrapedProduct[],
+  selectedProductIndices: Set<number>,
+  max: number,
+): ScrapedProduct[] {
+  const sorted = [...selectedProductIndices].sort((a, b) => a - b);
+  const out: ScrapedProduct[] = [];
+  for (const i of sorted) {
+    const p = scrapedProducts[i];
+    const u = p?.imageUrl?.trim();
+    if (!p || !u) continue;
+    try {
+      const parsed = new URL(u);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') continue;
+      out.push(p);
+      if (out.length >= max) break;
+    } catch {
+      /* skip */
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -95,12 +148,8 @@ interface AdWizardProps {
   clientId: string;
   initialBrand?: ScrapedBrand;
   initialProducts?: ScrapedProduct[];
-  /** Image URLs discovered during site crawl (optional). */
-  initialMediaUrls?: string[];
   /** Set when hub loaded context from Brand DNA vs cache vs live scrape. */
   brandContextSource?: BrandContextSource;
-  /** For “Edit in Brand DNA” link in the inline guideline panel. */
-  clientSlug?: string;
   /** When set (e.g. gallery “Create more like this”), wizard pre-fills from this creative. */
   seedCreative?: AdCreative | null;
   onGenerationStart?: (batchId: string, placeholderConfig: AdBatchPlaceholderConfig) => void;
@@ -120,9 +169,7 @@ export function AdWizard({
   clientId,
   initialBrand,
   initialProducts,
-  initialMediaUrls,
   brandContextSource,
-  clientSlug,
   seedCreative,
   onGenerationStart,
 }: AdWizardProps) {
@@ -133,7 +180,13 @@ export function AdWizard({
   const productDefaultsAppliedRef = useRef(false);
 
   const productsFingerprint = useMemo(
-    () => initialProducts?.map((p) => `${p.name}\u0000${p.imageUrl ?? ''}`).join('\n') ?? '',
+    () =>
+      initialProducts
+        ?.map(
+          (p) =>
+            `${p.name}\u0000${p.imageUrl ?? ''}\u0000${p.cta ?? ''}\u0000${p.offer ?? ''}`,
+        )
+        .join('\n') ?? '',
     [initialProducts],
   );
 
@@ -154,6 +207,12 @@ export function AdWizard({
   const [nanoCatalog, setNanoCatalog] = useState<NanoCatalogListItem[]>([]);
   const [loadingNanoCatalog, setLoadingNanoCatalog] = useState(false);
 
+  /** Same weighted interleaved mix as `scripts/generate-goldback-meta-100.ts` (scalable N). */
+  const [nanoBulkMixEnabled, setNanoBulkMixEnabled] = useState(false);
+  const [nanoBulkAdCount, setNanoBulkAdCount] = useState(100);
+  const [nanoBulkRotateImages, setNanoBulkRotateImages] = useState(false);
+  const [nanoBulkMetaModifier, setNanoBulkMetaModifier] = useState(true);
+
   // Copy & format
   const [copyMode, setCopyMode] = useState<'ai' | 'manual'>('ai');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
@@ -165,8 +224,6 @@ export function AdWizard({
   const [batchCta, setBatchCta] = useState(DEFAULT_BATCH_CTA);
 
   // Brand media
-  const [mediaUrls, setMediaUrls] = useState<string[]>(initialMediaUrls ?? []);
-  const [selectedMediaUrls, setSelectedMediaUrls] = useState<Set<string>>(new Set());
   const [flowIdx, setFlowIdx] = useState(0);
   const [offerText, setOfferText] = useState('');
 
@@ -208,17 +265,6 @@ export function AdWizard({
       preferred.size > 0 ? preferred : new Set(initialProducts.map((_, i) => i)),
     );
   }, [initialProducts, productsFingerprint]);
-
-  useEffect(() => {
-    if (initialMediaUrls && initialMediaUrls.length > 0) {
-      setMediaUrls(initialMediaUrls);
-      setSelectedMediaUrls((prev) => {
-        const next = new Set(prev);
-        for (const u of initialMediaUrls) next.add(u);
-        return next;
-      });
-    }
-  }, [initialMediaUrls]);
 
   useEffect(() => {
     if (!seedCreative) {
@@ -339,6 +385,10 @@ export function AdWizard({
     void fetchNanoCatalog();
   }, [fetchNanoCatalog]);
 
+  useEffect(() => {
+    if (templateSource !== 'nano') setNanoBulkMixEnabled(false);
+  }, [templateSource]);
+
   function toggleTemplate(id: string) {
     setSelectedTemplateIds((prev) => {
       const next = new Set(prev);
@@ -388,29 +438,18 @@ export function AdWizard({
   }
 
   function addProduct(product: ScrapedProduct) {
-    setScrapedProducts((prev) => [...prev, product]);
-    setSelectedProductIndices((prev) => new Set([...prev, scrapedProducts.length]));
-  }
-
-  // ---------------------------------------------------------------------------
-  // Brand media
-  // ---------------------------------------------------------------------------
-
-  function toggleMediaUrl(url: string) {
-    setSelectedMediaUrls((prev) => {
-      const next = new Set(prev);
-      if (next.has(url)) next.delete(url);
-      else next.add(url);
-      return next;
+    setScrapedProducts((prev) => {
+      const idx = prev.length;
+      setSelectedProductIndices((sel) => new Set([...sel, idx]));
+      return [...prev, product];
     });
   }
 
-  function handleMediaUpload(urls: string[]) {
-    setMediaUrls((prev) => [...prev, ...urls]);
-    // Auto-select newly uploaded media
-    setSelectedMediaUrls((prev) => {
-      const next = new Set(prev);
-      for (const url of urls) next.add(url);
+  function updateProduct(index: number, patch: Partial<ScrapedProduct>) {
+    setScrapedProducts((prev) => {
+      if (index < 0 || index >= prev.length) return prev;
+      const next = [...prev];
+      next[index] = { ...next[index], ...patch };
       return next;
     });
   }
@@ -420,7 +459,8 @@ export function AdWizard({
   // ---------------------------------------------------------------------------
 
   async function handlePreviewPrompts() {
-    if (!brand || selectedTemplateIds.size === 0) return;
+    const needsManualTemplatePick = !(templateSource === 'nano' && nanoBulkMixEnabled);
+    if (!brand || (needsManualTemplatePick && selectedTemplateIds.size === 0)) return;
     if (scrapedProducts.length > 0 && selectedProductIndices.size === 0) {
       toast.error('Select at least one product before previewing prompts.');
       return;
@@ -433,10 +473,25 @@ export function AdWizard({
         count: variations.get(t.id) ?? 2,
       }));
 
+      const bulkCountClamped =
+        templateSource === 'nano' && nanoBulkMixEnabled
+          ? Math.min(NANO_BULK_MAX, Math.max(NANO_BULK_MIN, nanoBulkAdCount))
+          : null;
+      const bulkSlotOrder =
+        bulkCountClamped !== null ? buildMetaPerformanceSlotOrder(bulkCountClamped) : null;
       const globalTemplateVariations =
         templateSource === 'nano'
-          ? buildNanoGlobalVariations(selectedTemplateIds, variations, nanoCatalog)
+          ? bulkSlotOrder
+            ? aggregateSlotOrderToGlobalVariations(bulkSlotOrder)
+            : buildNanoGlobalVariations(selectedTemplateIds, variations, nanoCatalog)
           : null;
+
+      const nanoStyleDirection =
+        templateSource === 'nano' && nanoBulkMixEnabled && nanoBulkMetaModifier
+          ? repeatStyleDirection?.trim()
+            ? `${repeatStyleDirection.trim()}\n\n${NANO_BULK_META_STYLE_DIRECTION}`
+            : NANO_BULK_META_STYLE_DIRECTION
+          : repeatStyleDirection?.trim() || undefined;
 
       const res = await fetch(`/api/clients/${clientId}/ad-creatives/preview-prompts`, {
         method: 'POST',
@@ -445,6 +500,7 @@ export function AdWizard({
           templateSource === 'nano'
             ? {
                 globalTemplateVariations,
+                ...(bulkSlotOrder?.length ? { globalTemplateSlotOrder: bulkSlotOrder } : {}),
                 productService: effectiveProductService || brand.name,
                 offer: offerText,
                 aspectRatio,
@@ -458,9 +514,7 @@ export function AdWizard({
                   ).slice(0, 300),
                   cta: (manualCta.trim() || 'Learn more').slice(0, 100),
                 } : undefined,
-                ...(repeatStyleDirection?.trim()
-                  ? { styleDirectionGlobal: repeatStyleDirection.trim() }
-                  : {}),
+                ...(nanoStyleDirection ? { styleDirectionGlobal: nanoStyleDirection } : {}),
                 ...(copyMode === 'ai'
                   ? { batchCta: (batchCta.trim() || DEFAULT_BATCH_CTA).slice(0, 30) }
                   : {}),
@@ -519,10 +573,22 @@ export function AdWizard({
     return templates.filter((t) => selectedTemplateIds.has(t.id));
   }, [templateSource, selectedTemplateIds, templates, nanoCatalog]);
 
-  const totalAds = selectedTemplates.reduce((sum, t) => sum + (variations.get(t.id) ?? 2), 0);
+  const totalAds = useMemo(() => {
+    if (templateSource === 'nano' && nanoBulkMixEnabled) {
+      return Math.min(NANO_BULK_MAX, Math.max(NANO_BULK_MIN, nanoBulkAdCount));
+    }
+    return selectedTemplates.reduce((sum, t) => sum + (variations.get(t.id) ?? 2), 0);
+  }, [
+    templateSource,
+    nanoBulkMixEnabled,
+    nanoBulkAdCount,
+    selectedTemplates,
+    variations,
+  ]);
 
   async function handleGenerate(editedPreviews?: PromptPreviewData[] | null) {
-    if (!brand || selectedTemplateIds.size === 0) return;
+    const needsManualTemplatePick = !(templateSource === 'nano' && nanoBulkMixEnabled);
+    if (!brand || (needsManualTemplatePick && selectedTemplateIds.size === 0)) return;
 
     if (scrapedProducts.length > 0 && selectedProductIndices.size === 0) {
       toast.error('Select at least one product, or go back and adjust your catalog.');
@@ -548,7 +614,10 @@ export function AdWizard({
     setGenerating(true);
 
     try {
-      const selectedProducts = Array.from(selectedProductIndices).map((i) => scrapedProducts[i]).filter(Boolean);
+      const sortedSelectedIndices = [...selectedProductIndices].sort((a, b) => a - b);
+      const selectedProducts = sortedSelectedIndices
+        .map((i) => scrapedProducts[i])
+        .filter((p): p is ScrapedProduct => Boolean(p));
 
       if (selectedProducts.length > AD_GENERATE_MAX_PRODUCTS && templateSource !== 'nano') {
         toast.message(
@@ -556,8 +625,6 @@ export function AdWizard({
         );
       }
       const productsForBatch = selectedProducts.slice(0, AD_GENERATE_MAX_PRODUCTS);
-      const productsForRequest =
-        templateSource === 'nano' ? productsForBatch.slice(0, 1) : productsForBatch;
 
       function sanitizeProductImageUrl(u: string | null): string | null {
         if (!u?.trim()) return null;
@@ -570,14 +637,40 @@ export function AdWizard({
         }
       }
 
-      const productConfigs = productsForRequest.map((p) => ({
+      const productsWithValidImages = selectedProductsWithValidImageUrls(
+        scrapedProducts,
+        selectedProductIndices,
+        MAX_NANO_PRODUCT_IMAGE_URLS,
+      );
+
+      const nanoProductUrls = collectValidProductImageUrls(
+        scrapedProducts,
+        selectedProductIndices,
+        MAX_NANO_PRODUCT_IMAGE_URLS,
+      );
+      const useNanoImageRotation =
+        templateSource === 'nano' &&
+        nanoBulkMixEnabled &&
+        nanoBulkRotateImages &&
+        nanoProductUrls.length > 1;
+
+      const productConfigsSource =
+        templateSource === 'nano' && nanoProductUrls.length > 0
+          ? useNanoImageRotation
+            ? productsWithValidImages
+            : productsWithValidImages.length > 0
+              ? [productsWithValidImages[0]]
+              : productsForBatch.slice(0, 1)
+          : productsForBatch;
+
+      const productConfigs = productConfigsSource.map((p) => ({
         product: {
           name: p.name.slice(0, 200),
           imageUrl: sanitizeProductImageUrl(p.imageUrl),
           description: (p.description ?? '').slice(0, 8000),
         },
-        offer: offerText,
-        cta: '',
+        offer: (p.offer?.trim() ? p.offer.trim() : offerText).slice(0, 300),
+        cta: (p.cta?.trim() ?? '').slice(0, 100),
       }));
 
       const templateVariations = selectedTemplates.map((t) => ({
@@ -585,9 +678,18 @@ export function AdWizard({
         count: variations.get(t.id) ?? 2,
       }));
 
+      const bulkCountClamped =
+        templateSource === 'nano' && nanoBulkMixEnabled
+          ? Math.min(NANO_BULK_MAX, Math.max(NANO_BULK_MIN, nanoBulkAdCount))
+          : null;
+      const bulkSlotOrder =
+        bulkCountClamped !== null ? buildMetaPerformanceSlotOrder(bulkCountClamped) : null;
+
       const nanoGtv =
         templateSource === 'nano'
-          ? buildNanoGlobalVariations(selectedTemplateIds, variations, nanoCatalog)
+          ? bulkSlotOrder
+            ? aggregateSlotOrderToGlobalVariations(bulkSlotOrder)
+            : buildNanoGlobalVariations(selectedTemplateIds, variations, nanoCatalog)
           : null;
 
       const placeholderConfig: AdBatchPlaceholderConfig =
@@ -595,13 +697,22 @@ export function AdWizard({
           ? {
               brandColors: brand.colors.slice(0, 4),
               skeletonOnly: true,
-              templateThumbnails: nanoGtv.flatMap((tv) =>
-                Array.from({ length: tv.count }, (_, i) => ({
-                  templateId: tv.slug,
-                  imageUrl: '',
-                  variationIndex: i,
-                })),
-              ),
+              templateThumbnails: bulkSlotOrder?.length
+                ? (() => {
+                    const seen = new Map<string, number>();
+                    return bulkSlotOrder.map((slug) => {
+                      const i = seen.get(slug) ?? 0;
+                      seen.set(slug, i + 1);
+                      return { templateId: slug, imageUrl: '', variationIndex: i };
+                    });
+                  })()
+                : nanoGtv.flatMap((tv) =>
+                    Array.from({ length: tv.count }, (_, i) => ({
+                      templateId: tv.slug,
+                      imageUrl: '',
+                      variationIndex: i,
+                    })),
+                  ),
             }
           : {
               brandColors: brand.colors.slice(0, 4),
@@ -624,7 +735,7 @@ export function AdWizard({
               productService:
                 effectiveProductService ||
                 brand.name ||
-                productsForRequest.map((p) => p.name).join(', ') ||
+                productsForBatch.map((p) => p.name).join(', ') ||
                 'Product',
               offer: offerText,
               onScreenTextMode: copyMode === 'ai' ? 'ai_generate' : 'manual',
@@ -632,7 +743,15 @@ export function AdWizard({
               products: productConfigs,
               brandUrl: brand.url,
               placeholderConfig,
-              ...(nanoProductImageUrl ? { productImageUrls: [nanoProductImageUrl] } : {}),
+              ...(nanoProductUrls.length > 0
+                ? {
+                    productImageUrls: useNanoImageRotation ? nanoProductUrls : [nanoProductUrls[0]],
+                  }
+                : nanoProductImageUrl
+                  ? { productImageUrls: [nanoProductImageUrl] }
+                  : {}),
+              ...(bulkSlotOrder?.length ? { globalTemplateSlotOrder: bulkSlotOrder } : {}),
+              ...(useNanoImageRotation ? { rotateProductImageUrls: true } : {}),
             }
           : {
               templateVariations,
@@ -650,7 +769,12 @@ export function AdWizard({
               brandLayoutMode,
             };
 
-      if (repeatStyleDirection?.trim()) {
+      if (templateSource === 'nano' && nanoBulkMixEnabled && nanoBulkMetaModifier) {
+        const base = repeatStyleDirection?.trim();
+        body.styleDirectionGlobal = base
+          ? `${base}\n\n${NANO_BULK_META_STYLE_DIRECTION}`
+          : NANO_BULK_META_STYLE_DIRECTION;
+      } else if (repeatStyleDirection?.trim()) {
         body.styleDirectionGlobal = repeatStyleDirection.trim();
       }
 
@@ -714,13 +838,6 @@ export function AdWizard({
 
   const currentStep = AD_WIZARD_STEP_META[flowIdx] ?? AD_WIZARD_STEP_META[0];
 
-  const productsDnaAside =
-    brandContextSource === 'brand_dna' && currentStep.id === 'products' ? (
-      <p className="text-[11px] text-accent-text/90 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 max-w-[220px] leading-snug">
-        Product list is synced from Brand DNA. Edit the catalog there for lasting changes.
-      </p>
-    ) : undefined;
-
   function canAdvanceFromCurrentStep(): boolean {
     switch (currentStep.id) {
       case 'brand':
@@ -730,6 +847,7 @@ export function AdWizard({
         return selectedProductIndices.size > 0;
       case 'templates':
         if (templateSource === 'nano') {
+          if (nanoBulkMixEnabled) return !loadingNanoCatalog;
           return selectedTemplateIds.size > 0 && !loadingNanoCatalog;
         }
         return selectedTemplateIds.size > 0 && !loadingTemplates;
@@ -740,6 +858,9 @@ export function AdWizard({
 
   const aspectLabel = RATIO_OPTIONS.find((r) => r.value === aspectRatio)?.label ?? aspectRatio;
 
+  const showBrandDnaStickyRail =
+    brandContextSource === 'brand_dna' && currentStep.id !== 'brand';
+
   // ---------------------------------------------------------------------------
   // Render — one step at a time
   // ---------------------------------------------------------------------------
@@ -748,7 +869,9 @@ export function AdWizard({
     <div
       className={
         brandContextSource === 'brand_dna'
-          ? 'flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px] lg:gap-8 lg:items-start w-full max-w-[1600px] mx-auto px-1'
+          ? showBrandDnaStickyRail
+            ? 'flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(260px,300px)] xl:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:items-start w-full mx-auto px-1'
+            : 'w-full max-w-5xl mx-auto px-1 space-y-6'
           : 'w-full max-w-3xl mx-auto px-1 space-y-6'
       }
     >
@@ -756,60 +879,40 @@ export function AdWizard({
         <AdWizardProgress currentIndex={flowIdx} onStepClick={(i) => setFlowIdx(i)} />
 
         <AdWizardShell>
-          <WizardStepHeader
-            title={currentStep.title}
-            description={currentStep.description}
-            aside={productsDnaAside}
-          />
+          <WizardStepHeader title={currentStep.title} description={currentStep.description} />
 
           {currentStep.id === 'brand' && (
             <div className="space-y-8">
-              {brandContextSource === 'brand_dna' && brand && (
-                <p className="text-sm text-text-muted rounded-xl border border-accent/20 bg-accent/[0.07] px-4 py-3 leading-relaxed">
-                  <span className="font-medium text-accent-text">Brand DNA</span>
-                  {' — '}
-                  Colors, logo, and copy cues match your guideline. Adjust in Brand DNA if something looks off.
-                </p>
-              )}
-              {brand ? (
-                <BrandEditor brand={brand} onBrandChange={setBrand} clientId={clientId || undefined} />
-              ) : (
+              {brandContextSource === 'brand_dna' && clientId ? (
+                <BrandDnaWizardPanel variant="inline" clientId={clientId} clientName={brand?.name} />
+              ) : null}
+              {brandContextSource === 'brand_dna' && !brand ? (
                 <div className="rounded-xl border border-dashed border-nativz-border bg-background/40 p-10 text-center">
-                  <p className="text-sm text-text-muted">Waiting for brand scan…</p>
+                  <p className="text-sm text-text-muted">Loading brand context…</p>
                 </div>
-              )}
-              {brand && brandContextSource === 'brand_dna' && clientId && (
-                <BrandDnaGuidelinePanel clientId={clientId} clientSlug={clientSlug} />
-              )}
-              {brand && clientId && (
+              ) : null}
+              {brandContextSource !== 'brand_dna' &&
+                (brand ? (
+                  <BrandEditor brand={brand} onBrandChange={setBrand} clientId={clientId || undefined} />
+                ) : (
+                  <div className="rounded-xl border border-dashed border-nativz-border bg-background/40 p-10 text-center">
+                    <p className="text-sm text-text-muted">Waiting for brand scan…</p>
+                  </div>
+                ))}
+              {clientId && (brandContextSource === 'brand_dna' || brand) ? (
                 <AdCreativeGuidelineUploads clientId={clientId} />
-              )}
-              {brand && mediaUrls.length > 0 && (
-                <div className="pt-6 border-t border-nativz-border/80 space-y-3">
-                  <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Site imagery</p>
-                  <BrandMediaPanel
-                    mediaUrls={mediaUrls}
-                    selectedUrls={selectedMediaUrls}
-                    onToggle={toggleMediaUrl}
-                    onUpload={handleMediaUpload}
-                    clientId={clientId || undefined}
-                  />
-                </div>
-              )}
+              ) : null}
             </div>
           )}
 
           {currentStep.id === 'products' && (
             <ProductGrid
+              clientId={clientId}
               products={scrapedProducts}
               selectedIndices={selectedProductIndices}
               onToggle={toggleProductSelection}
               onAddProduct={addProduct}
-              dataSourceHint={
-                brandContextSource === 'brand_dna'
-                  ? 'Names and images from Brand DNA (structured catalog).'
-                  : undefined
-              }
+              onUpdateProduct={updateProduct}
             />
           )}
 
@@ -823,17 +926,83 @@ export function AdWizard({
                   setVariations(new Map());
                 }}
                 options={[
-                  { value: 'nano' as const, label: 'Nano Banana', icon: Sparkles },
+                  { value: 'nano' as const, label: 'Templates', icon: Sparkles },
                   { value: 'client' as const, label: 'Client library', icon: LayoutGrid },
                 ]}
               />
               {templateSource === 'nano' ? (
-                <NanoBananaTemplateGrid
-                  items={nanoCatalog}
-                  loading={loadingNanoCatalog}
-                  selectedIds={selectedTemplateIds}
-                  onToggle={toggleTemplate}
-                />
+                <div className="space-y-5">
+                  <div className="rounded-xl border border-nativz-border bg-background/40 p-4 space-y-4">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={nanoBulkMixEnabled}
+                        onChange={(e) => setNanoBulkMixEnabled(e.target.checked)}
+                        className="mt-1 rounded border-nativz-border"
+                      />
+                      <span>
+                        <span className="text-sm font-medium text-text-primary">Meta performance mix</span>
+                        <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                          Large weighted batch with the same interleaved template order as the CLI Meta preset (scales to
+                          any count). Manual template picks below are ignored while this is on.
+                        </p>
+                      </span>
+                    </label>
+                    {nanoBulkMixEnabled ? (
+                      <div className="space-y-3 pl-7 border-l border-nativz-border/80">
+                        <div>
+                          <label htmlFor="nano-bulk-count" className="text-xs font-medium text-text-muted">
+                            Number of ads
+                          </label>
+                          <input
+                            id="nano-bulk-count"
+                            type="number"
+                            min={NANO_BULK_MIN}
+                            max={NANO_BULK_MAX}
+                            value={nanoBulkAdCount}
+                            onChange={(e) =>
+                              setNanoBulkAdCount(
+                                Math.min(
+                                  NANO_BULK_MAX,
+                                  Math.max(NANO_BULK_MIN, Number.parseInt(e.target.value, 10) || NANO_BULK_MIN),
+                                ),
+                              )
+                            }
+                            className="mt-1 block w-full max-w-[8rem] rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary tabular-nums focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
+                          />
+                        </div>
+                        <label className="flex items-start gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={nanoBulkRotateImages}
+                            onChange={(e) => setNanoBulkRotateImages(e.target.checked)}
+                            className="mt-0.5 rounded border-nativz-border"
+                          />
+                          <span className="text-sm text-text-secondary">
+                            Rotate product images across ads (select multiple products with valid image URLs)
+                          </span>
+                        </label>
+                        <label className="flex items-start gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={nanoBulkMetaModifier}
+                            onChange={(e) => setNanoBulkMetaModifier(e.target.checked)}
+                            className="mt-0.5 rounded border-nativz-border"
+                          />
+                          <span className="text-sm text-text-secondary">Append Meta feed style direction</span>
+                        </label>
+                      </div>
+                    ) : null}
+                  </div>
+                  {!nanoBulkMixEnabled ? (
+                    <NanoBananaTemplateGrid
+                      items={nanoCatalog}
+                      loading={loadingNanoCatalog}
+                      selectedIds={selectedTemplateIds}
+                      onToggle={toggleTemplate}
+                    />
+                  ) : null}
+                </div>
               ) : loadingTemplates ? (
                 <div className="flex flex-col items-center justify-center gap-3 py-16 text-text-muted">
                   <Loader2 size={28} className="animate-spin opacity-80" />
@@ -998,7 +1167,14 @@ export function AdWizard({
                         : 'Template + JSON prompt'}
                 </p>
                 <p className="text-xs text-text-muted leading-relaxed">
-                  {templateSource === 'nano' && scrapedProducts.length > 0 ? (
+                  {templateSource === 'nano' && nanoBulkMixEnabled ? (
+                    <>
+                      Meta-weighted mix: {totalAds} ads in interleaved order.{' '}
+                      {nanoBulkRotateImages
+                        ? 'Product images rotate when multiple selected products have valid URLs.'
+                        : 'Uses the first selected product image as packshot reference.'}
+                    </>
+                  ) : templateSource === 'nano' && scrapedProducts.length > 0 ? (
                     <>
                       The first selected product with a valid image URL is used as the primary packshot reference. Adjust
                       selection order on the products step if needed.
@@ -1012,12 +1188,18 @@ export function AdWizard({
                 </p>
               </div>
 
-              <VariationStrip
-                templates={selectedTemplates}
-                variations={variations}
-                onVariationChange={handleVariationChange}
-                onRemove={handleRemoveTemplate}
-              />
+              {templateSource === 'nano' && nanoBulkMixEnabled ? (
+                <p className="text-sm text-text-muted">
+                  Variation counts are fixed by the performance mix ({totalAds} slots across 15 global styles).
+                </p>
+              ) : (
+                <VariationStrip
+                  templates={selectedTemplates}
+                  variations={variations}
+                  onVariationChange={handleVariationChange}
+                  onRemove={handleRemoveTemplate}
+                />
+              )}
 
               <div className="rounded-xl border border-nativz-border bg-background/35 p-4 sm:p-5 space-y-4">
                 <div>
@@ -1112,6 +1294,8 @@ export function AdWizard({
           <Button
             type="button"
             variant="outline"
+            size="lg"
+            shape="pill"
             disabled={flowIdx <= 0}
             onClick={() => setFlowIdx((i) => Math.max(0, i - 1))}
           >
@@ -1120,18 +1304,22 @@ export function AdWizard({
           {currentStep.id !== 'generate' ? (
             <Button
               type="button"
+              size="lg"
+              shape="pill"
               disabled={!canAdvanceFromCurrentStep() || flowIdx >= AD_WIZARD_STEP_META.length - 1}
               onClick={() => setFlowIdx((i) => Math.min(AD_WIZARD_STEP_META.length - 1, i + 1))}
+              className="min-w-[10.5rem] shadow-lg shadow-accent/25 ring-1 ring-white/10"
             >
               Continue
+              <ChevronRight size={18} className="shrink-0 opacity-90" aria-hidden />
             </Button>
           ) : null}
         </AdWizardFooter>
       </div>
 
-      {brandContextSource === 'brand_dna' && (
-        <BrandDnaWizardRail clientId={clientId} clientSlug={clientSlug} />
-      )}
+      {showBrandDnaStickyRail ? (
+        <BrandDnaWizardRail clientId={clientId} clientName={brand?.name} />
+      ) : null}
     </div>
   );
 }

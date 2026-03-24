@@ -89,6 +89,8 @@ export interface BrandContextFull {
   creativeReferenceImageUrls: string[];
 }
 
+type BrandContextData = Omit<BrandContext, 'toPromptBlock' | 'toFullContext'>;
+
 // ---------------------------------------------------------------------------
 // In-memory cache (5-minute TTL)
 // ---------------------------------------------------------------------------
@@ -110,11 +112,16 @@ export function invalidateBrandContext(clientId: string): void {
  * Reads from brand_guideline knowledge entry first, falls back to raw client fields.
  * Results are cached for 5 minutes per client.
  */
-export async function getBrandContext(clientId: string): Promise<BrandContext> {
+export async function getBrandContext(
+  clientId: string,
+  opts?: { bypassCache?: boolean },
+): Promise<BrandContext> {
   // Check cache
-  const cached = cache.get(clientId);
-  if (cached && Date.now() < cached.expiry) {
-    return cached.data;
+  if (!opts?.bypassCache) {
+    const cached = cache.get(clientId);
+    if (cached && Date.now() < cached.expiry) {
+      return cached.data;
+    }
   }
 
   const admin = createAdminClient();
@@ -151,19 +158,22 @@ export async function getBrandContext(clientId: string): Promise<BrandContext> {
   }
 
   const guideline = guidelineResult.data as KnowledgeEntry | null;
-  const meta = (guideline?.metadata ?? null) as BrandGuidelineMetadata | null;
-  const prefs = client.preferences as Record<string, unknown> | null;
+  const rawMeta = guideline?.metadata ?? null;
+  const meta = rawMeta
+    ? normalizeHubMetadata(rawMeta as unknown as Record<string, unknown>)
+    : null;
   const supplemental = buildCreativeSupplementFromImportedRows(importedResult.data ?? []);
 
-  let context: BrandContext;
+  let data: BrandContextData;
 
   if (guideline && meta) {
-    // Build from brand guideline
-    context = buildFromGuideline(client, guideline, meta, supplemental);
+    data = buildFromGuidelineData(client, guideline, meta, supplemental);
+    data = await mergeBrandDnaSubnodes(admin, clientId, data);
   } else {
-    // Fallback: build from raw client fields
-    context = buildFromClientFields(client, supplemental);
+    data = buildFromClientFieldsData(client, supplemental);
   }
+
+  const context = attachMethods(data);
 
   // Cache result
   cache.set(clientId, { data: context, expiry: Date.now() + CACHE_TTL_MS });
@@ -243,15 +253,262 @@ function buildCreativeSupplementFromImportedRows(rows: ImportedKnowledgeRow[]): 
 }
 
 // ---------------------------------------------------------------------------
+// Hub metadata + sub-node merge (ad generation reads hub; UI can match sub-nodes)
+// ---------------------------------------------------------------------------
+
+function pickStr(r: Record<string, unknown>, snake: string, camel: string): string | null {
+  const a = r[snake];
+  const b = r[camel];
+  if (typeof a === 'string' && a.trim()) return a.trim();
+  if (typeof b === 'string' && b.trim()) return b.trim();
+  return null;
+}
+
+function pickStrArr(r: Record<string, unknown>, snake: string, camel: string): string[] {
+  const a = r[snake];
+  const b = r[camel];
+  const raw = Array.isArray(a) && a.length > 0 ? a : Array.isArray(b) ? b : [];
+  return (raw as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
+}
+
+/**
+ * Hub `brand_guideline.metadata` should use snake_case; tolerate camelCase or sparse hubs
+ * by filling from alternate keys. Does not replace non-empty snake arrays/strings.
+ */
+function normalizeHubMetadata(raw: Record<string, unknown>): BrandGuidelineMetadata {
+  const base = raw as unknown as BrandGuidelineMetadata;
+  const r = raw;
+
+  const colors = base.colors?.length ? base.colors : Array.isArray(r.colors) ? (r.colors as BrandColor[]) : [];
+  const fonts = base.fonts?.length ? base.fonts : Array.isArray(r.fonts) ? (r.fonts as BrandFont[]) : [];
+  const logos = base.logos?.length ? base.logos : Array.isArray(r.logos) ? (r.logos as BrandLogo[]) : [];
+  const screenshots = base.screenshots?.length
+    ? base.screenshots
+    : Array.isArray(r.screenshots)
+      ? (r.screenshots as BrandScreenshot[])
+      : [];
+  const products = base.products?.length ? base.products : Array.isArray(r.products) ? (r.products as ProductItem[]) : [];
+
+  const designStyle =
+    base.design_style ??
+    (r.design_style as DesignStyle | null | undefined) ??
+    (r.designStyle as DesignStyle | null | undefined) ??
+    null;
+
+  return {
+    ...base,
+    colors,
+    fonts,
+    logos,
+    screenshots,
+    products,
+    design_style: designStyle,
+    tone_primary: base.tone_primary ?? pickStr(r, 'tone_primary', 'tonePrimary'),
+    voice_attributes: base.voice_attributes?.length
+      ? base.voice_attributes
+      : pickStrArr(r, 'voice_attributes', 'voiceAttributes'),
+    messaging_pillars: base.messaging_pillars?.length
+      ? base.messaging_pillars
+      : pickStrArr(r, 'messaging_pillars', 'messagingPillars'),
+    vocabulary_patterns: base.vocabulary_patterns?.length
+      ? base.vocabulary_patterns
+      : pickStrArr(r, 'vocabulary_patterns', 'vocabularyPatterns'),
+    avoidance_patterns: base.avoidance_patterns?.length
+      ? base.avoidance_patterns
+      : pickStrArr(r, 'avoidance_patterns', 'avoidancePatterns'),
+    target_audience_summary:
+      base.target_audience_summary ??
+      pickStr(r, 'target_audience_summary', 'targetAudienceSummary'),
+    competitive_positioning:
+      base.competitive_positioning ??
+      pickStr(r, 'competitive_positioning', 'competitivePositioning'),
+  };
+}
+
+/**
+ * When the hub row is missing fields (partial PATCH, legacy rows, or apply-draft content-only merges),
+ * pull structured slices from Brand DNA category nodes so prompts match what the Brand DNA UI shows.
+ */
+async function mergeBrandDnaSubnodes(
+  admin: ReturnType<typeof createAdminClient>,
+  clientId: string,
+  data: BrandContextData,
+): Promise<BrandContextData> {
+  const { metadata } = data;
+  let { verbalIdentity, visualIdentity, audience, positioning, products } = data;
+
+  const verbalWeak =
+    !verbalIdentity.tonePrimary?.trim() &&
+    verbalIdentity.voiceAttributes.length === 0 &&
+    verbalIdentity.messagingPillars.length === 0 &&
+    verbalIdentity.vocabularyPatterns.length === 0;
+
+  if (verbalWeak) {
+    const { data: row } = await admin
+      .from('client_knowledge_entries')
+      .select('metadata')
+      .eq('client_id', clientId)
+      .eq('type', 'verbal_identity')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const vm = row?.metadata as Record<string, unknown> | undefined;
+    if (vm) {
+      verbalIdentity = {
+        tonePrimary: verbalIdentity.tonePrimary ?? pickStr(vm, 'tone_primary', 'tonePrimary'),
+        voiceAttributes: verbalIdentity.voiceAttributes.length
+          ? verbalIdentity.voiceAttributes
+          : pickStrArr(vm, 'voice_attributes', 'voiceAttributes'),
+        messagingPillars: verbalIdentity.messagingPillars.length
+          ? verbalIdentity.messagingPillars
+          : pickStrArr(vm, 'messaging_pillars', 'messagingPillars'),
+        vocabularyPatterns: verbalIdentity.vocabularyPatterns.length
+          ? verbalIdentity.vocabularyPatterns
+          : pickStrArr(vm, 'vocabulary_patterns', 'vocabularyPatterns'),
+        avoidancePatterns: verbalIdentity.avoidancePatterns.length
+          ? verbalIdentity.avoidancePatterns
+          : pickStrArr(vm, 'avoidance_patterns', 'avoidancePatterns'),
+      };
+    }
+  }
+
+  if (!audience.summary?.trim()) {
+    const { data: row } = await admin
+      .from('client_knowledge_entries')
+      .select('metadata')
+      .eq('client_id', clientId)
+      .eq('type', 'target_audience')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const tm = row?.metadata as Record<string, unknown> | undefined;
+    if (tm && typeof tm.summary === 'string' && tm.summary.trim()) {
+      audience = { summary: tm.summary.trim() };
+    }
+  }
+
+  if (!positioning?.trim()) {
+    const { data: row } = await admin
+      .from('client_knowledge_entries')
+      .select('metadata')
+      .eq('client_id', clientId)
+      .eq('type', 'competitive_positioning')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const pm = row?.metadata as Record<string, unknown> | undefined;
+    const stmt =
+      pm && typeof pm.positioning_statement === 'string' ? pm.positioning_statement.trim() : '';
+    if (stmt) positioning = stmt;
+  }
+
+  if (products.length === 0) {
+    const { data: row } = await admin
+      .from('client_knowledge_entries')
+      .select('metadata')
+      .eq('client_id', clientId)
+      .eq('type', 'product_catalog')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const pm = row?.metadata as Record<string, unknown> | undefined;
+    if (pm && Array.isArray(pm.products) && pm.products.length > 0) {
+      products = pm.products as ProductItem[];
+    }
+  }
+
+  const { data: viRow } = await admin
+    .from('client_knowledge_entries')
+    .select('metadata')
+    .eq('client_id', clientId)
+    .eq('type', 'visual_identity')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const vim = viRow?.metadata as Record<string, unknown> | undefined;
+  const subColors = Array.isArray(vim?.colors) ? (vim.colors as BrandColor[]) : [];
+  const subFonts = Array.isArray(vim?.fonts) ? (vim.fonts as BrandFont[]) : [];
+  const subLogos = Array.isArray(vim?.logos) ? (vim.logos as BrandLogo[]) : [];
+  const subScreenshots = Array.isArray(vim?.screenshots) ? (vim.screenshots as BrandScreenshot[]) : [];
+  const subDesign =
+    (vim?.design_style as DesignStyle | null | undefined) ??
+    (vim?.designStyle as DesignStyle | null | undefined) ??
+    null;
+
+  visualIdentity = {
+    colors: visualIdentity.colors.length > 0 ? visualIdentity.colors : subColors,
+    fonts: visualIdentity.fonts.length > 0 ? visualIdentity.fonts : subFonts,
+    logos: visualIdentity.logos.length > 0 ? visualIdentity.logos : subLogos,
+    screenshots: visualIdentity.screenshots.length > 0 ? visualIdentity.screenshots : subScreenshots,
+    designStyle: visualIdentity.designStyle ?? subDesign,
+  };
+
+  // Hub `brand_guideline.metadata` is authoritative after user edits in Admin.
+  if (metadata?.colors?.length) {
+    visualIdentity = { ...visualIdentity, colors: metadata.colors };
+  }
+  if (metadata?.fonts?.length) {
+    visualIdentity = { ...visualIdentity, fonts: metadata.fonts };
+  }
+  if (metadata?.logos?.length) {
+    visualIdentity = { ...visualIdentity, logos: metadata.logos };
+  }
+  if (metadata?.screenshots?.length) {
+    visualIdentity = { ...visualIdentity, screenshots: metadata.screenshots };
+  }
+  if (metadata?.design_style != null) {
+    visualIdentity = { ...visualIdentity, designStyle: metadata.design_style };
+  }
+
+  let nextMeta = metadata;
+  if (metadata) {
+    nextMeta = {
+      ...metadata,
+      tone_primary: verbalIdentity.tonePrimary ?? metadata.tone_primary,
+      voice_attributes: verbalIdentity.voiceAttributes.length
+        ? verbalIdentity.voiceAttributes
+        : metadata.voice_attributes,
+      messaging_pillars: verbalIdentity.messagingPillars.length
+        ? verbalIdentity.messagingPillars
+        : metadata.messaging_pillars,
+      vocabulary_patterns: verbalIdentity.vocabularyPatterns.length
+        ? verbalIdentity.vocabularyPatterns
+        : metadata.vocabulary_patterns,
+      avoidance_patterns: verbalIdentity.avoidancePatterns.length
+        ? verbalIdentity.avoidancePatterns
+        : metadata.avoidance_patterns,
+      target_audience_summary: audience.summary ?? metadata.target_audience_summary,
+      competitive_positioning: positioning ?? metadata.competitive_positioning,
+      colors: metadata.colors?.length ? metadata.colors : visualIdentity.colors,
+      fonts: metadata.fonts?.length ? metadata.fonts : visualIdentity.fonts,
+      logos: metadata.logos?.length ? metadata.logos : visualIdentity.logos,
+      screenshots: metadata.screenshots?.length ? metadata.screenshots : visualIdentity.screenshots,
+      products: products.length ? products : metadata.products,
+      design_style: visualIdentity.designStyle ?? metadata.design_style,
+    };
+  }
+
+  return {
+    ...data,
+    verbalIdentity,
+    visualIdentity,
+    audience,
+    positioning,
+    products,
+    metadata: nextMeta,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Builders
 // ---------------------------------------------------------------------------
 
-function buildFromGuideline(
+function buildFromGuidelineData(
   client: Record<string, unknown>,
   guideline: KnowledgeEntry,
   meta: BrandGuidelineMetadata,
   supplemental: { creativeSupplementBlock: string; creativeReferenceImageUrls: string[] },
-): BrandContext {
+): BrandContextData {
   const visualIdentity: VisualIdentity = {
     colors: meta.colors ?? [],
     fonts: meta.fonts ?? [],
@@ -276,7 +533,7 @@ function buildFromGuideline(
     if (topicsAvoid.length > 0) verbalIdentity.avoidancePatterns = topicsAvoid;
   }
 
-  return attachMethods({
+  return {
     fromGuideline: true,
     guidelineId: guideline.id,
     guidelineContent: guideline.content,
@@ -291,13 +548,13 @@ function buildFromGuideline(
     metadata: meta,
     creativeSupplementBlock: supplemental.creativeSupplementBlock,
     creativeReferenceImageUrls: supplemental.creativeReferenceImageUrls,
-  });
+  };
 }
 
-function buildFromClientFields(
+function buildFromClientFieldsData(
   client: Record<string, unknown>,
   supplemental: { creativeSupplementBlock: string; creativeReferenceImageUrls: string[] },
-): BrandContext {
+): BrandContextData {
   const prefs = client.preferences as Record<string, unknown> | null;
 
   const verbalIdentity: VerbalIdentity = {
@@ -320,7 +577,7 @@ function buildFromClientFields(
     verbalIdentity.messagingPillars = topicsLeanInto;
   }
 
-  return attachMethods({
+  return {
     fromGuideline: false,
     guidelineId: null,
     guidelineContent: null,
@@ -335,14 +592,12 @@ function buildFromClientFields(
     metadata: null,
     creativeSupplementBlock: supplemental.creativeSupplementBlock,
     creativeReferenceImageUrls: supplemental.creativeReferenceImageUrls,
-  });
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Methods
 // ---------------------------------------------------------------------------
-
-type BrandContextData = Omit<BrandContext, 'toPromptBlock' | 'toFullContext'>;
 
 function attachMethods(data: BrandContextData): BrandContext {
   return {
@@ -374,9 +629,39 @@ Name: ${ctx.clientName}
 Industry: ${ctx.clientIndustry}${ctx.clientWebsiteUrl ? `\nWebsite: ${ctx.clientWebsiteUrl}` : ''}
 </brand_overview>`);
 
-  // Verbal identity
+  const vid = ctx.visualIdentity;
+  if (vid.colors.length > 0 || vid.fonts.length > 0 || vid.logos.length > 0) {
+    let visBlock = '<visual_identity>';
+    if (vid.colors.length > 0) {
+      const lines = vid.colors
+        .slice(0, 8)
+        .map((c) => `${c.role}: ${c.hex}${c.name ? ` (${c.name})` : ''}`);
+      visBlock += `\nBrand palette (use on the ad):\n${lines.join('\n')}`;
+    }
+    if (vid.fonts.length > 0) {
+      visBlock += `\nTypography:\n${vid.fonts
+        .slice(0, 6)
+        .map((f) => `${f.role}: ${f.family}${f.weight ? ` — ${f.weight}` : ''}`)
+        .join('\n')}`;
+    }
+    if (vid.logos.length > 0) {
+      visBlock += `\nOfficial logo assets:\n${vid.logos
+        .slice(0, 4)
+        .map((l) => `- ${l.variant}: ${l.url}`)
+        .join('\n')}`;
+    }
+    visBlock += '\n</visual_identity>';
+    sections.push(visBlock);
+  }
+
+  // Verbal identity (include pillars/vocab even when tone line is empty — some hubs only store those)
   const vi = ctx.verbalIdentity;
-  if (vi.tonePrimary || vi.voiceAttributes.length > 0) {
+  if (
+    vi.tonePrimary ||
+    vi.voiceAttributes.length > 0 ||
+    vi.messagingPillars.length > 0 ||
+    vi.vocabularyPatterns.length > 0
+  ) {
     let toneBlock = '<tone_and_voice>';
     if (vi.tonePrimary) toneBlock += `\nPrimary tone: ${vi.tonePrimary}`;
     if (vi.voiceAttributes.length > 0) toneBlock += `\nVoice attributes: ${vi.voiceAttributes.join(', ')}`;

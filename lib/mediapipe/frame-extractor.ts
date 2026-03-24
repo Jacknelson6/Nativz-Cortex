@@ -26,8 +26,20 @@ async function loadVideo(videoUrl: string): Promise<HTMLVideoElement> {
 
   await new Promise<void>((resolve, reject) => {
     video.onloadedmetadata = () => resolve();
-    video.onerror = () =>
-      reject(new Error(`Failed to load video: ${videoUrl}`));
+    video.onerror = () => {
+      const me = video.error;
+      const detail =
+        me != null
+          ? `code=${me.code} message=${me.message ?? ''}`
+          : 'unknown media error';
+      const srcHint =
+        videoUrl.length > 120 ? `${videoUrl.slice(0, 120)}…` : videoUrl;
+      reject(
+        new Error(
+          `Failed to load video (${detail}). If this is a cross-origin CDN URL, CORS may block canvas use — try a direct file or proxied URL. Src: ${srcHint}`
+        )
+      );
+    };
     setTimeout(() => reject(new Error('Video metadata load timeout')), 30_000);
   });
 
@@ -75,9 +87,18 @@ export async function extractFrames(
     });
 
     ctx.drawImage(video, 0, 0, w, h);
+    let imageData: ImageData;
+    try {
+      imageData = ctx.getImageData(0, 0, w, h);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        `Canvas pixel read failed (${msg}). Usually means the video is cross-origin without CORS — cannot run MediaPipe on this URL.`
+      );
+    }
     frames.push({
       timestamp: t,
-      imageData: ctx.getImageData(0, 0, w, h),
+      imageData,
     });
 
     onProgress?.(frames.length / totalExpected);
@@ -129,9 +150,18 @@ export async function extractFramesRange(
     });
 
     ctx.drawImage(video, 0, 0, w, h);
+    let imageData: ImageData;
+    try {
+      imageData = ctx.getImageData(0, 0, w, h);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        `Canvas pixel read failed (${msg}). Usually means the video is cross-origin without CORS — cannot run MediaPipe on this URL.`
+      );
+    }
     frames.push({
       timestamp: t,
-      imageData: ctx.getImageData(0, 0, w, h),
+      imageData,
     });
 
     onProgress?.(frames.length / totalExpected);

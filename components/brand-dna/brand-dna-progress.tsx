@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Check, Loader2, Globe, Palette, MessageSquare, ShoppingBag, FileText, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
 const STAGES = [
@@ -27,10 +29,14 @@ export function BrandDNAProgress({
   onContinueInBackground,
   navigateAwayHint,
 }: BrandDNAProgressProps) {
+  const router = useRouter();
   const [progress, setProgress] = useState(0);
   const [stepLabel, setStepLabel] = useState('Starting...');
   const [status, setStatus] = useState('queued');
   const [error, setError] = useState('');
+  const [isStale, setIsStale] = useState(false);
+  const [staleHint, setStaleHint] = useState<string | null>(null);
+  const [aborting, setAborting] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasCompleted = useRef(false);
 
@@ -46,6 +52,8 @@ export function BrandDNAProgress({
         setProgress(data.progress_pct ?? 0);
         setStepLabel(data.step_label ?? 'Processing...');
         setStatus(data.status ?? 'queued');
+        setIsStale(data.is_stale === true);
+        setStaleHint(typeof data.stale_hint === 'string' ? data.stale_hint : null);
 
         if (data.status === 'completed' && !hasCompleted.current) {
           hasCompleted.current = true;
@@ -85,7 +93,9 @@ export function BrandDNAProgress({
   return (
     <div className="text-center">
       <h2 className="text-lg font-semibold text-text-primary mb-1">Building Brand DNA</h2>
-      <p className="text-sm text-text-muted mb-1">This usually takes 60–90 seconds</p>
+      <p className="text-sm text-text-muted mb-1">
+        This usually takes a few minutes; large sites or slow models can take longer.
+      </p>
       {awayCopy ? (
         <p className="text-xs text-text-muted/90 mb-4 max-w-sm mx-auto leading-relaxed">{awayCopy}</p>
       ) : (
@@ -115,7 +125,66 @@ export function BrandDNAProgress({
           }}
         />
       </div>
-      <p className="text-xs text-text-muted text-right tabular-nums mb-5">{Math.round(progress)}%</p>
+      <p className="text-xs text-text-muted text-right tabular-nums mb-1">{Math.round(progress)}%</p>
+      {stepLabel ? (
+        <p className="text-xs text-text-muted/90 text-center mb-5 max-w-sm mx-auto leading-snug">
+          {stepLabel}
+        </p>
+      ) : (
+        <div className="mb-5" aria-hidden />
+      )}
+
+      {isStale && (
+        <div className="mb-5 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-left">
+          <div className="flex items-start gap-2">
+            <AlertCircle size={16} className="text-amber-400 mt-0.5 shrink-0" />
+            <div className="min-w-0 space-y-2">
+              <p className="text-xs font-medium text-amber-200/95">This run looks stuck</p>
+              <p className="text-xs text-text-muted leading-relaxed">
+                {staleHint ??
+                  'No progress updates for a while. You can reset the job and start generation again.'}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-amber-500/30 text-text-secondary"
+                disabled={aborting}
+                onClick={async () => {
+                  setAborting(true);
+                  try {
+                    const res = await fetch(`/api/clients/${clientId}/brand-dna/abort-stuck`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({}),
+                    });
+                    const body = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                      toast.error(
+                        typeof body.error === 'string' ? body.error : 'Could not reset the job',
+                      );
+                      return;
+                    }
+                    toast.success('Job reset — you can generate Brand DNA again');
+                    router.refresh();
+                  } finally {
+                    setAborting(false);
+                  }
+                }}
+              >
+                {aborting ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    Resetting…
+                  </>
+                ) : (
+                  'Reset stuck job'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stage steps */}
       <div className="space-y-2.5 text-left">

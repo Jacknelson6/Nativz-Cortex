@@ -31,9 +31,11 @@ import { SearchIdeasWizard } from '@/components/research/search-ideas-wizard';
 import type { ClientOption } from '@/components/ui/client-picker';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { hasSerp, isNewMetrics } from '@/lib/types/search';
-import type { TopicSearch, TopicSearchAIResponse, SearchPlatform, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
+import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
 import { BenchmarkRecommendations } from '@/components/search/benchmark-recommendations';
 import { RelatedTopics } from '@/components/search/related-topics';
+import { IdeationPipelinePanel } from '@/components/ideation/ideation-pipeline-panel';
+import { ListeningInsightsCharts } from '@/components/charts/listening-insights-charts';
 import type { Recipient } from './page';
 
 interface LinkedIdea {
@@ -43,15 +45,30 @@ interface LinkedIdea {
   createdAt: string;
 }
 
+interface LinkedBoardRow {
+  id: string;
+  name: string;
+}
+
 interface AdminResultsClientProps {
   search: TopicSearch;
   clientInfo?: { id: string; name: string; slug: string; industry?: string } | null;
   recipients?: Recipient[];
   clients: ClientOption[];
   linkedIdeas?: LinkedIdea[];
+  linkedBoards?: LinkedBoardRow[];
+  videoCandidateCount?: number;
 }
 
-export function AdminResultsClient({ search, clientInfo, recipients = [], clients, linkedIdeas = [] }: AdminResultsClientProps) {
+export function AdminResultsClient({
+  search,
+  clientInfo,
+  recipients = [],
+  clients,
+  linkedIdeas = [],
+  linkedBoards = [],
+  videoCandidateCount = 0,
+}: AdminResultsClientProps) {
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
@@ -182,6 +199,19 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
 
       {/* Content */}
       <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+        <IdeationPipelinePanel
+          searchId={search.id}
+          query={search.query}
+          videoCandidateCount={videoCandidateCount}
+          linkedBoards={linkedBoards}
+          linkedIdeas={linkedIdeas.map((g) => ({
+            id: g.id,
+            count: g.count,
+            concept: g.concept,
+          }))}
+          onOpenIdeasWizard={() => setShowIdeasWizard(true)}
+        />
+
         {/* Linked ideas banner */}
         {linkedIdeas.length > 0 ? (
           <div className="rounded-xl border border-accent2/20 bg-accent2/5 p-4">
@@ -228,6 +258,11 @@ export function AdminResultsClient({ search, clientInfo, recipients = [], client
         {search.metrics ? (
           <MetricsRow metrics={search.metrics} isBrandSearch={!!aiResponse?.brand_alignment_notes} />
         ) : null}
+
+        <ListeningInsightsCharts
+          platformBreakdown={aiResponse?.platform_breakdown}
+          trendingTopics={trendingTopics}
+        />
 
         {/* Platform source strip — v2 searches only */}
         {Boolean(aiResponse?.platform_breakdown?.length) ? (

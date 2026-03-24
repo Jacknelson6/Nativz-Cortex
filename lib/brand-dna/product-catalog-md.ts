@@ -54,6 +54,8 @@ export function buildCanonicalProductCatalogMarkdown(
       }
       if (p.description?.trim()) line += ` — ${p.description.trim()}`;
       if (p.price?.trim()) line += ` _(${p.price.trim()})_`;
+      if (p.cta?.trim()) line += ` · CTA: ${p.cta.trim()}`;
+      if (p.offer?.trim()) line += ` · Offer: ${p.offer.trim()}`;
       bits.push(line);
       sections.push(bits.join('\n\n'));
     }

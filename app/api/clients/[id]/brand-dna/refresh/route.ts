@@ -61,19 +61,33 @@ export async function POST(
         onProgress: async (status, progressPct, stepLabel) => {
           await admin
             .from('brand_dna_jobs')
-            .update({ status, progress_pct: progressPct, step_label: stepLabel })
+            .update({
+              status,
+              progress_pct: progressPct,
+              step_label: stepLabel,
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', job.id);
         },
       });
 
       await admin
         .from('brand_dna_jobs')
-        .update({ status: 'completed', progress_pct: 100, completed_at: new Date().toISOString() })
+        .update({
+          status: 'completed',
+          progress_pct: 100,
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', job.id);
     } catch (err) {
       await admin
         .from('brand_dna_jobs')
-        .update({ status: 'failed', error_message: err instanceof Error ? err.message : 'Unknown error' })
+        .update({
+          status: 'failed',
+          error_message: err instanceof Error ? err.message : 'Unknown error',
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', job.id);
     }
   });

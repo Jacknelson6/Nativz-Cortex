@@ -1,5 +1,6 @@
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
+import { BRAND_DNA_AI_TIMEOUT_MS } from './constants';
 import type { CrawledPage } from './types';
 
 export interface VerbalIdentityAnalysis {
@@ -51,6 +52,7 @@ Output ONLY the JSON object. No other text.`;
       ],
       maxTokens: 2000,
       feature: 'brand_dna_verbal',
+      timeoutMs: BRAND_DNA_AI_TIMEOUT_MS,
     });
 
     const parsed = parseAIResponseJSON<Record<string, unknown>>(result.text);

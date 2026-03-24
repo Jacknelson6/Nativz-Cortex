@@ -11,6 +11,22 @@ import type {
   ThumbnailPickerResult,
 } from './types';
 
+function describeUnknownError(err: unknown): string {
+  if (err instanceof Error) {
+    const parts = [`${err.name}: ${err.message}`];
+    if (err.cause instanceof Error) {
+      parts.push(`cause: ${err.cause.message}`);
+    }
+    return parts.join(' | ');
+  }
+  if (typeof err === 'string') return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
 export interface AnalysisResult {
   pacing: PacingAnalysis;
   hook: HookVisualAnalysis;
@@ -128,10 +144,9 @@ export async function runAndPersistAnalysis(
     );
 
     if (!analyzeRes.ok) {
-      console.error(
-        'MediaPipe: analyze endpoint failed:',
-        await analyzeRes.text()
-      );
+      const body = await analyzeRes.text();
+      console.error('MediaPipe: analyze endpoint failed:', analyzeRes.status, body);
+      return false;
     }
 
     // Send thumbnail results
@@ -152,14 +167,21 @@ export async function runAndPersistAnalysis(
       if (!thumbnailRes.ok) {
         console.error(
           'MediaPipe: thumbnail endpoint failed:',
+          thumbnailRes.status,
           await thumbnailRes.text()
         );
+        return false;
       }
     }
 
     return true;
   } catch (err) {
-    console.error('MediaPipe: analysis failed for item', itemId, err);
+    console.error(
+      'MediaPipe: analysis failed for item',
+      itemId,
+      describeUnknownError(err),
+      err instanceof Error ? err.stack : err
+    );
     return false;
   }
 }

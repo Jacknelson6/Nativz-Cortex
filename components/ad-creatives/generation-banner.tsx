@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, ArrowRight } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 interface GenerationBannerProps {
   clientId: string;
-  onViewGallery: () => void;
 }
 
 interface ActiveBatch {
@@ -15,13 +14,15 @@ interface ActiveBatch {
   failed_count: number;
 }
 
-export function GenerationBanner({ clientId, onViewGallery }: GenerationBannerProps) {
+export function GenerationBanner({ clientId }: GenerationBannerProps) {
   const [activeBatch, setActiveBatch] = useState<ActiveBatch | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const poll = useCallback(async () => {
     try {
-      const res = await fetch(`/api/clients/${clientId}/ad-creatives/batches?status=generating`);
+      const res = await fetch(
+        `/api/clients/${clientId}/ad-creatives/batches?status=generating,queued`,
+      );
       if (!res.ok) return;
       const data = await res.json();
       const batches = data.batches ?? [];
@@ -51,15 +52,16 @@ export function GenerationBanner({ clientId, onViewGallery }: GenerationBannerPr
       <Loader2 size={16} className="animate-spin text-accent-text shrink-0" />
       <p className="text-sm text-text-secondary flex-1">
         Generating {total} ad{total !== 1 ? 's' : ''}...
-        <span className="text-text-muted ml-1">({done}/{total} done)</span>
+        <span className="text-text-muted ml-1">
+          {done === 0 ? (
+            <>
+              (0/{total} — AI copy and setup run first; counts tick up as each image finishes)
+            </>
+          ) : (
+            <> ({done}/{total} done)</>
+          )}
+        </span>
       </p>
-      <button
-        type="button"
-        onClick={onViewGallery}
-        className="inline-flex items-center gap-1 text-sm font-medium text-accent-text hover:underline cursor-pointer"
-      >
-        View <ArrowRight size={14} />
-      </button>
 
       <style jsx>{`
         .animate-slide-down {

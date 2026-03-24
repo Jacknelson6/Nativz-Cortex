@@ -4,6 +4,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { rateLimitByUser } from '@/lib/security/rate-limit';
 import { scrapeBrandAndProducts } from '@/lib/ad-creatives/scrape-brand';
 
+export const maxDuration = 180;
+
 const bodySchema = z.object({
   url: z
     .string()

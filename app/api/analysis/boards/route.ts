@@ -18,6 +18,7 @@ const createBoardSchema = z.object({
  *
  * @auth Required (admin)
  * @query show_archived - Pass 'true' to include archived boards (optional)
+ * @query topic_search_id - Filter boards linked to a topic search (optional)
  * @returns {MoodboardBoard[]} Boards with client_name, item_count, and thumbnails
  */
 export async function GET(request: NextRequest) {
@@ -42,6 +43,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const showArchived = searchParams.get('show_archived') === 'true';
+    const topicSearchId = searchParams.get('topic_search_id');
 
     let query = adminClient
       .from('moodboard_boards')
@@ -50,6 +52,10 @@ export async function GET(request: NextRequest) {
 
     if (!showArchived) {
       query = query.is('archived_at', null);
+    }
+
+    if (topicSearchId) {
+      query = query.eq('source_topic_search_id', topicSearchId);
     }
 
     const { data: boards, error: fetchError } = await query;

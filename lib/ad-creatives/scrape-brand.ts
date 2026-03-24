@@ -9,6 +9,7 @@ import { extractColorPalette, extractLogoUrls } from '@/lib/brand-dna/extract-vi
 import { extractLogo } from './extract-logo';
 import { extractRichProducts } from './extract-products-rich';
 import { isJunkProductName } from './product-name-filters';
+import { fetchHtmlForBrandScrape } from './fetch-page-for-scrape';
 
 /** Used by `crawl-site` to pick extraction heuristics. */
 export type BusinessType = 'retail' | 'restaurant' | 'service' | 'saas';
@@ -27,6 +28,10 @@ export type ScrapedProduct = {
   imageUrl: string | null;
   description: string;
   price: string | null;
+  /** Optional per-product CTA (from Brand DNA or wizard edits). */
+  cta?: string | null;
+  /** Optional per-product offer line (from Brand DNA or wizard edits). */
+  offer?: string | null;
 };
 
 export type ScrapeBrandResult = {
@@ -39,20 +44,7 @@ export type ScrapeBrandResult = {
  * This is NOT a full Brand DNA generation — just enough to populate the wizard.
  */
 export async function scrapeBrandAndProducts(url: string): Promise<ScrapeBrandResult> {
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      Accept: 'text/html,application/xhtml+xml',
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch URL (${res.status})`);
-  }
-
-  const html = await res.text();
+  const html = await fetchHtmlForBrandScrape(url);
   const brand = extractBrand(html, url);
   const products = extractProducts(html, url);
 

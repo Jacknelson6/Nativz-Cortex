@@ -46,6 +46,8 @@ export function buildAdWizardContextFromBrandDNA(
     imageUrl: absUrl(p.imageUrl ?? null, base),
     description: p.description ?? '',
     price: p.price ?? null,
+    cta: p.cta?.trim() ? p.cta.trim() : null,
+    offer: p.offer?.trim() ? p.offer.trim() : null,
   }));
 
   const mediaUrls: string[] = [];

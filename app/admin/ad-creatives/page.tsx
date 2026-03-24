@@ -3,15 +3,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 import { getVaultClients } from '@/lib/vault/reader';
 import { AdCreativesHub } from '@/components/ad-creatives/ad-creatives-hub';
+import { AdCreativesHubLandingSkeleton } from '@/components/ad-creatives/ad-creatives-skeletons';
+import type { RecentClient } from '@/lib/ad-creatives/recent-client';
 
-export type RecentClient = {
-  clientId: string;
-  slug: string;
-  name: string;
-  logo_url: string | null;
-  website_url: string | null;
-  creativeCount: number;
-};
+export type { RecentClient };
 
 type AdCreativesDbClientRow = {
   id: string;
@@ -118,14 +113,7 @@ export default async function AdCreativesPage() {
     .filter((rc): rc is RecentClient => rc != null);
 
   return (
-    <Suspense
-      fallback={
-        <div className="cortex-page-gutter max-w-7xl mx-auto space-y-4 animate-pulse">
-          <div className="h-8 w-48 rounded-lg bg-surface border border-nativz-border" />
-          <div className="h-64 rounded-2xl bg-surface border border-nativz-border" />
-        </div>
-      }
-    >
+    <Suspense fallback={<AdCreativesHubLandingSkeleton />}>
       <AdCreativesHub clients={clients} recentClients={recentClients} />
     </Suspense>
   );

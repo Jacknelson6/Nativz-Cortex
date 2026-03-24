@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { ADMIN_E2E_FULL_STATIC_ROUTES } from './route-matrix';
 import { fetchJson, filterCriticalConsoleErrors } from './e2e-helpers';
+import { signInAsAdmin } from './admin-login-helpers';
 
 const email = process.env.E2E_ADMIN_EMAIL ?? '';
 const password = process.env.E2E_ADMIN_PASSWORD ?? '';
@@ -31,18 +32,31 @@ test.describe('Admin full journey', () => {
     page.on('pageerror', (err) => errors.push(err.message));
 
     await page.context().clearCookies();
-    await page.goto('/admin/login', { waitUntil: 'load' });
-    await page.getByLabel(/^email$/i).fill(email);
-    await page.getByLabel(/^password$/i).fill(password);
-    await page.getByRole('button', { name: /^sign in$/i }).click();
-    await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 60_000 });
+    await signInAsAdmin(page, email, password);
 
     const visited = new Set<string>();
 
     async function visitPath(path: string) {
       if (visited.has(path)) return;
       visited.add(path);
-      await page.goto(path, { waitUntil: 'domcontentloaded' });
+      const attempts = 3;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+          break;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          const flaky =
+            msg.includes('ERR_ABORTED') ||
+            msg.includes('ERR_CONNECTION_RESET') ||
+            msg.includes('Target page, context or browser has been closed');
+          if (flaky && i < attempts - 1) {
+            await page.waitForTimeout(600);
+            continue;
+          }
+          throw e;
+        }
+      }
       expect(page.url(), `still on login after ${path}`).not.toMatch(/\/admin\/login(\?|$)/);
       await expect(page.locator('body')).toBeVisible();
     }

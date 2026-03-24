@@ -284,7 +284,7 @@ export async function PATCH(
           }
         } else {
           // Task not yet pushed to Todoist — push it now
-          const newTodoistId = await pushTaskToTodoist(
+          const { id: newTodoistId } = await pushTaskToTodoist(
             todoistUser.todoist_api_key,
             {
               id: task.id,

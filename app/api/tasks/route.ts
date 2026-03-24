@@ -237,7 +237,7 @@ export async function POST(request: NextRequest) {
 
         if (todoistUser?.todoist_api_key) {
           try {
-            const todoistId = await pushTaskToTodoist(
+            const { id: todoistId } = await pushTaskToTodoist(
               todoistUser.todoist_api_key,
               {
                 id: task.id,

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { ArrowLeft, Dna, Image, LayoutGrid, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Dna, Image, LayoutGrid, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -12,12 +12,17 @@ import { AdWizard } from './ad-wizard';
 import { BulkTemplateImport } from './bulk-template-import';
 import { BrandDnaRequiredPanel } from './brand-dna-required-panel';
 import { BrandDnaTabReadyPanel } from './brand-dna-tab-ready-panel';
+import { FloatingGenerateCreativesButton } from './floating-generate-button';
 import { Dialog } from '@/components/ui/dialog';
 import type { ScrapedBrand, ScrapedProduct } from '@/lib/ad-creatives/scrape-brand';
 import type { AdCreative } from '@/lib/ad-creatives/types';
 import type { AdBatchPlaceholderConfig } from '@/lib/ad-creatives/placeholder-config';
 import { normalizeWebsiteUrl, isValidWebsiteUrl } from '@/lib/utils/normalize-website-url';
 import { useClientAdminShell } from '@/components/clients/client-admin-shell-context';
+import {
+  NATIVZ_BRAND_DNA_UPDATED_EVENT,
+  type NativzBrandDnaUpdatedDetail,
+} from '@/lib/brand-dna/brand-dna-updated-event';
 
 type BrandContextSource = 'brand_dna' | 'knowledge_cache' | 'live_scrape';
 
@@ -56,7 +61,6 @@ export function AdCreativesView({
 
   const [brand, setBrand] = useState<ScrapedBrand | null>(null);
   const [scrapedProducts, setScrapedProducts] = useState<ScrapedProduct[]>([]);
-  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [brandContextSource, setBrandContextSource] = useState<BrandContextSource | null>(null);
   const [contextLoading, setContextLoading] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -65,7 +69,8 @@ export function AdCreativesView({
   const [wizardSeedCreative, setWizardSeedCreative] = useState<AdCreative | null>(null);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [placeholderConfig, setPlaceholderConfig] = useState<AdBatchPlaceholderConfig | null>(null);
-  const [galleryEmptyForCta, setGalleryEmptyForCta] = useState(false);
+  /** Bumps when Brand DNA is saved elsewhere or the generate wizard opens — refetch crawl-brand from DB. */
+  const [brandContextRefreshKey, setBrandContextRefreshKey] = useState(0);
 
   const tabParam = searchParams.get('tab') as Tab | null;
   const brandDnaReady = brandDnaStatus === 'active' || brandDnaStatus === 'draft';
@@ -90,7 +95,6 @@ export function AdCreativesView({
         if (data.status === 'ready') {
           setBrand(data.brand ?? null);
           setScrapedProducts(data.products ?? []);
-          setMediaUrls(data.mediaUrls ?? []);
           setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
           setContextLoading(false);
           clearPoll();
@@ -113,6 +117,25 @@ export function AdCreativesView({
   const shouldLoadWizardContext = brandDnaReady && (activeTab === 'gallery' || wizardOpen);
 
   useEffect(() => {
+    function onBrandDnaUpdated(e: Event) {
+      const d = (e as CustomEvent<NativzBrandDnaUpdatedDetail>).detail;
+      if (d?.clientId === clientId) {
+        setBrandContextRefreshKey((k) => k + 1);
+      }
+    }
+    window.addEventListener(NATIVZ_BRAND_DNA_UPDATED_EVENT, onBrandDnaUpdated);
+    return () => window.removeEventListener(NATIVZ_BRAND_DNA_UPDATED_EVENT, onBrandDnaUpdated);
+  }, [clientId]);
+
+  const prevWizardOpen = useRef(false);
+  useEffect(() => {
+    if (wizardOpen && !prevWizardOpen.current) {
+      setBrandContextRefreshKey((k) => k + 1);
+    }
+    prevWizardOpen.current = wizardOpen;
+  }, [wizardOpen]);
+
+  useEffect(() => {
     if (!shouldLoadWizardContext) {
       clearPoll();
       if (!wizardOpen) {
@@ -127,7 +150,6 @@ export function AdCreativesView({
       setContextLoading(true);
       setBrand(null);
       setScrapedProducts([]);
-      setMediaUrls([]);
       setBrandContextSource(null);
 
       const normalized = normalizeWebsiteUrl(websiteUrl ?? '');
@@ -155,7 +177,6 @@ export function AdCreativesView({
         if (data.status === 'cached' || data.status === 'ready') {
           setBrand(data.brand ?? null);
           setScrapedProducts(data.products ?? []);
-          setMediaUrls(data.mediaUrls ?? []);
           setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
           setContextLoading(false);
         } else if (data.status === 'generating' || data.status === 'crawling') {
@@ -177,7 +198,7 @@ export function AdCreativesView({
       cancelled = true;
       clearPoll();
     };
-  }, [shouldLoadWizardContext, clientId, websiteUrl, pollForBrandContext, clearPoll]);
+  }, [shouldLoadWizardContext, clientId, websiteUrl, brandContextRefreshKey, pollForBrandContext, clearPoll]);
 
   const setTab = useCallback(
     (tab: Tab) => {
@@ -242,33 +263,18 @@ export function AdCreativesView({
                 </div>
               </div>
 
-              {activeTab === 'gallery' && (
+              {activeTab === 'gallery' && !brandDnaReady && (
                 <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
-                  {brandDnaReady ? (
-                    !galleryEmptyForCta ? (
-                      <Button
-                        type="button"
-                        size="lg"
-                        shape="pill"
-                        className="w-full shadow-lg shadow-accent/15 sm:w-auto"
-                        onClick={() => setWizardOpen(true)}
-                      >
-                        <Sparkles size={18} strokeWidth={1.75} />
-                        Generate creatives
-                      </Button>
-                    ) : null
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      shape="pill"
-                      className="w-full border-white/15 bg-background/30 backdrop-blur-sm sm:w-auto"
-                      onClick={() => setTab('generate')}
-                    >
-                      <Dna size={16} />
-                      Finish brand kit
-                    </Button>
-                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    shape="pill"
+                    className="w-full border-white/15 bg-background/30 backdrop-blur-sm sm:w-auto"
+                    onClick={() => setTab('generate')}
+                  >
+                    <Dna size={16} />
+                    Finish brand kit
+                  </Button>
                 </div>
               )}
             </div>
@@ -321,10 +327,13 @@ export function AdCreativesView({
             setPlaceholderConfig(null);
           }}
           onCreateMoreLikeThis={brandDnaReady ? handleCreateMoreLikeThis : undefined}
-          onGalleryEmptyForCtaChange={setGalleryEmptyForCta}
-          onOpenGenerateWizard={brandDnaReady ? () => setWizardOpen(true) : undefined}
         />
       )}
+
+      <FloatingGenerateCreativesButton
+        visible={activeTab === 'gallery' && brandDnaReady}
+        onClick={() => setWizardOpen(true)}
+      />
 
       {activeTab === 'templates' && (
         <TemplateCatalog
@@ -363,7 +372,7 @@ export function AdCreativesView({
           setWizardSeedCreative(null);
         }}
         maxWidth="full"
-        className="max-h-[min(92vh,940px)] sm:max-w-[min(96vw,1440px)]"
+        className="max-h-[min(92vh,940px)] sm:max-w-6xl"
         bodyClassName="flex max-h-[min(92vh,940px)] flex-col overflow-hidden p-0"
       >
         <div className="flex flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
@@ -377,10 +386,8 @@ export function AdCreativesView({
           ) : (
             <AdWizard
               clientId={clientId}
-              clientSlug={clientSlug}
               initialBrand={brand ?? undefined}
               initialProducts={scrapedProducts}
-              initialMediaUrls={mediaUrls}
               brandContextSource={brandContextSource ?? undefined}
               seedCreative={wizardSeedCreative}
               onGenerationStart={handleGenerationStart}

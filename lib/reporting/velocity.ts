@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { LatePostingService } from '@/lib/posting/late';
+import { ZernioPostingService } from '@/lib/posting/zernio';
 import { notifyAdmins } from '@/lib/notifications';
 import type { NotificationPreferences } from '@/lib/types/notification-preferences';
 import { DEFAULT_NOTIFICATION_PREFERENCES } from '@/lib/types/notification-preferences';
@@ -7,7 +7,7 @@ import { DEFAULT_NOTIFICATION_PREFERENCES } from '@/lib/types/notification-prefe
 /**
  * Hourly velocity check — detects posts picking up speed.
  *
- * 1. Fetch fresh analytics from Late API
+ * 1. Fetch fresh analytics from Zernio API
  * 2. Upsert current metrics into post_metrics
  * 3. Compare to last velocity snapshot
  * 4. If views/engagement jumped significantly → notify
@@ -19,7 +19,7 @@ export async function checkPostVelocity(): Promise<{
   errors: string[];
 }> {
   const admin = createAdminClient();
-  const late = new LatePostingService();
+  const zernio = new ZernioPostingService();
   const errors: string[] = [];
   let checked = 0;
   let trending = 0;
@@ -59,12 +59,12 @@ export async function checkPostVelocity(): Promise<{
     return { checked: 0, trending: 0, errors: [] };
   }
 
-  // Fetch fresh analytics from Late
+  // Fetch fresh analytics from Zernio
   let analyticsData;
   try {
-    analyticsData = await late.getFullAnalytics();
+    analyticsData = await zernio.getFullAnalytics();
   } catch (err) {
-    return { checked: 0, trending: 0, errors: [`Failed to fetch Late analytics: ${err}`] };
+    return { checked: 0, trending: 0, errors: [`Failed to fetch Zernio analytics: ${err}`] };
   }
 
   const posts = analyticsData.posts ?? [];

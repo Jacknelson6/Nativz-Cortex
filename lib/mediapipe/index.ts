@@ -6,8 +6,9 @@ import {
   ImageSegmenter,
 } from '@mediapipe/tasks-vision';
 
+/** Must match `package.json` `@mediapipe/tasks-vision` — `@latest` wasm can drift and break at runtime. */
 const WASM_CDN =
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm';
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
 
 const MODELS = {
   objectDetector:

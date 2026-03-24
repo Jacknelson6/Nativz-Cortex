@@ -7,7 +7,6 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { BrandDNACards, BRAND_DNA_BENTO_SURFACE } from './brand-dna-cards';
-import { CompletenessBadge } from './completeness-badge';
 import { OnboardWizard } from './onboard-wizard';
 import { BrandDNAProgress } from './brand-dna-progress';
 import { BrandDNASectionEditor } from './brand-dna-section-editor';
@@ -91,10 +90,10 @@ export function BrandDNAView({
             </Link>
           )}
           <div>
-            <h1 className="ui-page-title-md">Brand DNA</h1>
-            <p className="text-sm text-text-muted">{clientName}</p>
+            <h1 className="ui-page-title-md">
+              {clientName.trim() ? `${clientName.trim()} brand DNA` : 'Brand DNA'}
+            </h1>
           </div>
-          {metadata && <CompletenessBadge metadata={metadata} size="md" />}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {guideline && (

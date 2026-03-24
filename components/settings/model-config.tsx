@@ -427,7 +427,7 @@ export function ModelConfig() {
         setAllModels(data.models ?? []);
       } catch {
         // Non-critical — selector will just be empty
-        console.error('Failed to load OpenRouter models catalog');
+        console.warn('Failed to load OpenRouter models catalog');
       } finally {
         setModelsLoading(false);
       }

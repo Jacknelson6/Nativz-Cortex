@@ -39,17 +39,21 @@ interface CortexTask {
   todoist_task_id: string | null;
   recurrence: string | null;
   tags: string[];
+  /** Present when loaded for Todoist-linked rows (including archived). */
+  archived_at?: string | null;
 }
 
 // ---------------------------------------------------------------------------
 // Push a single Cortex task to Todoist
 // ---------------------------------------------------------------------------
 
+export type PushTaskToTodoistResult = { id: string | null; error?: string };
+
 export async function pushTaskToTodoist(
   apiKey: string,
   task: CortexTask,
   projectId?: string,
-): Promise<string | null> {
+): Promise<PushTaskToTodoistResult> {
   try {
     // Build due string — prefer recurrence pattern, then date
     let dueString: string | undefined;
@@ -75,7 +79,7 @@ export async function pushTaskToTodoist(
         await closeTodoistTask(apiKey, task.todoist_task_id);
       }
 
-      return task.todoist_task_id;
+      return { id: task.todoist_task_id };
     } else {
       // Create new
       const created = await createTodoistTask(apiKey, {
@@ -91,11 +95,12 @@ export async function pushTaskToTodoist(
         await closeTodoistTask(apiKey, created.id);
       }
 
-      return created.id;
+      return { id: created.id };
     }
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error('pushTaskToTodoist error:', error);
-    return null;
+    return { id: null, error: message };
   }
 }
 
@@ -123,21 +128,34 @@ export async function syncTodoist(
     // 1. Fetch all Todoist tasks
     const todoistTasks = await getTodoistTasks(apiKey, projectId);
 
-    // 2. Fetch all Cortex tasks for this user that have todoist_task_id
-    const { data: cortexTasks } = await admin
+    // 2. Linked tasks: any row with todoist_task_id (including archived). Excluding archived
+    // here caused duplicate-key inserts — the unique index still applies to archived rows.
+    const { data: linkedTasks } = await admin
+      .from('tasks')
+      .select(
+        'id, title, description, status, priority, due_date, todoist_task_id, recurrence, tags, archived_at',
+      )
+      .eq('created_by', userId)
+      .not('todoist_task_id', 'is', null);
+
+    // Non-archived tasks without Todoist id — candidates to push to Todoist
+    const { data: openTasks } = await admin
       .from('tasks')
       .select('id, title, description, status, priority, due_date, todoist_task_id, recurrence, tags')
       .eq('created_by', userId)
       .is('archived_at', null);
 
     const cortexByTodoistId = new Map<string, CortexTask>();
-    const cortexWithoutTodoist: CortexTask[] = [];
-
-    for (const t of cortexTasks ?? []) {
+    for (const t of linkedTasks ?? []) {
       if (t.todoist_task_id) {
-        cortexByTodoistId.set(t.todoist_task_id, t);
-      } else {
-        cortexWithoutTodoist.push(t);
+        cortexByTodoistId.set(t.todoist_task_id, t as CortexTask);
+      }
+    }
+
+    const cortexWithoutTodoist: CortexTask[] = [];
+    for (const t of openTasks ?? []) {
+      if (!t.todoist_task_id) {
+        cortexWithoutTodoist.push(t as CortexTask);
       }
     }
 
@@ -166,6 +184,10 @@ export async function syncTodoist(
         const cortexDone = cortex.status === 'done';
         if (todoistDone && !cortexDone) updates.status = 'done';
         if (!todoistDone && cortexDone) updates.status = 'backlog';
+
+        if (cortex.archived_at) {
+          updates.archived_at = null;
+        }
 
         if (Object.keys(updates).length > 0) {
           updates.updated_at = new Date().toISOString();
@@ -201,12 +223,14 @@ export async function syncTodoist(
 
     // 4. Push: Export Cortex tasks without todoist_task_id
     for (const ct of cortexWithoutTodoist) {
-      const todoistId = await pushTaskToTodoist(apiKey, ct, projectId);
+      const { id: todoistId, error: pushError } = await pushTaskToTodoist(apiKey, ct, projectId);
       if (todoistId) {
         await admin.from('tasks').update({ todoist_task_id: todoistId }).eq('id', ct.id);
         result.pushed++;
       } else {
-        result.errors.push(`Push ${ct.title}: failed`);
+        result.errors.push(
+          pushError ? `Push "${ct.title}": ${pushError}` : `Push "${ct.title}": failed`,
+        );
       }
     }
 

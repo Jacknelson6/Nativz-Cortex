@@ -37,11 +37,12 @@ export const ASPECT_RATIOS = [
 ] as const;
 
 export const BATCH_STATUSES = [
-  'pending',
+  'queued',
   'generating',
   'completed',
   'failed',
   'partial',
+  'cancelled',
 ] as const;
 
 /** Cap for `products` on POST /api/clients/[id]/ad-creatives/generate (Zod + client must match). */
@@ -168,6 +169,15 @@ export type AdGenerationConfig = {
    * Global Nano Banana styles (mutually exclusive with client `templateVariations` / `templateIds`).
    */
   globalTemplateVariations?: GlobalTemplateVariation[];
+  /**
+   * When set, work items follow this slug sequence (interleaved Meta-style mix).
+   * Must agree with {@link globalTemplateVariations} aggregate counts.
+   */
+  globalTemplateSlotOrder?: string[];
+  /**
+   * When true and multiple `productImageUrls` are set, each ad uses one URL rotating by slot index.
+   */
+  rotateProductImageUrls?: boolean;
   productService: string;
   offer: string;
   onScreenText: OnScreenText | 'ai_generate';

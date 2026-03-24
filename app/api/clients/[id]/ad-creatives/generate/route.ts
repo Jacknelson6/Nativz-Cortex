@@ -4,9 +4,15 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { rateLimitByUser } from '@/lib/security/rate-limit';
 import { runGenerationBatch } from '@/lib/ad-creatives/orchestrate-batch';
+import { getBrandContext } from '@/lib/knowledge/brand-context';
+import {
+  assertBrandDnaGuidelineForAdGeneration,
+  BrandDnaRequiredError,
+} from '@/lib/ad-creatives/require-brand-dna-for-generation';
 import { AD_GENERATE_MAX_PRODUCTS, BRAND_LAYOUT_MODES } from '@/lib/ad-creatives/types';
 import { DEFAULT_BATCH_CTA } from '@/lib/ad-creatives/batch-cta-presets';
 import { assertValidNanoBananaSlugs } from '@/lib/ad-creatives/nano-banana/catalog';
+import { globalSlotOrderMatchesVariations } from '@/lib/ad-creatives/nano-banana/bulk-presets';
 
 export const maxDuration = 300;
 
@@ -42,18 +48,18 @@ const productInfoSchema = z.object({
 
 const templateVariationSchema = z.object({
   templateId: z.string().uuid(),
-  count: z.number().int().min(1).max(10),
+  count: z.number().int().min(1).max(200),
 });
 
 const globalTemplateVariationSchema = z.object({
   slug: z.string().min(1).max(80),
-  count: z.number().int().min(1).max(10),
+  count: z.number().int().min(1).max(200),
 });
 
 /** UUID client template or global Nano Banana slug */
 const creativeOverrideSchema = z.object({
   templateId: z.string().min(1).max(80),
-  variationIndex: z.number().int().min(0).max(25),
+  variationIndex: z.number().int().min(0).max(199),
   headline: z.string().min(1).max(200),
   subheadline: z.string().min(1).max(300),
   cta: z.string().min(1).max(100),
@@ -70,7 +76,9 @@ const bodySchema = z.object({
   templateIds: z.array(z.string().uuid()).optional(),
   numVariations: z.number().int().min(1).max(20).optional(),
   globalTemplateVariations: z.array(globalTemplateVariationSchema).min(1).optional(),
-  productImageUrls: z.array(z.string().url()).max(4).optional(),
+  globalTemplateSlotOrder: z.array(z.string().min(1).max(80)).max(200).optional(),
+  rotateProductImageUrls: z.boolean().optional(),
+  productImageUrls: z.array(z.string().url()).max(12).optional(),
   productService: z.string().min(1, 'Product or service description is required').max(500),
   offer: z.string().max(300).optional(),
   aspectRatio: z.enum(['1:1', '9:16', '4:5']),
@@ -88,7 +96,7 @@ const bodySchema = z.object({
       variationIndex: z.number(),
     })).optional(),
   }).optional(),
-  creativeOverrides: z.array(creativeOverrideSchema).max(120).optional(),
+  creativeOverrides: z.array(creativeOverrideSchema).max(200).optional(),
   styleDirectionGlobal: z.string().max(4000).optional(),
   brandLayoutMode: z.enum(BRAND_LAYOUT_MODES).optional(),
   creativeBrief: z.string().max(4000).optional(),
@@ -117,10 +125,25 @@ const bodySchema = z.object({
           templateId: id,
           count: data.numVariations ?? 2,
         })));
-    const expected = resolved.reduce((sum, tv) => sum + tv.count, 0);
+    const expected =
+      hasGlobal && data.globalTemplateSlotOrder?.length
+        ? data.globalTemplateSlotOrder.length
+        : resolved.reduce((sum, tv) => sum + tv.count, 0);
     return co.length === expected;
   },
   { message: 'creativeOverrides must include exactly one entry per template variation', path: ['creativeOverrides'] },
+).refine(
+  (data) => {
+    const so = data.globalTemplateSlotOrder;
+    const gtv = data.globalTemplateVariations;
+    if (!so?.length) return true;
+    if (!gtv?.length) return false;
+    return globalSlotOrderMatchesVariations(so, gtv);
+  },
+  {
+    message: 'globalTemplateSlotOrder slug counts must match globalTemplateVariations',
+    path: ['globalTemplateSlotOrder'],
+  },
 );
 
 /**
@@ -159,10 +182,23 @@ export async function POST(
   const { data: client } = await admin.from('clients').select('id').eq('id', clientId).single();
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
 
+  try {
+    const brandContext = await getBrandContext(clientId, { bypassCache: true });
+    assertBrandDnaGuidelineForAdGeneration(brandContext);
+  } catch (e) {
+    if (e instanceof BrandDnaRequiredError) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
+    console.error('Load brand context for ad generation:', e);
+    return NextResponse.json({ error: 'Could not load brand context for this client' }, { status: 500 });
+  }
+
   const {
     templateVariations,
     templateIds: legacyTemplateIds,
     globalTemplateVariations,
+    globalTemplateSlotOrder,
+    rotateProductImageUrls,
     productImageUrls,
     productService,
     offer,
@@ -195,7 +231,16 @@ export async function POST(
       return NextResponse.json({ error: msg }, { status: 400 });
     }
 
-    totalCount = gtv.reduce((sum, g) => sum + g.count, 0);
+    if (globalTemplateSlotOrder?.length) {
+      try {
+        assertValidNanoBananaSlugs(globalTemplateSlotOrder);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Invalid Nano Banana slug';
+        return NextResponse.json({ error: msg }, { status: 400 });
+      }
+    }
+
+    totalCount = globalTemplateSlotOrder?.length ?? gtv.reduce((sum, g) => sum + g.count, 0);
     const resolvedBatchCta =
       onScreenTextMode === 'ai_generate'
         ? (batchCta?.trim() || DEFAULT_BATCH_CTA).slice(0, 30)
@@ -216,6 +261,10 @@ export async function POST(
       ...(creativeOverrides && creativeOverrides.length > 0 ? { creativeOverrides } : {}),
       ...(styleDirectionGlobal?.trim() ? { styleDirectionGlobal: styleDirectionGlobal.trim() } : {}),
       ...(productImageUrls && productImageUrls.length > 0 ? { productImageUrls } : {}),
+      ...(globalTemplateSlotOrder && globalTemplateSlotOrder.length > 0
+        ? { globalTemplateSlotOrder }
+        : {}),
+      ...(rotateProductImageUrls === true ? { rotateProductImageUrls: true } : {}),
     };
   } else {
     const resolvedVariations = templateVariations ?? (legacyTemplateIds ?? []).map((id) => ({
@@ -267,6 +316,7 @@ export async function POST(
       ...(creativeOverrides && creativeOverrides.length > 0 ? { creativeOverrides } : {}),
       ...(styleDirectionGlobal?.trim() ? { styleDirectionGlobal: styleDirectionGlobal.trim() } : {}),
       ...(productImageUrls && productImageUrls.length > 0 ? { productImageUrls } : {}),
+      ...(rotateProductImageUrls === true ? { rotateProductImageUrls: true } : {}),
     };
   }
 

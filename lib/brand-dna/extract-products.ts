@@ -1,5 +1,6 @@
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
+import { BRAND_DNA_AI_TIMEOUT_MS } from './constants';
 import type { CrawledPage } from './types';
 import type { ProductItem, ProductOfferingType } from '@/lib/knowledge/types';
 import { buildProductImageAllowlist } from './scrape-product-images';
@@ -89,6 +90,7 @@ Rules:
       ],
       maxTokens: 6000,
       feature: 'brand_dna_products',
+      timeoutMs: BRAND_DNA_AI_TIMEOUT_MS,
     });
 
     const parsed = parseAIResponseJSON<Record<string, unknown>[]>(result.text);

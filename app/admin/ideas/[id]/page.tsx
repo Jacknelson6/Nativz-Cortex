@@ -58,6 +58,7 @@ export default async function IdeaGenerationResultsPage({
           clientName={(client as { name: string })?.name ?? 'Unknown'}
           agency={(client as { agency?: string })?.agency ?? null}
           searchQuery={searchQuery}
+          searchId={generation.search_id}
           savedScripts={scriptMap}
         />
       </div>

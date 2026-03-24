@@ -1,4 +1,4 @@
-// Posting service abstraction — swap providers by changing POSTING_PROVIDER env var
+// Posting service abstraction — default provider is Zernio (POSTING_PROVIDER=zernio or late alias)
 
 export type SocialPlatform = 'facebook' | 'instagram' | 'tiktok' | 'youtube';
 
@@ -59,7 +59,7 @@ export interface ConnectProfileInput {
   platform: SocialPlatform;
   /** Redirect URL after OAuth completion */
   callbackUrl: string;
-  /** Late profile ID (groups social accounts per client) */
+  /** Zernio profile id (stored as clients.late_profile_id) */
   profileId: string;
 }
 
@@ -251,7 +251,7 @@ export interface PostingService {
   /** Get a presigned upload URL for media */
   getMediaUploadUrl(contentType?: string, filename?: string): Promise<{ uploadUrl: string; publicUrl: string }>;
 
-  /** List posts from Late */
+  /** List posts from the provider (Zernio) */
   listPosts(query?: ListPostsQuery): Promise<LatePost[]>;
 
   /** Get analytics for an account */

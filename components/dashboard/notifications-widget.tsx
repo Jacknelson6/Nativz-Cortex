@@ -21,6 +21,7 @@ import {
   RefreshCcw,
   Zap,
   X,
+  WifiOff,
 } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { Card } from '@/components/ui/card';
@@ -56,6 +57,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   post_published: <CheckCircle size={14} className="text-emerald-400" />,
   post_failed: <AlertTriangle size={14} className="text-red-400" />,
   post_trending: <Zap size={14} className="text-yellow-400" />,
+  account_disconnected: <WifiOff size={14} className="text-amber-400" />,
 };
 
 export function NotificationsWidget() {
@@ -213,7 +215,7 @@ export function NotificationsWidget() {
                   className="flex items-start gap-2 flex-1 min-w-0 text-left"
                 >
                   {/* Thumbnail with error fallback */}
-                  {notif.body && notif.body.startsWith('http') ? (
+                  {notif.body && /^https?:\/\//i.test(notif.body) ? (
                     <img
                       src={notif.body}
                       alt=""
@@ -231,18 +233,23 @@ export function NotificationsWidget() {
                   <div
                     className="mt-0.5 shrink-0"
                     data-fallback-icon
-                    style={notif.body?.startsWith('http') ? { display: 'none' } : undefined}
+                    style={notif.body && /^https?:\/\//i.test(notif.body) ? { display: 'none' } : undefined}
                   >
                     {TYPE_ICON[notif.type] || <Bell size={14} className="text-text-muted" />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p
-                      className={`text-sm leading-snug truncate ${
+                      className={`text-sm leading-snug ${
                         !notif.is_read ? 'font-medium text-text-primary' : 'text-text-secondary'
                       }`}
                     >
                       {notif.title}
                     </p>
+                    {notif.body && !/^https?:\/\//i.test(notif.body) && (
+                      <p className="mt-1 text-[11px] text-text-muted line-clamp-5 break-words">
+                        {notif.body}
+                      </p>
+                    )}
                     <p className="mt-0.5 text-[11px] text-text-muted/60">
                       {formatRelativeTime(notif.created_at)}
                     </p>

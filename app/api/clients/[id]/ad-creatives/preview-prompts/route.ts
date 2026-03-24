@@ -3,8 +3,12 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getBrandContext } from '@/lib/knowledge/brand-context';
+import {
+  assertBrandDnaGuidelineForAdGeneration,
+  BrandDnaRequiredError,
+} from '@/lib/ad-creatives/require-brand-dna-for-generation';
 import { assembleImagePrompt } from '@/lib/ad-creatives/assemble-prompt';
-import { generateAdCopy } from '@/lib/ad-creatives/generate-copy';
+import { generateAdCopy, generateAdCopyBatched } from '@/lib/ad-creatives/generate-copy';
 import { generateCreativeBrief } from '@/lib/ad-creatives/generate-creative-brief';
 import type { AdCreativeTemplate, AdPromptTemplate } from '@/lib/ad-creatives/types';
 import { BRAND_LAYOUT_MODES } from '@/lib/ad-creatives/types';
@@ -14,16 +18,18 @@ import { buildNanoBananaImagePrompt } from '@/lib/ad-creatives/nano-banana/build
 import { fillNanoBananaTemplate } from '@/lib/ad-creatives/nano-banana/fill-template';
 import { getNanoBananaBySlug } from '@/lib/ad-creatives/nano-banana/catalog';
 import { getClientAdGenerationSettings } from '@/lib/ad-creatives/client-ad-generation-settings';
+import { globalSlotOrderMatchesVariations } from '@/lib/ad-creatives/nano-banana/bulk-presets';
 
 const bodySchema = z.object({
   templateVariations: z.array(z.object({
     templateId: z.string().uuid(),
-    count: z.number().int().min(1).max(10),
+    count: z.number().int().min(1).max(200),
   })).min(1).optional(),
   globalTemplateVariations: z.array(z.object({
     slug: z.string().min(1).max(80),
-    count: z.number().int().min(1).max(10),
+    count: z.number().int().min(1).max(200),
   })).min(1).optional(),
+  globalTemplateSlotOrder: z.array(z.string().min(1).max(80)).max(200).optional(),
   productService: z.string().min(1).max(500),
   offer: z.string().max(300).optional(),
   batchCta: z.string().min(1).max(30).optional(),
@@ -47,6 +53,18 @@ const bodySchema = z.object({
   {
     message: 'Use either globalTemplateVariations or templateVariations',
     path: ['globalTemplateVariations'],
+  },
+).refine(
+  (data) => {
+    const so = data.globalTemplateSlotOrder;
+    const gtv = data.globalTemplateVariations;
+    if (!so?.length) return true;
+    if (!gtv?.length) return false;
+    return globalSlotOrderMatchesVariations(so, gtv);
+  },
+  {
+    message: 'globalTemplateSlotOrder slug counts must match globalTemplateVariations',
+    path: ['globalTemplateSlotOrder'],
   },
 );
 
@@ -84,6 +102,7 @@ export async function POST(
   const {
     templateVariations,
     globalTemplateVariations,
+    globalTemplateSlotOrder,
     productService,
     offer,
     batchCta,
@@ -100,29 +119,41 @@ export async function POST(
   const admin = createAdminClient();
 
   try {
-    const brandContext = await getBrandContext(clientId);
+    const brandContext = await getBrandContext(clientId, { bypassCache: true });
+    assertBrandDnaGuidelineForAdGeneration(brandContext);
 
-    let maxCount: number;
+    let totalSlots: number;
     if (isNano) {
-      maxCount = Math.max(...(globalTemplateVariations ?? []).map((tv) => tv.count));
+      totalSlots =
+        globalTemplateSlotOrder?.length ??
+        (globalTemplateVariations ?? []).reduce((s, g) => s + g.count, 0);
     } else {
       const tv = templateVariations ?? [];
-      maxCount = Math.max(...tv.map((t) => t.count));
+      totalSlots = tv.reduce((s, t) => s + t.count, 0);
     }
     let copyVariations: { headline: string; subheadline: string; cta: string }[];
 
     if (onScreenTextMode === 'ai_generate') {
       const resolvedBatchCta = (batchCta?.trim() || DEFAULT_BATCH_CTA).slice(0, 30);
-      copyVariations = await generateAdCopy({
-        brandContext,
-        productService,
-        offer: offer ?? null,
-        count: maxCount,
-        fixedCta: resolvedBatchCta,
-      });
+      copyVariations =
+        totalSlots > 36
+          ? await generateAdCopyBatched({
+              brandContext,
+              productService,
+              offer: offer ?? null,
+              count: totalSlots,
+              fixedCta: resolvedBatchCta,
+            })
+          : await generateAdCopy({
+              brandContext,
+              productService,
+              offer: offer ?? null,
+              count: Math.max(totalSlots, 1),
+              fixedCta: resolvedBatchCta,
+            });
     } else {
       const text = manualText ?? { headline: '', subheadline: '', cta: '' };
-      copyVariations = Array.from({ length: maxCount }, () => text);
+      copyVariations = Array.from({ length: totalSlots }, () => text);
     }
 
     let briefForPreviews = creativeBriefInput?.trim() ?? '';
@@ -140,38 +171,67 @@ export async function POST(
 
     if (isNano) {
       const adGenSettings = await getClientAdGenerationSettings(clientId);
-      for (const tv of globalTemplateVariations ?? []) {
-        const entry = getNanoBananaBySlug(tv.slug);
+      const pushNanoPreview = (
+        slug: string,
+        variationIndex: number,
+        copy: { headline: string; subheadline: string; cta: string },
+      ) => {
+        const entry = getNanoBananaBySlug(slug);
         if (!entry) {
-          return NextResponse.json({ error: `Unknown Nano Banana slug: ${tv.slug}` }, { status: 400 });
+          throw new Error(`Unknown Nano Banana slug: ${slug}`);
         }
-        for (let i = 0; i < tv.count; i++) {
-          const copy = copyVariations[i % copyVariations.length];
-          const sd = styleDirectionGlobal?.trim() || undefined;
-          const filled = fillNanoBananaTemplate(entry.promptTemplate, {
-            onScreenText: copy,
-            productService,
-            offer: offer ?? '',
-          });
-          const prompt = buildNanoBananaImagePrompt({
-            imagePromptModifier: adGenSettings.image_prompt_modifier,
-            brandContext,
-            filledTemplateBody: filled,
-            aspectRatio,
-            productService,
-            offer: offer ?? null,
-            creativeBrief: briefForPreviews || undefined,
-            styleDirection: sd,
-          });
-          previews.push({
-            templateId: tv.slug,
-            templateName: entry.name,
-            templateImageUrl: entry.previewPublicPath,
-            variationIndex: i,
-            copy,
-            prompt,
-            styleNotes: extractStyleNotes(prompt),
-          });
+        const sd = styleDirectionGlobal?.trim() || undefined;
+        const filled = fillNanoBananaTemplate(entry.promptTemplate, {
+          onScreenText: copy,
+          productService,
+          offer: offer ?? '',
+        });
+        const prompt = buildNanoBananaImagePrompt({
+          imagePromptModifier: adGenSettings.image_prompt_modifier,
+          brandContext,
+          filledTemplateBody: filled,
+          aspectRatio,
+          productService,
+          offer: offer ?? null,
+          creativeBrief: briefForPreviews || undefined,
+          styleDirection: sd,
+        });
+        previews.push({
+          templateId: slug,
+          templateName: entry.name,
+          templateImageUrl: entry.previewPublicPath,
+          variationIndex,
+          copy,
+          prompt,
+          styleNotes: extractStyleNotes(prompt),
+        });
+      };
+
+      if (globalTemplateSlotOrder?.length) {
+        const slugNextIdx = new Map<string, number>();
+        for (let pos = 0; pos < globalTemplateSlotOrder.length; pos++) {
+          const slug = globalTemplateSlotOrder[pos];
+          const i = slugNextIdx.get(slug) ?? 0;
+          slugNextIdx.set(slug, i + 1);
+          const copy = copyVariations[pos % Math.max(copyVariations.length, 1)];
+          try {
+            pushNanoPreview(slug, i, copy);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Invalid template';
+            return NextResponse.json({ error: msg }, { status: 400 });
+          }
+        }
+      } else {
+        for (const tv of globalTemplateVariations ?? []) {
+          for (let i = 0; i < tv.count; i++) {
+            const copy = copyVariations[i % Math.max(copyVariations.length, 1)];
+            try {
+              pushNanoPreview(tv.slug, i, copy);
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : 'Invalid template';
+              return NextResponse.json({ error: msg }, { status: 400 });
+            }
+          }
         }
       }
     } else {
@@ -243,6 +303,9 @@ export async function POST(
       imagePipeline: 'gemini_native',
     });
   } catch (err) {
+    if (err instanceof BrandDnaRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
     console.error('[preview-prompts] Error:', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Failed to generate previews' },

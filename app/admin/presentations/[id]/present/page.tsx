@@ -4,17 +4,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { BENCHMARK_SECTIONS } from '@/lib/benchmarks/sections';
+import {
+  BENCHMARK_SECTIONS,
+  DEFAULT_SECTION_ORDER,
+  DEFAULT_VISIBLE_SECTIONS,
+  mergeBenchmarkSectionOrder,
+} from '@/lib/benchmarks/sections';
 import { BenchmarkCard } from '@/lib/benchmarks/charts/benchmark-card';
-import { SpendTierTable } from '@/lib/benchmarks/charts/spend-tier-table';
-import { PortfolioBreakdown } from '@/lib/benchmarks/charts/portfolio-breakdown';
-import { SpendAllocation } from '@/lib/benchmarks/charts/spend-allocation';
-import { TestingHeatmap } from '@/lib/benchmarks/charts/testing-heatmap';
-import { Top25Comparison } from '@/lib/benchmarks/charts/top25-comparison';
-import { VisualStylesTable } from '@/lib/benchmarks/charts/visual-styles-table';
-import { VisualStylesVertical } from '@/lib/benchmarks/charts/visual-styles-vertical';
-import { HooksHeadlinesTable } from '@/lib/benchmarks/charts/hooks-headlines-table';
-import { AssetTypesTable } from '@/lib/benchmarks/charts/asset-types-table';
+import { BenchmarkSectionBody } from '@/lib/benchmarks/benchmark-section-body';
 import type { BenchmarkConfig } from '../types';
 
 interface Slide {
@@ -22,18 +19,6 @@ interface Slide {
   body: string;
   image_url?: string | null;
 }
-
-const CHART_COMPONENTS: Record<string, React.ComponentType<{ activeFilter?: string | null }>> = {
-  'CH-003': SpendTierTable,
-  'CH-005': PortfolioBreakdown,
-  'CH-006': SpendAllocation,
-  'CH-007': TestingHeatmap,
-  'CH-008': Top25Comparison,
-  'CH-009': VisualStylesTable,
-  'CH-010': VisualStylesVertical,
-  'CH-011': HooksHeadlinesTable,
-  'CH-012': AssetTypesTable,
-};
 
 export default function PresentModePage() {
   const router = useRouter();
@@ -56,11 +41,18 @@ export default function PresentModePage() {
 
         if (data.type === 'benchmarks') {
           const config = data.audit_data as BenchmarkConfig | undefined;
-          setBenchmarkConfig(config ?? {
-            visible_sections: ['CH-003', 'CH-005', 'CH-006', 'CH-007', 'CH-008', 'CH-009', 'CH-010', 'CH-011', 'CH-012'],
-            section_order: ['CH-003', 'CH-005', 'CH-006', 'CH-007', 'CH-008', 'CH-009', 'CH-010', 'CH-011', 'CH-012'],
-            active_vertical_filter: null,
-          });
+          setBenchmarkConfig(
+            config && Array.isArray(config.section_order) && Array.isArray(config.visible_sections)
+              ? {
+                  ...config,
+                  section_order: mergeBenchmarkSectionOrder(config.section_order),
+                }
+              : {
+                  visible_sections: [...DEFAULT_VISIBLE_SECTIONS],
+                  section_order: [...DEFAULT_SECTION_ORDER],
+                  active_vertical_filter: null,
+                }
+          );
         } else {
           setSlides(data.slides ?? []);
         }
@@ -130,7 +122,6 @@ export default function PresentModePage() {
 
   if (presentationType === 'benchmarks') {
     const section = benchmarkSlides[currentIndex]!;
-    const ChartComponent = CHART_COMPONENTS[section.id];
 
     return (
       <div className="fixed inset-0 z-50 bg-[#0a0a0f] flex flex-col">
@@ -146,9 +137,10 @@ export default function PresentModePage() {
         <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
           <div className="max-w-[1100px] w-full animate-fade-in">
             <BenchmarkCard section={section}>
-              {ChartComponent && (
-                <ChartComponent activeFilter={benchmarkConfig?.active_vertical_filter ?? null} />
-              )}
+              <BenchmarkSectionBody
+                section={section}
+                activeFilter={benchmarkConfig?.active_vertical_filter ?? null}
+              />
             </BenchmarkCard>
           </div>
         </div>

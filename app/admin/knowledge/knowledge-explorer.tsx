@@ -175,7 +175,7 @@ export function KnowledgeExplorer() {
         setGraphData({ nodes: data.nodes ?? [], edges: data.edges ?? [] });
       }
     } catch (err) {
-      console.error('Failed to fetch knowledge data:', err);
+      console.warn('Failed to fetch knowledge data:', err);
       toast.error('Failed to load knowledge graph');
     } finally {
       setLoading(false);

@@ -42,6 +42,8 @@ export interface IdeasResultsClientProps {
   clientName: string;
   agency?: string | null;
   searchQuery: string | null;
+  /** When set, breadcrumb links back to the topic search that grounded this generation. */
+  searchId?: string | null;
   savedScripts?: Record<string, string>;
 }
 

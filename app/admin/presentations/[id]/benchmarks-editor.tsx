@@ -6,10 +6,14 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ClientPickerButton, type ClientOption } from '@/components/ui/client-picker';
-import { BENCHMARK_SECTIONS } from '@/lib/benchmarks/sections';
+import {
+  BENCHMARK_SECTIONS,
+  DEFAULT_SECTION_ORDER,
+  DEFAULT_VISIBLE_SECTIONS,
+  mergeBenchmarkSectionOrder,
+} from '@/lib/benchmarks/sections';
 import type { PresentationData, BenchmarkConfig } from './types';
 import { BenchmarksViewer } from './benchmarks-viewer';
-import { DEFAULT_SECTION_ORDER, DEFAULT_VISIBLE_SECTIONS } from '@/lib/benchmarks/sections';
 
 interface BenchmarksEditorProps {
   presentation: PresentationData;
@@ -24,7 +28,10 @@ interface BenchmarksEditorProps {
 function getConfig(presentation: PresentationData): BenchmarkConfig {
   const raw = presentation.audit_data as unknown as BenchmarkConfig | undefined;
   if (raw && Array.isArray(raw.section_order) && Array.isArray(raw.visible_sections)) {
-    return raw;
+    return {
+      ...raw,
+      section_order: mergeBenchmarkSectionOrder(raw.section_order),
+    };
   }
   return {
     visible_sections: DEFAULT_VISIBLE_SECTIONS,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { syncClientReporting } from '@/lib/reporting/sync';
 import { generateAnalyticsNotifications } from '@/lib/reporting/notifications';
-import { notifyAdmins } from '@/lib/notifications';
+import { notifyAdmins, truncateNotificationBody } from '@/lib/notifications';
 import type { DateRange } from '@/lib/types/reporting';
 
 export const maxDuration = 300;
@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
             await notifyAdmins({
               type: 'sync_failed',
               title: `Sync issue for ${client.name}`,
-              body: result.errors.join('; ').substring(0, 200),
+              body: truncateNotificationBody(result.errors.join('; ')),
               linkPath: `/admin/analytics?client=${client.id}`,
               clientId: client.id,
             });

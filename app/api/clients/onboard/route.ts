@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { syncClientProfileToVault } from '@/lib/vault/sync';
 import { createMondayItem } from '@/lib/monday/client';
 import { logActivity } from '@/lib/activity';
-import { createLateProfile } from '@/lib/posting/late';
+import { createLateProfile } from '@/lib/posting';
 import { crawlClientWebsite } from '@/lib/knowledge/scraper';
 import { generateBrandProfile } from '@/lib/knowledge/brand-profile';
 

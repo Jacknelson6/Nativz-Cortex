@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, Check, Lightbulb, FileText, MessageSquare, Settings2, Mail, Search, Camera, CheckSquare, Clock, AlertTriangle, CheckCircle, TrendingUp, Flame, Users, RefreshCcw, Zap } from 'lucide-react';
+import { Bell, Check, Lightbulb, FileText, MessageSquare, Settings2, Mail, Search, Camera, CheckSquare, Clock, AlertTriangle, CheckCircle, TrendingUp, Flame, Users, RefreshCcw, Zap, WifiOff } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/format';
 
 interface Notification {
@@ -35,6 +35,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   post_published: <CheckCircle size={14} className="text-emerald-400" />,
   post_failed: <AlertTriangle size={14} className="text-red-400" />,
   post_trending: <Zap size={14} className="text-yellow-400" />,
+  account_disconnected: <WifiOff size={14} className="text-amber-400" />,
 };
 
 export function NotificationBell() {
@@ -137,7 +138,7 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 rounded-xl border border-nativz-border bg-surface shadow-xl z-50 overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 w-[22rem] max-w-[calc(100vw-2rem)] rounded-xl border border-nativz-border bg-surface shadow-xl z-50 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-nativz-border px-4 py-3">
             <h3 className="text-sm font-semibold text-text-primary">Notifications</h3>
@@ -177,8 +178,10 @@ export function NotificationBell() {
                     <p className={`text-sm leading-snug ${!notif.is_read ? 'font-medium text-text-primary' : 'text-text-secondary'}`}>
                       {notif.title}
                     </p>
-                    {notif.body && (
-                      <p className="mt-0.5 text-xs text-text-muted truncate">{notif.body}</p>
+                    {notif.body && !/^https?:\/\//i.test(notif.body) && (
+                      <p className="mt-1 text-xs text-text-muted line-clamp-6 break-words">
+                        {notif.body}
+                      </p>
                     )}
                     <p className="mt-1 text-xs text-text-muted/60">
                       {formatRelativeTime(notif.created_at)}

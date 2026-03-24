@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { AdCreativesView } from '@/components/ad-creatives/ad-creatives-view';
+import { AdCreativesWorkspaceSkeleton } from '@/components/ad-creatives/ad-creatives-skeletons';
 import { requireAdminWorkspaceModuleAccess } from '@/lib/clients/require-admin-workspace-module-access';
 
 export default async function AdCreativesPage({
@@ -29,14 +30,7 @@ export default async function AdCreativesPage({
     .eq('client_id', client.id);
 
   return (
-    <Suspense
-      fallback={
-        <div className="cortex-page-gutter max-w-7xl mx-auto space-y-4 animate-pulse">
-          <div className="h-8 w-40 rounded-lg bg-surface border border-nativz-border" />
-          <div className="h-72 rounded-xl bg-surface border border-nativz-border" />
-        </div>
-      }
-    >
+    <Suspense fallback={<AdCreativesWorkspaceSkeleton />}>
       <AdCreativesView
         clientId={client.id}
         clientName={client.name ?? ''}

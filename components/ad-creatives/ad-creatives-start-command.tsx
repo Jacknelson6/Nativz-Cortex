@@ -187,7 +187,6 @@ export function AdCreativesStartCommand({
                   }}
                   placeholder="Search clients or paste a website URL…"
                   disabled={scanning}
-                  autoFocus
                   role="combobox"
                   aria-expanded={open}
                   aria-controls="ad-creatives-start-listbox"

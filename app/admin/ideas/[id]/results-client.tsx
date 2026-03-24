@@ -17,7 +17,14 @@ import { IdeaResultCard, normalizeReasons } from './idea-result-card';
 
 // ── Results Client ──────────────────────────────────────────────────────────
 
-export function IdeasResultsClient({ generation: initialGeneration, clientName, agency, searchQuery, savedScripts = {} }: IdeasResultsClientProps) {
+export function IdeasResultsClient({
+  generation: initialGeneration,
+  clientName,
+  agency,
+  searchQuery,
+  searchId = null,
+  savedScripts = {},
+}: IdeasResultsClientProps) {
   const [generation, setGeneration] = useState(initialGeneration);
   const [ideas, setIdeas] = useState<GeneratedIdea[]>(
     (initialGeneration.ideas ?? []).map((i: GeneratedIdea) => ({
@@ -101,11 +108,11 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
           {generation.error_message ?? 'An unexpected error occurred. Please try again.'}
         </p>
         <Link
-          href="/admin/search/new"
+          href={searchId ? `/admin/search/${searchId}` : '/admin/search/new'}
           className="mt-4 inline-flex items-center gap-1.5 text-sm text-accent2-text hover:text-accent2-text"
         >
           <ArrowLeft size={14} />
-          Back to research
+          {searchId ? 'Back to topic research' : 'Back to research'}
         </Link>
       </div>
     );
@@ -458,11 +465,11 @@ export function IdeasResultsClient({ generation: initialGeneration, clientName, 
       {/* Breadcrumb + Header */}
       <div>
         <Link
-          href="/admin/search/new"
+          href={searchId ? `/admin/search/${searchId}` : '/admin/search/new'}
           className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text-secondary transition-colors mb-3"
         >
           <ArrowLeft size={14} />
-          Back to research
+          {searchId ? 'Back to topic research' : 'Back to research'}
         </Link>
 
         <div className="flex items-center gap-3">

@@ -1,5 +1,5 @@
 import type { PostingService } from './types';
-import { LatePostingService } from './late';
+import { ZernioPostingService } from './zernio';
 
 export type { PostingService } from './types';
 export type {
@@ -17,19 +17,28 @@ export type {
   LatePost,
 } from './types';
 
+export {
+  ZernioPostingService,
+  createZernioProfile,
+  createLateProfile,
+  getZernioApiKey,
+  getZernioApiBase,
+} from './zernio';
+
 let _instance: PostingService | null = null;
 
 export function getPostingService(): PostingService {
   if (_instance) return _instance;
 
-  const provider = process.env.POSTING_PROVIDER ?? 'late';
+  const provider = process.env.POSTING_PROVIDER ?? 'zernio';
 
   switch (provider) {
+    case 'zernio':
     case 'late':
-      _instance = new LatePostingService();
+      _instance = new ZernioPostingService();
       break;
     default:
-      throw new Error(`Unknown posting provider: ${provider}. Supported: late`);
+      throw new Error(`Unknown posting provider: ${provider}. Supported: zernio (late alias)`);
   }
 
   return _instance;

@@ -5,6 +5,7 @@ import {
   FileText, Image, Check, Pencil, ChevronRight,
 } from 'lucide-react';
 import type { BrandColor, BrandFont, BrandLogo, ProductItem } from '@/lib/knowledge/types';
+import { BrandDnaGoogleFontLink } from './brand-dna-google-font-link';
 
 /** Surface, radius, and hairline border shared by bento cards and full-guideline blocks */
 export const BRAND_DNA_BENTO_SURFACE = 'rounded-xl border border-white/[0.06] bg-white/[0.02]';
@@ -69,15 +70,32 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
         onEdit={() => onEditSection?.('Typography')}
       >
         {fonts.length > 0 ? (
-          <div className="flex h-[7.5rem] flex-col items-center justify-center gap-1">
-            <p className="text-2xl font-bold text-text-primary" style={{ fontFamily: fonts[0]?.family }}>
-              Aa
-            </p>
-            <p className="text-xs text-text-muted">{fonts[0]?.family}</p>
-            {fonts[1] && (
-              <p className="text-[10px] text-text-muted/60">{fonts[1].family} ({fonts[1].role})</p>
-            )}
-          </div>
+          <>
+            <BrandDnaGoogleFontLink
+              families={fonts.slice(0, 2).map((f) => f.family).filter((f) => f?.trim())}
+            />
+            <div className="flex h-[7.5rem] flex-col items-center justify-center gap-1">
+              <p
+                className="text-2xl font-bold text-text-primary"
+                style={{
+                  fontFamily: fonts[0]?.family
+                    ? `"${fonts[0].family}", ui-sans-serif, system-ui, sans-serif`
+                    : 'ui-sans-serif, system-ui, sans-serif',
+                }}
+              >
+                Aa
+              </p>
+              <p className="text-xs text-text-muted">{fonts[0]?.family}</p>
+              {fonts[1] ? (
+                <p
+                  className="text-[10px] text-text-muted/60"
+                  style={{ fontFamily: `"${fonts[1].family}", ui-sans-serif, system-ui, sans-serif` }}
+                >
+                  {fonts[1].family} ({fonts[1].role})
+                </p>
+              ) : null}
+            </div>
+          </>
         ) : (
           <p className="text-xs text-text-muted/60 text-center">No fonts detected</p>
         )}
@@ -95,10 +113,16 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
             {colors.slice(0, 4).map((c, i) => (
               <div
                 key={i}
-                className="min-h-0 min-w-0 rounded-lg"
-                style={{ backgroundColor: c.hex }}
-                title={`${c.hex} (${c.role})`}
-              />
+                className="relative min-h-0 min-w-0 overflow-hidden rounded-lg ring-1 ring-black/15"
+                title={`${c.name?.trim() ? c.name : c.role} · ${c.hex}`}
+              >
+                <div className="absolute inset-0" style={{ backgroundColor: c.hex }} />
+                <div className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 backdrop-blur-[1px]">
+                  <p className="truncate text-center text-[9px] font-semibold capitalize leading-tight text-white">
+                    {c.role ?? 'Color'}
+                  </p>
+                </div>
+              </div>
             ))}
           </div>
         ) : (

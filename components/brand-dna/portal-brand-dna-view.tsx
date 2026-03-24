@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { BrandDNACards } from './brand-dna-cards';
-import { CompletenessBadge } from './completeness-badge';
 
 interface PortalBrandDNAViewProps {
   clientName: string;
@@ -74,7 +73,6 @@ export function PortalBrandDNAView({ clientName, guideline }: PortalBrandDNAView
           <h1 className="ui-page-title-md">Your Brand DNA</h1>
           <p className="text-sm text-text-muted">{clientName}</p>
         </div>
-        {metadata && <CompletenessBadge metadata={metadata} size="md" />}
       </div>
 
       <BrandDNACards metadata={metadata} clientId="" />

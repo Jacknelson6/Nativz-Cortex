@@ -48,9 +48,13 @@ export const PORTAL_PROTECTED_ROUTES: string[] = [
   '/portal/nerd',
 ];
 
-/** Every static admin `page.tsx` (no `[param]`) — post-login E2E crawl. */
+/**
+ * Every static admin `page.tsx` (no `[param]`) — post-login E2E crawl.
+ * Omits `/admin/analytics` — that route only `redirect()`s to `/admin/analytics/social`;
+ * visiting both in sequence causes Playwright `net::ERR_ABORTED` on the second navigation.
+ */
 export const ADMIN_E2E_FULL_STATIC_ROUTES: string[] = [
-  ...ADMIN_PROTECTED_ROUTES,
+  ...ADMIN_PROTECTED_ROUTES.filter((p) => p !== '/admin/analytics'),
   '/admin/analysis',
 ];
 

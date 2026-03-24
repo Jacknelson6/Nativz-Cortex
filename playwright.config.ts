@@ -1,12 +1,24 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * E2E: `npm run dev` (or rely on webServer below), then `npm run test:e2e`
- * Optional signed-in crawl: `E2E_ADMIN_EMAIL=… E2E_ADMIN_PASSWORD=… npm run test:e2e`
+ * E2E: Playwright spawns `next dev` on PLAYWRIGHT_PORT (default 3100) to avoid clashing with a
+ * separate app on :3000 and to skip `npm run predev` (Supabase migrate).
+ *
+ * Optional: `PLAYWRIGHT_SKIP_WEBSERVER=1` + `PLAYWRIGHT_BASE_URL=http://localhost:3000`
+ * Signed-in crawl: `E2E_ADMIN_EMAIL=… E2E_ADMIN_PASSWORD=… npm run test:e2e`
+ *
  * @see https://playwright.dev/docs/test-configuration
  */
+const e2ePort = process.env.PLAYWRIGHT_PORT ?? '3100';
+const spawnedOrigin = `http://127.0.0.1:${e2ePort}`;
+
+const baseURL =
+  process.env.PLAYWRIGHT_BASE_URL ??
+  (process.env.PLAYWRIGHT_SKIP_WEBSERVER ? 'http://localhost:3000' : spawnedOrigin);
+
 export default defineConfig({
   testDir: './tests',
+  testMatch: '**/*.spec.ts',
   fullyParallel: true,
   globalTimeout: 30 * 60 * 1000,
   forbidOnly: !!process.env.CI,
@@ -15,7 +27,7 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : 'html',
   timeout: 60_000,
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
+    baseURL,
     trace: 'on-first-retry',
     viewport: { width: 1366, height: 768 },
   },
@@ -23,9 +35,13 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_SKIP_WEBSERVER
     ? undefined
     : {
-        command: 'npm run dev',
-        url: `${process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'}/api/health`,
-        reuseExistingServer: true,
+        // `next dev` only — avoids `predev` → supabase migrate when DB is unreachable (CI/sandbox).
+        // Full local stack with migrate on each dev start: PLAYWRIGHT_WEBSERVER_COMMAND="npm run dev"
+        command:
+          process.env.PLAYWRIGHT_WEBSERVER_COMMAND ??
+          `npx next dev -p ${e2ePort}`,
+        url: `${spawnedOrigin}/api/health`,
+        reuseExistingServer: !process.env.CI,
         timeout: 180_000,
       },
 

@@ -22,7 +22,9 @@ If the reference shows fashion retail (clothing racks, hangers, mannequins, bout
 
 Render the COMPLETE ad in this one image: headline, subheadline, CTA, offer line if specified, and one integrated brand mark — no empty “reserved for post-production” corners.
 
-CRITICAL: The ONLY marketing copy words allowed are those explicitly listed in the text prompt below. Ignore every character of text visible in the reference. Never add URL footers or domains from the reference.\n\n`;
+CRITICAL: The ONLY marketing copy words allowed are those explicitly listed in the text prompt below. Ignore every character of text visible in the reference. Never add URL footers or domains from the reference.
+
+If this request already included separate client logo and/or product reference images before this layout image, those earlier images are the source of truth for the brand mark and product appearance — never treat any logo, product, or packshot inside this template as the client's real identity.\n\n`;
 
 export interface BuildGeminiStaticAdPromptParams {
   brandContext: BrandContext;
@@ -86,6 +88,7 @@ export function buildGeminiStaticAdPrompt(config: BuildGeminiStaticAdPromptParam
   sections.push(
     `CREATIVE INTENT (READ FIRST):\n` +
       `- This is an ORIGINAL ad for "${brandContext.clientName}" — not a remake of any template brand.\n` +
+      `- Industry is "${brandContext.clientIndustry.trim() || 'general'}": match hero, props, and atmosphere to this sector. Do not default to enterprise software, med-tech, or fashion retail unless that truly matches the product.\n` +
       `- If a layout reference image is supplied separately, use it ONLY for rough spatial rhythm (e.g. headline zone, hero area, CTA area). IGNORE its subject matter, fake UI, node graphs, pills-with-icons, inset photos, and product category when they conflict with: ${productService}.\n` +
       `- The hero visual MUST support that product only. Never recreate unrelated heroes (clothing racks, hangers, fashion retail, mannequins, medical scribe / EHR / SOAP note UI, clinical charts, dating apps, random “extension” grids, etc.). If the layout reference shows apparel retail but this product is B2B SaaS or analytics, treat that photo as forbidden — substitute abstract or tech-appropriate art only.\n` +
       `- Static social ad = ONE headline + ONE subheadline + ONE primary CTA button` +

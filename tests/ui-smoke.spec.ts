@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { filterCriticalConsoleErrors } from './e2e-helpers';
 
 /**
  * Cortex UI smoke — public / auth shells only (no credentials).
@@ -40,8 +41,7 @@ test.describe('Admin login shell', () => {
     await expect(page.getByLabel(/^password$/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /^sign in$/i })).toBeVisible();
 
-    // Hydration / chunk failures show up here
-    expect(errors.filter((e) => !e.includes('favicon'))).toEqual([]);
+    expect(filterCriticalConsoleErrors(errors)).toEqual([]);
   });
 });
 
@@ -67,6 +67,6 @@ test.describe('Portal login shell', () => {
     await expect(submit).toBeVisible();
     await expect(submit).toHaveClass(/btn-shimmer/);
 
-    expect(errors.filter((e) => !e.includes('favicon'))).toEqual([]);
+    expect(filterCriticalConsoleErrors(errors)).toEqual([]);
   });
 });

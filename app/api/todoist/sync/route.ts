@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { syncTodoist } from '@/lib/todoist/sync';
-import { createNotification } from '@/lib/notifications';
+import { createNotification, truncateNotificationBody } from '@/lib/notifications';
 
 // Debounce: skip sync if last sync was less than 60s ago
 const SYNC_COOLDOWN_MS = 60_000;
@@ -19,12 +19,16 @@ const SYNC_COOLDOWN_MS = 60_000;
  * @returns {{ pulled: number, pushed: number, errors: string[], skipped?: boolean }}
  */
 export async function POST(request: NextRequest) {
+  /** Set after auth so unexpected errors can still notify the user. */
+  let syncNotificationUserId: string | undefined;
+
   try {
     const supabase = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    syncNotificationUserId = user.id;
 
     const admin = createAdminClient();
     const { data } = await admin
@@ -58,7 +62,7 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         type: 'sync_failed',
         title: 'Todoist sync issue',
-        body: result.errors.join('; ').substring(0, 200),
+        body: truncateNotificationBody(result.errors.join('; ')),
         linkPath: '/admin/tasks',
       });
     }
@@ -66,6 +70,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     console.error('POST /api/todoist/sync error:', error);
+    if (syncNotificationUserId) {
+      try {
+        const detail =
+          error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error';
+        await createNotification({
+          userId: syncNotificationUserId,
+          type: 'sync_failed',
+          title: 'Todoist sync issue',
+          body: truncateNotificationBody(`Sync crashed: ${detail}`),
+          linkPath: '/admin/tasks',
+        });
+      } catch {
+        /* non-blocking */
+      }
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

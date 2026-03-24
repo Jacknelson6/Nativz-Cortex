@@ -18,6 +18,14 @@ export default function PortalDashboardLoading() {
           </div>
         ))}
       </div>
+
+      {/* Content strategy card */}
+      <div className="space-y-3 rounded-xl border border-nativz-border bg-surface p-5">
+        <Skeleton className="h-5 w-44" />
+        <Skeleton className="h-24 w-full rounded-lg" />
+        <Skeleton className="h-9 w-36 rounded-md" />
+      </div>
+
       <div className="rounded-xl border border-nativz-border bg-surface p-5 space-y-4">
         <Skeleton className="h-5 w-36" />
         {Array.from({ length: 4 }).map((_, i) => (

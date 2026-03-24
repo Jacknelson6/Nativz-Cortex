@@ -13,7 +13,11 @@ export function isBenignConsoleMessage(text: string): boolean {
     t.includes('failed to load resource') ||
     t.includes('hydration') ||
     t.includes('warning:') ||
-    t.includes('deprecated')
+    t.includes('deprecated') ||
+    // Third-party WebGL / canvas (e.g. graph libs) — uncaught in some browsers during teardown
+    t.includes('blendfunc') ||
+    // Next dev HMR can briefly surface parse errors while reconciling a hot edit
+    (t.includes('module parse failed') && t.includes('already been declared'))
   );
 }
 

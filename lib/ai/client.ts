@@ -1,4 +1,4 @@
-import { logUsage, calculateCost } from './usage';
+import { logUsage } from './usage';
 import { checkCostBudget } from './cost-guard';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_OPENROUTER_MODEL } from './openrouter-default-model';
@@ -25,6 +25,8 @@ interface CompletionOptions {
   maxTokens: number;
   webSearch?: boolean;
   webSearchMaxResults?: number;
+  /** Abort the HTTP request after this many ms (0 = no timeout). */
+  timeoutMs?: number;
   /** Feature name for usage tracking (e.g. 'idea_generation', 'script_generation') */
   feature?: string;
   /** User context for per-user usage tracking */
@@ -105,16 +107,39 @@ async function callOpenRouter(
     }];
   }
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-      'X-Title': 'Nativz Cortex',
-    },
-    body: JSON.stringify(body),
-  });
+  const timeoutMs = options.timeoutMs ?? 0;
+  const controller = timeoutMs > 0 ? new AbortController() : null;
+  const timeoutId =
+    controller && timeoutMs > 0
+      ? setTimeout(() => controller.abort(), timeoutMs)
+      : null;
+
+  let response: Response;
+  try {
+    response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+        'X-Title': 'Nativz Cortex',
+      },
+      body: JSON.stringify(body),
+      signal: controller?.signal,
+    });
+  } catch (err) {
+    if (timeoutId) clearTimeout(timeoutId);
+    const aborted =
+      err instanceof Error &&
+      (err.name === 'AbortError' || err.message.toLowerCase().includes('abort'));
+    if (aborted) {
+      throw new Error(
+        `OpenRouter request timed out after ${timeoutMs}ms. Try again or switch model in agency settings.`,
+      );
+    }
+    throw err;
+  }
+  if (timeoutId) clearTimeout(timeoutId);
 
   if (!response.ok) {
     const errorBody = await response.text();

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { CheckCircle2, AlertTriangle, Loader2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { AdGenerationBatch, AdCreative } from '@/lib/ad-creatives/types';
+import { sortAdCreativesForBatch } from '@/lib/ad-creatives/sort-creatives';
 
 interface GenerationProgressProps {
   clientId: string;
@@ -28,11 +29,16 @@ export function GenerationProgress({ clientId, batchId, onComplete }: Generation
       }
       const data = await res.json();
       setBatch(data.batch ?? null);
-      setCreatives(data.creatives ?? []);
+      setCreatives(sortAdCreativesForBatch(data.creatives ?? []));
 
       // Stop polling when done
       const status = data.batch?.status;
-      if (status === 'completed' || status === 'failed' || status === 'partial') {
+      if (
+        status === 'completed' ||
+        status === 'failed' ||
+        status === 'partial' ||
+        status === 'cancelled'
+      ) {
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
@@ -58,7 +64,8 @@ export function GenerationProgress({ clientId, batchId, onComplete }: Generation
   const isDone =
     batch?.status === 'completed' ||
     batch?.status === 'partial' ||
-    batch?.status === 'failed';
+    batch?.status === 'failed' ||
+    batch?.status === 'cancelled';
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -70,6 +77,10 @@ export function GenerationProgress({ clientId, batchId, onComplete }: Generation
             batch?.status === 'failed' ? (
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/15">
                 <AlertTriangle size={20} className="text-red-400" />
+              </div>
+            ) : batch?.status === 'cancelled' ? (
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/15">
+                <AlertTriangle size={20} className="text-amber-400" />
               </div>
             ) : (
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/15">
@@ -86,7 +97,9 @@ export function GenerationProgress({ clientId, batchId, onComplete }: Generation
               {isDone
                 ? batch?.status === 'failed'
                   ? 'Generation failed'
-                  : 'All done!'
+                  : batch?.status === 'cancelled'
+                    ? 'Generation stopped'
+                    : 'All done!'
                 : `Generating creative ${completed + 1} of ${total}...`}
             </h2>
             {isDone && completed > 0 && failed > 0 && (
@@ -95,9 +108,16 @@ export function GenerationProgress({ clientId, batchId, onComplete }: Generation
                 {completed} creative{completed !== 1 ? 's' : ''} generated, {failed} failed
               </p>
             )}
-            {isDone && failed === 0 && completed > 0 && (
+            {isDone && failed === 0 && completed > 0 && batch?.status !== 'cancelled' && (
               <p className="text-xs text-text-muted mt-0.5">
                 {completed} creative{completed !== 1 ? 's' : ''} generated successfully
+              </p>
+            )}
+            {isDone && batch?.status === 'cancelled' && (
+              <p className="text-xs text-text-muted mt-0.5">
+                {completed > 0
+                  ? `${completed} creative${completed !== 1 ? 's' : ''} saved before stop. In-flight images may still appear shortly.`
+                  : 'No new creatives were saved. In-flight images may still appear shortly.'}
               </p>
             )}
           </div>
@@ -110,9 +130,11 @@ export function GenerationProgress({ clientId, batchId, onComplete }: Generation
               className={`h-full rounded-full transition-all duration-500 ease-out ${
                 batch?.status === 'failed'
                   ? 'bg-red-500'
-                  : isDone
-                    ? 'bg-emerald-500'
-                    : 'bg-accent'
+                  : batch?.status === 'cancelled'
+                    ? 'bg-amber-500'
+                    : isDone
+                      ? 'bg-emerald-500'
+                      : 'bg-accent'
               }`}
               style={{ width: `${progress}%` }}
             />
@@ -139,9 +161,16 @@ export function GenerationProgress({ clientId, batchId, onComplete }: Generation
           </Button>
         )}
 
-        {isDone && completed === 0 && (
+        {isDone && completed === 0 && batch?.status !== 'cancelled' && (
           <Button variant="outline" onClick={onComplete} className="w-full">
             Back to generator
+          </Button>
+        )}
+
+        {isDone && completed === 0 && batch?.status === 'cancelled' && (
+          <Button variant="outline" onClick={onComplete} className="w-full">
+            View gallery
+            <ArrowRight size={14} />
           </Button>
         )}
       </div>

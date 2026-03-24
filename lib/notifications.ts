@@ -2,6 +2,14 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import type { NotificationPreferences } from '@/lib/types/notification-preferences';
 import { DEFAULT_NOTIFICATION_PREFERENCES } from '@/lib/types/notification-preferences';
 
+/** Stored on `notifications.body` for sync/error detail (keep UI readable). */
+export const NOTIFICATION_BODY_MAX_LENGTH = 2000;
+
+export function truncateNotificationBody(text: string): string {
+  if (text.length <= NOTIFICATION_BODY_MAX_LENGTH) return text;
+  return `${text.slice(0, NOTIFICATION_BODY_MAX_LENGTH - 1)}…`;
+}
+
 export type NotificationType =
   | 'task_assigned'
   | 'task_due_tomorrow'
@@ -13,7 +21,8 @@ export type NotificationType =
   | 'sync_failed'
   | 'post_published'
   | 'post_failed'
-  | 'post_trending';
+  | 'post_trending'
+  | 'account_disconnected';
 
 /** Load merged notification preferences for a user */
 export async function getUserNotificationPreferences(userId: string): Promise<NotificationPreferences> {

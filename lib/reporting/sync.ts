@@ -15,13 +15,21 @@ export async function syncClientReporting(
   dateRange: DateRange,
 ): Promise<SyncResult> {
   const adminClient = createAdminClient();
-  const service = getPostingService();
   const result: SyncResult = {
     synced: false,
     platforms: [],
     postsCount: 0,
     errors: [],
   };
+
+  if (!process.env.ZERNIO_API_KEY?.trim() && !process.env.LATE_API_KEY?.trim()) {
+    result.errors.push(
+      'Social reporting sync skipped: ZERNIO_API_KEY is not set. Create a key in Zernio (Settings → API keys). Docs: https://docs.zernio.com/ — legacy LATE_API_KEY is still accepted during migration.',
+    );
+    return result;
+  }
+
+  const service = getPostingService();
 
   // 1. Query active social profiles connected via Late
   const { data: profiles, error: profilesError } = await adminClient

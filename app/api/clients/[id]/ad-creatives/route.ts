@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { removeAdCreativeStorageFile } from '@/lib/ad-creatives/remove-creative-storage';
 
 const querySchema = z.object({
   is_favorite: z.enum(['true', 'false']).optional(),
@@ -32,22 +33,6 @@ const bulkDeleteSchema = z.object({
 });
 
 const deleteSchema = z.union([singleDeleteSchema, bulkDeleteSchema]);
-
-async function removeAdCreativeStorageFile(
-  admin: ReturnType<typeof createAdminClient>,
-  imageUrl: string | null,
-): Promise<void> {
-  if (!imageUrl) return;
-  try {
-    const url = new URL(imageUrl);
-    const match = url.pathname.match(/\/storage\/v1\/object\/public\/ad-creatives\/(.+)/);
-    if (match) {
-      await admin.storage.from('ad-creatives').remove([match[1]]);
-    }
-  } catch {
-    console.warn('Failed to delete storage file for creative URL:', imageUrl);
-  }
-}
 
 /**
  * GET /api/clients/[id]/ad-creatives
@@ -89,6 +74,7 @@ export async function GET(
       .select('*', { count: 'exact' })
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (is_favorite !== undefined) query = query.eq('is_favorite', is_favorite === 'true');

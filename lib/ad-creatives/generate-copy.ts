@@ -91,7 +91,8 @@ Rules:
 - Each set must be unique — vary the angle, emotion, or framing (headline + subheadline only${ctaFixed ? '; keep cta identical across all sets' : ', including cta'})
 - Match the brand's tone and vocabulary exactly
 - Factual discipline: only claims that fit the product/service and brand materials below — do NOT invent features, metrics, integrations, or industries the brand does not serve
-- Do not use generic filler — every word should earn its place`;
+- Do not use generic filler — every word should earn its place
+- Output ONLY valid JSON: no markdown fences, no commentary; every string must be closed and the "copies" array must be complete`;
 
   const supplement = brandContext.creativeSupplementBlock?.trim();
   const supplementBlock =
@@ -113,7 +114,21 @@ Rules:
     ? `\nAudience: ${brandContext.audience.summary.trim()}`
     : '';
 
+  const brandLock = [
+    `NON-NEGOTIABLE: Every headline and subheadline must sound like "${brandContext.clientName}" (${brandContext.clientIndustry}) talking to their real customer — not generic SaaS, fintech, or unrelated categories.`,
+    brandContext.audience.summary?.trim()
+      ? `Reader: ${brandContext.audience.summary.trim().slice(0, 500)}${brandContext.audience.summary.length > 500 ? '…' : ''}`
+      : null,
+    brandContext.positioning?.trim()
+      ? `Positioning to respect: ${brandContext.positioning.trim().slice(0, 400)}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
   const userPrompt = `Generate ${count} unique sets of ad copy for the following:
+
+${brandLock}
 
 Brand: ${brandContext.clientName}
 Industry: ${brandContext.clientIndustry}
@@ -124,34 +139,80 @@ ${toneGuidance ? `BRAND VOICE GUIDELINES:\n${toneGuidance}` : ''}${pillars}${sup
 
 Return exactly ${count} sets as JSON.`;
 
-  const result = await createCompletion({
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    maxTokens: Math.min(8192, 400 + count * 100),
-    feature: 'ad_copy_generation',
-    modelPreference: resolveAdCopyOpenRouterPreference(openRouterModelPreference),
-  });
+  const maxTokens = Math.min(8192, 512 + Math.ceil(count * 340));
+  let lastText = '';
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = await createCompletion({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      maxTokens,
+      feature: 'ad_copy_generation',
+      modelPreference: resolveAdCopyOpenRouterPreference(openRouterModelPreference),
+    });
+    lastText = result.text;
+    const jsonText = extractJson(result.text);
+    try {
+      const parsed = responseSchema.parse(JSON.parse(jsonText));
+      const copies = parsed.copies.slice(0, count);
+      if (copies.length < count) {
+        throw new Error(`Expected ${count} copies, got ${copies.length}`);
+      }
+      if (ctaFixed) {
+        return copies.map((c) => ({ ...c, cta: ctaFixed }));
+      }
+      return copies;
+    } catch (err) {
+      lastErr = err;
+      console.warn(
+        `[generate-copy] parse attempt ${attempt + 1} failed:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+  console.error('[generate-copy] failed to parse AI response:', lastText.substring(0, 800));
+  throw new Error(
+    `Failed to parse ad copy response: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`,
+  );
+}
 
-  // Extract JSON from the response (handle markdown code blocks)
-  const jsonText = extractJson(result.text);
+/** Smaller chunks avoid truncated JSON from models with tight output limits (e.g. free tier). */
+const DEFAULT_COPY_CHUNK = 10;
 
-  let parsed: z.infer<typeof responseSchema>;
-  try {
-    parsed = responseSchema.parse(JSON.parse(jsonText));
-  } catch (err) {
-    console.error('[generate-copy] failed to parse AI response:', result.text.substring(0, 500));
-    throw new Error(
-      `Failed to parse ad copy response: ${err instanceof Error ? err.message : String(err)}`,
+/**
+ * Generate `count` unique copy rows in chunks to stay within model output limits.
+ */
+export async function generateAdCopyBatched(
+  params: Omit<GenerateAdCopyParams, 'count'> & { count: number; chunkSize?: number },
+): Promise<OnScreenText[]> {
+  const { count, chunkSize = DEFAULT_COPY_CHUNK, ...rest } = params;
+  if (count <= 0) return [];
+  const out: OnScreenText[] = [];
+
+  async function oneChunk(n: number): Promise<OnScreenText[]> {
+    try {
+      return await generateAdCopy({ ...rest, count: n });
+    } catch (e) {
+      if (n <= 1) throw e;
+      const a = Math.ceil(n / 2);
+      const b = n - a;
+      const left = await oneChunk(a);
+      const right = await oneChunk(b);
+      return [...left, ...right];
+    }
+  }
+
+  for (let offset = 0; offset < count; offset += chunkSize) {
+    const n = Math.min(chunkSize, count - offset);
+    console.log(
+      `[generate-copy] batched chunk ${offset + 1}–${offset + n} of ${count} (${n} set(s))…`,
     );
+    const chunk = await oneChunk(n);
+    out.push(...chunk);
   }
-
-  const copies = parsed.copies.slice(0, count);
-  if (ctaFixed) {
-    return copies.map((c) => ({ ...c, cta: ctaFixed }));
-  }
-  return copies;
+  return out.slice(0, count);
 }
 
 // ---------------------------------------------------------------------------

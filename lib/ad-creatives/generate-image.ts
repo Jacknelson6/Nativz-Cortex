@@ -1,6 +1,15 @@
 // ---------------------------------------------------------------------------
 // Static Ad Generation — Image Generation via Google AI Studio
 // ---------------------------------------------------------------------------
+//
+// Multimodal policy (Cortex static ads):
+// - Always attach client product URL(s) and official logo URL(s) when the orchestrator supplies them.
+//   Those define real merchandise and the real brand mark.
+// - A layout template image (`referenceImageUrl`) is composition-only — do not copy its embedded logos
+//   or product photos as the client's identity.
+// - Supplementary brand refs (mood boards, site screenshots from DNA) are omitted when a layout
+//   template is present so they do not fight template-driven composition; logo + product still apply.
+//   Set `includeSupplementaryBrandReferencesWithLayoutTemplate` to force them on.
 
 import { REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION } from './gemini-static-ad-prompt';
 
@@ -21,8 +30,23 @@ interface GenerateAdImageParams {
   /** Grayscale zone map from `buildLayoutWireframePng` — spatial hint only */
   layoutWireframePng?: Buffer;
   productImageUrls?: string[];
+  /**
+   * Local product shots as base64 (CLI / scripts). When non-empty, these are sent instead of
+   * fetching `productImageUrls` for the product-reference slot (same multimodal instructions).
+   */
+  productImagesInline?: { mimeType: string; data: string }[];
   /** Extra brand images (mood boards, packaging, guideline shots) from client uploads */
   brandReferenceImageUrls?: string[];
+  /**
+   * Official logo asset URLs from Brand DNA — shown first among brand images with instructions
+   * to reproduce the mark faithfully (Nano batches previously omitted these entirely).
+   */
+  brandLogoImageUrls?: string[];
+  /**
+   * When a layout template image is also sent, supplementary refs are skipped by default.
+   * Set true only if you intentionally want mood/screenshot images alongside template copy.
+   */
+  includeSupplementaryBrandReferencesWithLayoutTemplate?: boolean;
   aspectRatio: string;
 }
 
@@ -86,24 +110,73 @@ async function fetchImageAsBase64(url: string): Promise<{ mimeType: string; data
 
 async function buildParts(params: GenerateAdImageParams): Promise<GeminiContentPart[]> {
   const parts: GeminiContentPart[] = [];
+  const hasLayoutTemplateRef = Boolean(params.referenceImageUrl?.trim());
+  let attachedProductRefCount = 0;
+  let attachedLogoRefCount = 0;
 
   // 1. Include actual product images FIRST so the model uses real product photography
-  const productImages = params.productImageUrls ?? [];
-  if (productImages.length > 0) {
-    const fetched = await Promise.all(productImages.slice(0, 3).map(fetchImageAsBase64));
+  const inlineProducts = params.productImagesInline?.filter((p) => p.data?.length) ?? [];
+  if (inlineProducts.length > 0) {
+    const valid = inlineProducts.slice(0, 3);
+    attachedProductRefCount = valid.length;
+    for (const img of valid) {
+      parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+    }
+    parts.push({
+      text: `The above ${valid.length > 1 ? 'images are ACTUAL product photos' : 'image is an ACTUAL product photo'} for this brand. You MUST use these exact products in the advertisement — do not generate different or imaginary product imagery. The product appearance, packaging, and colors must match these reference photos exactly.\n\n`,
+    });
+  } else {
+    const productImages = params.productImageUrls ?? [];
+    if (productImages.length > 0) {
+      const fetched = await Promise.all(productImages.slice(0, 3).map(fetchImageAsBase64));
+      const valid = fetched.filter(Boolean) as { mimeType: string; data: string }[];
+      attachedProductRefCount = valid.length;
+      if (valid.length > 0) {
+        for (const img of valid) {
+          parts.push({ inlineData: img });
+        }
+        parts.push({
+          text: `The above ${valid.length > 1 ? 'images are ACTUAL product photos' : 'image is an ACTUAL product photo'} for this brand. You MUST use these exact products in the advertisement — do not generate different or imaginary product imagery. The product appearance, packaging, and colors must match these reference photos exactly.\n\n`,
+        });
+      }
+    }
+  }
+
+  // 2a. Official brand logo(s) from guidelines (before generic mood refs)
+  const logoUrls = params.brandLogoImageUrls ?? [];
+  if (logoUrls.length > 0) {
+    const fetched = await Promise.all(logoUrls.slice(0, 2).map(fetchImageAsBase64));
     const valid = fetched.filter(Boolean) as { mimeType: string; data: string }[];
+    attachedLogoRefCount = valid.length;
     if (valid.length > 0) {
       for (const img of valid) {
         parts.push({ inlineData: img });
       }
       parts.push({
-        text: `The above ${valid.length > 1 ? 'images are ACTUAL product photos' : 'image is an ACTUAL product photo'} for this brand. You MUST use these exact products in the advertisement — do not generate different or imaginary product imagery. The product appearance, packaging, and colors must match these reference photos exactly.\n\n`,
+        text:
+          `The above ${valid.length > 1 ? 'images are the official BRAND LOGOS' : 'image is the official BRAND LOGO'} from the brand guidelines. ` +
+          `Place a faithful rendition of this mark on the finished ad (correct proportions, lockup, and colors as shown). ` +
+          `Do not invent a different logo, wordmark, or substitute another company’s identity.\n\n`,
       });
     }
   }
 
-  // 2. Uploaded brand reference images (after product shots, before layout template)
-  const brandRefs = params.brandReferenceImageUrls ?? [];
+  if (
+    hasLayoutTemplateRef &&
+    (attachedProductRefCount > 0 || attachedLogoRefCount > 0)
+  ) {
+    parts.push({
+      text:
+        'A layout template image will appear later in this request — use it ONLY for rough composition and spacing. ' +
+        'The product and/or logo reference images above are the authoritative visuals for merchandise and brand mark. ' +
+        'Do not copy any product, logo, or packshot shown inside the template image as if it were this client’s.\n\n',
+    });
+  }
+
+  // 2b. Supplementary brand references — skipped when copying a layout template (avoids conflicting mood priors)
+  const skipSupplementary =
+    hasLayoutTemplateRef && !params.includeSupplementaryBrandReferencesWithLayoutTemplate;
+  const brandRefs = skipSupplementary ? [] : (params.brandReferenceImageUrls ?? []);
   if (brandRefs.length > 0) {
     const fetched = await Promise.all(brandRefs.slice(0, 5).map(fetchImageAsBase64));
     const valid = fetched.filter(Boolean) as { mimeType: string; data: string }[];
@@ -112,7 +185,7 @@ async function buildParts(params: GenerateAdImageParams): Promise<GeminiContentP
         parts.push({ inlineData: img });
       }
       parts.push({
-        text: `The above ${valid.length > 1 ? 'images are supplementary brand references' : 'image is a supplementary brand reference'} (mood, packaging, photography style, or guideline examples). Use them for color mood, composition, and on-brand visual language — not for copying any text or third-party logos from those images.\n\n`,
+        text: `The above ${valid.length > 1 ? 'images are supplementary brand references' : 'image is a supplementary brand reference'} (mood boards, packaging, site captures, or extra guideline art). Use them for color mood, photography style, and on-brand visual language. Do not copy unrelated text, third-party marks, or replace the official logo given earlier.\n\n`,
       });
     }
   }

@@ -1,0 +1,19 @@
+BRAND CONTEXT — Goldback (fallback prompt block for Nano Banana / Gemini batches)
+
+Client: Goldback — https://goldback.com
+Category: Spendable 24K gold currency organized into small denominations; state series with regional artwork.
+
+Idaho positioning (creative brief 02/04/26)
+- Idaho’s trustworthy, spendable 24K gold currency — rooted locally and ready for the future.
+- Overarching concept: SPEND GOLD. STAY FREE. KEEP IDAHO STRONG.
+- Pillars: protection (inflation / hold value in gold), verification (serials, UV, artwork), spendability (local merchant network), local pride (Idaho places and stories), future-ready independence.
+
+Voice
+- Direct, confident, Idaho-rooted; practical and proof-forward; avoid gimmicky fintech hype.
+
+Product truth
+- Physical notes with stated 24K gold content; polymer protection; anti-counterfeiting (serials, detailed art, UV where applicable).
+- Per-canvas copy in the filled template is authoritative — render on-screen text exactly as given.
+
+Visual defaults for Idaho GTM
+- Gritty, industrious, classic. Any palette values in the image modifier are for your color matching only — never draw a swatch strip, footer legend, or hex codes on the finished ad.

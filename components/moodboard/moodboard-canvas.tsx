@@ -27,6 +27,7 @@ import {
   Share2,
   MessageSquare,
   ExternalLink,
+  Search,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -177,6 +178,15 @@ export function MoodboardCanvas({
             <span className="hidden shrink-0 rounded-full bg-accent-surface px-2.5 py-0.5 text-[10px] font-medium text-accent-text sm:inline">
               {mb.board.client_name}
             </span>
+          ) : null}
+          {mb.board?.source_topic_search_id ? (
+            <Link
+              href={`/admin/search/${mb.board.source_topic_search_id}`}
+              className="hidden shrink-0 items-center gap-1 rounded-full border border-nativz-border bg-surface-hover px-2.5 py-0.5 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent-text sm:inline-flex"
+            >
+              <Search size={10} />
+              Source research
+            </Link>
           ) : null}
         </div>
 

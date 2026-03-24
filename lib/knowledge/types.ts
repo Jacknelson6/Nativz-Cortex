@@ -134,6 +134,10 @@ export interface ProductItem {
   imageUrl?: string;
   category?: string;
   offeringType?: ProductOfferingType;
+  /** Preferred on-ad CTA label for this SKU (wizard + generation). */
+  cta?: string;
+  /** Promo / urgency line for this SKU (shown in wizard; fed into image prompt offer context). */
+  offer?: string;
 }
 
 /** One of five ICPs generated during Brand DNA. */

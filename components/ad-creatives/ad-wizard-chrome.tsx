@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, type ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
+import { Check, type LucideIcon } from 'lucide-react';
 
 function cn(...parts: (string | false | undefined | null)[]) {
   return parts.filter(Boolean).join(' ');
@@ -16,7 +16,7 @@ export const AD_WIZARD_STEP_META = [
     id: 'brand' as const,
     title: 'Brand & assets',
     shortTitle: 'Brand',
-    description: 'Confirm name, colors, and logo. Add reference images from the site if you want.',
+    description: 'Confirm Brand DNA and add creative reference files if you want extra assets for generation.',
   },
   {
     id: 'products' as const,
@@ -122,11 +122,17 @@ export function AdWizardProgress({ currentIndex, onStepClick }: AdWizardProgress
                     'flex h-8 w-8 items-center justify-center rounded-full border text-[11px] font-semibold transition-all',
                     active &&
                       'border-accent-border bg-accent-surface text-accent-text shadow-[0_0_0_1px_rgba(59,130,246,0.2)]',
-                    done && !active && 'border-nativz-border bg-background text-text-secondary',
+                    done &&
+                      !active &&
+                      'border-accent-border/45 bg-accent/12 text-accent-text',
                     !done && !active && 'border-nativz-border/60 bg-background/50 text-text-muted',
                   )}
                 >
-                  {i + 1}
+                  {done && !active ? (
+                    <Check size={15} strokeWidth={2.5} className="shrink-0" aria-hidden />
+                  ) : (
+                    <span aria-hidden>{i + 1}</span>
+                  )}
                 </span>
                 <span
                   className={cn(
@@ -257,7 +263,7 @@ export function AdWizardShell({
 
 export function AdWizardFooter({ children }: { children: ReactNode }) {
   return (
-    <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+    <div className="mt-1 flex flex-col-reverse gap-3 border-t border-nativz-border/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
       {children}
     </div>
   );

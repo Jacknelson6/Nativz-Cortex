@@ -1,23 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getPostingService } from '@/lib/posting';
+import { getPostingService, getZernioApiBase, getZernioApiKey } from '@/lib/posting';
 import { z } from 'zod';
 import type { SocialPlatform } from '@/lib/posting/types';
 import { signState } from '@/lib/scheduler/oauth-state';
-
-const LATE_API_BASE = 'https://getlate.dev/api/v1';
 
 const ConnectSchema = z.object({
   platform: z.enum(['facebook', 'instagram', 'tiktok', 'youtube']),
   client_id: z.string().uuid(),
 });
 
-/** Create a Late profile for a client if one doesn't exist yet */
+/** Create a Zernio profile for a client if one doesn't exist yet (stored as late_profile_id). */
 async function ensureLateProfile(clientId: string, clientName: string): Promise<string> {
   const adminClient = createAdminClient();
 
-  // Check if client already has a Late profile
+  // Check if client already has a Zernio/Late profile id
   const { data: client } = await adminClient
     .from('clients')
     .select('late_profile_id')
@@ -26,22 +24,24 @@ async function ensureLateProfile(clientId: string, clientName: string): Promise<
 
   if (client?.late_profile_id) return client.late_profile_id;
 
-  // Create a new profile in Late
-  const res = await fetch(`${LATE_API_BASE}/profiles`, {
+  const res = await fetch(`${getZernioApiBase()}/profiles`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${process.env.LATE_API_KEY}`,
+      Authorization: `Bearer ${getZernioApiKey()}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ name: clientName }),
   });
 
   if (!res.ok) {
-    throw new Error(`Failed to create Late profile: ${await res.text()}`);
+    throw new Error(`Failed to create Zernio profile: ${await res.text()}`);
   }
 
-  const { profile } = await res.json();
-  const lateProfileId = profile._id;
+  const body = (await res.json()) as { profile?: { _id?: string; id?: string } };
+  const lateProfileId = body.profile?._id ?? body.profile?.id;
+  if (!lateProfileId) {
+    throw new Error('Zernio create profile: missing profile id in response');
+  }
 
   // Save it to our DB
   await adminClient
@@ -55,9 +55,8 @@ async function ensureLateProfile(clientId: string, clientName: string): Promise<
 /**
  * POST /api/scheduler/connect
  *
- * Initiate a Late API social account connection for a client. Creates a Late profile
- * for the client if one doesn't exist yet, then returns an authorization URL to redirect
- * the user to for platform OAuth.
+ * Initiate Zernio OAuth to connect a social account for a client. Creates a Zernio profile
+ * (stored as late_profile_id) if missing, then returns authUrl to redirect the user.
  *
  * @auth Required (any authenticated user)
  * @body platform - 'facebook' | 'instagram' | 'tiktok' | 'youtube' (required)

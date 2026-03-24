@@ -1,8 +1,7 @@
 import { after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateBrandDNA } from './generate';
-
-const IN_FLIGHT_STATUSES = ['queued', 'crawling', 'extracting', 'analyzing', 'compiling'] as const;
+import { BRAND_DNA_JOB_IN_FLIGHT_STATUSES } from './constants';
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -23,7 +22,7 @@ export async function queueBrandDNAGeneration(params: {
     .from('brand_dna_jobs')
     .select('id')
     .eq('client_id', clientId)
-    .in('status', [...IN_FLIGHT_STATUSES])
+    .in('status', [...BRAND_DNA_JOB_IN_FLIGHT_STATUSES])
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -58,7 +57,12 @@ export async function queueBrandDNAGeneration(params: {
         onProgress: async (status, progressPct, stepLabel) => {
           await bg
             .from('brand_dna_jobs')
-            .update({ status, progress_pct: progressPct, step_label: stepLabel })
+            .update({
+              status,
+              progress_pct: progressPct,
+              step_label: stepLabel,
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', job.id);
         },
       });
@@ -70,6 +74,7 @@ export async function queueBrandDNAGeneration(params: {
           progress_pct: 100,
           step_label: 'Complete',
           completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .eq('id', job.id);
     } catch (err) {
@@ -79,6 +84,7 @@ export async function queueBrandDNAGeneration(params: {
         .update({
           status: 'failed',
           error_message: err instanceof Error ? err.message : 'Unknown error',
+          updated_at: new Date().toISOString(),
         })
         .eq('id', job.id);
     }

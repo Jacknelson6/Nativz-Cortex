@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Copy, Heart, Images, Loader2, Sparkles, Trash2, Download, X } from 'lucide-react';
+import { Copy, Heart, Images, RefreshCw, Sparkles, Trash2, Download, X, CircleStop } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -11,9 +11,39 @@ import { GalleryPlaceholder } from './gallery-placeholder';
 import { Dialog } from '@/components/ui/dialog';
 import { downloadCreativesAsZip } from '@/lib/ad-creatives/bulk-download-creatives';
 import type { AdCreative } from '@/lib/ad-creatives/types';
+import { sortAdCreativesForGallery } from '@/lib/ad-creatives/sort-creatives';
 import type { AdBatchPlaceholderConfig } from '@/lib/ad-creatives/placeholder-config';
 
 const BULK_MAX = 50;
+
+/** API default page size is 24; max is 100. Load every page so the grid matches Supabase. */
+const GALLERY_FETCH_LIMIT = 100;
+
+async function fetchAllAdCreativesForGallery(clientId: string): Promise<AdCreative[]> {
+  const limit = GALLERY_FETCH_LIMIT;
+  let page = 1;
+  const byId = new Map<string, AdCreative>();
+  let reportedTotal: number | null = null;
+
+  for (let guard = 0; guard < 200; guard++) {
+    const res = await fetch(
+      `/api/clients/${encodeURIComponent(clientId)}/ad-creatives?limit=${limit}&page=${page}`,
+    );
+    if (!res.ok) break;
+    const data = (await res.json()) as { creatives?: AdCreative[]; total?: number };
+    if (typeof data.total === 'number') reportedTotal = data.total;
+    const batch = data.creatives ?? [];
+    for (const c of batch) {
+      if (c?.id) byId.set(c.id, c);
+    }
+    if (batch.length === 0) break;
+    if (batch.length < limit) break;
+    if (reportedTotal !== null && byId.size >= reportedTotal) break;
+    page++;
+  }
+
+  return sortAdCreativesForGallery([...byId.values()]);
+}
 
 function formatBatchDate(iso: string): string {
   const d = new Date(iso);
@@ -28,6 +58,15 @@ function formatBatchDate(iso: string): string {
 
 type FilterTab = 'all' | 'favorites';
 
+type BatchProgressSnapshot = {
+  status: string;
+  completed: number;
+  failed: number;
+  total: number;
+  batchCreatedAt: string | null;
+  checkedAt: string;
+};
+
 interface CreativeGalleryProps {
   clientId: string;
   /** When false, empty state points users to the Brand DNA tab (CTA lives in the parent toolbar). */
@@ -37,10 +76,6 @@ interface CreativeGalleryProps {
   onBatchComplete?: () => void;
   /** Opens generate wizard pre-filled from the selected creative (Brand DNA ready only). */
   onCreateMoreLikeThis?: (creative: AdCreative) => void;
-  /** When true, parent should hide the sticky-bar Generate button (CTA is shown in the empty state). */
-  onGalleryEmptyForCtaChange?: (isEmpty: boolean) => void;
-  /** Opens the generate wizard from the empty-state CTA. */
-  onOpenGenerateWizard?: () => void;
 }
 
 export function CreativeGallery({
@@ -50,8 +85,6 @@ export function CreativeGallery({
   placeholderConfig,
   onBatchComplete,
   onCreateMoreLikeThis,
-  onGalleryEmptyForCtaChange,
-  onOpenGenerateWizard,
 }: CreativeGalleryProps) {
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,8 +93,49 @@ export function CreativeGallery({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkWorking, setBulkWorking] = useState(false);
-  const [batchCreativeIds, setBatchCreativeIds] = useState<Set<string>>(new Set());
+  /** Batch started outside this session (e.g. CLI) — parent may not have activeBatchId. */
+  const [discoveredBatchId, setDiscoveredBatchId] = useState<string | null>(null);
+  const [batchProgress, setBatchProgress] = useState<BatchProgressSnapshot | null>(null);
+  const [refreshingGallery, setRefreshingGallery] = useState(false);
+  const [stoppingBatch, setStoppingBatch] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const effectiveBatchId = activeBatchId ?? discoveredBatchId ?? null;
+
+  const mergeBatchPollPayload = useCallback(
+    (data: {
+      batch?: {
+        status?: string;
+        completed_count?: number;
+        failed_count?: number;
+        total_count?: number;
+        created_at?: string;
+      };
+      creatives?: AdCreative[];
+    }) => {
+      const b = data.batch;
+      if (b?.status) {
+        setBatchProgress({
+          status: b.status,
+          completed: Number(b.completed_count ?? 0),
+          failed: Number(b.failed_count ?? 0),
+          total: Number(b.total_count ?? 0),
+          batchCreatedAt: typeof b.created_at === 'string' ? b.created_at : null,
+          checkedAt: new Date().toISOString(),
+        });
+      }
+      const batchCreatives: AdCreative[] = data.creatives ?? [];
+      setCreatives((prev) => {
+        if (batchCreatives.length === 0) return prev;
+        const byId = new Map<string, AdCreative>(prev.map((c) => [c.id, c]));
+        for (const c of batchCreatives) {
+          byId.set(c.id, c);
+        }
+        return sortAdCreativesForGallery([...byId.values()]);
+      });
+    },
+    [],
+  );
 
   const { confirm: confirmBulkDelete, dialog: bulkDeleteDialog } = useConfirm({
     title: 'Delete selected creatives',
@@ -72,11 +146,8 @@ export function CreativeGallery({
 
   const fetchCreatives = useCallback(async () => {
     try {
-      const res = await fetch(`/api/clients/${clientId}/ad-creatives`);
-      if (res.ok) {
-        const data = await res.json();
-        setCreatives(data.creatives ?? []);
-      }
+      const list = await fetchAllAdCreativesForGallery(clientId);
+      setCreatives(list);
     } catch {
       // Silently fail
     } finally {
@@ -88,39 +159,62 @@ export function CreativeGallery({
     fetchCreatives();
   }, [fetchCreatives]);
 
+  // Pick up in-flight batches (CLI / other tab) when parent did not set activeBatchId
   useEffect(() => {
-    if (!onGalleryEmptyForCtaChange) return;
-    // While loading, keep parent unchanged (avoids header CTA flicker when re-entering gallery).
-    if (loading) return;
-    const empty = creatives.length === 0 && !activeBatchId;
-    onGalleryEmptyForCtaChange(empty);
-  }, [loading, creatives.length, activeBatchId, onGalleryEmptyForCtaChange]);
+    if (!clientId) return;
+    if (activeBatchId) {
+      setDiscoveredBatchId(null);
+      return;
+    }
+    let cancelled = false;
+    async function discover() {
+      try {
+        const res = await fetch(
+          `/api/clients/${clientId}/ad-creatives/batches?status=generating,queued`,
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const batches = data.batches ?? [];
+        const active = batches.find(
+          (b: { status: string }) => b.status === 'generating' || b.status === 'queued',
+        );
+        if (!cancelled) setDiscoveredBatchId((active as { id?: string } | undefined)?.id ?? null);
+      } catch {
+        /* ignore */
+      }
+    }
+    void discover();
+    const t = setInterval(() => void discover(), 6000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [clientId, activeBatchId]);
+
+  useEffect(() => {
+    if (!effectiveBatchId) setBatchProgress(null);
+  }, [effectiveBatchId]);
 
   // Poll for batch progress when actively generating
   useEffect(() => {
-    if (!activeBatchId || !clientId) return;
+    if (!effectiveBatchId || !clientId) return;
 
     async function pollBatch() {
       try {
-        const res = await fetch(`/api/clients/${clientId}/ad-creatives/batches/${activeBatchId}`);
+        const res = await fetch(`/api/clients/${clientId}/ad-creatives/batches/${effectiveBatchId}`);
         if (!res.ok) return;
         const data = await res.json();
+        mergeBatchPollPayload(data);
 
-        // Update batch creatives
-        const batchCreatives: AdCreative[] = data.creatives ?? [];
-        setBatchCreativeIds(new Set(batchCreatives.map((c: AdCreative) => c.id)));
-
-        // Merge batch creatives into main list
-        setCreatives((prev) => {
-          const existingIds = new Set(prev.map((c) => c.id));
-          const newOnes = batchCreatives.filter((c: AdCreative) => !existingIds.has(c.id));
-          return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
-        });
-
-        // Check if batch is done
         const status = data.batch?.status;
-        if (status === 'completed' || status === 'failed' || status === 'partial') {
+        if (
+          status === 'completed' ||
+          status === 'failed' ||
+          status === 'partial' ||
+          status === 'cancelled'
+        ) {
           if (pollRef.current) clearInterval(pollRef.current);
+          setDiscoveredBatchId(null);
           onBatchComplete?.();
         }
       } catch {
@@ -134,7 +228,93 @@ export function CreativeGallery({
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [activeBatchId, clientId, onBatchComplete]);
+  }, [effectiveBatchId, clientId, mergeBatchPollPayload, onBatchComplete]);
+
+  const discoverActiveBatchId = useCallback(async (): Promise<string | null> => {
+    try {
+      const res = await fetch(
+        `/api/clients/${clientId}/ad-creatives/batches?status=generating,queued`,
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      const batches = data.batches ?? [];
+      const active = batches.find(
+        (b: { status: string }) => b.status === 'generating' || b.status === 'queued',
+      ) as { id?: string } | undefined;
+      return active?.id ?? null;
+    } catch {
+      return null;
+    }
+  }, [clientId]);
+
+  const handleStopBatch = useCallback(async () => {
+    if (!effectiveBatchId) return;
+    setStoppingBatch(true);
+    try {
+      const res = await fetch(
+        `/api/clients/${clientId}/ad-creatives/batches/${effectiveBatchId}/cancel`,
+        { method: 'POST' },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(typeof data.error === 'string' ? data.error : 'Could not stop batch');
+        return;
+      }
+      toast.success('Stopping generation — images already in flight may still finish');
+      if (pollRef.current) clearInterval(pollRef.current);
+      const resBatch = await fetch(`/api/clients/${clientId}/ad-creatives/batches/${effectiveBatchId}`);
+      if (resBatch.ok) {
+        const payload = await resBatch.json();
+        mergeBatchPollPayload(payload);
+      }
+      setDiscoveredBatchId(null);
+      onBatchComplete?.();
+    } catch {
+      toast.error('Could not stop batch');
+    } finally {
+      setStoppingBatch(false);
+    }
+  }, [clientId, effectiveBatchId, mergeBatchPollPayload, onBatchComplete]);
+
+  const handleRefreshGallery = useCallback(async () => {
+    setRefreshingGallery(true);
+    try {
+      const list = await fetchAllAdCreativesForGallery(clientId);
+      setCreatives(list);
+
+      let batchId = effectiveBatchId;
+      if (!batchId) {
+        const found = await discoverActiveBatchId();
+        if (found) setDiscoveredBatchId(found);
+        batchId = found;
+      }
+
+      if (batchId) {
+        const resBatch = await fetch(`/api/clients/${clientId}/ad-creatives/batches/${batchId}`);
+        if (resBatch.ok) {
+          const payload = await resBatch.json();
+          mergeBatchPollPayload(payload);
+          const st = payload.batch?.status;
+          if (st === 'completed' || st === 'failed' || st === 'partial' || st === 'cancelled') {
+            setDiscoveredBatchId(null);
+            onBatchComplete?.();
+          }
+        }
+      }
+
+      toast.success('Gallery refreshed');
+    } catch {
+      toast.error('Could not refresh. Try again.');
+    } finally {
+      setRefreshingGallery(false);
+    }
+  }, [
+    clientId,
+    effectiveBatchId,
+    discoverActiveBatchId,
+    mergeBatchPollPayload,
+    onBatchComplete,
+  ]);
 
   const toggleFavorite = async (id: string) => {
     const creative = creatives.find((c) => c.id === id);
@@ -180,10 +360,7 @@ export function CreativeGallery({
     });
   }, [creatives, filterTab]);
 
-  const selectableCreatives = useMemo(
-    () => filtered.filter((c) => !batchCreativeIds.has(c.id)),
-    [filtered, batchCreativeIds],
-  );
+  const selectableCreatives = filtered;
 
   useEffect(() => {
     const allow = new Set(selectableCreatives.map((c) => c.id));
@@ -318,23 +495,58 @@ export function CreativeGallery({
     }));
   }, [filtered]);
 
+  const isBatchGenerating =
+    !!effectiveBatchId &&
+    !!batchProgress &&
+    (batchProgress.status === 'generating' || batchProgress.status === 'queued');
+
+  const expectedSlotsTotal = useMemo(() => {
+    if (batchProgress && batchProgress.total > 0) return batchProgress.total;
+    if (placeholderConfig?.templateThumbnails.length)
+      return placeholderConfig.templateThumbnails.length;
+    return 0;
+  }, [batchProgress, placeholderConfig]);
+
+  const activeBatchCreativesSorted = useMemo(() => {
+    if (!effectiveBatchId) return [];
+    return filtered
+      .filter((c) => c.batch_id === effectiveBatchId)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }, [filtered, effectiveBatchId]);
+
+  /** In-flight batch with no rows in `filtered` yet (copy step / first image) still needs skeleton grid. */
+  const displayGroups = useMemo(() => {
+    if (!effectiveBatchId) return batchGroups;
+    const has = batchGroups.some((g) => g.batchId === effectiveBatchId);
+    if (has) return batchGroups;
+    if (!isBatchGenerating && activeBatchCreativesSorted.length === 0) return batchGroups;
+    return [{ batchId: effectiveBatchId, items: activeBatchCreativesSorted }, ...batchGroups];
+  }, [batchGroups, effectiveBatchId, isBatchGenerating, activeBatchCreativesSorted]);
+
+  const skeletonBrandColors = placeholderConfig?.brandColors?.length
+    ? placeholderConfig.brandColors
+    : ['#1e293b', '#334155'];
+
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <Skeleton className="h-9 w-24" />
-          <Skeleton className="h-9 w-32" />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg bg-surface p-0.5">
+            <Skeleton className="h-8 w-14 rounded-md" />
+            <Skeleton className="h-8 w-24 rounded-md" />
+          </div>
+          <Skeleton className="h-8 w-16 rounded-md border border-nativz-border" />
         </div>
-        <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+        <div className="columns-2 gap-4 space-y-4 md:columns-3 lg:columns-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-48 w-full break-inside-avoid" />
+            <Skeleton key={i} className="h-48 w-full break-inside-avoid rounded-xl" />
           ))}
         </div>
       </div>
     );
   }
 
-  if (creatives.length === 0 && !activeBatchId) {
+  if (creatives.length === 0 && !effectiveBatchId) {
     return (
       <>
         <div className="flex flex-col items-center justify-center py-10 sm:py-14 px-4">
@@ -358,7 +570,10 @@ export function CreativeGallery({
                 </h2>
                 <p className="text-sm leading-relaxed text-text-muted">
                   {brandDnaReady ? (
-                    <>Finished ads appear in this grid as each image completes.</>
+                    <>
+                      Finished ads appear in this grid as each image completes. Use the{' '}
+                      <span className="text-text-secondary font-medium">Generate</span> button below to start a batch.
+                    </>
                   ) : (
                     <>
                       Complete your brand kit on the{' '}
@@ -368,18 +583,20 @@ export function CreativeGallery({
                   )}
                 </p>
               </div>
-              {brandDnaReady && onOpenGenerateWizard && (
+              <div className="flex flex-col sm:flex-row gap-2 items-center justify-center mt-2 w-full max-w-xs mx-auto sm:max-w-none">
                 <Button
                   type="button"
                   size="lg"
+                  variant="outline"
                   shape="pill"
-                  className="mt-2 w-full max-w-xs shadow-lg shadow-accent/15 sm:w-auto"
-                  onClick={() => onOpenGenerateWizard()}
+                  className="w-full border-nativz-border sm:w-auto"
+                  disabled={refreshingGallery}
+                  onClick={() => void handleRefreshGallery()}
                 >
-                  <Sparkles size={18} strokeWidth={1.75} />
-                  Generate creatives
+                  <RefreshCw size={18} className={refreshingGallery ? 'animate-spin' : ''} />
+                  Refresh gallery
                 </Button>
-              )}
+              </div>
             </div>
           </div>
         </div>
@@ -390,40 +607,74 @@ export function CreativeGallery({
   return (
     <>
     {bulkDeleteDialog}
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24 sm:pb-28">
       {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1 bg-surface rounded-lg p-0.5">
-          {(['all', 'favorites'] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => {
-                setFilterTab(tab);
-                if (selectionMode) exitSelectionMode();
-              }}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
-                filterTab === tab
-                  ? 'bg-background text-text-primary shadow-sm'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
-            >
-              {tab === 'all' ? 'All' : 'Favorites'}
-            </button>
-          ))}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 bg-surface rounded-lg p-0.5">
+            {(['all', 'favorites'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => {
+                  setFilterTab(tab);
+                  if (selectionMode) exitSelectionMode();
+                }}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
+                  filterTab === tab
+                    ? 'bg-background text-text-primary shadow-sm'
+                    : 'text-text-muted hover:text-text-secondary'
+                }`}
+              >
+                {tab === 'all' ? 'All' : 'Favorites'}
+              </button>
+            ))}
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant={selectionMode ? 'secondary' : 'outline'}
+            className="h-8 text-xs border-nativz-border"
+            onClick={() => {
+              if (selectionMode) exitSelectionMode();
+              else setSelectionMode(true);
+            }}
+          >
+            {selectionMode ? 'Cancel' : 'Select'}
+          </Button>
+          <span className="text-xs text-text-muted tabular-nums px-1">
+            {creatives.length} {creatives.length === 1 ? 'ad' : 'ads'}
+          </span>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          variant={selectionMode ? 'secondary' : 'outline'}
-          className="h-8 text-xs border-nativz-border"
-          onClick={() => {
-            if (selectionMode) exitSelectionMode();
-            else setSelectionMode(true);
-          }}
-        >
-          {selectionMode ? 'Cancel' : 'Select'}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {effectiveBatchId &&
+            (!batchProgress ||
+              batchProgress.status === 'generating' ||
+              batchProgress.status === 'queued') && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5 border-amber-500/35 text-amber-200 hover:bg-amber-500/10 hover:text-amber-100"
+                disabled={stoppingBatch || refreshingGallery}
+                onClick={() => void handleStopBatch()}
+              >
+                <CircleStop size={14} />
+                {stoppingBatch ? 'Stopping…' : 'Stop generation'}
+              </Button>
+            )}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs gap-1.5 border-nativz-border shrink-0"
+            disabled={refreshingGallery}
+            onClick={() => void handleRefreshGallery()}
+          >
+            <RefreshCw size={14} className={refreshingGallery ? 'animate-spin' : ''} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {selectionMode && (
@@ -507,42 +758,19 @@ export function CreativeGallery({
 
       {/* Batch-grouped grid */}
       <div className="space-y-6">
-        {/* Active generating batch at the top */}
-        {activeBatchId && !batchGroups.some((g) => g.batchId === activeBatchId) && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Loader2 size={12} className="animate-spin text-accent-text" />
-              <span className="text-xs font-medium text-accent-text">Generating now</span>
-            </div>
-            {placeholderConfig && (
-              <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-                {placeholderConfig.templateThumbnails.map((thumb, i) => (
-                  <div key={`placeholder-${i}`} className="break-inside-avoid">
-                    <GalleryPlaceholder
-                      brandColors={placeholderConfig.brandColors}
-                      templateThumbnailUrl={thumb.imageUrl}
-                      skeletonOnly={placeholderConfig.skeletonOnly}
-                      status="generating"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Grouped by batch */}
-        {batchGroups.map((group, groupIndex) => {
-          const isActiveBatch = group.batchId === activeBatchId;
+        {displayGroups.map((group, groupIndex) => {
+          const isActiveBatch = effectiveBatchId != null && group.batchId === effectiveBatchId;
           const firstCreated = group.items[0]?.created_at;
-          const completedInBatch = group.items.filter((c) => batchCreativeIds.has(c.id));
-          const remainingPlaceholders = isActiveBatch && placeholderConfig
-            ? Math.max(0, placeholderConfig.templateThumbnails.length - completedInBatch.length)
-            : 0;
+          const itemsSorted = [...group.items].sort(
+            (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+          );
+          const skeletonCount =
+            isActiveBatch && isBatchGenerating && expectedSlotsTotal > 0
+              ? Math.max(0, expectedSlotsTotal - itemsSorted.length)
+              : 0;
 
           return (
             <div key={group.batchId} className="space-y-3">
-              {/* Batch divider (not first group, or any group after an active batch) */}
               {groupIndex > 0 && (
                 <div className="flex items-center gap-3 pt-2">
                   <div className="flex-1 h-px bg-nativz-border/60" />
@@ -555,55 +783,40 @@ export function CreativeGallery({
                 </div>
               )}
 
-              {isActiveBatch && (
-                <div className="flex items-center gap-2">
-                  <Loader2 size={12} className="animate-spin text-accent-text" />
-                  <span className="text-xs font-medium text-accent-text">Generating now</span>
-                </div>
-              )}
-
               <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-                {/* Remaining placeholder slots for this active batch */}
-                {isActiveBatch && placeholderConfig && Array.from({ length: remainingPlaceholders }).map((_, i) => (
-                  <div key={`placeholder-${i}`} className="break-inside-avoid">
-                    <GalleryPlaceholder
-                      brandColors={placeholderConfig.brandColors}
-                      templateThumbnailUrl={placeholderConfig.templateThumbnails[completedInBatch.length + i]?.imageUrl}
-                      skeletonOnly={placeholderConfig.skeletonOnly}
-                      status="generating"
+                {itemsSorted.map((creative) => (
+                  <div key={creative.id} className="break-inside-avoid">
+                    <CreativeCard
+                      creative={creative}
+                      onFavorite={() => toggleFavorite(creative.id)}
+                      onDelete={() => deleteCreative(creative.id)}
+                      onClick={() => setSelectedCreative(creative)}
+                      selectionMode={selectionMode}
+                      selected={selectedIds.has(creative.id)}
+                      onToggleSelect={() => toggleCreativeSelected(creative.id)}
+                      onOpenDetail={() => setSelectedCreative(creative)}
                     />
                   </div>
                 ))}
-
-                {/* Creatives in this batch */}
-                {group.items.map((creative) => (
-                  <div key={creative.id} className="break-inside-avoid">
-                    {batchCreativeIds.has(creative.id) ? (
+                {Array.from({ length: skeletonCount }).map((_, i) => {
+                  const thumb = placeholderConfig?.templateThumbnails[itemsSorted.length + i];
+                  return (
+                    <div key={`sk-${group.batchId}-${i}`} className="break-inside-avoid">
                       <GalleryPlaceholder
-                        brandColors={placeholderConfig?.brandColors ?? []}
-                        status="completed"
-                        imageUrl={creative.image_url}
+                        brandColors={skeletonBrandColors}
+                        templateThumbnailUrl={thumb?.imageUrl}
+                        skeletonOnly={placeholderConfig?.skeletonOnly}
+                        status="generating"
                       />
-                    ) : (
-                      <CreativeCard
-                        creative={creative}
-                        onFavorite={() => toggleFavorite(creative.id)}
-                        onDelete={() => deleteCreative(creative.id)}
-                        onClick={() => setSelectedCreative(creative)}
-                        selectionMode={selectionMode}
-                        selected={selectedIds.has(creative.id)}
-                        onToggleSelect={() => toggleCreativeSelected(creative.id)}
-                        onOpenDetail={() => setSelectedCreative(creative)}
-                      />
-                    )}
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
         })}
 
-        {filtered.length === 0 && !activeBatchId && (
+        {filtered.length === 0 && !effectiveBatchId && (
           <p className="text-sm text-text-muted text-center py-12">
             No creatives match the current filters.
           </p>
