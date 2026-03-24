@@ -3,12 +3,39 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+const slideSchema = z.object({
+  title: z.string().default(''),
+  body: z.string().default(''),
+  image_url: z.string().optional().nullable(),
+  embed_url: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const tierDefSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  color: z.string(),
+});
+
+const tierItemSchema = z.object({
+  id: z.string(),
+  url: z.string().default(''),
+  title: z.string(),
+  thumbnail_url: z.string().optional().nullable(),
+  tier_id: z.string().optional().nullable(),
+  position: z.number().default(0),
+  notes: z.string().optional().nullable(),
+});
+
 const createSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   description: z.string().max(2000).optional().nullable(),
-  type: z.literal('benchmarks').default('benchmarks'),
+  type: z.enum(['slides', 'tier_list', 'social_audit', 'benchmarks', 'prospect_audit', 'social_results']).default('slides'),
   audit_data: z.record(z.string(), z.unknown()).optional(),
   client_id: z.string().uuid().optional().nullable(),
+  slides: z.array(slideSchema).optional(),
+  tiers: z.array(tierDefSchema).optional(),
+  tier_items: z.array(tierItemSchema).optional(),
   status: z.enum(['draft', 'ready', 'archived']).optional(),
   tags: z.array(z.string()).optional(),
 });
@@ -88,12 +115,12 @@ export async function POST(request: NextRequest) {
       .insert({
         title: parsed.data.title,
         description: parsed.data.description ?? null,
-        type: 'benchmarks',
+        type: parsed.data.type,
         client_id: parsed.data.client_id ?? null,
         created_by: user.id,
-        slides: [],
-        tiers: [],
-        tier_items: [],
+        slides: parsed.data.slides ?? [],
+        tiers: parsed.data.tiers ?? [],
+        tier_items: parsed.data.tier_items ?? [],
         status: parsed.data.status ?? 'draft',
         tags: parsed.data.tags ?? [],
         audit_data: parsed.data.audit_data ?? {},

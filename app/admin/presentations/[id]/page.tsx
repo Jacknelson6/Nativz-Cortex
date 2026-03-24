@@ -5,7 +5,14 @@ import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import type { ClientOption } from '@/components/ui/client-picker';
 import type { PresentationData } from './types';
+import { SlideEditor } from './slide-editor';
+import { TierListEditor } from './tier-list-editor';
+import { SocialAuditEditor } from './social-audit-editor';
 import { BenchmarksEditor } from './benchmarks-editor';
+import { ProspectAuditEditor } from './prospect-audit-editor';
+import { SocialResultsEditor } from './social-results-editor';
+
+// ─── Router page ─────────────────────────────────────────────────────────────
 
 export default function PresentationEditorPage() {
   const router = useRouter();
@@ -49,6 +56,9 @@ export default function PresentationEditorPage() {
             title: data.title,
             description: data.description,
             client_id: data.client_id,
+            slides: data.slides,
+            tiers: data.tiers,
+            tier_items: data.tier_items,
             audit_data: data.audit_data,
             status: data.status,
             tags: data.tags,
@@ -81,6 +91,9 @@ export default function PresentationEditorPage() {
           title: presentation.title,
           description: presentation.description,
           client_id: presentation.client_id,
+          slides: presentation.slides,
+          tiers: presentation.tiers,
+          tier_items: presentation.tier_items,
           audit_data: presentation.audit_data,
           status: presentation.status,
           tags: presentation.tags,
@@ -94,15 +107,9 @@ export default function PresentationEditorPage() {
     }
   }
 
-  useEffect(() => {
-    if (!presentation || presentation.type === 'benchmarks') return;
-    toast.error('This presentation type is no longer supported.');
-    router.replace('/admin/presentations');
-  }, [presentation, router]);
-
   if (loading) {
     return (
-      <div className="cortex-page-gutter space-y-4">
+      <div className="p-6 space-y-4">
         <div className="h-8 w-48 rounded bg-surface-hover animate-pulse" />
         <div className="h-[600px] rounded-xl bg-surface-hover animate-pulse" />
       </div>
@@ -111,16 +118,74 @@ export default function PresentationEditorPage() {
 
   if (!presentation) return null;
 
-  if (presentation.type !== 'benchmarks') {
+  if (presentation.type === 'benchmarks') {
     return (
-      <div className="cortex-page-gutter flex min-h-[40vh] items-center justify-center">
-        <p className="text-sm text-text-muted">Redirecting…</p>
-      </div>
+      <BenchmarksEditor
+        presentation={presentation}
+        saving={saving}
+        clients={clients}
+        update={update}
+        onSave={handleManualSave}
+        onBack={() => router.push('/admin/presentations')}
+        onPresent={() => router.push(`/admin/presentations/${id}/present`)}
+      />
+    );
+  }
+
+  if (presentation.type === 'prospect_audit') {
+    return (
+      <ProspectAuditEditor
+        presentation={presentation}
+        saving={saving}
+        clients={clients}
+        update={update}
+        onSave={handleManualSave}
+        onBack={() => router.push('/admin/presentations')}
+      />
+    );
+  }
+
+  if (presentation.type === 'social_audit') {
+    return (
+      <SocialAuditEditor
+        presentation={presentation}
+        saving={saving}
+        clients={clients}
+        update={update}
+        onSave={handleManualSave}
+        onBack={() => router.push('/admin/presentations')}
+      />
+    );
+  }
+
+  if (presentation.type === 'social_results') {
+    return (
+      <SocialResultsEditor
+        presentation={presentation}
+        saving={saving}
+        clients={clients}
+        update={update}
+        onSave={handleManualSave}
+        onBack={() => router.push('/admin/presentations')}
+      />
+    );
+  }
+
+  if (presentation.type === 'tier_list') {
+    return (
+      <TierListEditor
+        presentation={presentation}
+        saving={saving}
+        clients={clients}
+        update={update}
+        onSave={handleManualSave}
+        onBack={() => router.push('/admin/presentations')}
+      />
     );
   }
 
   return (
-    <BenchmarksEditor
+    <SlideEditor
       presentation={presentation}
       saving={saving}
       clients={clients}

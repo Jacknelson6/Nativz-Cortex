@@ -46,7 +46,11 @@ function buildStages(platforms: string[], volume: string): Stage[] {
   const isMedium = volume === 'medium';
   const stages: Stage[] = [];
   let cumulative = 0;
-  const totalEst = isDeep ? 300000 : isMedium ? 120000 : 45000;
+  // Base timeline — multi-platform + LLM often needs several minutes; avoid jumping to “final” in <1 min.
+  const platformCount = Math.max(1, platforms.filter((p) => p !== 'quora').length);
+  const platformBoost = (platformCount - 1) * 45000;
+  const totalEst =
+    (isDeep ? 300000 : isMedium ? 180000 : 90000) + platformBoost;
 
   const add = (label: string, icon: React.ReactNode, duration: number) => {
     cumulative += duration;
@@ -65,7 +69,7 @@ function buildStages(platforms: string[], volume: string): Stage[] {
   }
   add('Computing analytics', <Brain size={14} />, isDeep ? 5000 : 3000);
   add('Generating video ideas with AI', <Sparkles size={14} />, isDeep ? 20000 : isMedium ? 12000 : 8000);
-  add('Building your report', <FileText size={14} />, isDeep ? 5000 : 3000);
+  add('Building your report', <FileText size={14} />, isDeep ? 120000 : isMedium ? 90000 : 60000);
 
   return stages;
 }
@@ -83,6 +87,8 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
   const hasStarted = useRef(false);
   const apiErrorRef = useRef(false);
   const intervalsRef = useRef<{ progress: ReturnType<typeof setInterval> | null; timer: ReturnType<typeof setInterval> | null }>({ progress: null, timer: null });
+  const pollStatusRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const redirectOnceRef = useRef(false);
 
   // Keep ref in sync so the interval closure can read it
   useEffect(() => {
@@ -99,6 +105,26 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
     if (intervalsRef.current.progress) clearInterval(intervalsRef.current.progress);
     if (intervalsRef.current.timer) clearInterval(intervalsRef.current.timer);
     intervalsRef.current = { progress: null, timer: null };
+  }
+
+  function stopStatusPoll() {
+    if (pollStatusRef.current) {
+      clearInterval(pollStatusRef.current);
+      pollStatusRef.current = null;
+    }
+  }
+
+  function goToResults() {
+    if (redirectOnceRef.current) return;
+    redirectOnceRef.current = true;
+    stopStatusPoll();
+    clearIntervals();
+    setProgress(100);
+    setStageIndex(stagesRef.current.length - 1);
+    setDone(true);
+    setTimeout(() => {
+      router.push(`${redirectPrefix}/search/${searchId}`);
+    }, 400);
   }
 
   function startProgress() {
@@ -166,7 +192,30 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
     setError('');
     setApiError(null);
     apiErrorRef.current = false;
+    redirectOnceRef.current = false;
     startProgress();
+    stopStatusPoll();
+
+    // While POST runs, poll DB — server can finish before the HTTP response returns (or UI was on wrong stage).
+    pollStatusRef.current = setInterval(async () => {
+      if (redirectOnceRef.current || apiErrorRef.current) return;
+      try {
+        const r = await fetch(`/api/search/${searchId}`);
+        if (!r.ok) return;
+        const row = await r.json();
+        if (row.status === 'completed') {
+          goToResults();
+        } else if (row.status === 'failed') {
+          stopStatusPoll();
+          clearIntervals();
+          const msg = typeof row.summary === 'string' ? row.summary : 'Search failed.';
+          setError(msg);
+          setApiError(msg);
+        }
+      } catch {
+        // ignore transient poll errors
+      }
+    }, 2000);
 
     try {
       const controller = new AbortController();
@@ -174,6 +223,7 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
       const res = await fetch(`/api/search/${searchId}/process`, { method: 'POST', signal: controller.signal });
       clearTimeout(timeoutId);
       const data = await res.json().catch(() => ({}));
+      stopStatusPoll();
 
       if (res.status === 202) {
         clearIntervals();
@@ -188,12 +238,7 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
           setApiError(msg);
           return;
         }
-        setProgress(100);
-        setStageIndex(stagesRef.current.length - 1);
-        setDone(true);
-        setTimeout(() => {
-          router.push(`${redirectPrefix}/search/${searchId}`);
-        }, 800);
+        goToResults();
         return;
       }
 
@@ -205,15 +250,9 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
         return;
       }
 
-      clearIntervals();
-      setProgress(100);
-      setStageIndex(stagesRef.current.length - 1);
-      setDone(true);
-
-      setTimeout(() => {
-        router.push(`${redirectPrefix}/search/${searchId}`);
-      }, 800);
+      goToResults();
     } catch (err) {
+      stopStatusPoll();
       clearIntervals();
       const msg = err instanceof DOMException && err.name === 'AbortError'
         ? 'Request timed out — the search took too long. Try again or use a lighter depth.'
@@ -248,12 +287,17 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
       runProcess();
     })();
 
-    return () => clearIntervals();
+    return () => {
+      clearIntervals();
+      stopStatusPoll();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleRetry() {
     hasStarted.current = false;
+    redirectOnceRef.current = false;
+    stopStatusPoll();
     setError('');
     setApiError(null);
     runProcess();
@@ -301,6 +345,11 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
           <p className="text-sm text-text-muted mt-1">
             Estimated {timeEstimate.label} · {platforms.length} platform{platforms.length !== 1 ? 's' : ''}
           </p>
+          {platforms.length > 1 && (
+            <p className="text-xs text-text-muted/80 mt-2 max-w-sm mx-auto">
+              Multi-platform research often needs a few minutes while the report is built — the bar is approximate.
+            </p>
+          )}
         </div>
 
         {/* Progress bar */}

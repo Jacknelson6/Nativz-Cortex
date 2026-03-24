@@ -16,7 +16,8 @@ import type { ClientPreferences } from '@/lib/types/database';
 import { syncSearchToVault } from '@/lib/vault/sync';
 import { createNotification } from '@/lib/notifications/create';
 
-export const maxDuration = 300;
+/** Vercel Pro / Fluid can use 800s — heavy multi-platform runs often exceed 5 minutes. */
+export const maxDuration = 800;
 
 /** How long a processing lease is considered active before another worker may reclaim (ms). */
 const PROCESS_LEASE_MS = 15 * 60 * 1000;
@@ -456,6 +457,21 @@ export async function POST(
 
       if (updateError) {
         console.error('Error updating search with results:', updateError);
+        await adminClient
+          .from('topic_searches')
+          .update({
+            status: 'failed',
+            processing_started_at: null,
+            summary: `Could not save results: ${updateError.message}`,
+          })
+          .eq('id', id);
+        return NextResponse.json(
+          {
+            error: 'Failed to save search results',
+            details: updateError.message,
+          },
+          { status: 500 }
+        );
       }
 
       // Sync to vault (non-blocking)
