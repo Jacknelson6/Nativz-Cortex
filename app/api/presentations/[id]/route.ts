@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  CONTENT_PRODUCTION_SOP_SEED_TAG,
+  CONTENT_PRODUCTION_SOP_SUPPRESSION_KEY,
+} from '@/lib/presentations/ensure-content-production-sop';
 
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -129,13 +133,36 @@ export async function DELETE(
     const auth = await checkAdmin();
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { error } = await auth.adminClient
+    const { data: row, error: fetchError } = await auth.adminClient
       .from('presentations')
-      .delete()
-      .eq('id', id);
+      .select('tags')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError) {
+      return NextResponse.json({ error: 'Failed to load presentation' }, { status: 500 });
+    }
+    if (!row) {
+      return NextResponse.json({ error: 'Presentation not found' }, { status: 404 });
+    }
+
+    const tags = (row.tags as string[] | null) ?? [];
+    const wasSeedDeck = tags.includes(CONTENT_PRODUCTION_SOP_SEED_TAG);
+
+    const { error } = await auth.adminClient.from('presentations').delete().eq('id', id);
 
     if (error) {
       return NextResponse.json({ error: 'Failed to delete presentation' }, { status: 500 });
+    }
+
+    if (wasSeedDeck) {
+      const { error: supErr } = await auth.adminClient.from('workspace_seed_suppressions').upsert(
+        { seed_key: CONTENT_PRODUCTION_SOP_SUPPRESSION_KEY },
+        { onConflict: 'seed_key' },
+      );
+      if (supErr) {
+        console.error('workspace_seed_suppressions upsert:', supErr);
+      }
     }
 
     return NextResponse.json({ success: true });

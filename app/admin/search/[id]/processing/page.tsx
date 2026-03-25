@@ -25,6 +25,10 @@ export default async function AdminSearchProcessingPage({
     redirect(`/admin/search/${id}`);
   }
 
+  if (search.status === 'pending_subtopics') {
+    redirect(`/admin/search/${id}/subtopics`);
+  }
+
   return (
     <SearchProcessing
       searchId={id}

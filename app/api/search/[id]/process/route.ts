@@ -10,11 +10,13 @@ import { computeAnalytics } from '@/lib/search/analytics-engine';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
+import { normalizeSyntheticAudiences } from '@/lib/search/synthetic-audiences';
 import type { TopicSearchAIResponse, SearchPlatform, TrendingTopic, TopicSource } from '@/lib/types/search';
 import type { BraveSerpData } from '@/lib/brave/types';
 import type { ClientPreferences } from '@/lib/types/database';
 import { syncSearchToVault } from '@/lib/vault/sync';
 import { createNotification } from '@/lib/notifications/create';
+import { runLlmTopicPipeline } from '@/lib/search/llm-pipeline/run-llm-topic-pipeline';
 
 /** Vercel Pro / Fluid can use 800s — heavy multi-platform runs often exceed 5 minutes. */
 export const maxDuration = 800;
@@ -179,7 +181,101 @@ export async function POST(
     const isV2 = platforms.length > 1 || platforms.includes('reddit') || platforms.includes('quora');
 
     try {
-      // ── Step 1: Gather data ────────────────────────────────────────────────
+      const topicPipeline = (search as { topic_pipeline?: string }).topic_pipeline ?? 'legacy';
+      if (topicPipeline === 'llm_v1') {
+        const result = await runLlmTopicPipeline({
+          searchId: id,
+          search: {
+            query: search.query,
+            time_range: search.time_range,
+            country: search.country,
+            language: search.language,
+            search_mode: search.search_mode as 'general' | 'client_strategy',
+            client_id: search.client_id,
+            subtopics: (search as { subtopics?: unknown }).subtopics,
+          },
+          userId: user.id,
+          userEmail: user.email ?? undefined,
+          clientContext: clientContext
+            ? {
+                name: clientContext.name,
+                industry: clientContext.industry,
+                brandVoice: clientContext.brandVoice,
+              }
+            : null,
+        });
+
+        const { error: llmUpdateErr } = await adminClient
+          .from('topic_searches')
+          .update({
+            status: 'completed',
+            processing_started_at: null,
+            summary: result.aiResponse.summary,
+            metrics: result.metrics,
+            emotions: result.aiResponse.emotions,
+            content_breakdown: result.aiResponse.content_breakdown,
+            trending_topics: result.aiResponse.trending_topics,
+            serp_data: result.serpData,
+            raw_ai_response: result.aiResponse,
+            research_sources: result.researchSources,
+            pipeline_state: result.pipelineState,
+            platform_data: {
+              stats: [],
+              sourceCount: result.platformSources.length,
+              sources: result.platformSources,
+            },
+            tokens_used: result.totalTokens,
+            estimated_cost: result.estimatedCost,
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', id);
+
+        if (llmUpdateErr) {
+          console.error('[process] llm_v1 save failed:', llmUpdateErr);
+          await adminClient
+            .from('topic_searches')
+            .update({
+              status: 'failed',
+              processing_started_at: null,
+              summary: `Could not save results: ${llmUpdateErr.message}`,
+            })
+            .eq('id', id);
+          return NextResponse.json(
+            { error: 'Failed to save search results', details: llmUpdateErr.message },
+            { status: 500 },
+          );
+        }
+
+        syncSearchToVault(
+          {
+            ...search,
+            status: 'completed',
+            summary: result.aiResponse.summary,
+            metrics: result.metrics,
+            emotions: result.aiResponse.emotions,
+            content_breakdown: result.aiResponse.content_breakdown,
+            trending_topics: result.aiResponse.trending_topics,
+            raw_ai_response: result.aiResponse,
+            serp_data: result.serpData,
+            tokens_used: result.totalTokens,
+            estimated_cost: result.estimatedCost,
+            completed_at: new Date().toISOString(),
+          },
+          clientContext?.name,
+        ).catch(() => {});
+
+        createNotification({
+          recipientUserId: user.id,
+          type: 'search_completed',
+          title: 'Search completed',
+          body: `Results ready for "${search.query}"`,
+          linkPath: `/admin/search/${id}`,
+        }).catch(() => {});
+
+        return NextResponse.json({ status: 'completed' });
+      }
+
+      // ── Step 1: Gather data (legacy) ───────────────────────────────────────
       let serpData: BraveSerpData;
       let platformContext = '';
       let platformSources: import('@/lib/types/search').PlatformSource[] = [];
@@ -212,6 +308,8 @@ export async function POST(
                 content: s.content.substring(0, 500),
                 author: s.author,
                 subreddit: s.subreddit,
+                thumbnailUrl: s.thumbnailUrl ?? null,
+                videoFormat: s.videoFormat ?? null,
                 engagement: s.engagement,
                 createdAt: s.createdAt,
                 comments: s.comments.slice(0, 5),
@@ -294,7 +392,7 @@ export async function POST(
 
       const aiResult = await createCompletion({
         messages: [{ role: 'user', content: narrativePrompt }],
-        maxTokens: 8000, // Much smaller — only narrative + video ideas
+        maxTokens: 9000, // Narrative + synthetic audiences + video ideas
         feature: 'topic_search',
         userId: user.id,
         userEmail: user.email ?? undefined,
@@ -303,6 +401,7 @@ export async function POST(
       // Parse the LLM response (now includes topic discovery)
       let narrative: {
         summary: string;
+        synthetic_audiences?: unknown;
         topics: {
           name: string;
           why_trending: string;
@@ -348,6 +447,7 @@ export async function POST(
         narrative = {
           summary: fallbackSummary,
           topics: fallbackTopics,
+          synthetic_audiences: undefined,
         };
       }
 
@@ -390,6 +490,7 @@ export async function POST(
           name: llmTopic.name,
           resonance,
           sentiment,
+          total_engagement: Math.max(0, Math.round(engagementEstimate)),
           posts_overview: llmTopic.posts_overview ?? `Trending topic across ${(llmTopic.platforms_seen ?? []).join(', ')}.`,
           comments_overview: llmTopic.comments_overview ?? `${llmTopic.why_trending ?? 'Active discussion across platforms.'}`,
           sources,
@@ -404,6 +505,7 @@ export async function POST(
             name: topic.name,
             resonance: computeResonance(topic.frequency, topic.totalEngagement),
             sentiment: topic.avgSentiment,
+            total_engagement: Math.max(0, Math.round(topic.totalEngagement)),
             posts_overview: `Found in ${topic.frequency} sources across ${Array.from(topic.platforms).join(', ')} with ${topic.totalEngagement.toLocaleString()} total engagement.`,
             comments_overview: `Sentiment is ${topic.avgSentiment > 0.2 ? 'positive' : topic.avgSentiment < -0.2 ? 'negative' : 'mixed'} based on comment analysis.`,
             sources: topic.sources.filter(s => serpUrls.has(s.url) || s.platform !== 'web'),
@@ -413,6 +515,8 @@ export async function POST(
       }
 
       // Assemble the full AI response in the existing format (backward compatible)
+      const syntheticAudiences = normalizeSyntheticAudiences(narrative.synthetic_audiences);
+
       const aiResponse: TopicSearchAIResponse = {
         summary: (narrative.summary && !narrative.summary.startsWith('{'))
           ? narrative.summary
@@ -425,6 +529,7 @@ export async function POST(
         big_movers: analytics.big_movers,
         platform_breakdown: analytics.platform_breakdown,
         conversation_themes: analytics.conversation_themes,
+        ...(syntheticAudiences ? { synthetic_audiences: syntheticAudiences } : {}),
       };
 
       // ── Step 6: Compute display metrics ────────────────────────────────────

@@ -12,6 +12,11 @@ export const TOOLTIPS: Record<string, TooltipDef> = {
     title: 'Resonance',
     description: 'How strongly content resonates with audiences. Ranges from Low to Viral based on engagement signals.',
   },
+  total_views: {
+    title: 'Total views',
+    description:
+      'Estimated reach from sources tied to this topic (views, likes, and comments blended). Shown as a compact number; not a census of unique viewers.',
+  },
   conversation_intensity: {
     title: 'Conversation intensity',
     description: 'How actively people are discussing this topic — measured by reply depth and discussion frequency.',

@@ -12,16 +12,8 @@ import type { HistoryItem, HistoryItemType } from '@/lib/research/history';
 interface HistoryFeedProps {
   items: HistoryItem[];
   clients?: { id: string; name: string }[];
-  onViewAll?: () => void;
   onItemDeleted?: (id: string) => void;
 }
-
-const TYPE_FILTERS: { label: string; value: HistoryItemType | null }[] = [
-  { label: 'All', value: null },
-  { label: 'Brand intel', value: 'brand_intel' },
-  { label: 'Topic', value: 'topic' },
-  { label: 'Ideas', value: 'ideas' },
-];
 
 const TYPE_BADGE_CONFIG: Record<HistoryItemType, { variant: 'purple' | 'default'; label: string }> = {
   brand_intel: { variant: 'default', label: 'Brand intel' },
@@ -35,8 +27,7 @@ function TypeIcon({ type }: { type: HistoryItemType }) {
   return <Search size={14} className="text-text-muted shrink-0" />;
 }
 
-export function HistoryFeed({ items, onViewAll, onItemDeleted }: HistoryFeedProps) {
-  const [typeFilter, setTypeFilter] = useState<HistoryItemType | null>(null);
+export function HistoryFeed({ items, onItemDeleted }: HistoryFeedProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
@@ -63,7 +54,6 @@ export function HistoryFeed({ items, onViewAll, onItemDeleted }: HistoryFeedProp
 
   const filtered = items.filter((item) => {
     if (hiddenIds.has(item.id)) return false;
-    if (typeFilter && item.type !== typeFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const matchesTitle = item.title.toLowerCase().includes(q);
@@ -75,50 +65,20 @@ export function HistoryFeed({ items, onViewAll, onItemDeleted }: HistoryFeedProp
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
+      {/* Header + search */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+        <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2 shrink-0">
           <Clock size={18} className="text-accent-text" />
           Recent history
         </h2>
-        {onViewAll && (
-          <button
-            type="button"
-            onClick={onViewAll}
-            className="text-sm text-text-muted hover:text-text-secondary transition-colors"
-          >
-            View all history
-          </button>
-        )}
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex bg-white/[0.04] rounded-lg p-0.5 gap-0.5">
-          {TYPE_FILTERS.map((f) => (
-            <button
-              key={f.label}
-              type="button"
-              onClick={() => setTypeFilter(f.value)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                typeFilter === f.value
-                  ? 'bg-white/[0.08] text-text-primary'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="ml-auto relative">
+        <div className="relative w-full sm:max-w-xs">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
           <input
             type="text"
             placeholder="Search..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="rounded-lg border border-white/[0.08] bg-white/[0.04] pl-8 pr-3 py-1.5 text-xs text-text-primary placeholder-text-muted focus:outline-none focus:border-accent w-[180px]"
+            className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] pl-8 pr-3 py-1.5 text-xs text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
           />
         </div>
       </div>

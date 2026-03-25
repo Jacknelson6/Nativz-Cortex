@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getTopicSearchPipelineFromEnv } from '@/lib/config/topic-search-pipeline';
 
 const searchSchema = z.object({
   query: z.string().min(1, 'Search query is required').max(500),
@@ -53,8 +54,12 @@ export async function POST(request: NextRequest) {
 
     const { query, source, time_range, language, country, client_id, search_mode, platforms, volume } = parsed.data;
     const isV2 = platforms.length > 1 || platforms.includes('reddit') || platforms.includes('quora');
+    const topicPipeline = getTopicSearchPipelineFromEnv();
 
     const adminClient = createAdminClient();
+
+    const searchVersion = topicPipeline === 'llm_v1' ? 3 : isV2 ? 2 : 1;
+    const initialStatus = topicPipeline === 'llm_v1' ? 'pending_subtopics' : 'processing';
 
     const { data: search, error: insertError } = await adminClient
       .from('topic_searches')
@@ -68,8 +73,9 @@ export async function POST(request: NextRequest) {
         search_mode,
         platforms,
         volume,
-        search_version: isV2 ? 2 : 1,
-        status: 'processing',
+        search_version: searchVersion,
+        topic_pipeline: topicPipeline,
+        status: initialStatus,
         created_by: user.id,
       })
       .select('id')
@@ -83,7 +89,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ id: search.id });
+    return NextResponse.json({ id: search.id, topic_pipeline: topicPipeline });
   } catch (error) {
     console.error('POST /api/search/start error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

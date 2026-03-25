@@ -1,62 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { buildTopicResearchPrompt } from '@/lib/prompts/topic-research';
-import { buildClientStrategyPrompt } from '@/lib/prompts/client-strategy';
-import { gatherSerpData } from '@/lib/brave/client';
-import { gatherPlatformData, formatPlatformContext } from '@/lib/search/platform-router';
-import type { SearchPlatform } from '@/lib/types/search';
-import { createCompletion } from '@/lib/ai/client';
-import { parseAIResponseJSON } from '@/lib/ai/parse';
-import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
-import type { TopicSearchAIResponse } from '@/lib/types/search';
-import type { BraveSerpData } from '@/lib/brave/types';
-import { createNotification } from '@/lib/notifications/create';
-import { crawlWebsite } from '@/lib/cloudflare/crawl';
-import { getClientMemory, formatClientMemoryBlock } from '@/lib/vault/content-memory';
-import type { ClientPreferences } from '@/lib/types/database';
+import { searchSchema, executeTopicSearch } from '@/lib/search/execute-topic-search';
 
 export const maxDuration = 300;
-
-const searchSchema = z.object({
-  query: z.string().min(1, 'Search query is required').max(500),
-  source: z.string().default('all'),
-  time_range: z.string().default('last_3_months'),
-  language: z.string().default('all'),
-  country: z.string().default('us'),
-  client_id: z.string().uuid().nullable().optional(),
-  search_mode: z.enum(['general', 'client_strategy']).default('general'),
-  platforms: z.array(z.enum(['web', 'reddit', 'youtube', 'tiktok'])).default(['web']),
-  volume: z.enum(['quick', 'deep']).default('quick'),
-});
-
-/**
- * Build a set of all URLs present in the SERP data for validation.
- */
-function buildSerpUrlSet(serpData: BraveSerpData): Set<string> {
-  const urls = new Set<string>();
-  for (const r of serpData.webResults) urls.add(r.url);
-  for (const d of serpData.discussions) urls.add(d.url);
-  for (const v of serpData.videos) urls.add(v.url);
-  return urls;
-}
-
-/**
- * Strip any AI-cited URLs that don't exist in the original SERP data.
- */
-function validateTopicSources(
-  aiResponse: TopicSearchAIResponse,
-  serpUrls: Set<string>
-): TopicSearchAIResponse {
-  return {
-    ...aiResponse,
-    trending_topics: aiResponse.trending_topics.map(topic => ({
-      ...topic,
-      sources: (topic.sources || []).filter(source => serpUrls.has(source.url)),
-    })),
-  };
-}
 
 /**
  * POST /api/search
@@ -96,234 +43,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { query, source, time_range, language, country, client_id, search_mode, platforms, volume } = parsed.data;
-    const isV2 = platforms.length > 1 || platforms.includes('reddit');
-
-    // Use admin client for DB operations (bypasses RLS)
     const adminClient = createAdminClient();
-
-    // Fetch optional client context + preferences + memory
-    let clientContext = null;
-    let brandPreferences: ClientPreferences | null = null;
-    let websiteContent: { url: string; content: string }[] | null = null;
-    let clientMemoryBlock: string | null = null;
-
-    if (client_id) {
-      const { data: client } = await adminClient
-        .from('clients')
-        .select('name, industry, target_audience, brand_voice, topic_keywords, website_url, preferences, organization_id')
-        .eq('id', client_id)
-        .single();
-
-      // Org scope check: portal users can only search their own org's clients
-      if (client) {
-        const { data: userData } = await adminClient
-          .from('users')
-          .select('role, organization_id')
-          .eq('id', user.id)
-          .single();
-        if (userData?.role === 'viewer' && client.organization_id !== userData.organization_id) {
-          return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-        }
-      }
-
-      if (client) {
-        clientContext = {
-          name: client.name,
-          industry: client.industry,
-          targetAudience: client.target_audience,
-          brandVoice: client.brand_voice,
-          topicKeywords: client.topic_keywords,
-          websiteUrl: client.website_url,
-        };
-        brandPreferences = (client.preferences as ClientPreferences) ?? null;
-
-        // Fetch client content history (past research, content logs, strategy)
-        const memory = await getClientMemory(client_id);
-        const memBlock = formatClientMemoryBlock(memory);
-        if (!memBlock.includes('No previous content history')) {
-          clientMemoryBlock = memBlock;
-        }
-
-        // For brand strategy searches, crawl the client website for deeper context
-        if (search_mode === 'client_strategy' && client.website_url) {
-          websiteContent = await crawlWebsite(client.website_url);
-        }
-      }
-    }
-
-    // Insert pending row
-    const { data: search, error: insertError } = await adminClient
-      .from('topic_searches')
-      .insert({
-        query,
-        source,
-        time_range,
-        language,
-        country,
-        client_id: client_id || null,
-        search_mode,
-        status: 'processing',
-        created_by: user.id,
-        platforms,
-        search_version: isV2 ? 2 : 1,
-        volume,
-      })
-      .select()
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role, organization_id')
+      .eq('id', user.id)
       .single();
 
-    if (insertError || !search) {
-      console.error('Error creating search record:', insertError);
-      return NextResponse.json(
-        { error: 'Failed to create search', details: insertError?.message || 'No data returned' },
-        { status: 500 }
-      );
-    }
+    const role = userData?.role === 'viewer' ? 'viewer' : 'admin';
+    const result = await executeTopicSearch(
+      adminClient,
+      {
+        id: user.id,
+        email: user.email,
+        role,
+        organizationId: userData?.organization_id ?? null,
+      },
+      parsed.data,
+    );
 
-    try {
-      // Step 1: Gather data — v2 uses platform router, v1 uses Brave only
-      let serpData: BraveSerpData;
-      let platformContext = '';
-
-      if (isV2) {
-        const platformResults = await gatherPlatformData(
-          query,
-          platforms as SearchPlatform[],
-          time_range,
-          volume as 'quick' | 'deep',
-        );
-        serpData = platformResults.braveSerpData ?? { webResults: [], discussions: [], videos: [] };
-        platformContext = formatPlatformContext(platformResults.sources, platformResults.platformStats);
-
-        // Store raw platform data for future re-analysis
-        await adminClient
-          .from('topic_searches')
-          .update({ platform_data: { stats: platformResults.platformStats, sourceCount: platformResults.sources.length } })
-          .eq('id', search.id);
-      } else {
-        serpData = await gatherSerpData(query, {
-          timeRange: time_range,
-          country,
-          language,
-          source,
-        });
+    if (!result.ok) {
+      if (result.reason === 'forbidden') {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
       }
-
-      // Step 2: Build prompt with data context
-      let prompt: string;
-      if (search_mode === 'client_strategy' && clientContext) {
-        prompt = buildClientStrategyPrompt({
-          query,
-          source,
-          timeRange: time_range,
-          language,
-          country,
-          serpData,
-          clientContext,
-          brandPreferences,
-          websiteContent,
-          clientMemoryBlock,
-        });
-      } else {
-        prompt = buildTopicResearchPrompt({
-          query,
-          source,
-          timeRange: time_range,
-          language,
-          country,
-          serpData,
-          clientContext,
-          brandPreferences,
-          websiteContent,
-          clientMemoryBlock,
-        });
-      }
-
-      // Inject platform data into prompt for v2 searches
-      if (isV2 && platformContext) {
-        prompt = prompt.replace(
-          '</research_data>',
-          `\n\n<platform_data>\n${platformContext}\n</platform_data>\n</research_data>`,
+      if (result.reason === 'insert') {
+        return NextResponse.json(
+          { error: 'Failed to create search', details: result.message },
+          { status: 500 },
         );
       }
-
-      // Step 3: Call AI (Hunter Alpha via OpenRouter)
-      const aiResult = await createCompletion({
-        messages: [{ role: 'user', content: prompt }],
-        maxTokens: 16000,
-        feature: 'topic_search',
-        userId: user.id,
-        userEmail: user.email ?? undefined,
-      });
-
-      const rawAiResponse = parseAIResponseJSON<TopicSearchAIResponse>(aiResult.text);
-
-      // Step 4: Validate AI-cited URLs against actual SERP data
-      const serpUrls = buildSerpUrlSet(serpData);
-      const aiResponse = validateTopicSources(rawAiResponse, serpUrls);
-
-      // Step 5: Compute real metrics from SERP data + AI sentiment + topics
-      const metrics = computeMetricsFromSerp(
-        serpData,
-        aiResponse.overall_sentiment,
-        aiResponse.conversation_intensity,
-        aiResponse.trending_topics
-      );
-
-      // Step 6: Update with results
-      const { error: updateError } = await adminClient
-        .from('topic_searches')
-        .update({
-          status: 'completed',
-          summary: aiResponse.summary,
-          metrics,
-          emotions: aiResponse.emotions,
-          content_breakdown: aiResponse.content_breakdown,
-          trending_topics: aiResponse.trending_topics,
-          serp_data: serpData,
-          raw_ai_response: aiResponse,
-          tokens_used: aiResult.usage.totalTokens,
-          estimated_cost: aiResult.estimatedCost,
-          completed_at: new Date().toISOString(),
-        })
-        .eq('id', search.id);
-
-      if (updateError) {
-        console.error('Error updating search with results:', updateError);
-      }
-
-      // Notify the user that search is complete
-      createNotification({
-        recipientUserId: user.id,
-        type: 'search_completed',
-        title: 'Search completed',
-        body: `Results ready for "${parsed.data.query}"`,
-        linkPath: `/admin/search/${search.id}`,
-      }).catch(() => {});
-
-      return NextResponse.json({ id: search.id, status: 'completed' });
-    } catch (aiError) {
-      console.error('AI processing error:', aiError);
-
-      await adminClient
-        .from('topic_searches')
-        .update({
-          status: 'failed',
-          summary: aiError instanceof Error
-            ? `Search failed: ${aiError.message}`
-            : 'Search failed due to an unknown error',
-        })
-        .eq('id', search.id);
-
       return NextResponse.json(
         {
           error: 'Search failed',
-          id: search.id,
-          details: aiError instanceof Error ? aiError.message : 'Unknown error',
+          id: result.searchId,
+          details: result.message,
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
+
+    return NextResponse.json({ id: result.searchId, status: 'completed' });
   } catch (error) {
     console.error('POST /api/search error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -14,9 +14,11 @@ import type { ClientOption } from '@/components/ui/client-picker';
 interface ResearchHubProps {
   clients: ClientOption[];
   historyItems: HistoryItem[];
+  /** When true, new searches use llm_v1 and go to subtopics planning first */
+  topicPipelineLlmV1?: boolean;
 }
 
-export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
+export function ResearchHub({ clients, historyItems, topicPipelineLlmV1 = false }: ResearchHubProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefillQuery = searchParams.get('query') ?? '';
@@ -97,16 +99,25 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
 
   const allItems = [...optimisticItems, ...historyItems];
 
-  const handleResearchStarted = useCallback((item: { id: string; query: string; mode: string; clientName: string | null }) => {
+  const handleResearchStarted = useCallback((item: {
+    id: string;
+    query: string;
+    mode: string;
+    clientName: string | null;
+    needsSubtopics?: boolean;
+  }) => {
+    const needsSubtopics = Boolean(item.needsSubtopics);
     setOptimisticItems((prev) => [{
       id: item.id,
       type: item.mode === 'client_strategy' ? 'brand_intel' as const : 'topic' as const,
       title: item.query,
-      status: 'processing',
+      status: needsSubtopics ? 'pending_subtopics' : 'processing',
       clientName: item.clientName,
       clientId: null,
       createdAt: new Date().toISOString(),
-      href: `/admin/search/${item.id}/processing`,
+      href: needsSubtopics
+        ? `/admin/search/${item.id}/subtopics`
+        : `/admin/search/${item.id}/processing`,
     }, ...prev]);
   }, []);
 
@@ -172,7 +183,6 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
         <HistoryFeed
           items={allItems}
           clients={clients.map((c) => ({ id: c.id, name: c.name }))}
-          onViewAll={() => setHistoryModalOpen(true)}
         />
       </div>
 
@@ -182,6 +192,7 @@ export function ResearchHub({ clients, historyItems }: ResearchHubProps) {
         onClose={() => setResearchOpen(false)}
         clients={clients}
         initialQuery={prefillQuery}
+        topicPipelineLlmV1={topicPipelineLlmV1}
         onStarted={handleResearchStarted}
       />
       <ContentWizardModal

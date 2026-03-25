@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export interface LinkedBoard {
@@ -83,9 +84,6 @@ export function IdeationPipelinePanel({
             <Layers size={18} className="text-accent" />
             Ideation pipeline
           </CardTitle>
-          <p className="text-xs text-text-muted mt-1 max-w-xl">
-            Tie this research to moodboard analysis, ranked video ideas, and scripts — without leaving the Cortex loop.
-          </p>
         </div>
       </div>
 
@@ -93,9 +91,10 @@ export function IdeationPipelinePanel({
         <PipelineStep
           step={1}
           title="Topic research"
-          description={`“${query.length > 42 ? `${query.slice(0, 42)}…` : query}”`}
+          description={`“${query}”`}
           done={step1Done}
           icon={<Film size={16} />}
+          descriptionSingleLine
         />
         <PipelineStep
           step={2}
@@ -140,20 +139,9 @@ export function IdeationPipelinePanel({
           done={step3Done}
           icon={<Sparkles size={16} />}
           actions={
-            <>
-              <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={onOpenIdeasWizard}>
-                {step3Done ? 'Generate more' : 'Create ideas'}
-              </Button>
-              {step3Done ? (
-                <Link
-                  href={`/admin/ideas/${linkedIdeas[0].id}`}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-accent2-text hover:underline"
-                >
-                  Open latest
-                  <ArrowRight size={12} />
-                </Link>
-              ) : null}
-            </>
+            <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={onOpenIdeasWizard}>
+              {step3Done ? 'Generate more' : 'Create ideas'}
+            </Button>
           }
         />
         <PipelineStep
@@ -186,6 +174,7 @@ function PipelineStep({
   done,
   icon,
   actions,
+  descriptionSingleLine = false,
 }: {
   step: number;
   title: string;
@@ -193,10 +182,12 @@ function PipelineStep({
   done: boolean;
   icon: ReactNode;
   actions?: ReactNode;
+  /** Topic query: keep on one line; scroll horizontally if needed (grid columns are narrow). */
+  descriptionSingleLine?: boolean;
 }) {
   return (
-    <li className="rounded-xl border border-nativz-border bg-surface/80 p-3 flex flex-col gap-2">
-      <div className="flex items-center gap-2">
+    <li className="min-w-0 rounded-xl border border-nativz-border bg-surface/80 p-3 flex flex-col gap-2">
+      <div className="flex items-center gap-2 min-w-0">
         <span
           className={`flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold shrink-0 ${
             done
@@ -206,14 +197,25 @@ function PipelineStep({
         >
           {done ? <Check size={14} /> : <Circle size={14} className="opacity-40" />}
         </span>
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-text-muted">{icon}</span>
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <span className="text-text-muted shrink-0">{icon}</span>
           <span className="text-xs font-semibold text-text-primary truncate">
             {step}. {title}
           </span>
         </div>
       </div>
-      <p className="text-[11px] text-text-muted leading-snug pl-9">{description}</p>
+      <div className="min-w-0 pl-9">
+        {descriptionSingleLine ? (
+          /* w-max so the line sizes to the full string; parent clips + scrolls (grid min-content was clipping mid-glyph). */
+          <div className="overflow-x-auto overflow-y-hidden" title={description}>
+            <p className="m-0 w-max max-w-none whitespace-nowrap text-[11px] text-text-muted leading-snug">
+              {description}
+            </p>
+          </div>
+        ) : (
+          <p className="text-[11px] text-text-muted leading-snug">{description}</p>
+        )}
+      </div>
       {actions ? <div className="pl-9 flex flex-col gap-1.5 items-start">{actions}</div> : null}
     </li>
   );

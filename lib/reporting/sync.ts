@@ -31,7 +31,7 @@ export async function syncClientReporting(
 
   const service = getPostingService();
 
-  // 1. Query active social profiles connected via Late
+  // 1. Query active social profiles connected via Zernio
   const { data: profiles, error: profilesError } = await adminClient
     .from('social_profiles')
     .select('id, platform, late_account_id')
@@ -50,7 +50,7 @@ export async function syncClientReporting(
 
   const snapshotDate = new Date().toISOString().split('T')[0];
 
-  // 2. Process each profile via Late API
+  // 2. Process each profile via Zernio API
   for (const profile of profiles) {
     const platform = profile.platform as SocialPlatform;
     const lateAccountId = profile.late_account_id as string;

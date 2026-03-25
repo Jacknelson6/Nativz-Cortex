@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logActivity } from '@/lib/activity';
+
+const renameSearchBodySchema = z.object({
+  query: z.string().trim().min(1, 'Topic name is required').max(500),
+});
 
 /**
  * GET /api/search/[id]
@@ -45,13 +50,14 @@ export async function GET(
 /**
  * PATCH /api/search/[id]
  *
- * Approve or reject a completed search result, controlling whether it is visible
- * to portal users. Approval is logged in activity.
+ * - **Rename:** `{ query: string }` — update the topic search title (1–500 chars). Admin only.
+ * - **Approve / reject:** `{ action: 'approve' | 'reject' }` — portal visibility for the report.
+ *
+ * Do not send `query` and `action` in the same request.
  *
  * @auth Required (admin)
  * @param id - Topic search UUID
- * @body action - 'approve' to set approved_at/approved_by; 'reject' to clear them
- * @returns {{ success: true, action: 'approved' | 'rejected' }}
+ * @returns Rename: `{ success: true, query }` · Approve/reject: `{ success: true, action }`
  */
 export async function PATCH(
   request: NextRequest,
@@ -78,8 +84,58 @@ export async function PATCH(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const { action } = body as { action: 'approve' | 'reject' };
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const hasQuery = typeof body.query === 'string';
+    const action = body.action;
+    const hasAction = action === 'approve' || action === 'reject';
+
+    if (hasQuery && hasAction) {
+      return NextResponse.json({ error: 'Send only one of query or action' }, { status: 400 });
+    }
+
+    if (hasQuery) {
+      const parsed = renameSearchBodySchema.safeParse(body);
+      if (!parsed.success) {
+        const msg = parsed.error.issues[0]?.message ?? 'Invalid topic name';
+        return NextResponse.json({ error: msg }, { status: 400 });
+      }
+      const { query: nextQuery } = parsed.data;
+
+      const { data: existing, error: fetchErr } = await adminClient
+        .from('topic_searches')
+        .select('id, query')
+        .eq('id', id)
+        .single();
+
+      if (fetchErr || !existing) {
+        return NextResponse.json({ error: 'Search not found' }, { status: 404 });
+      }
+
+      if (existing.query === nextQuery) {
+        return NextResponse.json({ success: true, query: nextQuery });
+      }
+
+      const { error: updateError } = await adminClient
+        .from('topic_searches')
+        .update({ query: nextQuery })
+        .eq('id', id);
+
+      if (updateError) {
+        console.error('Error renaming search:', updateError);
+        return NextResponse.json({ error: 'Failed to update topic name' }, { status: 500 });
+      }
+
+      logActivity(user.id, 'search_renamed', 'search', id, {
+        previous_query: existing.query,
+        query: nextQuery,
+      }).catch(() => {});
+
+      return NextResponse.json({ success: true, query: nextQuery });
+    }
 
     if (action === 'approve') {
       const { error: updateError } = await adminClient
@@ -117,7 +173,10 @@ export async function PATCH(
       return NextResponse.json({ success: true, action: 'rejected' });
     }
 
-    return NextResponse.json({ error: 'Invalid action. Use "approve" or "reject".' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Invalid body. Send { query: string } to rename, or { action: "approve" | "reject" }.' },
+      { status: 400 },
+    );
   } catch (error) {
     console.error('PATCH /api/search/[id] error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

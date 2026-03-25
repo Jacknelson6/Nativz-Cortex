@@ -152,6 +152,8 @@ export interface MoodboardItem {
   music: string | null;
   hashtags: string[];
   error_message: string | null;
+  /** Platform scrape / pipeline extras (e.g. video_url, vision_clip_breakdown). */
+  metadata?: Record<string, unknown> | null;
 
   // website fields
   screenshot_url: string | null;

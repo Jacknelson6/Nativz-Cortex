@@ -74,6 +74,41 @@ function buildStages(platforms: string[], volume: string): Stage[] {
   return stages;
 }
 
+const PROCESS_POST_BY_ID = new Map<string, Promise<{ res: Response; data: unknown }>>();
+
+function processingClockKey(id: string) {
+  return `nativz-sp-t0:${id}`;
+}
+
+function clearProcessingClock(id: string) {
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem(processingClockKey(id));
+}
+
+/** Derive stage + bar position from wall-clock elapsed (survives Strict Mode remounts). */
+function progressFromElapsedMs(elapsedMs: number, stages: Stage[]) {
+  let cumulativeDuration = 0;
+  let currentStage = 0;
+  for (let i = 0; i < stages.length; i++) {
+    cumulativeDuration += stages[i].duration;
+    if (elapsedMs < cumulativeDuration) {
+      currentStage = i;
+      break;
+    }
+    currentStage = i;
+  }
+  const stage = stages[currentStage];
+  let stageStartMs = 0;
+  for (let i = 0; i < currentStage; i++) {
+    stageStartMs += stages[i].duration;
+  }
+  const within = Math.max(0, elapsedMs - stageStartMs);
+  const frac = stage.duration > 0 ? Math.min(1, within / stage.duration) : 1;
+  const prevTarget = currentStage > 0 ? stages[currentStage - 1].target : 0;
+  const progress = Math.min(91, prevTarget + (stage.target - prevTarget) * (0.2 + 0.75 * frac));
+  return { stageIndex: currentStage, progress };
+}
+
 export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'medium', platforms = ['web'] }: SearchProcessingProps) {
   const router = useRouter();
   const [progress, setProgress] = useState(0);
@@ -84,7 +119,6 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
   const [emailSent, setEmailSent] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const hasStarted = useRef(false);
   const apiErrorRef = useRef(false);
   const intervalsRef = useRef<{ progress: ReturnType<typeof setInterval> | null; timer: ReturnType<typeof setInterval> | null }>({ progress: null, timer: null });
   const pollStatusRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -117,6 +151,7 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
   function goToResults() {
     if (redirectOnceRef.current) return;
     redirectOnceRef.current = true;
+    clearProcessingClock(searchId);
     stopStatusPoll();
     clearIntervals();
     setProgress(100);
@@ -129,31 +164,48 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
 
   function startProgress() {
     clearIntervals();
-    setProgress(0);
-    setStageIndex(0);
     setDone(false);
-    setElapsed(0);
 
     const stages = stagesRef.current;
-    const startTime = Date.now();
-    let currentProgress = 0;
-    let currentStage = 0;
+    const clockKey = processingClockKey(searchId);
+    let t0 = Date.now();
+    if (typeof window !== 'undefined') {
+      const raw = sessionStorage.getItem(clockKey);
+      if (raw) {
+        const parsed = parseInt(raw, 10);
+        if (!Number.isNaN(parsed)) t0 = parsed;
+        else sessionStorage.setItem(clockKey, String(t0));
+      } else {
+        sessionStorage.setItem(clockKey, String(t0));
+      }
+    }
+
+    const elapsedMs = Date.now() - t0;
+    const seeded = progressFromElapsedMs(elapsedMs, stages);
+    setStageIndex(seeded.stageIndex);
+    setProgress(seeded.progress);
+    setElapsed(Math.floor(elapsedMs / 1000));
+
+    let currentProgress = seeded.progress;
+    let currentStage = seeded.stageIndex;
 
     intervalsRef.current.timer = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTime) / 1000));
+      setElapsed(Math.floor((Date.now() - t0) / 1000));
     }, 1000);
 
     intervalsRef.current.progress = setInterval(() => {
-      // Stop advancing if the API call errored out
       if (apiErrorRef.current) return;
 
-      const elapsedMs = Date.now() - startTime;
+      const elapsedMsLoop = Date.now() - t0;
 
       let cumulativeDuration = 0;
       let targetStage = 0;
       for (let i = 0; i < stages.length; i++) {
         cumulativeDuration += stages[i].duration;
-        if (elapsedMs < cumulativeDuration) { targetStage = i; break; }
+        if (elapsedMsLoop < cumulativeDuration) {
+          targetStage = i;
+          break;
+        }
         targetStage = i;
       }
 
@@ -188,15 +240,44 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
     );
   }
 
-  async function runProcess() {
+  function getOrCreateProcessPost(forceRetry: boolean) {
+    if (forceRetry) {
+      PROCESS_POST_BY_ID.delete(searchId);
+    }
+    let p = PROCESS_POST_BY_ID.get(searchId);
+    if (p) return p;
+    p = (async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 600000);
+      try {
+        const res = await fetch(`/api/search/${searchId}/process`, {
+          method: 'POST',
+          signal: controller.signal,
+        });
+        const data = await res.json().catch(() => ({}));
+        return { res, data };
+      } finally {
+        clearTimeout(timeoutId);
+        PROCESS_POST_BY_ID.delete(searchId);
+      }
+    })();
+    PROCESS_POST_BY_ID.set(searchId, p);
+    return p;
+  }
+
+  async function runProcess(opts?: { forceRetry?: boolean }) {
+    const forceRetry = opts?.forceRetry ?? false;
+    if (forceRetry) {
+      redirectOnceRef.current = false;
+      clearProcessingClock(searchId);
+    }
+
     setError('');
     setApiError(null);
     apiErrorRef.current = false;
-    redirectOnceRef.current = false;
     startProgress();
     stopStatusPoll();
 
-    // While POST runs, poll DB — server can finish before the HTTP response returns (or UI was on wrong stage).
     pollStatusRef.current = setInterval(async () => {
       if (redirectOnceRef.current || apiErrorRef.current) return;
       try {
@@ -218,11 +299,7 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
     }, 2000);
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 min timeout
-      const res = await fetch(`/api/search/${searchId}/process`, { method: 'POST', signal: controller.signal });
-      clearTimeout(timeoutId);
-      const data = await res.json().catch(() => ({}));
+      const { res, data } = await getOrCreateProcessPost(forceRetry);
       stopStatusPoll();
 
       if (res.status === 202) {
@@ -244,7 +321,10 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
 
       if (!res.ok) {
         clearIntervals();
-        const msg = data.details ? `${data.error}: ${data.details}` : (data.error || 'Search failed.');
+        const errBody = data as { error?: string; details?: string };
+        const msg = errBody.details
+          ? `${errBody.error ?? 'Error'}: ${errBody.details}`
+          : (errBody.error || 'Search failed.');
         setError(msg);
         setApiError(msg);
         return;
@@ -263,15 +343,13 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
   }
 
   useEffect(() => {
-    if (hasStarted.current) return;
-    hasStarted.current = true;
-
-    (async () => {
+    void (async () => {
       try {
         const check = await fetch(`/api/search/${searchId}`);
         if (check.ok) {
           const s = await check.json();
           if (s.status === 'completed') {
+            clearProcessingClock(searchId);
             router.replace(`${redirectPrefix}/search/${searchId}`);
             return;
           }
@@ -292,15 +370,13 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
       stopStatusPoll();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchId]);
 
   function handleRetry() {
-    hasStarted.current = false;
-    redirectOnceRef.current = false;
     stopStatusPoll();
     setError('');
     setApiError(null);
-    runProcess();
+    runProcess({ forceRetry: true });
   }
 
   async function handleEmailMe() {

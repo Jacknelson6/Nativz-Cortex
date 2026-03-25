@@ -46,7 +46,10 @@
     "ads:goldback:idgt200": "tsx scripts/generate-goldback-idaho-gtm-200.ts",
     "ads:goldback:idgt200:pipeline": "tsx scripts/pipeline-goldback-idaho-gtm-200.ts",
     "ads:goldback:zip-run": "tsx scripts/zip-goldback-run-folder.ts",
-    "ads:goldback:idgt-samples5": "tsx scripts/generate-goldback-idaho-gtm-samples-5.ts"
+    "ads:goldback:idgt-samples5": "tsx scripts/generate-goldback-idaho-gtm-samples-5.ts",
+    "seed:goldback-search": "tsx scripts/seed-goldback-topic-search.ts",
+    "setup:college-hunks": "tsx scripts/college-hunks-setup.ts",
+    "seed:college-hunks-searches": "tsx scripts/seed-college-hunks-topic-searches.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

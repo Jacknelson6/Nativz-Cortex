@@ -21,6 +21,14 @@ export function formatNumber(num: number): string {
   return num.toLocaleString();
 }
 
+/** Compact counts with two fractional digits (e.g. 211.82K) for dashboard tables */
+export function formatCompactCount(num: number): string {
+  if (!Number.isFinite(num) || num < 0) return '—';
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(2)}M`;
+  if (num >= 1_000) return `${(num / 1_000).toFixed(2)}K`;
+  return num.toLocaleString();
+}
+
 export function formatPercent(value: number, decimals = 1): string {
   return `${(value * 100).toFixed(decimals)}%`;
 }

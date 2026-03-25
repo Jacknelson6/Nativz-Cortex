@@ -61,7 +61,7 @@ Infrastructure and configuration requirements for Nativz Cortex production deplo
 | `SUPABASE_SERVICE_ROLE_KEY` | Vercel env vars | — | — |
 | `OPENROUTER_API_KEY` | Vercel env vars | — | — |
 | `GOOGLE_AI_STUDIO_KEY` | Vercel env vars | — | — |
-| `BRAVE_API_KEY` | Vercel env vars | — | — |
+| `BRAVE_SEARCH_API_KEY` | Vercel env vars | — | — |
 | `GITHUB_VAULT_WEBHOOK_SECRET` | Vercel + GitHub | — | — |
 | `MONDAY_WEBHOOK_SECRET` | Vercel + Monday | — | — |
 | `CRON_SECRET` | Vercel env vars | — | — |

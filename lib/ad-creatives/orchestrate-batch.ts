@@ -16,6 +16,7 @@ import { getClientAdGenerationSettings } from './client-ad-generation-settings';
 import { buildNanoBananaImagePrompt } from './nano-banana/build-nano-prompt';
 import { fillNanoBananaTemplate } from './nano-banana/fill-template';
 import { assertValidNanoBananaSlugs, getNanoBananaBySlug } from './nano-banana/catalog';
+import { nanoBananaCatalogStyleDirection } from './nano-banana/catalog-style-direction';
 import {
   brandLogoImageUrlsForGeneration,
   supplementaryBrandReferenceImageUrls,
@@ -208,7 +209,9 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
     const layoutMode = isGlobalNano ? 'schema_only' : (config.brandLayoutMode ?? 'reference_image');
 
     let creativeBriefParagraph = config.creativeBrief?.trim() ?? '';
-    if (!creativeBriefParagraph) {
+    // Nano Banana / CLI-style runs: do not auto-inject an LLM brief when empty — the CLI batch
+    // relied on modifier + template + product refs only; the brief model added competing copy priors.
+    if (!creativeBriefParagraph && !isGlobalNano) {
       creativeBriefParagraph = (
         await generateCreativeBrief({
           brandContext,
@@ -255,9 +258,16 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
             if ((await fetchAdBatchStatus(admin, batchId)) === 'cancelled') {
               return;
             }
-            const styleDirection = [item.styleDirection, qaRetryStyleSuffix].filter(Boolean).join('\n\n');
+            const catalogNanoStyle =
+              item.mode === 'global' ? nanoBananaCatalogStyleDirection(item.templateKey) : undefined;
+            const styleDirection = [catalogNanoStyle, item.styleDirection, qaRetryStyleSuffix]
+              .filter(Boolean)
+              .join('\n\n');
             const logoUrls = brandLogoImageUrlsForGeneration(brandContext);
-            const brandRefs = supplementaryBrandReferenceImageUrls(brandContext, logoUrls);
+            const brandRefs =
+              item.mode === 'global'
+                ? []
+                : supplementaryBrandReferenceImageUrls(brandContext, logoUrls);
             const refUrl =
               item.mode === 'client' && layoutMode === 'reference_image'
                 ? item.referenceImageUrl ?? undefined
@@ -306,9 +316,13 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
             const productUrlsThisSlot =
               rawProductUrls.length === 0
                 ? undefined
-                : rotateProductRefs
-                  ? [rawProductUrls[itemIndex % rawProductUrls.length]]
-                  : rawProductUrls.slice(0, 3);
+                : item.mode === 'global'
+                  ? rotateProductRefs
+                    ? [rawProductUrls[itemIndex % rawProductUrls.length]]
+                    : [rawProductUrls[0]]
+                  : rotateProductRefs
+                    ? [rawProductUrls[itemIndex % rawProductUrls.length]]
+                    : rawProductUrls.slice(0, 3);
 
             imageBuffer = await generateAdImage({
               prompt,
@@ -316,7 +330,8 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
               layoutWireframePng,
               productImageUrls: productUrlsThisSlot,
               brandLogoImageUrls: logoUrls.length > 0 ? logoUrls : undefined,
-              brandReferenceImageUrls: brandRefs.length > 0 ? brandRefs : undefined,
+              brandReferenceImageUrls:
+                item.mode === 'global' ? undefined : brandRefs.length > 0 ? brandRefs : undefined,
               aspectRatio: config.aspectRatio,
             });
 

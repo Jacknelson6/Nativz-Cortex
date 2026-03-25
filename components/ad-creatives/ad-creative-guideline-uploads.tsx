@@ -10,6 +10,9 @@ import { BRAND_DNA_BENTO_SURFACE } from '@/components/brand-dna/brand-dna-cards'
 const ACCEPT =
   'image/png,image/jpeg,image/jpg,image/svg+xml,image/webp,application/pdf,text/plain,text/markdown,.md,.txt,.docx';
 
+/** Must match `app/api/clients/[id]/brand-dna/upload/route.ts` per-request cap. */
+const FILES_PER_UPLOAD_BATCH = 40;
+
 interface AdCreativeGuidelineUploadsProps {
   clientId: string;
   /** Sidebar vs full-width panel */
@@ -31,25 +34,49 @@ export function AdCreativeGuidelineUploads({ clientId, variant = 'default' }: Ad
       if (files.length === 0) return;
       setUploading(true);
       try {
-        const formData = new FormData();
-        for (const f of files) {
-          formData.append('files', f);
+        let totalAdded = 0;
+        const batches: File[][] = [];
+        for (let i = 0; i < files.length; i += FILES_PER_UPLOAD_BATCH) {
+          batches.push(files.slice(i, i + FILES_PER_UPLOAD_BATCH));
         }
-        const res = await fetch(`/api/clients/${clientId}/brand-dna/upload`, {
-          method: 'POST',
-          body: formData,
-        });
-        const data = (await res.json().catch(() => ({}))) as {
-          entryIds?: string[];
-          textContent?: string;
-          error?: string;
-        };
-        if (!res.ok) {
-          throw new Error(typeof data.error === 'string' ? data.error : 'Upload failed');
+
+        for (let b = 0; b < batches.length; b++) {
+          const chunk = batches[b];
+          const formData = new FormData();
+          for (const f of chunk) {
+            formData.append('files', f);
+          }
+          const res = await fetch(`/api/clients/${clientId}/brand-dna/upload`, {
+            method: 'POST',
+            body: formData,
+          });
+          const data = (await res.json().catch(() => ({}))) as {
+            entryIds?: string[];
+            textContent?: string;
+            error?: string;
+          };
+          if (!res.ok) {
+            const detail =
+              batches.length > 1
+                ? ` (failed on batch ${b + 1} of ${batches.length}; ${totalAdded} files were saved before this error)`
+                : '';
+            throw new Error(
+              (typeof data.error === 'string' ? data.error : 'Upload failed') + detail,
+            );
+          }
+          totalAdded += data.entryIds?.length ?? chunk.length;
+          if (batches.length > 1) {
+            toast.message(`Batch ${b + 1} of ${batches.length}`, {
+              description: `${totalAdded} / ${files.length} files uploaded so far.`,
+            });
+          }
         }
-        const n = data.entryIds?.length ?? files.length;
-        toast.success(`${n} file${n === 1 ? '' : 's'} added`, {
-          description: 'Included in the next ad generation run (copy + images).',
+
+        toast.success(`${totalAdded} file${totalAdded === 1 ? '' : 's'} added`, {
+          description:
+            batches.length > 1
+              ? `Uploaded in ${batches.length} batches (${FILES_PER_UPLOAD_BATCH} files max per request).`
+              : 'Included in the next ad generation run (copy + images).',
         });
         setQueue([]);
         router.refresh();
@@ -129,8 +156,9 @@ export function AdCreativeGuidelineUploads({ clientId, variant = 'default' }: Ad
         <div>
           <h3 className="text-sm font-semibold text-text-primary">Creative reference files</h3>
           <p className="text-xs text-text-muted mt-1 leading-relaxed">
-            Upload brand guidelines (PDF, Word), mood boards, packaging shots, or notes (Markdown/text). Up to 40 files
-            per batch; each up to 50&nbsp;MB. Text and images are pulled into ad copy and image generation automatically.
+            Upload brand guidelines (PDF, Word), mood boards, packaging shots, or notes (Markdown/text). Each request
+            accepts up to {FILES_PER_UPLOAD_BATCH} files; larger queues upload automatically in sequence (each file up
+            to 50&nbsp;MB). Text and images are pulled into ad copy and image generation automatically.
           </p>
         </div>
       </div>

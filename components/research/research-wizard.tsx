@@ -18,7 +18,15 @@ interface ResearchWizardProps {
   onClose: () => void;
   clients: ClientOption[];
   initialQuery?: string;
-  onStarted?: (item: { id: string; query: string; mode: string; clientName: string | null }) => void;
+  /** Server uses llm_v1 by default; set TOPIC_SEARCH_PIPELINE=legacy to disable subtopic planning */
+  topicPipelineLlmV1?: boolean;
+  onStarted?: (item: {
+    id: string;
+    query: string;
+    mode: string;
+    clientName: string | null;
+    needsSubtopics?: boolean;
+  }) => void;
 }
 
 const DEPTH_OPTIONS: { value: 'light' | 'medium' | 'deep'; label: string; tip: string }[] = [
@@ -27,7 +35,7 @@ const DEPTH_OPTIONS: { value: 'light' | 'medium' | 'deep'; label: string; tip: s
   { value: 'deep', label: 'Deep', tip: '500+ sources · Full analysis' },
 ];
 
-export function ResearchWizard({ open, onClose, clients, initialQuery, onStarted }: ResearchWizardProps) {
+export function ResearchWizard({ open, onClose, clients, initialQuery, topicPipelineLlmV1 = false, onStarted }: ResearchWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [topicQuery, setTopicQuery] = useState(initialQuery ?? '');
@@ -105,21 +113,29 @@ export function ResearchWizard({ open, onClose, clients, initialQuery, onStarted
         body: JSON.stringify(body),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as { id?: string; error?: string; topic_pipeline?: string };
       if (!res.ok) {
         setError(data.error || 'Search failed');
         setLoading(false);
         return;
       }
 
+      const needsSubtopics =
+        topicPipelineLlmV1 || data.topic_pipeline === 'llm_v1';
+
       onStarted?.({
-        id: data.id,
+        id: data.id!,
         query: topicQuery.trim(),
         mode: searchMode,
         clientName: selectedClient?.name ?? null,
+        needsSubtopics,
       });
       handleClose();
-      router.push(`/admin/search/${data.id}/processing`);
+      router.push(
+        needsSubtopics
+          ? `/admin/search/${data.id}/subtopics`
+          : `/admin/search/${data.id}/processing`,
+      );
     } catch {
       setError('Something went wrong. Try again.');
       setLoading(false);

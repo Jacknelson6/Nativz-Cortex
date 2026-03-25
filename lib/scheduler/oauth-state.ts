@@ -2,7 +2,8 @@
  * Signed OAuth state tokens for the scheduler connect flow.
  *
  * Format: base64url(JSON payload).base64url(HMAC-SHA256 signature)
- * Secret: LATE_WEBHOOK_SECRET env var
+ * Uses the same **Zernio webhook secret** as `/api/scheduler/webhooks`:
+ * `ZERNIO_WEBHOOK_SECRET` (legacy alias: `LATE_WEBHOOK_SECRET`).
  * Expiry: 10 minutes
  */
 
@@ -15,9 +16,11 @@ export interface OAuthStatePayload {
 }
 
 function getSecret(): string {
-  const secret = process.env.LATE_WEBHOOK_SECRET;
+  const secret = process.env.ZERNIO_WEBHOOK_SECRET ?? process.env.LATE_WEBHOOK_SECRET;
   if (!secret) {
-    throw new Error('LATE_WEBHOOK_SECRET is not set — cannot sign OAuth state');
+    throw new Error(
+      'Zernio webhook secret is not set — set ZERNIO_WEBHOOK_SECRET (legacy alias: LATE_WEBHOOK_SECRET) for OAuth state signing',
+    );
   }
   return secret;
 }

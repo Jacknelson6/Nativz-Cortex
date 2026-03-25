@@ -141,6 +141,26 @@ function SectionHeader({ title, dotColor }: { title: string; dotColor?: string }
   );
 }
 
+/** Renders **Markdown bold** in PDF using nested Text (Helvetica-Bold). */
+function PdfTextWithBold({ text, style }: { text: string; style: typeof s.body }) {
+  const segments = text.split(/(\*\*.+?\*\*)/g);
+  return (
+    <Text style={style}>
+      {segments.map((seg, i) => {
+        const m = seg.match(/^\*\*(.+?)\*\*$/);
+        if (m) {
+          return (
+            <Text key={i} style={{ fontFamily: 'Helvetica-Bold', color: c.text }}>
+              {m[1]}
+            </Text>
+          );
+        }
+        return <Text key={i}>{seg}</Text>;
+      })}
+    </Text>
+  );
+}
+
 // ─── Main document ────────────────────────────────────────────────────────────
 
 interface SearchPdfDocumentProps {
@@ -156,13 +176,14 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
   const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
   const topics = (search.trending_topics ?? []) as TrendingTopic[];
   const emotions = (search.emotions ?? []) as EmotionBreakdown[];
-  const isBrand = !!aiResponse?.brand_alignment_notes;
+  const hasBrandAlignment = !!aiResponse?.brand_alignment_notes;
   const dateStr = search.completed_at
     ? new Date(search.completed_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-  // Extract key findings from summary
+  // Extract key findings from summary (strip Markdown bold markers first)
   const keyFindings = (search.summary ?? '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
     .split(/[.!?]+/)
     .map((s) => s.trim())
     .filter((s) => s.length > 20)
@@ -207,22 +228,33 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
           </View>
         </View>
 
-        {/* Executive Summary / Brand Alignment */}
-        {(isBrand ? aiResponse?.brand_alignment_notes : search.summary) && (
+        {/* Executive summary — always when present; brand alignment is additional */}
+        {search.summary ? (
           <View style={s.section}>
-            <SectionHeader title={isBrand ? 'Brand alignment' : 'Executive summary'} dotColor={isBrand ? c.purple : c.accent} />
+            <SectionHeader title="Executive summary" dotColor={c.accent} />
             <View style={s.card}>
-              <Text style={s.body}>
-                {isBrand ? aiResponse!.brand_alignment_notes : search.summary}
-              </Text>
-              {aiResponse?.overall_sentiment !== undefined && (
+              <PdfTextWithBold text={search.summary} style={s.body} />
+              {aiResponse?.overall_sentiment !== undefined && !hasBrandAlignment ? (
                 <View style={{ marginTop: 8 }}>
                   <SentimentBadge sentiment={aiResponse.overall_sentiment} />
                 </View>
-              )}
+              ) : null}
             </View>
           </View>
-        )}
+        ) : null}
+        {hasBrandAlignment ? (
+          <View style={s.section}>
+            <SectionHeader title="Brand alignment" dotColor={c.purple} />
+            <View style={s.card}>
+              <PdfTextWithBold text={aiResponse!.brand_alignment_notes ?? ''} style={s.body} />
+              {aiResponse?.overall_sentiment !== undefined ? (
+                <View style={{ marginTop: 8 }}>
+                  <SentimentBadge sentiment={aiResponse.overall_sentiment} />
+                </View>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
 
         {/* Key Findings */}
         {keyFindings.length > 0 && (
@@ -241,7 +273,7 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
           <View style={s.section}>
             <SectionHeader title="Key metrics" />
             <View style={s.metricsRow}>
-              {isBrand ? (
+              {hasBrandAlignment ? (
                 <>
                   <View style={s.metricBox}>
                     <Text style={[s.metricValue, { color: c.purple }]}>{search.metrics.sources_analyzed}</Text>

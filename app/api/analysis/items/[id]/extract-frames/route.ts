@@ -9,8 +9,9 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import type { VideoFrame } from '@/lib/types/moodboard';
+import { analyzeVisionClipBreakdown } from '@/lib/moodboard/vision-clip-breakdown';
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 // ffmpeg-static uses module.exports (CJS), so we need require() for the path
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -22,6 +23,18 @@ if (ffmpegPath) {
 /**
  * Download a video from URL to a temp file
  */
+function probeDurationSec(videoPath: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    Ffmpeg.ffprobe(videoPath, (err, metadata) => {
+      if (err || metadata?.format?.duration == null) {
+        resolve(null);
+        return;
+      }
+      resolve(Number(metadata.format.duration));
+    });
+  });
+}
+
 async function downloadVideo(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
@@ -157,7 +170,11 @@ export async function POST(
     await mkdir(frameDir, { recursive: true });
 
     try {
-      const duration = item.duration || 30;
+      const probed = await probeDurationSec(videoPath);
+      const duration =
+        probed != null && Number.isFinite(probed) && probed > 0
+          ? Math.max(1, Math.ceil(probed))
+          : item.duration || 30;
 
       // Extract a frame every 3 seconds
       const { paths: framePaths, timestamps } = await extractFramesFromFile(videoPath, frameDir, duration);
@@ -202,14 +219,30 @@ export async function POST(
         });
       }
 
-      // Save frames to database
-      await adminClient
-        .from('moodboard_items')
-        .update({
-          frames,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id);
+      const visionBreakdown =
+        frames.length > 0
+          ? await analyzeVisionClipBreakdown({
+              frames: frames.map((f) => ({ url: f.url, timestamp: f.timestamp })),
+              videoDurationSec: duration,
+              userId: user.id,
+              userEmail: user.email ?? undefined,
+            })
+          : null;
+
+      const prevMeta =
+        item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+          ? (item.metadata as Record<string, unknown>)
+          : {};
+
+      const updatePayload: Record<string, unknown> = {
+        frames,
+        updated_at: new Date().toISOString(),
+      };
+      if (visionBreakdown) {
+        updatePayload.metadata = { ...prevMeta, vision_clip_breakdown: visionBreakdown };
+      }
+
+      await adminClient.from('moodboard_items').update(updatePayload).eq('id', id);
 
       // Fetch updated item
       const { data: updated } = await adminClient

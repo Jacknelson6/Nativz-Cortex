@@ -2,6 +2,7 @@ import type { BraveSerpData } from '@/lib/brave/types';
 import type { ClientPreferences } from '@/lib/types/database';
 import type { BrandContext } from '@/lib/knowledge/brand-context';
 import { formatBrandPreferencesBlock, hasPreferences } from './brand-context';
+import { EXECUTIVE_SUMMARY_CORE } from '@/lib/prompts/executive-summary-instructions';
 
 interface TopicResearchConfig {
   query: string;
@@ -149,11 +150,13 @@ Based on the search data above:
 5. **Trending sub-topics** — What specific angles or sub-topics within this broader topic are trending? For each, cite 2-5 real sources from the search data above.
 6. **Video opportunities** — For each trending sub-topic, what specific video ideas would perform well?
 
+${EXECUTIVE_SUMMARY_CORE}
+
 ## OUTPUT FORMAT
 Respond ONLY in valid JSON matching this exact schema. No text outside the JSON object.
 
 {
-  "summary": "3-5 sentence overview of the topic landscape. Reference specific sources from the search data. What's the conversation about? What are the key takeaways? What opportunities exist for content creators?",
+  "summary": "Single paragraph per executive summary rules above (Markdown **bold** on 3–6 short phrases only)",
 
   "overall_sentiment": 0.0,
 

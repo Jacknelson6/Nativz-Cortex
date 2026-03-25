@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  ensureContentProductionSopPresentation,
+  sortPresentationsWithSeedFirst,
+} from '@/lib/presentations/ensure-content-production-sop';
 
 const slideSchema = z.object({
   title: z.string().default(''),
@@ -59,6 +63,8 @@ export async function GET() {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
+    await ensureContentProductionSopPresentation(adminClient, user.id);
+
     const { data, error } = await adminClient
       .from('presentations')
       .select('*, clients(name)')
@@ -69,11 +75,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch presentations' }, { status: 500 });
     }
 
-    const result = (data ?? []).map((p: Record<string, unknown>) => ({
+    const mapped = (data ?? []).map((p: Record<string, unknown>) => ({
       ...p,
       client_name: (p.clients as { name: string } | null)?.name ?? null,
       clients: undefined,
     }));
+
+    const result = sortPresentationsWithSeedFirst(
+      mapped as { tags?: string[]; updated_at?: string }[],
+    );
 
     return NextResponse.json(result);
   } catch (error) {

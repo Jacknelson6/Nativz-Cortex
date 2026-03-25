@@ -12,6 +12,7 @@ import {
 } from '@/lib/benchmarks/sections';
 import { BenchmarkCard } from '@/lib/benchmarks/charts/benchmark-card';
 import { BenchmarkSectionBody } from '@/lib/benchmarks/benchmark-section-body';
+import { SlidesPresentView } from '../slides-present-view';
 import type { BenchmarkConfig } from '../types';
 
 export default function PresentModePage() {
@@ -19,6 +20,9 @@ export default function PresentModePage() {
   const params = useParams();
   const id = params.id as string;
 
+  const [presentationType, setPresentationType] = useState<'benchmarks' | 'slides' | null>(null);
+  const [deckTitle, setDeckTitle] = useState('');
+  const [slides, setSlides] = useState<{ title: string; body: string; image_url?: string | null; notes?: string | null }[]>([]);
   const [benchmarkConfig, setBenchmarkConfig] = useState<BenchmarkConfig | null>(null);
   const [unsupported, setUnsupported] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -30,24 +34,36 @@ export default function PresentModePage() {
         const res = await fetch(`/api/presentations/${id}`);
         if (!res.ok) throw new Error();
         const data = await res.json();
-        if (data.type !== 'benchmarks') {
-          setUnsupported(true);
+
+        if (data.type === 'slides') {
+          setPresentationType('slides');
+          setDeckTitle(String(data.title ?? 'Presentation'));
+          setSlides(Array.isArray(data.slides) ? data.slides : []);
           setLoading(false);
           return;
         }
-        const config = data.audit_data as BenchmarkConfig | undefined;
-        setBenchmarkConfig(
-          config && Array.isArray(config.section_order) && Array.isArray(config.visible_sections)
-            ? {
-                ...config,
-                section_order: mergeBenchmarkSectionOrder(config.section_order),
-              }
-            : {
-                visible_sections: [...DEFAULT_VISIBLE_SECTIONS],
-                section_order: [...DEFAULT_SECTION_ORDER],
-                active_vertical_filter: null,
-              }
-        );
+
+        if (data.type === 'benchmarks') {
+          setPresentationType('benchmarks');
+          const config = data.audit_data as BenchmarkConfig | undefined;
+          setBenchmarkConfig(
+            config && Array.isArray(config.section_order) && Array.isArray(config.visible_sections)
+              ? {
+                  ...config,
+                  section_order: mergeBenchmarkSectionOrder(config.section_order),
+                }
+              : {
+                  visible_sections: [...DEFAULT_VISIBLE_SECTIONS],
+                  section_order: [...DEFAULT_SECTION_ORDER],
+                  active_vertical_filter: null,
+                }
+          );
+          setLoading(false);
+          return;
+        }
+
+        setUnsupported(true);
+        setLoading(false);
       } catch {
         toast.error('Failed to load presentation');
         router.push(`/admin/presentations/${id}`);
@@ -65,7 +81,7 @@ export default function PresentModePage() {
         .filter(Boolean)
     : [];
 
-  const totalSlides = benchmarkSlides.length;
+  const totalSlides = presentationType === 'benchmarks' ? benchmarkSlides.length : 0;
 
   const goNext = useCallback(() => {
     setCurrentIndex((i) => Math.min(i + 1, totalSlides - 1));
@@ -80,6 +96,7 @@ export default function PresentModePage() {
   }, [router, id]);
 
   useEffect(() => {
+    if (presentationType !== 'benchmarks') return;
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault();
@@ -93,11 +110,11 @@ export default function PresentModePage() {
     }
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [goNext, goPrev, exit]);
+  }, [presentationType, goNext, goPrev, exit]);
 
   useEffect(() => {
     if (!unsupported) return;
-    toast.error('Present mode only supports creative benchmarks decks.');
+    toast.error('Present mode supports slide decks and creative benchmarks only.');
     router.replace(`/admin/presentations/${id}`);
   }, [unsupported, router, id]);
 
@@ -117,7 +134,11 @@ export default function PresentModePage() {
     );
   }
 
-  if (totalSlides === 0) {
+  if (presentationType === 'slides') {
+    return <SlidesPresentView presentationId={id} deckTitle={deckTitle} slides={slides} />;
+  }
+
+  if (presentationType === 'benchmarks' && totalSlides === 0) {
     return (
       <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
         <p className="text-white/60">No benchmark sections visible</p>

@@ -71,7 +71,21 @@ async function main() {
     connectionString: url,
     ssl: url.includes('supabase') ? { rejectUnauthorized: false } : undefined,
   });
-  await client.connect();
+
+  try {
+    await client.connect();
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException & { code?: string };
+    const transient = new Set(['ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'EAI_AGAIN', 'ENETUNREACH']);
+    if (err?.code && transient.has(err.code)) {
+      console.warn(
+        `[supabase:migrate] Database unreachable (${err.code}) — skip migrations. ` +
+          'Check SUPABASE_DB_URL / DIRECT_URL in .env.local (Supabase Dashboard → Database → URI), VPN/network, or resume a paused project.',
+      );
+      process.exit(0);
+    }
+    throw e;
+  }
 
   try {
     await client.query(INIT_SQL);

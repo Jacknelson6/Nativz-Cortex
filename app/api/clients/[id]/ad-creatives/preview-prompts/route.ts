@@ -17,6 +17,7 @@ import { DEFAULT_BATCH_CTA } from '@/lib/ad-creatives/batch-cta-presets';
 import { buildNanoBananaImagePrompt } from '@/lib/ad-creatives/nano-banana/build-nano-prompt';
 import { fillNanoBananaTemplate } from '@/lib/ad-creatives/nano-banana/fill-template';
 import { getNanoBananaBySlug } from '@/lib/ad-creatives/nano-banana/catalog';
+import { nanoBananaCatalogStyleDirection } from '@/lib/ad-creatives/nano-banana/catalog-style-direction';
 import { getClientAdGenerationSettings } from '@/lib/ad-creatives/client-ad-generation-settings';
 import { globalSlotOrderMatchesVariations } from '@/lib/ad-creatives/nano-banana/bulk-presets';
 
@@ -157,7 +158,7 @@ export async function POST(
     }
 
     let briefForPreviews = creativeBriefInput?.trim() ?? '';
-    if (!briefForPreviews) {
+    if (!briefForPreviews && !isNano) {
       briefForPreviews = (
         await generateCreativeBrief({
           brandContext,
@@ -180,7 +181,9 @@ export async function POST(
         if (!entry) {
           throw new Error(`Unknown Nano Banana slug: ${slug}`);
         }
-        const sd = styleDirectionGlobal?.trim() || undefined;
+        const catalogSd = nanoBananaCatalogStyleDirection(slug);
+        const mergedStyle =
+          [catalogSd, styleDirectionGlobal?.trim()].filter(Boolean).join('\n\n') || undefined;
         const filled = fillNanoBananaTemplate(entry.promptTemplate, {
           onScreenText: copy,
           productService,
@@ -194,7 +197,7 @@ export async function POST(
           productService,
           offer: offer ?? null,
           creativeBrief: briefForPreviews || undefined,
-          styleDirection: sd,
+          styleDirection: mergedStyle,
         });
         previews.push({
           templateId: slug,
@@ -300,7 +303,7 @@ export async function POST(
       previews,
       creativeBrief: briefForPreviews || undefined,
       brandLayoutMode: layoutMode,
-      imagePipeline: 'gemini_native',
+      imagePipeline: isNano ? 'nano_banana' : 'gemini_native',
     });
   } catch (err) {
     if (err instanceof BrandDnaRequiredError) {

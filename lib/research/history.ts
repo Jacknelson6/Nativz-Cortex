@@ -55,9 +55,11 @@ export async function fetchHistory({
         clientId: s.client_id,
         createdAt: s.created_at,
         href:
-          s.status === 'processing' || s.status === 'pending'
-            ? `/admin/search/${s.id}/processing`
-            : `/admin/search/${s.id}`,
+          s.status === 'pending_subtopics'
+            ? `/admin/search/${s.id}/subtopics`
+            : s.status === 'processing' || s.status === 'pending'
+              ? `/admin/search/${s.id}/processing`
+              : `/admin/search/${s.id}`,
       });
     }
   }

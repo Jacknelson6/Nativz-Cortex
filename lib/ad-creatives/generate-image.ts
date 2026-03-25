@@ -123,7 +123,9 @@ async function buildParts(params: GenerateAdImageParams): Promise<GeminiContentP
       parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
     }
     parts.push({
-      text: `The above ${valid.length > 1 ? 'images are ACTUAL product photos' : 'image is an ACTUAL product photo'} for this brand. You MUST use these exact products in the advertisement — do not generate different or imaginary product imagery. The product appearance, packaging, and colors must match these reference photos exactly.\n\n`,
+      text:
+        `The above ${valid.length > 1 ? 'images are ACTUAL product photos' : 'image is an ACTUAL product photo'} for this brand. You MUST use these exact products in the advertisement — do not generate different or imaginary product imagery. The product appearance, packaging, and colors must match these reference photos exactly.\n` +
+        `PHOTOREAL FIDELITY: Keep the same SKU/variant, printed graphics, text and seals on the product, serial or label zones, and overall silhouette as the reference. You may adjust lighting, shadow, depth, and a modest camera angle as if reshooting in studio — do NOT invent a different design, denomination, or packaging, merge two references into one hybrid, or repaint artwork on the product surface.\n\n`,
     });
   } else {
     const productImages = params.productImageUrls ?? [];
@@ -136,7 +138,9 @@ async function buildParts(params: GenerateAdImageParams): Promise<GeminiContentP
           parts.push({ inlineData: img });
         }
         parts.push({
-          text: `The above ${valid.length > 1 ? 'images are ACTUAL product photos' : 'image is an ACTUAL product photo'} for this brand. You MUST use these exact products in the advertisement — do not generate different or imaginary product imagery. The product appearance, packaging, and colors must match these reference photos exactly.\n\n`,
+          text:
+            `The above ${valid.length > 1 ? 'images are ACTUAL product photos' : 'image is an ACTUAL product photo'} for this brand. You MUST use these exact products in the advertisement — do not generate different or imaginary product imagery. The product appearance, packaging, and colors must match these reference photos exactly.\n` +
+            `PHOTOREAL FIDELITY: Keep the same SKU/variant, printed graphics, text and seals on the product, serial or label zones, and overall silhouette as the reference. You may adjust lighting, shadow, depth, and a modest camera angle as if reshooting in studio — do NOT invent a different design, denomination, or packaging, merge two references into one hybrid, or repaint artwork on the product surface.\n\n`,
         });
       }
     }

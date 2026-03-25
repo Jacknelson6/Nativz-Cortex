@@ -2,15 +2,16 @@
 
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface Crumb {
   label: string;
   href?: string;
 }
 
-export function Breadcrumbs({ items }: { items: Crumb[] }) {
+export function Breadcrumbs({ items, className }: { items: Crumb[]; className?: string }) {
   return (
-    <nav className="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+    <nav className={cn('flex items-center gap-1.5 text-xs text-zinc-500 mb-4', className)}>
       {items.map((item, i) => (
         <span key={i} className="flex items-center gap-1.5">
           {i > 0 && <ChevronRight className="w-3 h-3" />}

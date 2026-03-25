@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { ChevronDown, ChevronRight, ChevronUp, Bookmark, Check } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Bookmark, Check, Copy } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import { TooltipCard } from '@/components/ui/tooltip-card';
-import { getSentimentBadgeVariant, getSentimentLabel } from '@/lib/utils/sentiment';
+import { getSentimentLabel } from '@/lib/utils/sentiment';
 import { TOOLTIPS } from '@/lib/tooltips';
+import { formatCompactCount } from '@/lib/utils/format';
 import { TopicRowExpanded } from './topic-row-expanded';
 import type { TrendingTopic, LegacyTrendingTopic } from '@/lib/types/search';
 
@@ -17,13 +17,6 @@ interface TrendingTopicsTableProps {
   searchId?: string;
 }
 
-const RESONANCE_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple'> = {
-  low: 'default',
-  medium: 'info',
-  high: 'success',
-  viral: 'purple',
-};
-
 const RESONANCE_ORDER: Record<string, number> = {
   low: 0,
   medium: 1,
@@ -31,8 +24,67 @@ const RESONANCE_ORDER: Record<string, number> = {
   viral: 3,
 };
 
-type SortKey = 'resonance' | 'sentiment';
+const RESONANCE_LABEL: Record<string, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  viral: 'Viral',
+};
+
+const TOPIC_FALLBACK_EMOJI = ['🔍', '🤖', '📣', '💡', '🎯', '✨', '📊', '🎬', '🎨', '📈'];
+
+type SortKey = 'resonance' | 'sentiment' | 'reach';
 type SortDir = 'asc' | 'desc';
+
+/** Matches mockup: topic | total views | resonance | sentiment | save */
+const GRID =
+  'grid-cols-[minmax(0,1fr)_minmax(88px,0.95fr)_minmax(72px,0.75fr)_minmax(88px,0.85fr)_40px]';
+
+function getTopicReachValue(topic: TrendingTopic | LegacyTrendingTopic): number {
+  if ('total_engagement' in topic && typeof (topic as TrendingTopic).total_engagement === 'number') {
+    return Math.max(0, (topic as TrendingTopic).total_engagement ?? 0);
+  }
+  if ('estimated_views' in topic && typeof topic.estimated_views === 'number') {
+    return Math.max(0, topic.estimated_views);
+  }
+  return 0;
+}
+
+function formatTopicReach(topic: TrendingTopic | LegacyTrendingTopic): string {
+  const v = getTopicReachValue(topic);
+  if (v <= 0) return '—';
+  return formatCompactCount(v);
+}
+
+function SentimentSplitBar({ sentiment }: { sentiment: number }) {
+  const pos = Math.max(0, Math.min(1, (sentiment + 1) / 2));
+  const neg = 1 - pos;
+  return (
+    <div
+      className="flex h-2 w-[72px] shrink-0 gap-0.5 overflow-hidden rounded-full"
+      title={getSentimentLabel(sentiment)}
+    >
+      <div className="h-full min-w-[3px] rounded-l-full bg-red-500/85" style={{ width: `${neg * 100}%` }} />
+      <div className="h-full min-w-[3px] rounded-r-full bg-emerald-500/85" style={{ width: `${pos * 100}%` }} />
+    </div>
+  );
+}
+
+function TopicTitleCell({ name, index }: { name: string; index: number }) {
+  const leading = name.match(/^(\p{Extended_Pictographic})\s*/u);
+  const emoji = leading?.[1];
+  const label = emoji ? name.slice(leading![0].length) : name;
+  const displayEmoji = emoji ?? TOPIC_FALLBACK_EMOJI[index % TOPIC_FALLBACK_EMOJI.length];
+
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span className="text-base leading-none shrink-0" aria-hidden>
+        {displayEmoji}
+      </span>
+      <span className="min-w-0 truncate text-sm font-semibold text-text-primary">{label}</span>
+    </span>
+  );
+}
 
 function SortHeader({
   label,
@@ -55,14 +107,16 @@ function SortHeader({
     <button
       type="button"
       onClick={() => onSort(sortKey)}
-      className={`flex items-center gap-1 justify-center transition-colors hover:text-text-secondary ${isActive ? 'text-text-secondary' : ''}`}
+      className={`flex w-full items-center justify-end gap-1 transition-colors hover:text-text-secondary ${
+        isActive ? 'text-text-secondary' : 'text-text-muted'
+      }`}
     >
       {tooltip ? (
         <TooltipCard title={tooltip.title} description={tooltip.description}>
-          {label}
+          <span className="text-xs font-medium normal-case">{label}</span>
         </TooltipCard>
       ) : (
-        label
+        <span className="text-xs font-medium normal-case">{label}</span>
       )}
       <span className="flex flex-col -space-y-1">
         <ChevronUp size={10} className={isActive && activeDir === 'asc' ? 'text-accent-text' : 'opacity-30'} />
@@ -124,6 +178,15 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
     }
   }
 
+  async function copyTopicTitle(topic: TrendingTopic | LegacyTrendingTopic) {
+    try {
+      await navigator.clipboard.writeText(topic.name);
+      toast.success('Copied topic');
+    } catch {
+      toast.error('Could not copy');
+    }
+  }
+
   const sortedTopics = useMemo(() => {
     if (!sortKey) return topics;
     const sorted = [...topics].sort((a, b) => {
@@ -135,6 +198,9 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
         case 'sentiment':
           diff = a.sentiment - b.sentiment;
           break;
+        case 'reach':
+          diff = getTopicReachValue(a) - getTopicReachValue(b);
+          break;
       }
       return sortDir === 'desc' ? -diff : diff;
     });
@@ -143,19 +209,19 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
 
   if (!topics.length) return null;
 
-  const gridCols = 'grid-cols-[1fr_120px_120px_60px]';
-
   return (
-    <Card padding="none">
-      <div className="p-6 pb-0">
-        <CardTitle>Trending topics</CardTitle>
-      </div>
-
-      <div className="mt-4 overflow-x-auto">
-        <div className="min-w-[540px]">
-        {/* Table header */}
-        <div className={`grid ${gridCols} gap-4 border-b border-nativz-border px-6 py-2.5 text-xs font-medium text-text-muted uppercase tracking-wide`}>
-          <span>Topic</span>
+    <Card padding="none" elevated className="overflow-hidden">
+      <div className="border-b border-nativz-border px-5 py-3 sm:px-6">
+        <div className={`grid ${GRID} gap-3 items-end`}>
+          <span className="text-xs font-medium uppercase tracking-wide text-text-muted">Trending topics</span>
+          <SortHeader
+            label="Total views"
+            sortKey="reach"
+            activeKey={sortKey}
+            activeDir={sortDir}
+            onSort={handleSort}
+            tooltip={TOOLTIPS.total_views}
+          />
           <SortHeader
             label="Resonance"
             sortKey="resonance"
@@ -172,69 +238,81 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
             onSort={handleSort}
             tooltip={TOOLTIPS.sentiment}
           />
-          <span className="text-center">Save</span>
+          <span className="block w-10" aria-hidden />
         </div>
-
-        {/* Rows */}
-        {sortedTopics.map((topic, i) => (
-          <div
-            key={topic.name}
-            className="animate-stagger-in"
-            style={{ animationDelay: `${i * 40}ms` }}
-          >
-            <div className={`grid w-full ${gridCols} gap-4 items-center px-6 py-3.5 transition-colors hover:bg-surface-hover`}>
-              <button
-                onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
-                className="flex items-center gap-2 text-left min-w-0"
-              >
-                {expandedIndex === i ? (
-                  <ChevronDown size={14} className="text-text-muted shrink-0" />
-                ) : (
-                  <ChevronRight size={14} className="text-text-muted shrink-0" />
-                )}
-                <span className="text-sm font-medium text-text-primary truncate">{topic.name}</span>
-              </button>
-
-              <span className="text-center">
-                <Badge variant={RESONANCE_VARIANT[topic.resonance] || 'default'}>
-                  {topic.resonance}
-                </Badge>
-              </span>
-              <span className="text-center whitespace-nowrap">
-                <Badge variant={getSentimentBadgeVariant(topic.sentiment)}>
-                  {getSentimentLabel(topic.sentiment)}
-                </Badge>
-              </span>
-              <span className="flex justify-center">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSave(topic);
-                  }}
-                  disabled={savedTopics.has(topic.name) || savingTopic === topic.name}
-                  className={`rounded-lg p-1.5 transition-colors ${
-                    savedTopics.has(topic.name)
-                      ? 'text-emerald-400'
-                      : 'text-text-muted hover:text-accent-text hover:bg-accent-surface'
-                  } disabled:pointer-events-none`}
-                  title={savedTopics.has(topic.name) ? 'Saved' : 'Save to ideas'}
-                >
-                  {savedTopics.has(topic.name) ? (
-                    <Check size={16} />
-                  ) : (
-                    <Bookmark size={16} className={savingTopic === topic.name ? 'animate-pulse' : ''} />
-                  )}
-                </button>
-              </span>
-            </div>
-
-            {expandedIndex === i && (
-              <TopicRowExpanded topic={topic} clientId={clientId} searchId={searchId} />
-            )}
-          </div>
-        ))}
       </div>
+
+      <div className="overflow-x-auto">
+        <div className="min-w-[560px]">
+          {sortedTopics.map((topic, i) => (
+            <div key={topic.name} className="animate-stagger-in" style={{ animationDelay: `${i * 40}ms` }}>
+              <div
+                className={`grid ${GRID} gap-3 items-center border-b border-nativz-border/80 px-5 py-3.5 last:border-b-0 sm:px-6 transition-colors hover:bg-surface-hover/60`}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    aria-expanded={expandedIndex === i}
+                  >
+                    {expandedIndex === i ? (
+                      <ChevronDown size={16} className="shrink-0 text-text-muted" />
+                    ) : (
+                      <ChevronRight size={16} className="shrink-0 text-text-muted" />
+                    )}
+                    <TopicTitleCell name={topic.name} index={i} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void copyTopicTitle(topic)}
+                    className="shrink-0 rounded-md p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary"
+                    title="Copy topic title"
+                    aria-label="Copy topic title"
+                  >
+                    <Copy size={14} />
+                  </button>
+                </div>
+
+                <span className="text-right text-sm font-semibold tabular-nums text-text-primary">
+                  {formatTopicReach(topic)}
+                </span>
+                <span className="text-right text-sm font-medium text-text-secondary">
+                  {RESONANCE_LABEL[topic.resonance] ?? topic.resonance}
+                </span>
+                <div className="flex justify-end">
+                  <SentimentSplitBar sentiment={topic.sentiment} />
+                </div>
+                <span className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleSave(topic);
+                    }}
+                    disabled={savedTopics.has(topic.name) || savingTopic === topic.name}
+                    className={`rounded-lg p-1.5 transition-colors ${
+                      savedTopics.has(topic.name)
+                        ? 'text-emerald-400'
+                        : 'text-text-muted hover:text-accent-text hover:bg-accent-surface'
+                    } disabled:pointer-events-none`}
+                    title={savedTopics.has(topic.name) ? 'Saved' : 'Save to ideas'}
+                  >
+                    {savedTopics.has(topic.name) ? (
+                      <Check size={16} />
+                    ) : (
+                      <Bookmark size={16} className={savingTopic === topic.name ? 'animate-pulse' : ''} />
+                    )}
+                  </button>
+                </span>
+              </div>
+
+              {expandedIndex === i && (
+                <TopicRowExpanded topic={topic} clientId={clientId} searchId={searchId} />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </Card>
   );

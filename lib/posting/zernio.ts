@@ -1,6 +1,7 @@
 /**
  * Zernio posting + analytics (formerly Late / getlate.dev).
  * @see https://docs.zernio.com/
+ * @see docs/zernio-setup.md — env vars, webhook URL, Vercel redeploy checklist
  */
 
 import type {
@@ -42,7 +43,9 @@ export function getZernioApiBase(): string {
 export function getZernioApiKey(): string {
   const key = process.env.ZERNIO_API_KEY ?? process.env.LATE_API_KEY;
   if (!key?.trim()) {
-    throw new Error('ZERNIO_API_KEY is not configured');
+    throw new Error(
+      'ZERNIO_API_KEY is not set. Add it in Zernio (Settings → API keys). Legacy LATE_API_KEY is still accepted.',
+    );
   }
   return key.trim();
 }

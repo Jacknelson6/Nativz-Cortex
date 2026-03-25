@@ -15,6 +15,8 @@ export interface TikTokSearchVideo {
   music: { title: string; authorName: string } | null;
   hashtags: string[];
   videoUrl: string | null;
+  /** Cover image from Apify (when provided) */
+  coverUrl: string | null;
   top_comments: TikTokComment[];
   transcript: string | null;
 }
@@ -193,9 +195,20 @@ export async function gatherTikTokData(
       hashtags: string[];
       videoUrl: string | null;
       tiktokUrl: string;
+      coverUrl: string | null;
     }[] = [];
 
     for (const item of items) {
+      const row = item as Record<string, unknown>;
+      const videoMeta = row.videoMeta as Record<string, unknown> | undefined;
+      const coverUrl =
+        (typeof row.cover === 'string' && row.cover) ||
+        (typeof row.coverUrl === 'string' && row.coverUrl) ||
+        (videoMeta && typeof videoMeta.coverUrl === 'string' && videoMeta.coverUrl) ||
+        (typeof row.thumbnailUrl === 'string' && row.thumbnailUrl) ||
+        (typeof row.thumbnail === 'string' && row.thumbnail) ||
+        null;
+
       const hashtags = (item.hashtags ?? [])
         .map((h: { name?: string } | string) => typeof h === 'string' ? h : h.name ?? '')
         .filter(Boolean);
@@ -222,6 +235,7 @@ export async function gatherTikTokData(
         hashtags,
         videoUrl: item.videoUrl ?? null,
         tiktokUrl: `https://www.tiktok.com/@${uniqueId}/video/${videoId}`,
+        coverUrl,
       });
     }
 

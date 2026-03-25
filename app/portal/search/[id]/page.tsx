@@ -13,10 +13,11 @@ import { TrendingTopicsTable } from '@/components/results/trending-topics-table'
 import { ContentPillars } from '@/components/results/content-pillars';
 import { NicheInsights } from '@/components/results/niche-insights';
 import { SourcesPanel } from '@/components/results/sources-panel';
+import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
-import { BenchmarkRecommendations } from '@/components/search/benchmark-recommendations';
 import { formatRelativeTime } from '@/lib/utils/format';
+import { searchHeaderQueryClassName } from '@/lib/clients/client-abbreviations';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 import { hasSerp } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse } from '@/lib/types/search';
@@ -44,18 +45,16 @@ export default async function PortalSearchResultsPage({
   }
 
   // Verify org scoping: search's client must belong to user's org
-  let clientIndustry: string | null = null;
   if (search.client_id) {
     const { data: clientData } = await adminClient
       .from('clients')
-      .select('id, organization_id, industry')
+      .select('id, organization_id')
       .eq('id', search.client_id)
       .single();
 
     if (!clientData || clientData.organization_id !== result.organizationId) {
       notFound();
     }
-    clientIndustry = clientData?.industry ?? null;
   } else {
     // No client attached — portal users shouldn't see unattached searches
     notFound();
@@ -70,16 +69,21 @@ export default async function PortalSearchResultsPage({
     return (
       <div className="min-h-full">
         <div className="sticky top-0 z-10 border-b border-nativz-border bg-surface/80 backdrop-blur-sm">
-          <div className="flex h-14 items-center gap-4 px-6">
-            <Link href="/portal/reports" className="text-text-muted hover:text-text-secondary transition-colors">
-              <ArrowLeft size={20} />
-            </Link>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="font-medium text-text-primary">{search.query}</span>
-              <span className="text-text-muted">/</span>
-              <span className="text-text-muted">Report</span>
+          <div className="flex flex-col gap-3 px-6 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              <Link
+                href="/portal/reports"
+                className="mt-0.5 shrink-0 text-text-muted hover:text-text-secondary transition-colors"
+              >
+                <ArrowLeft size={20} />
+              </Link>
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                <span className={searchHeaderQueryClassName}>{search.query}</span>
+                <span className="shrink-0 text-text-muted">/</span>
+                <span className="shrink-0 text-text-muted">Report</span>
+              </div>
             </div>
-            <div className="ml-auto">
+            <div className="shrink-0">
               <Badge variant="warning">Coming soon</Badge>
             </div>
           </div>
@@ -115,16 +119,21 @@ export default async function PortalSearchResultsPage({
     <div className="min-h-full">
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-nativz-border bg-surface/80 backdrop-blur-sm">
-        <div className="flex h-14 items-center gap-4 px-6">
-          <Link href="/portal/reports" className="text-text-muted hover:text-text-secondary transition-colors">
-            <ArrowLeft size={20} />
-          </Link>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium text-text-primary">{s.query}</span>
-            <span className="text-text-muted">/</span>
-            <span className="text-text-muted">Report</span>
+        <div className="flex flex-col gap-3 px-6 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <Link
+              href="/portal/reports"
+              className="mt-0.5 shrink-0 text-text-muted hover:text-text-secondary transition-colors"
+            >
+              <ArrowLeft size={20} />
+            </Link>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+              <span className={searchHeaderQueryClassName}>{s.query}</span>
+              <span className="shrink-0 text-text-muted">/</span>
+              <span className="shrink-0 text-text-muted">Report</span>
+            </div>
           </div>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
             {s.completed_at && (
               <span className="hidden sm:flex items-center gap-1 text-xs text-text-muted">
                 <Clock size={12} />
@@ -138,13 +147,25 @@ export default async function PortalSearchResultsPage({
 
       {/* Content */}
       <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
-        {/* Brand alignment replaces executive summary for brand searches */}
-        {aiResponse?.brand_alignment_notes ? (
-          <ExecutiveSummary summary={aiResponse.brand_alignment_notes} variant="brand" />
-        ) : (
-          s.summary && <ExecutiveSummary summary={s.summary} />
+        {(s.summary || aiResponse?.brand_alignment_notes) ? (
+          <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5 space-y-5">
+            {s.summary ? <ExecutiveSummary summary={s.summary} /> : null}
+            {aiResponse?.brand_alignment_notes ? (
+              <ExecutiveSummary summary={aiResponse.brand_alignment_notes} variant="brand" />
+            ) : null}
+          </div>
+        ) : null}
+        {s.metrics && (
+          <MetricsRow
+            metrics={s.metrics}
+            isBrandSearch={!!aiResponse?.brand_alignment_notes}
+            platformBreakdown={aiResponse?.platform_breakdown}
+          />
         )}
-        {s.metrics && <MetricsRow metrics={s.metrics} isBrandSearch={!!aiResponse?.brand_alignment_notes} />}
+
+        {aiResponse?.synthetic_audiences?.segments?.length ? (
+          <TopicSyntheticAudiences data={aiResponse.synthetic_audiences} />
+        ) : null}
 
         {/* Legacy activity chart — only rendered for old searches */}
         {s.activity_data && s.activity_data.length > 0 && (
@@ -154,7 +175,7 @@ export default async function PortalSearchResultsPage({
         {(s.emotions || s.content_breakdown) && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {s.emotions && s.emotions.length > 0 && (
-              <EmotionsBreakdown emotions={s.emotions} />
+              <EmotionsBreakdown emotions={s.emotions} searchId={s.id} />
             )}
             {s.content_breakdown && (
               <ContentBreakdown data={s.content_breakdown} />
@@ -175,11 +196,6 @@ export default async function PortalSearchResultsPage({
               <NicheInsights insights={aiResponse.niche_performance_insights} />
             )}
           </div>
-        )}
-
-        {/* Benchmark ad format recommendations */}
-        {clientIndustry && (
-          <BenchmarkRecommendations industry={clientIndustry} />
         )}
 
         {/* Sources panel — only for new searches with SERP data */}

@@ -25,6 +25,10 @@ export interface PlatformSource {
   content: string;
   author: string;
   subreddit?: string;
+  /** Cover / thumbnail URL when available (video platforms) */
+  thumbnailUrl?: string | null;
+  /** Short-form vertical vs long-form landscape (drives thumbnail aspect in UI) */
+  videoFormat?: 'short' | 'long';
   engagement: {
     views?: number;
     likes?: number;
@@ -104,6 +108,19 @@ export function isNewMetrics(m: SearchMetrics | LegacySearchMetrics): m is Searc
   return 'web_results_found' in m;
 }
 
+/** Backend pipeline: legacy (Brave + platform scrape) vs LLM tool research (v3). */
+export type TopicPipeline = 'legacy' | 'llm_v1';
+
+/** Tool-backed source row for llm_v1 (stored in research_sources jsonb). */
+export interface ResearchSourceRecord {
+  url: string;
+  title: string;
+  snippet?: string;
+  subtopic_index: number;
+  fetched_text?: string;
+  platform?: SearchPlatform;
+}
+
 export interface TopicSearch {
   id: string;
   query: string;
@@ -112,7 +129,7 @@ export interface TopicSearch {
   language: string;
   country: string;
   client_id: string | null;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: 'pending' | 'pending_subtopics' | 'processing' | 'completed' | 'failed';
   summary: string | null;
   metrics: SearchMetrics | LegacySearchMetrics | null;
   activity_data: ActivityDataPoint[] | null; // legacy, kept for old searches
@@ -135,6 +152,13 @@ export interface TopicSearch {
   search_version?: number;
   platform_data?: Record<string, PlatformSource[]>;
   volume?: SearchVolume;
+  /** legacy | llm_v1 */
+  topic_pipeline?: TopicPipeline;
+  /** Confirmed subtopics (1–5) for llm_v1 */
+  subtopics?: string[] | null;
+  /** Deduped sources from tool calls */
+  research_sources?: ResearchSourceRecord[] | null;
+  pipeline_state?: Record<string, unknown> | null;
 }
 
 // Content pillar for client strategy mode
@@ -163,6 +187,37 @@ export interface BigMover {
   takeaway: string;
 }
 
+/** Big Five (OCEAN) scores as 0–100 for synthetic audience modelling */
+export interface OceanScores {
+  openness: number;
+  conscientiousness: number;
+  extraversion: number;
+  agreeableness: number;
+  neuroticism: number;
+}
+
+/** One inferred audience segment for messaging / ICP-style planning (not empirical survey data) */
+export interface SyntheticAudienceSegment {
+  /** Short persona-style label, e.g. "Calm & inquisitive" */
+  name: string;
+  emoji: string;
+  /** Approximate share of conversational attention (0–100) */
+  share_percent: number;
+  ocean: OceanScores;
+  /** 2–4 sentences: motivations, behaviors, how they show up in the topic (ICP narrative) */
+  description?: string;
+  /** Topic or interest tags for messaging angles */
+  interest_tags?: string[];
+  /** One sentence grounded in research signals (optional if description is present) */
+  rationale?: string;
+}
+
+/** Synthetic audience + OCEAN breakdown derived from topic research (modelled personas) */
+export interface SyntheticAudiences {
+  intro?: string;
+  segments: SyntheticAudienceSegment[];
+}
+
 // AI response — single call returns everything
 export interface TopicSearchAIResponse {
   summary: string;
@@ -178,6 +233,8 @@ export interface TopicSearchAIResponse {
   // v2 additions
   platform_breakdown?: PlatformBreakdown[];
   conversation_themes?: ConversationTheme[];
+  /** Modelled segments + OCEAN — populated by narrative pipeline when present */
+  synthetic_audiences?: SyntheticAudiences;
 }
 
 // Legacy AI response for old searches
@@ -220,6 +277,8 @@ export interface TrendingTopic {
   name: string;
   resonance: 'low' | 'medium' | 'high' | 'viral';
   sentiment: number;
+  /** Blended engagement from matched sources (views/likes/comments signals), set by process pipeline */
+  total_engagement?: number;
   posts_overview: string;
   comments_overview: string;
   sources: TopicSource[];
@@ -251,8 +310,10 @@ export function hasSerp(search: TopicSearch): boolean {
 export interface VideoIdea {
   title: string;
   hook: string;
-  format: string;
-  virality: 'low' | 'medium' | 'high' | 'viral_potential';
+  /** LLM may omit */
+  format?: string;
+  /** LLM may omit */
+  virality?: 'low' | 'medium' | 'high' | 'viral_potential';
   why_it_works: string;
   /** 3-5 bullet script outline / talking points */
   script_outline?: string[];

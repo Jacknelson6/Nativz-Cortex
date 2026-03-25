@@ -1,5 +1,5 @@
 /**
- * Resolve who receives in-app alerts for Zernio/Late scheduler webhooks
+ * Resolve who receives in-app alerts for Zernio scheduler webhooks
  * (post failures, account disconnects).
  *
  * Env (any combination):

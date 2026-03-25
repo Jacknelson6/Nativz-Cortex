@@ -51,10 +51,10 @@ function normalizeWebhookEvent(raw: string): string {
 /**
  * POST /api/scheduler/webhooks
  *
- * Receive Zernio (formerly Late) webhooks and update scheduled post statuses.
+ * Receive **Zernio** webhooks and update scheduled post statuses.
  * Handles post.published, post.failed, post.scheduled, post.partial / post.partial_publish,
- * account.connected, and account.disconnected. Verifies HMAC if
- * ZERNIO_WEBHOOK_SECRET or LATE_WEBHOOK_SECRET is set.
+ * account.connected, and account.disconnected. Verifies HMAC when the **Zernio webhook secret**
+ * is configured via `ZERNIO_WEBHOOK_SECRET` (legacy alias: `LATE_WEBHOOK_SECRET`).
  *
  * @auth HMAC SHA-256 in X-Zernio-Signature, X-Late-Signature, or X-Signature (secret required)
  * @returns {{ received: true }}

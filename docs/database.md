@@ -215,7 +215,7 @@ Video idea submissions with status tracking.
 |---------|----------|
 | Supabase | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or dashboard `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`), `SUPABASE_SERVICE_ROLE_KEY` |
 | OpenRouter | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (optional; app default: `nvidia/nemotron-3-super-120b-a12b:free` when DB `agency_settings.ai_model` is empty) |
-| Brave Search | `BRAVE_SEARCH_API_KEY` |
+| Brave Search | `BRAVE_SEARCH_API_KEY` — [Brave Search API](https://brave.com/search/api/). Used by legacy topic search SERP and by the default **`llm_v1`** pipeline (`TOPIC_SEARCH_PIPELINE` unset or not `legacy`). Roll back with `TOPIC_SEARCH_PIPELINE=legacy`. |
 | Vercel | `NEXT_PUBLIC_APP_URL` |
 | Vault (GitHub) | `VAULT_GITHUB_TOKEN`, `VAULT_GITHUB_OWNER`, `VAULT_GITHUB_REPO` |
 | Knowledge graph (GitHub → Supabase sync) | `GITHUB_VAULT_TOKEN`; optional `KNOWLEDGE_GRAPH_GITHUB_REPO` (default `Jacknelson6/Cortex-Knowledge-Graph`) |

@@ -19,6 +19,7 @@ import {
 import { toast } from 'sonner';
 import { hasSources } from '@/lib/types/search';
 import type { TrendingTopic, LegacyTrendingTopic, TopicSource, VideoIdea, SearchPlatform } from '@/lib/types/search';
+import { displayIdeaFormat, displayIdeaVirality, effectiveVirality } from '@/lib/search/video-idea-display';
 import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
 
 interface TopicRowExpandedProps {
@@ -50,8 +51,8 @@ function formatIdeaAsText(idea: VideoIdea, index: number): string {
   const lines: string[] = [];
   lines.push(`${index}. ${idea.title}`);
   lines.push(`   Hook: "${idea.hook}"`);
-  lines.push(`   Format: ${idea.format.replace(/_/g, ' ')}`);
-  lines.push(`   Virality: ${idea.virality.replace('_', ' ')}`);
+  lines.push(`   Format: ${displayIdeaFormat(idea.format)}`);
+  lines.push(`   Virality: ${displayIdeaVirality(idea.virality)}`);
   if (idea.script_outline?.length) {
     lines.push('   Script outline:');
     idea.script_outline.forEach((point) => {
@@ -143,6 +144,7 @@ function VideoIdeaListItem({
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const virality = effectiveVirality(idea.virality);
 
   async function handleCopy() {
     try {
@@ -165,8 +167,8 @@ function VideoIdeaListItem({
         body: JSON.stringify({
           title: idea.title,
           hook: idea.hook,
-          format: idea.format,
-          virality: idea.virality,
+          format: idea.format ?? null,
+          virality: idea.virality ?? null,
           why_it_works: idea.why_it_works,
           topic_name: topicName,
           client_id: clientId || null,
@@ -231,21 +233,21 @@ function VideoIdeaListItem({
           {/* Inline meta: format + virality — tucked at bottom */}
           <div className="flex items-center gap-2 mt-2">
             <span className="inline-flex items-center rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-text-muted font-medium">
-              {idea.format.replace(/_/g, ' ')}
+              {displayIdeaFormat(idea.format)}
             </span>
             <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${
-              idea.virality === 'viral_potential' ? 'text-accent2-text' :
-              idea.virality === 'high' ? 'text-emerald-400' :
-              idea.virality === 'medium' ? 'text-blue-400' :
+              virality === 'viral_potential' ? 'text-accent2-text' :
+              virality === 'high' ? 'text-emerald-400' :
+              virality === 'medium' ? 'text-blue-400' :
               'text-text-muted'
             }`}>
               <span className={`inline-block h-1 w-1 rounded-full ${
-                idea.virality === 'viral_potential' ? 'bg-accent2' :
-                idea.virality === 'high' ? 'bg-emerald-400' :
-                idea.virality === 'medium' ? 'bg-blue-400' :
+                virality === 'viral_potential' ? 'bg-accent2' :
+                virality === 'high' ? 'bg-emerald-400' :
+                virality === 'medium' ? 'bg-blue-400' :
                 'bg-text-muted'
               }`} />
-              {idea.virality.replace('_', ' ')}
+              {displayIdeaVirality(idea.virality)}
             </span>
           </div>
 

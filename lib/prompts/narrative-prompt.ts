@@ -5,6 +5,7 @@
  */
 
 import type { ComputedAnalytics } from '@/lib/search/analytics-engine';
+import { EXECUTIVE_SUMMARY_CORE } from '@/lib/prompts/executive-summary-instructions';
 
 interface NarrativePromptConfig {
   query: string;
@@ -40,10 +41,12 @@ export function buildNarrativePrompt(config: NarrativePromptConfig): string {
   return `You are a short-form video strategist and trend analyst. Analyze the following research data for "${query}" over the ${timeRange}.
 
 Your job is to:
-1. Write a 3-5 sentence SUMMARY of the topic landscape.
+1. Write the executive summary (see block below).
 2. Identify 5-10 specific trending sub-topics from the data below.
 3. Generate 3-4 VIDEO IDEAS for each topic.
 
+${EXECUTIVE_SUMMARY_CORE}
+${config.clientName ? `\nClient context: tailor implications where natural for **${config.clientName}** (${config.clientIndustry ?? 'general'}); the summary is still about the topic landscape, not a sales pitch.\n` : ''}
 TOPIC DISCOVERY RULES:
 - Identify 5-10 specific trending sub-topics. Topics should be specific angles, ingredients, controversies, techniques, or niches within the search query.
 - NEVER use these as topics: format words (shorts, video, content, reels, clip), platform names (tiktok, youtube, reddit, instagram), hashtag noise (fyp, foryou, foryoupage, viral, trending, explore), generic food words that just restate the query, or misspellings/translations of the query itself.
@@ -69,7 +72,27 @@ ${platformDataBlock}
 Respond in this exact JSON format:
 
 {
-  "summary": "3-5 sentence overview referencing specific trends and data points",
+  "summary": "Single paragraph per EXECUTIVE SUMMARY block above (Markdown **bold** on 3–6 short phrases only)",
+  "synthetic_audiences": {
+    "intro": "One optional sentence: how these segments relate to the query (modelled, not survey data)",
+    "segments": [
+      {
+        "name": "Persona-style title (e.g. Calm & inquisitive, Outgoing & warm)",
+        "emoji": "One emoji",
+        "share_percent": 32,
+        "description": "2-4 sentences: motivations, behaviors, and how they engage with this topic — like an ICP narrative",
+        "interest_tags": ["Tag one", "Tag two", "Tag three"],
+        "ocean": {
+          "openness": 0,
+          "conscientiousness": 0,
+          "extraversion": 0,
+          "agreeableness": 0,
+          "neuroticism": 0
+        },
+        "rationale": "One sentence tying this segment to concrete themes or emotions in the data"
+      }
+    ]
+  },
   "topics": [
     {
       "name": "Topic Name",
@@ -91,6 +114,12 @@ Respond in this exact JSON format:
     }
   ]
 }
+
+SYNTHETIC AUDIENCES (synthetic_audiences):
+- Propose 3–5 plausible audience segments (personas) who would care about this topic. Use **persona-style names** that hint at temperament (e.g. "Calm & inquisitive", "Guarded & adventurous") — not generic labels like "Segment A".
+- For EACH segment include: emoji, share_percent (sum ≈ 100, ±8), **description** (2–4 sentences: motivations, behaviors, content style — reads like an ICP card), **interest_tags** (4–8 short tags: topics, formats, or angles relevant to messaging), OCEAN scores 0–100, and **rationale** (one sentence tied to themes/emotions in the data).
+- OCEAN scores: infer from conversation themes, tone, emotions, and platform mix — **modelled personas for messaging**, not measured demographics. Do not claim survey or census data.
+- Neuroticism reflects emotional stability vs. stress reactivity (high = more mood/anxiety sensitivity; low = calmer baseline).
 
 RULES:
 - Identify 5-10 trending sub-topics from the data

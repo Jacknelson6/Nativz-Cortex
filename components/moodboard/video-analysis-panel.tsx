@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import type { MoodboardItem, TranscriptSegment } from '@/lib/types/moodboard';
 import { PacingTimeline } from './pacing-timeline';
 import { ContentBreakdown } from './content-breakdown';
+import { VisionClipBreakdownPanel, parseVisionClipBreakdown } from './vision-clip-breakdown-panel';
 import type { HookVisualAnalysis } from '@/lib/mediapipe/types';
 
 interface VideoAnalysisPanelProps {
@@ -39,6 +40,7 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
   const [extractingFrames, setExtractingFrames] = useState(false);
   const [view, setView] = useState<PanelView>('transcript');
   const contentRef = useRef<HTMLDivElement>(null);
+  const autoExtractAfterTranscribeFailRef = useRef(false);
 
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
@@ -47,7 +49,29 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
   const isAnalyzed = item.hook_score != null;
   const isTranscribed = !!item.transcript;
   const framesList = item.frames ?? [];
-  const hasFrames = framesList.length > 0 && new Set(framesList.map(f => f.url)).size > 1;
+  const hasFrames = framesList.length > 0;
+
+  const runExtractFrames = useCallback(() => {
+    const itemId = item.id;
+    setExtractingFrames(true);
+    toast.info('Extracting frames...', { duration: 3000 });
+
+    fetch(`/api/analysis/items/${itemId}/extract-frames`, { method: 'POST' })
+      .then(async (res) => {
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Frame extraction failed');
+        }
+        const updated = await res.json();
+        setItem(updated);
+        setView('transcript');
+        toast.success('Frames extracted', { duration: 5000 });
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Frame extraction failed');
+      })
+      .finally(() => setExtractingFrames(false));
+  }, [item.id]);
 
   const handleAnalyze = () => {
     if (isAnalyzed) {
@@ -77,26 +101,7 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
   };
 
   const handleExtractFrames = () => {
-    const itemId = item.id;
-    const itemTitle = item.title || 'Video';
-    setExtractingFrames(true);
-    toast.info('Extracting frames...', { duration: 3000 });
-
-    fetch(`/api/analysis/items/${itemId}/extract-frames`, { method: 'POST' })
-      .then(async (res) => {
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || 'Frame extraction failed');
-        }
-        const updated = await res.json();
-        setItem(updated);
-        setView('transcript');
-        toast.success('Frames extracted', { duration: 5000 });
-      })
-      .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Frame extraction failed');
-      })
-      .finally(() => setExtractingFrames(false));
+    runExtractFrames();
   };
 
   const handleTranscribe = async () => {
@@ -134,6 +139,20 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
       handleTranscribe();
     }
   }, []);
+
+  // No transcript (e.g. music-only TikTok): still pull frames so the panel isn’t empty
+  useEffect(() => {
+    if (
+      transcribeFailed &&
+      !hasFrames &&
+      !extractingFrames &&
+      item.type === 'video' &&
+      !autoExtractAfterTranscribeFailRef.current
+    ) {
+      autoExtractAfterTranscribeFailRef.current = true;
+      runExtractFrames();
+    }
+  }, [transcribeFailed, hasFrames, extractingFrames, item.type, runExtractFrames]);
 
   return (
     <>
@@ -259,26 +278,73 @@ function TranscriptView({ item, isTranscribed, transcribing, transcribeFailed, o
   searchQuery: string; setSearchQuery: (q: string) => void; onCopy: (t: string) => void; copied: boolean;
   hasFrames: boolean; extractingFrames: boolean; onExtractFrames: () => void;
 }) {
-  if (!isTranscribed) {
+  const showVisualTimeline = hasFrames || extractingFrames;
+
+  if (!isTranscribed && extractingFrames && !hasFrames) {
     return (
       <div className="text-center py-12">
+        <Loader2 size={24} className="animate-spin text-accent-text mx-auto mb-3" />
+        <p className="text-sm text-text-muted">Extracting frames from video...</p>
+        <p className="text-xs text-text-muted mt-2 max-w-xs mx-auto">Works without a transcript — we&apos;ll analyze stills for b-roll, talking head, memes, and more.</p>
+      </div>
+    );
+  }
+
+  if (!isTranscribed && showVisualTimeline) {
+    return (
+      <TranscriptSection
+        item={item}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        onCopy={onCopy}
+        copied={copied}
+        hasFrames={hasFrames}
+        extractingFrames={extractingFrames}
+        onExtractFrames={onExtractFrames}
+      />
+    );
+  }
+
+  if (!isTranscribed) {
+    return (
+      <div className="text-center py-10 space-y-4 px-1">
         {transcribing ? (
           <>
-            <Loader2 size={24} className="animate-spin text-accent-text mx-auto mb-3" />
+            <Loader2 size={24} className="animate-spin text-accent-text mx-auto mb-2" />
             <p className="text-sm text-text-muted">Transcribing video...</p>
+            <p className="text-xs text-text-muted max-w-xs mx-auto">
+              You can extract key frames in parallel — no transcript required.
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={onExtractFrames} disabled={extractingFrames} className="cursor-pointer">
+              {extractingFrames ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
+              Extract frames
+            </Button>
           </>
         ) : transcribeFailed ? (
           <>
-            <FileText size={24} className="text-text-muted/40 mx-auto mb-3" />
+            <FileText size={24} className="text-text-muted/40 mx-auto mb-2" />
             <p className="text-sm text-text-muted">This video could not be transcribed</p>
+            <p className="text-xs text-text-muted max-w-xs mx-auto mb-3">
+              We&apos;re pulling frames automatically when possible. You can also retry below.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2 justify-center items-center">
+              <Button type="button" variant="outline" size="sm" onClick={onExtractFrames} disabled={extractingFrames} className="cursor-pointer">
+                {extractingFrames ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
+                Extract frames
+              </Button>
+              <Button type="button" size="sm" onClick={onTranscribe} className="cursor-pointer">
+                <FileText size={14} />
+                Retry transcribe
+              </Button>
+            </div>
           </>
         ) : (
           <>
-            <FileText size={24} className="text-text-muted mx-auto mb-3" />
-            <p className="text-sm text-text-muted mb-3">Extract the video transcript</p>
-            <Button onClick={onTranscribe}>
-              <FileText size={14} />
-              Transcribe
+            <FileText size={24} className="text-text-muted mx-auto mb-2" />
+            <p className="text-sm text-text-muted mb-3">Starting transcript...</p>
+            <Button type="button" variant="outline" size="sm" onClick={onExtractFrames} disabled={extractingFrames} className="cursor-pointer">
+              {extractingFrames ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
+              Extract frames
             </Button>
           </>
         )}
@@ -444,6 +510,11 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied, 
   const segments: TranscriptSegment[] = item.transcript_segments ?? [];
   const frames = item.frames ?? [];
   const hasSegments = segments.length > 0;
+  const visionBreakdown = useMemo(
+    () => parseVisionClipBreakdown(item.metadata?.vision_clip_breakdown),
+    [item.metadata],
+  );
+  const videoDurationSec = item.duration ?? 30;
 
   const filteredSegments = useMemo(() => {
     if (!searchQuery.trim()) return segments;
@@ -493,11 +564,14 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied, 
     if (hasFrames) {
       return (
         <div className="space-y-3">
+          {visionBreakdown && (
+            <VisionClipBreakdownPanel breakdown={visionBreakdown} videoDurationSec={videoDurationSec} />
+          )}
           {contentClassification && (
             <div className="rounded-lg border border-nativz-border bg-surface-hover/20 p-3">
               <ContentBreakdown
                 classification={contentClassification}
-                videoDurationMs={(item.duration ?? 30) * 1000}
+                videoDurationMs={videoDurationSec * 1000}
               />
             </div>
           )}
@@ -589,12 +663,16 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied, 
         </div>
       )}
 
-      {/* Content classification (shown when frames are available) */}
+      {hasFrames && visionBreakdown && (
+        <VisionClipBreakdownPanel breakdown={visionBreakdown} videoDurationSec={videoDurationSec} />
+      )}
+
+      {/* Content classification (MediaPipe — shown when client analysis exists) */}
       {hasFrames && contentClassification && (
         <div className="rounded-lg border border-nativz-border bg-surface-hover/20 p-3">
           <ContentBreakdown
             classification={contentClassification}
-            videoDurationMs={(item.duration ?? 30) * 1000}
+            videoDurationMs={videoDurationSec * 1000}
           />
         </div>
       )}
@@ -702,9 +780,8 @@ function FramesSection({ item, extracting, onExtract }: {
 }) {
   const frames = item.frames ?? [];
   const segments: TranscriptSegment[] = item.transcript_segments ?? [];
-  const hasDistinctFrames = new Set(frames.map(f => f.url)).size > 1;
 
-  if (frames.length === 0 || !hasDistinctFrames) {
+  if (frames.length === 0) {
     return (
       <div className="text-center py-12">
         {extracting ? (

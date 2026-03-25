@@ -5,7 +5,8 @@ import { processUploadedFiles } from '@/lib/brand-dna/process-uploads';
 import { validateFileSignature } from '@/lib/security/validate-file-type';
 import { invalidateBrandContext } from '@/lib/knowledge/brand-context';
 
-export const maxDuration = 60;
+/** Large image batches (up to 40 × storage + DB) can exceed 60s on cold starts. */
+export const maxDuration = 120;
 
 /**
  * POST /api/clients/[id]/brand-dna/upload

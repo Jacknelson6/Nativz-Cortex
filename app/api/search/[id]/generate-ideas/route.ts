@@ -4,9 +4,63 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
-import type { VideoIdea, TopicSearchAIResponse } from '@/lib/types/search';
+import type { VideoIdea, TopicSearchAIResponse, TrendingTopic } from '@/lib/types/search';
 
 export const maxDuration = 120;
+
+/**
+ * Match UI topic name to stored topic (trim + case-insensitive; then loose substring).
+ * Strict equality failed when models or copy edits introduced invisible whitespace drift.
+ */
+function findTopicIndex(topics: TrendingTopic[], topicName: string): number {
+  const want = topicName.trim().toLowerCase();
+  const exact = topics.findIndex((t) => t.name.trim().toLowerCase() === want);
+  if (exact >= 0) return exact;
+  return topics.findIndex(
+    (t) => {
+      const n = t.name.trim().toLowerCase();
+      return n.includes(want) || want.includes(n);
+    },
+  );
+}
+
+/**
+ * Parse `{ "ideas": [...] }` from model output; fall back to array slice if JSON is noisy.
+ */
+function parseIdeasFromCompletion(text: string): VideoIdea[] {
+  try {
+    const parsed = parseAIResponseJSON<{ ideas: VideoIdea[] }>(text);
+    return parsed.ideas ?? [];
+  } catch {
+    const key = '"ideas"';
+    const idx = text.indexOf(key);
+    if (idx === -1) return [];
+    const bracket = text.indexOf('[', idx);
+    if (bracket === -1) return [];
+    let depth = 0;
+    let end = -1;
+    for (let i = bracket; i < text.length; i++) {
+      const c = text[i];
+      if (c === '[') depth++;
+      else if (c === ']') {
+        depth--;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    if (end === -1) return [];
+    try {
+      const arr = JSON.parse(text.slice(bracket, end + 1)) as unknown[];
+      return arr.filter((x): x is VideoIdea =>
+        Boolean(x && typeof x === 'object' && 'title' in x && typeof (x as VideoIdea).title === 'string'),
+      );
+    } catch {
+      return [];
+    }
+  }
+}
 
 const requestSchema = z.object({
   topic_name: z.string().min(1),
@@ -63,6 +117,24 @@ export async function POST(
     }
 
     const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
+    const topics = aiResponse?.trending_topics ?? [];
+    if (!aiResponse || topics.length === 0) {
+      return NextResponse.json(
+        { error: 'This search has no topic analysis yet. Use a completed search with trending topics.' },
+        { status: 400 },
+      );
+    }
+    const topicIndex = findTopicIndex(topics, topic_name);
+    if (topicIndex < 0) {
+      return NextResponse.json(
+        {
+          error: 'Topic not found for this search',
+          topic_name,
+          available_topics: topics.map((t) => t.name),
+        },
+        { status: 404 },
+      );
+    }
 
     // Get client context if available — include product/service details for natural integration
     let clientBlock = '';
@@ -92,7 +164,8 @@ export async function POST(
       ? `\n\nEXISTING IDEAS (do NOT repeat these):\n${existing_ideas.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
       : '';
 
-    const prompt = `Generate 4 new short-form video ideas for the topic "${topic_name}" from the research query "${search.query}".${clientBlock}
+    const canonicalTopicName = topics[topicIndex]!.name;
+    const prompt = `Generate 4 new short-form video ideas for the topic "${canonicalTopicName}" from the research query "${search.query}".${clientBlock}
 
 These should be for TikTok, Instagram Reels, YouTube Shorts, and Facebook Reels ONLY. Each idea must be unique, actionable, and ready to produce on set.${existingList}
 
@@ -116,23 +189,21 @@ Generate exactly 4 ideas. Make them DIFFERENT from the existing ideas — new an
     const aiResult = await createCompletion({
       messages: [{ role: 'user', content: prompt }],
       maxTokens: 4000,
+      feature: 'topic_search',
       userId: user.id,
       userEmail: user.email ?? undefined,
     });
 
-    const result = parseAIResponseJSON<{ ideas: VideoIdea[] }>(aiResult.text);
-    const newIdeas = result.ideas ?? [];
+    const newIdeas = parseIdeasFromCompletion(aiResult.text);
 
     // Append new ideas to the search's trending topic
-    if (aiResponse && newIdeas.length > 0) {
-      const updatedTopics = (aiResponse.trending_topics ?? []).map((topic) => {
-        if (topic.name === topic_name) {
-          return {
-            ...topic,
-            video_ideas: [...(topic.video_ideas ?? []), ...newIdeas],
-          };
-        }
-        return topic;
+    if (newIdeas.length > 0) {
+      const updatedTopics = (aiResponse.trending_topics ?? []).map((topic, i) => {
+        if (i !== topicIndex) return topic;
+        return {
+          ...topic,
+          video_ideas: [...(topic.video_ideas ?? []), ...newIdeas],
+        };
       });
 
       await adminClient

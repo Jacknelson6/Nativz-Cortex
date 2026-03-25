@@ -1,14 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Clock, Send, Undo2, Building2, Check, Plus, X, Mail, Users, User, Sparkles } from 'lucide-react';
-import { PlatformIcon } from '@/components/search/platform-icon';
+import { ArrowLeft, Building2, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
 import { ExecutiveSummary } from '@/components/reports/executive-summary';
 import { MetricsRow } from '@/components/results/metrics-row';
@@ -21,7 +19,6 @@ import { SourcesPanel } from '@/components/results/sources-panel';
 import { SourceBrowser } from '@/components/results/source-browser';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { KeyFindings } from '@/components/results/key-findings';
-import { SentimentBadge } from '@/components/results/sentiment-badge';
 import { BigMovers } from '@/components/results/big-movers';
 import { CompetitiveAnalysis } from '@/components/results/competitive-analysis';
 import { ExportPdfButton } from '@/components/results/export-pdf-button';
@@ -29,14 +26,12 @@ import { ShareButton } from '@/components/results/share-button';
 import { SearchProgress } from '@/components/search/search-progress';
 import { SearchIdeasWizard } from '@/components/research/search-ideas-wizard';
 import type { ClientOption } from '@/components/ui/client-picker';
-import { formatRelativeTime } from '@/lib/utils/format';
 import { hasSerp, isNewMetrics } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
-import { BenchmarkRecommendations } from '@/components/search/benchmark-recommendations';
 import { RelatedTopics } from '@/components/search/related-topics';
 import { IdeationPipelinePanel } from '@/components/ideation/ideation-pipeline-panel';
-import { ListeningInsightsCharts } from '@/components/charts/listening-insights-charts';
-import type { Recipient } from './page';
+import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
+import { getClientAbbreviationLabel } from '@/lib/clients/client-abbreviations';
 
 interface LinkedIdea {
   id: string;
@@ -53,7 +48,6 @@ interface LinkedBoardRow {
 interface AdminResultsClientProps {
   search: TopicSearch;
   clientInfo?: { id: string; name: string; slug: string; industry?: string } | null;
-  recipients?: Recipient[];
   clients: ClientOption[];
   linkedIdeas?: LinkedIdea[];
   linkedBoards?: LinkedBoardRow[];
@@ -63,40 +57,55 @@ interface AdminResultsClientProps {
 export function AdminResultsClient({
   search,
   clientInfo,
-  recipients = [],
   clients,
   linkedIdeas = [],
   linkedBoards = [],
   videoCandidateCount = 0,
 }: AdminResultsClientProps) {
   const router = useRouter();
-  const [sending, setSending] = useState(false);
-  const [showSendModal, setShowSendModal] = useState(false);
   const [showIdeasWizard, setShowIdeasWizard] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(search.query);
+  const [savingTitle, setSavingTitle] = useState(false);
   const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
   const trendingTopics = (search.trending_topics ?? []) as (TrendingTopic | LegacyTrendingTopic)[];
 
-  async function handleSend(action: 'approve' | 'reject') {
-    setSending(true);
+  useEffect(() => {
+    setTitleDraft(search.query);
+  }, [search.query]);
+
+  function beginEditingTitle() {
+    setTitleDraft(search.query);
+    setEditingTitle(true);
+  }
+
+  async function saveTopicTitle() {
+    const trimmed = titleDraft.trim();
+    if (!trimmed) {
+      toast.error('Topic name is required');
+      return;
+    }
+    if (trimmed === search.query) {
+      setEditingTitle(false);
+      return;
+    }
+    setSavingTitle(true);
     try {
       const res = await fetch(`/api/search/${search.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ query: trimmed }),
       });
-      if (res.ok) {
-        const name = clientInfo?.name;
-        toast.success(
-          action === 'approve'
-            ? `Report sent to ${name || 'client'}`
-            : 'Report unsent'
-        );
-        router.refresh();
-      } else {
-        toast.error('Something went wrong. Try again.');
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        toast.error(data.error || 'Could not update topic name');
+        return;
       }
+      toast.success('Topic name updated');
+      setEditingTitle(false);
+      router.refresh();
     } finally {
-      setSending(false);
+      setSavingTitle(false);
     }
   }
 
@@ -127,78 +136,99 @@ export function AdminResultsClient({
     <div className="min-h-full">
       {/* Header */}
       <div className="border-b border-nativz-border bg-surface">
-        <div className="flex h-14 items-center gap-4 px-6">
-          <Link href="/admin/search/new?history=true" className="text-text-muted hover:text-text-secondary transition-colors">
-            <ArrowLeft size={20} />
-          </Link>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium text-text-primary">{search.query}</span>
-            <span className="text-text-muted">/</span>
-            <span className="text-text-muted">Results</span>
-            {clientInfo && (
-              <>
-                <span className="text-text-muted">/</span>
+        <div className="flex flex-col gap-3 px-6 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <Link
+              href="/admin/search/new?history=true"
+              className="mt-1 shrink-0 text-text-muted hover:text-text-secondary transition-colors"
+            >
+              <ArrowLeft size={20} />
+            </Link>
+            <div className="min-w-0 flex-1 space-y-2">
+              {editingTitle ? (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+                  <input
+                    autoFocus
+                    maxLength={500}
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setTitleDraft(search.query);
+                        setEditingTitle(false);
+                      }
+                      if (e.key === 'Enter') void saveTopicTitle();
+                    }}
+                    aria-label="Topic search name"
+                    className="block w-full min-w-0 flex-1 rounded-lg border border-nativz-border bg-background px-3 py-2 text-base font-semibold leading-snug text-text-primary shadow-[var(--shadow-card)] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent sm:text-lg"
+                  />
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button type="button" size="sm" disabled={savingTitle} onClick={() => void saveTopicTitle()}>
+                      Save
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={savingTitle}
+                      onClick={() => {
+                        setTitleDraft(search.query);
+                        setEditingTitle(false);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <h1 className="min-w-0">
+                  <button
+                    type="button"
+                    title="Click to edit"
+                    onClick={beginEditingTitle}
+                    className="w-full rounded-md px-1 py-0.5 text-left text-base font-semibold leading-snug text-text-primary break-words [overflow-wrap:anywhere] transition-colors hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:text-lg"
+                  >
+                    {search.query}
+                  </button>
+                </h1>
+              )}
+              {clientInfo ? (
                 <Link
                   href={`/admin/clients/${clientInfo.slug}`}
-                  className="flex items-center gap-1 text-accent-text hover:text-accent-hover transition-colors"
+                  title={clientInfo.name}
+                  aria-label={`View client ${clientInfo.name}`}
+                  className="inline-flex max-w-full"
                 >
-                  <Building2 size={12} />
-                  {clientInfo.name}
+                  <Badge variant="info" className="gap-1.5 px-2.5 py-1 text-xs font-medium">
+                    <Building2 size={12} className="shrink-0 opacity-90" aria-hidden />
+                    <span className="truncate">{getClientAbbreviationLabel(clientInfo.name, clientInfo.slug)}</span>
+                  </Badge>
                 </Link>
-              </>
-            )}
-            {!clientInfo && search.client_id === null && (
-              <>
-                <span className="text-text-muted">/</span>
-                <span className="text-xs text-text-muted">No client attached</span>
-              </>
-            )}
+              ) : search.client_id === null ? (
+                <Badge variant="mono" className="text-[11px]">
+                  No client attached
+                </Badge>
+              ) : null}
+            </div>
           </div>
-          <div className="ml-auto flex items-center gap-3">
-            {aiResponse?.overall_sentiment !== undefined && (
-              <SentimentBadge sentiment={aiResponse.overall_sentiment} />
-            )}
-            {search.completed_at ? (
-              <span className="hidden sm:flex items-center gap-1 text-xs text-text-muted">
-                <Clock size={12} />
-                {formatRelativeTime(search.completed_at)}
-              </span>
-            ) : null}
-            <Button variant="outline" size="sm" onClick={() => setShowIdeasWizard(true)}>
-              <Sparkles size={14} />
-              Create video ideas
-            </Button>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3 sm:pt-0.5">
             <ExportPdfButton search={search} clientName={clientInfo?.name} />
             <ShareButton searchId={search.id} />
-            {search.approved_at ? (
-              <>
-                <Badge variant="success">Sent</Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleSend('reject')}
-                  disabled={sending}
-                >
-                  <Undo2 size={14} />
-                  Unsend
-                </Button>
-              </>
-            ) : (
-              <Button
-                size="sm"
-                onClick={() => setShowSendModal(true)}
-                disabled={sending}
-              >
-                <Send size={14} />
-                Send report
-              </Button>
-            )}
           </div>
         </div>
       </div>
 
       {/* Content */}
       <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+        {(search.summary || aiResponse?.brand_alignment_notes) ? (
+          <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5 space-y-5">
+            {search.summary ? <ExecutiveSummary summary={search.summary} /> : null}
+            {aiResponse?.brand_alignment_notes ? (
+              <ExecutiveSummary summary={aiResponse.brand_alignment_notes} variant="brand" />
+            ) : null}
+          </div>
+        ) : null}
+
         <IdeationPipelinePanel
           searchId={search.id}
           query={search.query}
@@ -238,11 +268,6 @@ export function AdminResultsClient({
           </div>
         ) : null}
 
-        {aiResponse?.brand_alignment_notes ? (
-          <ExecutiveSummary summary={aiResponse.brand_alignment_notes} variant="brand" />
-        ) : search.summary ? (
-          <ExecutiveSummary summary={search.summary} />
-        ) : null}
         {/* Key Findings Cards */}
         {Boolean(search.summary && aiResponse?.trending_topics) ? (
           <KeyFindings
@@ -256,27 +281,15 @@ export function AdminResultsClient({
         ) : null}
 
         {search.metrics ? (
-          <MetricsRow metrics={search.metrics} isBrandSearch={!!aiResponse?.brand_alignment_notes} />
+          <MetricsRow
+            metrics={search.metrics}
+            isBrandSearch={!!aiResponse?.brand_alignment_notes}
+            platformBreakdown={aiResponse?.platform_breakdown}
+          />
         ) : null}
 
-        <ListeningInsightsCharts
-          platformBreakdown={aiResponse?.platform_breakdown}
-          trendingTopics={trendingTopics}
-        />
-
-        {/* Platform source strip — v2 searches only */}
-        {Boolean(aiResponse?.platform_breakdown?.length) ? (
-          <div className="flex items-center gap-4 py-3 px-4 rounded-xl bg-surface border border-nativz-border">
-            <span className="text-xs text-text-muted">Sources gathered</span>
-            <div className="flex items-center gap-3">
-              {aiResponse!.platform_breakdown!.map((pb) => (
-                <span key={pb.platform} className="flex items-center gap-1.5 text-sm">
-                  <PlatformIcon platform={pb.platform} size={14} />
-                  <span className="text-text-secondary font-medium">{pb.post_count}</span>
-                </span>
-              ))}
-            </div>
-          </div>
+        {aiResponse?.synthetic_audiences?.segments?.length ? (
+          <TopicSyntheticAudiences data={aiResponse.synthetic_audiences} />
         ) : null}
 
         {search.activity_data && search.activity_data.length > 0 ? (
@@ -286,7 +299,7 @@ export function AdminResultsClient({
         {(Boolean(search.emotions?.length) || Boolean(search.content_breakdown)) ? (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {search.emotions && search.emotions.length > 0 ? (
-              <EmotionsBreakdown emotions={search.emotions} />
+              <EmotionsBreakdown emotions={search.emotions} searchId={search.id} />
             ) : null}
             {search.content_breakdown ? (
               <ContentBreakdown data={search.content_breakdown} />
@@ -320,11 +333,6 @@ export function AdminResultsClient({
           <BigMovers movers={aiResponse!.big_movers!} />
         ) : null}
 
-        {/* Benchmark ad format recommendations */}
-        {clientInfo?.industry ? (
-          <BenchmarkRecommendations industry={clientInfo.industry} />
-        ) : null}
-
         {/* Source browser — browse posts by platform */}
         {Boolean(
           search.platform_data && (search.platform_data as Record<string, unknown>).sources,
@@ -342,19 +350,6 @@ export function AdminResultsClient({
 
       <ScrollToTop />
 
-      {/* Send report modal */}
-      <SendReportModal
-        open={showSendModal}
-        onClose={() => setShowSendModal(false)}
-        recipients={recipients}
-        clientName={clientInfo?.name}
-        sending={sending}
-        onSend={async () => {
-          await handleSend('approve');
-          setShowSendModal(false);
-        }}
-      />
-
       {/* Ideas wizard modal */}
       <SearchIdeasWizard
         open={showIdeasWizard}
@@ -364,212 +359,5 @@ export function AdminResultsClient({
         clients={clients}
       />
     </div>
-  );
-}
-
-// ─── Send report modal ──────────────────────────────────────────────────────
-
-function SendReportModal({
-  open,
-  onClose,
-  recipients,
-  clientName,
-  sending,
-  onSend,
-}: {
-  open: boolean;
-  onClose: () => void;
-  recipients: Recipient[];
-  clientName?: string;
-  sending: boolean;
-  onSend: () => Promise<void>;
-}) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [customEmail, setCustomEmail] = useState('');
-  const [customEmails, setCustomEmails] = useState<string[]>([]);
-
-  const teamRecipients = recipients.filter((r) => r.group === 'team');
-  const clientRecipients = recipients.filter((r) => r.group === 'client');
-
-  function toggleRecipient(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function addCustomEmail() {
-    const email = customEmail.trim().toLowerCase();
-    if (email && email.includes('@') && !customEmails.includes(email)) {
-      setCustomEmails((prev) => [...prev, email]);
-      setCustomEmail('');
-    }
-  }
-
-  function removeCustomEmail(email: string) {
-    setCustomEmails((prev) => prev.filter((e) => e !== email));
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addCustomEmail();
-    }
-  }
-
-  const totalRecipients = selected.size + customEmails.length;
-
-  return (
-    <Dialog open={open} onClose={onClose} title="Send report" maxWidth="md">
-      <p className="text-sm text-text-muted mb-5">
-        Select who should receive this report{clientName ? ` for ${clientName}` : ''}.
-      </p>
-
-      <div className="space-y-5">
-        {/* Team members */}
-        {teamRecipients.length > 0 && (
-          <div>
-            <div className="flex items-center gap-2 mb-2.5">
-              <Users size={14} className="text-accent-text" />
-              <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide">Nativz team</h3>
-            </div>
-            <div className="space-y-1.5">
-              {teamRecipients.map((r) => (
-                <RecipientCheckbox
-                  key={r.id}
-                  name={r.name}
-                  email={r.email}
-                  checked={selected.has(r.id)}
-                  onChange={() => toggleRecipient(r.id)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Client contacts */}
-        {clientRecipients.length > 0 && (
-          <div>
-            <div className="flex items-center gap-2 mb-2.5">
-              <User size={14} className="text-emerald-400" />
-              <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide">
-                {clientName || 'Client'} contacts
-              </h3>
-            </div>
-            <div className="space-y-1.5">
-              {clientRecipients.map((r) => (
-                <RecipientCheckbox
-                  key={r.id}
-                  name={r.name}
-                  email={r.email}
-                  checked={selected.has(r.id)}
-                  onChange={() => toggleRecipient(r.id)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Custom email */}
-        <div>
-          <div className="flex items-center gap-2 mb-2.5">
-            <Mail size={14} className="text-accent2-text" />
-            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide">Custom email</h3>
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="email"
-              value={customEmail}
-              onChange={(e) => setCustomEmail(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Enter email address"
-              className="flex-1 rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none transition-colors"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={addCustomEmail}
-              disabled={!customEmail.trim().includes('@')}
-            >
-              <Plus size={14} />
-              Add
-            </Button>
-          </div>
-          {customEmails.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2.5">
-              {customEmails.map((email) => (
-                <span
-                  key={email}
-                  className="flex items-center gap-1.5 rounded-full border border-nativz-border bg-surface-hover px-3 py-1 text-xs text-text-secondary"
-                >
-                  {email}
-                  <button onClick={() => removeCustomEmail(email)} className="text-text-muted hover:text-red-400 transition-colors cursor-pointer">
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="flex items-center justify-between mt-6 pt-4 border-t border-nativz-border">
-        <span className="text-xs text-text-muted">
-          {totalRecipients === 0 ? 'No recipients selected' : `${totalRecipients} recipient${totalRecipients === 1 ? '' : 's'} selected`}
-        </span>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            onClick={onSend}
-            disabled={sending || totalRecipients === 0}
-          >
-            <Send size={14} />
-            {sending ? 'Sending...' : 'Send report'}
-          </Button>
-        </div>
-      </div>
-    </Dialog>
-  );
-}
-
-function RecipientCheckbox({
-  name,
-  email,
-  checked,
-  onChange,
-}: {
-  name: string;
-  email: string;
-  checked: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onChange}
-      className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
-        checked
-          ? 'border-accent/40 bg-accent-surface/50'
-          : 'border-nativz-border-light bg-surface-hover hover:border-accent/20'
-      }`}
-    >
-      <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
-        checked
-          ? 'border-accent bg-accent text-white'
-          : 'border-nativz-border bg-surface'
-      }`}>
-        {checked && <Check size={12} />}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-text-primary truncate">{name}</p>
-        <p className="text-xs text-text-muted truncate">{email}</p>
-      </div>
-    </button>
   );
 }

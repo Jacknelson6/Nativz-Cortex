@@ -5,6 +5,7 @@ import { Lightbulb, Zap, Copy, Check, ThumbsUp, Star, MessageSquareWarning } fro
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import type { VideoIdea } from '@/lib/types/search';
+import { displayIdeaFormat, displayIdeaVirality, effectiveVirality } from '@/lib/search/video-idea-display';
 
 type Reaction = 'approved' | 'starred' | 'revision_requested' | null;
 
@@ -33,8 +34,8 @@ function formatIdeaForClipboard(idea: VideoIdea): string {
     idea.title,
     '',
     `Hook: ${idea.hook}`,
-    `Format: ${idea.format.replace(/_/g, ' ')}`,
-    `Virality: ${idea.virality.replace('_', ' ')}`,
+    `Format: ${displayIdeaFormat(idea.format)}`,
+    `Virality: ${displayIdeaVirality(idea.virality)}`,
     '',
     `Why it works: ${idea.why_it_works}`,
   ].join('\n');
@@ -62,7 +63,8 @@ export function VideoIdeaCard({ idea, topicName, clientId, searchId, initialReac
   const [copied, setCopied] = useState(false);
   const [reaction, setReaction] = useState<Reaction>(initialReaction ?? null);
   const [saving, setSaving] = useState(false);
-  const borderClass = VIRALITY_BORDER[idea.virality] || 'border-l-transparent';
+  const virality = effectiveVirality(idea.virality);
+  const borderClass = VIRALITY_BORDER[virality] || 'border-l-transparent';
 
   async function handleCopy(e: React.MouseEvent) {
     e.stopPropagation();
@@ -91,8 +93,8 @@ export function VideoIdeaCard({ idea, topicName, clientId, searchId, initialReac
         body: JSON.stringify({
           title: idea.title,
           hook: idea.hook,
-          format: idea.format,
-          virality: idea.virality,
+          format: idea.format ?? null,
+          virality: idea.virality ?? null,
           why_it_works: idea.why_it_works,
           topic_name: topicName,
           client_id: clientId || null,
@@ -129,8 +131,8 @@ export function VideoIdeaCard({ idea, topicName, clientId, searchId, initialReac
           >
             {copied ? <Check size={12} className="text-accent" /> : <Copy size={12} />}
           </button>
-          <Badge variant={VIRALITY_VARIANT[idea.virality] || 'default'}>
-            {idea.virality.replace('_', ' ')}
+          <Badge variant={VIRALITY_VARIANT[virality] || 'default'}>
+            {displayIdeaVirality(idea.virality)}
           </Badge>
         </div>
       </div>
@@ -148,7 +150,7 @@ export function VideoIdeaCard({ idea, topicName, clientId, searchId, initialReac
         {/* Format tag + reaction buttons */}
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center rounded-md bg-surface-hover px-2 py-0.5 text-xs text-text-muted">
-            {idea.format.replace(/_/g, ' ')}
+            {displayIdeaFormat(idea.format)}
           </span>
 
           <div className="flex items-center gap-1">

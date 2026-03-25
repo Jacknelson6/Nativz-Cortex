@@ -84,7 +84,7 @@ export function buildAnalysisHtml({ item, clientName, generatedTitle, logoBase64
   const wins = item.winning_elements ?? [];
   const improvements = item.improvement_areas ?? [];
   const frames = item.frames ?? [];
-  const hasDistinctFrames = new Set(frames.map(f => f.url)).size > 1;
+  const hasFrameStrip = frames.length > 0;
 
   const sections: string[] = [];
 
@@ -191,7 +191,7 @@ export function buildAnalysisHtml({ item, clientName, generatedTitle, logoBase64
   }
 
   // ── Frames ──
-  if (hasDistinctFrames && frames.length > 0) {
+  if (hasFrameStrip) {
     let framesHtml = `<div style="margin-bottom:24px;page-break-before:always">`;
     framesHtml += sectionHeader('Key frames');
     framesHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">`;

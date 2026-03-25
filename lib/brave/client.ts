@@ -23,7 +23,7 @@ function getApiKey(): string {
   return key;
 }
 
-async function braveSearch(
+export async function braveSearch(
   query: string,
   options: BraveSearchOptions = {}
 ): Promise<BraveWebSearchResponse> {

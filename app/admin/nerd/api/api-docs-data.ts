@@ -203,11 +203,12 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   {
     method: 'PATCH',
     path: '/api/search/[id]',
-    description: 'Approve or reject a search (marks it as reviewed/sent to client).',
+    description:
+      'Admin: rename topic with { query } (1–500 chars), or approve/reject report with { action: \'approve\' | \'reject\' }. Not both.',
     auth: 'Required (admin)',
     section: 'Search & Research',
-    body: '{ action: \'approve\' | \'reject\' }',
-    response: 'Updated search object',
+    body: '{ query?: string } | { action?: \'approve\' | \'reject\' }',
+    response: '{ success: true, query? } | { success: true, action? }',
   },
   {
     method: 'GET',

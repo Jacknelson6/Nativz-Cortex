@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { CONTENT_PRODUCTION_SOP_SEED_TAG } from '@/lib/presentations/ensure-content-production-sop';
 
 interface PresentationItem {
   id: string;
@@ -147,11 +148,20 @@ export default function PresentationsPage() {
     if (!ok) return;
     try {
       const res = await fetch(`/api/presentations/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        let message = 'Failed to delete presentation';
+        try {
+          const body = (await res.json()) as { error?: string };
+          if (body.error) message = body.error;
+        } catch {
+          /* ignore */
+        }
+        throw new Error(message);
+      }
       toast.success('Presentation deleted');
       setPresentations((prev) => prev.filter((p) => p.id !== id));
-    } catch {
-      toast.error('Failed to delete presentation');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete presentation');
     }
     setMenuOpenId(null);
   }
@@ -169,7 +179,7 @@ export default function PresentationsPage() {
           slides: p.slides,
           tiers: p.tiers,
           tier_items: p.tier_items,
-          tags: p.tags,
+          tags: (p.tags ?? []).filter((t) => t !== CONTENT_PRODUCTION_SOP_SEED_TAG),
         }),
       });
       if (!res.ok) throw new Error();
@@ -227,7 +237,9 @@ export default function PresentationsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Presentations</h1>
-          <p className="text-sm text-text-muted mt-1">Sales tools, tier lists, and client presentations</p>
+          <p className="text-sm text-text-muted mt-1">
+            Sales tools, tier lists, and client presentations — includes a ready-made video content production SOP deck
+          </p>
         </div>
         <Button onClick={() => setShowCreate(!showCreate)}>
           <Plus size={14} />
@@ -326,10 +338,15 @@ export default function PresentationsPage() {
                     <div className={`flex h-9 w-9 items-center justify-center rounded-lg shrink-0 ${tc.accentClass}`}>
                       <TypeIcon size={16} className={tc.iconColor} />
                     </div>
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
                       <span className="rounded-full bg-surface-hover border border-nativz-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-text-muted whitespace-nowrap">
                         {tc.label}
                       </span>
+                      {p.tags?.includes(CONTENT_PRODUCTION_SOP_SEED_TAG) ? (
+                        <span className="rounded-full bg-accent/15 border border-accent/35 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-text whitespace-nowrap">
+                          Included
+                        </span>
+                      ) : null}
                     </div>
                     <div className="relative shrink-0">
                       <button
@@ -422,13 +439,30 @@ export default function PresentationsPage() {
                     <span>{formatDate(p.updated_at)}</span>
                   </div>
                 </button>
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
-                    onClick={() => handleArchive(p)}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void handleArchive(p);
+                    }}
                     className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors"
                     title="Unarchive"
                   >
                     <ArchiveRestore size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void handleDelete(p.id);
+                    }}
+                    className="cursor-pointer rounded-lg p-1.5 text-red-400/90 hover:bg-surface-hover hover:text-red-400 transition-colors"
+                    title="Delete permanently"
+                  >
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>

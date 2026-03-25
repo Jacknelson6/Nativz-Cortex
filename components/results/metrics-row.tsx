@@ -1,21 +1,47 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { StatCard } from '@/components/shared/stat-card';
-import { Zap, Lightbulb, TrendingUp, Heart, Eye, Users, MessageCircle, Building2, Globe } from 'lucide-react';
+import { PlatformIcon } from '@/components/search/platform-icon';
+import { Zap, TrendingUp, Heart, Eye, Users, MessageCircle, Building2, Globe } from 'lucide-react';
 import { TooltipCard } from '@/components/ui/tooltip-card';
 import { formatNumber } from '@/lib/utils/format';
 import { TOOLTIPS } from '@/lib/tooltips';
-import type { SearchMetrics, LegacySearchMetrics } from '@/lib/types/search';
+import type { SearchMetrics, LegacySearchMetrics, PlatformBreakdown } from '@/lib/types/search';
 import { isNewMetrics } from '@/lib/types/search';
 
 interface MetricsRowProps {
   metrics: SearchMetrics | LegacySearchMetrics;
   isBrandSearch?: boolean;
+  /** When present, shown inside the Sources analyzed card (topic searches only). */
+  platformBreakdown?: PlatformBreakdown[];
 }
 
-export function MetricsRow({ metrics, isBrandSearch = false }: MetricsRowProps) {
+function SourcesPlatformFooter({ breakdown }: { breakdown: PlatformBreakdown[] }) {
+  return (
+    <div>
+      <p className="mb-2 text-[11px] font-medium text-text-muted">Sources gathered</p>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        {breakdown.map((pb) => (
+          <span key={pb.platform} className="flex items-center gap-1.5 text-sm">
+            <PlatformIcon platform={pb.platform} size={14} />
+            <span className="font-medium text-text-secondary tabular-nums">{pb.post_count}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function MetricsRow({ metrics, isBrandSearch = false, platformBreakdown }: MetricsRowProps) {
   if (isNewMetrics(metrics)) {
-    const cards = isBrandSearch
+    const cards: {
+      tooltipKey: 'topic_score' | 'sources_analyzed' | 'brand_references';
+      title: string;
+      value: string;
+      icon: ReactNode;
+      footer?: ReactNode;
+    }[] = isBrandSearch
       ? [
           {
             tooltipKey: 'brand_references',
@@ -36,6 +62,10 @@ export function MetricsRow({ metrics, isBrandSearch = false }: MetricsRowProps) 
             title: 'Sources analyzed',
             value: String(metrics.sources_analyzed ?? metrics.total_sources),
             icon: <Globe size={18} />,
+            footer:
+              platformBreakdown && platformBreakdown.length > 0 ? (
+                <SourcesPlatformFooter breakdown={platformBreakdown} />
+              ) : undefined,
           },
         ];
 
@@ -57,6 +87,7 @@ export function MetricsRow({ metrics, isBrandSearch = false }: MetricsRowProps) 
                 }
                 value={card.value}
                 icon={card.icon}
+                footer={card.footer}
               />
             </div>
           );

@@ -4,6 +4,7 @@ import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibili
 import { getVaultClients } from '@/lib/vault/reader';
 import { ResearchHub } from '@/components/research/research-hub';
 import { fetchHistory } from '@/lib/research/history';
+import { getTopicSearchPipelineFromEnv } from '@/lib/config/topic-search-pipeline';
 
 type ResearchHubDbClientRow = {
   id: string;
@@ -41,6 +42,7 @@ export default async function AdminNewSearchPage() {
 
   // Fetch merged history
   const historyItems = await fetchHistory({ limit: 10 });
+  const topicPipelineLlmV1 = getTopicSearchPipelineFromEnv() === 'llm_v1';
 
   return (
     <Suspense
@@ -51,7 +53,7 @@ export default async function AdminNewSearchPage() {
         </div>
       }
     >
-      <ResearchHub clients={clients} historyItems={historyItems} />
+      <ResearchHub clients={clients} historyItems={historyItems} topicPipelineLlmV1={topicPipelineLlmV1} />
     </Suspense>
   );
 }

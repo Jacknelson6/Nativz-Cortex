@@ -12,6 +12,10 @@ Next.js 15 (App Router) + TypeScript, Supabase (Postgres + Auth), Brave Search A
 
 **Zernio webhooks:** `POST https://<app>/api/scheduler/webhooks` — use the same secret in Zernio’s “Secret key” field (signature header may still be labeled `X-Late-Signature` in their UI). Enable **Post failed** and **Account disconnected**. To ping specific admins in-app, set `ZERNIO_WEBHOOK_NOTIFY_EMAILS` (comma-separated, matches `users.email` for role admin, else `team_members.email` + linked `user_id`) and/or `ZERNIO_WEBHOOK_NOTIFY_USER_IDS` (auth UUIDs). Apply migration `068_account_disconnected_notification_type.sql` for the `account_disconnected` notification type.
 
+**Zernio deploy checklist:** **`docs/zernio-setup.md`** — concrete steps (Vercel env vars, webhook URL, redeploy) plus link to [Zernio API docs](https://docs.zernio.com/).
+
+**Topic search (Brave + LLM pipeline):** `BRAVE_SEARCH_API_KEY` — [Brave Search API](https://brave.com/search/api/) key (required for the default `llm_v1` pipeline’s web search tool and for the legacy pipeline’s SERP). Optional: `TOPIC_SEARCH_PIPELINE` — omit or set to anything except `legacy` for **llm_v1** (default: subtopic planning + research); set to `legacy` to force the old multi-platform scrape path. Optional model overrides: `TOPIC_SEARCH_PLANNER_MODEL`, `TOPIC_SEARCH_RESEARCH_MODEL`, `TOPIC_SEARCH_MERGER_MODEL`. Apply migration `071_topic_search_llm_pipeline.sql` before relying on `llm_v1` columns in production.
+
 ## Commands
 
 ```bash
@@ -56,6 +60,7 @@ Detailed docs live in `docs/` — read only when needed for the current task:
 - **`docs/spec-client-engagement.md`** — Client engagement features spec
 - **`docs/spec-pdr.md`** — PDR spec
 - **`docs/MOODBOARD_PRD.md`** — Moodboard feature PRD
+- **`docs/zernio-setup.md`** — Zernio env vars, webhook URL, redeploy checklist (scheduler + reporting)
 
 ## Session Startup
 
@@ -73,6 +78,7 @@ This project uses **Ars Contexta** (`~/.claude/plugins/arscontexta/`). Key comma
 
 - **Plans are always approved** — proceed with implementation without asking for permission
 - **Don't ask "is this plan good?"** — just build it
+- **Run the commands** — Whenever you would tell the user to run a terminal command (scripts, seeds, migrations, tests, typecheck, lint), run it yourself in this environment. Do not stop at “here’s what to run.” Exceptions: steps that truly require the user (browser-only auth, dashboard clicks, deploying from their account) — say so briefly, but still run everything that can run here.
 
 ## Key Conventions
 

@@ -2,6 +2,7 @@ import type { BraveSerpData } from '@/lib/brave/types';
 import type { ClientPreferences } from '@/lib/types/database';
 import type { BrandContext } from '@/lib/knowledge/brand-context';
 import { formatBrandPreferencesBlock, hasPreferences } from './brand-context';
+import { EXECUTIVE_SUMMARY_CORE, executiveSummaryClientLens } from '@/lib/prompts/executive-summary-instructions';
 
 interface ClientStrategyConfig {
   query: string;
@@ -160,11 +161,15 @@ Based on the search data above, analyze through the lens of ${ctx.name}'s brand:
 8. **Niche insights** — What formats perform best, what hooks work, and what gaps exist?
 9. **Brand alignment** — How do these trends connect to ${ctx.name}'s identity?
 
+${EXECUTIVE_SUMMARY_CORE}
+
+${executiveSummaryClientLens(ctx.name)}
+
 ## OUTPUT FORMAT
 Respond ONLY in valid JSON matching this exact schema. No text outside the JSON object.
 
 {
-  "summary": "3-5 sentence overview of the topic landscape, specifically framed for ${ctx.name}. What opportunities exist for THIS brand?",
+  "summary": "Single paragraph per executive summary rules above — **Markdown bold** on 3–6 short phrases; framed for ${ctx.name}",
 
   "overall_sentiment": 0.0,
 
@@ -254,7 +259,7 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
     "competitor_gaps": "Opportunities competitors are missing that ${ctx.name} can fill"
   },
 
-  "brand_alignment_notes": "2-3 sentences on how the trending topics connect to ${ctx.name}'s identity, audience, and brand positioning"
+  "brand_alignment_notes": "2-3 sentences on how the trending topics connect to ${ctx.name}'s identity, audience, and brand positioning. Use **Markdown bold** on 2–4 short phrases that must stand out (brand fit, audience, or strategic angle)."
 }
 
 ## IMPORTANT GUIDELINES

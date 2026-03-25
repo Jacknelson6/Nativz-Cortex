@@ -32,14 +32,23 @@ export default async function SharedSearchPage({
   if (!search) notFound();
 
   let clientName: string | null = null;
+  let clientSlug: string | null = null;
   if (search.client_id) {
     const { data: client } = await adminClient
       .from('clients')
-      .select('name')
+      .select('name, slug')
       .eq('id', search.client_id)
       .single();
     clientName = client?.name || null;
+    clientSlug = client?.slug || null;
   }
 
-  return <SharedSearchClient search={search} clientName={clientName} />;
+  return (
+    <SharedSearchClient
+      search={search}
+      clientName={clientName}
+      clientSlug={clientSlug}
+      shareToken={token}
+    />
+  );
 }

@@ -1,6 +1,7 @@
 // lib/search/platform-router.ts — Orchestrates multi-platform data gathering
 
 import type { SearchPlatform, SearchVolume, PlatformSource, PlatformComment } from '@/lib/types/search';
+import { inferYoutubeVideoFormat } from '@/lib/search/source-mention-utils';
 
 /**
  * Centralized volume config — single source of truth for per-platform source counts.
@@ -206,6 +207,8 @@ export async function gatherPlatformData(
             title: vid.title,
             content: vid.description,
             author: vid.channelTitle,
+            thumbnailUrl: vid.thumbnailUrl,
+            videoFormat: inferYoutubeVideoFormat(vid.title),
             engagement: {
               views: vid.viewCount,
               likes: vid.likeCount,
@@ -254,6 +257,8 @@ export async function gatherPlatformData(
             title: vid.desc.slice(0, 100),
             content: vid.desc,
             author: vid.author.nickname || vid.author.uniqueId,
+            thumbnailUrl: vid.coverUrl ?? undefined,
+            videoFormat: 'short' as const,
             engagement: {
               views: vid.stats.playCount,
               likes: vid.stats.diggCount,

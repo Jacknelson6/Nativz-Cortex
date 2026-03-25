@@ -6,13 +6,6 @@ import { extractVideoCandidatesFromSearch } from '@/lib/ideation/extract-video-c
 import { AdminResultsClient } from './results-client';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 
-export interface Recipient {
-  id: string;
-  name: string;
-  email: string;
-  group: 'team' | 'client';
-}
-
 export default async function AdminSearchResultsPage({
   params,
 }: {
@@ -29,6 +22,10 @@ export default async function AdminSearchResultsPage({
 
   if (error || !search) {
     notFound();
+  }
+
+  if (search.status === 'pending_subtopics') {
+    redirect(`/admin/search/${id}/subtopics`);
   }
 
   if (search.status === 'processing' || search.status === 'pending') {
@@ -54,46 +51,6 @@ export default async function AdminSearchResultsPage({
     .select('id, name, logo_url, agency')
     .eq('is_active', true)
     .order('name');
-
-  // Fetch potential recipients: team (admins) + client contacts (viewers in same org)
-  const recipients: Recipient[] = [];
-
-  const { data: teamUsers } = await adminClient
-    .from('users')
-    .select('id, full_name, email')
-    .eq('role', 'admin');
-
-  if (teamUsers) {
-    for (const u of teamUsers) {
-      if (u.email) {
-        recipients.push({ id: u.id, name: u.full_name || u.email, email: u.email, group: 'team' });
-      }
-    }
-  }
-
-  if (clientInfo) {
-    const { data: clientOrg } = await adminClient
-      .from('clients')
-      .select('organization_id')
-      .eq('id', clientInfo.id)
-      .single();
-
-    if (clientOrg?.organization_id) {
-      const { data: clientUsers } = await adminClient
-        .from('users')
-        .select('id, full_name, email')
-        .eq('organization_id', clientOrg.organization_id)
-        .eq('role', 'viewer');
-
-      if (clientUsers) {
-        for (const u of clientUsers) {
-          if (u.email) {
-            recipients.push({ id: u.id, name: u.full_name || u.email, email: u.email, group: 'client' });
-          }
-        }
-      }
-    }
-  }
 
   // Fetch idea generations linked to this search
   const { data: linkedGenerations } = await adminClient
@@ -121,16 +78,18 @@ export default async function AdminSearchResultsPage({
 
   return (
     <>
-      <div className="px-6 pt-6">
-        <Breadcrumbs items={[
-          { label: 'Search History', href: '/admin/search/new?history=true' },
-          { label: (search as TopicSearch).query },
-        ]} />
+      <div className="px-6 pt-4">
+        <Breadcrumbs
+          className="mb-2"
+          items={[
+            { label: 'Search history', href: '/admin/search/new?history=true' },
+            { label: 'Results' },
+          ]}
+        />
       </div>
       <AdminResultsClient
         search={search as TopicSearch}
         clientInfo={clientInfo}
-        recipients={recipients}
         clients={(allClients ?? []).map((c) => ({ id: c.id, name: c.name, logo_url: c.logo_url, agency: c.agency }))}
         linkedIdeas={(linkedGenerations ?? []).map((g) => ({
           id: g.id,
