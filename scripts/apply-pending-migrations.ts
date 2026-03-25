@@ -39,6 +39,20 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 `;
 
+/** Best-effort hostname for logs (no password). Helps debug ENOTFOUND typos. */
+function postgresHostHint(connectionString: string): string | null {
+  try {
+    const normalized = connectionString
+      .trim()
+      .replace(/^postgresql:/i, 'http:')
+      .replace(/^postgres:/i, 'http:');
+    const u = new URL(normalized);
+    return u.hostname || null;
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   if (!loadEnvLocal()) {
     console.log('[supabase:migrate] No .env.local — skip (Next.js may still load env for the app).');
@@ -78,9 +92,15 @@ async function main() {
     const err = e as NodeJS.ErrnoException & { code?: string };
     const transient = new Set(['ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'EAI_AGAIN', 'ENETUNREACH']);
     if (err?.code && transient.has(err.code)) {
+      const host = postgresHostHint(url);
+      const hostLine = host
+        ? `\n  Resolved hostname from URL: ${host} (if this looks wrong, fix SUPABASE_DB_URL in .env.local).`
+        : '\n  Could not parse hostname from URL — check for typos, stray spaces, or a truncated copy-paste.';
       console.warn(
-        `[supabase:migrate] Database unreachable (${err.code}) — skip migrations. ` +
-          'Check SUPABASE_DB_URL / DIRECT_URL in .env.local (Supabase Dashboard → Database → URI), VPN/network, or resume a paused project.',
+        `[supabase:migrate] Database unreachable (${err.code}) — skip migrations.` +
+          hostLine +
+          '\n  Supabase: Dashboard → Project Settings → Database → Connection string → URI (direct). ' +
+          'Confirm the project is not paused. Test DNS: `nslookup <hostname>`.',
       );
       process.exit(0);
     }

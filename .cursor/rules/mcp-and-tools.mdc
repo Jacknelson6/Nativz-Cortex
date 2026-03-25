@@ -1,0 +1,79 @@
+---
+description: Prefer MCP servers for matching tasks; pair with skills; inventory of Cursor tools and enabled MCP tool names for this workspace.
+alwaysApply: true
+---
+
+# Agent tools & MCPs (Nativz Cortex)
+
+## Workflow (non-negotiable for scoped asks)
+
+When the user asks for something that maps to a **deployment platform, database, browser automation, library docs, payments, or design tools**, **use the matching MCP first** (after reading that tool’s JSON schema under `mcps/<server>/tools/`), then apply **project skills** (`.claude/skills/`, `.agents/skills/`, `CLAUDE.md` “Skills” references). Use **grep/read/run_terminal_cmd** only when no MCP fits or MCP is unavailable.
+
+| User intent | MCP server (this workspace) | Skills to pair |
+|-------------|-----------------------------|----------------|
+| Vercel deploys, logs, projects, docs | `plugin-vercel-vercel` | Vercel skills from hooks / `vercel-*` in plugin cache |
+| Supabase schema, SQL, project DB | `project-0-Nativz_Cortex-supabase` | `.agents/skills/supabase-postgres-best-practices/SKILL.md`, `docs/database.md` |
+| Up-to-date library docs / examples | `plugin-compound-engineering-context7` | `framework-docs-researcher`, dependency-specific skills |
+| Real browser driving (Playwright plugin) | `plugin-playwright-playwright` | `qa-loop`, e2e / Playwright patterns |
+| Cursor IDE browser (lock/snapshot/profile) | `cursor-ide-browser` | Same as browser QA |
+| Semantic code symbols / replace symbol | `plugin-serena-serena` | cortex-review, explore |
+| Stripe (after auth) | `plugin-stripe-stripe` | stripe skills in plugin cache |
+| Figma (after auth) | `plugin-figma-figma` | `figma-use`, `figma-implement-design` |
+
+**Before any `call_mcp_tool`:** read the tool’s descriptor JSON (`description`, `parameters`, `required`) so arguments match the schema.
+
+**Auth:** If the server exposes `mcp_auth`, call it so the user can authenticate before other tools appear.
+
+---
+
+## Built-in Cursor / agent tools (categories)
+
+These are not MCPs; use them for repo work and orchestration:
+
+- **Search & navigate:** semantic codebase search, grep/ripgrep, glob file search  
+- **Files:** read, write, apply patch / search-replace, delete, list directory  
+- **Terminal:** run commands (tests, build, scripts)  
+- **Tasks:** delegate parallel exploration or multi-step work to subagents when appropriate  
+- **Web:** web search, fetch URL  
+- **MCP:** `call_mcp_tool`, `list_mcp_resources`, `fetch_mcp_resource`  
+- **Quality:** linter diagnostics, image generation (when asked), notebook edit  
+
+---
+
+## MCP tool inventory (descriptor files in this workspace)
+
+Paths are under the Cursor project folder: `~/.cursor/projects/Users-jack-Claude-Code-Projects-Nativz-Cortex/mcps/`. Names match `call_mcp_tool` **toolName** for each **server** identifier shown in Cursor.
+
+### `cursor-ide-browser`
+
+`browser_navigate`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_fill`, `browser_fill_form`, `browser_hover`, `browser_drag`, `browser_select_option`, `browser_press_key`, `browser_wait_for`, `browser_navigate_back`, `browser_navigate_forward`, `browser_reload`, `browser_scroll`, `browser_tabs`, `browser_take_screenshot`, `browser_search`, `browser_lock`, `browser_unlock`, `browser_console_messages`, `browser_network_requests`, `browser_resize`, `browser_handle_dialog`, `browser_get_attribute`, `browser_get_input_value`, `browser_is_visible`, `browser_is_enabled`, `browser_is_checked`, `browser_get_bounding_box`, `browser_highlight`, `browser_profile_start`, `browser_profile_stop`
+
+### `plugin-compound-engineering-context7`
+
+`query-docs`, `resolve-library-id`
+
+### `plugin-playwright-playwright`
+
+`browser_navigate`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_fill_form`, `browser_hover`, `browser_drag`, `browser_select_option`, `browser_press_key`, `browser_wait_for`, `browser_navigate_back`, `browser_take_screenshot`, `browser_run_code`, `browser_network_requests`, `browser_evaluate`, `browser_file_upload`, `browser_handle_dialog`, `browser_console_messages`, `browser_resize`, `browser_close`, `browser_install`, `browser_tabs`
+
+### `plugin-serena-serena`
+
+`initial_instructions`, `prepare_for_new_conversation`, `onboarding`, `check_onboarding_performed`, `get_current_config`, `switch_modes`, `activate_project`, `execute_shell_command`, `edit_memory`, `rename_memory`, `delete_memory`, `list_memories`, `read_memory`, `write_memory`, `rename_symbol`, `insert_before_symbol`, `insert_after_symbol`, `replace_symbol_body`, `find_referencing_symbols`, `find_symbol`, `get_symbols_overview`, `search_for_pattern`, `replace_content`, `find_file`, `list_dir`, `create_text_file`, `read_file`
+
+### `plugin-vercel-vercel`
+
+`search_vercel_documentation`, `list_projects`, `get_project`, `list_deployments`, `get_deployment`, `get_deployment_build_logs`, `get_runtime_logs`, `get_access_to_vercel_url`, `web_fetch_vercel_url`, `list_teams`, `check_domain_availability_and_price`, `deploy_to_vercel`, `list_toolbar_threads`, `get_toolbar_thread`, `change_toolbar_thread_resolve_status`, `reply_to_toolbar_thread`, `edit_toolbar_message`, `add_toolbar_reaction`
+
+### `project-0-Nativz_Cortex-supabase`
+
+`mcp_auth` — authenticate; additional Supabase tools are provided by the hosted MCP after connection (see `CLAUDE.md` Supabase MCP section).
+
+### `plugin-stripe-stripe` / `plugin-figma-figma`
+
+`mcp_auth` — authenticate; Stripe/Figma tools appear after the server session is authorized.
+
+---
+
+## Skills pointer
+
+For implementation patterns, read the relevant **SKILL.md** from `.claude/skills/` and `.agents/skills/` when the task matches (Supabase, cortex-route, bedrock UI, QA, etc.). MCPs supply **live platform state**; skills supply **how we build and review** in this repo.

@@ -14,6 +14,8 @@ Next.js 15 (App Router) + TypeScript, Supabase (Postgres + Auth), Brave Search A
 
 **Zernio deploy checklist:** **`docs/zernio-setup.md`** — concrete steps (Vercel env vars, webhook URL, redeploy) plus link to [Zernio API docs](https://docs.zernio.com/).
 
+**Vercel build cache:** `vercel.json` sets `VERCEL_FORCE_NO_BUILD_CACHE=1` during build so deployments do not restore a stale remote cache (which can crash webpack with `Cannot read properties of undefined (reading 'length')` after large dependency or route-graph changes). Tradeoff: slightly longer builds. To re-enable caching after a stable period, remove that `build.env` entry and use **Redeploy** → uncheck “Use existing Build Cache” if a one-off clean build is needed.
+
 **Topic search (Brave + LLM pipeline):** `BRAVE_SEARCH_API_KEY` — [Brave Search API](https://brave.com/search/api/) key (required for the default `llm_v1` pipeline’s web search tool and for the legacy pipeline’s SERP). Optional: `TOPIC_SEARCH_PIPELINE` — omit or set to anything except `legacy` for **llm_v1** (default: subtopic planning + research); set to `legacy` to force the old multi-platform scrape path. Optional model overrides: `TOPIC_SEARCH_PLANNER_MODEL`, `TOPIC_SEARCH_RESEARCH_MODEL`, `TOPIC_SEARCH_MERGER_MODEL`. Apply migration `071_topic_search_llm_pipeline.sql` before relying on `llm_v1` columns in production.
 
 ## Commands
@@ -70,15 +72,29 @@ Do these at the start of every session:
 2. Read **`todo.md`** — Current status, what's done, what's left, priorities
 3. Reference **`docs/detail-design-patterns.md`** when implementing any UI component
 
+## Supabase MCP (Nativz Cortex)
+
+- **Project ref:** `phypsgxszrvwdaaqpxup` — MCP URL: `https://mcp.supabase.com/mcp?project_ref=phypsgxszrvwdaaqpxup`
+- **Claude Code:** `claude mcp add --scope project --transport http supabase "<url>"` (writes **`.mcp.json`**, gitignored). Authenticate once: run **`claude /mcp`** in a normal terminal → select **supabase** → **Authenticate**.
+- **Cursor:** `.cursor/mcp.json` registers the same HTTP MCP server for this workspace.
+- **Preference:** When working on **schema, SQL, migrations, RLS, or Supabase dashboard-style DB tasks** in this repo, **prefer the Supabase MCP** (read tables, run read-safe SQL, docs) over guessing. Fall back to `docs/database.md` and migrations in `supabase/migrations/` when MCP is unavailable.
+- **Optional:** `npx skills add supabase/agent-skills` — extra Supabase-oriented agent skills (install once per machine if desired).
+
 ## Memory System
 
 This project uses **Ars Contexta** (`~/.claude/plugins/arscontexta/`). Key commands: `/arscontexta-help`, `/arscontexta-remember`, `/arscontexta-next`, `/arscontexta-health`
+
+## Agent tools & MCPs
+
+- **Cursor rule:** `.cursor/rules/mcp-and-tools.mdc` (always on) — **MCP-first** when the task matches Vercel, Supabase, Context7 docs, browser automation, Stripe, Figma, or Serena symbols; read each tool’s schema in `~/.cursor/projects/.../mcps/<server>/tools/*.json` before `call_mcp_tool`; pair with the matching **skill** in `.claude/skills/` / `.agents/skills/`.
+- **Inventory:** Full list of **MCP tool names** and the **built-in Cursor tool categories** lives in that rule file (update the list if you add/remove MCP servers).
 
 ## Working Preferences
 
 - **Plans are always approved** — proceed with implementation without asking for permission
 - **Don't ask "is this plan good?"** — just build it
 - **Run the commands** — Whenever you would tell the user to run a terminal command (scripts, seeds, migrations, tests, typecheck, lint), run it yourself in this environment. Do not stop at “here’s what to run.” Exceptions: steps that truly require the user (browser-only auth, dashboard clicks, deploying from their account) — say so briefly, but still run everything that can run here.
+- **Secrets in chat** — The maintainer is fine with passwords, API keys, and connection strings appearing in chat when useful. **Do not** add recurring disclaimers, lectures, or “don’t paste secrets” warnings unless they explicitly ask for a security review. Treat pasted credentials as authorized for troubleshooting and config. (`.env.local` remains gitignored; only commit example keys in `.env.example` if the repo uses one.)
 
 ## Key Conventions
 
