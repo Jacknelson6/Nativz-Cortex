@@ -38,6 +38,28 @@ export const mergerTopicItemSchema = z.object({
       }),
     )
     .optional(),
+  resonance: z.enum(['low', 'medium', 'high', 'viral']).optional(),
+  sentiment: z.number().min(-1).max(1).optional(),
+  estimated_engagement: z.number().optional(),
+});
+
+export const mergerEmotionSchema = z.object({
+  emotion: z.string(),
+  percentage: z.number(),
+  color: z.string(),
+});
+
+export const mergerContentBreakdownItemSchema = z.object({
+  name: z.string(),
+  percentage: z.number(),
+  engagement_rate: z.number(),
+});
+
+export const mergerPlatformBreakdownItemSchema = z.object({
+  platform: z.string(),
+  post_count: z.number(),
+  comment_count: z.number(),
+  avg_sentiment: z.number(),
 });
 
 export const mergerOutputSchema = z.object({
@@ -46,6 +68,13 @@ export const mergerOutputSchema = z.object({
   overall_sentiment: z.number().min(-1).max(1),
   conversation_intensity: z.enum(['low', 'moderate', 'high', 'very_high']),
   topics: z.array(mergerTopicItemSchema).min(1).max(12),
+  emotions: z.array(mergerEmotionSchema).optional(),
+  content_breakdown: z.object({
+    intentions: z.array(mergerContentBreakdownItemSchema),
+    categories: z.array(mergerContentBreakdownItemSchema),
+    formats: z.array(mergerContentBreakdownItemSchema),
+  }).optional(),
+  platform_breakdown: z.array(mergerPlatformBreakdownItemSchema).optional(),
 });
 
 export type PlannerOutput = z.infer<typeof plannerOutputSchema>;

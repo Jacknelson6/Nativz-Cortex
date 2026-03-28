@@ -22,8 +22,10 @@ import { refineSerpQueryWithLlm } from '@/lib/search/llm-pipeline/refine-serp-qu
 import { getTopicSearchModelsFromDb } from '@/lib/ai/topic-search-models';
 import {
   getTimeRangeOptionLabel,
+  type PlatformBreakdown,
   type PlatformSource,
   type ResearchSourceRecord,
+  type SearchPlatform,
   type TopicSearchAIResponse,
   type TopicSource,
   type TrendingTopic,
@@ -231,6 +233,12 @@ async function researchOneSubtopicWithLiveSerp(args: {
     });
   }
 
+  const isConnectionError = (e: unknown): boolean => {
+    if (!(e instanceof Error)) return false;
+    const msg = e.message.toLowerCase();
+    return msg.includes('econnrefused') || msg.includes('enotfound') || msg.includes('etimedout') || msg.includes('econnreset') || msg.includes('fetch failed');
+  };
+
   try {
     if (serpMode === 'searxng') {
       hits = await searchWebSearxng(q, {
@@ -253,24 +261,71 @@ async function researchOneSubtopicWithLiveSerp(args: {
       serpCost = res.usage.estimatedCost;
     }
   } catch (e) {
+    // Only fall back to llm_only if the search service is actually unreachable
+    if (isConnectionError(e)) {
+      logLlmV1({
+        search_id: args.searchId,
+        subtopic_index: args.index,
+        serp_fallback: 'llm_only',
+        serp_mode: serpMode,
+        reason: e instanceof Error ? e.message.slice(0, 200) : String(e),
+      });
+      return researchOneSubtopicLlmOnly({
+        parentQuery: args.parentQuery,
+        subtopic: args.subtopic,
+        index: args.index,
+        userId: args.userId,
+        userEmail: args.userEmail,
+        researchModel: args.researchModel,
+        maxResearchTokens: args.maxResearchTokens,
+        searchId: args.searchId,
+        timeRangeLabel: args.timeRangeLabel,
+      });
+    }
+    // Non-connection errors: log warning but don't silently downgrade
     logLlmV1({
       search_id: args.searchId,
       subtopic_index: args.index,
-      serp_fallback: 'llm_only',
+      serp_error: true,
       serp_mode: serpMode,
       reason: e instanceof Error ? e.message.slice(0, 200) : String(e),
     });
-    return researchOneSubtopicLlmOnly({
-      parentQuery: args.parentQuery,
-      subtopic: args.subtopic,
-      index: args.index,
-      userId: args.userId,
-      userEmail: args.userEmail,
-      researchModel: args.researchModel,
-      maxResearchTokens: args.maxResearchTokens,
-      searchId: args.searchId,
-      timeRangeLabel: args.timeRangeLabel,
+    throw e;
+  }
+
+  // On empty results, retry with broader query (parent query only) before giving up
+  if (hits.length === 0 && q !== args.parentQuery) {
+    logLlmV1({
+      search_id: args.searchId,
+      subtopic_index: args.index,
+      no_serp_hits: true,
+      serp_mode: serpMode,
+      retry_broader: true,
     });
+    try {
+      if (serpMode === 'searxng') {
+        hits = await searchWebSearxng(args.parentQuery, {
+          count: args.maxSearches,
+          timeRange: args.timeRange,
+          country: args.country,
+          language: args.language,
+        });
+      } else {
+        const res = await searchWebOpenRouter(args.parentQuery, {
+          count: args.maxSearches,
+          timeRange: args.timeRange,
+          country: args.country,
+          language: args.language,
+          userId: args.userId,
+          userEmail: args.userEmail,
+        });
+        hits = res.hits;
+        serpTokens += res.usage.totalTokens;
+        serpCost += res.usage.estimatedCost;
+      }
+    } catch {
+      // Broader retry failed — continue with empty hits
+    }
   }
 
   if (hits.length === 0) {
@@ -279,6 +334,7 @@ async function researchOneSubtopicWithLiveSerp(args: {
       subtopic_index: args.index,
       no_serp_hits: true,
       serp_mode: serpMode,
+      falling_back: 'llm_only',
     });
     return researchOneSubtopicLlmOnly({
       parentQuery: args.parentQuery,
@@ -534,6 +590,13 @@ Return ONLY valid JSON matching:
   "brand_alignment_notes": "optional string — only if client_strategy: bridge topic insights to the client brand (2-4 sentences).",
   "overall_sentiment": number -1 to 1,
   "conversation_intensity": "low"|"moderate"|"high"|"very_high",
+  "emotions": [{"emotion": string, "percentage": number, "color": string}],
+  "content_breakdown": {
+    "intentions": [{"name": string, "percentage": number, "engagement_rate": number}],
+    "categories": [{"name": string, "percentage": number, "engagement_rate": number}],
+    "formats": [{"name": string, "percentage": number, "engagement_rate": number}]
+  },
+  "platform_breakdown": [{"platform": string, "post_count": number, "comment_count": number, "avg_sentiment": number}],
   "topics": [
     {
       "name": string,
@@ -542,7 +605,10 @@ Return ONLY valid JSON matching:
       "posts_overview": string,
       "comments_overview": string,
       "source_urls": string[] (each MUST appear in the subtopic research URLs above),
-      "video_ideas": [{ "title", "hook", "why_it_works", "format", "virality" }]
+      "video_ideas": [{ "title", "hook", "why_it_works", "format", "virality" }],
+      "resonance": "low"|"medium"|"high"|"viral",
+      "sentiment": number -1 to 1 (specific to THIS topic based on evidence tone),
+      "estimated_engagement": number (estimated total engagement/views across sources)
     }
   ]
 }
@@ -550,7 +616,13 @@ Return ONLY valid JSON matching:
 Rules:
 - 5–10 topics max; each must be distinct.
 - source_urls must be from the evidence URLs only.
-- If search_mode is general, omit brand_alignment_notes or use null.`;
+- If search_mode is general, omit brand_alignment_notes or use null.
+- emotions: 5-8 emotions that sum to ~100%. Analyze the actual tone and sentiment of the evidence text. Colors from: #5ba3e6 blue, #a855f7 purple, #22c55e green, #f59e0b amber, #ef4444 red, #ec4899 pink, #14b8a6 teal, #6366f1 indigo.
+- content_breakdown: intentions (3-5 viewer motivations like Educational, Entertainment, Debate), categories (3-5 content types like News, How-to, Opinion), formats (3-5 like Short video, Article, Thread). Each with percentage and engagement_rate (0-1). Derive from what the evidence actually shows.
+- platform_breakdown: which platforms appeared most in the SERP results. Estimate post_count, comment_count, avg_sentiment from evidence.
+- Per-topic resonance: based on evidence volume and engagement signals for that specific topic (not array position).
+- Per-topic sentiment: specific to THIS topic's evidence tone, not just copying overall_sentiment.
+- Per-topic estimated_engagement: grounded in view counts, comment counts, and discussion activity visible in the evidence. Use realistic estimates, not round placeholder numbers.`;
 
   const mergeT0 = Date.now();
   const mergerAi = await createCompletion({
@@ -593,12 +665,12 @@ Rules:
   const trendingTopics: TrendingTopic[] = (merger.topics ?? []).map((t, idx) => {
     const urls = (t.source_urls ?? []).filter((u) => allowSet.has(normalizeUrlForMatch(u)));
     const resonance: TrendingTopic['resonance'] =
-      idx === 0 ? 'high' : idx < 3 ? 'medium' : 'low';
+      t.resonance ?? (idx === 0 ? 'high' : idx < 3 ? 'medium' : 'low');
     return {
       name: t.name,
       resonance,
-      sentiment: merger.overall_sentiment,
-      total_engagement: Math.max(100, 500 - idx * 40),
+      sentiment: t.sentiment ?? merger.overall_sentiment,
+      total_engagement: t.estimated_engagement ?? Math.max(100, 500 - idx * 40),
       posts_overview: t.posts_overview,
       comments_overview: t.comments_overview,
       sources: buildTopicSources(urls, titleByUrl),
@@ -606,14 +678,14 @@ Rules:
     };
   });
 
-  const emotions = [
+  const emotions = merger.emotions ?? [
     { emotion: 'Interest', percentage: 35, color: '#5ba3e6' },
     { emotion: 'Skepticism', percentage: 20, color: '#a855f7' },
     { emotion: 'Excitement', percentage: 25, color: '#22c55e' },
     { emotion: 'Concern', percentage: 20, color: '#f59e0b' },
   ];
 
-  const content_breakdown = {
+  const content_breakdown = merger.content_breakdown ?? {
     intentions: [
       { name: 'Educational', percentage: 34, engagement_rate: 0.12 },
       { name: 'Debate', percentage: 22, engagement_rate: 0.1 },
@@ -629,6 +701,14 @@ Rules:
     ],
   };
 
+  const VALID_PLATFORMS = new Set<SearchPlatform>(['reddit', 'youtube', 'tiktok', 'web', 'quora']);
+  const coercePlatform = (p: string): SearchPlatform =>
+    VALID_PLATFORMS.has(p as SearchPlatform) ? (p as SearchPlatform) : 'web';
+
+  const platform_breakdown: PlatformBreakdown[] = (merger.platform_breakdown ?? [
+    { platform: 'web', post_count: allHits.length, comment_count: 0, avg_sentiment: merger.overall_sentiment },
+  ]).map((pb) => ({ ...pb, platform: coercePlatform(pb.platform) }));
+
   let aiResponse: TopicSearchAIResponse = {
     summary: merger.summary,
     overall_sentiment: merger.overall_sentiment,
@@ -636,9 +716,7 @@ Rules:
     emotions,
     content_breakdown,
     trending_topics: trendingTopics,
-    platform_breakdown: [
-      { platform: 'web', post_count: allHits.length, comment_count: 0, avg_sentiment: merger.overall_sentiment },
-    ],
+    platform_breakdown,
     conversation_themes: [],
     ...(merger.brand_alignment_notes ? { brand_alignment_notes: merger.brand_alignment_notes } : {}),
   };

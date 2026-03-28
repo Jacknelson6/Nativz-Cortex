@@ -10,7 +10,7 @@ export type TopicSearchWebResearchMode = 'searxng' | 'openrouter' | 'llm_only';
  * - `TOPIC_SEARCH_WEB_RESEARCH=llm_only` — never call SearXNG or OpenRouter web
  * - `TOPIC_SEARCH_WEB_RESEARCH=searxng` — always SearXNG when the pipeline runs
  * - `TOPIC_SEARCH_WEB_RESEARCH=openrouter` — always OpenRouter web search
- * - **Unset** — if `SEARXNG_URL` is set → **searxng**; else → **openrouter**
+ * - **Unset** → **searxng** (SearXNG is always running locally)
  *
  * **Recommended stack:** SearXNG SERP (`searxng`) + OpenAI research models in admin (`openai/…`) — synthesis uses your OpenAI key; web retrieval uses SearXNG. OpenRouter's web plugin (`openrouter`) is an alternative SERP path and does not use the OpenAI API for search.
  *
@@ -23,7 +23,8 @@ export function getTopicSearchWebResearchMode(): TopicSearchWebResearchMode {
   if (v === 'openrouter') return 'openrouter';
   // Legacy compat: treat 'brave' as 'searxng'
   if (v === 'brave') return 'searxng';
-  return process.env.SEARXNG_URL?.trim() ? 'searxng' : 'openrouter';
+  // Default to searxng — SearXNG is always running locally (localhost:8888)
+  return 'searxng';
 }
 
 /**

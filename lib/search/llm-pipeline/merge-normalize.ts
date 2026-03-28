@@ -89,6 +89,15 @@ export function normalizeMergerPayload(raw: unknown): unknown {
         : JSON.stringify(obj.summary);
   }
 
+  // Preserve LLM-analyzed aggregate fields (pass through to Zod; optional)
+  if (Array.isArray(obj.emotions)) {
+    obj.emotions = obj.emotions.filter(
+      (e: unknown) => e && typeof e === 'object' && 'emotion' in (e as Record<string, unknown>),
+    );
+    if ((obj.emotions as unknown[]).length === 0) delete obj.emotions;
+  }
+  // content_breakdown and platform_breakdown are passed through as-is for Zod validation
+
   const topics = obj.topics;
   if (!Array.isArray(topics) || topics.length === 0) {
     throw new Error('Merger model returned no topics.');
@@ -161,6 +170,24 @@ function normalizeTopicItem(item: unknown): unknown {
 
   if (Array.isArray(t.source_urls)) {
     t.source_urls = t.source_urls.filter((u) => typeof u === 'string');
+  }
+
+  // Preserve LLM-analyzed per-topic fields
+  if (typeof t.resonance === 'string') {
+    const allowed = new Set(['low', 'medium', 'high', 'viral']);
+    if (!allowed.has(t.resonance)) delete t.resonance;
+  }
+  if (typeof t.sentiment === 'string') t.sentiment = parseFloat(t.sentiment as string);
+  if (typeof t.sentiment === 'number' && Number.isFinite(t.sentiment)) {
+    t.sentiment = Math.max(-1, Math.min(1, t.sentiment));
+  } else {
+    delete t.sentiment;
+  }
+  if (typeof t.estimated_engagement === 'string') t.estimated_engagement = parseFloat(t.estimated_engagement as string);
+  if (typeof t.estimated_engagement === 'number' && Number.isFinite(t.estimated_engagement)) {
+    t.estimated_engagement = Math.max(0, t.estimated_engagement);
+  } else {
+    delete t.estimated_engagement;
   }
 
   if (Array.isArray(t.video_ideas)) {
