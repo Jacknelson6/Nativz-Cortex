@@ -49,6 +49,9 @@ next-env.d.ts
 /logs_llm/
 .data/
 
+# Cursor IDE local worktree paths
+.cursor/worktrees.json
+
 # worktrees
 .worktrees/
 .superpowers/
