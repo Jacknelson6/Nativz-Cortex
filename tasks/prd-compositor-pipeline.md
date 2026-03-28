@@ -754,3 +754,724 @@ When this PRD is fully implemented:
 | `lib/ad-creatives/nano-banana/build-nano-prompt.ts` | MODIFY | Add `cleanCanvas` param |
 | `lib/ad-creatives/nano-banana/fill-template.ts` | MODIFY | Blank slots in compositor mode |
 | `lib/ad-creatives/types.ts` | MODIFY | Add `useCompositor` to `AdGenerationConfig` |
+
+---
+
+## Phase 8: Creative Intelligence Loop — How the System Learns What "Good" Looks Like
+
+### The Problem
+
+Right now, every batch starts from zero. The system has no memory of which ads worked and which didn't. A human generates 20 creatives, favorites 3, deletes 12, and downloads 5. That signal — what got kept, what got trashed — is lost. The next batch makes the same kinds of mistakes.
+
+This is the difference between a tool and a system. A tool generates ads. A system generates ads, learns which ones are good, and generates better ads next time. That's what we're building.
+
+### What "Good" Means — The Signal Hierarchy
+
+There are multiple quality signals available to us, and they're not all equal. Understanding the hierarchy matters because it determines what the system optimizes for.
+
+**Tier 1: Explicit Human Judgment (Strongest Signal)**
+- **Favorited creatives** (`is_favorite = true` in `ad_creatives` table) — The admin looked at this and said "yes, this is good"
+- **Downloaded creatives** — Strong enough to use in a real campaign
+- **Deleted creatives** — Explicit rejection signal. Something was wrong.
+
+**Tier 2: QA Scores (Automated Quality)**
+- **QA passed on first attempt** — The AI generated a clean image without retries. This correlates with good composition.
+- **QA score** (`metadata.qa_score`) — Higher scores mean fewer issues detected
+- **QA issues by type** — Tells us WHAT went wrong (text garble vs wrong product vs duplicate logo)
+
+**Tier 3: Behavioral Signals (Implicit)**
+- **Time spent viewing** (future — not implemented yet, don't build this now)
+- **"Generate more like this"** actions (if a user regenerates from a specific creative's prompt, that creative was a reference point)
+
+**Tier 4: Platform Performance (External — Future)**
+- CTR, ROAS, CPA from Meta/Google Ads — The ultimate signal, but requires ad platform integration we don't have yet. Design the schema to accept this data later, but don't build the integration now.
+
+### Architecture: The Learning Loop
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    GENERATION CYCLE                          │
+│                                                              │
+│  ┌──────────┐    ┌──────────┐    ┌───────────┐              │
+│  │ Style    │───>│ Generate │───>│ Composite │───> Gallery   │
+│  │ Memory   │    │ (Gemini) │    │ (Sharp)   │              │
+│  └──────────┘    └──────────┘    └───────────┘              │
+│       ▲                                  │                   │
+│       │                                  ▼                   │
+│  ┌──────────┐    ┌──────────┐    ┌───────────┐              │
+│  │ Pattern  │<───│ Analyze  │<───│ Feedback  │<── Human     │
+│  │ Extractor│    │ Winners  │    │ Collector │    Actions    │
+│  └──────────┘    └──────────┘    └───────────┘              │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+The loop has 4 stages:
+1. **Collect** — Capture every human signal (favorite, delete, download)
+2. **Analyze** — Extract patterns from winners vs losers
+3. **Synthesize** — Compress patterns into a reusable "style memory" per client
+4. **Apply** — Inject style memory into the next generation's prompt
+
+This loop runs automatically. No human has to click "learn from this." The system watches what gets favorited and what gets deleted, and adjusts.
+
+---
+
+### Stage 8.1: Feedback Collector (`lib/ad-creatives/intelligence/feedback-collector.ts`)
+
+#### What It Does
+
+Listens for signal events (favorite toggled, creative deleted, creative downloaded) and records them in a structured format for analysis.
+
+#### Why It's Separate from the Existing Favorite/Delete Logic
+
+The existing `PATCH /api/clients/[id]/ad-creatives/[creativeId]` endpoint toggles `is_favorite`. The existing `DELETE` endpoint removes a creative. Those work fine for their purpose. But they don't capture the CONTEXT of the decision — what template was used, what the QA score was, what copy was on the ad, what the brand colors were. The feedback collector enriches the signal with context before storing it.
+
+#### Database: `ad_creative_feedback` Table
+
+```sql
+CREATE TABLE ad_creative_feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  creative_id UUID REFERENCES ad_creatives(id) ON DELETE SET NULL,
+  batch_id UUID REFERENCES ad_generation_batches(id) ON DELETE SET NULL,
+  
+  -- The signal
+  signal_type TEXT NOT NULL,  -- 'favorite' | 'unfavorite' | 'delete' | 'download' | 'regenerate_from'
+  
+  -- Snapshot of the creative at signal time (survives deletion)
+  creative_snapshot JSONB NOT NULL,
+  -- Contains: { template_source, template_key, aspect_ratio, on_screen_text,
+  --             product_service, offer, qa_passed, qa_score, qa_issues,
+  --             prompt_used (truncated to 2000 chars), metadata }
+  
+  -- Enrichment from Brand DNA at signal time
+  brand_snapshot JSONB,
+  -- Contains: { colors (hex array), fonts, industry, advertising_type, image_prompt_modifier }
+  
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_creative_feedback_client ON ad_creative_feedback(client_id);
+CREATE INDEX idx_creative_feedback_signal ON ad_creative_feedback(signal_type);
+CREATE INDEX idx_creative_feedback_created ON ad_creative_feedback(created_at DESC);
+```
+
+#### Why We Snapshot Instead of Just Referencing
+
+When a creative is deleted, the `ad_creatives` row is gone. But the deletion IS a signal — we need to remember what was deleted and why it was bad. The snapshot preserves the creative's attributes even after the row is removed. This is critical for the analysis stage.
+
+#### Recording Logic
+
+Hook into the existing API routes. When a creative is favorited, deleted, or downloaded, call:
+
+```typescript
+export async function recordCreativeFeedback(params: {
+  clientId: string;
+  creativeId: string;
+  signalType: 'favorite' | 'unfavorite' | 'delete' | 'download' | 'regenerate_from';
+}): Promise<void> {
+  const admin = createAdminClient();
+  
+  // Fetch the creative (may be about to be deleted — fetch BEFORE deletion)
+  const { data: creative } = await admin
+    .from('ad_creatives')
+    .select('*')
+    .eq('id', params.creativeId)
+    .maybeSingle();
+  
+  if (!creative) return; // Already gone, can't snapshot
+  
+  const snapshot = {
+    template_source: creative.template_source,
+    template_key: creative.template_id,
+    aspect_ratio: creative.aspect_ratio,
+    on_screen_text: creative.on_screen_text,
+    product_service: creative.product_service,
+    offer: creative.offer,
+    qa_passed: creative.metadata?.qa_passed,
+    qa_score: creative.metadata?.qa_score,
+    qa_issues: creative.metadata?.qa_issues,
+    prompt_used: typeof creative.prompt_used === 'string' 
+      ? creative.prompt_used.substring(0, 2000) 
+      : null,
+    global_slug: creative.metadata?.global_slug ?? null,
+    image_pipeline: creative.metadata?.image_pipeline ?? null,
+  };
+  
+  await admin.from('ad_creative_feedback').insert({
+    client_id: params.clientId,
+    creative_id: params.creativeId,
+    batch_id: creative.batch_id,
+    signal_type: params.signalType,
+    creative_snapshot: snapshot,
+  });
+}
+```
+
+#### Where to Hook This In
+
+1. **`PATCH /api/clients/[id]/ad-creatives/[creativeId]`** (favorite toggle) — call `recordCreativeFeedback` with `'favorite'` or `'unfavorite'`
+2. **`DELETE /api/clients/[id]/ad-creatives/[creativeId]`** — call `recordCreativeFeedback` with `'delete'` BEFORE the actual deletion
+3. **`POST /api/clients/[id]/ad-creatives/bulk-download`** — call for each creative ID with `'download'`
+
+---
+
+### Stage 8.2: Winner Analyzer (`lib/ad-creatives/intelligence/winner-analyzer.ts`)
+
+#### What It Does
+
+Given a client's feedback history, identifies statistical patterns in what makes their "winners" (favorited/downloaded) different from their "losers" (deleted/ignored).
+
+#### How It Works
+
+This is NOT machine learning. It's structured pattern extraction using an LLM. Here's why:
+
+We don't have enough data per client for statistical ML (a client might have 50-200 creatives total). But we CAN use an LLM to read the winner vs loser snapshots and extract patterns like a human creative director would. This is essentially "show a smart analyst 10 winning ads and 10 losing ads and ask: what's different?"
+
+```typescript
+export interface WinnerAnalysis {
+  clientId: string;
+  analyzedAt: string;
+  sampleSize: { winners: number; losers: number; total: number };
+  
+  // Extracted patterns
+  patterns: {
+    /** Which Nano Banana styles consistently win? */
+    preferredStyles: string[];      // e.g. ['headline', 'soft-gradient-product', 'testimonial-card']
+    /** Which styles consistently lose? */
+    avoidStyles: string[];          // e.g. ['faux-iphone-notes', 'ugly-ad', 'browser-chrome-lite']
+    /** Color patterns in winners */
+    colorInsights: string;          // e.g. "Winners use dark backgrounds with bright accent CTAs"
+    /** Composition patterns */
+    compositionInsights: string;    // e.g. "Product-forward layouts outperform abstract/editorial"
+    /** Copy patterns */
+    copyInsights: string;           // e.g. "Short headlines (3-4 words) with specific numbers win"
+    /** What to avoid based on deletions */
+    avoidPatterns: string;          // e.g. "Avoid busy backgrounds, multiple visual elements"
+    /** Overall style direction for next batch */
+    styleDirectionSummary: string;  // 2-3 sentence summary usable as prompt injection
+  };
+  
+  /** Confidence: 'low' (<10 signals), 'medium' (10-30), 'high' (30+) */
+  confidence: 'low' | 'medium' | 'high';
+}
+```
+
+#### The Analysis Function
+
+```typescript
+export async function analyzeClientWinners(clientId: string): Promise<WinnerAnalysis> {
+  const admin = createAdminClient();
+  
+  // Fetch all feedback for this client, ordered by recency
+  const { data: feedback } = await admin
+    .from('ad_creative_feedback')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false })
+    .limit(200);  // Last 200 signals max
+  
+  if (!feedback || feedback.length < 5) {
+    // Not enough data to analyze — return empty patterns
+    return buildEmptyAnalysis(clientId, feedback?.length ?? 0);
+  }
+  
+  // Separate winners and losers
+  const winners = feedback.filter(f => f.signal_type === 'favorite' || f.signal_type === 'download');
+  const losers = feedback.filter(f => f.signal_type === 'delete');
+  const ignored = // creatives that were neither favorited nor deleted (neutral)
+  
+  // Build analysis prompt for LLM
+  const analysisPrompt = buildAnalysisPrompt(winners, losers, clientId);
+  
+  // Call Claude (not Gemini — this is analytical text work, not image generation)
+  const result = await createCompletion({
+    messages: [
+      { role: 'system', content: WINNER_ANALYSIS_SYSTEM_PROMPT },
+      { role: 'user', content: analysisPrompt },
+    ],
+    maxTokens: 1500,
+    feature: 'creative_intelligence',
+  });
+  
+  // Parse structured response
+  return parseAnalysisResponse(result.text, clientId, winners.length, losers.length, feedback.length);
+}
+```
+
+#### The Analysis Prompt
+
+This is the most important part. The prompt must be specific about what patterns to look for:
+
+```typescript
+const WINNER_ANALYSIS_SYSTEM_PROMPT = `You are a performance creative analyst for a social media advertising agency. You analyze patterns in ad creative performance to improve future generation.
+
+You will receive two sets of ad creatives:
+- WINNERS: Ads that were favorited or downloaded by the creative director (human approved)
+- LOSERS: Ads that were deleted by the creative director (human rejected)
+
+Your job is to find ACTIONABLE patterns — not generic advice. Don't say "use eye-catching visuals." Say "winners used product-forward compositions with the product occupying 60%+ of the frame, while losers used abstract editorial layouts."
+
+Output valid JSON with this exact schema:
+{
+  "preferredStyles": ["slug1", "slug2"],     // Nano Banana template slugs that appear in winners
+  "avoidStyles": ["slug3", "slug4"],          // Slugs that appear in losers
+  "colorInsights": "specific observation",     // What color patterns distinguish winners
+  "compositionInsights": "specific observation", // Layout/composition patterns
+  "copyInsights": "specific observation",      // What copy patterns work (length, tone, numbers)
+  "avoidPatterns": "specific observation",     // Common traits of deleted ads
+  "styleDirectionSummary": "2-3 sentences"    // Reusable direction for injection into image prompts
+}
+
+Be SPECIFIC. Reference actual template names, actual color choices, actual copy structures. The "styleDirectionSummary" will be injected directly into an image generation prompt, so write it as a concise creative brief, not as analysis.`;
+```
+
+#### Why LLM Analysis Instead of Pure Statistics
+
+With 50 creatives, you can't run a regression. But you CAN show an LLM:
+- "Here are 8 favorited ads. They used templates: headline (3x), soft-gradient (2x), testimonial (2x), stat-hero (1x). Colors were all dark backgrounds. Copy had numbers in 6/8 headlines."
+- "Here are 15 deleted ads. They used templates: faux-iphone-notes (4x), browser-chrome-lite (3x), ugly-ad (2x)..."
+
+The LLM sees the same patterns a human creative director would, but faster and without forgetting.
+
+#### When to Run Analysis
+
+Analysis doesn't need to run on every signal. It should run:
+
+1. **After a batch review is "complete"** — when the admin has gone through a batch and favorited/deleted most of it. Detect this: if >60% of a batch's creatives have been either favorited or deleted, trigger analysis.
+2. **Before a new batch starts** — check if analysis exists and is recent (<7 days). If stale or missing, run fresh analysis.
+3. **Never during generation** — analysis is a background task, not in the hot path.
+
+```typescript
+export async function ensureFreshAnalysis(clientId: string): Promise<WinnerAnalysis | null> {
+  const admin = createAdminClient();
+  
+  // Check for recent analysis
+  const { data: existing } = await admin
+    .from('ad_style_memory')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('analyzed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  
+  if (existing) {
+    const age = Date.now() - new Date(existing.analyzed_at).getTime();
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    if (age < sevenDays) return existing.analysis as WinnerAnalysis;
+  }
+  
+  // Check if we have enough new feedback to justify re-analysis
+  const { count } = await admin
+    .from('ad_creative_feedback')
+    .select('*', { count: 'exact', head: true })
+    .eq('client_id', clientId);
+  
+  if ((count ?? 0) < 5) return null; // Not enough data
+  
+  return analyzeClientWinners(clientId);
+}
+```
+
+---
+
+### Stage 8.3: Style Memory (`lib/ad-creatives/intelligence/style-memory.ts`)
+
+#### What It Does
+
+Persists the analysis results and makes them queryable. This is the system's "memory" of what works for each client.
+
+#### Database: `ad_style_memory` Table
+
+```sql
+CREATE TABLE ad_style_memory (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  analyzed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  sample_size JSONB NOT NULL,        -- { winners, losers, total }
+  patterns JSONB NOT NULL,           -- The WinnerAnalysis.patterns object
+  confidence TEXT NOT NULL,          -- 'low' | 'medium' | 'high'
+  style_direction TEXT NOT NULL,     -- The compiled styleDirectionSummary (ready for prompt injection)
+  preferred_slugs TEXT[] DEFAULT '{}',  -- Denormalized for fast query
+  avoid_slugs TEXT[] DEFAULT '{}',      -- Denormalized for fast query
+  
+  -- Versioning: each analysis is a new row, preserving history
+  version INT NOT NULL DEFAULT 1,
+  
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_style_memory_client ON ad_style_memory(client_id, analyzed_at DESC);
+```
+
+#### Why Version History
+
+The system's taste evolves as more data comes in. Early analysis (5 signals, low confidence) might say "prefers headline layouts." After 50 signals, it might refine to "prefers headline layouts with product hero and warm lighting, specifically not abstract/editorial." Keeping versions lets us track how the model of the client's preferences develops. It also lets us rollback if a bad analysis corrupts the style direction.
+
+#### Store and Retrieve
+
+```typescript
+export async function storeStyleMemory(analysis: WinnerAnalysis): Promise<void> {
+  const admin = createAdminClient();
+  
+  // Get current version number
+  const { data: latest } = await admin
+    .from('ad_style_memory')
+    .select('version')
+    .eq('client_id', analysis.clientId)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  
+  const nextVersion = (latest?.version ?? 0) + 1;
+  
+  await admin.from('ad_style_memory').insert({
+    client_id: analysis.clientId,
+    analyzed_at: analysis.analyzedAt,
+    sample_size: analysis.sampleSize,
+    patterns: analysis.patterns,
+    confidence: analysis.confidence,
+    style_direction: analysis.patterns.styleDirectionSummary,
+    preferred_slugs: analysis.patterns.preferredStyles,
+    avoid_slugs: analysis.patterns.avoidStyles,
+    version: nextVersion,
+  });
+}
+
+/** Get the most recent style memory for a client. Returns null if none exists. */
+export async function getLatestStyleMemory(clientId: string): Promise<{
+  styleDirection: string;
+  preferredSlugs: string[];
+  avoidSlugs: string[];
+  confidence: string;
+  patterns: WinnerAnalysis['patterns'];
+  version: number;
+} | null> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('ad_style_memory')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('analyzed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  
+  if (!data) return null;
+  
+  return {
+    styleDirection: data.style_direction,
+    preferredSlugs: data.preferred_slugs ?? [],
+    avoidSlugs: data.avoid_slugs ?? [],
+    confidence: data.confidence,
+    patterns: data.patterns as WinnerAnalysis['patterns'],
+    version: data.version,
+  };
+}
+```
+
+---
+
+### Stage 8.4: Prompt Injection — Closing the Loop (`lib/ad-creatives/intelligence/apply-intelligence.ts`)
+
+#### What It Does
+
+This is where the loop closes. Before generating a batch, the system checks for style memory and injects it into the generation process at three levels:
+
+#### Level 1: Template Selection Bias
+
+When the admin opens the wizard to select Nano Banana templates, the UI should surface style memory:
+
+```typescript
+/** Annotate the Nano Banana catalog with intelligence signals */
+export function annotateNanoCatalogWithIntelligence(
+  catalog: NanoBananaCatalogEntry[],
+  memory: { preferredSlugs: string[]; avoidSlugs: string[] } | null,
+): (NanoBananaCatalogEntry & { intelligence?: 'preferred' | 'avoid' })[] {
+  if (!memory) return catalog.map(e => ({ ...e }));
+  
+  return catalog.map(entry => ({
+    ...entry,
+    intelligence: memory.preferredSlugs.includes(entry.slug)
+      ? 'preferred'
+      : memory.avoidSlugs.includes(entry.slug)
+        ? 'avoid'
+        : undefined,
+  }));
+}
+```
+
+In the UI (`nano-banana-template-grid.tsx`), show a small badge:
+- Green star on preferred templates: "Performs well for this client"
+- Yellow warning on avoid templates: "Historically underperforms"
+
+The admin can still select avoided templates — this is a nudge, not a block. Sometimes you want to retry an avoided style with different copy.
+
+#### Level 2: Style Direction Injection
+
+This is the most impactful integration. The `styleDirectionSummary` from style memory gets prepended to every image generation prompt.
+
+In `orchestrate-batch.ts`, before the work item loop:
+
+```typescript
+// NEW: Load style intelligence for this client
+const styleMemory = await getLatestStyleMemory(typedBatch.client_id);
+const intelligenceStyleDirection = styleMemory?.styleDirection ?? '';
+```
+
+Then in the prompt builder, prepend it:
+
+```typescript
+const styleDirection = [
+  intelligenceStyleDirection,  // NEW: learned style preferences
+  catalogNanoStyle,
+  item.styleDirection,
+  qaRetryStyleSuffix,
+].filter(Boolean).join('\n\n');
+```
+
+This means every creative in the batch benefits from the accumulated learning about what works for this client. The style direction might say something like:
+
+> "Product-forward compositions with the product occupying 60-70% of the visual area perform best. Use dark, muted backgrounds (navy, charcoal, deep forest) with a single bright accent on the CTA. Avoid editorial/magazine layouts, abstract shapes without product context, and faux UI styles. Headlines with specific numbers or percentages get favorited 3x more than generic benefit statements."
+
+That's injected directly into the Gemini prompt alongside the existing style direction from the template.
+
+#### Level 3: Auto-Generation Defaults
+
+When a client has strong style memory (high confidence, 30+ signals), the system can pre-select optimal templates for a new batch:
+
+```typescript
+/** Build a suggested template selection from style memory */
+export function suggestTemplateSelection(
+  memory: { preferredSlugs: string[]; avoidSlugs: string[]; confidence: string },
+  catalog: NanoBananaCatalogEntry[],
+  targetCount: number,
+): { slug: string; count: number }[] {
+  if (memory.confidence === 'low') return []; // Not enough data to suggest
+  
+  const preferred = memory.preferredSlugs.filter(s => catalog.some(c => c.slug === s));
+  
+  if (preferred.length === 0) return [];
+  
+  // Distribute target count across preferred styles
+  const countPer = Math.max(1, Math.floor(targetCount / preferred.length));
+  const remainder = targetCount - (countPer * preferred.length);
+  
+  return preferred.map((slug, i) => ({
+    slug,
+    count: countPer + (i === 0 ? remainder : 0),
+  }));
+}
+```
+
+In the wizard UI, when style memory exists, show a "Use recommended styles" button that auto-fills the template selection. The admin can modify it, but the defaults are informed by data.
+
+---
+
+### Stage 8.5: The Recursive Improvement Cycle
+
+#### How It Gets Smarter Over Time
+
+This is the key insight: each cycle of the loop produces BETTER training data for the next cycle.
+
+**Cycle 1** (First 2-3 batches, ~30 creatives):
+- Style memory: LOW confidence
+- Effect: Minimal — maybe identifies 1-2 preferred styles
+- Value: Starts recording feedback
+
+**Cycle 2** (Batches 4-6, ~60-100 creatives):
+- Style memory: MEDIUM confidence
+- Effect: Avoids worst templates, injects basic style direction
+- Value: Fewer obviously bad outputs → higher favorite rate → better signal
+
+**Cycle 3** (Batches 7+, 100+ creatives):
+- Style memory: HIGH confidence
+- Effect: Strong template recommendations, specific style direction, auto-defaults
+- Value: The system "knows" this client's aesthetic and generates on-brand by default
+
+**The compounding effect:** Because the system avoids known-bad styles and emphasizes known-good ones, the NEXT batch has a higher hit rate. That means more favorites and fewer deletions, which gives cleaner training signal, which makes the NEXT analysis more precise. It's a flywheel.
+
+#### Re-Analysis Triggers
+
+The system should re-analyze (update style memory) when:
+
+1. **Significant new feedback** — 10+ new signals since last analysis
+2. **Time-based staleness** — analysis older than 7 days
+3. **Before any batch with `useIntelligence: true`** — always check freshness
+4. **Manual trigger** — admin clicks "Refresh style analysis" in UI
+
+```typescript
+export async function shouldReanalyze(clientId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  
+  const { data: memory } = await admin
+    .from('ad_style_memory')
+    .select('analyzed_at, sample_size')
+    .eq('client_id', clientId)
+    .order('analyzed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  
+  if (!memory) return true; // Never analyzed
+  
+  const age = Date.now() - new Date(memory.analyzed_at).getTime();
+  if (age > 7 * 24 * 60 * 60 * 1000) return true; // Stale
+  
+  // Count feedback since last analysis
+  const { count } = await admin
+    .from('ad_creative_feedback')
+    .select('*', { count: 'exact', head: true })
+    .eq('client_id', clientId)
+    .gt('created_at', memory.analyzed_at);
+  
+  return (count ?? 0) >= 10; // Enough new signal
+}
+```
+
+---
+
+### Stage 8.6: Reference Ad Import — Teaching the System What "Great" Looks Like
+
+#### The Cold Start Problem
+
+A brand-new client has zero feedback. The loop can't learn from nothing. But the admin KNOWS what good ads look like for this client — they've seen competitors, they have reference ads, they have a moodboard.
+
+#### Solution: Allow Importing "Reference Winners"
+
+Add the ability to upload external ads (screenshots of competitor ads, high-performing ads from other platforms, inspiration images) and tag them as synthetic "winners." These seed the style memory before a single creative is generated.
+
+```typescript
+export async function importReferenceWinners(params: {
+  clientId: string;
+  imageUrls: string[];
+}): Promise<void> {
+  const admin = createAdminClient();
+  
+  for (const url of params.imageUrls) {
+    // Use Gemini Vision to extract the ad's style attributes (same as extract-prompt.ts)
+    const schema = await extractAdPrompt(url);
+    
+    // Record as synthetic feedback
+    await admin.from('ad_creative_feedback').insert({
+      client_id: params.clientId,
+      creative_id: null, // No internal creative — external reference
+      batch_id: null,
+      signal_type: 'favorite', // Treated as a winner
+      creative_snapshot: {
+        template_source: 'reference_import',
+        prompt_schema: schema,
+        reference_image_url: url,
+        is_synthetic: true, // Flag so analysis can weight differently if needed
+      },
+    });
+  }
+}
+```
+
+This means the system can have style memory from day one. Upload 5-10 reference ads that represent the target quality → run analysis → first batch is already informed.
+
+#### Integration with Existing Template Upload
+
+The existing "Upload winning ads" flow (`components/ad-creatives/bulk-template-import.tsx`) already extracts JSON prompt schemas from uploaded ads. Extend it to also record feedback:
+
+When an admin uploads a winning ad as a template, automatically call `recordCreativeFeedback` with `signal_type: 'favorite'` and a snapshot built from the extracted schema. This means every template the admin adds to the library is ALSO a training signal for the intelligence loop.
+
+---
+
+### What You Must NOT Do (Intelligence Loop Edition)
+
+1. **Do NOT build real-time learning.** Analysis runs between batches, not during. Don't slow down generation with intelligence lookups beyond one `getLatestStyleMemory()` call at batch start.
+
+2. **Do NOT make intelligence mandatory.** Every intelligence feature is opt-in or additive. The system works fine without style memory — it just doesn't improve over time. This means a bug in the intelligence loop never blocks ad generation.
+
+3. **Do NOT weight synthetic feedback the same as real feedback.** Imported reference winners are useful for cold start, but real human favorites from actual generated ads are stronger signal. The analysis prompt should mention when signals are synthetic so the LLM can weight accordingly.
+
+4. **Do NOT store full prompts in feedback.** Truncate to 2000 chars. Prompts are 3000-4000 tokens each, and storing 200 full prompts per client would bloat the table unnecessarily. The schema attributes are what matter, not the raw prompt text.
+
+5. **Do NOT run analysis synchronously in the API request path.** Analysis calls an LLM and may take 10-30 seconds. Run it as a background task (same pattern as batch generation — use `after()` or a queued job).
+
+6. **Do NOT auto-exclude avoided templates.** Show warnings, not blocks. The admin makes the final call. Creative taste evolves, and a style that failed with one product might work with another.
+
+---
+
+### Intelligence Loop — Database Migration
+
+One migration file creates both tables:
+
+```sql
+-- ad_creative_feedback: records human signals on generated ads
+CREATE TABLE IF NOT EXISTS ad_creative_feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  creative_id UUID REFERENCES ad_creatives(id) ON DELETE SET NULL,
+  batch_id UUID REFERENCES ad_generation_batches(id) ON DELETE SET NULL,
+  signal_type TEXT NOT NULL CHECK (signal_type IN ('favorite', 'unfavorite', 'delete', 'download', 'regenerate_from')),
+  creative_snapshot JSONB NOT NULL DEFAULT '{}',
+  brand_snapshot JSONB,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_creative_feedback_client ON ad_creative_feedback(client_id);
+CREATE INDEX idx_creative_feedback_signal ON ad_creative_feedback(signal_type);
+CREATE INDEX idx_creative_feedback_created ON ad_creative_feedback(created_at DESC);
+
+-- ad_style_memory: versioned per-client style intelligence
+CREATE TABLE IF NOT EXISTS ad_style_memory (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  analyzed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  sample_size JSONB NOT NULL DEFAULT '{}',
+  patterns JSONB NOT NULL DEFAULT '{}',
+  confidence TEXT NOT NULL DEFAULT 'low' CHECK (confidence IN ('low', 'medium', 'high')),
+  style_direction TEXT NOT NULL DEFAULT '',
+  preferred_slugs TEXT[] DEFAULT '{}',
+  avoid_slugs TEXT[] DEFAULT '{}',
+  version INT NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_style_memory_client ON ad_style_memory(client_id, analyzed_at DESC);
+
+-- RLS
+ALTER TABLE ad_creative_feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ad_style_memory ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins full access on feedback" ON ad_creative_feedback
+  FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Admins full access on style memory" ON ad_style_memory
+  FOR ALL USING (true) WITH CHECK (true);
+```
+
+---
+
+### Intelligence Loop — File Checklist
+
+| File | Status | Purpose |
+|------|--------|---------|
+| `lib/ad-creatives/intelligence/feedback-collector.ts` | NEW | Record human signals with creative snapshots |
+| `lib/ad-creatives/intelligence/winner-analyzer.ts` | NEW | LLM-powered pattern extraction from winners vs losers |
+| `lib/ad-creatives/intelligence/style-memory.ts` | NEW | Store/retrieve versioned style intelligence per client |
+| `lib/ad-creatives/intelligence/apply-intelligence.ts` | NEW | Inject intelligence into prompts, annotate catalog, suggest templates |
+| `lib/ad-creatives/intelligence/types.ts` | NEW | Intelligence-specific types |
+| `supabase/migrations/XXX_ad_creative_intelligence.sql` | NEW | Tables: `ad_creative_feedback`, `ad_style_memory` |
+| `app/api/clients/[id]/ad-creatives/[creativeId]/route.ts` | MODIFY | Hook feedback collector into PATCH (favorite) and DELETE |
+| `app/api/clients/[id]/ad-creatives/bulk-download/route.ts` | MODIFY | Hook feedback collector into download |
+| `app/api/clients/[id]/ad-creatives/intelligence/route.ts` | NEW | GET (latest analysis), POST (trigger re-analysis) |
+| `lib/ad-creatives/orchestrate-batch.ts` | MODIFY | Load style memory, inject into prompt style direction |
+| `components/ad-creatives/nano-banana-template-grid.tsx` | MODIFY | Show preferred/avoid badges from intelligence |
+| `components/ad-creatives/ad-wizard.tsx` | MODIFY | "Use recommended styles" button when memory exists |
+
+### Intelligence Loop — Success Criteria
+
+- [ ] Every favorite, delete, and download is recorded with full creative snapshot
+- [ ] Analysis extracts actionable patterns from 5+ signals (preferred styles, avoid styles, color/composition/copy insights)
+- [ ] Style memory persists across sessions with version history
+- [ ] Style direction is injected into generation prompts automatically when available
+- [ ] Nano Banana template grid shows preferred/avoid badges
+- [ ] Wizard offers "Use recommended" auto-selection from style memory
+- [ ] Reference ad imports seed style memory for cold-start clients
+- [ ] Re-analysis triggers automatically on staleness or sufficient new feedback
+- [ ] Analysis runs in background, never blocking generation
+- [ ] All intelligence features degrade gracefully (no data = no intelligence, system works normally)
+- [ ] No new npm dependencies
+- [ ] Typecheck/lint passes
