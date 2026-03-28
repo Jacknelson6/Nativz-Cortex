@@ -20,8 +20,8 @@ interface SearchProcessingProps {
   pipeline?: 'legacy' | 'llm_v1';
   /** Confirmed subtopics count (llm_v1); defaults to 3 if unknown */
   subtopicCount?: number;
-  /** Server-driven: Brave / OpenRouter web vs LLM-only subtopic synthesis */
-  webResearchMode?: 'brave' | 'openrouter' | 'llm_only';
+  /** Server-driven: SearXNG / OpenRouter web vs LLM-only subtopic synthesis */
+  webResearchMode?: 'searxng' | 'openrouter' | 'llm_only';
 }
 
 const TIME_ESTIMATES: Record<string, { label: string }> = {
@@ -74,7 +74,7 @@ function buildStages(platforms: string[], volume: string): Stage[] {
 function buildLlmStages(
   volume: string,
   subtopicCount: number,
-  webResearch: 'brave' | 'openrouter' | 'llm_only'
+  webResearch: 'searxng' | 'openrouter' | 'llm_only'
 ): Stage[] {
   const isDeep = volume === 'deep';
   const isMedium = volume === 'medium';
@@ -82,7 +82,7 @@ function buildLlmStages(
   const stages: Stage[] = [];
   let cumulative = 0;
 
-  const liveWeb = webResearch === 'brave' || webResearch === 'openrouter';
+  const liveWeb = webResearch === 'searxng' || webResearch === 'openrouter';
 
   const perSubtopic =
     liveWeb

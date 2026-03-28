@@ -1,8 +1,10 @@
-// lib/quora/client.ts — Quora data gathering via Brave Search discussions endpoint
+// lib/quora/client.ts — Quora data gathering via SearXNG + Google Serper
 //
 // Quora has no public API and actively blocks scrapers.
-// Strategy: use Brave Search to find Quora threads + Google Serper for extra coverage.
+// Strategy: use SearXNG to find Quora threads + Google Serper for extra coverage.
 // This gives us questions, answers, and engagement signals without scraping.
+
+import { searxngSearch } from '@/lib/serp/client';
 
 export interface QuoraThread {
   id: string;
@@ -10,7 +12,7 @@ export interface QuoraThread {
   url: string;
   topAnswer: string;
   answerCount: number | null;
-  source: 'brave' | 'serper';
+  source: 'searxng' | 'serper';
 }
 
 export interface QuoraSearchResult {
@@ -18,98 +20,39 @@ export interface QuoraSearchResult {
   totalResults: number;
 }
 
-const BRAVE_API_BASE = 'https://api.search.brave.com/res/v1/web/search';
-
-const FRESHNESS_MAP: Record<string, string> = {
-  last_7_days: 'pw',
-  last_30_days: 'pm',
-  last_3_months: 'py',
-  last_6_months: 'py',
-  last_year: 'py',
-};
-
 /**
- * Search Brave for Quora discussions specifically.
+ * Search SearXNG for Quora discussions specifically.
  */
-async function searchBraveQuora(query: string, timeRange: string, count: number): Promise<QuoraThread[]> {
-  const braveKey = process.env.BRAVE_SEARCH_API_KEY;
-  if (!braveKey) {
-    console.warn('[quora] No BRAVE_SEARCH_API_KEY — skipping Brave search');
-    return [];
-  }
-
+async function searchSearxngQuora(query: string, timeRange: string, count: number): Promise<QuoraThread[]> {
   try {
-    const braveHeaders = {
-      'Accept': 'application/json',
-      'Accept-Encoding': 'gzip',
-      'X-Subscription-Token': braveKey,
-    };
-
-    // Run searches sequentially to avoid Brave 429 rate limits.
-    // Use "quora" keyword query — Brave's discussions section naturally surfaces Quora threads.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const braveResults: (any | null)[] = [];
-
-    // First: keyword search (better than site: which suppresses discussions section)
-    try {
-      const res = await fetch(`${BRAVE_API_BASE}?${new URLSearchParams({
-        q: `${query} quora answers`,
-        count: String(count),
-      })}`, {
-        headers: braveHeaders,
-        signal: AbortSignal.timeout(10000),
-      });
-      braveResults.push(res.ok ? await res.json() : null);
-      if (!res.ok) console.warn(`[quora] Brave quora search failed: ${res.status}`);
-    } catch (err) {
-      console.error('[quora] Brave search error:', err);
-      braveResults.push(null);
-    }
+    const res = await searxngSearch(`${query} quora answers`, {
+      timeRange,
+      categories: 'general',
+    });
 
     const threads: QuoraThread[] = [];
     const seenUrls = new Set<string>();
+    const resultCount = res.results?.length ?? 0;
+    console.log(`[quora] SearXNG response — results: ${resultCount}`);
 
-    // Process results
-    for (const data of braveResults) {
-      if (!data) continue;
-
-      const discussionCount = data.discussions?.results?.length ?? 0;
-      const webResultCount = data.web?.results?.length ?? 0;
-      console.log(`[quora] Brave response — discussions: ${discussionCount}, web results: ${webResultCount}`);
-
-      // Check discussions first (better structured data — has answer counts, top comments)
-      for (const d of data.discussions?.results ?? []) {
-        if (!d.url?.includes('quora.com') || seenUrls.has(d.url)) continue;
-        seenUrls.add(d.url);
-        threads.push({
-          id: `quora-brave-${d.url}`,
-          question: d.title ?? '',
-          url: d.url,
-          topAnswer: d.top_comment ?? d.description ?? '',
-          answerCount: d.num_answers ?? null,
-          source: 'brave',
-        });
-      }
-
-      // Also check web results for Quora pages
-      for (const r of data.web?.results ?? []) {
-        if (!r.url?.includes('quora.com') || seenUrls.has(r.url)) continue;
-        seenUrls.add(r.url);
-        threads.push({
-          id: `quora-brave-${r.url}`,
-          question: r.title?.replace(' - Quora', '') ?? '',
-          url: r.url,
-          topAnswer: r.description ?? '',
-          answerCount: null,
-          source: 'brave',
-        });
-      }
+    for (const r of res.results ?? []) {
+      if (!r.url?.includes('quora.com') || seenUrls.has(r.url)) continue;
+      seenUrls.add(r.url);
+      threads.push({
+        id: `quora-searxng-${r.url}`,
+        question: r.title?.replace(' - Quora', '') ?? '',
+        url: r.url,
+        topAnswer: r.content ?? '',
+        answerCount: null,
+        source: 'searxng',
+      });
+      if (threads.length >= count) break;
     }
 
-    console.log(`[quora] Total Brave threads found: ${threads.length}`);
+    console.log(`[quora] Total SearXNG threads found: ${threads.length}`);
     return threads;
   } catch (err) {
-    console.error('[quora] Brave search error:', err);
+    console.error('[quora] SearXNG search error:', err);
     return [];
   }
 }
@@ -184,18 +127,18 @@ export async function gatherQuoraData(
 ): Promise<QuoraSearchResult> {
   const count = volume === 'deep' ? 40 : volume === 'medium' ? 25 : 8;
 
-  // Search both Brave and Serper in parallel for maximum coverage
-  const [braveResults, serperResults] = await Promise.allSettled([
-    searchBraveQuora(query, timeRange, count),
+  // Search both SearXNG and Serper in parallel for maximum coverage
+  const [searxngResults, serperResults] = await Promise.allSettled([
+    searchSearxngQuora(query, timeRange, count),
     searchSerperQuora(query, timeRange, count),
   ]);
 
   const allThreads: QuoraThread[] = [];
   const seenUrls = new Set<string>();
 
-  // Brave results first (better discussion metadata)
-  if (braveResults.status === 'fulfilled') {
-    for (const thread of braveResults.value) {
+  // SearXNG results first
+  if (searxngResults.status === 'fulfilled') {
+    for (const thread of searxngResults.value) {
       const normalized = thread.url.split('?')[0]; // strip query params
       if (!seenUrls.has(normalized)) {
         seenUrls.add(normalized);

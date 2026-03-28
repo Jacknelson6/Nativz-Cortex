@@ -76,7 +76,7 @@ const SERVICE_META: Record<
   openrouter: { label: 'OpenRouter / Claude', icon: Zap, color: 'text-blue-400' },
   groq: { label: 'Groq / Whisper', icon: Mic, color: 'text-green-400' },
   gemini: { label: 'Google AI / Gemini', icon: Eye, color: 'text-accent2-text' },
-  brave: { label: 'Brave Search', icon: Search, color: 'text-orange-400' },
+  searxng: { label: 'SearXNG', icon: Search, color: 'text-orange-400' },
   apify: { label: 'Apify / TikTok', icon: Bot, color: 'text-accent2-text' },
   cloudflare: { label: 'Cloudflare / Crawl', icon: Cloud, color: 'text-amber-400' },
   resend: { label: 'Resend / Email', icon: Mail, color: 'text-indigo-400' },
@@ -109,7 +109,7 @@ const MODEL_LABELS: Record<string, string> = {
   'gemini-embedding-001': 'Gemini Embedding',
   'whisper-large-v3': 'Whisper Large v3',
   'whisper-large-v3-turbo': 'Whisper Large v3 Turbo',
-  'brave-search': 'Brave Search',
+  'searxng': 'SearXNG',
 };
 
 function modelLabel(model: string): string {

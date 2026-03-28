@@ -1,8 +1,10 @@
-// lib/reddit/client.ts — Reddit data via Brave Search + direct scraping
+// lib/reddit/client.ts — Reddit data via SearXNG + direct scraping
 //
-// Strategy: Use Brave Search to find Reddit threads (no rate limits),
+// Strategy: Use SearXNG to find Reddit threads (self-hosted, no rate limits),
 // then scrape individual Reddit pages for full post content + comments.
 // This avoids Reddit API registration entirely.
+
+import { searxngSearch } from '@/lib/serp/client';
 
 export interface RedditPost {
   id: string;
@@ -33,109 +35,55 @@ export interface RedditSearchResult {
 }
 
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-const BRAVE_API_BASE = 'https://api.search.brave.com/res/v1/web/search';
-
-const FRESHNESS_MAP: Record<string, string> = {
-  last_7_days: 'pw',
-  last_30_days: 'pm',
-  last_3_months: 'py',
-  last_6_months: 'py',
-  last_year: 'py',
-};
 
 /**
- * Find Reddit threads via Brave Search (no rate limit concerns).
- * Returns URLs + metadata from Brave's index.
+ * Find Reddit threads via SearXNG (self-hosted, no rate limit concerns).
+ * Returns URLs + metadata from the search index.
  */
-async function findRedditThreadsViaBrave(
+async function findRedditThreadsViaSearxng(
   query: string,
   timeRange: string,
   count: number,
 ): Promise<{ title: string; url: string; description: string; subreddit: string; answers: number | null; topComment: string | null }[]> {
-  const braveKey = process.env.BRAVE_SEARCH_API_KEY;
-  if (!braveKey) return [];
-
-  const freshness = FRESHNESS_MAP[timeRange];
   const threads: { title: string; url: string; description: string; subreddit: string; answers: number | null; topComment: string | null }[] = [];
 
-  const braveHeaders = {
-    'Accept': 'application/json',
-    'Accept-Encoding': 'gzip',
-    'X-Subscription-Token': braveKey,
-  };
-
-  // Run two searches sequentially (not parallel) to avoid Brave 429 rate limits.
-  // 1. General query — Brave's discussions section naturally surfaces Reddit threads
-  // 2. "reddit" keyword query — catches additional threads
-  // Skipping site:reddit.com — it gets rate-limited and Brave's discussions already surface Reddit.
+  // Run two searches for broad coverage
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const results: (any | null)[] = [];
 
-  // First query: general search to get Brave's discussions section
+  // First query: general search with reddit engine
   try {
-    const res = await fetch(`${BRAVE_API_BASE}?${new URLSearchParams({
-      q: query,
-      count: String(Math.min(count, 20)),
-      ...(freshness ? { freshness } : {}),
-    })}`, {
-      headers: braveHeaders,
-      signal: AbortSignal.timeout(10000),
+    const res = await searxngSearch(query, {
+      timeRange,
+      categories: 'general',
+      engines: 'reddit',
     });
-    results.push(res.ok ? await res.json() : null);
-    if (!res.ok) console.warn(`[reddit] Brave general search failed: ${res.status}`);
+    results.push(res);
   } catch (err) {
-    console.error('[reddit] Brave general search error:', err);
+    console.error('[reddit] SearXNG general search error:', err);
     results.push(null);
   }
 
-  // Small delay to avoid rate limits
-  await new Promise(r => setTimeout(r, 500));
-
   // Second query: reddit keyword search for broader coverage
   try {
-    const res = await fetch(`${BRAVE_API_BASE}?${new URLSearchParams({
-      q: `reddit ${query} discussion`,
-      count: String(Math.min(count, 20)),
-      ...(freshness ? { freshness } : {}),
-    })}`, {
-      headers: braveHeaders,
-      signal: AbortSignal.timeout(10000),
+    const res = await searxngSearch(`reddit ${query} discussion`, {
+      timeRange,
+      categories: 'general',
     });
-    results.push(res.ok ? await res.json() : null);
-    if (!res.ok) console.warn(`[reddit] Brave reddit search failed: ${res.status}`);
+    results.push(res);
   } catch (err) {
-    console.error('[reddit] Brave reddit search error:', err);
+    console.error('[reddit] SearXNG reddit search error:', err);
     results.push(null);
   }
 
   const seenUrls = new Set<string>();
 
-  // Process all search results — discussions section has best quality (answer counts, top comments)
   for (const data of results) {
     if (!data) continue;
-    const discussionCount = data.discussions?.results?.length ?? 0;
-    const webResultCount = data.web?.results?.length ?? 0;
-    console.log(`[reddit] Brave response — discussions: ${discussionCount}, web results: ${webResultCount}`);
+    const resultCount = data.results?.length ?? 0;
+    console.log(`[reddit] SearXNG response — results: ${resultCount}`);
 
-    // Check discussions section
-    for (const d of data.discussions?.results ?? []) {
-      if (!d.url?.includes('reddit.com') || seenUrls.has(d.url)) continue;
-      seenUrls.add(d.url);
-
-      const subreddit = extractSubreddit(d.url);
-      threads.push({
-        title: d.title ?? '',
-        url: d.url,
-        description: d.description ?? '',
-        subreddit,
-        answers: d.num_answers ?? null,
-        topComment: d.top_comment ?? null,
-      });
-    }
-
-    // Check web results for Reddit pages
-    // Accept any reddit.com URL (not just /r/ — comments links, short URLs, etc.)
-    for (const r of data.web?.results ?? []) {
+    for (const r of data.results ?? []) {
       if (!r.url?.includes('reddit.com') || seenUrls.has(r.url)) continue;
       // Skip non-post URLs (wiki pages, sidebar, about pages, subreddit listings)
       if (r.url.includes('/wiki/') || r.url.includes('/about/') || r.url.match(/reddit\.com\/r\/[^/]+\/?$/)) continue;
@@ -145,7 +93,7 @@ async function findRedditThreadsViaBrave(
       threads.push({
         title: r.title?.replace(` : ${subreddit}`, '').replace(' : r/', '') ?? '',
         url: r.url,
-        description: r.description ?? '',
+        description: r.content ?? '',
         subreddit,
         answers: null,
         topComment: null,
@@ -153,7 +101,7 @@ async function findRedditThreadsViaBrave(
     }
   }
 
-  console.log(`[reddit] Total threads found via Brave: ${threads.length}`);
+  console.log(`[reddit] Total threads found via SearXNG: ${threads.length}`);
   return threads.slice(0, count);
 }
 
@@ -192,7 +140,7 @@ async function scrapeRedditThread(url: string): Promise<{
     });
 
     if (res.status === 429) {
-      // Rate limited — return what we have from Brave
+      // Rate limited — return what we have from search
       return { post: null, comments: [] };
     }
 
@@ -242,21 +190,21 @@ async function scrapeRedditThread(url: string): Promise<{
 
 /**
  * Search Reddit for posts matching a query.
- * Uses Brave Search to find threads, then scrapes for full content + comments.
+ * Uses SearXNG to find threads, then scrapes for full content + comments.
  */
 export async function searchReddit(
   query: string,
   timeRange: string,
   limit: number = 50,
 ): Promise<RedditSearchResult> {
-  const braveThreads = await findRedditThreadsViaBrave(query, timeRange, Math.min(limit, 40));
+  const searxngThreads = await findRedditThreadsViaSearxng(query, timeRange, Math.min(limit, 40));
 
-  // Build posts from Brave metadata (no scraping needed for basic data)
-  const posts: RedditPost[] = braveThreads.map((thread) => ({
+  // Build posts from search metadata (no scraping needed for basic data)
+  const posts: RedditPost[] = searxngThreads.map((thread) => ({
     id: extractPostId(thread.url),
     title: thread.title,
     selftext: thread.description,
-    score: 0, // Brave doesn't provide this — will be enriched by scraping
+    score: 0, // Search doesn't provide this — will be enriched by scraping
     num_comments: thread.answers ?? 0,
     url: thread.url,
     permalink: new URL(thread.url).pathname,
@@ -299,7 +247,7 @@ export async function fetchTopComments(
  * Main entry point for the platform router.
  *
  * Strategy:
- * 1. Brave Search finds Reddit threads (no rate limits)
+ * 1. SearXNG finds Reddit threads (self-hosted, no rate limits)
  * 2. Scrape top threads for full content + comments (batched, with delays)
  */
 export async function gatherRedditData(
@@ -307,8 +255,6 @@ export async function gatherRedditData(
   timeRange: string,
   volume: string = 'medium',
 ): Promise<RedditSearchResult & { postsWithComments: (RedditPost & { top_comments: RedditComment[] })[] }> {
-  // Brave Search returns ~20 results per query (2 queries = ~40 max).
-  // These limits reflect the practical ceiling of the Brave-based approach.
   const limit = volume === 'deep' ? 40 : volume === 'medium' ? 40 : 20;
   const result = await searchReddit(query, timeRange, limit);
 
@@ -326,10 +272,10 @@ export async function gatherRedditData(
       batch.map(async (post) => {
         const { post: scrapedPost, comments } = await scrapeRedditThread(post.url);
 
-        // Merge: scraped data enriches Brave metadata
+        // Merge: scraped data enriches search metadata
         return {
           ...(scrapedPost ?? post),
-          // Keep Brave title if scraping failed
+          // Keep search title if scraping failed
           title: scrapedPost?.title ?? post.title,
           selftext: scrapedPost?.selftext || post.selftext,
           top_comments: comments,

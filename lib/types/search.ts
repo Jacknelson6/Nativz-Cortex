@@ -1,6 +1,6 @@
 // Types for the topic search / ideation MVP flow
 
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 
 export type SearchMode = 'general' | 'client_strategy';
 
@@ -108,7 +108,7 @@ export function isNewMetrics(m: SearchMetrics | LegacySearchMetrics): m is Searc
   return 'web_results_found' in m;
 }
 
-/** Backend pipeline: legacy (Brave + platform scrape) vs LLM tool research (v3). */
+/** Backend pipeline: legacy (SearXNG + platform scrape) vs LLM tool research (v3). */
 export type TopicPipeline = 'legacy' | 'llm_v1';
 
 /** Tool-backed source row for llm_v1 (stored in research_sources jsonb). */
@@ -136,7 +136,7 @@ export interface TopicSearch {
   emotions: EmotionBreakdown[] | null;
   content_breakdown: ContentBreakdown | null;
   trending_topics: (TrendingTopic | LegacyTrendingTopic)[] | null;
-  serp_data: BraveSerpData | null;
+  serp_data: SerpData | null;
   raw_ai_response: TopicSearchAIResponse | null;
   tokens_used: number | null;
   estimated_cost: number | null;

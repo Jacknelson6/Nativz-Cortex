@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { gatherSerpData } from '@/lib/brave/client';
+import { gatherSerpData } from '@/lib/serp/client';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { buildShootPlanPrompt } from '@/lib/prompts/shoot-plan';

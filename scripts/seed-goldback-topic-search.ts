@@ -16,7 +16,7 @@ import {
   IDAHO_GOLDBACK_POSITIONING,
   IDGT_PRODUCT_LINES,
 } from './data/goldback-idaho-gtm-pools';
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 import type {
   TopicSearchAIResponse,
   TrendingTopic,
@@ -111,7 +111,7 @@ function fmtViews(n: number): string {
   return String(n);
 }
 
-function fakeRedditPost(i: number): BraveSerpData['discussions'][0] {
+function fakeRedditPost(i: number): SerpData['discussions'][0] {
   const sub = SUBREDDITS[i % SUBREDDITS.length];
   const body = REDDIT_SNIPPETS[i % REDDIT_SNIPPETS.length];
   const pid = redditPostId(i);
@@ -155,7 +155,7 @@ function tikTokToSerpVideo(v: {
   desc: string;
   author: { uniqueId: string; nickname: string };
   stats: { playCount: number };
-}): BraveSerpData['videos'][0] {
+}): SerpData['videos'][0] {
   return {
     title: v.desc.slice(0, 120) || 'TikTok video',
     url: `https://www.tiktok.com/@${v.author.uniqueId}/video/${v.id}`,
@@ -166,7 +166,7 @@ function tikTokToSerpVideo(v: {
   };
 }
 
-function padTikTokVideos(real: BraveSerpData['videos']): BraveSerpData['videos'] {
+function padTikTokVideos(real: SerpData['videos']): SerpData['videos'] {
   const out = [...real];
   while (out.length < TARGET_TIKTOK) {
     const i = out.length;
@@ -210,7 +210,7 @@ function mockTikTokVideosForDemo(count: number): TikTokSearchVideo[] {
   });
 }
 
-const WEB_SEEDS: BraveSerpData['webResults'] = [
+const WEB_SEEDS: SerpData['webResults'] = [
   {
     title: 'Goldback — spendable 24K gold currency',
     url: 'https://www.goldback.com/',
@@ -238,7 +238,7 @@ const WEB_SEEDS: BraveSerpData['webResults'] = [
   },
 ];
 
-function buildWebResults(): BraveSerpData['webResults'] {
+function buildWebResults(): SerpData['webResults'] {
   const rows = [...WEB_SEEDS];
   const wikiRot = [
     { title: 'Inflation', url: 'https://en.wikipedia.org/wiki/Inflation', description: 'General reference for inflation discussions tied to savings and hedging.' },
@@ -737,7 +737,7 @@ async function resolveClientId(admin: ReturnType<typeof createAdminClient>): Pro
 
 export function buildGoldbackSearchRow(args: {
   clientId: string;
-  realVideos: BraveSerpData['videos'];
+  realVideos: SerpData['videos'];
   ttVideosRaw: TikTokSearchVideo[];
   ttVolume: string;
   completedAt: string;
@@ -746,10 +746,10 @@ export function buildGoldbackSearchRow(args: {
 }) {
   const { clientId, realVideos, ttVideosRaw, ttVolume, completedAt, tiktokQueryLabel, syntheticOnly } = args;
 
-  const discussions: BraveSerpData['discussions'] = [];
+  const discussions: SerpData['discussions'] = [];
   for (let i = 0; i < TARGET_REDDIT; i++) discussions.push(fakeRedditPost(i));
 
-  const serpData: BraveSerpData = {
+  const serpData: SerpData = {
     webResults: buildWebResults(),
     discussions,
     videos: padTikTokVideos(realVideos),
@@ -952,7 +952,7 @@ async function main() {
   const syntheticOnly =
     process.env.GOLDBACK_DEMO_SYNTHETIC_ONLY === '1' || process.env.GOLDBACK_DEMO_SYNTHETIC_ONLY === 'true';
 
-  let realVideos: BraveSerpData['videos'];
+  let realVideos: SerpData['videos'];
   let ttVideosRaw: TikTokSearchVideo[];
 
   if (syntheticOnly) {

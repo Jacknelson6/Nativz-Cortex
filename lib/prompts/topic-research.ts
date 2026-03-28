@@ -1,4 +1,4 @@
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 import type { ClientPreferences } from '@/lib/types/database';
 import type { BrandContext } from '@/lib/knowledge/brand-context';
 import { getTimeRangeOptionLabel } from '@/lib/types/search';
@@ -11,7 +11,7 @@ interface TopicResearchConfig {
   timeRange: string;
   language: string;
   country: string;
-  serpData: BraveSerpData;
+  serpData: SerpData;
   clientContext?: {
     name: string;
     industry: string;
@@ -30,7 +30,7 @@ interface TopicResearchConfig {
   brandDNA?: BrandContext | null;
 }
 
-function formatSerpDataBlock(serpData: BraveSerpData): string {
+function formatSerpDataBlock(serpData: SerpData): string {
   let block = '';
 
   if (serpData.webResults.length > 0) {

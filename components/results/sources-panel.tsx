@@ -2,14 +2,14 @@
 
 import { Globe, Video, ExternalLink } from 'lucide-react';
 import { Card, CardTitle } from '@/components/ui/card';
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, '');
 }
 
 interface SourcesPanelProps {
-  serpData: BraveSerpData;
+  serpData: SerpData;
 }
 
 function SourceTypeSection({

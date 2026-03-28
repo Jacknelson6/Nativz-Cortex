@@ -37,15 +37,15 @@ export const VOLUME_CONFIG = {
 import { gatherRedditData } from '@/lib/reddit/client';
 import { gatherYouTubeData } from '@/lib/youtube/search';
 import { gatherTikTokData } from '@/lib/tiktok/search';
-import { gatherSerpData } from '@/lib/brave/client';
+import { gatherSerpData } from '@/lib/serp/client';
 import { gatherQuoraData } from '@/lib/quora/client';
 import { gatherSerperData } from '@/lib/serper/client';
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 import type { SerperPeopleAlsoAsk } from '@/lib/serper/client';
 
 export interface PlatformResults {
   sources: PlatformSource[];
-  braveSerpData: BraveSerpData | null;
+  serpData: SerpData | null;
   platformStats: {
     platform: SearchPlatform;
     postCount: number;
@@ -73,34 +73,34 @@ export async function gatherPlatformData(
 ): Promise<PlatformResults> {
   const allSources: PlatformSource[] = [];
   const platformStats: PlatformResults['platformStats'] = [];
-  let braveSerpData: BraveSerpData | null = null;
+  let serpData: SerpData | null = null;
   let peopleAlsoAsk: SerperPeopleAlsoAsk[] = [];
   let relatedSearches: string[] = [];
 
   // Build platform fetch promises
   const promises: Promise<void>[] = [];
 
-  // Web — runs Brave Search + Serper (Google SERP) in parallel
+  // Web — runs SearXNG + Serper (Google SERP) in parallel
   if (platforms.includes('web')) {
     promises.push(
       (async () => {
         try {
-          // Run Brave + Serper in parallel for maximum coverage
-          const [braveResult, serperResult] = await Promise.allSettled([
+          // Run SearXNG + Serper (Google) in parallel for maximum coverage
+          const [searxngResult, serperResult] = await Promise.allSettled([
             gatherSerpData(query, { timeRange }),
             process.env.SERPER_API_KEY ? gatherSerperData(query, timeRange, volume) : Promise.resolve(null),
           ]);
 
-          // Process Brave results
-          if (braveResult.status === 'fulfilled') {
-            braveSerpData = braveResult.value;
-            const webSources = normalizeBraveToSources(braveResult.value);
+          // Process SearXNG results
+          if (searxngResult.status === 'fulfilled') {
+            serpData = searxngResult.value;
+            const webSources = normalizeSerpToSources(searxngResult.value);
             if (webSources.length === 0) {
-              console.warn('[platform-router] Brave returned 0 web sources for query');
+              console.warn('[platform-router] SearXNG returned 0 web sources for query');
             }
             allSources.push(...webSources);
           } else {
-            console.error('[platform-router] Brave search failed:', braveResult.reason);
+            console.error('[platform-router] SearXNG search failed:', searxngResult.reason);
           }
 
           // Process Serper results (People Also Ask + Google organic)
@@ -131,7 +131,7 @@ export async function gatherPlatformData(
           }
 
           const webCount = allSources.filter(s => s.platform === 'web').length;
-          console.log(`[platform-router] Web sources total: ${webCount} (Brave: ${braveSerpData ? braveSerpData.webResults.length + braveSerpData.discussions.length + braveSerpData.videos.length : 0}, Serper PAA: ${peopleAlsoAsk.length})`);
+          console.log(`[platform-router] Web sources total: ${webCount} (SearXNG: ${serpData ? serpData.webResults.length + serpData.discussions.length + serpData.videos.length : 0}, Serper PAA: ${peopleAlsoAsk.length})`);
           platformStats.push({
             platform: 'web',
             postCount: webCount,
@@ -145,7 +145,7 @@ export async function gatherPlatformData(
     );
   }
 
-  // Reddit — delayed 1s to avoid Brave rate limits (web handler goes first)
+  // Reddit — delayed 1s to stagger requests (web handler goes first)
   if (platforms.includes('reddit')) {
     promises.push(
       (async () => {
@@ -293,7 +293,7 @@ export async function gatherPlatformData(
     );
   }
 
-  // Quora — delayed 2s to avoid Brave rate limits (web + reddit go first)
+  // Quora — delayed 2s to stagger requests (web + reddit go first)
   if (platforms.includes('quora')) {
     promises.push(
       (async () => {
@@ -334,13 +334,13 @@ export async function gatherPlatformData(
   // Execute all platform fetches in parallel
   await Promise.allSettled(promises);
 
-  return { sources: allSources, braveSerpData, platformStats, peopleAlsoAsk, relatedSearches };
+  return { sources: allSources, serpData, platformStats, peopleAlsoAsk, relatedSearches };
 }
 
 /**
- * Convert Brave SERP data into normalized PlatformSource format.
+ * Convert SearXNG SERP data into normalized PlatformSource format.
  */
-function normalizeBraveToSources(serpData: BraveSerpData): PlatformSource[] {
+function normalizeSerpToSources(serpData: SerpData): PlatformSource[] {
   const sources: PlatformSource[] = [];
 
   // Web results

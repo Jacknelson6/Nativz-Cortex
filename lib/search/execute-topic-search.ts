@@ -2,14 +2,14 @@ import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildTopicResearchPrompt } from '@/lib/prompts/topic-research';
 import { buildClientStrategyPrompt } from '@/lib/prompts/client-strategy';
-import { gatherSerpData } from '@/lib/brave/client';
+import { gatherSerpData } from '@/lib/serp/client';
 import { gatherPlatformData, formatPlatformContext } from '@/lib/search/platform-router';
 import type { SearchPlatform } from '@/lib/types/search';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
 import type { TopicSearchAIResponse } from '@/lib/types/search';
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 import { createNotification } from '@/lib/notifications/create';
 import { crawlWebsite } from '@/lib/cloudflare/crawl';
 import { getClientMemory, formatClientMemoryBlock } from '@/lib/vault/content-memory';
@@ -42,7 +42,7 @@ export type ExecuteTopicSearchResult =
   | { ok: false; reason: 'insert'; message: string }
   | { ok: false; reason: 'pipeline'; searchId: string; message: string };
 
-function buildSerpUrlSet(serpData: BraveSerpData): Set<string> {
+function buildSerpUrlSet(serpData: SerpData): Set<string> {
   const urls = new Set<string>();
   for (const r of serpData.webResults) urls.add(r.url);
   for (const d of serpData.discussions) urls.add(d.url);
@@ -158,7 +158,7 @@ export async function executeTopicSearch(
   }
 
   try {
-    let serpData: BraveSerpData;
+    let serpData: SerpData;
     let platformContext = '';
 
     if (isV2) {
@@ -168,7 +168,7 @@ export async function executeTopicSearch(
         time_range,
         volume as 'quick' | 'deep',
       );
-      serpData = platformResults.braveSerpData ?? { webResults: [], discussions: [], videos: [] };
+      serpData = platformResults.serpData ?? { webResults: [], discussions: [], videos: [] };
       platformContext = formatPlatformContext(platformResults.sources, platformResults.platformStats);
 
       await adminClient

@@ -1,9 +1,9 @@
 /**
  * Web retrieval for topic search (llm_v1):
- * - **Brave** (`searchWebBrave`) — agency Brave Search API (`BRAVE_SEARCH_API_KEY`); our primary SERP integration.
+ * - **SearXNG** (`searchWebSearxng`) — self-hosted SearXNG instance; our primary SERP integration.
  * - **OpenRouter** (`searchWebOpenRouter`) — OpenRouter chat + web plugin (optional; uses OpenRouter key, not OpenAI).
  */
-import { braveSearch } from '@/lib/brave/client';
+import { searxngSearch } from '@/lib/serp/client';
 import { createCompletion } from '@/lib/ai/client';
 import { extractUrlsFromPlainText } from '@/lib/ai/openrouter-citations';
 import { dedupeUrls, normalizeUrlForMatch } from '@/lib/search/tools/urls';
@@ -25,36 +25,26 @@ export interface WebSearchOptions {
 }
 
 /**
- * Brave SERP for topic search (requires `BRAVE_SEARCH_API_KEY`).
+ * SearXNG SERP for topic search (uses `SEARXNG_URL` or defaults to localhost:8888).
  */
-export async function searchWebBrave(query: string, options: WebSearchOptions = {}): Promise<WebSearchHit[]> {
+export async function searchWebSearxng(query: string, options: WebSearchOptions = {}): Promise<WebSearchHit[]> {
   const count = Math.min(Math.max(options.count ?? 10, 1), 20);
-  const FRESHNESS_MAP: Record<string, string> = {
-    last_7_days: 'pw',
-    last_30_days: 'pm',
-    last_3_months: 'py',
-    last_6_months: 'py',
-    last_year: 'py',
-  };
-  const freshness = options.timeRange ? FRESHNESS_MAP[options.timeRange] : undefined;
 
-  const res = await braveSearch(query, {
-    count,
-    freshness,
-    country: options.country && options.country !== 'all' ? options.country : undefined,
-    search_lang: options.language && options.language !== 'all' ? options.language : undefined,
-    extra_snippets: true,
+  const res = await searxngSearch(query, {
+    timeRange: options.timeRange,
+    language: options.language && options.language !== 'all' ? options.language : undefined,
+    categories: 'general',
   });
 
   const hits: WebSearchHit[] = [];
-  const web = res.web?.results ?? [];
-  for (const r of web) {
+  for (const r of res.results) {
     if (!r.url) continue;
     hits.push({
       url: normalizeUrlForMatch(r.url),
       title: r.title ?? r.url,
-      snippet: (r.description ?? '').slice(0, 500),
+      snippet: (r.content ?? '').slice(0, 500),
     });
+    if (hits.length >= count) break;
   }
   const urls = dedupeUrls(hits.map((h) => h.url));
   const byUrl = new Map(hits.map((h) => [normalizeUrlForMatch(h.url), h]));
@@ -128,5 +118,5 @@ Query: ${query}`;
   };
 }
 
-/** @deprecated Prefer `searchWebBrave` or `searchWebOpenRouter` — Brave-backed alias. */
-export const searchWeb = searchWebBrave;
+/** @deprecated Prefer `searchWebSearxng` or `searchWebOpenRouter` — SearXNG-backed alias. */
+export const searchWeb = searchWebSearxng;

@@ -187,7 +187,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
   {
     method: 'POST',
     path: '/api/search/[id]/process',
-    description: 'Execute the full search pipeline: Brave SERP fetch, Claude AI analysis, store results. Long-running (up to 5 min).',
+    description: 'Execute the full search pipeline: SearXNG SERP fetch, Claude AI analysis, store results. Long-running (up to 5 min).',
     auth: 'Required (user)',
     section: 'Search & Research',
     response: '{ success: true }',

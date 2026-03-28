@@ -1,4 +1,4 @@
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 import type { ClientPreferences } from '@/lib/types/database';
 import { formatBrandPreferencesBlock, hasPreferences } from './brand-context';
 
@@ -12,12 +12,12 @@ interface ShootPlanConfig {
   shootTitle: string;
   shootLocation: string | null;
   shootNotes: string | null;
-  serpData: BraveSerpData;
+  serpData: SerpData;
   clientMemoryBlock: string;
   brandPreferences?: ClientPreferences | null;
 }
 
-function formatSerpBlock(serpData: BraveSerpData): string {
+function formatSerpBlock(serpData: SerpData): string {
   let block = '';
 
   if (serpData.webResults.length > 0) {

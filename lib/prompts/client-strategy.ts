@@ -1,4 +1,4 @@
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 import type { ClientPreferences } from '@/lib/types/database';
 import type { BrandContext } from '@/lib/knowledge/brand-context';
 import { formatBrandPreferencesBlock, hasPreferences } from './brand-context';
@@ -10,7 +10,7 @@ interface ClientStrategyConfig {
   timeRange: string;
   language: string;
   country: string;
-  serpData: BraveSerpData;
+  serpData: SerpData;
   clientContext: {
     name: string;
     industry: string;
@@ -38,7 +38,7 @@ const TIME_RANGE_LABELS: Record<string, string> = {
   last_year: 'last year',
 };
 
-function formatSerpDataBlock(serpData: BraveSerpData): string {
+function formatSerpDataBlock(serpData: SerpData): string {
   let block = '';
 
   if (serpData.webResults.length > 0) {

@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { buildTopicResearchPrompt } from '@/lib/prompts/topic-research';
 import { buildClientStrategyPrompt } from '@/lib/prompts/client-strategy';
 import { buildNarrativePrompt } from '@/lib/prompts/narrative-prompt';
-import { gatherSerpData } from '@/lib/brave/client';
+import { gatherSerpData } from '@/lib/serp/client';
 import { gatherPlatformData, formatPlatformContext } from '@/lib/search/platform-router';
 import { computeAnalytics } from '@/lib/search/analytics-engine';
 import { createCompletion } from '@/lib/ai/client';
@@ -12,7 +12,7 @@ import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
 import { normalizeSyntheticAudiences } from '@/lib/search/synthetic-audiences';
 import type { TopicSearchAIResponse, SearchPlatform, TrendingTopic, TopicSource } from '@/lib/types/search';
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 import type { ClientPreferences } from '@/lib/types/database';
 import { syncSearchToVault } from '@/lib/vault/sync';
 import { createNotification } from '@/lib/notifications/create';
@@ -27,7 +27,7 @@ const PROCESS_LEASE_MS = 15 * 60 * 1000;
 /**
  * Build a set of all URLs present in the SERP data for validation.
  */
-function buildSerpUrlSet(serpData: BraveSerpData): Set<string> {
+function buildSerpUrlSet(serpData: SerpData): Set<string> {
   const urls = new Set<string>();
   for (const r of serpData.webResults) urls.add(r.url);
   for (const d of serpData.discussions) urls.add(d.url);
@@ -276,7 +276,7 @@ export async function POST(
       }
 
       // ── Step 1: Gather data (legacy) ───────────────────────────────────────
-      let serpData: BraveSerpData;
+      let serpData: SerpData;
       let platformContext = '';
       let platformSources: import('@/lib/types/search').PlatformSource[] = [];
       let platformStats: { platform: SearchPlatform; postCount: number; commentCount: number; topSubreddits?: string[]; topChannels?: string[]; topHashtags?: string[] }[] = [];
@@ -288,7 +288,7 @@ export async function POST(
           search.time_range,
           volume as 'light' | 'medium' | 'deep',
         );
-        serpData = platformResults.braveSerpData ?? { webResults: [], discussions: [], videos: [] };
+        serpData = platformResults.serpData ?? { webResults: [], discussions: [], videos: [] };
         platformContext = formatPlatformContext(platformResults.sources, platformResults.platformStats);
         platformSources = platformResults.sources;
         platformStats = platformResults.platformStats;

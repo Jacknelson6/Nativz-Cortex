@@ -2,7 +2,7 @@
  * Rich synthetic topic_search payloads (junk removal + moving angles).
  * Offline fill for UI: no live SERP/API calls; stored shape matches a completed multi-platform run.
  */
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 import type {
   ContentBreakdown,
   ConversationTheme,
@@ -57,7 +57,7 @@ function vi(partial: VideoIdea): VideoIdea {
 const JUNK_SUBS = ['Declutter', 'minimalism', 'HomeImprovement', 'moving', 'BuyItForLife', 'personalfinance', 'HomeMaintenance', 'ZeroWaste'];
 const MOVE_SUBS = ['moving', 'MovingOut', 'Apartmentliving', 'HomeBuying', 'FirstTimeHomeBuyer', 'Relocation', 'Militarymove', 'VanLife'];
 
-function fakeDiscussion(i: number, theme: 'junk' | 'moving'): BraveSerpData['discussions'][0] {
+function fakeDiscussion(i: number, theme: 'junk' | 'moving'): SerpData['discussions'][0] {
   const subs = theme === 'junk' ? JUNK_SUBS : MOVE_SUBS;
   const sub = subs[i % subs.length];
   const pid = redditId(i);
@@ -116,9 +116,9 @@ const MOVE_TT = [
   'Utility cutoff dates — the spreadsheet row that saved us',
 ];
 
-function buildVideos(theme: 'junk' | 'moving'): BraveSerpData['videos'] {
+function buildVideos(theme: 'junk' | 'moving'): SerpData['videos'] {
   const hooks = theme === 'junk' ? JUNK_TT : MOVE_TT;
-  const out: BraveSerpData['videos'] = [];
+  const out: SerpData['videos'] = [];
   const platforms = ['tiktok', 'youtube', 'tiktok', 'youtube', 'tiktok'] as const;
   for (let i = 0; i < TARGET_VIDEOS; i++) {
     const hook = hooks[i % hooks.length];
@@ -149,25 +149,25 @@ function buildVideos(theme: 'junk' | 'moving'): BraveSerpData['videos'] {
   return out;
 }
 
-function buildDiscussions(theme: 'junk' | 'moving'): BraveSerpData['discussions'] {
-  const d: BraveSerpData['discussions'] = [];
+function buildDiscussions(theme: 'junk' | 'moving'): SerpData['discussions'] {
+  const d: SerpData['discussions'] = [];
   for (let i = 0; i < TARGET_DISCUSSIONS; i++) d.push(fakeDiscussion(i, theme));
   return d;
 }
 
-function buildWeb(theme: 'junk' | 'moving'): BraveSerpData['webResults'] {
-  const junkSeeds: BraveSerpData['webResults'] = [
+function buildWeb(theme: 'junk' | 'moving'): SerpData['webResults'] {
+  const junkSeeds: SerpData['webResults'] = [
     { title: 'Donation pickup and reuse — what charities accept', url: 'https://www.example.org/guides/donation-pickup', description: 'Guidance on scheduling pickups and preparing items for reuse networks.' },
     { title: 'Junk removal pricing models explained', url: 'https://www.example.org/research/pricing-models', description: 'Flat rate vs volume vs labor time — how quotes are typically structured.' },
     { title: 'Estate cleanouts: a practical checklist', url: 'https://www.example.org/lifestyle/estate-cleanout', description: 'Room-by-room priorities when clearing a home quickly.' },
   ];
-  const moveSeeds: BraveSerpData['webResults'] = [
+  const moveSeeds: SerpData['webResults'] = [
     { title: 'Local moving services — planning hub', url: 'https://www.example.org/move/planning', description: 'Timelines, permits, and coordination points for metro moves.' },
     { title: 'Packing strategies that reduce damage', url: 'https://www.example.org/move/packing', description: 'Materials, box labeling, and load order for common household moves.' },
     { title: 'Moving stress: what the research says', url: 'https://www.example.org/wellness/moving-stress', description: 'Habit and scheduling tactics tied to smoother move weeks.' },
   ];
   const seeds = theme === 'junk' ? junkSeeds : moveSeeds;
-  const out: BraveSerpData['webResults'] = [...seeds];
+  const out: SerpData['webResults'] = [...seeds];
   const rot = [
     { title: 'Home organization trends', url: 'https://www.example.org/trends/home-org', description: 'Consumer interest in decluttering and responsible disposal.' },
     { title: 'Housing and mobility survey notes', url: 'https://www.example.org/data/housing-mobility', description: 'Regional commentary on moving frequency and service demand.' },
@@ -510,7 +510,7 @@ export function buildCollegeHunksTopicSearchRow(args: {
 }): Record<string, unknown> {
   const { query, clientId, createdBy, completedAt, theme } = args;
 
-  const serpData: BraveSerpData = {
+  const serpData: SerpData = {
     webResults: buildWeb(theme),
     discussions: buildDiscussions(theme),
     videos: buildVideos(theme),

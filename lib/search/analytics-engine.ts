@@ -17,7 +17,7 @@ import type {
   SearchPlatform,
   TopicSource,
 } from '@/lib/types/search';
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 
 // ── Sentiment analysis (keyword-based) ───────────────────────────────────────
 
@@ -166,7 +166,7 @@ interface ExtractedTopic {
 
 function extractTopics(
   sources: PlatformSource[],
-  serpData: BraveSerpData,
+  serpData: SerpData,
   query: string,
 ): ExtractedTopic[] {
   // Build bigrams from titles and content
@@ -483,7 +483,7 @@ export interface ComputedAnalytics {
 
 export function computeAnalytics(
   sources: PlatformSource[],
-  serpData: BraveSerpData,
+  serpData: SerpData,
   platformStats: { platform: SearchPlatform; postCount: number; commentCount: number; topSubreddits?: string[]; topChannels?: string[]; topHashtags?: string[] }[],
   query: string,
 ): ComputedAnalytics {

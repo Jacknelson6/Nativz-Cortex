@@ -17,8 +17,8 @@ const PRICING: Record<string, { input: number; output: number }> = {
   'whisper-large-v3-turbo': { input: 0, output: 0 },
   // Legacy — Gemini 2.5 Flash (kept for historical logs)
   'gemini-2.5-flash-preview-05-20': { input: 0.00015 / 1000, output: 0.0006 / 1000 },
-  // Brave Search (per query, flat rate)
-  'brave-search': { input: 0.005, output: 0 },
+  // SearXNG (self-hosted, no per-query cost)
+  'searxng': { input: 0, output: 0 },
 };
 
 // Groq audio pricing: $0.006 per minute of audio
@@ -29,7 +29,7 @@ export type TrackedService =
   | 'openai'
   | 'groq'
   | 'gemini'
-  | 'brave'
+  | 'searxng'
   | 'apify'
   | 'cloudflare'
   | 'resend'

@@ -2,7 +2,7 @@ import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { parseMergerOutput } from '@/lib/search/llm-pipeline/merge-normalize';
 import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
-import { searchWebBrave, searchWebOpenRouter, type WebSearchHit } from '@/lib/search/tools/web-search';
+import { searchWebSearxng, searchWebOpenRouter, type WebSearchHit } from '@/lib/search/tools/web-search';
 import { fetchUrlText } from '@/lib/search/tools/fetch-url';
 import { dedupeUrls, normalizeUrlForMatch } from '@/lib/search/tools/urls';
 import { filterTopicSourcesByAllowlist, toAllowlistSet } from '@/lib/search/llm-pipeline/citation-validator';
@@ -17,7 +17,6 @@ import {
   getTopicSearchRefineQueryModel,
   getTopicSearchRefineSerpQueryEnabled,
   getTopicSearchWebResearchMode,
-  isBraveRateLimitError,
 } from '@/lib/config/topic-search-web-research';
 import { refineSerpQueryWithLlm } from '@/lib/search/llm-pipeline/refine-serp-query';
 import { getTopicSearchModelsFromDb } from '@/lib/ai/topic-search-models';
@@ -114,7 +113,7 @@ Return ONLY valid JSON with this shape:
 Rules:
 - Do not invent specific statistics, study names, or publication dates. Use hedged language ("often", "commonly") when needed.
 - findings must be qualitatively useful for a videographer or content strategist.
-- **sources must be the empty array []** — there is no live SERP in this mode; do NOT fabricate URLs, Wikipedia links, or placeholders. Real URLs are attached by the system when Brave or OpenRouter web search is enabled.
+- **sources must be the empty array []** — there is no live SERP in this mode; do NOT fabricate URLs, Wikipedia links, or placeholders. Real URLs are attached by the system when SearXNG or OpenRouter web search is enabled.
 - The "subtopic" field must match exactly: ${JSON.stringify(args.subtopic)}`;
 
   const ai = await createCompletion({
@@ -233,8 +232,8 @@ async function researchOneSubtopicWithLiveSerp(args: {
   }
 
   try {
-    if (serpMode === 'brave') {
-      hits = await searchWebBrave(q, {
+    if (serpMode === 'searxng') {
+      hits = await searchWebSearxng(q, {
         count: args.maxSearches,
         timeRange: args.timeRange,
         country: args.country,
@@ -254,45 +253,24 @@ async function researchOneSubtopicWithLiveSerp(args: {
       serpCost = res.usage.estimatedCost;
     }
   } catch (e) {
-    if (serpMode === 'brave' && isBraveRateLimitError(e)) {
-      logLlmV1({
-        search_id: args.searchId,
-        subtopic_index: args.index,
-        brave_fallback: 'llm_only',
-        reason: e instanceof Error ? e.message.slice(0, 200) : String(e),
-      });
-      return researchOneSubtopicLlmOnly({
-        parentQuery: args.parentQuery,
-        subtopic: args.subtopic,
-        index: args.index,
-        userId: args.userId,
-        userEmail: args.userEmail,
-        researchModel: args.researchModel,
-        maxResearchTokens: args.maxResearchTokens,
-        searchId: args.searchId,
-        timeRangeLabel: args.timeRangeLabel,
-      });
-    }
-    if (serpMode === 'openrouter') {
-      logLlmV1({
-        search_id: args.searchId,
-        subtopic_index: args.index,
-        openrouter_fallback: 'llm_only',
-        reason: e instanceof Error ? e.message.slice(0, 200) : String(e),
-      });
-      return researchOneSubtopicLlmOnly({
-        parentQuery: args.parentQuery,
-        subtopic: args.subtopic,
-        index: args.index,
-        userId: args.userId,
-        userEmail: args.userEmail,
-        researchModel: args.researchModel,
-        maxResearchTokens: args.maxResearchTokens,
-        searchId: args.searchId,
-        timeRangeLabel: args.timeRangeLabel,
-      });
-    }
-    throw e;
+    logLlmV1({
+      search_id: args.searchId,
+      subtopic_index: args.index,
+      serp_fallback: 'llm_only',
+      serp_mode: serpMode,
+      reason: e instanceof Error ? e.message.slice(0, 200) : String(e),
+    });
+    return researchOneSubtopicLlmOnly({
+      parentQuery: args.parentQuery,
+      subtopic: args.subtopic,
+      index: args.index,
+      userId: args.userId,
+      userEmail: args.userEmail,
+      researchModel: args.researchModel,
+      maxResearchTokens: args.maxResearchTokens,
+      searchId: args.searchId,
+      timeRangeLabel: args.timeRangeLabel,
+    });
   }
 
   if (hits.length === 0) {

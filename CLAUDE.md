@@ -6,7 +6,7 @@
 
 ## Tech Stack
 
-Next.js 15 (App Router) + TypeScript, Supabase (Postgres + Auth), Brave Search API, Claude Sonnet 4.5 via OpenRouter, Tailwind CSS v4, Recharts, lucide-react, Zod, Obsidian vault via GitHub API
+Next.js 15 (App Router) + TypeScript, Supabase (Postgres + Auth), SearXNG (self-hosted), Claude Sonnet 4.5 via OpenRouter, Tailwind CSS v4, Recharts, lucide-react, Zod, Obsidian vault via GitHub API
 
 **Social posting / analytics:** [Zernio](https://docs.zernio.com/) (`ZERNIO_API_KEY`; optional `ZERNIO_API_BASE`, `ZERNIO_WEBHOOK_SECRET`). Legacy env names `LATE_API_KEY` / `LATE_WEBHOOK_SECRET` and `POSTING_PROVIDER=late` still work as aliases. DB columns remain `late_profile_id` / `late_account_id` / `late_post_id` for now.
 
@@ -16,7 +16,7 @@ Next.js 15 (App Router) + TypeScript, Supabase (Postgres + Auth), Brave Search A
 
 **Vercel build cache:** `vercel.json` sets `VERCEL_FORCE_NO_BUILD_CACHE=1` during build so deployments do not restore a stale remote cache (which can crash webpack with `Cannot read properties of undefined (reading 'length')` after large dependency or route-graph changes). Tradeoff: slightly longer builds. To re-enable caching after a stable period, remove that `build.env` entry and use **Redeploy** → uncheck “Use existing Build Cache” if a one-off clean build is needed.
 
-**Topic search (LLM pipeline):** **Recommended:** `BRAVE_SEARCH_API_KEY` + OpenAI research models (`openai/…` in admin or `TOPIC_SEARCH_*_MODEL`) — Brave supplies SERP + page fetch; **OpenAI** runs synthesis (and optional `TOPIC_SEARCH_REFINE_SERP_QUERY=1` query shaping before SERP). If Brave is unset, default **openrouter** web search uses the OpenRouter API (not OpenAI) for retrieval. Set `TOPIC_SEARCH_WEB_RESEARCH=llm_only` for findings only (no live SERP). Optional: `TOPIC_SEARCH_REFINE_QUERY_MODEL` for refine-only. `BRAVE_SEARCH_API_KEY` remains required for the **legacy** pipeline’s SERP. Optional: `TOPIC_SEARCH_PIPELINE` — omit or set to anything except `legacy` for **llm_v1**; set to `legacy` for the old multi-platform scrape path. Optional model overrides: `TOPIC_SEARCH_PLANNER_MODEL`, `TOPIC_SEARCH_RESEARCH_MODEL`, `TOPIC_SEARCH_MERGER_MODEL`. Apply migration `071_topic_search_llm_pipeline.sql` before relying on `llm_v1` columns in production.
+**Topic search (LLM pipeline):** **Recommended:** `SEARXNG_URL` (self-hosted SearXNG, defaults to `http://localhost:8888`) + OpenAI research models (`openai/…` in admin or `TOPIC_SEARCH_*_MODEL`) — SearXNG supplies SERP; **OpenAI** runs synthesis (and optional `TOPIC_SEARCH_REFINE_SERP_QUERY=1` query shaping before SERP). If `SEARXNG_URL` is unset, default **openrouter** web search uses the OpenRouter API (not OpenAI) for retrieval. Set `TOPIC_SEARCH_WEB_RESEARCH=llm_only` for findings only (no live SERP). Optional: `TOPIC_SEARCH_REFINE_QUERY_MODEL` for refine-only. Optional: `TOPIC_SEARCH_PIPELINE` — omit or set to anything except `legacy` for **llm_v1**; set to `legacy` for the old multi-platform scrape path. Optional model overrides: `TOPIC_SEARCH_PLANNER_MODEL`, `TOPIC_SEARCH_RESEARCH_MODEL`, `TOPIC_SEARCH_MERGER_MODEL`. Apply migration `071_topic_search_llm_pipeline.sql` before relying on `llm_v1` columns in production.
 
 ## Commands
 

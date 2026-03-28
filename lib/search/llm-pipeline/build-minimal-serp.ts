@@ -1,4 +1,4 @@
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 import type { SearchPlatform } from '@/lib/types/search';
 import type { WebSearchHit } from '@/lib/search/tools/web-search';
 
@@ -14,7 +14,7 @@ export function guessPlatformFromUrl(url: string): SearchPlatform {
 /**
  * Minimal SERP blob for metrics + compatibility with existing `hasSerp` consumers.
  */
-export function buildMinimalSerpFromHits(hits: WebSearchHit[]): BraveSerpData {
+export function buildMinimalSerpFromHits(hits: WebSearchHit[]): SerpData {
   return {
     webResults: hits.map((h) => ({
       title: h.title,

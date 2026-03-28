@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { gatherSerpData } from '@/lib/brave/client';
+import { gatherSerpData } from '@/lib/serp/client';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { buildOnboardStrategyPrompt } from '@/lib/prompts/onboard-strategy';
@@ -87,7 +87,7 @@ export async function POST(
       );
 
       // Merge SERP data
-      const mergedSerp: import('@/lib/brave/types').BraveSerpData = {
+      const mergedSerp: import('@/lib/serp/types').SerpData = {
         webResults: [],
         discussions: [],
         videos: [],

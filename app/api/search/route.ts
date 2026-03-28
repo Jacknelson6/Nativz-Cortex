@@ -8,7 +8,7 @@ export const maxDuration = 300;
 /**
  * POST /api/search
  *
- * Execute a full AI-powered topic research search. Gathers SERP data from Brave Search,
+ * Execute a full AI-powered topic research search. Gathers SERP data from SearXNG,
  * builds a prompt with optional client context and website content, calls Claude AI,
  * validates AI-cited URLs against actual SERP data, computes metrics, and persists results.
  * Supports two modes: general topic research and client-specific brand strategy.

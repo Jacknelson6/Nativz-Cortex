@@ -1,4 +1,4 @@
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 import type { SearchMetrics, TrendingTopic } from '@/lib/types/search';
 
 /**
@@ -73,11 +73,11 @@ function countContentOpportunities(topics: TrendingTopic[]): number {
 }
 
 /**
- * Compute real metrics from Brave SERP data + AI analysis.
+ * Compute real metrics from SERP SERP data + AI analysis.
  * Includes both source counts (for data) and display metrics (for the UI).
  */
 export function computeMetricsFromSerp(
-  serpData: BraveSerpData,
+  serpData: SerpData,
   overallSentiment: number,
   conversationIntensity: 'low' | 'moderate' | 'high' | 'very_high',
   trendingTopics?: TrendingTopic[],
@@ -88,7 +88,7 @@ export function computeMetricsFromSerp(
   const videoCount = serpData.videos.length;
   const totalSources = webCount + discussionCount + videoCount;
 
-  // Sum video views from Brave data
+  // Sum video views from SERP data
   let totalVideoViews: number | null = null;
   for (const v of serpData.videos) {
     const parsed = parseViewCount(v.views);

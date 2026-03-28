@@ -1,4 +1,4 @@
-import type { BraveSerpData } from '@/lib/brave/types';
+import type { SerpData } from '@/lib/serp/types';
 import type { PlatformBreakdown, PlatformSource, TopicSearch, TopicSource, TrendingTopic } from '@/lib/types/search';
 import { hasSources } from '@/lib/types/search';
 
@@ -89,7 +89,7 @@ export function extractVideoCandidatesFromSearch(search: TopicSearch): VideoCand
     });
   }
 
-  const serp = search.serp_data as BraveSerpData | null | undefined;
+  const serp = search.serp_data as SerpData | null | undefined;
   if (serp?.videos?.length) {
     for (const v of serp.videos) {
       if (!v.url || !isVideoLikeUrl(v.url)) continue;
