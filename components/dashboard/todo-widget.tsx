@@ -147,7 +147,7 @@ export function TodoWidget() {
   }, []);
 
   return (
-    <Card className="h-full flex flex-col">
+    <Card className="flex min-h-0 flex-1 flex-col">
       <TaskDetailPanel
         task={selectedTask}
         onClose={() => setSelectedTask(null)}
@@ -157,7 +157,7 @@ export function TodoWidget() {
         teamMembers={teamMembers}
       />
 
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex shrink-0 items-center justify-between mb-4">
         <h2 className="text-base font-semibold text-text-primary flex items-center gap-2">
           <ListTodo size={16} className="text-accent-text" />
           Today&apos;s tasks
@@ -165,9 +165,9 @@ export function TodoWidget() {
         <span className="text-xs text-text-muted">{todayTasks.length} open</span>
       </div>
 
-      <div className="min-h-0">
+      <div className="flex min-h-0 flex-1 flex-col">
         {loading ? (
-          <div className="space-y-2">
+          <div className="flex flex-1 flex-col justify-center space-y-2">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3 px-2 py-2 animate-pulse">
                 <div className="h-5 w-5 rounded-full bg-surface-elevated" />
@@ -176,26 +176,28 @@ export function TodoWidget() {
             ))}
           </div>
         ) : todayTasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-6">
+          <div className="flex flex-1 flex-col items-center justify-center py-6 min-h-[7rem]">
             <p className="text-sm text-text-muted">All caught up!</p>
           </div>
         ) : (
-          <AnimatePresence mode="popLayout">
-            {visibleTasks.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                onToggleDone={handleToggleDone}
-                onSelect={setSelectedTask}
-                onUpdateDate={handleUpdateDate}
-                onDelete={handleDelete}
-              />
-            ))}
-          </AnimatePresence>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <AnimatePresence mode="popLayout">
+              {visibleTasks.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  onToggleDone={handleToggleDone}
+                  onSelect={setSelectedTask}
+                  onUpdateDate={handleUpdateDate}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
         )}
       </div>
 
-      <div className="border-t border-nativz-border/50 pt-2 flex items-center justify-between">
+      <div className="mt-auto flex shrink-0 items-center justify-between border-t border-nativz-border/50 pt-2">
         <InlineAddTask
           defaultDate={today}
           clients={clients}

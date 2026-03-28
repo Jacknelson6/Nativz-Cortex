@@ -1,6 +1,7 @@
 import type { BraveSerpData } from '@/lib/brave/types';
 import type { ClientPreferences } from '@/lib/types/database';
 import type { BrandContext } from '@/lib/knowledge/brand-context';
+import { getTimeRangeOptionLabel } from '@/lib/types/search';
 import { formatBrandPreferencesBlock, hasPreferences } from './brand-context';
 import { EXECUTIVE_SUMMARY_CORE } from '@/lib/prompts/executive-summary-instructions';
 
@@ -28,14 +29,6 @@ interface TopicResearchConfig {
   /** Unified brand context from Brand DNA (takes precedence over clientContext/brandPreferences) */
   brandDNA?: BrandContext | null;
 }
-
-const TIME_RANGE_LABELS: Record<string, string> = {
-  last_7_days: 'last 7 days',
-  last_30_days: 'last 30 days',
-  last_3_months: 'last 3 months',
-  last_6_months: 'last 6 months',
-  last_year: 'last year',
-};
 
 function formatSerpDataBlock(serpData: BraveSerpData): string {
   let block = '';
@@ -74,7 +67,7 @@ function formatSerpDataBlock(serpData: BraveSerpData): string {
 }
 
 export function buildTopicResearchPrompt(config: TopicResearchConfig): string {
-  const timeLabel = TIME_RANGE_LABELS[config.timeRange] || config.timeRange;
+  const timeLabel = getTimeRangeOptionLabel(config.timeRange).toLowerCase();
   const sourceFilter = config.source !== 'all'
     ? `Focus specifically on ${config.source} content.`
     : 'Analyze across all major social platforms (TikTok, Instagram, YouTube, Reddit, X/Twitter).';

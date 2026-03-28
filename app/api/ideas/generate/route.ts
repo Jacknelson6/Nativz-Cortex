@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createCompletion } from '@/lib/ai/client';
+import { getIdeasModelFromDb } from '@/lib/ai/provider-keys';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { getBrandProfile, getKnowledgeEntries } from '@/lib/knowledge/queries';
 import { quickScrapeUrl } from '@/lib/knowledge/scraper';
@@ -124,6 +125,8 @@ async function processGeneration({
   userEmail?: string;
 }) {
   const admin = createAdminClient();
+  const ideasModelId = (await getIdeasModelFromDb()).trim();
+  const ideasModelPreference = ideasModelId ? [ideasModelId] : undefined;
 
   try {
     // ── Build context blocks ──
@@ -397,6 +400,7 @@ Output ONLY the JSON array. No other text.`;
           feature: 'idea_generation',
           userId,
           userEmail,
+          modelPreference: ideasModelPreference,
         });
 
         const pillarIdeas = parseAIResponseJSON<GeneratedIdeaResult[]>(result.text)
@@ -451,6 +455,7 @@ Output ONLY the JSON array. No other text.`;
       feature: 'idea_generation',
       userId,
       userEmail,
+      modelPreference: ideasModelPreference,
     });
 
     const ideas = parseAIResponseJSON<GeneratedIdeaResult[]>(result.text).slice(0, count);

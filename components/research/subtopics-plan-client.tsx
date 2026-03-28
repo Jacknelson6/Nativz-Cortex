@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -11,12 +10,13 @@ import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 interface SubtopicsPlanClientProps {
   searchId: string;
   query: string;
+  /** User-selected recency window (e.g. "Last 3 months") — gameplan angles must fit this period. */
+  timeRangeLabel: string;
 }
 
 const MAX = 5;
 
-export function SubtopicsPlanClient({ searchId, query }: SubtopicsPlanClientProps) {
-  const router = useRouter();
+export function SubtopicsPlanClient({ searchId, query, timeRangeLabel }: SubtopicsPlanClientProps) {
   const [items, setItems] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,7 +27,7 @@ export function SubtopicsPlanClient({ searchId, query }: SubtopicsPlanClientProp
       const res = await fetch(`/api/search/${searchId}/plan-subtopics`, { method: 'POST' });
       const data = (await res.json()) as { subtopics?: string[]; error?: string };
       if (!res.ok) {
-        toast.error(data.error || 'Could not generate subtopics');
+        toast.error(data.error || 'Could not generate research angles');
         setItems([query]);
         return;
       }
@@ -63,11 +63,11 @@ export function SubtopicsPlanClient({ searchId, query }: SubtopicsPlanClientProp
   async function confirmAndRun() {
     const cleaned = items.map((s) => s.trim()).filter(Boolean);
     if (cleaned.length === 0) {
-      toast.error('Add at least one subtopic');
+      toast.error('Add at least one research angle');
       return;
     }
     if (cleaned.length > MAX) {
-      toast.error(`Maximum ${MAX} subtopics`);
+      toast.error(`Maximum ${MAX} research angles`);
       return;
     }
     setSaving(true);
@@ -82,8 +82,9 @@ export function SubtopicsPlanClient({ searchId, query }: SubtopicsPlanClientProp
         toast.error(data.error || 'Could not save');
         return;
       }
-      router.push(`/admin/search/${searchId}/processing`);
-      router.refresh();
+      // Full navigation so the processing page always loads fresh DB state (avoids stale RSC
+      // still seeing pending_subtopics and redirecting back to this screen).
+      window.location.assign(`/admin/search/${searchId}/processing`);
     } catch {
       toast.error('Failed to start research');
     } finally {
@@ -96,35 +97,39 @@ export function SubtopicsPlanClient({ searchId, query }: SubtopicsPlanClientProp
       <Breadcrumbs
         className="mb-2"
         items={[
-          { label: 'Search history', href: '/admin/search/new?history=true' },
-          { label: 'Subtopics' },
+          { label: 'Search history', href: '/admin/search/new' },
+          { label: 'Research gameplan' },
         ]}
       />
 
       <div className="flex items-start gap-3">
         <Link
-          href="/admin/search/new?history=true"
+          href="/admin/search/new"
           className="mt-1 shrink-0 text-text-muted hover:text-text-secondary transition-colors"
             aria-label="Back"
         >
           <ArrowLeft size={20} />
         </Link>
         <div className="min-w-0 flex-1 space-y-1">
-          <h1 className="text-lg font-semibold text-text-primary break-words">Plan subtopics</h1>
+          <h1 className="text-lg font-semibold text-text-primary break-words">Research gameplan</h1>
           <p className="text-sm text-text-muted">
-            Research: <span className="text-text-secondary">&ldquo;{query}&rdquo;</span>
+            Topic: <span className="text-text-secondary">&ldquo;{query}&rdquo;</span>
+            {' · '}
+            <span className="text-text-secondary">{timeRangeLabel}</span>
           </p>
         </div>
       </div>
 
       <p className="text-sm text-text-muted">
-        We suggest up to five angles. Edit, remove, or add rows — then run research to build your report.
+        Build a gameplan: up to five research angles that together cover the full scope of this topic—each
+        focused on what matters <strong className="text-text-secondary font-medium">{timeRangeLabel}</strong>{' '}
+        (not generic evergreen angles). Edit, remove, or add rows, then run research to generate your report.
       </p>
 
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-text-muted py-8">
           <Loader2 className="animate-spin shrink-0" size={18} />
-          Generating subtopics…
+          Generating angles…
         </div>
       ) : (
         <div className="space-y-3">
@@ -134,7 +139,7 @@ export function SubtopicsPlanClient({ searchId, query }: SubtopicsPlanClientProp
                 value={row}
                 onChange={(e) => updateAt(i, e.target.value)}
                 className="flex-1 rounded-xl border border-nativz-border bg-surface-hover px-3 py-2.5 text-sm text-text-primary"
-                placeholder={`Subtopic ${i + 1}`}
+                placeholder={`Research angle ${i + 1}`}
                 maxLength={200}
               />
               <button
@@ -150,7 +155,7 @@ export function SubtopicsPlanClient({ searchId, query }: SubtopicsPlanClientProp
           {items.length < MAX && (
             <Button type="button" variant="outline" size="sm" onClick={addRow} className="gap-1.5">
               <Plus size={14} />
-              Add subtopic
+              Add angle
             </Button>
           )}
         </div>

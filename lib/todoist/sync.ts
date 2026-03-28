@@ -29,6 +29,17 @@ interface SyncResult {
   errors: string[];
 }
 
+/** True when insert failed because this Todoist id already exists in `tasks` (dedup / race) — not a user-facing error. */
+function isDuplicateTodoistTaskIdInsert(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === '23505') return true;
+  const m = (error.message ?? '').toLowerCase();
+  return (
+    m.includes('duplicate key') &&
+    (m.includes('todoist_task_id') || m.includes('idx_tasks_todoist'))
+  );
+}
+
 interface CortexTask {
   id: string;
   title: string;
@@ -215,6 +226,10 @@ export async function syncTodoist(
       });
 
       if (error) {
+        if (isDuplicateTodoistTaskIdInsert(error)) {
+          // Already stored for this Todoist id — skip (no notification noise)
+          continue;
+        }
         result.errors.push(`Import ${tt.content}: ${error.message}`);
       } else {
         result.pulled++;

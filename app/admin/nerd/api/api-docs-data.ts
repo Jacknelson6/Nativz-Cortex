@@ -258,7 +258,7 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
     description: 'Fetch research history with optional filtering and cursor-based pagination.',
     auth: 'Required (user)',
     section: 'Search & Research',
-    query: 'limit?: number, cursor?: string, type?: string, client_id?: string',
+    query: 'limit?: number, cursor?: string, type?: string, client_id?: string, include_ideas?: boolean (default true; false omits idea generations when type is omitted)',
     response: '{ items: HistoryItem[], nextCursor?: string }',
   },
   {

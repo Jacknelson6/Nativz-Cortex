@@ -183,10 +183,15 @@ export async function PATCH(
   }
 }
 
+/** Topic searches that can be removed without affecting an in-flight pipeline run. */
+const DELETABLE_TOPIC_SEARCH_STATUSES = new Set(['failed', 'pending_subtopics']);
+
 /**
  * DELETE /api/search/[id]
  *
- * Permanently delete a topic search record. Only allowed for searches with status 'failed'.
+ * Permanently delete a topic search record. Allowed when the search is **failed**, or stuck in
+ * **pending_subtopics** (e.g. planning errored and never completed). Active `processing` / `completed`
+ * rows are protected.
  *
  * @auth Required (admin)
  * @param id - Topic search UUID
@@ -227,8 +232,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Search not found' }, { status: 404 });
     }
 
-    if (search.status !== 'failed') {
-      return NextResponse.json({ error: 'Only failed searches can be deleted' }, { status: 400 });
+    if (!DELETABLE_TOPIC_SEARCH_STATUSES.has(search.status)) {
+      return NextResponse.json(
+        {
+          error:
+            'Only failed searches or ones stuck in subtopic planning can be deleted. Cancel or wait if a search is still running.',
+        },
+        { status: 400 },
+      );
     }
 
     const { error: deleteError } = await adminClient

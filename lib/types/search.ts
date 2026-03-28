@@ -339,6 +339,12 @@ export const TIME_RANGE_OPTIONS = [
   { value: 'last_year', label: 'Last year' },
 ] as const;
 
+/** Human label for `topic_searches.time_range` (e.g. "Last 3 months"). */
+export function getTimeRangeOptionLabel(value: string): string {
+  const o = TIME_RANGE_OPTIONS.find((x) => x.value === value);
+  return o?.label ?? value.replace(/_/g, ' ');
+}
+
 export const LANGUAGE_OPTIONS = [
   { value: 'all', label: 'All languages' },
   { value: 'en', label: 'English' },

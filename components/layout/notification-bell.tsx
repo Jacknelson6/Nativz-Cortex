@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, Check, Lightbulb, FileText, MessageSquare, Settings2, Mail, Search, Camera, CheckSquare, Clock, AlertTriangle, CheckCircle, TrendingUp, Flame, Users, RefreshCcw, Zap, WifiOff } from 'lucide-react';
+import { Bell, Check, Trash2, Lightbulb, FileText, MessageSquare, Settings2, Mail, Search, Camera, CheckSquare, Clock, AlertTriangle, CheckCircle, TrendingUp, Flame, Users, RefreshCcw, Zap, WifiOff } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/format';
 
 interface Notification {
@@ -97,6 +97,17 @@ export function NotificationBell() {
     } catch { /* ignore */ }
   }
 
+  async function clearAll() {
+    try {
+      const res = await fetch('/api/notifications/clear-all', { method: 'POST' });
+      if (res.ok) {
+        setNotifications([]);
+        setUnreadCount(0);
+        router.refresh();
+      }
+    } catch { /* ignore */ }
+  }
+
   async function handleClick(notif: Notification) {
     if (!notif.is_read) {
       try {
@@ -140,18 +151,30 @@ export function NotificationBell() {
       {open && (
         <div className="absolute right-0 top-full mt-2 w-[22rem] max-w-[calc(100vw-2rem)] rounded-xl border border-nativz-border bg-surface shadow-xl z-50 overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-nativz-border px-4 py-3">
+          <div className="flex items-center justify-between gap-2 border-b border-nativz-border px-4 py-3">
             <h3 className="text-sm font-semibold text-text-primary">Notifications</h3>
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={markAllRead}
-                className="flex items-center gap-1 text-xs text-accent-text hover:text-accent-hover transition-colors"
-              >
-                <Check size={12} />
-                Mark all read
-              </button>
-            )}
+            <div className="flex shrink-0 items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllRead}
+                  className="flex items-center gap-1 text-xs text-accent-text hover:text-accent-hover transition-colors"
+                >
+                  <Check size={12} />
+                  Mark all read
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="flex items-center gap-1 text-xs text-text-muted hover:text-red-400 transition-colors"
+                >
+                  <Trash2 size={12} />
+                  Clear all
+                </button>
+              )}
+            </div>
           </div>
 
           {/* List */}

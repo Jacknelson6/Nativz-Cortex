@@ -1,9 +1,10 @@
 import { Suspense } from 'react';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 import { getVaultClients } from '@/lib/vault/reader';
 import { ResearchHub } from '@/components/research/research-hub';
-import { fetchHistory } from '@/lib/research/history';
+import { fetchHistory, TOPIC_SEARCH_HUB_HISTORY_LIMIT } from '@/lib/research/history';
 import { getTopicSearchPipelineFromEnv } from '@/lib/config/topic-search-pipeline';
 
 type ResearchHubDbClientRow = {
@@ -40,9 +41,30 @@ export default async function AdminNewSearchPage() {
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
 
-  // Fetch merged history
-  const historyItems = await fetchHistory({ limit: 10 });
+  const historyItems = await fetchHistory({
+    limit: TOPIC_SEARCH_HUB_HISTORY_LIMIT,
+    includeIdeas: false,
+  });
   const topicPipelineLlmV1 = getTopicSearchPipelineFromEnv() === 'llm_v1';
+
+  const serverSupabase = await createServerSupabaseClient();
+  const {
+    data: { user: authUser },
+  } = await serverSupabase.auth.getUser();
+  let userFirstName: string | null = null;
+  if (authUser) {
+    const { data: userRow } = await serverSupabase
+      .from('users')
+      .select('full_name')
+      .eq('id', authUser.id)
+      .maybeSingle();
+    const raw = userRow?.full_name?.trim();
+    if (raw) {
+      userFirstName = raw.split(/\s+/)[0] ?? null;
+    } else if (authUser.email) {
+      userFirstName = authUser.email.split('@')[0] ?? null;
+    }
+  }
 
   return (
     <Suspense
@@ -53,7 +75,12 @@ export default async function AdminNewSearchPage() {
         </div>
       }
     >
-      <ResearchHub clients={clients} historyItems={historyItems} topicPipelineLlmV1={topicPipelineLlmV1} />
+      <ResearchHub
+        clients={clients}
+        historyItems={historyItems}
+        topicPipelineLlmV1={topicPipelineLlmV1}
+        userFirstName={userFirstName}
+      />
     </Suspense>
   );
 }

@@ -2,16 +2,19 @@
 
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Sparkles, ArrowLeft, Loader2, Upload, Link2, Trash2,
-  Minus, Plus, X, Check,
-} from 'lucide-react';
+import { Sparkles, ArrowLeft, Loader2, Link2, Minus, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { ComboSelect } from '@/components/ui/combo-select';
 import { PathSelector } from './path-selector';
 import { PillarGenerator } from './pillar-generator';
 import { PillarIdeaConfig } from './pillar-idea-config';
 import { FullStrategyModal } from './full-strategy-modal';
+import {
+  ReferenceVideosField,
+  processPendingReferenceVideos,
+  completedReferenceVideoIds,
+  type ReferenceVideoItem,
+} from './reference-videos-field';
 import type { Pillar } from './pillar-card';
 
 interface ContentWizardProps {
@@ -28,7 +31,6 @@ export function ContentWizard({
   clients,
   onIdeasSaved,
   initialSearchId,
-  initialSearchQuery,
 }: ContentWizardProps) {
   const [step, setStep] = useState<WizardStep>(1);
   const [path, setPath] = useState<WizardPath>(null);
@@ -155,9 +157,8 @@ export function ContentWizard({
         <IdeaConfigStep
           clientId={clientId}
           brandUrl={brandUrl}
-          clients={clients}
-          onIdeasSaved={onIdeasSaved}
           initialSearchId={initialSearchId}
+          onIdeasStarted={onIdeasSaved}
         />
       )}
 
@@ -167,6 +168,7 @@ export function ContentWizard({
           clientId={clientId}
           pillars={pillars}
           initialSearchId={initialSearchId}
+          onIdeasStarted={onIdeasSaved}
         />
       )}
 
@@ -181,14 +183,6 @@ export function ContentWizard({
 }
 
 // ── Inline idea config (used as step 2 for "ideas" path) ────────────────────
-
-interface ReferenceVideo {
-  id?: string;
-  url?: string;
-  file?: File;
-  title: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-}
 
 function CountSelector({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   const presets = [5, 10, 15, 20];
@@ -234,67 +228,33 @@ function CountSelector({ value, onChange }: { value: number; onChange: (n: numbe
 function IdeaConfigStep({
   clientId,
   brandUrl,
-  clients,
-  onIdeasSaved,
   initialSearchId,
+  onIdeasStarted,
 }: {
   clientId: string;
   brandUrl?: string;
-  clients: { id: string; name: string }[];
-  onIdeasSaved: () => void;
   initialSearchId?: string | null;
+  onIdeasStarted?: () => void;
 }) {
   const router = useRouter();
   const [concept, setConcept] = useState('');
   const [count, setCount] = useState(10);
-  const [referenceVideos, setReferenceVideos] = useState<ReferenceVideo[]>([]);
-  const [urlInput, setUrlInput] = useState('');
+  const [referenceVideos, setReferenceVideos] = useState<ReferenceVideoItem[]>([]);
   const [generating, setGenerating] = useState(false);
   const [processingRefs, setProcessingRefs] = useState(false);
 
-  const completedRefIds = referenceVideos
-    .filter((v) => v.status === 'completed' && v.id)
-    .map((v) => v.id!);
-
-  const addReferenceUrl = useCallback(() => {
-    const url = urlInput.trim();
-    if (!url) return;
-    setReferenceVideos((prev) => [...prev, { url, title: url.split('/').pop() ?? 'Video', status: 'pending' }]);
-    setUrlInput('');
-  }, [urlInput]);
-
-  const processReferences = useCallback(async () => {
-    if (!clientId || referenceVideos.length === 0) return;
-    setProcessingRefs(true);
-    const updated = [...referenceVideos];
-    for (let i = 0; i < updated.length; i++) {
-      if (updated[i].status !== 'pending') continue;
-      updated[i] = { ...updated[i], status: 'processing' };
-      setReferenceVideos([...updated]);
-      try {
-        const createRes = await fetch('/api/reference-videos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ client_id: clientId, url: updated[i].url ?? null, title: updated[i].title }),
-        });
-        if (!createRes.ok) throw new Error('Failed');
-        const { video } = await createRes.json();
-        const processRes = await fetch(`/api/reference-videos/${video.id}/process`, { method: 'POST' });
-        if (!processRes.ok) throw new Error('Failed');
-        const { video: processed } = await processRes.json();
-        updated[i] = { ...updated[i], id: processed.id, status: processed.status };
-      } catch {
-        updated[i] = { ...updated[i], status: 'failed' };
-      }
-      setReferenceVideos([...updated]);
-    }
-    setProcessingRefs(false);
-  }, [clientId, referenceVideos]);
+  const completedRefIds = completedReferenceVideoIds(referenceVideos);
 
   const handleGenerate = useCallback(async () => {
     if (!clientId && !brandUrl?.trim()) return;
-    const hasPending = referenceVideos.some((v) => v.status === 'pending');
-    if (hasPending) await processReferences();
+    const hasPendingUrl = referenceVideos.some((v) => v.status === 'pending' && v.url);
+    let refIds = completedRefIds;
+    if (hasPendingUrl && clientId) {
+      setProcessingRefs(true);
+      const finalItems = await processPendingReferenceVideos(clientId, referenceVideos, setReferenceVideos);
+      setProcessingRefs(false);
+      refIds = completedReferenceVideoIds(finalItems);
+    }
 
     setGenerating(true);
     try {
@@ -306,7 +266,7 @@ function IdeaConfigStep({
           url: !clientId && brandUrl ? brandUrl.trim() : undefined,
           concept: concept.trim() || undefined,
           count,
-          reference_video_ids: completedRefIds.length > 0 ? completedRefIds : undefined,
+          reference_video_ids: refIds.length > 0 ? refIds : undefined,
           search_id: initialSearchId ?? undefined,
         }),
       });
@@ -315,12 +275,13 @@ function IdeaConfigStep({
         throw new Error(d.error ?? 'Failed');
       }
       const data = await res.json();
+      onIdeasStarted?.();
       router.push(`/admin/ideas/${data.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to generate ideas');
       setGenerating(false);
     }
-  }, [clientId, brandUrl, concept, count, referenceVideos, completedRefIds, processReferences, initialSearchId, router]);
+  }, [clientId, brandUrl, concept, count, referenceVideos, completedRefIds, initialSearchId, router, onIdeasStarted]);
 
   return (
     <div className="space-y-5">
@@ -350,70 +311,11 @@ function IdeaConfigStep({
           />
         </div>
 
-        {/* Reference videos */}
-        <div className="space-y-3">
-          <label className="block text-sm font-medium text-text-secondary">
-            Reference videos <span className="text-text-muted font-normal">(optional)</span>
-          </label>
-          <div className="flex gap-2">
-            <div className="flex-1 flex items-center gap-2 rounded-lg border border-nativz-border bg-background px-3 py-2">
-              <Link2 size={14} className="text-text-muted shrink-0" />
-              <input
-                type="text"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReferenceUrl(); } }}
-                placeholder="Paste a video URL (YouTube, TikTok, Instagram…)"
-                className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none"
-              />
-            </div>
-            <button
-              onClick={addReferenceUrl}
-              disabled={!urlInput.trim()}
-              className="px-3 py-2 rounded-lg border border-nativz-border bg-surface text-xs font-medium text-text-secondary hover:bg-surface-hover disabled:opacity-40 cursor-pointer transition-colors"
-            >
-              Add
-            </button>
-          </div>
-
-          <label className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-nativz-border/60 bg-background px-4 py-3 text-xs text-text-muted hover:border-accent2/40 hover:text-text-secondary transition-colors cursor-pointer">
-            <Upload size={14} />
-            Drop or click to upload video files
-            <input
-              type="file"
-              accept="video/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (!e.target.files) return;
-                for (const file of Array.from(e.target.files)) {
-                  if (!file.type.startsWith('video/')) continue;
-                  setReferenceVideos((prev) => [...prev, { file, title: file.name, status: 'pending' }]);
-                }
-              }}
-            />
-          </label>
-
-          {referenceVideos.length > 0 && (
-            <div className="space-y-1.5">
-              {referenceVideos.map((ref, i) => (
-                <div key={i} className="flex items-center gap-2 rounded-lg border border-nativz-border bg-background px-3 py-2">
-                  {ref.status === 'processing' && <Loader2 size={12} className="animate-spin text-accent2-text shrink-0" />}
-                  {ref.status === 'completed' && <Check size={12} className="text-emerald-400 shrink-0" />}
-                  {ref.status === 'failed' && <X size={12} className="text-red-400 shrink-0" />}
-                  {ref.status === 'pending' && <div className="w-3 h-3 rounded-full border-2 border-nativz-border shrink-0" />}
-                  <span className="text-xs text-text-secondary truncate flex-1">{ref.title}</span>
-                  <button
-                    onClick={() => setReferenceVideos((prev) => prev.filter((_, j) => j !== i))}
-                    className="p-1 rounded text-text-muted hover:text-red-400 cursor-pointer"
-                  >
-                    <Trash2 size={11} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <ReferenceVideosField
+          items={referenceVideos}
+          setItems={setReferenceVideos}
+          disabled={generating || processingRefs}
+        />
 
         {/* Generate */}
         <div className="flex items-center justify-center pt-2">

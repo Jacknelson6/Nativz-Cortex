@@ -40,14 +40,22 @@ function SlideTransition({
 
   useLayoutEffect(() => {
     if (!ref.current) return;
-    onHeightReady(ref.current.offsetHeight);
 
-    // Observe size changes (e.g. context mode toggle reveals/hides inputs)
-    const observer = new ResizeObserver(() => {
+    const measure = () => {
       if (ref.current) onHeightReady(ref.current.offsetHeight);
+    };
+    measure();
+    // Defer one frame so max-height / overflow on descendants (e.g. scrollable lists) is applied before we size the shell
+    const raf = requestAnimationFrame(measure);
+
+    const observer = new ResizeObserver(() => {
+      requestAnimationFrame(measure);
     });
     observer.observe(ref.current);
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
   }, [children, onHeightReady]);
 
   return (

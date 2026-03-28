@@ -22,6 +22,7 @@ import {
   Zap,
   X,
   WifiOff,
+  Trash2,
 } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { Card } from '@/components/ui/card';
@@ -125,6 +126,22 @@ export function NotificationsWidget() {
     }
   }
 
+  async function clearAll() {
+    try {
+      const res = await fetch('/api/notifications/clear-all', { method: 'POST' });
+      if (res.ok) {
+        setNotifications([]);
+        setUnreadCount(0);
+        sessionStorage.setItem(
+          'notifications-widget',
+          JSON.stringify({ notifications: [], unreadCount: 0 })
+        );
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
   async function handleDelete(e: React.MouseEvent, notif: Notification) {
     e.stopPropagation();
     setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
@@ -160,7 +177,7 @@ export function NotificationsWidget() {
   }
 
   return (
-    <Card className="h-full flex flex-col">
+    <Card className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-semibold text-text-primary flex items-center gap-2">
           <Bell size={16} className="text-accent-text" />
@@ -171,16 +188,28 @@ export function NotificationsWidget() {
             </span>
           )}
         </h2>
-        {unreadCount > 0 && (
-          <button
-            type="button"
-            onClick={markAllRead}
-            className="flex items-center gap-1 text-xs text-accent-text hover:text-accent-hover transition-colors"
-          >
-            <Check size={12} />
-            Mark all read
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={markAllRead}
+              className="flex items-center gap-1 text-xs text-accent-text hover:text-accent-hover transition-colors"
+            >
+              <Check size={12} />
+              Mark all read
+            </button>
+          )}
+          {notifications.length > 0 && (
+            <button
+              type="button"
+              onClick={clearAll}
+              className="flex items-center gap-1 text-xs text-text-muted hover:text-red-400 transition-colors"
+            >
+              <Trash2 size={12} />
+              Clear all
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="relative flex-1 min-h-0 -mx-1">

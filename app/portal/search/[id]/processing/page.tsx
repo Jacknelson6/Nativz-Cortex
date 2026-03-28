@@ -1,13 +1,18 @@
+import { unstable_noStore as noStore } from 'next/cache';
 import { notFound, redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 import { SearchProcessing } from '@/components/search/search-processing';
+import { getTopicSearchWebResearchMode } from '@/lib/config/topic-search-web-research';
+
+export const dynamic = 'force-dynamic';
 
 export default async function PortalSearchProcessingPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  noStore();
   const { id } = await params;
   const result = await getPortalClient();
 
@@ -17,7 +22,7 @@ export default async function PortalSearchProcessingPage({
 
   const { data: search, error } = await adminClient
     .from('topic_searches')
-    .select('id, query, status, client_id')
+    .select('id, query, status, client_id, volume, platforms, topic_pipeline, subtopics')
     .eq('id', id)
     .single();
 
@@ -45,5 +50,20 @@ export default async function PortalSearchProcessingPage({
     redirect(`/portal/search/${id}`);
   }
 
-  return <SearchProcessing searchId={id} query={search.query} redirectPrefix="/portal" />;
+  const topicPipeline = (search.topic_pipeline as 'legacy' | 'llm_v1' | undefined) ?? 'legacy';
+  const rawSub = search.subtopics as unknown;
+  const subtopicCount = Array.isArray(rawSub) ? rawSub.length : 3;
+
+  return (
+    <SearchProcessing
+      searchId={id}
+      query={search.query}
+      redirectPrefix="/portal"
+      volume={(search.volume as string) ?? 'medium'}
+      platforms={(search.platforms as string[]) ?? ['web']}
+      pipeline={topicPipeline}
+      subtopicCount={subtopicCount}
+      webResearchMode={getTopicSearchWebResearchMode()}
+    />
+  );
 }

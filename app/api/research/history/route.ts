@@ -13,6 +13,7 @@ import { fetchHistory, type HistoryItemType } from '@/lib/research/history';
  * @query type - Filter by item type (HistoryItemType)
  * @query client_id - Filter by client UUID
  * @query cursor - Pagination cursor (ISO datetime of last item's created_at)
+ * @query include_ideas - Set to "false" to omit idea generations when `type` is omitted (topic search sidebar)
  * @returns {{ items: HistoryItem[] }}
  */
 export async function GET(request: NextRequest) {
@@ -28,8 +29,10 @@ export async function GET(request: NextRequest) {
     const type = (searchParams.get('type') as HistoryItemType) || null;
     const clientId = searchParams.get('client_id') || null;
     const cursor = searchParams.get('cursor') || null;
+    const includeIdeasRaw = searchParams.get('include_ideas');
+    const includeIdeas = includeIdeasRaw === null ? true : includeIdeasRaw !== 'false';
 
-    const items = await fetchHistory({ limit, type, clientId, cursor });
+    const items = await fetchHistory({ limit, type, clientId, cursor, includeIdeas });
 
     return NextResponse.json({ items });
   } catch {

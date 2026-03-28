@@ -2,14 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  BarChart3,
   Zap,
   Mic,
   Eye,
   Search,
   DollarSign,
-  Hash,
-  Activity,
   Users,
   Bot,
   Cloud,
@@ -221,11 +218,6 @@ export function UsageDashboard() {
       {loading && (
         <>
           <Skeleton className="h-28 w-full rounded-xl" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-36 rounded-xl" />
-            ))}
-          </div>
           <Skeleton className="h-64 rounded-xl" />
           <Skeleton className="h-48 rounded-xl" />
         </>
@@ -252,74 +244,6 @@ export function UsageDashboard() {
               </p>
             </div>
           </Card>
-
-          {/* Service breakdown cards — show active services first, then inactive */}
-          {(() => {
-            const allServices = Object.entries(SERVICE_META);
-            const active = allServices.filter(([key]) => data.byService[key]?.requests > 0);
-            const inactive = allServices.filter(([key]) => !data.byService[key]?.requests);
-
-            return (
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                  {active.map(([key, { label, icon: Icon, color }]) => {
-                    const svc = data.byService[key]!;
-                    return (
-                      <Card key={key} padding="sm">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Icon size={16} className={color} />
-                          <span className="text-sm font-medium text-text-primary">
-                            {label}
-                          </span>
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-text-muted flex items-center gap-1">
-                              <Activity size={12} /> Requests
-                            </span>
-                            <span className="text-sm text-text-secondary font-medium">
-                              {formatNumber(svc.requests)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-text-muted flex items-center gap-1">
-                              <Hash size={12} /> Tokens
-                            </span>
-                            <span className="text-sm text-text-secondary font-medium">
-                              {formatTokens(svc.totalTokens)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-text-muted flex items-center gap-1">
-                              <DollarSign size={12} /> Cost
-                            </span>
-                            <span className="text-sm text-text-primary font-semibold">
-                              {formatCost(svc.costUsd)}
-                            </span>
-                          </div>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-                {/* Inactive services — compact row */}
-                {inactive.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {inactive.map(([key, { label, icon: Icon, color }]) => (
-                      <div
-                        key={key}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-hover border border-nativz-border text-xs text-text-muted"
-                      >
-                        <Icon size={12} className={color} />
-                        {label}
-                        <span className="text-text-muted/50 ml-1">0 req</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
 
           {/* Model breakdown */}
           <Card>

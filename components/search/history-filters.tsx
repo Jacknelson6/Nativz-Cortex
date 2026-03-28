@@ -18,7 +18,8 @@ export function HistoryFilters({ clients }: HistoryFiltersProps) {
     } else {
       params.set(key, value);
     }
-    router.push(`/admin/search/new?history=true?${params.toString()}`);
+    const q = params.toString();
+    router.push(q ? `/admin/search/new?${q}` : '/admin/search/new');
   }
 
   const clientOptions = [

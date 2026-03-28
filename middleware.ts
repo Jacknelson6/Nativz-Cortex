@@ -1,6 +1,28 @@
 import { createServerClient } from '@supabase/ssr';
+import type { User } from '@supabase/supabase-js';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/supabase/public-env';
+
+type SupabaseFromMiddleware = ReturnType<typeof createServerClient>;
+
+/**
+ * Prefer getUser() (validates JWT with Supabase Auth). On Edge, that uses fetch and can
+ * throw "fetch failed" (transient network, DNS, sandbox). Fall back to cookie session.
+ */
+async function getAuthUserResilient(supabase: SupabaseFromMiddleware): Promise<User | null> {
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (!error && user) return user;
+  } catch {
+    // Network failure during JWT validation — session is still usable for routing
+  }
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user ?? null;
+  } catch {
+    return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // CORS configuration — dynamic origin to support localhost + production
@@ -100,7 +122,7 @@ export async function middleware(request: NextRequest) {
 
   // Login pages don't require auth
   if (pathname === '/admin/login' || pathname === '/portal/login') {
-    const { data: { user: loginUser } } = await supabase.auth.getUser();
+    const loginUser = await getAuthUserResilient(supabase);
     if (loginUser) {
       if (pathname === '/admin/login') {
         return NextResponse.redirect(new URL('/admin/dashboard', request.url));
@@ -115,8 +137,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/admin/login', request.url));
   }
 
-  // Use getUser() for server-side JWT verification (validates with Supabase auth server).
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUserResilient(supabase);
 
   if (!user) {
     // JSON APIs must not redirect to HTML login — clients expect { error } and show "Request failed" on HTML.

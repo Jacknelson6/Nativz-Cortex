@@ -82,7 +82,7 @@ export default async function AdminSearchResultsPage({
         <Breadcrumbs
           className="mb-2"
           items={[
-            { label: 'Search history', href: '/admin/search/new?history=true' },
+            { label: 'Search history', href: '/admin/search/new' },
             { label: 'Results' },
           ]}
         />

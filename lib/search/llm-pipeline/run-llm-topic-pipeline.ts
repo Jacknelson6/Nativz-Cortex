@@ -1,26 +1,35 @@
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
+import { parseMergerOutput } from '@/lib/search/llm-pipeline/merge-normalize';
 import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
-import { searchWeb, type WebSearchHit } from '@/lib/search/tools/web-search';
+import { searchWebBrave, searchWebOpenRouter, type WebSearchHit } from '@/lib/search/tools/web-search';
 import { fetchUrlText } from '@/lib/search/tools/fetch-url';
 import { dedupeUrls, normalizeUrlForMatch } from '@/lib/search/tools/urls';
 import { filterTopicSourcesByAllowlist, toAllowlistSet } from '@/lib/search/llm-pipeline/citation-validator';
 import { buildMinimalSerpFromHits, guessPlatformFromUrl } from '@/lib/search/llm-pipeline/build-minimal-serp';
 import {
-  mergerOutputSchema,
   subtopicReportSchema,
   type MergerOutput,
   type SubtopicReport,
 } from '@/lib/search/llm-pipeline/schemas';
 import { getLlmTopicPipelineLimits } from '@/lib/search/llm-pipeline/limits';
-import type {
-  PlatformSource,
-  ResearchSourceRecord,
-  TopicSearchAIResponse,
-  TopicSource,
-  TrendingTopic,
-  VideoIdea,
-  SearchMode,
+import {
+  getTopicSearchRefineQueryModel,
+  getTopicSearchRefineSerpQueryEnabled,
+  getTopicSearchWebResearchMode,
+  isBraveRateLimitError,
+} from '@/lib/config/topic-search-web-research';
+import { refineSerpQueryWithLlm } from '@/lib/search/llm-pipeline/refine-serp-query';
+import { getTopicSearchModelsFromDb } from '@/lib/ai/topic-search-models';
+import {
+  getTimeRangeOptionLabel,
+  type PlatformSource,
+  type ResearchSourceRecord,
+  type TopicSearchAIResponse,
+  type TopicSource,
+  type TrendingTopic,
+  type VideoIdea,
+  type SearchMode,
 } from '@/lib/types/search';
 
 function logLlmV1(event: Record<string, unknown>) {
@@ -31,10 +40,6 @@ function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
-}
-
-function envModel(name: string, fallback: string): string {
-  return process.env[name]?.trim() || fallback;
 }
 
 function buildTopicSources(urls: string[], titleByUrl: Map<string, string>): TopicSource[] {
@@ -74,11 +79,94 @@ function mapVideoIdeas(raw: MergerOutput['topics'][0]['video_ideas']): VideoIdea
   }));
 }
 
-async function researchOneSubtopic(args: {
+async function researchOneSubtopicLlmOnly(args: {
+  parentQuery: string;
+  subtopic: string;
+  index: number;
+  userId: string;
+  userEmail?: string;
+  researchModel: string;
+  maxResearchTokens: number;
+  searchId?: string;
+  /** e.g. "Last 3 months" — findings should reflect this recency window */
+  timeRangeLabel: string;
+}): Promise<{
+  report: SubtopicReport;
+  hits: WebSearchHit[];
+  records: ResearchSourceRecord[];
+  allowed: string[];
+  tokens: number;
+  cost: number;
+  stageMs: number;
+  searchCalls: number;
+  fetchCalls: number;
+}> {
+  const t0 = Date.now();
+  const prompt = `Live web search is disabled for this run. You are a research analyst. Using general knowledge of how audiences discuss this theme online (short video, forums, news, search behavior), produce ONE JSON object for content research planning.
+
+Main topic: ${JSON.stringify(args.parentQuery)}
+Research angle (exact string for the "subtopic" field): ${JSON.stringify(args.subtopic)}
+Time window: Frame findings and themes as what has mattered **${args.timeRangeLabel}** (recency for this run—not timeless background).
+
+Return ONLY valid JSON with this shape:
+{"subtopic":string,"findings":string[] (3-6 bullets),"themes":string[] (optional),"sources":[],"open_questions":string[] (optional)}
+
+Rules:
+- Do not invent specific statistics, study names, or publication dates. Use hedged language ("often", "commonly") when needed.
+- findings must be qualitatively useful for a videographer or content strategist.
+- **sources must be the empty array []** — there is no live SERP in this mode; do NOT fabricate URLs, Wikipedia links, or placeholders. Real URLs are attached by the system when Brave or OpenRouter web search is enabled.
+- The "subtopic" field must match exactly: ${JSON.stringify(args.subtopic)}`;
+
+  const ai = await createCompletion({
+    messages: [{ role: 'user', content: prompt }],
+    maxTokens: args.maxResearchTokens,
+    feature: 'topic_search',
+    userId: args.userId,
+    userEmail: args.userEmail,
+    modelPreference: [args.researchModel],
+  });
+
+  const parsed = parseAIResponseJSON<unknown>(ai.text);
+  const parsedReport = subtopicReportSchema.parse(parsed);
+  /** Never persist LLM-suggested URLs in no-SERP mode (avoids fake Wikipedia / example.com in "Specific sources"). */
+  const report: SubtopicReport = { ...parsedReport, sources: [] };
+
+  const records: ResearchSourceRecord[] = [];
+  const allowed: string[] = [];
+  const hits: WebSearchHit[] = [];
+
+  const stageMs = Date.now() - t0;
+  logLlmV1({
+    search_id: args.searchId,
+    phase: 'subtopic_research',
+    subtopic_index: args.index,
+    duration_ms: stageMs,
+    tokens: ai.usage.totalTokens,
+    web_research: 'llm_only',
+    search_calls: 0,
+    fetches: 0,
+    hits_returned: hits.length,
+  });
+
+  return {
+    report,
+    hits,
+    records,
+    allowed,
+    tokens: ai.usage.totalTokens,
+    cost: ai.estimatedCost,
+    stageMs,
+    searchCalls: 0,
+    fetchCalls: 0,
+  };
+}
+
+async function researchOneSubtopicWithLiveSerp(args: {
   parentQuery: string;
   subtopic: string;
   index: number;
   timeRange: string;
+  timeRangeLabel: string;
   country: string;
   language: string;
   userId: string;
@@ -100,13 +188,132 @@ async function researchOneSubtopic(args: {
   fetchCalls: number;
 }> {
   const t0 = Date.now();
-  const q = `${args.parentQuery} — ${args.subtopic}`;
-  const hits = await searchWeb(q, {
-    count: args.maxSearches,
-    timeRange: args.timeRange,
-    country: args.country,
-    language: args.language,
-  });
+  const serpMode = getTopicSearchWebResearchMode();
+  let q = `${args.parentQuery} — ${args.subtopic}`;
+  let hits: WebSearchHit[] = [];
+  let serpTokens = 0;
+  let serpCost = 0;
+  let refineTokens = 0;
+  let refineCost = 0;
+
+  if (serpMode === 'llm_only') {
+    return researchOneSubtopicLlmOnly({
+      parentQuery: args.parentQuery,
+      subtopic: args.subtopic,
+      index: args.index,
+      userId: args.userId,
+      userEmail: args.userEmail,
+      researchModel: args.researchModel,
+      maxResearchTokens: args.maxResearchTokens,
+      searchId: args.searchId,
+      timeRangeLabel: args.timeRangeLabel,
+    });
+  }
+
+  if (getTopicSearchRefineSerpQueryEnabled()) {
+    const refined = await refineSerpQueryWithLlm({
+      parentQuery: args.parentQuery,
+      subtopic: args.subtopic,
+      timeRangeLabel: args.timeRangeLabel,
+      userId: args.userId,
+      userEmail: args.userEmail,
+      researchModel: args.researchModel,
+      refineModel: getTopicSearchRefineQueryModel(),
+    });
+    q = refined.query;
+    refineTokens = refined.tokens;
+    refineCost = refined.cost;
+    logLlmV1({
+      search_id: args.searchId,
+      phase: 'serp_query_refine',
+      subtopic_index: args.index,
+      tokens: refined.tokens,
+      serp_mode: serpMode,
+    });
+  }
+
+  try {
+    if (serpMode === 'brave') {
+      hits = await searchWebBrave(q, {
+        count: args.maxSearches,
+        timeRange: args.timeRange,
+        country: args.country,
+        language: args.language,
+      });
+    } else {
+      const res = await searchWebOpenRouter(q, {
+        count: args.maxSearches,
+        timeRange: args.timeRange,
+        country: args.country,
+        language: args.language,
+        userId: args.userId,
+        userEmail: args.userEmail,
+      });
+      hits = res.hits;
+      serpTokens = res.usage.totalTokens;
+      serpCost = res.usage.estimatedCost;
+    }
+  } catch (e) {
+    if (serpMode === 'brave' && isBraveRateLimitError(e)) {
+      logLlmV1({
+        search_id: args.searchId,
+        subtopic_index: args.index,
+        brave_fallback: 'llm_only',
+        reason: e instanceof Error ? e.message.slice(0, 200) : String(e),
+      });
+      return researchOneSubtopicLlmOnly({
+        parentQuery: args.parentQuery,
+        subtopic: args.subtopic,
+        index: args.index,
+        userId: args.userId,
+        userEmail: args.userEmail,
+        researchModel: args.researchModel,
+        maxResearchTokens: args.maxResearchTokens,
+        searchId: args.searchId,
+        timeRangeLabel: args.timeRangeLabel,
+      });
+    }
+    if (serpMode === 'openrouter') {
+      logLlmV1({
+        search_id: args.searchId,
+        subtopic_index: args.index,
+        openrouter_fallback: 'llm_only',
+        reason: e instanceof Error ? e.message.slice(0, 200) : String(e),
+      });
+      return researchOneSubtopicLlmOnly({
+        parentQuery: args.parentQuery,
+        subtopic: args.subtopic,
+        index: args.index,
+        userId: args.userId,
+        userEmail: args.userEmail,
+        researchModel: args.researchModel,
+        maxResearchTokens: args.maxResearchTokens,
+        searchId: args.searchId,
+        timeRangeLabel: args.timeRangeLabel,
+      });
+    }
+    throw e;
+  }
+
+  if (hits.length === 0) {
+    logLlmV1({
+      search_id: args.searchId,
+      subtopic_index: args.index,
+      no_serp_hits: true,
+      serp_mode: serpMode,
+    });
+    return researchOneSubtopicLlmOnly({
+      parentQuery: args.parentQuery,
+      subtopic: args.subtopic,
+      index: args.index,
+      userId: args.userId,
+      userEmail: args.userEmail,
+      researchModel: args.researchModel,
+      maxResearchTokens: args.maxResearchTokens,
+      searchId: args.searchId,
+      timeRangeLabel: args.timeRangeLabel,
+    });
+  }
 
   const allowed: string[] = [];
   const titleByUrl = new Map<string, string>();
@@ -137,6 +344,7 @@ async function researchOneSubtopic(args: {
 {"subtopic":string,"findings":string[] (3-6 bullets),"themes":string[] (optional),"sources":[{"url":string,"title":string,"note":string}],"open_questions":string[] (optional)}
 Rules:
 - Every finding must be grounded in the evidence. Do not invent statistics.
+- Time scope: This search targets **${args.timeRangeLabel}**. Prefer findings that reflect what has been active, debated, or trending in that window (as shown in the evidence).
 - sources[].url MUST be chosen from URLs that appear in the evidence block.
 - subtopic must be: ${JSON.stringify(args.subtopic)}
 
@@ -160,7 +368,8 @@ ${fetchedParts.join('\n\n---\n\n')}`;
     phase: 'subtopic_research',
     subtopic_index: args.index,
     duration_ms: stageMs,
-    tokens: ai.usage.totalTokens,
+    tokens: ai.usage.totalTokens + serpTokens + refineTokens,
+    web_research: serpMode,
     search_calls: 1,
     fetches: fetchLimit,
     hits_returned: hits.length,
@@ -170,12 +379,54 @@ ${fetchedParts.join('\n\n---\n\n')}`;
     hits,
     records,
     allowed,
-    tokens: ai.usage.totalTokens,
-    cost: ai.estimatedCost,
+    tokens: ai.usage.totalTokens + serpTokens + refineTokens,
+    cost: ai.estimatedCost + serpCost + refineCost,
     stageMs,
     searchCalls: 1,
     fetchCalls: fetchLimit,
   };
+}
+
+async function researchOneSubtopic(args: {
+  parentQuery: string;
+  subtopic: string;
+  index: number;
+  timeRange: string;
+  country: string;
+  language: string;
+  userId: string;
+  userEmail?: string;
+  researchModel: string;
+  maxSearches: number;
+  maxFetches: number;
+  maxResearchTokens: number;
+  searchId?: string;
+}): Promise<{
+  report: SubtopicReport;
+  hits: WebSearchHit[];
+  records: ResearchSourceRecord[];
+  allowed: string[];
+  tokens: number;
+  cost: number;
+  stageMs: number;
+  searchCalls: number;
+  fetchCalls: number;
+}> {
+  const timeRangeLabel = getTimeRangeOptionLabel(args.timeRange);
+  if (getTopicSearchWebResearchMode() === 'llm_only') {
+    return researchOneSubtopicLlmOnly({
+      parentQuery: args.parentQuery,
+      subtopic: args.subtopic,
+      index: args.index,
+      userId: args.userId,
+      userEmail: args.userEmail,
+      researchModel: args.researchModel,
+      maxResearchTokens: args.maxResearchTokens,
+      searchId: args.searchId,
+      timeRangeLabel,
+    });
+  }
+  return researchOneSubtopicWithLiveSerp({ ...args, timeRangeLabel });
 }
 
 export interface RunLlmTopicPipelineResult {
@@ -215,9 +466,13 @@ export async function runLlmTopicPipeline(args: {
     throw new Error('Subtopics must be a non-empty array (max 5). Confirm subtopics before processing.');
   }
 
+  const timeRangeLabel = getTimeRangeOptionLabel(args.search.time_range);
+
+  const webResearchMode = getTopicSearchWebResearchMode();
   const limits = getLlmTopicPipelineLimits();
-  const researchModel = envModel('TOPIC_SEARCH_RESEARCH_MODEL', 'openai/gpt-4o-mini');
-  const mergerModelPref = envModel('TOPIC_SEARCH_MERGER_MODEL', '').trim();
+  const topicModels = await getTopicSearchModelsFromDb();
+  const researchModel = topicModels.research;
+  const mergerModelPref = topicModels.merger.trim();
 
   const stageRows: Array<Record<string, unknown>> = [];
 
@@ -288,10 +543,11 @@ export async function runLlmTopicPipeline(args: {
       ? `Client: ${args.clientContext.name}. Industry: ${args.clientContext.industry ?? 'n/a'}. Voice: ${args.clientContext.brandVoice ?? 'n/a'}.`
       : '';
 
-  const mergerPrompt = `You merge subtopic research into one JSON report for "${args.search.query}".
+  const mergerPrompt = `You merge research-angle findings into one JSON report for "${args.search.query}".
+Time scope: The user chose **${timeRangeLabel}**. Emphasize themes, debates, and video ideas that fit audience and creator activity in that window (not generic evergreen filler unless the evidence supports it).
 ${brandLine}
 
-Subtopic research:
+Research-angle findings:
 ${subtopicBlock}
 
 Return ONLY valid JSON matching:
@@ -345,9 +601,11 @@ Rules:
 
   let merger: MergerOutput;
   try {
-    merger = mergerOutputSchema.parse(parseAIResponseJSON<unknown>(mergerAi.text));
-  } catch {
-    throw new Error('Merger model returned invalid JSON. Try again.');
+    merger = parseMergerOutput(mergerAi.text, logLlmV1);
+  } catch (e) {
+    const msg =
+      e instanceof Error ? e.message : 'Merger model returned invalid JSON. Try again.';
+    throw new Error(msg);
   }
 
   if (args.search.search_mode === 'general') {
@@ -433,6 +691,7 @@ Rules:
     kind: 'llm_v1',
     at: new Date().toISOString(),
     search_id: args.searchId,
+    web_research_mode: webResearchMode,
     limits,
     stages: stageRows,
     totals: {

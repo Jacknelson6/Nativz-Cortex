@@ -65,6 +65,9 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['ffmpeg-static', 'fluent-ffmpeg', '@resvg/resvg-js', 'playwright-core'],
   webpack: (config, { dev }) => {
     if (dev) {
+      // Avoid PackFileCacheStrategy rename/ENOENT races on disk (missing routes-manifest,
+      // edge-runtime-webpack.js, chunk *.js) when multiple compiles overlap or tooling touches .next.
+      config.cache = { type: 'memory' };
       config.watchOptions = {
         ...config.watchOptions,
         ignored: [

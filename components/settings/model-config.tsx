@@ -1,29 +1,24 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
-  Cpu,
   Check,
-  Loader2,
-  Plus,
   X,
   ChevronUp,
   ChevronDown,
   Search,
-  Shield,
   Image,
   Ear,
   Video,
   Type,
-  Sparkles,
 } from 'lucide-react';
-import { Card } from '@/components/ui/card';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-interface OpenRouterModel {
+export interface OpenRouterModel {
   id: string;
   name: string;
   description: string;
@@ -79,18 +74,21 @@ function ModalityCheck({ has }: { has: boolean }) {
   );
 }
 
-function ModelSelector({
+export function ModelSelector({
   models,
   value,
   onSelect,
   placeholder,
   excludeIds,
+  /** When set (e.g. `anthropic`), only models whose OpenRouter id starts with `{prefix}/` */
+  providerPrefixFilter,
 }: {
   models: OpenRouterModel[];
   value: string;
   onSelect: (id: string) => void;
   placeholder: string;
   excludeIds?: string[];
+  providerPrefixFilter?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -98,16 +96,47 @@ function ModelSelector({
   const [sortField, setSortField] = useState<SortField>('price');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [freeOnly, setFreeOnly] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [panelBox, setPanelBox] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
 
-  // Close on outside click
+  /** Portal + fixed position avoids clipping from overflow-hidden / details / cards. */
+  useLayoutEffect(() => {
+    if (!open) {
+      setPanelBox(null);
+      return;
+    }
+    function measure() {
+      const node = triggerRef.current;
+      if (!node) return;
+      const r = node.getBoundingClientRect();
+      setPanelBox({
+        top: r.bottom + 4,
+        left: r.left,
+        width: Math.max(640, r.width),
+      });
+    }
+    measure();
+    window.addEventListener('scroll', measure, true);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('scroll', measure, true);
+      window.removeEventListener('resize', measure);
+    };
+  }, [open]);
+
+  // Close on outside click (trigger + portaled panel)
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
@@ -126,6 +155,13 @@ function ModelSelector({
     const q = search.toLowerCase();
     const list = models.filter((m) => {
       if (excludeIds?.includes(m.id)) return false;
+      if (
+        providerPrefixFilter &&
+        providerPrefixFilter !== 'all' &&
+        !m.id.startsWith(`${providerPrefixFilter}/`)
+      ) {
+        return false;
+      }
       if (freeOnly && !m.isFree) return false;
       if (!q) return true;
       return m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q);
@@ -156,7 +192,7 @@ function ModelSelector({
     });
 
     return list;
-  }, [models, search, excludeIds, sortField, sortDir, freeOnly]);
+  }, [models, search, excludeIds, sortField, sortDir, freeOnly, providerPrefixFilter]);
 
   const selectedModel = models.find((m) => m.id === value);
 
@@ -178,33 +214,23 @@ function ModelSelector({
       : <ChevronDown size={12} className="inline" />;
   };
 
-  return (
-    <div ref={containerRef} className="relative">
-      {/* Trigger button */}
-      <button
-        type="button"
-        onClick={() => {
-          setOpen(!open);
-          if (!open) setTimeout(() => inputRef.current?.focus(), 50);
+  const dropdownPanel =
+    open &&
+    panelBox &&
+    createPortal(
+      <div
+        ref={panelRef}
+        role="listbox"
+        className="rounded-xl border border-nativz-border bg-surface shadow-elevated overflow-hidden"
+        style={{
+          position: 'fixed',
+          top: panelBox.top,
+          left: Math.max(8, Math.min(panelBox.left, typeof window !== 'undefined' ? window.innerWidth - panelBox.width - 8 : panelBox.left)),
+          width: panelBox.width,
+          zIndex: 200,
+          maxWidth: typeof window !== 'undefined' ? window.innerWidth - 16 : undefined,
         }}
-        className="w-full flex items-center gap-2 rounded-lg border border-nativz-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-accent/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25"
       >
-        {value ? (
-          <span className="flex-1 truncate">
-            <span className="font-mono text-accent-text">{value}</span>
-            {selectedModel && selectedModel.name !== value && (
-              <span className="text-text-muted ml-2 text-xs">{selectedModel.name}</span>
-            )}
-          </span>
-        ) : (
-          <span className="flex-1 text-text-muted">{placeholder}</span>
-        )}
-        <Search size={14} className="text-text-muted shrink-0" />
-      </button>
-
-      {/* Dropdown */}
-      {open && (
-        <div className="absolute z-50 mt-1 w-full min-w-[640px] rounded-xl border border-nativz-border bg-surface shadow-elevated overflow-hidden">
           {/* Search */}
           <div className="p-2 border-b border-nativz-border">
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-background border border-nativz-border">
@@ -371,298 +397,35 @@ function ModelSelector({
               ))
             )}
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
-export function ModelConfig() {
-  const [currentModel, setCurrentModel] = useState('');
-  const [inputValue, setInputValue] = useState('');
-  const [fallbackModels, setFallbackModels] = useState<string[]>([]);
-  const [savedFallbacks, setSavedFallbacks] = useState<string[]>([]);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // OpenRouter model catalog
-  const [allModels, setAllModels] = useState<OpenRouterModel[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(true);
-
-  // Fetch settings
-  useEffect(() => {
-    async function fetchModel() {
-      try {
-        const res = await fetch('/api/settings/ai-model');
-        if (!res.ok) throw new Error('Failed to fetch model');
-        const data = await res.json();
-        setCurrentModel(data.model);
-        setInputValue(data.model);
-        setFallbackModels(data.fallbackModels ?? []);
-        setSavedFallbacks(data.fallbackModels ?? []);
-        setUpdatedAt(data.updatedAt);
-      } catch {
-        setError('Failed to load model settings');
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchModel();
-  }, []);
-
-  // Fetch OpenRouter models catalog
-  useEffect(() => {
-    async function fetchModels() {
-      try {
-        const res = await fetch('/api/settings/openrouter-models');
-        if (!res.ok) throw new Error('Failed to fetch models');
-        const data = await res.json();
-        setAllModels(data.models ?? []);
-      } catch {
-        // Non-critical — selector will just be empty
-        console.warn('Failed to load OpenRouter models catalog');
-      } finally {
-        setModelsLoading(false);
-      }
-    }
-    fetchModels();
-  }, []);
-
-  const hasModelChange = inputValue.trim() !== currentModel;
-  const hasFallbackChange = JSON.stringify(fallbackModels) !== JSON.stringify(savedFallbacks);
-  const hasChanges = hasModelChange || hasFallbackChange;
-
-  async function handleSave() {
-    if (!hasChanges || !inputValue.trim()) return;
-    setSaving(true);
-    setError(null);
-    setSuccess(false);
-    try {
-      const body: Record<string, unknown> = {};
-      if (hasModelChange) body.model = inputValue.trim();
-      if (hasFallbackChange) body.fallbackModels = fallbackModels;
-
-      const res = await fetch('/api/settings/ai-model', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to save');
-      }
-      const data = await res.json();
-      setCurrentModel(data.model);
-      setInputValue(data.model);
-      setFallbackModels(data.fallbackModels ?? []);
-      setSavedFallbacks(data.fallbackModels ?? []);
-      setUpdatedAt(data.updatedAt);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save model');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function addFallback(modelId: string) {
-    if (fallbackModels.includes(modelId) || fallbackModels.length >= 5) return;
-    setFallbackModels([...fallbackModels, modelId]);
-  }
-
-  function removeFallback(index: number) {
-    setFallbackModels(fallbackModels.filter((_, i) => i !== index));
-  }
-
-  function moveFallback(from: number, direction: -1 | 1) {
-    const to = from + direction;
-    if (to < 0 || to >= fallbackModels.length) return;
-    const updated = [...fallbackModels];
-    const [moved] = updated.splice(from, 1);
-    updated.splice(to, 0, moved);
-    setFallbackModels(updated);
-  }
-
-  if (loading) {
-    return (
-      <Card>
-        <div className="flex items-center gap-3 animate-pulse">
-          <div className="h-10 w-10 rounded-xl bg-surface-hover" />
-          <div className="space-y-2 flex-1">
-            <div className="h-4 w-32 rounded bg-surface-hover" />
-            <div className="h-3 w-48 rounded bg-surface-hover" />
-          </div>
-        </div>
-      </Card>
+      </div>,
+      document.body,
     );
-  }
-
-  const excludeFromFallback = [inputValue, ...fallbackModels];
 
   return (
-    <Card>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-surface">
-            <Cpu size={20} className="text-accent-text" />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-text-primary">Active model</h2>
-            <p className="text-xs text-text-muted">
-              Platform-wide OpenRouter model for all AI features
-            </p>
-          </div>
-        </div>
-
-        {/* Current model display */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-hover border border-nativz-border">
-          <span className="text-xs text-text-muted">Currently active:</span>
-          <code className="text-sm font-mono text-accent-text">{currentModel}</code>
-          {updatedAt && (
-            <span className="ml-auto text-xs text-text-muted">
-              Updated{' '}
-              {new Date(updatedAt).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
+    <div className="w-full min-w-0">
+      <div ref={triggerRef} className="w-full">
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(!open);
+            if (!open) setTimeout(() => inputRef.current?.focus(), 50);
+          }}
+          className="flex w-full items-center gap-2 rounded-lg border border-nativz-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-accent/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25"
+        >
+          {value ? (
+            <span className="flex-1 truncate">
+              <span className="font-mono text-accent-text">{value}</span>
+              {selectedModel && selectedModel.name !== value && (
+                <span className="ml-2 text-xs text-text-muted">{selectedModel.name}</span>
+              )}
             </span>
-          )}
-        </div>
-
-        {/* Model selector */}
-        {modelsLoading ? (
-          <div className="h-10 rounded-lg bg-surface-hover animate-pulse" />
-        ) : (
-          <ModelSelector
-            models={allModels}
-            value={inputValue}
-            onSelect={setInputValue}
-            placeholder="Search and select a model..."
-          />
-        )}
-
-        {/* ── Fallback models ───────────────────────────────── */}
-        <div className="border-t border-nativz-border pt-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Shield size={16} className="text-amber-400" />
-            <h3 className="text-sm font-semibold text-text-primary">Fallback chain</h3>
-            <span className="text-xs text-text-muted ml-1">
-              Tried in order if the primary fails
-            </span>
-          </div>
-
-          {/* Fallback list */}
-          {fallbackModels.length > 0 ? (
-            <div className="space-y-1.5 mb-3">
-              {fallbackModels.map((modelId, i) => {
-                const model = allModels.find((m) => m.id === modelId);
-                return (
-                  <div
-                    key={`${modelId}-${i}`}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-hover border border-nativz-border group"
-                  >
-                    <span className="text-xs text-text-muted font-mono w-5 shrink-0 text-center">
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm text-text-primary font-medium truncate block">
-                        {model?.name ?? modelId}
-                      </span>
-                      {model && model.name !== modelId && (
-                        <span className="text-xs text-text-muted font-mono">{modelId}</span>
-                      )}
-                    </div>
-                    {model && (
-                      <span className="text-xs text-text-muted shrink-0">
-                        {model.isFree ? (
-                          <span className="text-emerald-400">Free</span>
-                        ) : (
-                          `${formatPrice(model.promptPrice)}/M`
-                        )}
-                      </span>
-                    )}
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => moveFallback(i, -1)}
-                        disabled={i === 0}
-                        className="p-1 rounded text-text-muted hover:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed"
-                        title="Move up"
-                      >
-                        <ChevronUp size={14} />
-                      </button>
-                      <button
-                        onClick={() => moveFallback(i, 1)}
-                        disabled={i === fallbackModels.length - 1}
-                        className="p-1 rounded text-text-muted hover:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed"
-                        title="Move down"
-                      >
-                        <ChevronDown size={14} />
-                      </button>
-                      <button
-                        onClick={() => removeFallback(i)}
-                        className="p-1 rounded text-text-muted hover:text-red-400 transition-colors"
-                        title="Remove"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           ) : (
-            <p className="text-xs text-text-muted mb-3">
-              No fallback models. If the primary is unavailable, requests will fail.
-            </p>
+            <span className="flex-1 text-text-muted">{placeholder}</span>
           )}
-
-          {/* Add fallback selector */}
-          {fallbackModels.length < 5 && !modelsLoading && (
-            <ModelSelector
-              models={allModels}
-              value=""
-              onSelect={(id) => addFallback(id)}
-              placeholder="+ Add fallback model..."
-              excludeIds={excludeFromFallback}
-            />
-          )}
-        </div>
-
-        {/* ── Save button + messages ───────────────────────── */}
-        <div className="flex items-center gap-3 border-t border-nativz-border pt-4">
-          <button
-            onClick={handleSave}
-            disabled={saving || !hasChanges || !inputValue.trim()}
-            className="flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-accent-surface text-accent-text hover:bg-accent/20"
-          >
-            {saving ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : success ? (
-              <Check size={14} />
-            ) : null}
-            {saving ? 'Saving...' : success ? 'Saved' : 'Save changes'}
-          </button>
-
-          {error && <p className="text-xs text-red-400">{error}</p>}
-
-          {success && (
-            <p className="text-xs text-emerald-400">
-              Settings updated. Changes take effect on the next AI request.
-            </p>
-          )}
-        </div>
+          <Search size={14} className="shrink-0 text-text-muted" />
+        </button>
       </div>
-    </Card>
+      {dropdownPanel}
+    </div>
   );
 }

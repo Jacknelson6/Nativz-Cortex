@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { getBrandProfile, getKnowledgeEntries } from '@/lib/knowledge/queries';
+import { generateSpokenScript } from '@/lib/ideas/spoken-script';
 
 const strategySchema = z.object({
   direction: z.string().optional(),
@@ -259,27 +260,31 @@ All ideas must be actionable short-form video content. Output ONLY the JSON arra
       completed_at: new Date().toISOString(),
     }).eq('id', ideaGen.id);
 
-    // ── Phase 3: Generate scripts ──
+    // ── Phase 3: Generate scripts (same spoken-script path as /api/ideas/generate-script) ──
     await admin.from('strategy_pipeline_runs').update({ current_phase: 'scripts' }).eq('id', runId);
 
     for (const idea of allIdeas) {
       try {
-        const scriptPrompt = `Write a spoken-word script for a short-form video (30-90 seconds). ONLY the words spoken on camera. No stage directions. Strong hook first 3 seconds. Clear CTA at end.`;
-
-        const scriptResult = await createCompletion({
-          messages: [
-            { role: 'system', content: scriptPrompt },
-            { role: 'user', content: `Video title: ${idea.title}\nContent pillar: ${idea.content_pillar}\nWhy it works: ${idea.why_it_works.join('. ')}` },
-          ],
-          maxTokens: 1500,
-          feature: 'strategy_pipeline',
+        const { scriptText } = await generateSpokenScript({
+          admin,
+          clientId,
+          title: idea.title,
+          why_it_works: idea.why_it_works,
+          content_pillar: idea.content_pillar,
+          video_length_seconds: 60,
+          userId,
         });
 
         await admin.from('idea_scripts').insert({
           client_id: clientId,
           title: idea.title,
-          script_text: scriptResult.text.trim(),
-          reference_context: { pillar_id: idea.pillar_id, content_pillar: idea.content_pillar },
+          script_text: scriptText,
+          reference_context: {
+            pillar_id: idea.pillar_id,
+            content_pillar: idea.content_pillar,
+            idea_generation_id: ideaGen.id,
+            pipeline: 'strategy_pipeline',
+          },
         });
       } catch {
         // Continue with other scripts if one fails

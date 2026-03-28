@@ -118,10 +118,14 @@ export default async function AdminDashboardPage() {
           </Link>
         </div>
 
-        {/* Tasks + Notifications */}
-        <div className="grid grid-cols-2 gap-3">
-          <TodoWidget />
-          <NotificationsWidget />
+        {/* Tasks + Notifications — equal row height so task footer pins to bottom */}
+        <div className="grid grid-cols-2 gap-3 items-stretch min-h-0">
+          <div className="flex h-full min-h-0 flex-col">
+            <TodoWidget />
+          </div>
+          <div className="flex h-full min-h-0 flex-col">
+            <NotificationsWidget />
+          </div>
         </div>
 
         {/* Pipeline quick-view */}

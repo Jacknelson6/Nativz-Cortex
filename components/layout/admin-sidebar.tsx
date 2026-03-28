@@ -29,6 +29,7 @@ import {
   List,
   RefreshCw,
   Sparkles,
+  Compass,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -90,6 +91,7 @@ const NAV_SECTIONS: NavSection[] = [
       },
       { href: '/admin/scheduler', label: 'Post scheduler', icon: Send },
       { href: '/admin/search/new', label: 'Research', icon: Telescope },
+      { href: '/admin/strategy-lab', label: 'Strategy lab', icon: Compass },
       { href: '/admin/analysis', label: 'Analysis', icon: Clapperboard },
       { href: '/admin/ad-creatives', label: 'Ad creatives', icon: ImagePlus },
     ],

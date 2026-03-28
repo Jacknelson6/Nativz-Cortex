@@ -69,11 +69,13 @@ export async function PATCH(
 
     const nextStatus = parsed.data.start_processing ? 'processing' : 'pending_subtopics';
 
+    /** Clear lease so POST /process can claim; avoids stuck 202 when retrying. */
     const { error: upErr } = await admin
       .from('topic_searches')
       .update({
         subtopics: parsed.data.subtopics,
         status: nextStatus,
+        ...(parsed.data.start_processing ? { processing_started_at: null } : {}),
       })
       .eq('id', id);
 

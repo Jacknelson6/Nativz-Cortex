@@ -1,18 +1,23 @@
+import { unstable_noStore as noStore } from 'next/cache';
 import { notFound, redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { SubtopicsPlanClient } from '@/components/research/subtopics-plan-client';
+import { getTimeRangeOptionLabel } from '@/lib/types/search';
+
+export const dynamic = 'force-dynamic';
 
 export default async function AdminSearchSubtopicsPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  noStore();
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
 
   const { data: search, error } = await supabase
     .from('topic_searches')
-    .select('id, query, status, topic_pipeline')
+    .select('id, query, status, topic_pipeline, time_range')
     .eq('id', id)
     .single();
 
@@ -34,5 +39,15 @@ export default async function AdminSearchSubtopicsPage({
     notFound();
   }
 
-  return <SubtopicsPlanClient searchId={search.id} query={search.query} />;
+  const timeRangeLabel = getTimeRangeOptionLabel(
+    (search as { time_range?: string | null }).time_range ?? 'last_3_months',
+  );
+
+  return (
+    <SubtopicsPlanClient
+      searchId={search.id}
+      query={search.query}
+      timeRangeLabel={timeRangeLabel}
+    />
+  );
 }

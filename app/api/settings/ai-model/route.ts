@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
+import { clearModelCache } from '@/lib/ai/client';
+import { clearTopicSearchModelCache, getTopicSearchModelsFromDb } from '@/lib/ai/topic-search-models';
 import { z } from 'zod';
 
 const PatchSchema = z.object({
   model: z.string().min(1, 'Model name is required').max(200).optional(),
   fallbackModels: z.array(z.string().min(1).max(200)).max(5).optional(),
+  /** Sets planner, research, and merger to the same id (topic search llm_v1). */
+  topicSearchModel: z.string().min(1).max(200).optional(),
+  topicSearchPlannerModel: z.string().min(1).max(200).optional(),
+  topicSearchResearchModel: z.string().min(1).max(200).optional(),
+  topicSearchMergerModel: z.string().max(200).optional(),
 });
 
 /**
@@ -41,10 +48,16 @@ export async function GET() {
       .eq('agency', 'nativz')
       .single();
 
+    const topicModels = await getTopicSearchModelsFromDb();
+
     return NextResponse.json({
       model: settings?.ai_model ?? DEFAULT_OPENROUTER_MODEL,
       fallbackModels: settings?.ai_fallback_models ?? [],
       updatedAt: settings?.updated_at ?? null,
+      topicSearchPlannerModel: topicModels.planner,
+      topicSearchResearchModel: topicModels.research,
+      topicSearchMergerModel: topicModels.merger,
+      topicSearchModelsUpdatedAt: settings?.updated_at ?? null,
     });
   } catch (err) {
     console.error('GET /api/settings/ai-model error:', err);
@@ -88,9 +101,15 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    if (!parsed.data.model && !parsed.data.fallbackModels) {
+    const hasTopicPatch =
+      parsed.data.topicSearchModel !== undefined ||
+      parsed.data.topicSearchPlannerModel !== undefined ||
+      parsed.data.topicSearchResearchModel !== undefined ||
+      parsed.data.topicSearchMergerModel !== undefined;
+
+    if (!parsed.data.model && !parsed.data.fallbackModels && !hasTopicPatch) {
       return NextResponse.json(
-        { error: 'Provide at least model or fallbackModels' },
+        { error: 'Provide at least model, fallbackModels, or topic search model fields' },
         { status: 400 },
       );
     }
@@ -100,6 +119,23 @@ export async function PATCH(req: NextRequest) {
     };
     if (parsed.data.model) updatePayload.ai_model = parsed.data.model;
     if (parsed.data.fallbackModels !== undefined) updatePayload.ai_fallback_models = parsed.data.fallbackModels;
+    if (parsed.data.topicSearchModel !== undefined) {
+      const m = parsed.data.topicSearchModel.trim();
+      updatePayload.topic_search_planner_model = m;
+      updatePayload.topic_search_research_model = m;
+      updatePayload.topic_search_merger_model = m;
+    } else {
+      if (parsed.data.topicSearchPlannerModel !== undefined) {
+        updatePayload.topic_search_planner_model = parsed.data.topicSearchPlannerModel.trim();
+      }
+      if (parsed.data.topicSearchResearchModel !== undefined) {
+        updatePayload.topic_search_research_model = parsed.data.topicSearchResearchModel.trim();
+      }
+      if (parsed.data.topicSearchMergerModel !== undefined) {
+        const m = parsed.data.topicSearchMergerModel.trim();
+        updatePayload.topic_search_merger_model = m.length > 0 ? m : null;
+      }
+    }
 
     const { error: updateError } = await adminClient
       .from('agency_settings')
@@ -108,7 +144,26 @@ export async function PATCH(req: NextRequest) {
 
     if (updateError) {
       console.error('Failed to update ai_model:', updateError);
-      return NextResponse.json({ error: 'Failed to save model' }, { status: 500 });
+      const msg = String((updateError as { message?: string }).message ?? '');
+      const code = String((updateError as { code?: string }).code ?? '');
+      const schemaBehind =
+        (code === 'PGRST204' || /column|schema cache/i.test(msg)) &&
+        /topic_search_|agency_settings/i.test(msg);
+      return NextResponse.json(
+        {
+          error: schemaBehind
+            ? 'Database schema is missing topic search columns. Run pending migrations (e.g. npm run supabase:migrate with SUPABASE_DB_URL), or apply supabase/migrations/073_agency_settings_topic_search_models.sql in the Supabase SQL editor.'
+            : 'Failed to save model',
+        },
+        { status: 500 },
+      );
+    }
+
+    if (parsed.data.model || parsed.data.fallbackModels !== undefined) {
+      clearModelCache();
+    }
+    if (hasTopicPatch) {
+      clearTopicSearchModelCache();
     }
 
     // Fetch updated settings to return
@@ -118,10 +173,16 @@ export async function PATCH(req: NextRequest) {
       .eq('agency', 'nativz')
       .single();
 
+    const topicModels = await getTopicSearchModelsFromDb();
+
     return NextResponse.json({
       model: settings?.ai_model ?? parsed.data.model,
       fallbackModels: settings?.ai_fallback_models ?? parsed.data.fallbackModels ?? [],
       updatedAt: settings?.updated_at ?? new Date().toISOString(),
+      topicSearchPlannerModel: topicModels.planner,
+      topicSearchResearchModel: topicModels.research,
+      topicSearchMergerModel: topicModels.merger,
+      topicSearchModelsUpdatedAt: settings?.updated_at ?? new Date().toISOString(),
     });
   } catch (err) {
     console.error('PATCH /api/settings/ai-model error:', err);

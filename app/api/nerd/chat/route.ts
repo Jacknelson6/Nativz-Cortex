@@ -5,6 +5,12 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { registerAllTools } from '@/lib/nerd/tools';
 import { getAllTools, getTool, getToolsForAPI } from '@/lib/nerd/registry';
 import type { ToolResult } from '@/lib/nerd/types';
+import { toOpenAiChatModelId } from '@/lib/ai/openai-model-id';
+import {
+  getNerdModelFromDb,
+  resolveOpenAiApiKeyForFeature,
+  resolveOpenRouterApiKeyForFeature,
+} from '@/lib/ai/provider-keys';
 
 // Register tools on module load
 registerAllTools();
@@ -471,10 +477,25 @@ export async function POST(req: NextRequest) {
     }
 
     // --- Build API messages ---
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const openAiKey = await resolveOpenAiApiKeyForFeature('nerd');
+    const orKey = await resolveOpenRouterApiKeyForFeature('nerd');
+    const nerdModel = await getNerdModelFromDb();
+    const openAiModelId = toOpenAiChatModelId(nerdModel);
+    const useOpenAi = Boolean(openAiKey && openAiModelId);
+    const apiKey = useOpenAi ? openAiKey : orKey;
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'OpenRouter API key not configured' }), { status: 500 });
+      return new Response(
+        JSON.stringify({
+          error:
+            'No API key configured. Add an OpenAI or OpenRouter key in admin → AI models (or set OPENAI_API_KEY / OPENROUTER_API_KEY).',
+        }),
+        { status: 500 },
+      );
     }
+    const chatCompletionsUrl = useOpenAi
+      ? 'https://api.openai.com/v1/chat/completions'
+      : 'https://openrouter.ai/api/v1/chat/completions';
+    const requestModel = useOpenAi ? openAiModelId! : nerdModel;
 
     // Choose system prompt based on portal vs admin
     const systemPrompt = isPortalUser ? buildPortalSystemPrompt(portalClientName) : SYSTEM_PROMPT;
@@ -499,16 +520,20 @@ export async function POST(req: NextRequest) {
       : getToolsForAPI();
 
     // --- Initial API call with tool definitions ---
-    const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const initialHeaders: Record<string, string> = {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    };
+    if (!useOpenAi) {
+      initialHeaders['HTTP-Referer'] = process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io';
+      initialHeaders['X-Title'] = 'Nativz Cortex - The Nerd';
+    }
+
+    const openRouterRes = await fetch(chatCompletionsUrl, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io',
-        'X-Title': 'Nativz Cortex - The Nerd',
-      },
+      headers: initialHeaders,
       body: JSON.stringify({
-        model: 'openrouter/hunter-alpha',
+        model: requestModel,
         messages: apiMessages,
         stream: true,
         max_tokens: 8192,
@@ -518,7 +543,7 @@ export async function POST(req: NextRequest) {
 
     if (!openRouterRes.ok) {
       const errText = await openRouterRes.text();
-      console.error('OpenRouter error:', openRouterRes.status, errText);
+      console.error('Chat completions error:', openRouterRes.status, errText);
       // Return the actual error details to help debug
       let detail = 'AI service error';
       try {
@@ -698,16 +723,20 @@ export async function POST(req: NextRequest) {
             }
 
             // Continue conversation with tool results
-            const continueRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            const continueHeaders: Record<string, string> = {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            };
+            if (!useOpenAi) {
+              continueHeaders['HTTP-Referer'] = process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io';
+              continueHeaders['X-Title'] = 'Nativz Cortex - The Nerd';
+            }
+
+            const continueRes = await fetch(chatCompletionsUrl, {
               method: 'POST',
-              headers: {
-                Authorization: `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io',
-                'X-Title': 'Nativz Cortex - The Nerd',
-              },
+              headers: continueHeaders,
               body: JSON.stringify({
-                model: 'openrouter/hunter-alpha',
+                model: requestModel,
                 messages: currentMessages,
                 stream: true,
                 max_tokens: 8192,
@@ -717,7 +746,7 @@ export async function POST(req: NextRequest) {
 
             if (!continueRes.ok) {
               const errText = await continueRes.text();
-              console.error('OpenRouter continue error:', continueRes.status, errText);
+              console.error('Chat completions continue error:', continueRes.status, errText);
               let errDetail = '';
               try { errDetail = JSON.parse(errText)?.error?.message ?? ''; } catch { /* */ }
               controller.enqueue(encoder.encode(JSON.stringify({ type: 'text', content: `\n\nI ran into an issue processing results${errDetail ? `: ${errDetail}` : ''}. Try asking a simpler question or start a new conversation.` }) + '\n'));

@@ -82,13 +82,23 @@ export function SearchModeSelector({
         }),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as {
+        id?: string;
+        topic_pipeline?: string;
+        error?: string;
+        details?: unknown;
+      };
       if (!res.ok) {
         setError(data.details ? `${data.error}: ${data.details}` : (data.error || 'Search failed. Try again.'));
         setBrandLoading(false);
         return;
       }
-      router.push(`${redirectPrefix}/search/${data.id}/processing`);
+      const id = data.id as string;
+      const subtopicsFirst =
+        data.topic_pipeline === 'llm_v1' && redirectPrefix === '/admin';
+      router.push(
+        `${redirectPrefix}/search/${id}/${subtopicsFirst ? 'subtopics' : 'processing'}`,
+      );
     } catch {
       setError('Something went wrong. Try again.');
       setBrandLoading(false);
@@ -117,13 +127,23 @@ export function SearchModeSelector({
         }),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as {
+        id?: string;
+        topic_pipeline?: string;
+        error?: string;
+        details?: unknown;
+      };
       if (!res.ok) {
         setError(data.details ? `${data.error}: ${data.details}` : (data.error || 'Search failed. Try again.'));
         setTopicLoading(false);
         return;
       }
-      router.push(`${redirectPrefix}/search/${data.id}/processing`);
+      const id = data.id as string;
+      const subtopicsFirst =
+        data.topic_pipeline === 'llm_v1' && redirectPrefix === '/admin';
+      router.push(
+        `${redirectPrefix}/search/${id}/${subtopicsFirst ? 'subtopics' : 'processing'}`,
+      );
     } catch {
       setError('Something went wrong. Try again.');
       setTopicLoading(false);

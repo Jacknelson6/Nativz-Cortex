@@ -78,7 +78,7 @@ export function CommandPalette() {
     { id: 'clients', label: 'Clients', group: 'Navigation', icon: <Users className="w-4 h-4" />, action: () => navigate('/admin/clients'), keywords: 'accounts brands' },
     { id: 'meetings', label: 'Meetings', group: 'Navigation', icon: <Mic2 className="w-4 h-4" />, action: () => navigate('/admin/meetings'), keywords: 'fyxer notes recurring adhoc prospects' },
     { id: 'research', label: 'Research', group: 'Navigation', icon: <Telescope className="w-4 h-4" />, action: () => navigate('/admin/search/new'), keywords: 'topic social listening ideas generate' },
-    { id: 'research-history', label: 'Research history', group: 'Navigation', icon: <Clock className="w-4 h-4" />, action: () => navigate('/admin/search/new?history=true'), keywords: 'past searches' },
+    { id: 'research-history', label: 'Research history', group: 'Navigation', icon: <Clock className="w-4 h-4" />, action: () => navigate('/admin/search/new'), keywords: 'past searches' },
     { id: 'analytics', label: 'Analytics', group: 'Navigation', icon: <BarChart3 className="w-4 h-4" />, action: () => navigate('/admin/analytics'), keywords: 'metrics reports data' },
     { id: 'settings', label: 'Settings', group: 'Navigation', icon: <Settings className="w-4 h-4" />, action: () => navigate('/admin/settings'), keywords: 'preferences config' },
     { id: 'add-task', label: 'Add task', group: 'Quick actions', icon: <Plus className="w-4 h-4" />, action: () => enterTaskMode(), keywords: 'create todo new task' },

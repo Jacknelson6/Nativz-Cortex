@@ -1,6 +1,9 @@
 // lib/research/history.ts
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/** Initial batch size for topic search hub history (`/admin/search/new`). */
+export const TOPIC_SEARCH_HUB_HISTORY_LIMIT = 40;
+
 export type HistoryItemType = 'brand_intel' | 'topic' | 'ideas';
 
 export interface HistoryItem {
@@ -19,6 +22,8 @@ interface FetchHistoryOptions {
   type?: HistoryItemType | null;
   clientId?: string | null;
   cursor?: string | null;
+  /** When `type` is omitted, set false to return only topic searches (no idea generations). Ignored when `type` is set. */
+  includeIdeas?: boolean;
 }
 
 export async function fetchHistory({
@@ -26,6 +31,7 @@ export async function fetchHistory({
   type = null,
   clientId = null,
   cursor = null,
+  includeIdeas = true,
 }: FetchHistoryOptions = {}): Promise<HistoryItem[]> {
   const supabase = createAdminClient();
   const items: HistoryItem[] = [];
@@ -64,7 +70,9 @@ export async function fetchHistory({
     }
   }
 
-  if (!type || type === 'ideas') {
+  const shouldFetchIdeas = type === 'ideas' || (type === null && includeIdeas);
+
+  if (shouldFetchIdeas) {
     let query = supabase
       .from('idea_generations')
       .select('id, concept, count, status, created_at, client_id, search_id, clients(name)')

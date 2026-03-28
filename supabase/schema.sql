@@ -60,7 +60,7 @@ CREATE TABLE topic_searches (
   language TEXT NOT NULL,
   country TEXT NOT NULL,
   client_id UUID REFERENCES clients(id),
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'pending_subtopics', 'processing', 'completed', 'failed')),
   summary TEXT,
   metrics JSONB,
   activity_data JSONB,

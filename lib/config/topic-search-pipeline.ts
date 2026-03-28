@@ -13,7 +13,7 @@ export function topicPipelineFromEnvValue(raw: string | undefined): TopicPipelin
 /**
  * Which topic search backend runs for **new** searches (`POST /api/search/start`) and process routing.
  *
- * **Default: `llm_v1`** — subtopic planning + tool-augmented LLM research (requires `BRAVE_SEARCH_API_KEY`).
+ * **Default: `llm_v1`** — subtopic planning + LLM research (`TOPIC_SEARCH_WEB_RESEARCH=brave` adds Brave SERP; default is LLM-only).
  * Set `TOPIC_SEARCH_PIPELINE=legacy` to use the previous Brave + platform scrape pipeline.
  */
 export function getTopicSearchPipelineFromEnv(): TopicPipeline {

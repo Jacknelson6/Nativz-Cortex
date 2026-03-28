@@ -2,48 +2,43 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, Sparkles } from 'lucide-react';
-import { SpotlightCard } from '@/components/ui/spotlight-card';
+import { ResearchTopicForm, type ResearchTopicSnapshot } from './research-topic-form';
 import { ResearchWizard } from './research-wizard';
-import { ContentWizardModal } from '@/components/ideas-hub/content-wizard-modal';
-import { HistoryFeed } from './history-feed';
-import { HistoryModal } from './history-modal';
+import {
+  TopicSearchHistoryRail,
+  useTopicSearchHistoryRailOpen,
+} from './topic-search-history-rail';
 import type { HistoryItem } from '@/lib/research/history';
 import type { ClientOption } from '@/components/ui/client-picker';
+import { cn } from '@/lib/utils/cn';
 
 interface ResearchHubProps {
   clients: ClientOption[];
   historyItems: HistoryItem[];
   /** When true, new searches use llm_v1 and go to subtopics planning first */
   topicPipelineLlmV1?: boolean;
+  /** Greeting name on the search card */
+  userFirstName?: string | null;
 }
 
-export function ResearchHub({ clients, historyItems, topicPipelineLlmV1 = false }: ResearchHubProps) {
+export function ResearchHub({
+  clients,
+  historyItems,
+  topicPipelineLlmV1 = false,
+  userFirstName = null,
+}: ResearchHubProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefillQuery = searchParams.get('query') ?? '';
-  const [researchOpen, setResearchOpen] = useState(!!prefillQuery);
-  const [strategyOpen, setStrategyOpen] = useState(false);
-  const [historyModalOpen, setHistoryModalOpen] = useState(searchParams.get('history') === 'true');
 
-  // Open history modal when ?history=true is in the URL
-  useEffect(() => {
-    if (searchParams.get('history') === 'true') {
-      setHistoryModalOpen(true);
-    }
-  }, [searchParams]);
+  const [legacyModalOpen, setLegacyModalOpen] = useState(false);
+  const [legacySnapshot, setLegacySnapshot] = useState<ResearchTopicSnapshot | null>(null);
 
-  // Auto-open research wizard when ?query= is present
-  useEffect(() => {
-    if (prefillQuery) {
-      setResearchOpen(true);
-    }
-  }, [prefillQuery]);
   const [optimisticItems, setOptimisticItems] = useState<HistoryItem[]>([]);
+  const [historyRailOpen, setHistoryRailOpen] = useTopicSearchHistoryRailOpen();
   const prevHistoryRef = useRef(historyItems);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Clear optimistic items when server data refreshes (avoids duplicates)
   useEffect(() => {
     if (prevHistoryRef.current !== historyItems) {
       prevHistoryRef.current = historyItems;
@@ -53,7 +48,6 @@ export function ResearchHub({ clients, historyItems, topicPipelineLlmV1 = false 
     }
   }, [historyItems]);
 
-  // Poll processing items until they complete, then refresh server data
   useEffect(() => {
     const fromOptimistic = optimisticItems
       .filter((item) => item.status === 'processing' || item.status === 'pending')
@@ -122,92 +116,86 @@ export function ResearchHub({ clients, historyItems, topicPipelineLlmV1 = false 
   }, []);
 
   return (
-    <div className="cortex-page-gutter space-y-12">
-      {/* Header + Cards */}
-      <div className="flex flex-col items-center justify-center pt-8">
-        <div className="w-full max-w-3xl">
-          <div className="text-center mb-10">
-            <h1 className="ui-page-title-hero">What would you like to research today?</h1>
+    <div
+      className={cn(
+        'flex min-h-0 flex-col px-6 pb-12 sm:px-8 lg:pl-0',
+        /* Mobile / tablet: fill viewport so history list can flex to “View more” */
+        'max-lg:min-h-[calc(100dvh-3.5rem)] max-lg:flex-1',
+        /* Lock to viewport below header: no page scroll on lg+; only the history rail scrolls */
+        'lg:h-[calc(100vh-3.5rem)] lg:min-h-0 lg:max-h-[calc(100vh-3.5rem)] lg:overflow-hidden lg:pb-0',
+      )}
+    >
+      <section
+        className={cn(
+          'flex w-full flex-1 flex-col pt-6 sm:pt-8 md:pt-12 lg:pt-0',
+          'min-h-0',
+          'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden',
+        )}
+      >
+        <div
+          className={cn(
+            'flex min-h-0 flex-1 flex-col gap-8 lg:grid lg:items-stretch lg:gap-10',
+            'lg:overflow-hidden',
+            historyRailOpen
+              ? 'lg:grid-cols-[260px_minmax(0,1fr)]'
+              : 'lg:grid-cols-[2.5rem_minmax(0,1fr)]',
+          )}
+        >
+          {/* Main column: center hero in remaining space; min-h-0 so grid does not overflow the page */}
+          <div
+            className={cn(
+              'flex min-w-0 w-full shrink-0 justify-center lg:col-start-2 lg:row-start-1 xl:pl-2',
+              'lg:min-h-0 lg:flex-1 lg:flex-col lg:items-center lg:justify-center lg:overflow-hidden',
+            )}
+          >
+            <div className="w-full max-w-3xl -translate-y-1.5 lg:-translate-y-2">
+              <ResearchTopicForm
+                clients={clients}
+                initialQuery={prefillQuery}
+                topicPipelineLlmV1={topicPipelineLlmV1}
+                userFirstName={userFirstName}
+                onStarted={handleResearchStarted}
+                onLegacyContinue={(snap) => {
+                  setLegacySnapshot(snap);
+                  setLegacyModalOpen(true);
+                }}
+              />
+            </div>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Research card */}
-            <SpotlightCard spotlightColor="rgba(91, 163, 230, 0.15)" className="p-7">
-              <button
-                type="button"
-                onClick={() => setResearchOpen(true)}
-                className="w-full text-left cursor-pointer"
-              >
-                <div className="flex flex-col items-center text-center">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-surface mb-3">
-                    <Search size={18} className="text-accent-text" />
-                  </div>
-                  <h2 className="text-base font-semibold text-text-primary mb-1">Research</h2>
-                  <p className="text-sm text-text-muted mb-5">
-                    Search what people are saying about a brand or topic
-                  </p>
-                  <div className="w-full rounded-xl bg-accent-surface/50 border border-accent/25 py-2.5 text-center">
-                    <span className="text-sm font-semibold text-accent-text">Start research</span>
-                  </div>
-                </div>
-              </button>
-            </SpotlightCard>
-
-            {/* Ideas card */}
-            <SpotlightCard spotlightColor="rgba(168, 85, 247, 0.15)" className="p-7">
-              <button
-                type="button"
-                onClick={() => setStrategyOpen(true)}
-                className="w-full text-left cursor-pointer"
-              >
-                <div className="flex flex-col items-center text-center">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent2-surface mb-3">
-                    <Sparkles size={18} className="text-accent2-text" />
-                  </div>
-                  <h2 className="text-base font-semibold text-text-primary mb-1">Strategize</h2>
-                  <p className="text-sm text-text-muted mb-5">
-                    Generate content ideas powered by AI + knowledge
-                  </p>
-                  <div className="w-full rounded-xl bg-accent2-surface border border-accent2/25 py-2.5 text-center">
-                    <span className="text-sm font-semibold text-accent2-text">Generate strategy</span>
-                  </div>
-                </div>
-              </button>
-            </SpotlightCard>
-          </div>
+          {/* History rail: left of content on lg+ (between app nav and workspace) */}
+          <aside
+            className={cn(
+              'flex min-h-0 w-full flex-col',
+              'max-lg:flex-1',
+              'lg:col-start-1 lg:row-start-1 lg:h-full lg:max-h-full lg:shrink-0 lg:self-stretch lg:overflow-hidden',
+            )}
+          >
+            <TopicSearchHistoryRail
+              open={historyRailOpen}
+              onOpen={() => setHistoryRailOpen(true)}
+              onClose={() => setHistoryRailOpen(false)}
+              items={allItems}
+              historyResetKey={historyItems.map((i) => i.id).join(',')}
+              serverHistoryCount={historyItems.length}
+              clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+            />
+          </aside>
         </div>
-      </div>
+      </section>
 
-      {/* History feed */}
-      <div className="max-w-3xl mx-auto w-full">
-        <HistoryFeed
-          items={allItems}
-          clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+      {!topicPipelineLlmV1 && (
+        <ResearchWizard
+          open={legacyModalOpen}
+          onClose={() => {
+            setLegacyModalOpen(false);
+            setLegacySnapshot(null);
+          }}
+          clients={clients}
+          step1Snapshot={legacySnapshot}
+          topicPipelineLlmV1={topicPipelineLlmV1}
+          onStarted={handleResearchStarted}
         />
-      </div>
-
-      {/* Wizards */}
-      <ResearchWizard
-        open={researchOpen}
-        onClose={() => setResearchOpen(false)}
-        clients={clients}
-        initialQuery={prefillQuery}
-        topicPipelineLlmV1={topicPipelineLlmV1}
-        onStarted={handleResearchStarted}
-      />
-      <ContentWizardModal
-        open={strategyOpen}
-        onClose={() => setStrategyOpen(false)}
-        clients={clients.map((c) => ({ id: c.id, name: c.name }))}
-      />
-
-      {/* History modal */}
-      <HistoryModal
-        open={historyModalOpen}
-        onClose={() => setHistoryModalOpen(false)}
-        initialItems={historyItems}
-        clients={clients.map((c) => ({ id: c.id, name: c.name }))}
-      />
+      )}
     </div>
   );
 }

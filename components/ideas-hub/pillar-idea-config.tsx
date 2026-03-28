@@ -5,12 +5,20 @@ import { useRouter } from 'next/navigation';
 import { Sparkles, Loader2, Minus, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import {
+  ReferenceVideosField,
+  processPendingReferenceVideos,
+  completedReferenceVideoIds,
+  type ReferenceVideoItem,
+} from './reference-videos-field';
 import type { Pillar } from './pillar-card';
 
 interface PillarIdeaConfigProps {
   clientId: string;
   pillars: Pillar[];
   initialSearchId?: string | null;
+  /** Called when idea generation is accepted (before redirect). */
+  onIdeasStarted?: () => void;
 }
 
 // ── Ideas Per Pillar Selector ────────────────────────────────────────────────
@@ -59,16 +67,28 @@ function IdeasPerPillarSelector({ value, onChange }: { value: number; onChange: 
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export function PillarIdeaConfig({ clientId, pillars, initialSearchId }: PillarIdeaConfigProps) {
+export function PillarIdeaConfig({ clientId, pillars, initialSearchId, onIdeasStarted }: PillarIdeaConfigProps) {
   const router = useRouter();
   const [ideasPerPillar, setIdeasPerPillar] = useState(5);
   const [concept, setConcept] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [processingRefs, setProcessingRefs] = useState(false);
+  const [referenceVideos, setReferenceVideos] = useState<ReferenceVideoItem[]>([]);
 
   const totalIdeas = ideasPerPillar * pillars.length;
+  const completedRefIds = completedReferenceVideoIds(referenceVideos);
 
   const handleGenerate = useCallback(async () => {
     if (!clientId || pillars.length === 0) return;
+    const hasPendingUrl = referenceVideos.some((v) => v.status === 'pending' && v.url);
+    let refIds = completedRefIds;
+    if (hasPendingUrl) {
+      setProcessingRefs(true);
+      const finalItems = await processPendingReferenceVideos(clientId, referenceVideos, setReferenceVideos);
+      setProcessingRefs(false);
+      refIds = completedReferenceVideoIds(finalItems);
+    }
+
     setGenerating(true);
 
     try {
@@ -82,6 +102,7 @@ export function PillarIdeaConfig({ clientId, pillars, initialSearchId }: PillarI
           concept: concept.trim() || undefined,
           count: totalIdeas,
           search_id: initialSearchId ?? undefined,
+          reference_video_ids: refIds.length > 0 ? refIds : undefined,
         }),
       });
 
@@ -91,12 +112,13 @@ export function PillarIdeaConfig({ clientId, pillars, initialSearchId }: PillarI
       }
 
       const data = await res.json();
+      onIdeasStarted?.();
       router.push(`/admin/ideas/${data.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to generate ideas');
       setGenerating(false);
     }
-  }, [clientId, pillars, ideasPerPillar, concept, totalIdeas, initialSearchId, router]);
+  }, [clientId, pillars, ideasPerPillar, concept, totalIdeas, initialSearchId, router, referenceVideos, completedRefIds, onIdeasStarted]);
 
   return (
     <div className="space-y-6">
@@ -150,27 +172,23 @@ export function PillarIdeaConfig({ clientId, pillars, initialSearchId }: PillarI
           />
         </div>
 
-        {/* Reference videos placeholder */}
-        <div>
-          <label className="block text-sm font-medium text-text-secondary mb-1.5">
-            Reference videos <span className="text-text-muted font-normal">(optional)</span>
-          </label>
-          <div className="rounded-lg border border-dashed border-nativz-border/60 bg-background px-4 py-3 text-xs text-text-muted text-center">
-            Reference videos coming soon
-          </div>
-        </div>
+        <ReferenceVideosField
+          items={referenceVideos}
+          setItems={setReferenceVideos}
+          disabled={generating || processingRefs}
+        />
 
         {/* Generate button */}
         <div className="flex items-center justify-center pt-2">
           <button
             onClick={handleGenerate}
-            disabled={generating || pillars.length === 0}
+            disabled={generating || processingRefs || pillars.length === 0}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent2 px-8 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
           >
-            {generating ? (
+            {generating || processingRefs ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                Generating {totalIdeas} ideas...
+                {processingRefs ? 'Processing references…' : `Generating ${totalIdeas} ideas...`}
               </>
             ) : (
               <>

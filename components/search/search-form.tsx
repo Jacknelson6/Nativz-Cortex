@@ -86,7 +86,12 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
         }),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as {
+        id?: string;
+        topic_pipeline?: string;
+        error?: string;
+        details?: unknown;
+      };
 
       if (!res.ok) {
         const msg = data.details ? `${data.error}: ${data.details}` : (data.error || 'Search failed. Try again.');
@@ -95,8 +100,12 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
         return;
       }
 
-      // Redirect to the processing page immediately
-      router.push(`${redirectPrefix}/search/${data.id}/processing`);
+      const id = data.id as string;
+      const subtopicsFirst =
+        data.topic_pipeline === 'llm_v1' && redirectPrefix === '/admin';
+      router.push(
+        `${redirectPrefix}/search/${id}/${subtopicsFirst ? 'subtopics' : 'processing'}`,
+      );
     } catch {
       setError('Something went wrong. Try again.');
       setLoading(false);

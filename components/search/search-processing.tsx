@@ -1,14 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Check, Loader2, AlertCircle, RotateCcw, Brain, Search,
-  MessageSquare, Sparkles, FileText, Mail, ArrowLeft,
+  MessageSquare, Sparkles, FileText, Mail, ArrowLeft, Layers, ShieldCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { EncryptedText } from '@/components/ui/encrypted-text';
 import { PLATFORM_CONFIG } from './platform-icon';
 import { toast } from 'sonner';
 
@@ -18,6 +16,12 @@ interface SearchProcessingProps {
   redirectPrefix: string;
   volume?: string;
   platforms?: string[];
+  /** `llm_v1` = subtopic pipeline; `legacy` = multi-platform scrape + analytics */
+  pipeline?: 'legacy' | 'llm_v1';
+  /** Confirmed subtopics count (llm_v1); defaults to 3 if unknown */
+  subtopicCount?: number;
+  /** Server-driven: Brave / OpenRouter web vs LLM-only subtopic synthesis */
+  webResearchMode?: 'brave' | 'openrouter' | 'llm_only';
 }
 
 const TIME_ESTIMATES: Record<string, { label: string }> = {
@@ -25,13 +29,6 @@ const TIME_ESTIMATES: Record<string, { label: string }> = {
   medium: { label: '1–3 min' },
   deep: { label: '3–8 min' },
   quick: { label: '30 sec – 1 min' },
-};
-
-const DEPTH_LABELS: Record<string, { label: string; color: string }> = {
-  light: { label: 'Light', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  medium: { label: 'Medium', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-  deep: { label: 'Deep', color: 'bg-accent2/10 text-accent2-text border-accent2/20' },
-  quick: { label: 'Light', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
 };
 
 interface Stage {
@@ -74,6 +71,57 @@ function buildStages(platforms: string[], volume: string): Stage[] {
   return stages;
 }
 
+function buildLlmStages(
+  volume: string,
+  subtopicCount: number,
+  webResearch: 'brave' | 'openrouter' | 'llm_only'
+): Stage[] {
+  const isDeep = volume === 'deep';
+  const isMedium = volume === 'medium';
+  const n = Math.max(1, subtopicCount);
+  const stages: Stage[] = [];
+  let cumulative = 0;
+
+  const liveWeb = webResearch === 'brave' || webResearch === 'openrouter';
+
+  const perSubtopic =
+    liveWeb
+      ? isDeep
+        ? 52000
+        : isMedium
+          ? 38000
+          : 24000
+      : isDeep
+        ? 22000
+        : isMedium
+          ? 16000
+          : 11000;
+
+  const researchBlock = perSubtopic * n;
+  const mergeMs = isDeep ? 35000 : isMedium ? 22000 : 14000;
+  const ideasMs = isDeep ? 22000 : isMedium ? 14000 : 9000;
+  const reportMs = isDeep ? 95000 : isMedium ? 70000 : 45000;
+
+  const totalEst = researchBlock + mergeMs + ideasMs + reportMs;
+
+  const add = (label: string, icon: React.ReactNode, duration: number) => {
+    cumulative += duration;
+    stages.push({ label, icon, target: Math.min(92, (cumulative / totalEst) * 92), duration });
+  };
+
+  const researchLabel = liveWeb
+    ? 'Gathering live web sources for your angles'
+    : 'Exploring each angle you set in your gameplan';
+
+  add(researchLabel, <Layers size={14} />, researchBlock);
+  add('Tightening sources and trimming overlap', <ShieldCheck size={14} />, mergeMs * 0.35);
+  add('Weaving findings into themes and narrative', <Brain size={14} />, mergeMs * 0.65);
+  add('Shaping video directions from what we found', <Sparkles size={14} />, ideasMs);
+  add('Assembling your report', <FileText size={14} />, reportMs);
+
+  return stages;
+}
+
 const PROCESS_POST_BY_ID = new Map<string, Promise<{ res: Response; data: unknown }>>();
 
 function processingClockKey(id: string) {
@@ -109,7 +157,16 @@ function progressFromElapsedMs(elapsedMs: number, stages: Stage[]) {
   return { stageIndex: currentStage, progress };
 }
 
-export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'medium', platforms = ['web'] }: SearchProcessingProps) {
+export function SearchProcessing({
+  searchId,
+  query,
+  redirectPrefix,
+  volume = 'medium',
+  platforms = ['web'],
+  pipeline = 'legacy',
+  subtopicCount = 3,
+  webResearchMode = 'llm_only',
+}: SearchProcessingProps) {
   const router = useRouter();
   const [progress, setProgress] = useState(0);
   const [stageIndex, setStageIndex] = useState(0);
@@ -129,11 +186,15 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
     apiErrorRef.current = apiError !== null;
   }, [apiError]);
 
-  // Memoize stages with useRef so they don't change between renders
-  const stagesRef = useRef<Stage[]>(buildStages(platforms, volume));
+  const stages = useMemo(() => {
+    if (pipeline === 'llm_v1') {
+      return buildLlmStages(volume, subtopicCount, webResearchMode);
+    }
+    return buildStages(platforms, volume);
+  }, [pipeline, platforms, volume, subtopicCount, webResearchMode]);
 
   const timeEstimate = TIME_ESTIMATES[volume] ?? TIME_ESTIMATES.medium;
-  const depth = DEPTH_LABELS[volume] ?? DEPTH_LABELS.medium;
+  const isLlmPipeline = pipeline === 'llm_v1';
 
   function clearIntervals() {
     if (intervalsRef.current.progress) clearInterval(intervalsRef.current.progress);
@@ -155,7 +216,7 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
     stopStatusPoll();
     clearIntervals();
     setProgress(100);
-    setStageIndex(stagesRef.current.length - 1);
+    setStageIndex(stages.length - 1);
     setDone(true);
     setTimeout(() => {
       router.push(`${redirectPrefix}/search/${searchId}`);
@@ -166,7 +227,6 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
     clearIntervals();
     setDone(false);
 
-    const stages = stagesRef.current;
     const clockKey = processingClockKey(searchId);
     let t0 = Date.now();
     if (typeof window !== 'undefined') {
@@ -304,7 +364,7 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
 
       if (res.status === 202) {
         clearIntervals();
-        setStageIndex(stagesRef.current.length - 2);
+        setStageIndex(stages.length - 2);
         setProgress(88);
         try {
           await pollUntilTerminal();
@@ -401,30 +461,38 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
     return `${Math.floor(s / 60)}m ${s % 60}s`;
   }
 
-  const stages = stagesRef.current;
-
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 animate-fade-slide-in">
       <div className="w-full max-w-md">
         {/* Heading */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent2-surface text-accent2-text text-xs font-medium">
-              <Brain size={12} />
-              AI research engine
-            </div>
-            <Badge className={`text-[10px] border ${depth.color}`}>{depth.label}</Badge>
-          </div>
           <h2 className="text-xl font-semibold text-text-primary">
             Researching &ldquo;{query}&rdquo;
           </h2>
           <p className="text-sm text-text-muted mt-1">
-            Estimated {timeEstimate.label} · {platforms.length} platform{platforms.length !== 1 ? 's' : ''}
+            {isLlmPipeline ? (
+              <>
+                Estimated {timeEstimate.label}
+                {webResearchMode !== 'llm_only' ? ' · Including live web' : ''}
+              </>
+            ) : (
+              <>
+                Estimated {timeEstimate.label} · {platforms.length} platform
+                {platforms.length !== 1 ? 's' : ''}
+              </>
+            )}
           </p>
-          {platforms.length > 1 && (
-            <p className="text-xs text-text-muted/80 mt-2 max-w-sm mx-auto">
-              Multi-platform research often needs a few minutes while the report is built — the bar is approximate.
+          {isLlmPipeline ? (
+            <p className="text-xs text-text-muted/80 mt-2 max-w-sm mx-auto leading-relaxed">
+              You&apos;ll see stages below: explore each angle, clean up sources, connect the story, sketch video
+              ideas, then deliver your report. The bar is a rough guide, not a clock.
             </p>
+          ) : (
+            platforms.length > 1 && (
+              <p className="text-xs text-text-muted/80 mt-2 max-w-sm mx-auto">
+                Multi-platform research often needs a few minutes while the report is built — the bar is approximate.
+              </p>
+            )
           )}
         </div>
 
@@ -464,11 +532,7 @@ export function SearchProcessing({ searchId, query, redirectPrefix, volume = 'me
                   </div>
                 )}
                 <span className={`text-sm transition-colors ${isComplete ? 'text-text-muted' : 'text-text-primary font-medium'}`}>
-                  {isCurrent ? (
-                    <EncryptedText text={stage.label} revealDelayMs={35} className="text-sm !font-medium" />
-                  ) : (
-                    stage.label
-                  )}
+                  {stage.label}
                 </span>
               </div>
             );

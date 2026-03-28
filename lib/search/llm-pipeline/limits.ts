@@ -18,7 +18,7 @@ export function getLlmTopicPipelineLimits() {
     maxParallel: Math.min(rawParallel, MAX_PARALLEL_HARD_CAP),
     maxSearchesPerSubtopic: parsePositiveInt(process.env.TOPIC_SEARCH_MAX_SEARCHES_PER_SUBTOPIC, 10),
     maxFetchesPerSubtopic: parsePositiveInt(process.env.TOPIC_SEARCH_MAX_FETCHES_PER_SUBTOPIC, 3),
-    maxMergerTokens: parsePositiveInt(process.env.TOPIC_SEARCH_MAX_MERGER_TOKENS, 6000),
+    maxMergerTokens: parsePositiveInt(process.env.TOPIC_SEARCH_MAX_MERGER_TOKENS, 10000),
     maxResearchTokens: parsePositiveInt(process.env.TOPIC_SEARCH_MAX_RESEARCH_TOKENS, 2500),
   };
 }

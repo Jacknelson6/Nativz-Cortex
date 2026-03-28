@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Bell,
   Check,
+  Trash2,
   FileText,
   Flame,
   TrendingUp,
@@ -55,6 +56,16 @@ export function PortalNotificationList({ notifications: initialNotifications }: 
     } catch { /* ignore */ }
   }
 
+  async function clearAll() {
+    try {
+      const res = await fetch('/api/notifications/clear-all', { method: 'POST' });
+      if (res.ok) {
+        setNotifications([]);
+        router.refresh();
+      }
+    } catch { /* ignore */ }
+  }
+
   async function handleClick(notif: Notification) {
     if (!notif.is_read) {
       try {
@@ -89,12 +100,20 @@ export function PortalNotificationList({ notifications: initialNotifications }: 
             Stay updated on your content performance and reports.
           </p>
         </div>
-        {unreadCount > 0 && (
-          <Button variant="ghost" size="sm" onClick={markAllRead}>
-            <Check size={14} />
-            Mark all read
-          </Button>
-        )}
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {unreadCount > 0 && (
+            <Button variant="ghost" size="sm" onClick={markAllRead}>
+              <Check size={14} />
+              Mark all read
+            </Button>
+          )}
+          {notifications.length > 0 && (
+            <Button variant="ghost" size="sm" className="text-text-muted hover:text-red-400" onClick={clearAll}>
+              <Trash2 size={14} />
+              Clear all
+            </Button>
+          )}
+        </div>
       </div>
 
       {notifications.length === 0 ? (

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 /**
  * US-012: lightweight API smoke for llm_v1 routes (no auth).
- * Full end-to-end with TOPIC_SEARCH_PIPELINE=llm_v1 requires admin login + Brave — run manually or set
+ * Full end-to-end with TOPIC_SEARCH_PIPELINE=llm_v1 requires admin login (LLM-only by default; add Brave with TOPIC_SEARCH_WEB_RESEARCH=brave) — run manually or set
  * E2E_TOPIC_SEARCH_LLM_V1=1 with PLAYWRIGHT_SKIP_WEBSERVER + seeded env (see tasks/prd-topic-search-llm-pipeline.md).
  */
 

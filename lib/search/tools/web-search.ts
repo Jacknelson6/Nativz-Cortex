@@ -1,4 +1,11 @@
+/**
+ * Web retrieval for topic search (llm_v1):
+ * - **Brave** (`searchWebBrave`) — agency Brave Search API (`BRAVE_SEARCH_API_KEY`); our primary SERP integration.
+ * - **OpenRouter** (`searchWebOpenRouter`) — OpenRouter chat + web plugin (optional; uses OpenRouter key, not OpenAI).
+ */
 import { braveSearch } from '@/lib/brave/client';
+import { createCompletion } from '@/lib/ai/client';
+import { extractUrlsFromPlainText } from '@/lib/ai/openrouter-citations';
 import { dedupeUrls, normalizeUrlForMatch } from '@/lib/search/tools/urls';
 
 export interface WebSearchHit {
@@ -12,12 +19,15 @@ export interface WebSearchOptions {
   timeRange?: string;
   country?: string;
   language?: string;
+  /** Usage tracking for OpenRouter web search (topic_search feature). */
+  userId?: string;
+  userEmail?: string;
 }
 
 /**
- * Single-query Brave web search for agent tool use (llm_v1 pipeline).
+ * Brave SERP for topic search (requires `BRAVE_SEARCH_API_KEY`).
  */
-export async function searchWeb(query: string, options: WebSearchOptions = {}): Promise<WebSearchHit[]> {
+export async function searchWebBrave(query: string, options: WebSearchOptions = {}): Promise<WebSearchHit[]> {
   const count = Math.min(Math.max(options.count ?? 10, 1), 20);
   const FRESHNESS_MAP: Record<string, string> = {
     last_7_days: 'pw',
@@ -50,3 +60,73 @@ export async function searchWeb(query: string, options: WebSearchOptions = {}): 
   const byUrl = new Map(hits.map((h) => [normalizeUrlForMatch(h.url), h]));
   return urls.map((u) => byUrl.get(u)!).filter(Boolean);
 }
+
+export type OpenRouterWebSearchResult = {
+  hits: WebSearchHit[];
+  usage: { totalTokens: number; estimatedCost: number };
+};
+
+/**
+ * OpenRouter web plugin (or `:online` model) — real URLs from response annotations when available.
+ * Default model: `TOPIC_SEARCH_OPENROUTER_WEB_MODEL` or `google/gemini-2.0-flash-001`.
+ */
+export async function searchWebOpenRouter(
+  query: string,
+  options: WebSearchOptions = {},
+): Promise<OpenRouterWebSearchResult> {
+  const count = Math.min(Math.max(options.count ?? 10, 1), 20);
+  const envModel = process.env.TOPIC_SEARCH_OPENROUTER_WEB_MODEL?.trim();
+  const base = envModel || 'google/gemini-2.0-flash-001';
+  const model = base.includes(':online') ? base.replace(/:online$/i, '') : base;
+
+  const recency =
+    options.timeRange && options.timeRange !== 'all'
+      ? ` Prefer sources relevant to the user's time filter: ${options.timeRange}.`
+      : '';
+  const locale =
+    options.country && options.country !== 'all'
+      ? ` Region/country context: ${options.country}.`
+      : '';
+  const lang =
+    options.language && options.language !== 'all' ? ` Language bias: ${options.language}.` : '';
+
+  const prompt = `Use web search to find authoritative, relevant pages for this research query. Summarize what you find in 2–5 short sentences (no bullet list). Real page URLs are returned as citations by the search system.${recency}${locale}${lang}
+
+Query: ${query}`;
+
+  const ai = await createCompletion({
+    messages: [{ role: 'user', content: prompt }],
+    maxTokens: 1200,
+    webSearch: true,
+    webSearchMaxResults: count,
+    feature: 'topic_search',
+    userId: options.userId,
+    userEmail: options.userEmail,
+    modelPreference: [model],
+  });
+
+  const raw = ai.webCitations ?? [];
+  let hits: WebSearchHit[] = raw.map((c) => ({
+    url: normalizeUrlForMatch(c.url),
+    title: c.title || c.url,
+    snippet: (c.snippet ?? '').slice(0, 500),
+  }));
+  if (hits.length === 0 && ai.text) {
+    hits = extractUrlsFromPlainText(ai.text, count).map((c) => ({
+      url: c.url,
+      title: c.title,
+      snippet: c.snippet,
+    }));
+  }
+
+  const urls = dedupeUrls(hits.map((h) => h.url));
+  const byUrl = new Map(hits.map((h) => [normalizeUrlForMatch(h.url), h]));
+  const deduped = urls.map((u) => byUrl.get(u)!).filter(Boolean);
+  return {
+    hits: deduped,
+    usage: { totalTokens: ai.usage.totalTokens, estimatedCost: ai.estimatedCost },
+  };
+}
+
+/** @deprecated Prefer `searchWebBrave` or `searchWebOpenRouter` — Brave-backed alias. */
+export const searchWeb = searchWebBrave;

@@ -26,6 +26,7 @@ const GROQ_AUDIO_PRICE_PER_SECOND = 0.006 / 60;
 
 export type TrackedService =
   | 'openrouter'
+  | 'openai'
   | 'groq'
   | 'gemini'
   | 'brave'
