@@ -100,6 +100,8 @@ const bodySchema = z.object({
   styleDirectionGlobal: z.string().max(4000).optional(),
   brandLayoutMode: z.enum(BRAND_LAYOUT_MODES).optional(),
   creativeBrief: z.string().max(4000).optional(),
+  /** Code-composited typography + logo; Gemini generates a clean plate only. */
+  useCompositor: z.boolean().optional(),
 }).refine(
   (data) => data.onScreenTextMode !== 'manual' || data.manualText !== undefined,
   { message: 'manualText is required when onScreenTextMode is "manual"', path: ['manualText'] },
@@ -214,6 +216,7 @@ export async function POST(
     batchCta,
     brandLayoutMode,
     creativeBrief,
+    useCompositor,
   } = parsed.data;
 
   const isNano = (globalTemplateVariations?.length ?? 0) > 0;
@@ -265,6 +268,7 @@ export async function POST(
         ? { globalTemplateSlotOrder }
         : {}),
       ...(rotateProductImageUrls === true ? { rotateProductImageUrls: true } : {}),
+      ...(useCompositor === true ? { useCompositor: true } : {}),
     };
   } else {
     const resolvedVariations = templateVariations ?? (legacyTemplateIds ?? []).map((id) => ({
@@ -317,6 +321,7 @@ export async function POST(
       ...(styleDirectionGlobal?.trim() ? { styleDirectionGlobal: styleDirectionGlobal.trim() } : {}),
       ...(productImageUrls && productImageUrls.length > 0 ? { productImageUrls } : {}),
       ...(rotateProductImageUrls === true ? { rotateProductImageUrls: true } : {}),
+      ...(useCompositor === true ? { useCompositor: true } : {}),
     };
   }
 

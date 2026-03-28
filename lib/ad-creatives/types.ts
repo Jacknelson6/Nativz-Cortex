@@ -215,6 +215,10 @@ export type AdGenerationConfig = {
    * One batch-level creative direction paragraph (optional). If omitted, orchestrator generates once and may persist on the batch.
    */
   creativeBrief?: string;
+  /**
+   * When true, Gemini is treated as a clean-plate generator and text/logo/CTA are composited in code (see `lib/ad-creatives/compositor`).
+   */
+  useCompositor?: boolean;
 };
 
 // ---------------------------------------------------------------------------

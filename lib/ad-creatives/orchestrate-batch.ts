@@ -22,6 +22,10 @@ import {
   supplementaryBrandReferenceImageUrls,
 } from './brand-reference-images';
 import { slotOnScreenText, slotProductServiceOffer } from './slot-product-context';
+import {
+  compositeAdCreative,
+  DEFAULT_COMPOSITOR_PROMPT_SCHEMA,
+} from '@/lib/ad-creatives/compositor';
 import { ASPECT_RATIOS } from './types';
 import type {
   AdGenerationBatch,
@@ -248,11 +252,13 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
         try {
           const MAX_QA_RETRIES = 2;
           let imageBuffer: Buffer | null = null;
+          let compositorMeta: Record<string, unknown> | null = null;
           let lastPrompt = '';
           let qaResult = { passed: true, issues: [] as { type: string; description: string }[], extractedText: [] as string[], confidence: 0 };
           let qaRetryStyleSuffix = '';
           const ost = slotOnScreenText(item.onScreenText, itemIndex, config);
           const slotCtx = slotProductServiceOffer(itemIndex, config);
+          const useCompositor = config.useCompositor === true;
 
           for (let attempt = 0; attempt <= MAX_QA_RETRIES; attempt++) {
             if ((await fetchAdBatchStatus(admin, batchId)) === 'cancelled') {
@@ -284,11 +290,15 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
 
             let prompt: string;
             if (item.mode === 'global') {
-              const filled = fillNanoBananaTemplate(item.nanoPromptTemplate, {
-                onScreenText: ost,
-                productService: slotCtx.productService,
-                offer: slotCtx.offer ?? '',
-              });
+              const filled = fillNanoBananaTemplate(
+                item.nanoPromptTemplate,
+                {
+                  onScreenText: ost,
+                  productService: slotCtx.productService,
+                  offer: slotCtx.offer ?? '',
+                },
+                { blankCopySlots: useCompositor },
+              );
               prompt = buildNanoBananaImagePrompt({
                 imagePromptModifier: adGenSettings.image_prompt_modifier,
                 brandContext,
@@ -298,6 +308,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
                 offer: slotCtx.offer || null,
                 creativeBrief: creativeBriefParagraph || undefined,
                 styleDirection: styleDirection || undefined,
+                cleanCanvas: useCompositor,
               });
             } else {
               prompt = assembleImagePrompt({
@@ -309,6 +320,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
                 aspectRatio: config.aspectRatio,
                 styleDirection: styleDirection || undefined,
                 creativeBrief: creativeBriefParagraph || undefined,
+                cleanCanvas: useCompositor,
               });
             }
             lastPrompt = prompt;
@@ -329,11 +341,29 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
               referenceImageUrl: refUrl,
               layoutWireframePng,
               productImageUrls: productUrlsThisSlot,
-              brandLogoImageUrls: logoUrls.length > 0 ? logoUrls : undefined,
+              brandLogoImageUrls: useCompositor ? undefined : logoUrls.length > 0 ? logoUrls : undefined,
               brandReferenceImageUrls:
                 item.mode === 'global' ? undefined : brandRefs.length > 0 ? brandRefs : undefined,
               aspectRatio: config.aspectRatio,
+              cleanCanvas: useCompositor,
             });
+
+            if (useCompositor && imageBuffer) {
+              const promptSchema: AdPromptSchema =
+                item.mode === 'client' ? item.promptSchema : DEFAULT_COMPOSITOR_PROMPT_SCHEMA;
+              const composited = await compositeAdCreative({
+                backgroundImage: imageBuffer,
+                brandContext,
+                onScreenText: ost,
+                offer: slotCtx.offer || null,
+                promptSchema,
+                width: dimensions.width,
+                height: dimensions.height,
+                aspectRatio: config.aspectRatio,
+              });
+              imageBuffer = composited.image;
+              compositorMeta = composited.metadata as unknown as Record<string, unknown>;
+            }
 
             // QA: verify text is about the right brand, not copied from reference
             qaResult = await qaCheckAd({
@@ -404,6 +434,7 @@ export async function runGenerationBatch(batchId: string): Promise<void> {
               qa_passed: qaResult.passed,
               qa_score: qaResult.confidence,
               qa_issues: qaResult.issues.length > 0 ? qaResult.issues : undefined,
+              ...(useCompositor ? { compositor: true, compositor_meta: compositorMeta ?? undefined } : {}),
               ...(item.mode === 'global' ? { global_slug: item.templateKey } : {}),
             },
           });

@@ -5,15 +5,21 @@
  */
 import {
   buildGeminiStaticAdPrompt,
+  buildCleanCanvasPrompt,
   resolveBrandStyleAppendix,
   REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION,
+  REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION_CLEAN_CANVAS,
+  WIREFRAME_MULTIMODAL_INSTRUCTION_CLEAN_CANVAS,
   type BuildGeminiStaticAdPromptParams,
 } from './gemini-static-ad-prompt';
 
 export {
   buildGeminiStaticAdPrompt,
+  buildCleanCanvasPrompt,
   resolveBrandStyleAppendix,
   REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION,
+  REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION_CLEAN_CANVAS,
+  WIREFRAME_MULTIMODAL_INSTRUCTION_CLEAN_CANVAS,
   type BuildGeminiStaticAdPromptParams,
 };
 

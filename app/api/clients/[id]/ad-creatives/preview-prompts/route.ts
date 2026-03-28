@@ -45,6 +45,8 @@ const bodySchema = z.object({
   }).optional(),
   brandLayoutMode: z.enum(BRAND_LAYOUT_MODES).optional(),
   creativeBrief: z.string().max(4000).optional(),
+  /** Same as POST generate — clean-canvas + Nano blank slots when true. */
+  useCompositor: z.boolean().optional(),
 }).refine(
   (data) => {
     const hasGlobal = (data.globalTemplateVariations?.length ?? 0) > 0;
@@ -113,7 +115,10 @@ export async function POST(
     manualText,
     brandLayoutMode,
     creativeBrief: creativeBriefInput,
+    useCompositor: useCompositorInput,
   } = parsed.data;
+
+  const useCompositor = useCompositorInput === true;
 
   const isNano = (globalTemplateVariations?.length ?? 0) > 0;
   const layoutMode = isNano ? 'schema_only' : (brandLayoutMode ?? 'reference_image');
@@ -184,11 +189,15 @@ export async function POST(
         const catalogSd = nanoBananaCatalogStyleDirection(slug);
         const mergedStyle =
           [catalogSd, styleDirectionGlobal?.trim()].filter(Boolean).join('\n\n') || undefined;
-        const filled = fillNanoBananaTemplate(entry.promptTemplate, {
-          onScreenText: copy,
-          productService,
-          offer: offer ?? '',
-        });
+        const filled = fillNanoBananaTemplate(
+          entry.promptTemplate,
+          {
+            onScreenText: copy,
+            productService,
+            offer: offer ?? '',
+          },
+          { blankCopySlots: useCompositor },
+        );
         const prompt = buildNanoBananaImagePrompt({
           imagePromptModifier: adGenSettings.image_prompt_modifier,
           brandContext,
@@ -198,6 +207,7 @@ export async function POST(
           offer: offer ?? null,
           creativeBrief: briefForPreviews || undefined,
           styleDirection: mergedStyle,
+          cleanCanvas: useCompositor,
         });
         previews.push({
           templateId: slug,
@@ -284,6 +294,7 @@ export async function POST(
             aspectRatio,
             styleDirection: sd,
             creativeBrief: briefForPreviews || undefined,
+            cleanCanvas: useCompositor,
           });
 
           previews.push({
@@ -304,6 +315,7 @@ export async function POST(
       creativeBrief: briefForPreviews || undefined,
       brandLayoutMode: layoutMode,
       imagePipeline: isNano ? 'nano_banana' : 'gemini_native',
+      useCompositor,
     });
   } catch (err) {
     if (err instanceof BrandDnaRequiredError) {

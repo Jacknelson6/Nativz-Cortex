@@ -89,6 +89,7 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
   const [brandLayoutMode, setBrandLayoutMode] = useState<BrandLayoutMode>('reference_image');
   const [numVariations, setNumVariations] = useState(3);
+  const [useCompositor, setUseCompositor] = useState(false);
 
   // Generation state
   const [generating, setGenerating] = useState(false);
@@ -141,6 +142,7 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
         aspectRatio,
         numVariations,
         brandLayoutMode,
+        ...(useCompositor ? { useCompositor: true } : {}),
       };
 
       if (copyMode === 'manual') {
@@ -363,6 +365,21 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
             </div>
           </div>
 
+          <label className="flex items-start gap-2 cursor-pointer max-w-xl pt-2 border-t border-nativz-border">
+            <input
+              type="checkbox"
+              checked={useCompositor}
+              onChange={(e) => setUseCompositor(e.target.checked)}
+              className="mt-0.5 rounded border-nativz-border"
+            />
+            <span>
+              <span className="text-sm font-medium text-text-primary">Use compositor (beta)</span>
+              <span className="block text-[11px] text-text-muted leading-relaxed mt-0.5">
+                Crisp type and logo overlaid in code; Gemini draws the background only.
+              </span>
+            </span>
+          </label>
+
           {/* Number of variations */}
           <div className="space-y-1.5">
             <label htmlFor="num-variations" className="block text-sm font-medium text-text-secondary">
@@ -398,8 +415,9 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
               <option value="schema_plus_wireframe">Schema + wireframe</option>
             </select>
             <p className="text-[11px] text-text-muted leading-relaxed">
-              One Gemini pass renders type, visuals, and brand mark. Default uses the template PNG as a loose layout
-              guide.
+              {useCompositor
+                ? 'Compositor mode: Gemini is asked for a clean plate without on-image text; copy and logo are overlaid in code.'
+                : 'One Gemini pass renders type, visuals, and brand mark. Default uses the template PNG as a loose layout guide.'}
             </p>
           </div>
         </div>

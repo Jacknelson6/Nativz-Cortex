@@ -12,6 +12,8 @@ export function buildNanoBananaImagePrompt(params: {
   offer: string | null;
   creativeBrief?: string;
   styleDirection?: string;
+  /** When true, strip verbatim copy rules; Gemini outputs a text-free plate for compositor overlay. */
+  cleanCanvas?: boolean;
 }): string {
   const {
     imagePromptModifier,
@@ -23,16 +25,25 @@ export function buildNanoBananaImagePrompt(params: {
     creativeBrief,
     styleDirection,
   } = params;
+  const cleanCanvas = params.cleanCanvas === true;
 
   const dimensions = ASPECT_RATIOS.find((r) => r.value === aspectRatio) ?? ASPECT_RATIOS[0];
   const appendix = resolveBrandStyleAppendix(brandContext);
 
   const sections: string[] = [];
 
-  sections.push(
-    `Create one professional static advertisement image at ${dimensions.width}x${dimensions.height}px (${aspectRatio}). ` +
-      'All typography, hero, CTA, and offer line must appear in this single frame — no follow-up compositing.',
-  );
+  if (cleanCanvas) {
+    sections.push(
+      `Create one professional visual at ${dimensions.width}x${dimensions.height}px (${aspectRatio}). ` +
+        'CLEAN CANVAS MODE: Generate ONLY background scene, lighting, and hero subject. ' +
+        'Do NOT render typography, CTA buttons, logos, offer lines, or URLs — those are composited in post-production.',
+    );
+  } else {
+    sections.push(
+      `Create one professional static advertisement image at ${dimensions.width}x${dimensions.height}px (${aspectRatio}). ` +
+        'All typography, hero, CTA, and offer line must appear in this single frame — no follow-up compositing.',
+    );
+  }
 
   if (imagePromptModifier.trim()) {
     sections.push(`CLIENT IMAGE MODIFIER (apply globally):\n${imagePromptModifier.trim()}`);
@@ -41,12 +52,14 @@ export function buildNanoBananaImagePrompt(params: {
       `DEFAULT NANO BANANA BASELINE (no client image modifier set — apply anyway):\n` +
         `- Product reference photos are the source of truth for hero product appearance (same SKU, packaging, printed graphics).\n` +
         `- Product-forward composition: hero product roughly 60–75% of visual interest unless the template explicitly calls for a different layout.\n` +
-        `- One headline, one subheadline, one CTA control; clean editorial hierarchy.`,
+        (cleanCanvas
+          ? `- Reserve visually simple negative space where the template implies headline/CTA zones.\n`
+          : `- One headline, one subheadline, one CTA control; clean editorial hierarchy.`),
     );
   }
 
   const isGoldback = brandContext.clientName.trim().toLowerCase() === 'goldback';
-  if (isGoldback) {
+  if (isGoldback && !cleanCanvas) {
     sections.push(
       `GOLDBACK COPY + LOGO RULE (mandatory):\n` +
         `- Render the subheadline as EXACTLY the quoted Subheadline string from the template — same words, same order. Do not swap in art-direction, layout notes, or paraphrases from elsewhere in this prompt.\n` +
@@ -59,6 +72,12 @@ export function buildNanoBananaImagePrompt(params: {
         `- Do NOT draw a bottom bar, footer strip, legend, or “palette” row of color blocks with names or codes.\n` +
         `- Do NOT render any substring that looks like a hex color token (hash mark + six hexadecimal digits) anywhere on the advertisement.\n` +
         `- Do NOT label colors on-canvas (e.g. “CREAM”, “MARIGOLD”) unless those words appear verbatim inside the approved headline/subheadline copy.`,
+    );
+  }
+  if (isGoldback && cleanCanvas) {
+    sections.push(
+      `GOLDBACK CLEAN CANVAS: Do not render hex codes, color-bar footers, or palette legends on canvas. ` +
+        `Match environmental colors only; product identity comes from reference photos.`,
     );
   }
 
@@ -78,19 +97,31 @@ export function buildNanoBananaImagePrompt(params: {
 
   sections.push(`NANO BANANA TEMPLATE (filled):\n${filledTemplateBody}`);
 
-  sections.push(
-    `GLOBAL CONSTRAINTS:\n` +
-      `- Product/service summary (context for you — do not render as ad copy unless a template line explicitly asks for it): ${productService.trim()}` +
-      (offer?.trim() ? `\n- Offer context: ${offer.trim()}` : '') +
-      `\n- No layout reference image is attached for this style — do not imitate unrelated template brands.` +
-      `\n- VERBATIM ON-CANVAS COPY: Headline, subheadline, and CTA must match the quoted strings in the filled template exactly — same words, same order, same spelling. Do not invent, shorten, translate, or paraphrase them. Do not repeat any of those lines elsewhere (no echo in stickers, watermarks, device screens, or a second headline band).` +
-      `\n- SINGLE INSTANCE: Each approved line (headline, subheadline, CTA, offer if any) appears exactly once in the composition. No duplicated sentences, stutter, or mirrored type.` +
-      `\n- TYPOGRAPHY: Use clean, high-contrast lettering. If space is tight, simplify background or scale type — never warp, squeeze, or clip mid-glyph. No deformed or illegible characters.` +
-      `\n- PRODUCT REFERENCE (when product images are supplied to the model before this text): The hero product must stay the same real SKU as the reference — same printed graphics, packaging shape, colors, and on-product marks. Lighting, depth, and modest camera angle changes are allowed like a new studio photo; do not redraw a different variant, merge two products, or replace artwork on the product surface.` +
-      `\n- Use only the quoted headline, subheadline, and CTA for marketing copy; no hashtags, URL footers, or extra marketing paragraphs beyond what the template slot allows.` +
-      `\n- Render the quoted CTA as exactly one primary **button** (pill or rectangle); the label must match the CTA string verbatim. No secondary CTAs or duplicate buttons.` +
-      `\n- Avoid fake SaaS UI, dashboards, SOAP/medical charts, and social-post chrome unless the product is literally that.`,
-  );
+  if (cleanCanvas) {
+    sections.push(
+      `GLOBAL CONSTRAINTS (CLEAN CANVAS):\n` +
+        `- Product/service (scene context only — do not render as visible text): ${productService.trim()}` +
+        (offer?.trim() ? `\n- Offer context (do not render): ${offer.trim()}` : '') +
+        `\n- No layout reference image is attached for this style — do not imitate unrelated template brands.` +
+        `\n- Do NOT render headline, subheadline, CTA, offer, logos, or buttons. Slots may show “LEAVE BLANK” — that is intentional.` +
+        `\n- PRODUCT REFERENCE (when product images are supplied before this text): Keep the same real SKU — same packaging, graphics, and on-product marks. Lighting and angle may vary; do not invent a different variant.` +
+        `\n- Preserve simple negative space in implied text zones. No fake SaaS UI or social chrome unless the product is literally that.`,
+    );
+  } else {
+    sections.push(
+      `GLOBAL CONSTRAINTS:\n` +
+        `- Product/service summary (context for you — do not render as ad copy unless a template line explicitly asks for it): ${productService.trim()}` +
+        (offer?.trim() ? `\n- Offer context: ${offer.trim()}` : '') +
+        `\n- No layout reference image is attached for this style — do not imitate unrelated template brands.` +
+        `\n- VERBATIM ON-CANVAS COPY: Headline, subheadline, and CTA must match the quoted strings in the filled template exactly — same words, same order, same spelling. Do not invent, shorten, translate, or paraphrase them. Do not repeat any of those lines elsewhere (no echo in stickers, watermarks, device screens, or a second headline band).` +
+        `\n- SINGLE INSTANCE: Each approved line (headline, subheadline, CTA, offer if any) appears exactly once in the composition. No duplicated sentences, stutter, or mirrored type.` +
+        `\n- TYPOGRAPHY: Use clean, high-contrast lettering. If space is tight, simplify background or scale type — never warp, squeeze, or clip mid-glyph. No deformed or illegible characters.` +
+        `\n- PRODUCT REFERENCE (when product images are supplied to the model before this text): The hero product must stay the same real SKU as the reference — same printed graphics, packaging shape, colors, and on-product marks. Lighting, depth, and modest camera angle changes are allowed like a new studio photo; do not redraw a different variant, merge two products, or replace artwork on the product surface.` +
+        `\n- Use only the quoted headline, subheadline, and CTA for marketing copy; no hashtags, URL footers, or extra marketing paragraphs beyond what the template slot allows.` +
+        `\n- Render the quoted CTA as exactly one primary **button** (pill or rectangle); the label must match the CTA string verbatim. No secondary CTAs or duplicate buttons.` +
+        `\n- Avoid fake SaaS UI, dashboards, SOAP/medical charts, and social-post chrome unless the product is literally that.`,
+    );
+  }
 
   const verbal = brandContext.verbalIdentity;
   const colorHint =
@@ -119,7 +150,7 @@ export function buildNanoBananaImagePrompt(params: {
       `- Do not invent a different company, category, or generic "tech startup" look when the industry is local services, retail, or trades.`,
   );
 
-  if (isGoldback) {
+  if (isGoldback && !cleanCanvas) {
     sections.push(
       `FINAL CHECK (Goldback): The export must not include a color-bar footer, swatch legend, or any visible #RRGGBB text. Colors are environmental paint only.`,
     );

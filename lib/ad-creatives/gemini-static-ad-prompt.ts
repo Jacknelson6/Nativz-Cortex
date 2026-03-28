@@ -26,6 +26,22 @@ CRITICAL: The ONLY marketing copy words allowed are those explicitly listed in t
 
 If this request already included separate client logo and/or product reference images before this layout image, those earlier images are the source of truth for the brand mark and product appearance — never treat any logo, product, or packshot inside this template as the client's real identity.\n\n`;
 
+/** Layout template multimodal block when `useCompositor` / clean-canvas prompts are active — no on-image text. */
+export const REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION_CLEAN_CANVAS =
+  `The above image is a LAYOUT REFERENCE ONLY — loose grid for where headline, hero, and CTA zones might sit.
+
+CLEAN CANVAS MODE: Do NOT render any text, headlines, subheads, buttons, logos, wordmarks, URLs, or typographic elements. Do NOT copy any characters visible in the reference. Headline, subheadline, CTA, offer line, and brand mark will be composited in post-production.
+
+Reserve clear negative space in those zones (especially where the reference shows type) — avoid busy textures and high-contrast edges so overlaid text stays readable.
+
+If separate product and/or logo images appeared earlier in this request, those define the real product and brand identity — do not duplicate logos from inside the template reference.\n\n`;
+
+/** Wireframe multimodal block when compositor overlays text (no typography in the generated frame). */
+export const WIREFRAME_MULTIMODAL_INSTRUCTION_CLEAN_CANVAS =
+  `The above image is a grayscale WIREFRAME — tinted rectangles only, no letters. Use it as loose spatial guidance for composition and negative space.
+
+CLEAN CANVAS MODE: Generate only background scene and hero subject. Do NOT paint typography, CTA chrome, or brand logos in the frame — those are added in post-production. Keep indicated text zones visually simple.\n\n`;
+
 export interface BuildGeminiStaticAdPromptParams {
   brandContext: BrandContext;
   promptSchema: AdPromptSchema;
@@ -36,6 +52,11 @@ export interface BuildGeminiStaticAdPromptParams {
   styleDirection?: string;
   /** One-shot batch brief (LLM); injected before brand appendix */
   creativeBrief?: string;
+  /**
+   * When true, Gemini generates a text-free background; typography and logo are composited in code.
+   * Omit long copy/typography/logo rules from the prompt (see `buildCleanCanvasPrompt`).
+   */
+  cleanCanvas?: boolean;
 }
 
 /**
@@ -49,9 +70,116 @@ export function resolveBrandStyleAppendix(ctx: BrandContext): string | null {
 }
 
 /**
+ * Stripped prompt for compositor mode — Gemini only generates the visual background and hero.
+ * No typography instructions, CTA rules, logo placement, or verbatim copy blocks.
+ */
+export function buildCleanCanvasPrompt(config: BuildGeminiStaticAdPromptParams): string {
+  const {
+    brandContext,
+    promptSchema: rawSchema,
+    productService,
+    offer,
+    aspectRatio,
+    styleDirection,
+    creativeBrief,
+  } = config;
+  const promptSchema = sanitizeAdPromptSchemaForImagePrompt(rawSchema);
+
+  const dimensions = ASPECT_RATIOS.find((r) => r.value === aspectRatio) ?? ASPECT_RATIOS[0];
+  const vi = brandContext.visualIdentity;
+
+  const brandColors =
+    vi.colors.length > 0
+      ? vi.colors.map((c) => `${c.name ?? c.role}: ${c.hex}`).join(', ')
+      : promptSchema.colorStrategy.dominantColors.join(', ');
+
+  const sections: string[] = [];
+
+  sections.push(
+    `CLEAN CANVAS MODE: Generate ONLY the visual background, environment, and hero subject for a static ad at ${dimensions.width}x${dimensions.height}px (${aspectRatio}). ` +
+      `Do NOT render ANY text, headlines, subheads, buttons, logos, wordmarks, URLs, QR codes, or typographic UI. ` +
+      `Do NOT add URL footers, contact lines, or fake dashboard/app chrome. ` +
+      `Marketing copy and brand mark will be composited in post-production.`,
+  );
+
+  sections.push(
+    `Product/service focus (for hero and setting only — do not paint this paragraph as visible text): ${productService.trim()}` +
+      (offer?.trim() ? `\nOffer context (do not render as text): ${offer.trim()}` : ''),
+  );
+
+  sections.push(
+    `CREATIVE INTENT:\n` +
+      `- Original ad for "${brandContext.clientName}" — industry "${brandContext.clientIndustry.trim() || 'general'}". Match hero, props, and atmosphere to this sector.\n` +
+      `- Hero must support the product/service above. No unrelated stock scenarios (fashion retail racks for B2B SaaS, etc.).\n` +
+      `- Prefer one clear focal visual — abstract shapes, product photography, or editorial negative space — without nested fake UI frames.`,
+  );
+
+  if (brandContext.positioning?.trim()) {
+    sections.push(`Brand positioning (mood only; never as on-canvas text): ${brandContext.positioning.trim()}`);
+  }
+  if (brandContext.audience?.summary?.trim()) {
+    sections.push(`Target audience (casting/mood only): ${brandContext.audience.summary.trim()}`);
+  }
+
+  sections.push(
+    `RESERVE SPACE FOR TEXT OVERLAY (from template — keep these areas visually simple; no busy patterns or high-contrast clutter):\n` +
+      `- Intended text zone: ${promptSchema.layout.textPosition}\n` +
+      `- Primary visual / hero: ${promptSchema.layout.imagePosition}\n` +
+      `- Future CTA zone (leave calm negative space; do not draw a button): ${promptSchema.layout.ctaPosition}\n` +
+      `- Reading flow: ${promptSchema.layout.visualHierarchy}`,
+  );
+
+  sections.push(
+    `COMPOSITION:\n` +
+      `- Background: ${promptSchema.composition.backgroundType}\n` +
+      `- Overlay: ${promptSchema.composition.overlayStyle}\n` +
+      `- Border: ${promptSchema.composition.borderTreatment}`,
+  );
+
+  sections.push(
+    `COLOR PALETTE (environment and accents only — no color swatch legends or hex labels on canvas):\n` +
+      `- Brand colors: ${brandColors}\n` +
+      `- Contrast approach: ${promptSchema.colorStrategy.contrastApproach}\n` +
+      `- Accent usage: ${promptSchema.colorStrategy.accentUsage}`,
+  );
+
+  sections.push(`IMAGERY STYLE: ${promptSchema.imageryStyle.replace(/_/g, ' ')}`);
+  sections.push(`EMOTIONAL TONE: ${promptSchema.emotionalTone.replace(/_/g, ' ')}`);
+
+  const brief = creativeBrief?.trim();
+  if (brief) {
+    sections.push(`BATCH CREATIVE DIRECTION (scene mood and hero only):\n${brief}`);
+  }
+
+  const brandAppendix = resolveBrandStyleAppendix(brandContext);
+  if (brandAppendix?.trim()) {
+    sections.push(`BRAND STYLE APPENDIX:\n${brandAppendix.trim()}`);
+  }
+
+  const trimmedDirection = styleDirection?.trim();
+  if (trimmedDirection) {
+    sections.push(`USER STYLE DIRECTION:\n${trimmedDirection}`);
+  }
+
+  const supplement = brandContext.creativeSupplementBlock?.trim();
+  if (supplement) {
+    const capped = supplement.length > 6000 ? `${supplement.slice(0, 6000)}\n...(truncated)` : supplement;
+    sections.push(
+      `ADDITIONAL BRAND MATERIALS (palette, photography cues, claims — never paste verbatim as ad copy):\n${capped}`,
+    );
+  }
+
+  return sections.join('\n\n');
+}
+
+/**
  * Full Gemini user text prompt for a single static ad (everything on-canvas in one generation).
  */
 export function buildGeminiStaticAdPrompt(config: BuildGeminiStaticAdPromptParams): string {
+  if (config.cleanCanvas) {
+    return buildCleanCanvasPrompt(config);
+  }
+
   const {
     brandContext,
     promptSchema: rawSchema,

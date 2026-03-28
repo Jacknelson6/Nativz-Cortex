@@ -11,7 +11,11 @@
 //   template is present so they do not fight template-driven composition; logo + product still apply.
 //   Set `includeSupplementaryBrandReferencesWithLayoutTemplate` to force them on.
 
-import { REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION } from './gemini-static-ad-prompt';
+import {
+  REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION,
+  REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION_CLEAN_CANVAS,
+  WIREFRAME_MULTIMODAL_INSTRUCTION_CLEAN_CANVAS,
+} from './gemini-static-ad-prompt';
 
 /** Image-capable Gemini model (Google AI Studio). Override with GEMINI_IMAGE_MODEL if needed. */
 const DEFAULT_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
@@ -48,6 +52,11 @@ interface GenerateAdImageParams {
    */
   includeSupplementaryBrandReferencesWithLayoutTemplate?: boolean;
   aspectRatio: string;
+  /**
+   * When true, multimodal hints match compositor / clean-canvas prompts (no typography or logo in-frame).
+   * Caller should omit `brandLogoImageUrls` so logos are not duplicated vs compositor overlay.
+   */
+  cleanCanvas?: boolean;
 }
 
 interface GeminiContentPart {
@@ -110,6 +119,7 @@ async function fetchImageAsBase64(url: string): Promise<{ mimeType: string; data
 
 async function buildParts(params: GenerateAdImageParams): Promise<GeminiContentPart[]> {
   const parts: GeminiContentPart[] = [];
+  const cleanCanvas = params.cleanCanvas === true;
   const hasLayoutTemplateRef = Boolean(params.referenceImageUrl?.trim());
   let attachedProductRefCount = 0;
   let attachedLogoRefCount = 0;
@@ -203,8 +213,9 @@ async function buildParts(params: GenerateAdImageParams): Promise<GeminiContentP
       },
     });
     parts.push({
-      text:
-        'The above image is a grayscale WIREFRAME — tinted rectangles only, no letters. It approximates zones for headline block, hero visual, and CTA area. Use it as loose spatial guidance for composition and negative space; do NOT trace visible boxes as hard UI chrome. Render the complete ad per the final text prompt (typography, hero, CTA, single brand mark) — the wireframe is spatial hint only.\n\n',
+      text: cleanCanvas
+        ? WIREFRAME_MULTIMODAL_INSTRUCTION_CLEAN_CANVAS
+        : 'The above image is a grayscale WIREFRAME — tinted rectangles only, no letters. It approximates zones for headline block, hero visual, and CTA area. Use it as loose spatial guidance for composition and negative space; do NOT trace visible boxes as hard UI chrome. Render the complete ad per the final text prompt (typography, hero, CTA, single brand mark) — the wireframe is spatial hint only.\n\n',
     });
   }
 
@@ -213,7 +224,9 @@ async function buildParts(params: GenerateAdImageParams): Promise<GeminiContentP
     const ref = await fetchImageAsBase64(params.referenceImageUrl);
     if (ref) {
       parts.push({ inlineData: ref });
-      parts.push({ text: REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION });
+      parts.push({
+        text: cleanCanvas ? REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION_CLEAN_CANVAS : REFERENCE_IMAGE_MULTIMODAL_INSTRUCTION,
+      });
     }
   }
 
