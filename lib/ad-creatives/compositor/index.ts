@@ -62,6 +62,18 @@ function textColorForArchetype(archetype: string, overlay: boolean): string {
   return '#111111';
 }
 
+function textAlignForArchetype(archetype: string): 'left' | 'center' | 'right' {
+  switch (archetype) {
+    case 'left_stack': return 'left';
+    case 'right_stack': return 'right';
+    case 'center_overlay':
+    case 'full_overlay':
+    case 'top_text':
+    case 'bottom_text':
+    default: return 'center';
+  }
+}
+
 /**
  * Composite clean AI background + text, CTA, optional logo (PRD Phase 6).
  */
@@ -87,6 +99,7 @@ export async function compositeAdCreative(params: CompositeAdParams): Promise<Co
   const accent = findAccentHex(brandContext.visualIdentity.colors ?? []);
   const ctaTextColor = bestTextColor(accent);
   const bodyColor = textColorForArchetype(archetype, overlay);
+  const textAlign = textAlignForArchetype(archetype);
 
   const headlineMaxW = Math.round(layout.headline.width * width);
   const headlineMaxH = Math.round(layout.headline.height * height);
@@ -109,7 +122,7 @@ export async function compositeAdCreative(params: CompositeAdParams): Promise<Co
       maxWidth: headlineMaxW,
       maxHeight: headlineMaxH,
       color: bodyColor,
-      align: 'center',
+      align: textAlign,
       role: 'headline',
     }),
     renderTextToPng({
@@ -119,7 +132,7 @@ export async function compositeAdCreative(params: CompositeAdParams): Promise<Co
       maxWidth: subMaxW,
       maxHeight: subMaxH,
       color: bodyColor,
-      align: 'center',
+      align: textAlign,
       role: 'subheadline',
     }),
     offer?.trim()
@@ -130,7 +143,7 @@ export async function compositeAdCreative(params: CompositeAdParams): Promise<Co
           maxWidth: offerMaxW,
           maxHeight: offerMaxH,
           color: bodyColor,
-          align: 'center',
+          align: textAlign,
           role: 'offer',
         })
       : Promise.resolve(null),
@@ -158,18 +171,25 @@ export async function compositeAdCreative(params: CompositeAdParams): Promise<Co
     composites.push({ input: logoResult.buffer, left: lx, top: ly, blend: 'over' });
   }
 
-  const place = (buf: Buffer, zone: { x: number; y: number; width: number; height: number }) => {
-    const left = Math.round(zone.x * width);
-    const top = Math.round(zone.y * height);
-    composites.push({ input: buf, left, top, blend: 'over' });
+  /** Center the rendered buffer within its layout zone. */
+  const placeCentered = (buf: Buffer, renderedWidth: number, zn: { x: number; y: number; width: number; height: number }) => {
+    const zonePixelX = Math.round(zn.x * width);
+    const zonePixelW = Math.round(zn.width * width);
+    const offset = Math.round((zonePixelW - renderedWidth) / 2);
+    composites.push({
+      input: buf,
+      left: zonePixelX + Math.max(0, offset),
+      top: Math.round(zn.y * height),
+      blend: 'over',
+    });
   };
 
-  place(headlinePng.buffer, layout.headline);
-  place(subPng.buffer, layout.subheadline);
+  placeCentered(headlinePng.buffer, headlinePng.width, layout.headline);
+  placeCentered(subPng.buffer, subPng.width, layout.subheadline);
   if (offerPng && layout.offer) {
-    place(offerPng.buffer, layout.offer);
+    placeCentered(offerPng.buffer, offerPng.width, layout.offer);
   }
-  place(ctaPng.buffer, layout.cta);
+  placeCentered(ctaPng.buffer, ctaPng.width, layout.cta);
 
   const base = await sharp(backgroundImage)
     .resize(width, height, { fit: 'cover' })

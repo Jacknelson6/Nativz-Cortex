@@ -16,6 +16,14 @@ export interface RenderTextParams {
 }
 
 /** Exported for compositor QA / layout tuning (ratios vs canvas height). */
+/** Cap to prevent satori rendering artifacts at extreme canvas heights (9:16 = 1920px). */
+const MAX_FONT_SIZES: Record<TextRole, number> = {
+  headline: 96,
+  subheadline: 52,
+  cta: 44,
+  offer: 40,
+};
+
 export function computeFontSize(role: TextRole, canvasHeight: number): number {
   const ratios: Record<TextRole, number> = {
     headline: 0.065,
@@ -23,7 +31,8 @@ export function computeFontSize(role: TextRole, canvasHeight: number): number {
     cta: 0.03,
     offer: 0.028,
   };
-  return Math.round(canvasHeight * ratios[role]);
+  const raw = Math.round(canvasHeight * ratios[role]);
+  return Math.min(raw, MAX_FONT_SIZES[role]);
 }
 
 function minFontSize(role: TextRole, canvasHeight: number): number {
@@ -45,6 +54,9 @@ function buildElement(
   maxHeight: number,
   align: 'left' | 'center' | 'right',
 ): { type: string; props: Record<string, unknown> } {
+  // Satori flex containers ignore textAlign on flex items.
+  // Use alignItems for horizontal alignment in column layout.
+  const alignItems = align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start';
   return {
     type: 'div',
     props: {
@@ -52,6 +64,7 @@ function buildElement(
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
+        alignItems,
         width: maxWidth,
         height: maxHeight,
         color,
@@ -83,13 +96,15 @@ export async function renderTextToPng(params: RenderTextParams): Promise<{
 
   for (let attempt = 0; attempt < 4; attempt++) {
     const el = buildElement(content, fontSize, font, color, maxWidth, maxHeight, align);
+    // Defensive copy — ArrayBuffers can be detached when shared across parallel satori calls
+    const fontDataCopy = font.data.slice(0);
     const svg = await satori(el as never, {
       width: maxWidth,
       height: maxHeight,
       fonts: [
         {
           name: font.name,
-          data: font.data,
+          data: fontDataCopy,
           weight: font.weight as 400 | 500 | 600 | 700 | 800,
           style: 'normal',
         },
@@ -110,13 +125,14 @@ export async function renderTextToPng(params: RenderTextParams): Promise<{
 
   const truncated = content.length > 80 ? `${content.slice(0, 77)}…` : content;
   const el = buildElement(truncated, floor, font, color, maxWidth, maxHeight, align);
+  const fontDataCopy = font.data.slice(0);
   const svg = await satori(el as never, {
     width: maxWidth,
     height: maxHeight,
     fonts: [
       {
         name: font.name,
-        data: font.data,
+        data: fontDataCopy,
         weight: font.weight as 400 | 500 | 600 | 700 | 800,
         style: 'normal',
       },

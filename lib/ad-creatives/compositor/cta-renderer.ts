@@ -40,7 +40,10 @@ export async function renderCtaToPng(params: RenderCtaParams): Promise<{
 }> {
   const { text, font, fontSize, textColor, backgroundColor, buttonShape, maxWidth } = params;
   const { borderRadius, paddingX, paddingY } = resolveButtonStyle(buttonShape);
+  // Defensive copy — prevents ArrayBuffer detachment in parallel satori calls
+  const fontDataCopy = font.data.slice(0);
 
+  // Outer wrapper centers the button within the satori canvas
   const el = {
     type: 'div',
     props: {
@@ -49,26 +52,38 @@ export async function renderCtaToPng(params: RenderCtaParams): Promise<{
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor,
-        borderRadius,
-        paddingLeft: paddingX,
-        paddingRight: paddingX,
-        paddingTop: paddingY,
-        paddingBottom: paddingY,
-        maxWidth,
+        width: maxWidth,
+        height: 400,
       },
       children: {
         type: 'div',
         props: {
           style: {
-            color: textColor,
-            fontSize,
-            fontFamily: font.name,
-            fontWeight: font.weight,
-            textAlign: 'center' as const,
-            wordWrap: 'break-word' as const,
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor,
+            borderRadius,
+            paddingLeft: paddingX,
+            paddingRight: paddingX,
+            paddingTop: paddingY,
+            paddingBottom: paddingY,
           },
-          children: text,
+          children: {
+            type: 'div',
+            props: {
+              style: {
+                color: textColor,
+                fontSize,
+                fontFamily: font.name,
+                fontWeight: font.weight,
+                textAlign: 'center' as const,
+                whiteSpace: 'nowrap' as const,
+              },
+              children: text,
+            },
+          },
         },
       },
     },
@@ -80,16 +95,18 @@ export async function renderCtaToPng(params: RenderCtaParams): Promise<{
     fonts: [
       {
         name: font.name,
-        data: font.data,
+        data: fontDataCopy,
         weight: font.weight as 400 | 500 | 600 | 700 | 800,
         style: 'normal',
       },
     ],
   });
-  const png = await sharp(Buffer.from(svg)).png().toBuffer();
-  const meta = await sharp(png).metadata();
+  const fullPng = await sharp(Buffer.from(svg)).png().toBuffer();
+  // Trim transparent pixels to get just the button (not the full canvas)
+  const trimmed = await sharp(fullPng).trim().png().toBuffer();
+  const meta = await sharp(trimmed).metadata();
   return {
-    buffer: png,
+    buffer: trimmed,
     width: meta.width ?? maxWidth,
     height: meta.height ?? Math.round(fontSize + paddingY * 2),
   };

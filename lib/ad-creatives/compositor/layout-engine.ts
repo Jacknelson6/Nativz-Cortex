@@ -109,18 +109,36 @@ export function computeLayout(
     case 'center_overlay':
     case 'full_overlay':
     default: {
-      const stackBottom = 0.88;
-      const ctaH = 0.1;
-      const ctaY = stackBottom - ctaH - 0.02;
+      // Content lives in the lower 60% of the canvas (y: 0.40 to 0.94)
+      // Hero gets top 40%, 6% bottom margin
+      const zoneTop = 0.40;
+      const zoneBottom = 0.94;
+      const zoneHeight = zoneBottom - zoneTop;
+
+      const headlineH = 0.11;
+      const subH = 0.08;
       const offerH = hasOffer ? 0.045 : 0;
-      const subY = ctaY - ELEMENT_GAP - 0.08 - (hasOffer ? offerH + ELEMENT_GAP : 0);
-      const headY = subY - ELEMENT_GAP - 0.11;
-      const h1 = zone(MARGIN, headY, textW, 0.11);
-      const h2 = zone(MARGIN, subY, textW, 0.08);
-      const offer = hasOffer
-        ? zone(MARGIN, subY + 0.08 + ELEMENT_GAP, textW, offerH)
-        : null;
-      const cta = zone((1 - CTA_MAX_WIDTH_FRAC) / 2, ctaY, CTA_MAX_WIDTH_FRAC, ctaH);
+      const ctaH = 0.1;
+      const gaps = 2 + (hasOffer ? 1 : 0);
+
+      const totalContentH = headlineH + subH + offerH + ctaH + (gaps * ELEMENT_GAP);
+
+      // Center the content block within the zone
+      const contentTop = zoneTop + (zoneHeight - totalContentH) / 2;
+
+      // ALL elements share the same centered x and width so they sit on one axis.
+      // Text elements use the full textW, CTA uses the same zone (placeCentered handles button centering).
+      const centerX = (1 - textW) / 2; // center the text zone on the canvas
+
+      let y = contentTop;
+      const h1 = zone(centerX, y, textW, headlineH);
+      y += headlineH + ELEMENT_GAP;
+      const h2 = zone(centerX, y, textW, subH);
+      y += subH + ELEMENT_GAP;
+      const offer = hasOffer ? zone(centerX, y, textW, offerH) : null;
+      if (offer) y += offerH + ELEMENT_GAP;
+      // CTA uses same zone width so placeCentered centers the smaller button within it
+      const cta = zone(centerX, y, textW, ctaH);
       const logo = zone(1 - MARGIN - LOGO_MAX_WIDTH_FRAC, MARGIN, LOGO_MAX_WIDTH_FRAC, LOGO_MAX_HEIGHT_FRAC);
       return { headline: h1, subheadline: h2, cta, offer, logo };
     }
