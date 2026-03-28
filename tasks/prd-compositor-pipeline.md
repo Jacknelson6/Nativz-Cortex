@@ -1,4 +1,270 @@
-# PRD: Sharp Compositor Pipeline — The Missing Layer That Makes Ad Generation Reliable
+# PRD: Nativz Cortex Creative OS — From Ad Generator to Self-Improving Creative Engine
+
+## The Vision: What We're Actually Building
+
+This isn't a feature. This is the transformation of Cortex from an "ad generator" into a **Creative Operating System** — a platform that gets better at making ads the more you use it, per client, per industry, per style.
+
+Here's the endgame: A franchise owner logs in, clicks "Generate 20 ads for our March pizza special," and gets 20 creatives where 15+ are immediately usable. Not because the AI got lucky, but because the system has learned from 200 previous creatives what works for this brand — what compositions their audience responds to, what color palettes match their vibe, what copy structures their creative director keeps vs deletes.
+
+That's Creative OS. The ad generation is table stakes. The intelligence layer is the product.
+
+### What "Success" Looks Like — The Creative Quality Framework
+
+To build a self-improving system, you need a definition of what "better" means that the system can actually measure. Without this, the recursive loop has no objective function — it's just collecting data with no direction.
+
+We define success across 5 dimensions. These aren't aspirational metrics — they're concrete, measurable signals that the system tracks and optimizes against at every level.
+
+---
+
+### Dimension 1: Usability Rate (The North Star)
+
+**Definition:** Of all creatives generated in a batch, what percentage does the admin keep (favorite or download) without manual editing?
+
+**Why this is the north star:** This is the single number that tells you whether the system is working. If an admin generates 20 ads and favorites 3, usability rate is 15%. That's bad — the admin wasted time reviewing 17 rejects. If they favorite 14, usability rate is 70%. That's a product people pay for.
+
+**How to measure:**
+```
+Usability Rate = (favorited + downloaded) / total_generated × 100
+```
+
+Tracked per batch, per client, and globally. Stored in batch metadata after the admin has reviewed (>60% of batch has signals).
+
+**Targets by system maturity:**
+
+| Stage | Usability Rate | What It Means |
+|-------|---------------|---------------|
+| Baseline (no compositor, no intelligence) | 15-25% | Current state — most ads have text issues or wrong vibes |
+| After compositor (Phase 1-7) | 35-50% | Text is always perfect, but style/composition still varies |
+| After intelligence loop (Phase 8, low confidence) | 45-60% | System avoids known-bad styles, nudges toward winners |
+| After intelligence loop (high confidence, 100+ signals) | 60-80% | System "knows" the client's aesthetic |
+| With reference imports + high confidence | 70-85% | Cold start solved, every batch is informed |
+
+**How the recursive loop uses this:** After each batch review, the system calculates usability rate and stores it on the batch record. The winner analyzer compares usability rates across batches to detect whether the intelligence loop is actually improving output quality over time. If usability rate plateaus or drops, the system flags it for the admin: "Style memory may be stale — consider uploading new reference ads."
+
+---
+
+### Dimension 2: First-Pass QA Rate
+
+**Definition:** Of all creatives in a batch, what percentage pass QA on the first Gemini generation attempt (no retries needed)?
+
+**Why it matters:** Each retry costs money (another Gemini API call) and time (~15-30 seconds). First-pass QA rate directly correlates with generation speed and cost efficiency. With the compositor handling text, this metric should jump dramatically because the #1 QA failure mode (garbled/misspelled/missing text) is eliminated by construction.
+
+**How to measure:**
+```
+First-Pass QA Rate = creatives_passed_first_attempt / total_generated × 100
+```
+
+Already trackable from existing `metadata.qa_passed` field + retry count.
+
+**Targets:**
+
+| Stage | First-Pass QA Rate | Primary Failure Mode |
+|-------|-------------------|---------------------|
+| Current (no compositor) | 40-60% | Text garble, duplicate logos, wrong hero |
+| After compositor | 75-90% | Wrong hero imagery, bad composition (text issues gone) |
+| After intelligence + compositor | 85-95% | Rare composition edge cases only |
+
+**How the recursive loop uses this:** The intelligence loop tracks which Nano Banana styles have the highest first-pass QA rates per client. Styles that consistently fail QA (even after text is handled by compositor) indicate a mismatch between the template's style direction and the brand's visual identity. The winner analyzer flags these: "stat-hero template fails QA 40% of the time for this client — consider removing from defaults."
+
+---
+
+### Dimension 3: Style Consistency Score
+
+**Definition:** How visually consistent are the creatives within a single batch? Measured by the similarity of composition patterns, color usage, and visual tone across the batch.
+
+**Why it matters:** Franchises need consistent brand presence. If a batch of 20 ads looks like 20 different brands designed them, the output is useless even if each individual ad is high quality. Consistency is what separates a "creative system" from "random AI art."
+
+**How to measure:** This is harder to quantify automatically, so we use two proxy metrics:
+
+1. **Template concentration:** What percentage of the batch uses the top 3 template styles? Higher concentration = more consistent look.
+   ```
+   Template Concentration = creatives_using_top_3_styles / total × 100
+   ```
+
+2. **Style memory alignment:** What percentage of the batch's templates are in the client's "preferred" list?
+   ```
+   Memory Alignment = creatives_using_preferred_styles / total × 100
+   ```
+
+**Targets:**
+
+| Stage | Template Concentration | Memory Alignment |
+|-------|----------------------|------------------|
+| Current (random selection) | 30-40% | N/A (no memory) |
+| With intelligence (medium confidence) | 50-65% | 40-60% |
+| With intelligence (high confidence) | 65-80% | 70-90% |
+
+**How the recursive loop uses this:** When the admin selects "Use recommended styles" and the batch scores high on both usability AND consistency, the system reinforces those template selections in the next analysis. When templates produce inconsistent results (high variance in QA scores within the same batch), the analyzer notes this pattern and may move those templates from "preferred" to "neutral."
+
+---
+
+### Dimension 4: Generation Efficiency
+
+**Definition:** Cost and time per usable creative. Not per generated creative — per KEPT creative.
+
+**Why it matters:** Generating 100 ads to get 15 keepers is expensive. Generating 20 ads to get 15 keepers is 5x more efficient. The intelligence loop's job is to increase the ratio of keepers to total generations.
+
+**How to measure:**
+```
+Cost Per Usable = total_batch_api_cost / usable_count
+Time Per Usable = total_batch_generation_time / usable_count
+```
+
+API cost can be estimated:
+- Gemini Flash: ~$0.002 per image generation
+- Gemini QA check: ~$0.001 per check
+- Claude copy generation: ~$0.003 per batch
+- Claude analysis (intelligence): ~$0.005 per analysis run
+
+**Targets:**
+
+| Stage | Cost Per Usable | Time Per Usable |
+|-------|----------------|-----------------|
+| Current | ~$0.08-0.12 | ~45-90 seconds |
+| After compositor (fewer retries) | ~$0.04-0.06 | ~25-40 seconds |
+| After intelligence (higher hit rate) | ~$0.02-0.04 | ~20-30 seconds |
+
+**How the recursive loop uses this:** The system tracks cost-per-usable across batches. If a new style memory version INCREASES cost (more retries, lower usability), the system detects regression and can auto-rollback to the previous style memory version. This is why we version style memory — it's a safety net against bad analysis.
+
+---
+
+### Dimension 5: Learning Velocity
+
+**Definition:** How quickly does the system's usability rate improve as more feedback accumulates?
+
+**Why it matters:** This is the meta-metric — it measures whether the recursive loop itself is working. A system that collects feedback but never improves has a broken loop. A system where usability rate climbs from 25% to 60% over 5 batches has a healthy loop.
+
+**How to measure:**
+```
+Learning Velocity = (usability_rate_last_3_batches - usability_rate_first_3_batches) / number_of_batches
+```
+
+Positive = improving. Zero = stalled. Negative = degrading.
+
+**Targets:**
+
+| Batches Completed | Expected Usability Trend |
+|-------------------|------------------------|
+| 1-3 (cold start) | 20-35% (baseline, learning) |
+| 4-6 (low confidence) | 35-50% (first intelligence kicks in) |
+| 7-10 (medium confidence) | 50-65% (clear improvement visible) |
+| 10+ (high confidence) | 60-80% (plateaus at client's quality ceiling) |
+
+**How the recursive loop uses this:** The winner analyzer tracks learning velocity as part of its analysis. If velocity stalls (5+ batches with no improvement), the analysis prompt includes this context: "Usability rate has plateaued at X%. The current style direction may be too narrow. Consider broadening template variety or updating reference ads to shift the aesthetic."
+
+This is how the system avoids getting stuck in a local optimum — it detects stagnation and recommends exploration.
+
+---
+
+### The Framework Summary: How These 5 Dimensions Drive the Loop
+
+```
+                    ┌─────────────────────────┐
+                    │    GENERATE BATCH        │
+                    │  (compositor + prompts)  │
+                    └───────────┬──────────────┘
+                                │
+                                ▼
+                    ┌─────────────────────────┐
+                    │    MEASURE                │
+                    │  • Usability Rate (D1)   │
+                    │  • First-Pass QA (D2)    │
+                    │  • Consistency (D3)      │
+                    │  • Efficiency (D4)       │
+                    └───────────┬──────────────┘
+                                │
+                                ▼
+                    ┌─────────────────────────┐
+                    │    ANALYZE               │
+                    │  Winner patterns +       │
+                    │  dimension trends        │
+                    │  → Updated style memory  │
+                    └───────────┬──────────────┘
+                                │
+                                ▼
+                    ┌─────────────────────────┐
+                    │    ADAPT                 │
+                    │  • Inject style direction│
+                    │  • Bias template select  │
+                    │  • Adjust defaults       │
+                    │  • Flag stagnation (D5)  │
+                    └───────────┬──────────────┘
+                                │
+                                ▼
+                    ┌─────────────────────────┐
+                    │    GENERATE NEXT BATCH   │
+                    │  (informed by memory)    │
+                    └─────────────────────────┘
+```
+
+Each dimension serves a specific role in the loop:
+- **D1 (Usability)** is the objective function — what are we maximizing?
+- **D2 (First-Pass QA)** is the quality floor — are we wasting retries?
+- **D3 (Consistency)** is the brand constraint — are outputs coherent?
+- **D4 (Efficiency)** is the cost check — are we getting smarter or just spending more?
+- **D5 (Learning Velocity)** is the meta-check — is the loop itself working?
+
+The winner analyzer receives ALL 5 dimensions as context when building its analysis. This means the style direction it produces isn't just "what looks good" — it's "what looks good AND passes QA AND is consistent AND is cost-efficient AND represents improvement over last time."
+
+---
+
+### Dimension Tracking: Where the Numbers Live
+
+All 5 dimensions are stored on the batch record after review is complete. Add these fields to the `ad_generation_batches` table:
+
+```sql
+ALTER TABLE ad_generation_batches ADD COLUMN IF NOT EXISTS metrics JSONB DEFAULT NULL;
+-- metrics schema:
+-- {
+--   "usability_rate": 0.65,
+--   "first_pass_qa_rate": 0.85,
+--   "template_concentration": 0.72,
+--   "memory_alignment": 0.80,
+--   "cost_per_usable": 0.035,
+--   "time_per_usable_seconds": 28,
+--   "total_api_cost_estimate": 0.52,
+--   "review_completeness": 0.90,  // % of batch with signals
+--   "computed_at": "2026-03-28T..."
+-- }
+```
+
+Compute metrics when review completeness exceeds 60% (>60% of creatives have been favorited, deleted, or downloaded). Store once, reference in subsequent analysis runs.
+
+A utility function computes all metrics from the batch's creatives and feedback:
+
+```typescript
+export async function computeBatchMetrics(batchId: string): Promise<BatchMetrics | null> {
+  // Fetch all creatives for this batch
+  // Fetch all feedback for these creative IDs
+  // Calculate each dimension
+  // Return null if review completeness < 60%
+  // Store on batch record
+}
+```
+
+The winner analyzer receives the last 10 batches' metrics alongside individual creative feedback. This gives it both the macro trend (are we improving?) and the micro detail (which specific creatives won/lost?).
+
+---
+
+### How the Framework Makes the Recursive Loop Self-Correcting
+
+Without the framework, the loop can go wrong in predictable ways:
+
+**Failure mode 1: Overfitting to one style.** The admin favorites 5 "headline" style ads early on. The system locks into headline-only recommendations. Future batches are all headline, and usability stalls because there's no variety.
+
+**How the framework catches it:** D5 (Learning Velocity) detects the plateau. D3 (Consistency) scores high but D1 (Usability) stops climbing. The analyzer sees: "High consistency, stalled usability — the style palette is too narrow. Recommend introducing 2-3 styles outside current preferences for A/B testing."
+
+**Failure mode 2: Bad analysis corrupts style memory.** A small sample of 6 signals produces a misleading pattern. The system starts avoiding a style that was actually fine — the 3 deletions were for unrelated reasons (bad copy, not bad template).
+
+**How the framework catches it:** D4 (Efficiency) degrades — cost per usable increases because the system is now avoiding viable templates. D5 (Learning Velocity) goes negative. The system flags: "Metrics degraded after style memory v3. Consider rolling back to v2." The version history in `ad_style_memory` makes rollback trivial.
+
+**Failure mode 3: The compositor produces technically correct but visually boring ads.** Text is perfect, logo is right, but the compositions are all safe/generic because the layout engine defaults to the same archetype.
+
+**How the framework catches it:** D1 (Usability) stays moderate but doesn't climb past 50%. The analyzer sees the pattern: "High QA pass rate (D2: 90%) but moderate usability (D1: 48%). Creatives are technically correct but not compelling. Style direction should emphasize bolder compositions — larger headlines, more saturated backgrounds, product closer to camera."
+
+This is the power of having multiple dimensions. No single metric can be gamed or misinterpreted because the others serve as cross-checks.
+
+---
 
 ## The Problem We're Solving (Read This First)
 
@@ -1006,11 +1272,21 @@ This is the most important part. The prompt must be specific about what patterns
 ```typescript
 const WINNER_ANALYSIS_SYSTEM_PROMPT = `You are a performance creative analyst for a social media advertising agency. You analyze patterns in ad creative performance to improve future generation.
 
-You will receive two sets of ad creatives:
-- WINNERS: Ads that were favorited or downloaded by the creative director (human approved)
-- LOSERS: Ads that were deleted by the creative director (human rejected)
+You will receive:
+- WINNERS: Ads favorited or downloaded by the creative director (human approved)
+- LOSERS: Ads deleted by the creative director (human rejected)
+- BATCH METRICS: The 5 performance dimensions across recent batches:
+  D1 (Usability Rate), D2 (First-Pass QA Rate), D3 (Style Consistency),
+  D4 (Generation Efficiency), D5 (Learning Velocity — trend direction)
 
 Your job is to find ACTIONABLE patterns — not generic advice. Don't say "use eye-catching visuals." Say "winners used product-forward compositions with the product occupying 60%+ of the frame, while losers used abstract editorial layouts."
+
+Use the batch metrics to calibrate your recommendations:
+- If D1 is stalled (velocity near zero), recommend BROADENING the style palette — the system may be overfitting
+- If D2 is low, identify which template styles consistently fail QA and recommend avoiding them
+- If D3 is low, recommend narrowing to fewer template styles for consistency
+- If D4 is degrading, check if avoid_styles is too aggressive (cutting viable options)
+- If D5 is negative, the previous style direction may have been wrong — recommend a reset or rollback
 
 Output valid JSON with this exact schema:
 {
@@ -1020,10 +1296,12 @@ Output valid JSON with this exact schema:
   "compositionInsights": "specific observation", // Layout/composition patterns
   "copyInsights": "specific observation",      // What copy patterns work (length, tone, numbers)
   "avoidPatterns": "specific observation",     // Common traits of deleted ads
-  "styleDirectionSummary": "2-3 sentences"    // Reusable direction for injection into image prompts
+  "styleDirectionSummary": "2-3 sentences",   // Reusable direction for injection into image prompts
+  "metricDiagnosis": "1-2 sentences",         // What the D1-D5 trends suggest about system health
+  "explorationRecommendation": "1 sentence"   // Should next batch explore new styles or exploit known winners?
 }
 
-Be SPECIFIC. Reference actual template names, actual color choices, actual copy structures. The "styleDirectionSummary" will be injected directly into an image generation prompt, so write it as a concise creative brief, not as analysis.`;
+Be SPECIFIC. Reference actual template names, actual color choices, actual copy structures. The "styleDirectionSummary" will be injected directly into an image generation prompt, so write it as a concise creative brief, not as analysis. The "metricDiagnosis" helps the admin understand whether the system is improving or stagnating.`;
 ```
 
 #### Why LLM Analysis Instead of Pure Statistics
