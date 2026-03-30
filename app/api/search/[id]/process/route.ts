@@ -18,9 +18,79 @@ import { syncSearchToVault } from '@/lib/vault/sync';
 import { createNotification } from '@/lib/notifications/create';
 import { runLlmTopicPipeline } from '@/lib/search/llm-pipeline/run-llm-topic-pipeline';
 import { scrapeAllPlatforms } from '@/lib/scrapers/scrape-all';
+import { sendSearchCompletedEmail } from '@/lib/email/resend';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 /** Vercel Pro / Fluid can use 800s — heavy multi-platform runs often exceed 5 minutes. */
 export const maxDuration = 800;
+
+// ── Pipeline step tracking ──────────────────────────────────────────────────
+
+interface PipelineStep {
+  id: string;
+  label: string;
+  status: 'pending' | 'active' | 'completed' | 'failed';
+  startedAt?: string;
+  completedAt?: string;
+}
+
+interface PipelineSteps {
+  steps: PipelineStep[];
+  currentStep: string;
+}
+
+const LLM_PIPELINE_STEPS: Omit<PipelineStep, 'status'>[] = [
+  { id: 'subtopic_research', label: 'Researching subtopics' },
+  { id: 'trend_analysis', label: 'Analyzing trends' },
+  { id: 'report_generation', label: 'Generating report' },
+  { id: 'video_scraping', label: 'Scraping real videos' },
+  { id: 'outlier_scoring', label: 'Scoring outliers' },
+  { id: 'hook_extraction', label: 'Extracting hooks' },
+  { id: 'finalizing', label: 'Finalizing results' },
+];
+
+const LEGACY_PIPELINE_STEPS: Omit<PipelineStep, 'status'>[] = [
+  { id: 'web_search', label: 'Searching the web' },
+  { id: 'trend_analysis', label: 'Analyzing trends' },
+  { id: 'report_generation', label: 'Generating report' },
+  { id: 'finalizing', label: 'Finalizing results' },
+];
+
+function initPipelineSteps(isLlmV1: boolean): PipelineSteps {
+  const template = isLlmV1 ? LLM_PIPELINE_STEPS : LEGACY_PIPELINE_STEPS;
+  return {
+    steps: template.map((s) => ({ ...s, status: 'pending' as const })),
+    currentStep: template[0].id,
+  };
+}
+
+async function updateStep(
+  admin: SupabaseClient,
+  searchId: string,
+  stepId: string,
+  status: 'active' | 'completed' | 'failed',
+  pipelineSteps: PipelineSteps,
+) {
+  const now = new Date().toISOString();
+  for (const step of pipelineSteps.steps) {
+    if (step.id === stepId) {
+      step.status = status;
+      if (status === 'active') {
+        step.startedAt = step.startedAt ?? now;
+      }
+      if (status === 'completed' || status === 'failed') {
+        step.completedAt = now;
+      }
+    }
+  }
+  pipelineSteps.currentStep = stepId;
+
+  await admin
+    .from('topic_searches')
+    .update({ pipeline_state: { ...pipelineSteps } })
+    .eq('id', searchId)
+    .then(() => {}); // fire-and-forget, don't block pipeline
+}
 
 /** How long a processing lease is considered active before another worker may reclaim (ms). */
 const PROCESS_LEASE_MS = 15 * 60 * 1000;
@@ -183,7 +253,13 @@ export async function POST(
 
     try {
       const topicPipeline = (search as { topic_pipeline?: string }).topic_pipeline ?? 'legacy';
-      if (topicPipeline === 'llm_v1') {
+      const isLlmV1 = topicPipeline === 'llm_v1';
+      const steps = initPipelineSteps(isLlmV1);
+
+      if (isLlmV1) {
+        // Initialize pipeline steps in DB
+        await updateStep(adminClient, id, 'subtopic_research', 'active', steps);
+
         // Run LLM pipeline and video scraping in parallel
         const [result, scrapeResult] = await Promise.all([
           runLlmTopicPipeline({
@@ -206,22 +282,45 @@ export async function POST(
                   brandVoice: clientContext.brandVoice,
                 }
               : null,
+          }).then(async (r) => {
+            // Mark research steps as completed after LLM pipeline finishes
+            await updateStep(adminClient, id, 'subtopic_research', 'completed', steps);
+            await updateStep(adminClient, id, 'trend_analysis', 'active', steps);
+            await updateStep(adminClient, id, 'trend_analysis', 'completed', steps);
+            await updateStep(adminClient, id, 'report_generation', 'active', steps);
+            await updateStep(adminClient, id, 'report_generation', 'completed', steps);
+            return r;
           }),
-          scrapeAllPlatforms({
-            query: search.query,
-            searchId: id,
-            timeRange: search.time_range,
-            userId: user.id,
-            userEmail: user.email ?? undefined,
-          }).catch((err) => {
-            console.error('[process] Video scraping failed (non-blocking):', err);
-            return null;
-          }),
+          (async () => {
+            await updateStep(adminClient, id, 'video_scraping', 'active', steps);
+            try {
+              const r = await scrapeAllPlatforms({
+                query: search.query,
+                searchId: id,
+                timeRange: search.time_range,
+                userId: user.id,
+                userEmail: user.email ?? undefined,
+              });
+              await updateStep(adminClient, id, 'video_scraping', 'completed', steps);
+              await updateStep(adminClient, id, 'outlier_scoring', 'active', steps);
+              await updateStep(adminClient, id, 'outlier_scoring', 'completed', steps);
+              await updateStep(adminClient, id, 'hook_extraction', 'active', steps);
+              await updateStep(adminClient, id, 'hook_extraction', 'completed', steps);
+              return r;
+            } catch (err) {
+              console.error('[process] Video scraping failed (non-blocking):', err);
+              await updateStep(adminClient, id, 'video_scraping', 'completed', steps);
+              return null;
+            }
+          })(),
         ]);
+
+        await updateStep(adminClient, id, 'finalizing', 'active', steps);
 
         // Merge scrape stats into pipeline state
         const pipelineState = {
           ...result.pipelineState,
+          ui_steps: steps,
           ...(scrapeResult ? {
             video_scraping: {
               total_videos: scrapeResult.videos.length,
@@ -299,10 +398,21 @@ export async function POST(
           linkPath: `/admin/search/${id}`,
         }).catch(() => {});
 
+        await updateStep(adminClient, id, 'finalizing', 'completed', steps);
+
+        // Send email notification (non-blocking)
+        sendSearchCompletionEmail(adminClient, user.id, {
+          searchId: id,
+          query: search.query,
+          summary: result.aiResponse.summary,
+          clientName: clientContext?.name ?? null,
+        }).catch(() => {});
+
         return NextResponse.json({ status: 'completed' });
       }
 
       // ── Step 1: Gather data (legacy) ───────────────────────────────────────
+      await updateStep(adminClient, id, 'web_search', 'active', steps);
       let serpData: SerpData;
       let platformContext = '';
       let platformSources: import('@/lib/types/search').PlatformSource[] = [];
@@ -355,7 +465,10 @@ export async function POST(
       }
 
       // ── Step 2: Compute analytics in code (no LLM) ────────────────────────
+      await updateStep(adminClient, id, 'web_search', 'completed', steps);
+      await updateStep(adminClient, id, 'trend_analysis', 'active', steps);
       const analytics = computeAnalytics(platformSources, serpData, platformStats, search.query);
+      await updateStep(adminClient, id, 'trend_analysis', 'completed', steps);
 
       // ── Step 3: Fetch knowledge base context for client searches ───────────
       let clientKnowledgeBlock: string | null = null;
@@ -406,6 +519,7 @@ export async function POST(
       }
 
       // ── Step 4: Call LLM for topic discovery + narrative + video ideas ─────
+      await updateStep(adminClient, id, 'report_generation', 'active', steps);
       const timeLabel = search.time_range.replace(/_/g, ' ').replace('last ', 'last ');
       const narrativePrompt = buildNarrativePrompt({
         query: search.query,
@@ -569,6 +683,8 @@ export async function POST(
       );
 
       // ── Step 7: Save results ───────────────────────────────────────────────
+      await updateStep(adminClient, id, 'report_generation', 'completed', steps);
+      await updateStep(adminClient, id, 'finalizing', 'active', steps);
       const { error: updateError } = await adminClient
         .from('topic_searches')
         .update({
@@ -634,6 +750,16 @@ export async function POST(
         linkPath: `/admin/search/${id}`,
       }).catch(() => {});
 
+      await updateStep(adminClient, id, 'finalizing', 'completed', steps);
+
+      // Send email notification (non-blocking)
+      sendSearchCompletionEmail(adminClient, user.id, {
+        searchId: id,
+        query: search.query,
+        summary: aiResponse.summary,
+        clientName: clientContext?.name ?? null,
+      }).catch(() => {});
+
       return NextResponse.json({ status: 'completed' });
     } catch (aiError) {
       console.error('Processing error:', aiError);
@@ -669,4 +795,33 @@ function computeResonance(frequency: number, engagement: number): 'low' | 'mediu
   if (score > 12) return 'high';
   if (score > 6) return 'medium';
   return 'low';
+}
+
+/** Check user email_notifications preference and send completion email */
+async function sendSearchCompletionEmail(
+  admin: SupabaseClient,
+  userId: string,
+  opts: { searchId: string; query: string; summary: string; clientName: string | null },
+) {
+  try {
+    const { data: userData } = await admin
+      .from('users')
+      .select('email, email_notifications')
+      .eq('id', userId)
+      .single();
+
+    if (!userData?.email) return;
+    if (userData.email_notifications === false) return;
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io';
+    await sendSearchCompletedEmail({
+      to: userData.email,
+      query: opts.query,
+      clientName: opts.clientName,
+      summaryPreview: (opts.summary ?? '').slice(0, 200),
+      resultsUrl: `${appUrl}/admin/search/${opts.searchId}`,
+    });
+  } catch (err) {
+    console.error('[process] Email notification failed:', err);
+  }
 }

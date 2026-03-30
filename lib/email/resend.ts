@@ -314,3 +314,54 @@ export async function sendAffiliateWeeklyReportEmail(opts: {
 
   return result;
 }
+
+// ── Search completed notification ─────────────────────────────────────────
+
+export async function sendSearchCompletedEmail(opts: {
+  to: string;
+  query: string;
+  clientName: string | null;
+  summaryPreview: string;
+  resultsUrl: string;
+}) {
+  const clientLine = opts.clientName
+    ? `<p class="detail-label">Client</p><p class="detail-value">${opts.clientName}</p>`
+    : '';
+
+  const result = await getResend().emails.send({
+    from: FROM_ADDRESS,
+    to: opts.to,
+    subject: 'Your topic search is ready',
+    html: layout(`
+      <div class="card">
+        <h1 class="heading">Research complete.</h1>
+        <p class="subtext">
+          Your topic search for <span class="highlight">&ldquo;${opts.query}&rdquo;</span> has finished processing. Here&rsquo;s a quick preview:
+        </p>
+        <p class="small" style="margin-bottom: 24px;">
+          ${opts.summaryPreview}${opts.summaryPreview.length >= 200 ? '&hellip;' : ''}
+        </p>
+        ${clientLine}
+        <div class="button-wrap">
+          <a href="${opts.resultsUrl}" class="button">View full report &rarr;</a>
+        </div>
+        <hr class="divider" />
+        <p class="small">
+          You received this because you ran a topic search on Nativz Cortex. You can disable these emails in your profile settings.
+        </p>
+      </div>
+    `),
+  });
+
+  logUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  }).catch(() => {});
+
+  return result;
+}

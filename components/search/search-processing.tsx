@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PLATFORM_CONFIG } from './platform-icon';
+import { PipelineStepper } from './pipeline-stepper';
 import { toast } from 'sonner';
 
 interface SearchProcessingProps {
@@ -513,30 +514,13 @@ export function SearchProcessing({
           <span className="text-xs text-text-muted tabular-nums">{Math.round(progress)}%</span>
         </div>
 
-        {/* Stage steps */}
-        <div className="mt-5 space-y-2">
-          {stages.map((stage, i) => {
-            const isComplete = i < stageIndex || done;
-            const isCurrent = i === stageIndex && !done && !error;
-            if (!isComplete && !isCurrent) return null;
+        {/* Real-time pipeline stepper (reads actual DB state) */}
+        {!done && !error && (
+          <PipelineStepper searchId={searchId} />
+        )}
 
-            return (
-              <div key={stage.label} className="flex items-center gap-2.5 animate-fade-slide-in">
-                {isComplete ? (
-                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent/15">
-                    <Check size={12} className="text-accent" />
-                  </div>
-                ) : (
-                  <div className="flex h-5 w-5 items-center justify-center">
-                    <Loader2 size={14} className="animate-spin text-accent2-text" />
-                  </div>
-                )}
-                <span className={`text-sm transition-colors ${isComplete ? 'text-text-muted' : 'text-text-primary font-medium'}`}>
-                  {stage.label}
-                </span>
-              </div>
-            );
-          })}
+        {/* Fallback stage steps (time-based simulation while stepper has no data) */}
+        <div className="mt-5 space-y-2">
           {done && (
             <div className="flex items-center gap-2.5 animate-fade-slide-in">
               <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/15">
