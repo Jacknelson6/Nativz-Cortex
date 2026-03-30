@@ -81,8 +81,12 @@ export interface TopicSearchHookRow {
 /** Options for scraping */
 export interface ScrapeOptions {
   query: string;
+  /** Multiple targeted search queries (topic + keyword combos) */
+  searchQueries?: string[];
   maxResults?: number;
   timeRange?: string;
+  /** ISO 639-1 language code for filtering (e.g. 'en') */
+  language?: string;
 }
 
 /** Result from a single platform scrape */

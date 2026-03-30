@@ -74,14 +74,19 @@ export async function scrapeInstagram(options: ScrapeOptions): Promise<ScrapeRes
     const client = getApifyClient();
     const maxItems = options.maxResults ?? 50;
 
-    console.log(`[instagram-scraper] Running Apify actor ${ACTOR_ID}`);
+    // Use keyword search for better relevance (hashtag search strips spaces and is too broad)
+    const queries = options.searchQueries?.length
+      ? options.searchQueries
+      : [options.query];
+
+    console.log(`[instagram-scraper] Running Apify actor ${ACTOR_ID} with queries: ${queries.join(', ')}`);
     const run = await client.actor(ACTOR_ID).call(
       {
-        search: options.query,
+        search: queries.join(', '),
         resultsType: 'posts',
         resultsLimit: maxItems,
         searchType: 'hashtag',
-        searchLimit: 1,
+        searchLimit: queries.length,
       },
       { waitSecs: 120 },
     );

@@ -71,12 +71,17 @@ export async function scrapeTikTok(options: ScrapeOptions): Promise<ScrapeResult
     const client = getApifyClient();
     const maxItems = options.maxResults ?? 50;
 
-    console.log(`[tiktok-scraper] Running Apify actor ${ACTOR_ID}`);
+    // Use all targeted queries for broader but relevant coverage
+    const queries = options.searchQueries?.length
+      ? options.searchQueries
+      : [options.query];
+
+    console.log(`[tiktok-scraper] Running Apify actor ${ACTOR_ID} with ${queries.length} queries: ${queries.join(', ')}`);
     const run = await client.actor(ACTOR_ID).call(
       {
-        searchQueries: [options.query],
+        searchQueries: queries,
         maxProfilesPerQuery: 1,
-        resultsPerPage: maxItems,
+        resultsPerPage: Math.ceil(maxItems / queries.length),
         shouldDownloadCovers: false,
         shouldDownloadVideos: false,
       },

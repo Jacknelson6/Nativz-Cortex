@@ -15,6 +15,36 @@ export interface ScrapeAllOptions {
   platforms?: ('tiktok' | 'youtube' | 'instagram')[];
   userId?: string;
   userEmail?: string;
+  /** Selected keywords from the keyword picker step */
+  keywords?: string[];
+  /** Language code (e.g. 'en') for filtering results */
+  language?: string;
+}
+
+/**
+ * Build platform-specific search queries from the main topic + selected keywords.
+ * Produces 2-3 targeted queries per platform instead of one broad term.
+ */
+function buildSearchQueries(query: string, keywords?: string[]): string[] {
+  const queries: string[] = [];
+
+  // Always include the full query as-is
+  queries.push(query);
+
+  if (keywords && keywords.length > 0) {
+    // Add keyword combinations for specificity
+    // Take up to 3 most specific keywords and pair them with the topic
+    const specific = keywords
+      .filter(k => k.toLowerCase() !== query.toLowerCase())
+      .slice(0, 3);
+
+    for (const kw of specific) {
+      queries.push(`${query} ${kw}`);
+    }
+  }
+
+  // Deduplicate
+  return [...new Set(queries.map(q => q.trim()))].slice(0, 4);
 }
 
 export interface ScrapeAllResult {
@@ -123,50 +153,67 @@ function getAvailablePlatforms(localAvailable: boolean): Set<string> {
  * extract hooks, and persist to DB.
  */
 export async function scrapeAllPlatforms(options: ScrapeAllOptions): Promise<ScrapeAllResult> {
-  const { query, searchId, maxResultsPerPlatform = 50, timeRange, userId, userEmail } = options;
-  const localAvailable = await isLocalScraperAvailable();
-  const available = getAvailablePlatforms(localAvailable);
+  const { query, searchId, maxResultsPerPlatform = 50, timeRange, userId, userEmail, keywords, language } = options;
+  const available = getAvailablePlatforms(false); // Skip local scraper check — Apify is primary
   const requested = new Set(options.platforms ?? ['tiktok', 'youtube', 'instagram']);
   const errors: string[] = [];
 
+  // Build targeted search queries from topic + keywords
+  const searchQueries = buildSearchQueries(query, keywords);
+  const perQueryLimit = Math.ceil(maxResultsPerPlatform / searchQueries.length);
+
   console.log(`[scrape-all] Starting scrape for "${query}" (search ${searchId})`);
-  console.log(`[scrape-all] Local scraper: ${localAvailable ? 'available' : 'offline'}`);
-  console.log(`[scrape-all] Apify: ${process.env.APIFY_API_KEY ? 'APIFY_API_KEY set' : 'APIFY_API_KEY missing'}`);
+  console.log(`[scrape-all] Keywords: ${keywords?.join(', ') || 'none'}`);
+  console.log(`[scrape-all] Search queries: ${searchQueries.join(' | ')}`);
+  console.log(`[scrape-all] Language: ${language || 'en (default)'}`);
   console.log(`[scrape-all] Available platforms: ${[...available].join(', ')}`);
 
-  // Run available scrapers in parallel — prefer local Playwright, fall back to Apify
+  // Run available scrapers in parallel with targeted queries
   const scrapePromises: Promise<ScrapeResult>[] = [];
 
   if (requested.has('tiktok') && available.has('tiktok')) {
-    if (localAvailable) {
-      scrapePromises.push(
-        scrapeLocal('tiktok', query, maxResultsPerPlatform, timeRange)
-          .catch(() => ({ platform: 'tiktok' as const, videos: [], error: 'Local scraper failed' }))
-          .then(r => localThenApify('tiktok', r, () => scrapeTikTok({ query, maxResults: maxResultsPerPlatform, timeRange }))),
-      );
-    } else {
-      console.log('[scrape-all] tiktok: local offline — using Apify only');
-      scrapePromises.push(scrapeTikTok({ query, maxResults: maxResultsPerPlatform, timeRange }));
-    }
+    // TikTok: pass all search queries to the actor (it supports multiple)
+    scrapePromises.push(scrapeTikTok({
+      query: searchQueries[0], // Primary query
+      searchQueries, // All queries for the actor
+      maxResults: maxResultsPerPlatform,
+      timeRange,
+      language: language || 'en',
+    }));
   }
   if (requested.has('youtube') && available.has('youtube')) {
-    scrapePromises.push(scrapeYouTube({ query, maxResults: maxResultsPerPlatform, timeRange }));
+    // YouTube: run each query and merge results
+    const ytPromises = searchQueries.map(q =>
+      scrapeYouTube({ query: q, maxResults: perQueryLimit, timeRange, language: language || 'en' }),
+    );
+    scrapePromises.push(
+      Promise.all(ytPromises).then(results => {
+        const allVids: ScrapedVideo[] = [];
+        const errs: string[] = [];
+        for (const r of results) {
+          allVids.push(...r.videos);
+          if (r.error) errs.push(r.error);
+        }
+        // Deduplicate by platform_id
+        const seen = new Set<string>();
+        const unique = allVids.filter(v => {
+          if (seen.has(v.platform_id)) return false;
+          seen.add(v.platform_id);
+          return true;
+        });
+        return { platform: 'youtube' as const, videos: unique.slice(0, maxResultsPerPlatform), error: errs.length > 0 ? errs.join('; ') : undefined };
+      }),
+    );
   }
   if (requested.has('instagram') && available.has('instagram')) {
-    if (localAvailable) {
-      scrapePromises.push(
-        scrapeLocal('instagram', query, maxResultsPerPlatform, timeRange)
-          .catch(() => ({ platform: 'instagram' as const, videos: [], error: 'Local scraper failed' }))
-          .then(r =>
-            localThenApify('instagram', r, () =>
-              scrapeInstagram({ query, maxResults: maxResultsPerPlatform, timeRange }),
-            ),
-          ),
-      );
-    } else {
-      console.log('[scrape-all] instagram: local offline — using Apify only');
-      scrapePromises.push(scrapeInstagram({ query, maxResults: maxResultsPerPlatform, timeRange }));
-    }
+    // Instagram: use the most specific query
+    scrapePromises.push(scrapeInstagram({
+      query: searchQueries[0],
+      searchQueries,
+      maxResults: maxResultsPerPlatform,
+      timeRange,
+      language: language || 'en',
+    }));
   }
 
   if (scrapePromises.length === 0) {

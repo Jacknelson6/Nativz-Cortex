@@ -294,12 +294,16 @@ export async function POST(
           (async () => {
             await updateStep(adminClient, id, 'video_scraping', 'active', steps);
             try {
+              // Pass selected keywords for targeted scraping
+              const subtopics = (search as { subtopics?: string[] }).subtopics;
               const r = await scrapeAllPlatforms({
                 query: search.query,
                 searchId: id,
                 timeRange: search.time_range,
                 userId: user.id,
                 userEmail: user.email ?? undefined,
+                keywords: Array.isArray(subtopics) ? subtopics : undefined,
+                language: search.language || 'en',
               });
               await updateStep(adminClient, id, 'video_scraping', 'completed', steps);
               await updateStep(adminClient, id, 'outlier_scoring', 'active', steps);

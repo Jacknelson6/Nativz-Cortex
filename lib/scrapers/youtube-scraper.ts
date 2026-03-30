@@ -82,6 +82,7 @@ export async function scrapeYouTube(options: ScrapeOptions): Promise<ScrapeResul
       videoDuration: 'short',
       maxResults: String(maxResults),
       order: 'viewCount',
+      relevanceLanguage: options.language || 'en',
       key: apiKey,
     });
     const publishedAfter = getPublishedAfter(options.timeRange);
