@@ -8,6 +8,7 @@ import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { getBrandProfile, getKnowledgeEntries } from '@/lib/knowledge/queries';
 import { quickScrapeUrl } from '@/lib/knowledge/scraper';
 import { getHookContext } from '@/lib/hooks/get-hook-context';
+import { SCRIPTING_FRAMEWORK } from '@/lib/hooks/scripting-framework';
 
 const generateSchema = z.object({
   client_id: z.string().uuid().optional(),
@@ -380,6 +381,8 @@ Executive summary: ${(latestStrategy.executive_summary as string) ?? ''}
 
         const pillarPrompt = `You are a creative video content strategist for a marketing agency. Generate exactly ${ideas_per_pillar} unique short-form video ideas for the content pillar "${pillar.name}" as a JSON array.
 
+${SCRIPTING_FRAMEWORK}
+
 Each idea must have these fields:
 - "title": a compelling video title that a videographer can immediately understand
 - "why_it_works": an array of exactly 3 short bullet points (strings). Each under 10 words.
@@ -395,7 +398,7 @@ Requirements:
 - Each idea must be distinct
 ${hasReferences ? '- Draw inspiration from the reference videos' : ''}
 ${hasSearch ? '- Use the research data to ground ideas in real trends' : ''}
-${hookContext ? '- OPTIONAL: If the scraped video hooks above don't cover an angle, you may draw from the static hook templates for additional inspiration. Scraped hooks from real videos always take priority.' : ''}
+${hookContext ? '- OPTIONAL: If the scraped video hooks above do not cover an angle, you may draw from the static hook templates for additional inspiration. Scraped hooks from real videos always take priority.' : ''}
 
 Output ONLY the JSON array. No other text.`;
 
@@ -436,6 +439,8 @@ Output ONLY the JSON array. No other text.`;
     // ── Standard generation (no pillars) ──
     const systemPrompt = `You are a creative video content strategist for a marketing agency. Generate exactly ${count} unique short-form video ideas as a JSON array.
 
+${SCRIPTING_FRAMEWORK}
+
 Each idea must have these fields:
 - "title": a compelling video title that a videographer can immediately understand (e.g. "Top 10 reasons you should buy a home in 2026")
 - "why_it_works": an array of exactly 3 short bullet points (strings). Each bullet should be a concise, punchy one-liner — like a list of pros. Keep each under 10 words. Example: ["Taps into trending home-buying conversation", "Creates urgency with 2026 angle", "Listicle format drives high watch time"]
@@ -451,7 +456,7 @@ Requirements:
 ${hasReferences ? '- Draw heavy inspiration from the reference videos — match their style, energy, and content approach while adapting for this brand' : ''}
 ${hasSearch ? '- Use the research data heavily — base ideas on what is actually trending and performing well. Ground ideas in real data, not assumptions.' : ''}
 ${hasUrlSource ? '- The brand context was scraped from their website. Infer the industry, target audience, and brand voice from the content. Focus ideas on what would work for THIS specific business.' : ''}
-${hookContext ? '- OPTIONAL: If the scraped video hooks above don't cover an angle, you may draw from the static hook templates for additional inspiration. Scraped hooks from real videos always take priority.' : ''}
+${hookContext ? '- OPTIONAL: If the scraped video hooks above do not cover an angle, you may draw from the static hook templates for additional inspiration. Scraped hooks from real videos always take priority.' : ''}
 
 Output ONLY the JSON array. No other text.`;
 
