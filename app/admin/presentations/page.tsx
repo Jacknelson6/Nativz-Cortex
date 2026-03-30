@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Presentation, Plus, MoreHorizontal, Clock, Trash2, Archive, ArchiveRestore,
+  StickyNote, Plus, MoreHorizontal, Clock, Trash2, Archive, ArchiveRestore,
   Copy, Pencil, FileText, ListOrdered, BarChart3, BarChart2, ChevronRight, Search, Instagram,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -47,8 +47,8 @@ export default function PresentationsPage() {
   const [showCreate, setShowCreate] = useState(false);
 
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirm({
-    title: 'Delete presentation',
-    description: 'This will permanently delete this presentation. This action cannot be undone.',
+    title: 'Delete note',
+    description: 'This will permanently delete this note. This action cannot be undone.',
     confirmLabel: 'Delete',
     variant: 'danger',
   });
@@ -61,7 +61,7 @@ export default function PresentationsPage() {
       const data = await res.json();
       setPresentations(data);
     } catch {
-      toast.error('Failed to load presentations');
+      toast.error('Failed to load notes');
     } finally {
       setLoading(false);
     }
@@ -82,7 +82,7 @@ export default function PresentationsPage() {
   async function handleCreate(type: 'slides' | 'tier_list' | 'social_audit' | 'benchmarks' | 'prospect_audit' | 'social_results') {
     try {
       const titles: Record<string, string> = {
-        slides: 'Untitled presentation',
+        slides: 'Untitled note',
         tier_list: 'Untitled tier list',
         social_audit: 'Social audit',
         benchmarks: 'Creative benchmarks 2026',
@@ -139,7 +139,7 @@ export default function PresentationsPage() {
       const data = await res.json();
       router.push(`/admin/presentations/${data.id}`);
     } catch {
-      toast.error('Failed to create presentation');
+      toast.error('Failed to create note');
     }
   }
 
@@ -158,10 +158,10 @@ export default function PresentationsPage() {
         }
         throw new Error(message);
       }
-      toast.success('Presentation deleted');
+      toast.success('Note deleted');
       setPresentations((prev) => prev.filter((p) => p.id !== id));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to delete presentation');
+      toast.error(e instanceof Error ? e.message : 'Failed to delete note');
     }
     setMenuOpenId(null);
   }
@@ -236,9 +236,9 @@ export default function PresentationsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Presentations</h1>
+          <h1 className="text-2xl font-bold text-foreground">Notes</h1>
           <p className="text-sm text-text-muted mt-1">
-            Sales tools, tier lists, and client presentations — includes a ready-made video content production SOP deck
+            Sales tools, tier lists, and client notes — includes a ready-made video content production SOP deck
           </p>
         </div>
         <Button onClick={() => setShowCreate(!showCreate)}>
@@ -253,20 +253,19 @@ export default function PresentationsPage() {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowCreate(false)} />
           <div className="relative w-full max-w-xl rounded-2xl border border-nativz-border bg-surface shadow-2xl animate-modal-pop-in p-6 space-y-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-text-primary">Create new presentation</h2>
+              <h2 className="text-lg font-semibold text-text-primary">Create new note</h2>
               <button onClick={() => setShowCreate(false)} className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors">
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <p className="text-sm text-text-muted -mt-2">Choose a presentation type to get started</p>
+            <p className="text-sm text-text-muted -mt-2">Choose a note type to get started</p>
             <div className="grid grid-cols-1 gap-2">
               {[
-                { type: 'slides' as const, label: 'Slide deck', desc: 'Create a presentation with slides, images, and speaker notes', icon: FileText, color: 'rgba(4, 107, 210, 0.15)', iconColor: 'text-accent-text', bgColor: 'bg-accent-surface' },
+                { type: 'slides' as const, label: 'Slide deck', desc: 'Create a note with slides, images, and speaker notes', icon: FileText, color: 'rgba(4, 107, 210, 0.15)', iconColor: 'text-accent-text', bgColor: 'bg-accent-surface' },
                 { type: 'tier_list' as const, label: 'Tier list', desc: 'Rank content with drag-and-drop tiers for visual demos on calls', icon: ListOrdered, color: 'rgba(168, 85, 247, 0.15)', iconColor: 'text-accent2-text', bgColor: 'bg-accent2-surface' },
                 { type: 'social_audit' as const, label: 'Social audit', desc: 'Before & after analysis with real social data and growth projections', icon: BarChart3, color: 'rgba(16, 185, 129, 0.15)', iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10' },
                 { type: 'benchmarks' as const, label: 'Creative benchmarks', desc: 'Interactive charts and tables from $1.3B in ad spend data', icon: BarChart2, color: 'rgba(249, 115, 22, 0.15)', iconColor: 'text-orange-400', bgColor: 'bg-orange-500/15' },
-                { type: 'prospect_audit' as const, label: 'Prospect audit', desc: 'Audit a prospect\'s social presence, content pillars, and ad strategy', icon: Search, color: 'rgba(6, 182, 212, 0.15)', iconColor: 'text-cyan-400', bgColor: 'bg-cyan-500/15' },
-                { type: 'social_results' as const, label: 'Social results visualizer', desc: 'Show prospects their Instagram before & after 3 months with Nativz', icon: Instagram, color: 'rgba(236, 72, 153, 0.15)', iconColor: 'text-pink-400', bgColor: 'bg-pink-500/10' },
+                // Prospect audit and Social results visualizer moved to Strategy Lab
               ].map(({ type, label, desc, icon: Icon, iconColor, bgColor }) => (
                 <button
                   key={type}
@@ -406,7 +405,7 @@ export default function PresentationsPage() {
                         </span>
                       )}
                       <span className="flex items-center gap-1">
-                        <Presentation size={10} />
+                        <StickyNote size={10} />
                         {itemCount} {itemLabel}
                       </span>
                       <span className="flex items-center gap-1">
@@ -474,13 +473,13 @@ export default function PresentationsPage() {
       {/* Empty */}
       {!loading && presentations.length === 0 && (
         <EmptyState
-          icon={<Presentation size={32} />}
-          title="No presentations yet"
+          icon={<StickyNote size={32} />}
+          title="No notes yet"
           description="Create slide decks, tier lists, and other visual tools to close more sales."
           action={
             <Button onClick={() => setShowCreate(true)}>
               <Plus size={14} />
-              Create your first presentation
+              Create your first note
             </Button>
           }
         />

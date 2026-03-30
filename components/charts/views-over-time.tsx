@@ -166,7 +166,7 @@ export function ViewsOverTime({ videos }: ViewsOverTimeProps) {
                   color: '#f1f5f9',
                 }}
                 labelStyle={{ color: '#f1f5f9', fontWeight: 600, marginBottom: 4 }}
-                formatter={(value: number) => [formatNumber(value), 'Views']}
+                formatter={(value) => [formatNumber(value as number), 'Views']}
               />
               <Area type="monotone" dataKey="views" stroke="none" fill="url(#views-ot-gradient)" />
               <Line

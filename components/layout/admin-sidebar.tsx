@@ -19,7 +19,7 @@ import {
   Handshake,
   Clapperboard,
   ImagePlus,
-  Presentation,
+  StickyNote,
   Brain,
   Scissors,
   ThumbsUp,
@@ -99,7 +99,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Present',
     items: [
-      { href: '/admin/presentations', label: 'Presentations', icon: Presentation },
+      { href: '/admin/presentations', label: 'Notes', icon: StickyNote },
     ],
   },
   {

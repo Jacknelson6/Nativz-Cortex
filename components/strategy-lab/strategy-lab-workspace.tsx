@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Film, ClipboardList, ArrowRight } from 'lucide-react';
+import { Film, ClipboardList, ArrowRight, Compass, Search, Eye } from 'lucide-react';
 import { StrategyLabSection } from '@/components/strategy-lab/strategy-lab-section';
 import type { Pillar } from '@/components/ideas-hub/pillar-card';
 import {
@@ -12,7 +12,11 @@ import {
 import { StrategyLabStepper } from '@/components/strategy-lab/strategy-lab-stepper';
 import { StrategyLabAssistantCard } from '@/components/strategy-lab/strategy-lab-assistant-card';
 import { StrategyLabContentStackCard } from '@/components/strategy-lab/strategy-lab-content-stack-card';
+import { StrategyLabProspectAudit } from '@/components/strategy-lab/strategy-lab-prospect-audit';
+import { StrategyLabVisualizer } from '@/components/strategy-lab/strategy-lab-visualizer';
 import type { PillarReferencePreview } from '@/lib/strategy-lab/pillar-reference-previews';
+
+type LabTab = 'strategy' | 'prospect-audit' | 'visualizer';
 
 const STORAGE_PREFIX = 'strategy-lab:selected-topic-searches:';
 
@@ -56,6 +60,7 @@ export function StrategyLabWorkspace({
 }) {
   const storageKey = `${STORAGE_PREFIX}${clientId}`;
 
+  const [activeTab, setActiveTab] = useState<LabTab>('strategy');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
 
   const hasCompletedTopicSearch = useMemo(
@@ -108,8 +113,41 @@ export function StrategyLabWorkspace({
   const pillarStrategyHref = `${ideasHubBase}&focus=pillars`;
   const ideasHubPillarIdeasHref = `${ideasHubBase}&focus=pillar-ideas`;
 
+  const TABS: { id: LabTab; label: string; icon: typeof Compass }[] = [
+    { id: 'strategy', label: 'Content strategy', icon: Compass },
+    { id: 'prospect-audit', label: 'Prospect audit', icon: Search },
+    { id: 'visualizer', label: 'Visualizer', icon: Eye },
+  ];
+
   return (
     <div className="flex flex-col gap-6">
+      {/* Tab bar */}
+      <div className="flex gap-1 rounded-lg border border-nativz-border bg-surface p-1">
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          const active = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all ${
+                active
+                  ? 'bg-accent-surface text-accent-text'
+                  : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
+              }`}
+            >
+              <Icon size={16} />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === 'prospect-audit' && <StrategyLabProspectAudit clientId={clientId} />}
+      {activeTab === 'visualizer' && <StrategyLabVisualizer clientId={clientId} />}
+
+      {activeTab === 'strategy' && (<>
       <StrategyLabStepper
         hasCompletedTopicSearch={hasCompletedTopicSearch}
         hasPillars={hasPillars}
@@ -225,6 +263,7 @@ export function StrategyLabWorkspace({
           </ul>
         )}
       </StrategyLabSection>
+      </>)}
     </div>
   );
 }

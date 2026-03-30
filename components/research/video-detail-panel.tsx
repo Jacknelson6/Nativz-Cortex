@@ -266,12 +266,15 @@ export function VideoDetailPanel({ videos, initialIndex, onClose }: VideoDetailP
           </div>
 
           {/* View original button */}
-          <Button asChild className="w-full" variant="outline">
-            <a href={video.url} target="_blank" rel="noopener noreferrer">
-              <ExternalLink size={14} className="mr-2" />
-              View original
-            </a>
-          </Button>
+          <a
+            href={video.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-nativz-border bg-surface px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
+          >
+            <ExternalLink size={14} />
+            View original
+          </a>
 
           {/* Pagination */}
           <div className="flex items-center justify-between border-t border-nativz-border pt-4">
