@@ -77,6 +77,7 @@ ${clientContext}`,
         },
       ],
       maxTokens: 400,
+      feature: 'scheduler_hashtag_suggestions',
       userId: user.id,
       userEmail: user.email ?? undefined,
     });

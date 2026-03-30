@@ -55,6 +55,7 @@ ${transcript.slice(0, 15_000)}`;
   const response = await createCompletion({
     messages: [{ role: 'user', content: prompt }],
     maxTokens: 2000,
+    feature: 'meeting_import',
   });
 
   const text = response.text.trim();

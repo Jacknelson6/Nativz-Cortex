@@ -1,4 +1,4 @@
-import { logUsage } from './usage';
+import { createOpenRouterRichCompletion } from './openrouter-rich';
 
 const HEALER_MODEL = 'openrouter/healer-alpha';
 
@@ -32,9 +32,6 @@ export async function analyzeVideoWithGemini(config: {
   videoUrl?: string;
   feature?: string;
 }): Promise<VideoAnalysis> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY is not configured');
-
   const systemPrompt = `You are a video content analyst for a marketing agency. Analyze the provided video and extract a detailed breakdown of its elements.
 
 For each element you identify, assign a priority level:
@@ -89,51 +86,21 @@ Output ONLY valid JSON. No other text.`;
     text: 'Analyze this video and return the JSON breakdown.',
   });
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-      'X-Title': 'Nativz Cortex',
-    },
-    body: JSON.stringify({
-      model: HEALER_MODEL,
-      max_tokens: 4000,
-      temperature: 0.3,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: contentParts },
-      ],
-    }),
+  const result = await createOpenRouterRichCompletion({
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: contentParts },
+    ],
+    maxTokens: 4000,
+    temperature: 0.3,
+    feature: config.feature ?? 'video_analysis',
+    modelPreference: [HEALER_MODEL],
   });
 
-  if (!response.ok) {
-    const errBody = await response.text();
-    console.error('Healer Alpha API error:', response.status, errBody.substring(0, 500));
-    throw new Error(`Healer Alpha API error (${response.status}): ${errBody.substring(0, 300)}`);
-  }
-
-  const data = await response.json();
-
-  const text = data.choices?.[0]?.message?.content ?? '';
+  const text = result.text;
   if (!text) {
     throw new Error('Healer Alpha returned empty response');
   }
-
-  // Log usage (free model, but track for visibility)
-  const inputTokens = data.usage?.prompt_tokens ?? 0;
-  const outputTokens = data.usage?.completion_tokens ?? 0;
-
-  await logUsage({
-    service: 'openrouter',
-    model: HEALER_MODEL,
-    feature: config.feature ?? 'video_analysis',
-    inputTokens,
-    outputTokens,
-    totalTokens: inputTokens + outputTokens,
-    costUsd: 0, // Free model
-  }).catch(() => {});
 
   // Parse JSON response (strip markdown fences if present)
   const cleaned = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '').trim();

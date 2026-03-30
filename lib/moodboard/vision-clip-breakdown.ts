@@ -1,5 +1,5 @@
 import { parseAIResponseJSON } from '@/lib/ai/parse';
-import { logUsage } from '@/lib/ai/usage';
+import { createOpenRouterRichCompletion } from '@/lib/ai/openrouter-rich';
 import { z } from 'zod';
 
 const VISION_MODEL =
@@ -45,12 +45,6 @@ export async function analyzeVisionClipBreakdown(params: {
   userId?: string;
   userEmail?: string;
 }): Promise<VisionClipBreakdown | null> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    console.warn('vision-clip-breakdown: OPENROUTER_API_KEY missing');
-    return null;
-  }
-
   if (params.frames.length === 0) return null;
 
   const sorted = [...params.frames].sort((a, b) => a.timestamp - b.timestamp);
@@ -104,38 +98,21 @@ Rules:
   contentParts.push({ type: 'text', text: userText });
 
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-        'X-Title': 'Nativz Cortex',
-      },
-      body: JSON.stringify({
-        model: VISION_MODEL,
-        max_tokens: 2500,
-        temperature: 0.25,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: contentParts },
-        ],
-      }),
-      signal: AbortSignal.timeout(55000),
+    const result = await createOpenRouterRichCompletion({
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: contentParts },
+      ],
+      maxTokens: 2500,
+      temperature: 0.25,
+      timeoutMs: 55000,
+      feature: 'moodboard_vision_clip_breakdown',
+      modelPreference: [VISION_MODEL],
+      userId: params.userId,
+      userEmail: params.userEmail,
     });
 
-    if (!response.ok) {
-      const errBody = await response.text();
-      console.error('vision-clip-breakdown OpenRouter error:', response.status, errBody.slice(0, 400));
-      return null;
-    }
-
-    const data = (await response.json()) as {
-      choices?: { message?: { content?: string } }[];
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
-    };
-
-    const raw = data.choices?.[0]?.message?.content ?? '';
+    const raw = result.text;
     if (!raw.trim()) return null;
 
     const parsed = parseAIResponseJSON<Record<string, unknown>>(raw);
@@ -157,19 +134,6 @@ Rules:
       return null;
     }
 
-    const usage = data.usage;
-    await logUsage({
-      service: 'openrouter',
-      model: VISION_MODEL,
-      feature: 'moodboard_vision_clip_breakdown',
-      inputTokens: usage?.prompt_tokens ?? 0,
-      outputTokens: usage?.completion_tokens ?? 0,
-      totalTokens: (usage?.prompt_tokens ?? 0) + (usage?.completion_tokens ?? 0),
-      costUsd: 0,
-      userId: params.userId,
-      userEmail: params.userEmail,
-    }).catch(() => {});
-
     return {
       overallSummary:
         safe.data.overall_summary.trim() ||
@@ -182,7 +146,7 @@ Rules:
         confidence: c.confidence ?? 0.7,
       })),
       analyzedAt: new Date().toISOString(),
-      modelUsed: VISION_MODEL,
+      modelUsed: result.modelUsed,
     };
   } catch (e) {
     console.error('vision-clip-breakdown:', e);

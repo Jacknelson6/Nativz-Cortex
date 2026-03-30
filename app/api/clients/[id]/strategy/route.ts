@@ -116,6 +116,7 @@ export async function POST(
       const aiResult = await createCompletion({
         messages: [{ role: 'user', content: prompt }],
         maxTokens: 16000,
+        feature: 'client_strategy',
         userId: user.id,
         userEmail: user.email ?? undefined,
       });

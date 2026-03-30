@@ -5,13 +5,11 @@ import { chromium } from 'playwright-core';
 import { buildAnalysisHtml } from '@/lib/pdf/analysis-html';
 import { NATIVZ_LOGO_PNG } from '@/lib/brand-logo';
 import type { MoodboardItem } from '@/lib/types/moodboard';
+import { createCompletion } from '@/lib/ai/client';
 
 // ─── AI title generation ────────────────────────────────────────────────────────
 
-async function generateTitle(item: MoodboardItem): Promise<string> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return fallbackTitle(item);
-
+async function generateTitle(item: MoodboardItem, userId?: string, userEmail?: string): Promise<string> {
   const context = [
     item.concept_summary,
     item.hook,
@@ -22,33 +20,21 @@ async function generateTitle(item: MoodboardItem): Promise<string> {
   if (!context.trim()) return fallbackTitle(item);
 
   try {
-    const model = 'openrouter/hunter-alpha';
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'X-Title': 'Nativz Cortex - PDF Export',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 60,
-        messages: [
-          {
-            role: 'user',
-            content: `Generate a short, professional PDF export title (5-10 words max) for this video analysis. The title should describe the video's theme/topic, NOT be a caption or hashtags. Format: just the title text, no quotes or punctuation.\n\nVideo context: ${context}`,
-          },
-        ],
-      }),
+    const result = await createCompletion({
+      messages: [
+        {
+          role: 'user',
+          content: `Generate a short, professional PDF export title (5-10 words max) for this video analysis. The title should describe the video's theme/topic, NOT be a caption or hashtags. Format: just the title text, no quotes or punctuation.\n\nVideo context: ${context}`,
+        },
+      ],
+      maxTokens: 60,
+      timeoutMs: 30000,
+      feature: 'analysis_pdf_title',
+      modelPreference: ['openrouter/hunter-alpha'],
+      userId,
+      userEmail,
     });
-
-    if (!res.ok) {
-      console.error('AI title generation failed:', res.status, await res.text().catch(() => ''));
-      return fallbackTitle(item);
-    }
-
-    const data = await res.json();
-    const title = data.choices?.[0]?.message?.content?.trim().replace(/^["']|["']$/g, '');
+    const title = result.text.trim().replace(/^["']|["']$/g, '');
     return title && title.length > 3 ? title : fallbackTitle(item);
   } catch (err) {
     console.error('AI title generation error:', err);
@@ -109,7 +95,11 @@ export async function GET(
     }
 
     // Generate AI title
-    const generatedTitle = await generateTitle(item as MoodboardItem);
+    const generatedTitle = await generateTitle(
+      item as MoodboardItem,
+      user.id,
+      user.email ?? undefined,
+    );
 
     // Build HTML
     const html = buildAnalysisHtml({

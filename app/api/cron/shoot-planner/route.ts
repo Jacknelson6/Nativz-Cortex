@@ -113,6 +113,7 @@ export async function GET(request: NextRequest) {
         const aiResult = await createCompletion({
           messages: [{ role: 'user', content: prompt }],
           maxTokens: 12000,
+          feature: 'cron_shoot_planner',
         });
 
         const plan = parseAIResponseJSON<ShootPlan>(aiResult.text);

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createOpenRouterTextStream } from '@/lib/ai/openrouter-rich';
 
 const chatSchema = z.object({
   board_id: z.string(),
@@ -230,32 +231,15 @@ export async function POST(req: NextRequest) {
       ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     ];
 
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'OpenRouter API key not configured' }), { status: 500 });
-    }
-
-    const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://cortex.nativz.io',
+    const { response: openRouterRes } = await createOpenRouterTextStream({
+      feature: 'analysis_chat',
+      modelPreference: model ? [model] : ['openrouter/hunter-alpha'],
+      messages: apiMessages,
+      maxTokens: 4096,
+      extraHeaders: {
         'X-Title': 'Nativz Cortex AI Chat',
       },
-      body: JSON.stringify({
-        model: model || 'openrouter/hunter-alpha',
-        messages: apiMessages,
-        stream: true,
-        max_tokens: 4096,
-      }),
     });
-
-    if (!openRouterRes.ok) {
-      const errText = await openRouterRes.text();
-      console.error('OpenRouter error:', errText);
-      return new Response(JSON.stringify({ error: 'AI service error' }), { status: 502 });
-    }
 
     // Stream the response
     const encoder = new TextEncoder();

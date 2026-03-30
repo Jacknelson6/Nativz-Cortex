@@ -12,7 +12,7 @@ export type LlmProviderKeysStored = {
 /** @deprecated use LlmProviderKeyBucket */
 export type OpenRouterKeyBucket = LlmProviderKeyBucket;
 
-const DEFAULT_NERD_MODEL = 'openrouter/hunter-alpha';
+const DEFAULT_NERD_MODEL = 'openai/gpt-5.4-mini';
 
 /** Legacy JSON used `ideas`; treat as `default` when resolving keys. */
 function keyForBucket(

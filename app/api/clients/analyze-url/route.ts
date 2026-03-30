@@ -165,6 +165,9 @@ Guidelines:
     const aiResult = await createCompletion({
       messages: [{ role: 'user', content: prompt }],
       maxTokens: 500,
+      feature: 'client_analyze_url',
+      userId: user.id,
+      userEmail: user.email ?? undefined,
     });
 
     const result = parseAIResponseJSON<{

@@ -80,6 +80,7 @@ ${rawContent.slice(0, 12_000)}`;
     const response = await createCompletion({
       messages: [{ role: 'user', content: prompt }],
       maxTokens: 2000,
+      feature: 'knowledge_structuring',
     });
 
     const text = response.text.trim();

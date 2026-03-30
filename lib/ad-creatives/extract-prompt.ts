@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { logUsage } from '@/lib/ai/usage';
-import { checkCostBudget } from '@/lib/ai/cost-guard';
+import { createOpenRouterRichCompletion } from '@/lib/ai/openrouter-rich';
 import type { AdPromptSchema } from './types';
 
 const MODEL = 'google/gemini-2.5-flash';
@@ -111,72 +110,26 @@ const adPromptSchemaValidator = z.object({
 });
 
 export async function extractAdPrompt(imageUrl: string): Promise<AdPromptSchema> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new Error('OPENROUTER_API_KEY is not configured');
-  }
-
-  const budget = await checkCostBudget(FEATURE);
-  if (!budget.allowed) {
-    const detail =
-      budget.featureLimit && budget.featureSpent !== undefined
-        ? ` (feature "${FEATURE}": $${budget.featureSpent.toFixed(2)}/$${budget.featureLimit.toFixed(2)})`
-        : ` (total: $${budget.spent.toFixed(2)}/$${budget.limit.toFixed(2)})`;
-    throw new Error(`AI budget exceeded for this month${detail}. Contact admin.`);
-  }
-
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-      'X-Title': 'Nativz Cortex',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 2000,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: imageUrl } },
-            { type: 'text', text: 'Analyze this ad image and extract the structured prompt schema.' },
-          ],
-        },
-      ],
-    }),
+  const completion = await createOpenRouterRichCompletion({
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: imageUrl } },
+          { type: 'text', text: 'Analyze this ad image and extract the structured prompt schema.' },
+        ],
+      },
+    ],
+    maxTokens: 2000,
+    feature: FEATURE,
+    modelPreference: [MODEL],
   });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    console.error('OpenRouter vision API error:', response.status, errorBody.substring(0, 500));
-    if (response.status === 402) {
-      throw new Error('AI credits exhausted. Add credits at openrouter.ai/settings/credits');
-    }
-    throw new Error(`OpenRouter API error (${response.status}): ${errorBody.substring(0, 300)}`);
-  }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content ?? '';
+  const content = completion.text;
 
   if (!content) {
     throw new Error('Vision model returned an empty response. Try again.');
   }
-
-  const promptTokens = data.usage?.prompt_tokens ?? 0;
-  const completionTokens = data.usage?.completion_tokens ?? 0;
-
-  logUsage({
-    service: 'openrouter',
-    model: MODEL,
-    feature: FEATURE,
-    inputTokens: promptTokens,
-    outputTokens: completionTokens,
-    totalTokens: promptTokens + completionTokens,
-    costUsd: 0,
-  }).catch(() => {});
 
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
@@ -190,6 +143,6 @@ export async function extractAdPrompt(imageUrl: string): Promise<AdPromptSchema>
     throw new Error('Failed to parse JSON from vision response: ' + jsonMatch[0].substring(0, 200));
   }
 
-  const result = adPromptSchemaValidator.parse(parsed);
-  return result as AdPromptSchema;
+  const schemaResult = adPromptSchemaValidator.parse(parsed);
+  return schemaResult as AdPromptSchema;
 }

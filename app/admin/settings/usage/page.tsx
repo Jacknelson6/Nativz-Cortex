@@ -1,4 +1,5 @@
 import { AiRoutingSection } from '@/components/settings/ai-routing-section';
+import { AiRoutingSummarySection } from '@/components/settings/ai-routing-summary-section';
 import { LlmCredentialsSection } from '@/components/settings/llm-credentials-section';
 import { UsageDashboard } from '@/components/settings/usage-dashboard';
 
@@ -12,6 +13,7 @@ export default function UsagePage() {
         </p>
       </div>
       <AiRoutingSection />
+      <AiRoutingSummarySection />
       <LlmCredentialsSection />
       <div>
         <h2 className="mb-3 text-sm font-semibold text-text-primary">Usage</h2>

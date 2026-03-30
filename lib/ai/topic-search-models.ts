@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 
-const DEFAULT_PLANNER = 'openai/gpt-4o-mini';
-const DEFAULT_RESEARCH = 'openai/gpt-4o-mini';
+const DEFAULT_PLANNER = 'openai/gpt-5.4-mini';
+const DEFAULT_RESEARCH = 'openai/gpt-5.4-mini';
 
 let cached: {
   planner: string;

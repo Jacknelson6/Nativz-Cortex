@@ -135,6 +135,9 @@ Write the brief in clear, actionable language that a videographer can follow on 
         { role: 'user', content: prompt },
       ],
       maxTokens: 3000,
+      feature: 'analysis_item_replication',
+      userId: user.id,
+      userEmail: user.email ?? undefined,
     });
 
     const brief = aiResponse.text;

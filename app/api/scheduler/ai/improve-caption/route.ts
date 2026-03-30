@@ -111,6 +111,7 @@ ${clientContext ? `Client context:${clientContext}` : ''}${savedCaptionsContext}
         },
       ],
       maxTokens: 500,
+      feature: 'scheduler_caption_improve',
       userId: user.id,
       userEmail: user.email ?? undefined,
     });

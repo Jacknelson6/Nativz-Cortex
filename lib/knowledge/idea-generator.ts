@@ -209,6 +209,7 @@ Output ONLY the JSON array. No other text.`;
       { role: 'user', content: userPrompt },
     ],
     maxTokens: 4000,
+    feature: 'idea_generation',
   });
 
   const ideas = parseAIResponseJSON<GeneratedIdea[]>(result.text);

@@ -93,6 +93,9 @@ Respond ONLY with JSON: {"industry": "Industry Name Here"}`;
         const aiResult = await createCompletion({
           messages: [{ role: 'user', content: prompt }],
           maxTokens: 100,
+          feature: 'client_backfill_industry',
+          userId: user.id,
+          userEmail: user.email ?? undefined,
         });
 
         const parsed = parseAIResponseJSON<{ industry: string }>(aiResult.text);

@@ -77,6 +77,9 @@ export async function POST(
         const aiResult = await createCompletion({
           messages: [{ role: 'user', content: `Generate a short, catchy title (max 60 characters) for a video based on this transcript. Return ONLY the title text, nothing else.\n\nTranscript:\n${transcript.slice(0, 500)}` }],
           maxTokens: 50,
+          feature: 'analysis_transcript_title',
+          userId: user.id,
+          userEmail: user.email ?? undefined,
         });
         const title = aiResult.text.trim().replace(/^["']|["']$/g, '');
         if (title && title.length <= 80) {

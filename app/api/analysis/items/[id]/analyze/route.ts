@@ -167,6 +167,7 @@ Return ONLY the JSON, no other text.`;
         { role: 'user', content: analysisPrompt },
       ],
       maxTokens: 2000,
+      feature: 'analysis_item_analysis',
       userId: user.id,
       userEmail: user.email ?? undefined,
     });

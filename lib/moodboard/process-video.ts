@@ -238,6 +238,7 @@ Return ONLY the JSON, no other text.`;
         { role: 'user', content: analysisPrompt },
       ],
       maxTokens: 2000,
+      feature: 'moodboard_video_processing',
     });
 
     const analysis = parseAIResponseJSON<VideoAnalysis>(aiResponse.text);

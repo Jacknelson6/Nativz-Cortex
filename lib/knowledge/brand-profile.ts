@@ -165,6 +165,7 @@ Important: Base all analysis on the data provided. Extract as much specific deta
   const aiResult = await createCompletion({
     messages: [{ role: 'user', content: prompt }],
     maxTokens: 4000,
+    feature: 'knowledge_brand_profile',
   });
 
   const profileContent = aiResult.text ?? '';

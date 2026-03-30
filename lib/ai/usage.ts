@@ -12,6 +12,16 @@ const PRICING: Record<string, { input: number; output: number }> = {
   // Legacy — Claude Sonnet 4.5 (kept for historical logs)
   'anthropic/claude-sonnet-4-5': { input: 0.003 / 1000, output: 0.015 / 1000 },
   'anthropic/claude-sonnet-4.5': { input: 0.003 / 1000, output: 0.015 / 1000 },
+  // OpenAI — current recommended routing targets
+  'openai/gpt-5.4': { input: 2.5 / 1_000_000, output: 15 / 1_000_000 },
+  'gpt-5.4': { input: 2.5 / 1_000_000, output: 15 / 1_000_000 },
+  'openai/gpt-5.4-mini': { input: 0.75 / 1_000_000, output: 4.5 / 1_000_000 },
+  'gpt-5.4-mini': { input: 0.75 / 1_000_000, output: 4.5 / 1_000_000 },
+  'openai/gpt-5.4-nano': { input: 0.2 / 1_000_000, output: 1.25 / 1_000_000 },
+  'gpt-5.4-nano': { input: 0.2 / 1_000_000, output: 1.25 / 1_000_000 },
+  // OpenRouter — low-cost smart defaults
+  'deepseek/deepseek-v3.2': { input: 0.26 / 1_000_000, output: 0.38 / 1_000_000 },
+  'qwen/qwen3-30b-a3b': { input: 0.08 / 1_000_000, output: 0.28 / 1_000_000 },
   // Groq — Whisper (charged per second of audio, ~$0.006/min, approximate per-token)
   'whisper-large-v3': { input: 0, output: 0 },
   'whisper-large-v3-turbo': { input: 0, output: 0 },
@@ -54,7 +64,8 @@ export function calculateCost(
   inputTokens: number,
   outputTokens: number,
 ): number {
-  const pricing = PRICING[model];
+  const key = model.trim();
+  const pricing = PRICING[key];
   if (!pricing) return 0;
   return inputTokens * pricing.input + outputTokens * pricing.output;
 }
@@ -114,6 +125,7 @@ export async function getUsageSummary(
   const byService: Record<string, { totalTokens: number; costUsd: number; requests: number }> = {};
   const byModel: Record<string, { service: string; totalTokens: number; costUsd: number; requests: number }> = {};
   const byFeature: Record<string, { model: string; totalTokens: number; costUsd: number; requests: number }> = {};
+  const byFeatureModelCounts: Record<string, Record<string, number>> = {};
   const byUser: Record<string, { email: string; totalTokens: number; costUsd: number; requests: number }> = {};
   const dailyMap: Record<string, { costUsd: number; requests: number }> = {};
   let totalTokens = 0;
@@ -138,11 +150,11 @@ export async function getUsageSummary(
 
     // By feature (track primary model used)
     if (!byFeature[log.feature]) byFeature[log.feature] = { model: modelKey, totalTokens: 0, costUsd: 0, requests: 0 };
+    if (!byFeatureModelCounts[log.feature]) byFeatureModelCounts[log.feature] = {};
     byFeature[log.feature].totalTokens += tokens;
     byFeature[log.feature].costUsd += cost;
     byFeature[log.feature].requests += 1;
-    // Keep the most-used model for this feature (last seen is fine for display)
-    byFeature[log.feature].model = modelKey;
+    byFeatureModelCounts[log.feature][modelKey] = (byFeatureModelCounts[log.feature][modelKey] ?? 0) + 1;
 
     // By user
     const userKey = log.user_id ?? 'system';
@@ -162,6 +174,14 @@ export async function getUsageSummary(
   }
 
   const daily = Object.entries(dailyMap).map(([date, data]) => ({ date, ...data }));
+
+  for (const [feature, counts] of Object.entries(byFeatureModelCounts)) {
+    const dominantModel = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (dominantModel) {
+      byFeature[feature].model = dominantModel;
+    }
+  }
 
   return {
     byService,

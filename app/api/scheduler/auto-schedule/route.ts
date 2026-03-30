@@ -277,6 +277,7 @@ ${clientContext ? `Client context:\n${clientContext}` : ''}${savedCaptionsContex
         content: `Generate caption ${index} of ${total} for a video (file: "${filename}"). Make this caption unique and engaging. Write it exactly in the style of the saved captions above.`,
       },
     ],
+    feature: 'scheduler_auto_schedule_caption',
     maxTokens: 600,
   });
 

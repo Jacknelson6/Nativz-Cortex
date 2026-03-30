@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateAdImage } from '@/lib/ad-creatives/generate-image';
+import { createCompletion } from '@/lib/ai/client';
 import type { SocialResultsData, SocialResultsProfile, SocialResultsPost, SocialResultsHighlight } from '@/app/admin/presentations/[id]/types';
 
 export const maxDuration = 120;
@@ -79,7 +80,12 @@ export async function POST(
       .eq('id', id);
 
     // Step 3: Generate revised bio
-    const revisedBio = await generateRevisedBio(beforeProfile, timeline_months);
+    const revisedBio = await generateRevisedBio(
+      beforeProfile,
+      timeline_months,
+      user.id,
+      user.email ?? undefined,
+    );
 
     // Step 4: Project follower growth
     const projectedFollowers = projectFollowers(beforeProfile.followers, timeline_months);
@@ -248,33 +254,28 @@ async function scrapePostsViaApify(handle: string): Promise<SocialResultsPost[]>
 
 // ─── AI generation helpers ────────────────────────────────────────────────────
 
-async function generateRevisedBio(profile: SocialResultsProfile, months: number): Promise<string> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return profile.bio;
-
+async function generateRevisedBio(
+  profile: SocialResultsProfile,
+  months: number,
+  userId?: string,
+  userEmail?: string,
+): Promise<string> {
   try {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'anthropic/claude-sonnet-4-5',
-        max_tokens: 200,
-        messages: [
-          {
-            role: 'user',
-            content: `You are a social media strategist at Nativz, a video marketing agency. A prospect has this Instagram bio: "${profile.bio}" — Account: @${profile.handle} with ${profile.followers.toLocaleString()} followers. Write a concise, compelling new Instagram bio (max 150 characters) reflecting what their brand will look like after ${months} months of working with Nativz. Make it punchy, authentic, include relevant emojis. Return ONLY the bio text.`,
-          },
-        ],
-      }),
-      signal: AbortSignal.timeout(30000),
+    const result = await createCompletion({
+      messages: [
+        {
+          role: 'user',
+          content: `You are a social media strategist at Nativz, a video marketing agency. A prospect has this Instagram bio: "${profile.bio}" — Account: @${profile.handle} with ${profile.followers.toLocaleString()} followers. Write a concise, compelling new Instagram bio (max 150 characters) reflecting what their brand will look like after ${months} months of working with Nativz. Make it punchy, authentic, include relevant emojis. Return ONLY the bio text.`,
+        },
+      ],
+      maxTokens: 200,
+      timeoutMs: 30000,
+      feature: 'social_results_bio_generation',
+      modelPreference: ['anthropic/claude-sonnet-4-5'],
+      userId,
+      userEmail,
     });
-
-    if (!res.ok) return profile.bio;
-    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
-    return data.choices?.[0]?.message?.content?.trim() ?? profile.bio;
+    return result.text.trim() || profile.bio;
   } catch {
     return profile.bio;
   }

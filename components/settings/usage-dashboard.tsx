@@ -73,7 +73,8 @@ const SERVICE_META: Record<
   string,
   { label: string; icon: React.ElementType; color: string }
 > = {
-  openrouter: { label: 'OpenRouter / Claude', icon: Zap, color: 'text-blue-400' },
+  openrouter: { label: 'OpenRouter', icon: Zap, color: 'text-blue-400' },
+  openai: { label: 'OpenAI', icon: Bot, color: 'text-emerald-400' },
   groq: { label: 'Groq / Whisper', icon: Mic, color: 'text-green-400' },
   gemini: { label: 'Google AI / Gemini', icon: Eye, color: 'text-accent2-text' },
   searxng: { label: 'SearXNG', icon: Search, color: 'text-orange-400' },
@@ -105,6 +106,14 @@ const MODEL_LABELS: Record<string, string> = {
   'openrouter/healer-alpha': 'Healer Alpha',
   'anthropic/claude-sonnet-4-5': 'Claude Sonnet 4.5',
   'anthropic/claude-sonnet-4.5': 'Claude Sonnet 4.5',
+  'openai/gpt-5.4': 'GPT-5.4',
+  'gpt-5.4': 'GPT-5.4',
+  'openai/gpt-5.4-mini': 'GPT-5.4 mini',
+  'gpt-5.4-mini': 'GPT-5.4 mini',
+  'openai/gpt-5.4-nano': 'GPT-5.4 nano',
+  'gpt-5.4-nano': 'GPT-5.4 nano',
+  'deepseek/deepseek-v3.2': 'DeepSeek V3.2',
+  'qwen/qwen3-30b-a3b': 'Qwen 3 30B A3B',
   'gemini-2.5-flash-preview-05-20': 'Gemini 2.5 Flash',
   'gemini-embedding-001': 'Gemini Embedding',
   'whisper-large-v3': 'Whisper Large v3',
@@ -243,6 +252,45 @@ export function UsageDashboard() {
                 {formatTokens(data.total.totalTokens)} tokens
               </p>
             </div>
+          </Card>
+
+          <Card>
+            <h2 className="text-sm font-semibold text-text-primary mb-4">
+              Usage by service
+            </h2>
+            {Object.keys(data.byService).length === 0 ? (
+              <p className="text-sm text-text-muted py-4 text-center">
+                No service data for this period
+              </p>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {Object.entries(data.byService)
+                  .sort(([, a], [, b]) => b.requests - a.requests)
+                  .map(([service, stats]) => {
+                    const meta = SERVICE_META[service];
+                    const Icon = meta?.icon ?? Bot;
+                    return (
+                      <div
+                        key={service}
+                        className="rounded-xl border border-nativz-border/70 bg-surface-hover/25 p-4"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Icon size={14} className={serviceColor(service)} />
+                          <span className="text-sm font-medium text-text-primary">
+                            {meta?.label ?? service}
+                          </span>
+                        </div>
+                        <p className="mt-3 text-lg font-semibold text-text-primary">
+                          {stats.costUsd === 0 ? 'Free' : formatCost(stats.costUsd)}
+                        </p>
+                        <p className="mt-1 text-xs text-text-muted">
+                          {formatNumber(stats.requests)} requests · {formatTokens(stats.totalTokens)}
+                        </p>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
           </Card>
 
           {/* Model breakdown */}

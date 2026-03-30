@@ -66,6 +66,9 @@ Return ONLY valid JSON with these fields:
         { role: 'user', content: text },
       ],
       maxTokens: 200,
+      feature: 'task_parse',
+      userId: user.id,
+      userEmail: user.email ?? undefined,
     });
 
     let aiParsed: {

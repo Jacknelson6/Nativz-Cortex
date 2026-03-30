@@ -86,7 +86,7 @@ ${JSON.stringify(payload)}`;
     const ai = await createCompletion({
       messages: [{ role: 'user', content: prompt }],
       maxTokens: 1400,
-      feature: 'topic_search',
+      feature: 'history_title_shortening',
       userId: user.id,
       userEmail: user.email ?? undefined,
     });

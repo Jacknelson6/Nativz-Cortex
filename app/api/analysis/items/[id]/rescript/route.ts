@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createCompletion } from '@/lib/ai/client';
 
 const rescriptSchema = z.object({
   client_id: z.string().uuid().optional(),
@@ -101,37 +102,18 @@ Return a JSON object with exactly this structure (no markdown, just raw JSON):
   "script": "The full spoken word script. Each line or beat on a new line. Just the words to say, nothing else."
 }`;
 
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: 'OpenRouter API key not configured' }, { status: 500 });
-    }
-
-    const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-        'X-Title': 'Nativz Cortex',
-      },
-      body: JSON.stringify({
-        model: 'openrouter/hunter-alpha',
-        max_tokens: 2000,
-        messages: [
-          { role: 'system', content: 'You are a senior video content strategist. Return only valid JSON, no markdown code fences.' },
-          { role: 'user', content: prompt },
-        ],
-      }),
+    const aiResult = await createCompletion({
+      messages: [
+        { role: 'system', content: 'You are a senior video content strategist. Return only valid JSON, no markdown code fences.' },
+        { role: 'user', content: prompt },
+      ],
+      maxTokens: 2000,
+      feature: 'analysis_item_rescript',
+      modelPreference: ['openrouter/hunter-alpha'],
+      userId: user.id,
+      userEmail: user.email ?? undefined,
     });
-
-    if (!aiResponse.ok) {
-      const errorBody = await aiResponse.text();
-      console.error('OpenRouter API error:', aiResponse.status, errorBody.substring(0, 500));
-      return NextResponse.json({ error: 'AI generation failed' }, { status: 502 });
-    }
-
-    const aiData = await aiResponse.json();
-    const content = aiData.choices?.[0]?.message?.content || '';
+    const content = aiResult.text || '';
 
     if (!content) {
       return NextResponse.json({ error: 'AI returned empty response' }, { status: 502 });

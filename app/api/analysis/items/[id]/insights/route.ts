@@ -131,6 +131,7 @@ Return ONLY the JSON.`,
           },
         ],
         maxTokens: 1500,
+        feature: 'analysis_item_insights',
         userId: user.id,
         userEmail: user.email ?? undefined,
       });

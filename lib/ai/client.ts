@@ -1,9 +1,10 @@
-import { logUsage } from './usage';
+import { calculateCost, logUsage } from './usage';
 import { checkCostBudget } from './cost-guard';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_OPENROUTER_MODEL } from './openrouter-default-model';
 import { resolveOpenAiApiKeyForFeature, resolveOpenRouterApiKeyForFeature } from './provider-keys';
 import { openAiChatCompletionTokenFields, toOpenAiChatModelId } from './openai-model-id';
+import { buildOrderedModelChain, getFeatureRoutingPolicy } from './routing-policy';
 import {
   extractOpenRouterWebCitations,
   extractUrlsFromPlainText,
@@ -49,10 +50,6 @@ interface CompletionOptions {
   /** OpenRouter ids to try first, before agency primary + fallbacks (deduped). */
   modelPreference?: string[];
 }
-
-// Pricing for primary OpenRouter path (often free tier / $0 tracked)
-const PRICE_PER_INPUT_TOKEN = 0;
-const PRICE_PER_OUTPUT_TOKEN = 0;
 
 // ── Model cache (5-minute TTL) ──────────────────────────────────────────────
 let cachedModel: string | null = null;
@@ -247,7 +244,7 @@ function buildCompletionResultFromOpenRouter(
   const usage = data.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
   const promptTokens = usage?.prompt_tokens || 0;
   const completionTokens = usage?.completion_tokens || 0;
-  const estimatedCost = promptTokens * PRICE_PER_INPUT_TOKEN + completionTokens * PRICE_PER_OUTPUT_TOKEN;
+  const estimatedCost = calculateCost(model, promptTokens, completionTokens);
 
   if (options.feature) {
     logUsage({
@@ -278,16 +275,13 @@ function buildCompletionResultFromOpenRouter(
 
 export async function createCompletion(options: CompletionOptions): Promise<AICompletionResponse> {
   const { primary, fallbacks } = await getActiveModel();
-  const pref = (options.modelPreference ?? [])
-    .map((m) => m.trim())
-    .filter(Boolean);
-  const seen = new Set<string>();
-  const ordered: string[] = [];
-  for (const m of [...pref, primary, ...fallbacks]) {
-    if (seen.has(m)) continue;
-    seen.add(m);
-    ordered.push(m);
-  }
+  const policy = getFeatureRoutingPolicy(options.feature);
+  const ordered = buildOrderedModelChain({
+    explicitPreference: options.modelPreference,
+    policyPreference: policy.chain,
+    primary,
+    fallbacks,
+  });
 
   // Check cost budget before making the AI call
   if (options.feature) {
@@ -326,12 +320,12 @@ export async function createCompletion(options: CompletionOptions): Promise<AICo
         const usage = data.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
         const promptTokens = usage?.prompt_tokens || 0;
         const completionTokens = usage?.completion_tokens || 0;
-        const estimatedCost = promptTokens * PRICE_PER_INPUT_TOKEN + completionTokens * PRICE_PER_OUTPUT_TOKEN;
+        const estimatedCost = calculateCost(model, promptTokens, completionTokens);
 
         if (options.feature) {
           logUsage({
             service: 'openai',
-            model: openAiModelId,
+            model,
             feature: options.feature,
             inputTokens: promptTokens,
             outputTokens: completionTokens,
