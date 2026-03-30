@@ -4,7 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const patchSchema = z.object({
-  subtopics: z.array(z.string().min(1).max(200)).min(1).max(5),
+  subtopics: z.array(z.string().min(1).max(200)).min(1).max(15),
   /** When true, move to processing so /process can run */
   start_processing: z.boolean().optional(),
 });

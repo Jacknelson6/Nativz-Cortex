@@ -11,7 +11,7 @@ export const maxDuration = 120;
 
 /**
  * POST /api/search/[id]/plan-subtopics
- * Propose up to 5 research angles for the gameplan (llm_v1 pipeline only).
+ * Propose up to 10 keyword phrases for the research gameplan (llm_v1 pipeline only).
  */
 export async function POST(
   _request: NextRequest,
@@ -47,17 +47,20 @@ export async function POST(
     const timeLabel = getTimeRangeOptionLabel(timeRange);
     const mainTopic = JSON.stringify(search.query);
 
-    const prompt = `You design a research gameplan—not a loose list of unrelated subtopics.
+    const prompt = `You are a keyword research assistant. Given a topic, generate specific, searchable keyword phrases.
 
 Main topic: ${mainTopic}
-Time window: The user chose **${timeLabel}**. Every angle must be relevant **within ${timeLabel}** (what audiences, creators, news, and platforms have actually emphasized in that window—not timeless trivia).
+Time window: **${timeLabel}**. Keywords should reflect what people are actually searching for, discussing, and creating content about within ${timeLabel}.
 
-Return ONLY valid JSON: {"subtopics": string[]} with exactly 5 distinct items. Each string is 2–10 words naming one **research angle or phase** in the gameplan so that, together, all five cover the full scope of the main topic **for ${timeLabel}**. Think: five tracks a strategist would run so nothing important is missed in that period.
+Return ONLY valid JSON: {"subtopics": string[]} with exactly 10 distinct items. Each string is a **2–4 word keyword phrase** that is specific and searchable — the kind of phrase someone would type into a search engine or use as a content topic.
 
 Rules:
-- Each angle must be clearly tied to **recent** conversation, trends, or questions in this window.
-- No numbering prefixes in the strings.
-- Do not use the word "subtopic" inside each string.`;
+- Each keyword must be 2–4 words. Short and punchy, like "cooking hacks", "indie game dev", "morning routine tips".
+- Keywords must be specific to the topic, not generic.
+- Keywords must reflect real search interest within ${timeLabel}.
+- No numbering prefixes.
+- No full sentences — just keyword phrases.
+- Cover different angles and subtopics within the main topic.`;
 
     const ai = await createCompletion({
       messages: [{ role: 'user', content: prompt }],
@@ -75,7 +78,7 @@ Rules:
         : raw;
     const parsed = plannerOutputSchema.parse(normalized);
     return NextResponse.json({
-      subtopics: parsed.subtopics.slice(0, 5),
+      subtopics: parsed.subtopics.slice(0, 10),
       tokens_used: ai.usage.totalTokens,
     });
   } catch (e) {

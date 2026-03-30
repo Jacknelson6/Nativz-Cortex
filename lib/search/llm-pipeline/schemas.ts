@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const plannerOutputSchema = z.object({
-  subtopics: z.array(z.string().min(1).max(200)).min(1).max(5),
+  subtopics: z.array(z.string().min(1).max(200)).min(1).max(15),
 });
 
 export const subtopicReportSourceSchema = z.object({
