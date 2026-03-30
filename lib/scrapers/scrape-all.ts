@@ -92,7 +92,10 @@ export async function scrapeAllPlatforms(options: ScrapeAllOptions): Promise<Scr
     if (localAvailable) {
       scrapePromises.push(
         scrapeLocal('tiktok', query, maxResultsPerPlatform, timeRange)
-          .then(r => r.error && process.env.APIFY_API_KEY ? scrapeTikTok({ query, maxResults: maxResultsPerPlatform, timeRange }) : r),
+          .catch(() => ({ platform: 'tiktok' as const, videos: [], error: 'Local scraper network error' }))
+          .then(r => (r.error || r.videos.length === 0) && process.env.APIFY_API_KEY
+            ? scrapeTikTok({ query, maxResults: maxResultsPerPlatform, timeRange })
+            : r),
       );
     } else {
       scrapePromises.push(scrapeTikTok({ query, maxResults: maxResultsPerPlatform, timeRange }));
@@ -105,7 +108,10 @@ export async function scrapeAllPlatforms(options: ScrapeAllOptions): Promise<Scr
     if (localAvailable) {
       scrapePromises.push(
         scrapeLocal('instagram', query, maxResultsPerPlatform, timeRange)
-          .then(r => r.error && process.env.APIFY_API_KEY ? scrapeInstagram({ query, maxResults: maxResultsPerPlatform, timeRange }) : r),
+          .catch(() => ({ platform: 'instagram' as const, videos: [], error: 'Local scraper network error' }))
+          .then(r => (r.error || r.videos.length === 0) && process.env.APIFY_API_KEY
+            ? scrapeInstagram({ query, maxResults: maxResultsPerPlatform, timeRange })
+            : r),
       );
     } else {
       scrapePromises.push(scrapeInstagram({ query, maxResults: maxResultsPerPlatform, timeRange }));
