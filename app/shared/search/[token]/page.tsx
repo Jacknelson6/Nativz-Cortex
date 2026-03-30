@@ -43,12 +43,19 @@ export default async function SharedSearchPage({
     clientSlug = client?.slug || null;
   }
 
+  // Fetch scraped video count for v3 sections
+  const { count: scrapedVideoCount } = await adminClient
+    .from('topic_search_videos')
+    .select('id', { count: 'exact', head: true })
+    .eq('search_id', link.search_id);
+
   return (
     <SharedSearchClient
       search={search}
       clientName={clientName}
       clientSlug={clientSlug}
       shareToken={token}
+      scrapedVideoCount={scrapedVideoCount ?? 0}
     />
   );
 }

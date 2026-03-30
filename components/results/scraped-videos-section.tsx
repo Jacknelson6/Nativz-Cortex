@@ -10,9 +10,11 @@ interface ScrapedVideosSectionProps {
   searchId: string;
   /** Pre-fetched count from SSR — used to decide whether to fetch at all */
   scrapedVideoCount: number;
+  /** Optional share token for unauthenticated shared views */
+  shareToken?: string;
 }
 
-export function ScrapedVideosSection({ searchId, scrapedVideoCount }: ScrapedVideosSectionProps) {
+export function ScrapedVideosSection({ searchId, scrapedVideoCount, shareToken }: ScrapedVideosSectionProps) {
   const [videos, setVideos] = useState<TopicSearchVideoRow[]>([]);
   const [hooks, setHooks] = useState<TopicSearchHookRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -23,7 +25,10 @@ export function ScrapedVideosSection({ searchId, scrapedVideoCount }: ScrapedVid
     let cancelled = false;
     setLoading(true);
 
-    fetch(`/api/search/${searchId}/videos`)
+    const url = shareToken
+      ? `/api/search/${searchId}/videos?token=${encodeURIComponent(shareToken)}`
+      : `/api/search/${searchId}/videos`;
+    fetch(url)
       .then(res => res.json())
       .then((data: { videos?: TopicSearchVideoRow[]; hooks?: TopicSearchHookRow[] }) => {
         if (cancelled) return;
