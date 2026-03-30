@@ -3,7 +3,11 @@ import { logUsage } from '@/lib/ai/usage';
 import { EMAIL_BRAND as BRAND, nativzEmailLogoUrl } from '@/lib/email/brand-tokens';
 import { buildAffiliateWeeklyReportCardHtml } from '@/lib/email/templates/affiliate-weekly-report-html';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let _resend: Resend | null = null;
+function getResend() {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  return _resend;
+}
 
 const FROM_ADDRESS = 'Nativz Cortex <notifications@nativz.io>';
 
@@ -115,7 +119,7 @@ export async function sendTeamInviteEmail(opts: {
   inviteUrl: string;
   invitedBy: string;
 }) {
-  const result = await resend.emails.send({
+  const result = await getResend().emails.send({
     from: FROM_ADDRESS,
     to: opts.to,
     subject: `You're invited to join Nativz Cortex`,
@@ -166,7 +170,7 @@ export async function sendClientInviteEmail(opts: {
   inviteUrl: string;
   invitedBy: string;
 }) {
-  const result = await resend.emails.send({
+  const result = await getResend().emails.send({
     from: FROM_ADDRESS,
     to: opts.to,
     subject: `${opts.clientName} — Your content portal is ready`,
@@ -218,7 +222,7 @@ export async function sendWelcomeEmail(opts: {
   loginUrl: string;
 }) {
   const isTeam = opts.role === 'admin';
-  const result = await resend.emails.send({
+  const result = await getResend().emails.send({
     from: FROM_ADDRESS,
     to: opts.to,
     subject: `Welcome to Nativz Cortex`,
@@ -291,7 +295,7 @@ export async function sendAffiliateWeeklyReportEmail(opts: {
     topAffiliates: opts.topAffiliates,
   });
 
-  const result = await resend.emails.send({
+  const result = await getResend().emails.send({
     from: FROM_ADDRESS,
     to: opts.to,
     subject,
