@@ -332,6 +332,12 @@ export async function POST(
               hook_patterns_count: scrapeResult.hookPatterns.length,
               errors: scrapeResult.errors,
             },
+            web_context: scrapeResult.webContext ? {
+              serp_count: scrapeResult.webContext.serpResults.length,
+              reddit_count: scrapeResult.webContext.redditThreads.length,
+              serp_results: scrapeResult.webContext.serpResults,
+              reddit_threads: scrapeResult.webContext.redditThreads,
+            } : null,
           } : {}),
         };
 

@@ -2,6 +2,7 @@ import type { ScrapedVideo, ScoredVideo, ScrapeResult, HookPattern } from './typ
 import { scrapeTikTok } from './tiktok-scraper';
 import { scrapeYouTube } from './youtube-scraper';
 import { scrapeInstagram } from './instagram-scraper';
+import { gatherWebContext, type WebContextResult } from './web-context-scraper';
 import { calculateOutlierScores } from '@/lib/search/outlier-engine';
 import { extractHooksFromVideos, clusterHookPatterns } from '@/lib/search/hook-extractor';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -51,6 +52,7 @@ export interface ScrapeAllResult {
   videos: ScoredVideo[];
   hookPatterns: HookPattern[];
   platformCounts: { tiktok: number; youtube: number; instagram: number };
+  webContext: WebContextResult | null;
   errors: string[];
 }
 
@@ -222,11 +224,26 @@ export async function scrapeAllPlatforms(options: ScrapeAllOptions): Promise<Scr
       videos: [],
       hookPatterns: [],
       platformCounts: { tiktok: 0, youtube: 0, instagram: 0 },
+      webContext: null,
       errors: ['No scraper API keys configured (APIFY_API_KEY, YOUTUBE_API_KEY)'],
     };
   }
 
-  const results = await Promise.allSettled(scrapePromises);
+  // Gather lightweight web context (SERP + Reddit) in parallel with video scraping
+  const webContextPromise = gatherWebContext(query, { timeRange, language, keywords })
+    .then(ctx => {
+      console.log(`[scrape-all] Web context: ${ctx.serpResults.length} SERP results, ${ctx.redditThreads.length} Reddit threads`);
+      return ctx;
+    })
+    .catch(err => {
+      console.error('[scrape-all] Web context failed (non-blocking):', err);
+      return null as WebContextResult | null;
+    });
+
+  const [results, webContext] = await Promise.all([
+    Promise.allSettled(scrapePromises),
+    webContextPromise,
+  ]);
 
   const allVideos: ScrapedVideo[] = [];
   const platformCounts = { tiktok: 0, youtube: 0, instagram: 0 };
@@ -245,7 +262,7 @@ export async function scrapeAllPlatforms(options: ScrapeAllOptions): Promise<Scr
   console.log(`[scrape-all] Total scraped: ${allVideos.length} videos (TikTok: ${platformCounts.tiktok}, YouTube: ${platformCounts.youtube}, Instagram: ${platformCounts.instagram})`);
 
   if (allVideos.length === 0) {
-    return { videos: [], hookPatterns: [], platformCounts, errors };
+    return { videos: [], hookPatterns: [], platformCounts, webContext, errors };
   }
 
   // Calculate outlier scores
@@ -274,7 +291,7 @@ export async function scrapeAllPlatforms(options: ScrapeAllOptions): Promise<Scr
     errors.push(`DB persist failed: ${err instanceof Error ? err.message : 'unknown'}`);
   }
 
-  return { videos: withHooks, hookPatterns, platformCounts, errors };
+  return { videos: withHooks, hookPatterns, platformCounts, webContext, errors };
 }
 
 async function persistVideos(searchId: string, videos: ScoredVideo[]): Promise<void> {
