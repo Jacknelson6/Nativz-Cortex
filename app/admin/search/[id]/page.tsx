@@ -63,6 +63,12 @@ export default async function AdminSearchResultsPage({
 
   const videoCandidates = extractVideoCandidatesFromSearch(search as TopicSearch);
 
+  // Fetch scraped video count + platform breakdown
+  const { count: scrapedVideoCount } = await adminClient
+    .from('topic_search_videos')
+    .select('id', { count: 'exact', head: true })
+    .eq('search_id', id);
+
   const { data: linkedBoardsRaw, error: linkedBoardsError } = await adminClient
     .from('moodboard_boards')
     .select('id, name, updated_at')
@@ -99,6 +105,7 @@ export default async function AdminSearchResultsPage({
         }))}
         linkedBoards={linkedBoards.map((b) => ({ id: b.id, name: b.name ?? 'Board' }))}
         videoCandidateCount={videoCandidates.length}
+        scrapedVideoCount={scrapedVideoCount ?? 0}
       />
     </>
   );

@@ -17,6 +17,7 @@ import type { ClientPreferences } from '@/lib/types/database';
 import { syncSearchToVault } from '@/lib/vault/sync';
 import { createNotification } from '@/lib/notifications/create';
 import { runLlmTopicPipeline } from '@/lib/search/llm-pipeline/run-llm-topic-pipeline';
+import { scrapeAllPlatforms } from '@/lib/scrapers/scrape-all';
 
 /** Vercel Pro / Fluid can use 800s — heavy multi-platform runs often exceed 5 minutes. */
 export const maxDuration = 800;
@@ -183,27 +184,53 @@ export async function POST(
     try {
       const topicPipeline = (search as { topic_pipeline?: string }).topic_pipeline ?? 'legacy';
       if (topicPipeline === 'llm_v1') {
-        const result = await runLlmTopicPipeline({
-          searchId: id,
-          search: {
+        // Run LLM pipeline and video scraping in parallel
+        const [result, scrapeResult] = await Promise.all([
+          runLlmTopicPipeline({
+            searchId: id,
+            search: {
+              query: search.query,
+              time_range: search.time_range,
+              country: search.country,
+              language: search.language,
+              search_mode: search.search_mode as 'general' | 'client_strategy',
+              client_id: search.client_id,
+              subtopics: (search as { subtopics?: unknown }).subtopics,
+            },
+            userId: user.id,
+            userEmail: user.email ?? undefined,
+            clientContext: clientContext
+              ? {
+                  name: clientContext.name,
+                  industry: clientContext.industry,
+                  brandVoice: clientContext.brandVoice,
+                }
+              : null,
+          }),
+          scrapeAllPlatforms({
             query: search.query,
-            time_range: search.time_range,
-            country: search.country,
-            language: search.language,
-            search_mode: search.search_mode as 'general' | 'client_strategy',
-            client_id: search.client_id,
-            subtopics: (search as { subtopics?: unknown }).subtopics,
-          },
-          userId: user.id,
-          userEmail: user.email ?? undefined,
-          clientContext: clientContext
-            ? {
-                name: clientContext.name,
-                industry: clientContext.industry,
-                brandVoice: clientContext.brandVoice,
-              }
-            : null,
-        });
+            searchId: id,
+            timeRange: search.time_range,
+            userId: user.id,
+            userEmail: user.email ?? undefined,
+          }).catch((err) => {
+            console.error('[process] Video scraping failed (non-blocking):', err);
+            return null;
+          }),
+        ]);
+
+        // Merge scrape stats into pipeline state
+        const pipelineState = {
+          ...result.pipelineState,
+          ...(scrapeResult ? {
+            video_scraping: {
+              total_videos: scrapeResult.videos.length,
+              platform_counts: scrapeResult.platformCounts,
+              hook_patterns_count: scrapeResult.hookPatterns.length,
+              errors: scrapeResult.errors,
+            },
+          } : {}),
+        };
 
         const { error: llmUpdateErr } = await adminClient
           .from('topic_searches')
@@ -218,7 +245,7 @@ export async function POST(
             serp_data: result.serpData,
             raw_ai_response: result.aiResponse,
             research_sources: result.researchSources,
-            pipeline_state: result.pipelineState,
+            pipeline_state: pipelineState,
             platform_data: {
               stats: [],
               sourceCount: result.platformSources.length,
