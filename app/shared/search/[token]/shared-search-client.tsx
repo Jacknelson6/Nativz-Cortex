@@ -23,12 +23,14 @@ import {
 } from '@/lib/clients/client-abbreviations';
 import { hasSerp } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse, TrendingTopic } from '@/lib/types/search';
+import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
 
 interface SharedSearchClientProps {
   search: TopicSearch;
   clientName: string | null;
   clientSlug?: string | null;
   shareToken: string;
+  scrapedVideoCount?: number;
 }
 
 export function SharedSearchClient({
@@ -36,6 +38,7 @@ export function SharedSearchClient({
   clientName,
   clientSlug = null,
   shareToken,
+  scrapedVideoCount = 0,
 }: SharedSearchClientProps) {
   const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
 
@@ -124,6 +127,8 @@ export function SharedSearchClient({
         {search.trending_topics && search.trending_topics.length > 0 && (
           <TrendingTopicsTable topics={search.trending_topics} searchId={search.id} />
         )}
+
+        <ScrapedVideosSection searchId={search.id} scrapedVideoCount={scrapedVideoCount} shareToken={shareToken} />
 
         {(aiResponse?.content_pillars || aiResponse?.niche_performance_insights) && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

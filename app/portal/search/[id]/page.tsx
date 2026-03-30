@@ -21,6 +21,7 @@ import { searchHeaderQueryClassName } from '@/lib/clients/client-abbreviations';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 import { hasSerp } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse } from '@/lib/types/search';
+import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
 
 export default async function PortalSearchResultsPage({
   params,
@@ -112,6 +113,12 @@ export default async function PortalSearchResultsPage({
     );
   }
 
+  // Fetch scraped video count for v3 sections
+  const { count: scrapedVideoCount } = await adminClient
+    .from('topic_search_videos')
+    .select('id', { count: 'exact', head: true })
+    .eq('search_id', id);
+
   const s = search as TopicSearch;
   const aiResponse = s.raw_ai_response as TopicSearchAIResponse | null;
 
@@ -197,6 +204,9 @@ export default async function PortalSearchResultsPage({
             )}
           </div>
         )}
+
+        {/* Scraped videos v3 sections */}
+        <ScrapedVideosSection searchId={s.id} scrapedVideoCount={scrapedVideoCount ?? 0} />
 
         {/* Sources panel — only for new searches with SERP data */}
         {hasSerp(s) && s.serp_data && (

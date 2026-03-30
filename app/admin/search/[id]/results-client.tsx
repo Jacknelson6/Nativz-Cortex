@@ -29,6 +29,7 @@ import type { ClientOption } from '@/components/ui/client-picker';
 import { hasSerp, isNewMetrics } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
 import { RelatedTopics } from '@/components/search/related-topics';
+import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
 import { IdeationPipelinePanel } from '@/components/ideation/ideation-pipeline-panel';
 import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
 import { getClientAbbreviationLabel } from '@/lib/clients/client-abbreviations';
@@ -52,6 +53,7 @@ interface AdminResultsClientProps {
   linkedIdeas?: LinkedIdea[];
   linkedBoards?: LinkedBoardRow[];
   videoCandidateCount?: number;
+  scrapedVideoCount?: number;
 }
 
 export function AdminResultsClient({
@@ -61,6 +63,7 @@ export function AdminResultsClient({
   linkedIdeas = [],
   linkedBoards = [],
   videoCandidateCount = 0,
+  scrapedVideoCount = 0,
 }: AdminResultsClientProps) {
   const router = useRouter();
   const [showIdeasWizard, setShowIdeasWizard] = useState(false);
@@ -287,6 +290,9 @@ export function AdminResultsClient({
             platformBreakdown={aiResponse?.platform_breakdown}
           />
         ) : null}
+
+        {/* Scraped videos — outlier board, video grid, hook patterns */}
+        <ScrapedVideosSection searchId={search.id} scrapedVideoCount={scrapedVideoCount} />
 
         {aiResponse?.synthetic_audiences?.segments?.length ? (
           <TopicSyntheticAudiences data={aiResponse.synthetic_audiences} />
