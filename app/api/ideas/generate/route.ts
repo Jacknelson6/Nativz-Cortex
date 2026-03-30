@@ -7,6 +7,7 @@ import { getIdeasModelFromDb } from '@/lib/ai/provider-keys';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { getBrandProfile, getKnowledgeEntries } from '@/lib/knowledge/queries';
 import { quickScrapeUrl } from '@/lib/knowledge/scraper';
+import { getHookContext } from '@/lib/hooks/get-hook-context';
 
 const generateSchema = z.object({
   client_id: z.string().uuid().optional(),
@@ -344,6 +345,12 @@ Executive summary: ${(latestStrategy.executive_summary as string) ?? ''}
     const hasSearch = contextBlocks.some((b) => b.includes('<research_data>'));
     const hasUrlSource = !!url && !client_id;
 
+    // ── Hook templates + scraped hooks context ──
+    const hookContext = await getHookContext({ searchId: search_id, maxTemplates: 30 });
+    if (hookContext) {
+      contextBlocks.push(hookContext);
+    }
+
     // ── Pillar-based generation (one AI call per pillar) ──
     if (pillar_ids?.length && ideas_per_pillar && client_id) {
       const { data: pillars } = await admin
@@ -388,6 +395,7 @@ Requirements:
 - Each idea must be distinct
 ${hasReferences ? '- Draw inspiration from the reference videos' : ''}
 ${hasSearch ? '- Use the research data to ground ideas in real trends' : ''}
+${hookContext ? '- Use the hook templates and trending hooks as inspiration for opening lines and video concepts. Adapt proven hook patterns to this brand and pillar.' : ''}
 
 Output ONLY the JSON array. No other text.`;
 
@@ -443,6 +451,7 @@ Requirements:
 ${hasReferences ? '- Draw heavy inspiration from the reference videos — match their style, energy, and content approach while adapting for this brand' : ''}
 ${hasSearch ? '- Use the research data heavily — base ideas on what is actually trending and performing well. Ground ideas in real data, not assumptions.' : ''}
 ${hasUrlSource ? '- The brand context was scraped from their website. Infer the industry, target audience, and brand voice from the content. Focus ideas on what would work for THIS specific business.' : ''}
+${hookContext ? '- Use the hook templates and trending hooks as inspiration for opening lines and video concepts. Adapt proven hook patterns to fit this brand and audience.' : ''}
 
 Output ONLY the JSON array. No other text.`;
 
