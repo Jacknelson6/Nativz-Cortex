@@ -24,12 +24,43 @@ export interface ScrapeAllResult {
   errors: string[];
 }
 
+const LOCAL_SCRAPER_URL = process.env.LOCAL_SCRAPER_URL || 'http://localhost:3200';
+
 /**
- * Check which scrapers are available based on env vars
+ * Check if the local scraper service is available
  */
-function getAvailablePlatforms(): Set<string> {
+async function isLocalScraperAvailable(): Promise<boolean> {
+  try {
+    const res = await fetch(`${LOCAL_SCRAPER_URL}/health`, { signal: AbortSignal.timeout(2000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Scrape via local Playwright service
+ */
+async function scrapeLocal(platform: 'tiktok' | 'instagram', query: string, maxResults: number, timeRange?: string): Promise<ScrapeResult> {
+  const res = await fetch(`${LOCAL_SCRAPER_URL}/scrape/${platform}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, maxResults, timeRange }),
+    signal: AbortSignal.timeout(180000),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    return { platform, videos: [], error: `Local scraper error ${res.status}: ${text.substring(0, 200)}` };
+  }
+  return await res.json() as ScrapeResult;
+}
+
+/**
+ * Check which scrapers are available based on env vars and local service
+ */
+function getAvailablePlatforms(localAvailable: boolean): Set<string> {
   const available = new Set<string>();
-  if (process.env.APIFY_API_KEY) {
+  if (localAvailable || process.env.APIFY_API_KEY) {
     available.add('tiktok');
     available.add('instagram');
   }
@@ -45,24 +76,40 @@ function getAvailablePlatforms(): Set<string> {
  */
 export async function scrapeAllPlatforms(options: ScrapeAllOptions): Promise<ScrapeAllResult> {
   const { query, searchId, maxResultsPerPlatform = 50, timeRange, userId, userEmail } = options;
-  const available = getAvailablePlatforms();
+  const localAvailable = await isLocalScraperAvailable();
+  const available = getAvailablePlatforms(localAvailable);
   const requested = new Set(options.platforms ?? ['tiktok', 'youtube', 'instagram']);
   const errors: string[] = [];
 
   console.log(`[scrape-all] Starting scrape for "${query}" (search ${searchId})`);
+  console.log(`[scrape-all] Local scraper: ${localAvailable ? 'available' : 'offline'}`);
   console.log(`[scrape-all] Available platforms: ${[...available].join(', ')}`);
 
-  // Run available scrapers in parallel
+  // Run available scrapers in parallel — prefer local Playwright, fall back to Apify
   const scrapePromises: Promise<ScrapeResult>[] = [];
 
   if (requested.has('tiktok') && available.has('tiktok')) {
-    scrapePromises.push(scrapeTikTok({ query, maxResults: maxResultsPerPlatform, timeRange }));
+    if (localAvailable) {
+      scrapePromises.push(
+        scrapeLocal('tiktok', query, maxResultsPerPlatform, timeRange)
+          .then(r => r.error && process.env.APIFY_API_KEY ? scrapeTikTok({ query, maxResults: maxResultsPerPlatform, timeRange }) : r),
+      );
+    } else {
+      scrapePromises.push(scrapeTikTok({ query, maxResults: maxResultsPerPlatform, timeRange }));
+    }
   }
   if (requested.has('youtube') && available.has('youtube')) {
     scrapePromises.push(scrapeYouTube({ query, maxResults: maxResultsPerPlatform, timeRange }));
   }
   if (requested.has('instagram') && available.has('instagram')) {
-    scrapePromises.push(scrapeInstagram({ query, maxResults: maxResultsPerPlatform, timeRange }));
+    if (localAvailable) {
+      scrapePromises.push(
+        scrapeLocal('instagram', query, maxResultsPerPlatform, timeRange)
+          .then(r => r.error && process.env.APIFY_API_KEY ? scrapeInstagram({ query, maxResults: maxResultsPerPlatform, timeRange }) : r),
+      );
+    } else {
+      scrapePromises.push(scrapeInstagram({ query, maxResults: maxResultsPerPlatform, timeRange }));
+    }
   }
 
   if (scrapePromises.length === 0) {
