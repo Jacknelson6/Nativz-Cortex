@@ -75,7 +75,7 @@ export async function scrapeTikTok(options: ScrapeOptions): Promise<ScrapeResult
     const run = await client.actor(ACTOR_ID).call(
       {
         searchQueries: [options.query],
-        maxProfilesPerQuery: 0,
+        maxProfilesPerQuery: 1,
         resultsPerPage: maxItems,
         shouldDownloadCovers: false,
         shouldDownloadVideos: false,
