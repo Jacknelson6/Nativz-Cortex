@@ -68,7 +68,7 @@ export async function getHookContext(options: HookContextOptions = {}): Promise<
 
   if (parts.length === 0) return null;
 
-  return `<hook_inspiration>\nUse these hook patterns as inspiration for video ideas. Adapt the templates to fit the brand, topic, and audience. The trending hooks from real videos are especially valuable — they're proven to perform.\n\n${parts.join('\n\n')}\n</hook_inspiration>`;
+  return `<hook_inspiration>\nThese hook patterns are optional inspiration — NOT required. Prioritize trending hooks from real scraped videos first (they're proven performers). Only fall back to the static templates if the scraped hooks don't cover the angle you need, or if no scraped hooks are available.\n\n${parts.join('\n\n')}\n</hook_inspiration>`;
 }
 
 /** Get all available hook categories and their counts */

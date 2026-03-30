@@ -395,7 +395,7 @@ Requirements:
 - Each idea must be distinct
 ${hasReferences ? '- Draw inspiration from the reference videos' : ''}
 ${hasSearch ? '- Use the research data to ground ideas in real trends' : ''}
-${hookContext ? '- Use the hook templates and trending hooks as inspiration for opening lines and video concepts. Adapt proven hook patterns to this brand and pillar.' : ''}
+${hookContext ? '- OPTIONAL: If the scraped video hooks above don't cover an angle, you may draw from the static hook templates for additional inspiration. Scraped hooks from real videos always take priority.' : ''}
 
 Output ONLY the JSON array. No other text.`;
 
@@ -451,7 +451,7 @@ Requirements:
 ${hasReferences ? '- Draw heavy inspiration from the reference videos — match their style, energy, and content approach while adapting for this brand' : ''}
 ${hasSearch ? '- Use the research data heavily — base ideas on what is actually trending and performing well. Ground ideas in real data, not assumptions.' : ''}
 ${hasUrlSource ? '- The brand context was scraped from their website. Infer the industry, target audience, and brand voice from the content. Focus ideas on what would work for THIS specific business.' : ''}
-${hookContext ? '- Use the hook templates and trending hooks as inspiration for opening lines and video concepts. Adapt proven hook patterns to fit this brand and audience.' : ''}
+${hookContext ? '- OPTIONAL: If the scraped video hooks above don't cover an angle, you may draw from the static hook templates for additional inspiration. Scraped hooks from real videos always take priority.' : ''}
 
 Output ONLY the JSON array. No other text.`;
 
