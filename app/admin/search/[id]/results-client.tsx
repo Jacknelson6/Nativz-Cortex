@@ -30,6 +30,7 @@ import { hasSerp, isNewMetrics } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
 import { RelatedTopics } from '@/components/search/related-topics';
 import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
+import { AiTakeaways } from '@/components/results/ai-takeaways';
 import { IdeationPipelinePanel } from '@/components/ideation/ideation-pipeline-panel';
 import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
 import { getClientAbbreviationLabel } from '@/lib/clients/client-abbreviations';
@@ -229,6 +230,12 @@ export function AdminResultsClient({
             {aiResponse?.brand_alignment_notes ? (
               <ExecutiveSummary summary={aiResponse.brand_alignment_notes} variant="brand" />
             ) : null}
+          </div>
+        ) : null}
+
+        {(aiResponse || search.summary) ? (
+          <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5">
+            <AiTakeaways aiResponse={aiResponse} summary={search.summary} />
           </div>
         ) : null}
 

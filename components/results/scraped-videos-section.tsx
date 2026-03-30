@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { VideoGrid } from '@/components/research/video-grid';
-import { OutlierBoard } from '@/components/research/outlier-board';
+import { OutlierCreatorsTable } from '@/components/research/outlier-creators-table';
+import { HashtagCloud } from '@/components/research/hashtag-cloud';
 import { HookPatterns } from '@/components/research/hook-patterns';
+import { SearchStatsRow } from '@/components/results/search-stats-row';
+import { ViewsOverTime } from '@/components/charts/views-over-time';
 import type { TopicSearchVideoRow, TopicSearchHookRow } from '@/lib/scrapers/types';
 
 interface ScrapedVideosSectionProps {
@@ -70,8 +73,11 @@ export function ScrapedVideosSection({ searchId, scrapedVideoCount, shareToken }
 
   return (
     <div className="space-y-6">
-      <OutlierBoard videos={videos} />
+      <SearchStatsRow videos={videos} />
+      <OutlierCreatorsTable videos={videos} />
       <VideoGrid videos={videos} platformCounts={platformCounts} />
+      <HashtagCloud videos={videos} />
+      <ViewsOverTime videos={videos} />
       <HookPatterns hooks={hooks} />
     </div>
   );

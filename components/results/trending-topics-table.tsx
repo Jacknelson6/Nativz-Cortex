@@ -81,7 +81,7 @@ function TopicTitleCell({ name, index }: { name: string; index: number }) {
       <span className="text-base leading-none shrink-0" aria-hidden>
         {displayEmoji}
       </span>
-      <span className="min-w-0 truncate text-sm font-semibold text-text-primary">{label}</span>
+      <span className="min-w-0 text-sm font-semibold text-text-primary break-words whitespace-normal">{label}</span>
     </span>
   );
 }

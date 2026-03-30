@@ -7,6 +7,10 @@ const patchSchema = z.object({
   subtopics: z.array(z.string().min(1).max(200)).min(1).max(15),
   /** When true, move to processing so /process can run */
   start_processing: z.boolean().optional(),
+  /** Minimum view count filter for video scraping */
+  minViews: z.number().int().min(0).optional(),
+  /** Time range filter: today, week, month, year */
+  timeRange: z.enum(['today', 'week', 'month', 'year']).optional(),
 });
 
 /**
@@ -69,6 +73,11 @@ export async function PATCH(
 
     const nextStatus = parsed.data.start_processing ? 'processing' : 'pending_subtopics';
 
+    /** Merge filter preferences into pipeline_state JSONB */
+    const pipelineStatePatch: Record<string, unknown> = {};
+    if (parsed.data.minViews !== undefined) pipelineStatePatch.min_views = parsed.data.minViews;
+    if (parsed.data.timeRange !== undefined) pipelineStatePatch.time_range = parsed.data.timeRange;
+
     /** Clear lease so POST /process can claim; avoids stuck 202 when retrying. */
     const { error: upErr } = await admin
       .from('topic_searches')
@@ -76,6 +85,9 @@ export async function PATCH(
         subtopics: parsed.data.subtopics,
         status: nextStatus,
         ...(parsed.data.start_processing ? { processing_started_at: null } : {}),
+        ...(Object.keys(pipelineStatePatch).length > 0
+          ? { pipeline_state: pipelineStatePatch }
+          : {}),
       })
       .eq('id', id);
 
