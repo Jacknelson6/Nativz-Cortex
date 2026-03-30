@@ -71,7 +71,7 @@ test.describe('Admin full journey', () => {
 
     const clients = await fetchJson<ClientRow[]>(page.request, '/api/clients');
     const firstClient = clients?.[0];
-    if (firstClient?.slug) {
+    if (firstClient?.slug && firstClient?.id) {
       const slug = firstClient.slug;
       const clientNested = [
         `/admin/clients/${slug}`,
@@ -82,6 +82,9 @@ test.describe('Admin full journey', () => {
         `/admin/clients/${slug}/ideas/generate`,
         `/admin/clients/${slug}/ad-creatives`,
         `/admin/clients/${slug}/moodboard`,
+        `/admin/strategy-lab/${firstClient.id}`,
+        `/admin/analytics/social?clientId=${firstClient.id}`,
+        `/admin/nerd?strategySource=strategy-lab&strategyClient=${firstClient.id}`,
       ];
       for (const p of clientNested) {
         await visitPath(p);

@@ -197,6 +197,15 @@ registerCommand({
 });
 
 registerCommand({
+  name: 'affiliates',
+  description: 'Review affiliate performance for a client',
+  type: 'ai',
+  requiresMention: true,
+  example: '/affiliates @ClientName',
+  expandPrompt: (args) => `Review affiliate performance for ${args || 'a client'}. Use affiliate tools to summarize revenue, referrals, active affiliates, and strategic opportunities.`,
+});
+
+registerCommand({
   name: 'brief',
   description: 'Generate a content brief',
   type: 'ai',

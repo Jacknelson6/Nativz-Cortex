@@ -8,6 +8,12 @@
 
 ## Active Work
 
+### Strategy Lab “brain” + Nerd context (see `docs/prd-strategy-lab-brain.md`)
+- [x] PRD with phased backlog + implementation log
+- [x] `buildStrategyLabContextPack` + append when client is @mentioned in Nerd
+- [x] Analytics `/admin/analytics/social?clientId=` preselect + assistant card link
+- [x] Remaining PRD phases implemented: performance snapshot, affiliates, board/video strategy tools, Strategy Lab → Cortex handoff, smoke coverage
+
 ### Static Ad Generator (built 2026-03-18, QA'd 2026-03-19)
 - [x] PRD finalized — Gemini 3.1 Flash Image gen from Kandy template styles
 - [x] Database migration (4 tables + 2 storage buckets)

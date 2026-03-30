@@ -13,6 +13,8 @@ interface CreateBoardModalProps {
   open: boolean;
   onClose: () => void;
   onCreated: (board: MoodboardBoard) => void;
+  /** Pre-select a client when opening (e.g. deep link from Strategy lab). */
+  initialClientId?: string | null;
 }
 
 interface ClientOption {
@@ -26,7 +28,7 @@ interface Template {
   description: string;
 }
 
-export function CreateBoardModal({ open, onClose, onCreated }: CreateBoardModalProps) {
+export function CreateBoardModal({ open, onClose, onCreated, initialClientId }: CreateBoardModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [clientId, setClientId] = useState<string | null>(null);
@@ -34,6 +36,12 @@ export function CreateBoardModal({ open, onClose, onCreated }: CreateBoardModalP
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open && initialClientId?.trim()) {
+      setClientId(initialClientId.trim());
+    }
+  }, [open, initialClientId]);
 
   useEffect(() => {
     if (!open) return;

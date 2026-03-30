@@ -19,6 +19,7 @@ import { getAllCommands, getCommand, type SlashCommand } from '@/lib/nerd/slash-
 const SUGGESTIONS = [
   { label: 'Content strategy', prompt: 'Build a full content strategy for @' },
   { label: 'Analyze video', prompt: 'Analyze the top performing videos for @' },
+  { label: 'Affiliate performance', prompt: 'Review affiliate performance for @' },
   { label: 'View tasks', prompt: '/tasks' },
   { label: 'Hook ideas', prompt: 'Give me 10 scroll-stopping hooks for @' },
 ];
@@ -31,6 +32,10 @@ export default function NerdPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const conversationIdParam = searchParams.get('c');
+  const strategyClientId = searchParams.get('strategyClient');
+  const strategyBoardId = searchParams.get('strategyBoardId');
+  const strategyBoardName = searchParams.get('strategyBoardName');
+  const strategySource = searchParams.get('strategySource');
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -51,8 +56,13 @@ export default function NerdPage() {
   const [slashQuery, setSlashQuery] = useState('');
   const slashCommands = getAllCommands();
 
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const strategyClientPrefilledRef = useRef(false);
+  const strategySessionHintRef = useRef<string | null>(
+    strategySource === 'strategy-lab'
+      ? 'User opened this conversation from Strategy Lab. Prefer strategy, analytics, affiliate, and analysis-board tools where relevant.'
+      : null,
+  );
 
   const mentionsVisible = showMentions && mentionOptions.some((o) =>
     o.name.toLowerCase().includes(mentionQuery.toLowerCase()),
@@ -76,14 +86,32 @@ export default function NerdPage() {
       .catch(() => {});
   }, []);
 
-  // Load conversation from URL param
+  // Strategy Lab deep link: /admin/nerd?strategyClient=<uuid> — prefill input and client mention
   useEffect(() => {
-    if (conversationIdParam) {
-      loadConversation(conversationIdParam);
-    }
-  }, [conversationIdParam]);
+    if (strategyClientPrefilledRef.current) return;
+    if (!strategyClientId || mentionOptions.length === 0) return;
+    const client = mentionOptions.find((o) => o.type === 'client' && o.id === strategyClientId);
+    if (!client) return;
+    strategyClientPrefilledRef.current = true;
+    const boardPrompt =
+      strategyBoardId && strategyBoardName
+        ? `Review analysis board "${strategyBoardName}" (board_id: ${strategyBoardId}) for @${client.name}. Use get_analysis_board_summary first, then recommend what to keep, cut, or turn into shoots. `
+        : `Review our content strategy, pillars, and recent performance for @${client.name}. `;
+    setInput(boardPrompt);
+    setActiveMentions((prev) => {
+      if (prev.some((m) => m.id === client.id && m.type === 'client')) return prev;
+      return [...prev, { type: 'client' as const, id: client.id, name: client.name, slug: client.slug }];
+    });
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('strategyClient');
+    params.delete('strategyBoardId');
+    params.delete('strategyBoardName');
+    params.delete('strategySource');
+    const qs = params.toString();
+    router.replace(qs ? `/admin/nerd?${qs}` : '/admin/nerd', { scroll: false });
+  }, [strategyClientId, strategyBoardId, strategyBoardName, mentionOptions, searchParams, router]);
 
-  async function loadConversation(id: string) {
+  const loadConversation = useCallback(async (id: string) => {
     setLoadingConvo(true);
     try {
       const res = await fetch(`/api/nerd/conversations/${id}`);
@@ -105,7 +133,14 @@ export default function NerdPage() {
     } finally {
       setLoadingConvo(false);
     }
-  }
+  }, [router]);
+
+  // Load conversation from URL param
+  useEffect(() => {
+    if (conversationIdParam) {
+      loadConversation(conversationIdParam);
+    }
+  }, [conversationIdParam, loadConversation]);
 
   // Detect /slash command trigger
   useEffect(() => {
@@ -252,9 +287,11 @@ export default function NerdPage() {
           messages: chatHistory,
           mentions: messageMentions.length > 0 ? messageMentions : undefined,
           conversationId: conversationId ?? undefined,
+          sessionHint: strategySessionHintRef.current ?? undefined,
         }),
         signal: controller.signal,
       });
+      strategySessionHintRef.current = null;
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Failed to connect' }));

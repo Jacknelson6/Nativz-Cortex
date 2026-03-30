@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { Check, ExternalLink, Telescope } from 'lucide-react';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { StrategyLabSection } from '@/components/strategy-lab/strategy-lab-section';
 import { cn } from '@/lib/utils/cn';
 
 export type TopicSearchRow = {
@@ -74,15 +74,11 @@ export function TopicSearchSelectionCard({
   const selectedCount = selectedIds.size;
 
   return (
-    <Card className="border-nativz-border/60 bg-surface p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <Telescope className="h-5 w-5 text-accent-text" aria-hidden />
-        <h2 className="text-lg font-semibold text-foreground">Topic searches in this workspace</h2>
-      </div>
-      <p className="mb-4 text-sm leading-relaxed text-text-muted">
-        Choose which topic search runs to include in this strategy session. Your selection is saved only in
-        this browser.
-      </p>
+    <StrategyLabSection
+      icon={Telescope}
+      title="Topic searches in this workspace"
+      description="Choose which topic search runs to include in this strategy session. Your selection is saved only in this browser."
+    >
       {topicSearches.length === 0 ? (
         <p className="text-sm text-text-muted">
           No topic searches for this client yet.{' '}
@@ -188,6 +184,6 @@ export function TopicSearchSelectionCard({
           </p>
         </div>
       )}
-    </Card>
+    </StrategyLabSection>
   );
 }

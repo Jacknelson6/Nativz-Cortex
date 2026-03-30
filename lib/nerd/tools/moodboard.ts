@@ -2,6 +2,12 @@ import { z } from 'zod';
 import { ToolDefinition } from '../types';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+function truncate(text: string | null | undefined, max = 120): string {
+  const value = (text ?? '').trim();
+  if (!value) return '';
+  return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
 export const moodboardTools: ToolDefinition[] = [
   // ── list_moodboards ───────────────────────────────────────────────
   {
@@ -118,6 +124,206 @@ export const moodboardTools: ToolDefinition[] = [
         return {
           success: false,
           error: err instanceof Error ? err.message : 'Failed to get moodboard items',
+          cardType: 'moodboard' as const,
+        };
+      }
+    },
+  },
+  {
+    name: 'get_analysis_board_summary',
+    description:
+      'Summarize an analysis board for strategy work. Aggregates hooks, themes, winning elements, improvement areas, and strongest videos across all analyzed items on the board.',
+    parameters: z.object({
+      board_id: z.string().describe('Analysis board / moodboard board UUID'),
+    }),
+    riskLevel: 'read',
+    handler: async (params) => {
+      try {
+        const supabase = createAdminClient();
+        const { board_id } = params as { board_id: string };
+
+        const { data: board, error: boardError } = await supabase
+          .from('moodboard_boards')
+          .select('id, name, client_id')
+          .eq('id', board_id)
+          .single();
+
+        if (boardError || !board) {
+          return { success: false, error: 'Analysis board not found', cardType: 'moodboard' as const };
+        }
+
+        const { data: items, error } = await supabase
+          .from('moodboard_items')
+          .select('id, title, url, hook, hook_score, concept_summary, content_themes, winning_elements, improvement_areas, transcript, stats, status, platform, author_handle')
+          .eq('board_id', board_id)
+          .order('created_at', { ascending: true });
+
+        if (error) {
+          return { success: false, error: error.message, cardType: 'moodboard' as const };
+        }
+
+        const rows = (items ?? []) as Array<{
+          id: string;
+          title: string | null;
+          url: string;
+          hook: string | null;
+          hook_score: number | null;
+          concept_summary: string | null;
+          content_themes: string[] | null;
+          winning_elements: string[] | null;
+          improvement_areas: string[] | null;
+          transcript: string | null;
+          stats: { views?: number; likes?: number; comments?: number; shares?: number } | null;
+          status: string | null;
+          platform: string | null;
+          author_handle: string | null;
+        }>;
+
+        const analyzed = rows.filter((row) =>
+          row.hook || row.concept_summary || (row.content_themes?.length ?? 0) > 0,
+        );
+
+        const themeCounts = new Map<string, number>();
+        const winningCounts = new Map<string, number>();
+        const improvementCounts = new Map<string, number>();
+        let totalHookScore = 0;
+        let scoredCount = 0;
+
+        for (const row of analyzed) {
+          for (const theme of row.content_themes ?? []) {
+            themeCounts.set(theme, (themeCounts.get(theme) ?? 0) + 1);
+          }
+          for (const item of row.winning_elements ?? []) {
+            winningCounts.set(item, (winningCounts.get(item) ?? 0) + 1);
+          }
+          for (const item of row.improvement_areas ?? []) {
+            improvementCounts.set(item, (improvementCounts.get(item) ?? 0) + 1);
+          }
+          if (typeof row.hook_score === 'number') {
+            totalHookScore += row.hook_score;
+            scoredCount++;
+          }
+        }
+
+        const strongestVideos = [...analyzed]
+          .sort((a, b) => (b.hook_score ?? 0) - (a.hook_score ?? 0))
+          .slice(0, 3)
+          .map((row) => ({
+            id: row.id,
+            title: row.title ?? row.author_handle ?? row.url,
+            hook: truncate(row.hook, 80) || null,
+            hook_score: row.hook_score,
+            concept_summary: truncate(row.concept_summary, 120) || null,
+            platform: row.platform,
+            url: row.url,
+          }));
+
+        const topThemes = [...themeCounts.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([theme, count]) => ({ theme, count }));
+        const topWinning = [...winningCounts.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([item, count]) => ({ item, count }));
+        const topImprovements = [...improvementCounts.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([item, count]) => ({ item, count }));
+
+        return {
+          success: true,
+          data: {
+            board: {
+              id: board.id,
+              name: board.name,
+              client_id: board.client_id,
+            },
+            itemCount: rows.length,
+            analyzedItemCount: analyzed.length,
+            averageHookScore: scoredCount > 0 ? Number((totalHookScore / scoredCount).toFixed(1)) : null,
+            topThemes,
+            topWinningElements: topWinning,
+            topImprovementAreas: topImprovements,
+            strongestVideos,
+            needsAnalysisCount: rows.length - analyzed.length,
+          },
+          cardType: 'moodboard' as const,
+          link: { href: `/admin/analysis/${board_id}`, label: 'View analysis board' },
+        };
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to summarize analysis board',
+          cardType: 'moodboard' as const,
+        };
+      }
+    },
+  },
+  {
+    name: 'summarize_video_for_strategy',
+    description:
+      'Summarize a single analyzed board video for strategic use: hook, theme, winning elements, weaknesses, and creative notes. Requires an existing analyzed moodboard item.',
+    parameters: z.object({
+      item_id: z.string().describe('Moodboard item UUID'),
+    }),
+    riskLevel: 'read',
+    handler: async (params) => {
+      try {
+        const supabase = createAdminClient();
+        const { item_id } = params as { item_id: string };
+
+        const { data: item, error } = await supabase
+          .from('moodboard_items')
+          .select('id, board_id, title, url, hook, hook_analysis, hook_score, hook_type, concept_summary, content_themes, winning_elements, improvement_areas, transcript, stats, platform, author_handle, pacing, cta, status')
+          .eq('id', item_id)
+          .single();
+
+        if (error || !item) {
+          return { success: false, error: 'Video item not found', cardType: 'moodboard' as const };
+        }
+
+        const hasAnalysis =
+          !!item.hook ||
+          !!item.concept_summary ||
+          ((item.content_themes as string[] | null)?.length ?? 0) > 0;
+        if (!hasAnalysis) {
+          return {
+            success: false,
+            error: 'This video has not been analyzed yet. Open the analysis board and run analysis first.',
+            cardType: 'moodboard' as const,
+            link: { href: `/admin/analysis/${item.board_id}`, label: 'Open analysis board' },
+          };
+        }
+
+        return {
+          success: true,
+          data: {
+            id: item.id,
+            board_id: item.board_id,
+            title: item.title ?? item.author_handle ?? item.url,
+            platform: item.platform,
+            hook: item.hook,
+            hookAnalysis: item.hook_analysis,
+            hookScore: item.hook_score,
+            hookType: item.hook_type,
+            conceptSummary: item.concept_summary,
+            contentThemes: item.content_themes ?? [],
+            winningElements: item.winning_elements ?? [],
+            improvementAreas: item.improvement_areas ?? [],
+            pacing: item.pacing ?? null,
+            cta: item.cta ?? null,
+            stats: item.stats ?? null,
+            transcriptSnippet: truncate(item.transcript, 240) || null,
+            url: item.url,
+          },
+          cardType: 'moodboard' as const,
+          link: { href: `/admin/analysis/${item.board_id}`, label: 'Open analysis board' },
+        };
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to summarize video',
           cardType: 'moodboard' as const,
         };
       }

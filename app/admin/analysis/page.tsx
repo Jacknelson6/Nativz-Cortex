@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Layers, Plus, MoreHorizontal, Clock, FolderOpen, Pencil, Copy, Trash2, Archive, ArchiveRestore,
@@ -22,6 +22,8 @@ export default function MoodboardPage() {
   const [boards, setBoards] = useState<MoodboardBoard[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+  const [initialClientForCreate, setInitialClientForCreate] = useState<string | null>(null);
+  const openedBoardFromQuery = useRef(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
@@ -56,6 +58,19 @@ export default function MoodboardPage() {
   useEffect(() => {
     fetchBoards();
   }, [fetchBoards]);
+
+  /** Deep link from Strategy lab: /admin/analysis?createBoard=1&clientId=… */
+  useEffect(() => {
+    if (typeof window === 'undefined' || openedBoardFromQuery.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('createBoard') !== '1') return;
+    const cid = params.get('clientId');
+    if (!cid) return;
+    openedBoardFromQuery.current = true;
+    setInitialClientForCreate(cid);
+    setCreateOpen(true);
+    router.replace('/admin/analysis', { scroll: false });
+  }, [router]);
 
   // ── Quick analyze: create/find a "Quick analyses" board, add item, navigate ──
   async function handleQuickAnalyze() {
@@ -395,9 +410,14 @@ export default function MoodboardPage() {
       {/* Create Board Modal */}
       <CreateBoardModal
         open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        initialClientId={initialClientForCreate}
+        onClose={() => {
+          setCreateOpen(false);
+          setInitialClientForCreate(null);
+        }}
         onCreated={(board) => {
           setCreateOpen(false);
+          setInitialClientForCreate(null);
           router.push(`/admin/analysis/${board.id}`);
         }}
       />

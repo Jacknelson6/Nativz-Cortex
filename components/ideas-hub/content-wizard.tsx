@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sparkles, ArrowLeft, Loader2, Link2, Minus, Plus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,6 +22,12 @@ interface ContentWizardProps {
   onIdeasSaved: () => void;
   initialSearchId?: string | null;
   initialSearchQuery?: string | null;
+  initialClientId?: string | null;
+  initialFocus?: 'pillars' | 'ideas' | 'pillar-ideas' | null;
+}
+
+function clientIsValid(clientId: string, clientList: { id: string }[]): boolean {
+  return !!clientId && clientList.some((c) => c.id === clientId);
 }
 
 type WizardStep = 1 | 2 | 3;
@@ -31,13 +37,67 @@ export function ContentWizard({
   clients,
   onIdeasSaved,
   initialSearchId,
+  initialClientId,
+  initialFocus,
 }: ContentWizardProps) {
-  const [step, setStep] = useState<WizardStep>(1);
-  const [path, setPath] = useState<WizardPath>(null);
-  const [clientId, setClientId] = useState('');
+  const validInitialClient =
+    initialClientId && clientIsValid(initialClientId, clients) ? initialClientId : '';
+
+  const [step, setStep] = useState<WizardStep>(() => {
+    if (!validInitialClient) return 1;
+    if (initialFocus === 'pillars' || initialFocus === 'ideas') return 2;
+    if (initialFocus === 'pillar-ideas') return 2;
+    return 1;
+  });
+  const [path, setPath] = useState<WizardPath>(() => {
+    if (!validInitialClient) return null;
+    if (initialFocus === 'pillars') return 'pillars';
+    if (initialFocus === 'ideas') return 'ideas';
+    if (initialFocus === 'pillar-ideas') return 'pillars';
+    return null;
+  });
+  const [clientId, setClientId] = useState(validInitialClient);
   const [brandUrl, setBrandUrl] = useState('');
   const [pillars, setPillars] = useState<Pillar[]>([]);
   const [strategyModalOpen, setStrategyModalOpen] = useState(false);
+  const [pillarIdeasLoading, setPillarIdeasLoading] = useState(
+    () => initialFocus === 'pillar-ideas' && !!validInitialClient,
+  );
+
+  useEffect(() => {
+    if (initialFocus !== 'pillar-ideas') return;
+    if (!validInitialClient) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/clients/${validInitialClient}/pillars`);
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        const list = (data.pillars ?? []) as Pillar[];
+        if (cancelled) return;
+        if (list.length === 0) {
+          setPillars([]);
+          setPath('pillars');
+          setStep(2);
+        } else {
+          setPillars(list);
+          setPath('pillars');
+          setStep(3);
+        }
+      } catch {
+        if (!cancelled) {
+          toast.error('Could not load pillars');
+          setPath('pillars');
+          setStep(2);
+        }
+      } finally {
+        if (!cancelled) setPillarIdeasLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialFocus, validInitialClient]);
 
   const clientOptions = clients.map((c) => ({ value: c.id, label: c.name }));
   const selectedClient = clients.find((c) => c.id === clientId);
@@ -66,7 +126,7 @@ export function ContentWizard({
   return (
     <div className="space-y-6">
       {/* Step 1: Header + client + path selection */}
-      {step === 1 && (
+      {step === 1 && !pillarIdeasLoading && (
         <>
           <div className="text-center space-y-2">
             <div className="flex justify-center">
@@ -142,8 +202,16 @@ export function ContentWizard({
         </div>
       )}
 
+      {/* Pillar-ideas deep link: load pillars then jump to config */}
+      {pillarIdeasLoading && clientId && (
+        <div className="flex flex-col items-center gap-3 py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-accent2-text" />
+          <p className="text-sm text-text-muted">Loading your content pillars…</p>
+        </div>
+      )}
+
       {/* Step 2: Pillar generation */}
-      {step === 2 && path === 'pillars' && clientId && (
+      {step === 2 && path === 'pillars' && clientId && !pillarIdeasLoading && (
         <PillarGenerator
           clientId={clientId}
           pillars={pillars}
@@ -163,7 +231,7 @@ export function ContentWizard({
       )}
 
       {/* Step 3: Pillar → idea config */}
-      {step === 3 && path === 'pillars' && clientId && (
+      {step === 3 && path === 'pillars' && clientId && !pillarIdeasLoading && (
         <PillarIdeaConfig
           clientId={clientId}
           pillars={pillars}

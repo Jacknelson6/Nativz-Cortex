@@ -62,7 +62,7 @@ function getDateRange(preset: DateRangePreset, customRange?: DateRange): DateRan
   }
 }
 
-export function useReportingData() {
+export function useReportingData(initialClientId?: string | null) {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [datePreset, setDatePreset] = useState<DateRangePreset>('30d');
@@ -90,8 +90,13 @@ export function useReportingData() {
           agency: (c.agency as string | null) ?? null,
         }));
         setClients(list);
-        if (list.length > 0 && !selectedClientId) {
-          setSelectedClientId(list[0].id);
+        if (list.length > 0) {
+          setSelectedClientId((prev) => {
+            if (prev) return prev;
+            const preferred =
+              initialClientId && list.some((c) => c.id === initialClientId) ? initialClientId : list[0].id;
+            return preferred;
+          });
         }
       } catch {
         toast.error('Failed to load clients');
@@ -100,7 +105,7 @@ export function useReportingData() {
       }
     }
     fetchClients();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initialClientId]);
 
   const dateRange = getDateRange(datePreset, customRange);
 

@@ -18,7 +18,7 @@ const viewTabs: { value: 'summary' | 'top-posts'; label: string }[] = [
   { value: 'top-posts', label: 'Top posts' },
 ];
 
-export function AnalyticsDashboard() {
+export function AnalyticsDashboard({ initialClientId }: { initialClientId?: string | null } = {}) {
   const {
     clients,
     selectedClient,
@@ -40,7 +40,7 @@ export function AnalyticsDashboard() {
     syncing,
     syncNow,
     fetchTopPostsForReport,
-  } = useReportingData();
+  } = useReportingData(initialClientId);
 
   const [reportOpen, setReportOpen] = useState(false);
 

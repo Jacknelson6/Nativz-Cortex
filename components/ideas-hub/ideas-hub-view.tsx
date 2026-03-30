@@ -33,7 +33,10 @@ interface IdeasHubViewProps {
   clients: Client[];
   searchId?: string | null;
   searchQuery?: string | null;
-  searchClientId?: string | null;
+  /** Pre-selected client (merged from `?clientId=` or topic search on the server). */
+  initialClientId?: string | null;
+  /** Deep link from Strategy lab: `?focus=pillars|ideas|pillar-ideas`. */
+  initialFocus?: 'pillars' | 'ideas' | 'pillar-ideas' | null;
 }
 
 // ── Mini Generator (inside client drawer) ───────────────────────────────────
@@ -223,7 +226,14 @@ function ClientSection({
 
 // ── Main View ───────────────────────────────────────────────────────────────
 
-export function IdeasHubView({ initialIdeas, clients, searchId, searchQuery, searchClientId }: IdeasHubViewProps) {
+export function IdeasHubView({
+  initialIdeas,
+  clients,
+  searchId,
+  searchQuery,
+  initialClientId,
+  initialFocus,
+}: IdeasHubViewProps) {
   const [ideas, setIdeas] = useState(initialIdeas);
   const [openClientId, setOpenClientId] = useState<string | null>(null);
 
@@ -265,10 +275,13 @@ export function IdeasHubView({ initialIdeas, clients, searchId, searchQuery, sea
       <div className="flex flex-col items-center justify-center pt-8">
         <div className="w-full max-w-4xl">
           <ContentWizard
+            key={`${searchId ?? ''}-${initialClientId ?? ''}-${initialFocus ?? ''}`}
             clients={clients}
             onIdeasSaved={handleRefresh}
             initialSearchId={searchId}
             initialSearchQuery={searchQuery}
+            initialClientId={initialClientId ?? null}
+            initialFocus={initialFocus ?? null}
           />
         </div>
       </div>

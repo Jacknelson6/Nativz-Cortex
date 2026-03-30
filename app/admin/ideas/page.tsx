@@ -4,9 +4,9 @@ import { IdeasHubView } from '@/components/ideas-hub/ideas-hub-view';
 export default async function IdeasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search_id?: string }>;
+  searchParams: Promise<{ search_id?: string; clientId?: string; focus?: string }>;
 }) {
-  const { search_id } = await searchParams;
+  const { search_id, clientId: clientIdParam, focus: focusParam } = await searchParams;
   const supabase = createAdminClient();
 
   const [{ data: dbClients }, { data: savedIdeas }, searchData] = await Promise.all([
@@ -36,13 +36,27 @@ export default async function IdeasPage({
     name: c.name ?? '',
   }));
 
+  const validUrlClientId =
+    clientIdParam?.trim() && clients.some((c) => c.id === clientIdParam.trim())
+      ? clientIdParam.trim()
+      : null;
+  const mergedInitialClientId = searchData?.client_id ?? validUrlClientId ?? null;
+  const hasClientContext = mergedInitialClientId !== null;
+  const focusRaw = focusParam?.trim();
+  const initialFocus =
+    hasClientContext &&
+    (focusRaw === 'pillars' || focusRaw === 'ideas' || focusRaw === 'pillar-ideas')
+      ? (focusRaw as 'pillars' | 'ideas' | 'pillar-ideas')
+      : null;
+
   return (
     <IdeasHubView
       initialIdeas={savedIdeas ?? []}
       clients={clients}
       searchId={searchData?.id ?? null}
       searchQuery={searchData?.query ?? null}
-      searchClientId={searchData?.client_id ?? null}
+      initialClientId={mergedInitialClientId}
+      initialFocus={initialFocus}
     />
   );
 }

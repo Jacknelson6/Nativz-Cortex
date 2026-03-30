@@ -46,6 +46,8 @@ const chatSchema = z.object({
   conversationId: z.string().uuid().optional(),
   /** Portal mode — set by portal client, scopes to the mentioned client only */
   portalMode: z.boolean().optional(),
+  /** Optional frontend context for first message (e.g. opened from Strategy Lab) */
+  sessionHint: z.string().max(500).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -82,6 +84,8 @@ TOOL USAGE RULES:
 - After a tool call completes, summarize the result in natural language. Don't just dump JSON.
 - If a tool fails, explain the error clearly and suggest alternatives.
 - You can call multiple tools in sequence if the user's request requires it.
+- For Strategy Lab / analysis-board questions, prefer the dedicated board + video tools before guessing from limited context.
+- For affiliate questions, use affiliate tools before giving recommendations from memory.
 
 BEHAVIOR RULES:
 - Be direct, opinionated, and actionable. You're a senior strategist, not a generic chatbot.
@@ -302,7 +306,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Invalid request', details: parsed.error.flatten() }), { status: 400 });
     }
 
-    const { messages, mentions, actionConfirmation, conversationId, portalMode } = parsed.data;
+    const { messages, mentions, actionConfirmation, conversationId, portalMode, sessionHint } = parsed.data;
 
     // --- Detect portal user (viewer role) ---
     let isPortalUser = false;
@@ -406,8 +410,11 @@ export async function POST(req: NextRequest) {
     );
 
     // Enrich mentioned clients with knowledge context
+    const visibleClientIds = new Set(allClients.map((c) => c.id));
     const mentionedClientIds = new Set(
-      (mentions ?? []).filter((m) => m.type === 'client').map((m) => m.id),
+      (mentions ?? [])
+        .filter((m) => m.type === 'client' && visibleClientIds.has(m.id))
+        .map((m) => m.id),
     );
     const knowledgeSummaries = await Promise.all(
       allClients
@@ -416,9 +423,27 @@ export async function POST(req: NextRequest) {
     );
     const knowledgeByClient = new Map(knowledgeSummaries.map((k) => [k.id, k.summary]));
 
+    const strategyPackByClient = new Map<string, string>();
+    if (mentionedClientIds.size > 0) {
+      const { buildStrategyLabContextPack } = await import('@/lib/nerd/strategy-lab-context-pack');
+      const packResults = await Promise.all(
+        [...mentionedClientIds].map(async (id) => {
+          const pack = await buildStrategyLabContextPack(admin, id);
+          return { id, pack };
+        }),
+      );
+      for (const { id, pack } of packResults) {
+        if (pack.trim().length > 0) strategyPackByClient.set(id, pack);
+      }
+    }
+
     const enrichedSummaries = allClients.map((c, i) => {
       const knowledge = knowledgeByClient.get(c.id);
-      return knowledge ? `${clientSummaries[i]}\n${knowledge}` : clientSummaries[i];
+      const strategyPack = strategyPackByClient.get(c.id);
+      let block = clientSummaries[i];
+      if (knowledge) block += `\n${knowledge}`;
+      if (strategyPack) block += `\n\n${strategyPack}`;
+      return block;
     });
 
     const teamContext = teamMembers.map((t: { id: string; full_name: string; role: string | null }) => `- ${t.full_name} (id: ${t.id}, role: ${t.role ?? 'team member'})`).join('\n');
@@ -440,6 +465,9 @@ export async function POST(req: NextRequest) {
         return `@${m.name} → team_member_id: ${m.id}`;
       }).join('\n');
       portfolioContext += `\n\n# @Mentions in current message\n${mentionContext}`;
+    }
+    if (sessionHint?.trim()) {
+      portfolioContext += `\n\n# Session hint\n${sessionHint.trim()}`;
     }
 
     // --- Resolve or create conversation for persistence (admin only) ---
