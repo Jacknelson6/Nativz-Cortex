@@ -470,31 +470,7 @@ export function SearchProcessing({
           <h2 className="text-xl font-semibold text-text-primary">
             Researching &ldquo;{query}&rdquo;
           </h2>
-          <p className="text-sm text-text-muted mt-1">
-            {isLlmPipeline ? (
-              <>
-                Estimated {timeEstimate.label}
-                {webResearchMode !== 'llm_only' ? ' · Including live web' : ''}
-              </>
-            ) : (
-              <>
-                Estimated {timeEstimate.label} · {platforms.length} platform
-                {platforms.length !== 1 ? 's' : ''}
-              </>
-            )}
-          </p>
-          {isLlmPipeline ? (
-            <p className="text-xs text-text-muted/80 mt-2 max-w-sm mx-auto leading-relaxed">
-              You&apos;ll see stages below: explore each angle, clean up sources, connect the story, sketch video
-              ideas, then deliver your report. The bar is a rough guide, not a clock.
-            </p>
-          ) : (
-            platforms.length > 1 && (
-              <p className="text-xs text-text-muted/80 mt-2 max-w-sm mx-auto">
-                Multi-platform research often needs a few minutes while the report is built — the bar is approximate.
-              </p>
-            )
-          )}
+          
         </div>
 
         {/* Progress bar */}
@@ -536,6 +512,10 @@ export function SearchProcessing({
         {/* Action buttons */}
         {!done && !error && elapsed > 10 && (
           <div className="mt-6 flex items-center justify-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => router.push(`${redirectPrefix}/search/new`)}>
+              <ArrowLeft size={12} />
+              Go back
+            </Button>
             {!emailSent ? (
               <Button variant="outline" size="sm" onClick={handleEmailMe} disabled={sendingEmail}>
                 {sendingEmail ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} />}
@@ -546,10 +526,6 @@ export function SearchProcessing({
                 <Check size={12} /> We&apos;ll email you
               </span>
             )}
-            <Button variant="ghost" size="sm" onClick={() => router.push(`${redirectPrefix}/search/new`)}>
-              <ArrowLeft size={12} />
-              Back to research
-            </Button>
           </div>
         )}
 

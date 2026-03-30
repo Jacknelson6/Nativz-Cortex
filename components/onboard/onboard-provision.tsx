@@ -21,7 +21,7 @@ interface SystemStatus {
 export function OnboardProvision({ formData, onNext, onBack }: OnboardProvisionProps) {
   const [systems, setSystems] = useState<SystemStatus[]>([
     { label: 'Creating in Cortex database', icon: <Database size={14} />, status: 'pending' },
-    { label: 'Syncing to Obsidian vault', icon: <BookOpen size={14} />, status: 'pending' },
+    { label: 'Syncing to knowledge graph', icon: <BookOpen size={14} />, status: 'pending' },
     { label: 'Adding to Monday.com board', icon: <LayoutGrid size={14} />, status: 'pending' },
   ]);
   const [error, setError] = useState('');
@@ -56,7 +56,7 @@ export function OnboardProvision({ formData, onNext, onBack }: OnboardProvisionP
           error: data.cortex?.error,
         },
         {
-          label: 'Syncing to Obsidian vault',
+          label: 'Syncing to knowledge graph',
           icon: <BookOpen size={14} />,
           status: data.vault?.success ? 'success' : 'error',
           error: data.vault?.error,
