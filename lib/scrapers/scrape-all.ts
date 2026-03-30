@@ -39,20 +39,68 @@ async function isLocalScraperAvailable(): Promise<boolean> {
 }
 
 /**
- * Scrape via local Playwright service
+ * Scrape via local Playwright service — never throws; errors become ScrapeResult.error
  */
 async function scrapeLocal(platform: 'tiktok' | 'instagram', query: string, maxResults: number, timeRange?: string): Promise<ScrapeResult> {
-  const res = await fetch(`${LOCAL_SCRAPER_URL}/scrape/${platform}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, maxResults, timeRange }),
-    signal: AbortSignal.timeout(180000),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    return { platform, videos: [], error: `Local scraper error ${res.status}: ${text.substring(0, 200)}` };
+  try {
+    const res = await fetch(`${LOCAL_SCRAPER_URL}/scrape/${platform}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, maxResults, timeRange }),
+      signal: AbortSignal.timeout(180000),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      return { platform, videos: [], error: `Local scraper error ${res.status}: ${text.substring(0, 200)}` };
+    }
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch {
+      return { platform, videos: [], error: 'Local scraper returned invalid JSON' };
+    }
+    if (!data || typeof data !== 'object') {
+      return { platform, videos: [], error: 'Local scraper returned empty response' };
+    }
+    const body = data as Partial<ScrapeResult>;
+    return {
+      platform,
+      videos: Array.isArray(body.videos) ? body.videos : [],
+      error: body.error,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { platform, videos: [], error: `Local scraper failed: ${msg}` };
   }
-  return await res.json() as ScrapeResult;
+}
+
+async function localThenApify(
+  platform: 'tiktok' | 'instagram',
+  localResult: ScrapeResult,
+  runApify: () => Promise<ScrapeResult>,
+): Promise<ScrapeResult> {
+  const hasApify = !!process.env.APIFY_API_KEY;
+  const needsFallback = !!(localResult.error || localResult.videos.length === 0);
+
+  if (!needsFallback) {
+    console.log(`[scrape-all] ${platform}: local OK (${localResult.videos.length} videos)`);
+    return localResult;
+  }
+
+  if (!hasApify) {
+    console.warn(
+      `[scrape-all] ${platform}: local unusable (${localResult.error ?? '0 videos'}) and APIFY_API_KEY not set — skipping Apify`,
+    );
+    return localResult;
+  }
+
+  console.log(`[scrape-all] ${platform}: falling back to Apify (local: ${localResult.error ?? 'empty results'})`);
+  const apifyResult = await runApify();
+  console.log(
+    `[scrape-all] ${platform}: Apify returned ${apifyResult.videos.length} videos` +
+      (apifyResult.error ? ` (error: ${apifyResult.error})` : ''),
+  );
+  return apifyResult;
 }
 
 /**
@@ -83,6 +131,7 @@ export async function scrapeAllPlatforms(options: ScrapeAllOptions): Promise<Scr
 
   console.log(`[scrape-all] Starting scrape for "${query}" (search ${searchId})`);
   console.log(`[scrape-all] Local scraper: ${localAvailable ? 'available' : 'offline'}`);
+  console.log(`[scrape-all] Apify: ${process.env.APIFY_API_KEY ? 'APIFY_API_KEY set' : 'APIFY_API_KEY missing'}`);
   console.log(`[scrape-all] Available platforms: ${[...available].join(', ')}`);
 
   // Run available scrapers in parallel — prefer local Playwright, fall back to Apify
@@ -92,12 +141,11 @@ export async function scrapeAllPlatforms(options: ScrapeAllOptions): Promise<Scr
     if (localAvailable) {
       scrapePromises.push(
         scrapeLocal('tiktok', query, maxResultsPerPlatform, timeRange)
-          .catch(() => ({ platform: 'tiktok' as const, videos: [], error: 'Local scraper network error' }))
-          .then(r => (r.error || r.videos.length === 0) && process.env.APIFY_API_KEY
-            ? scrapeTikTok({ query, maxResults: maxResultsPerPlatform, timeRange })
-            : r),
+          .catch(() => ({ platform: 'tiktok' as const, videos: [], error: 'Local scraper failed' }))
+          .then(r => localThenApify('tiktok', r, () => scrapeTikTok({ query, maxResults: maxResultsPerPlatform, timeRange }))),
       );
     } else {
+      console.log('[scrape-all] tiktok: local offline — using Apify only');
       scrapePromises.push(scrapeTikTok({ query, maxResults: maxResultsPerPlatform, timeRange }));
     }
   }
@@ -108,12 +156,15 @@ export async function scrapeAllPlatforms(options: ScrapeAllOptions): Promise<Scr
     if (localAvailable) {
       scrapePromises.push(
         scrapeLocal('instagram', query, maxResultsPerPlatform, timeRange)
-          .catch(() => ({ platform: 'instagram' as const, videos: [], error: 'Local scraper network error' }))
-          .then(r => (r.error || r.videos.length === 0) && process.env.APIFY_API_KEY
-            ? scrapeInstagram({ query, maxResults: maxResultsPerPlatform, timeRange })
-            : r),
+          .catch(() => ({ platform: 'instagram' as const, videos: [], error: 'Local scraper failed' }))
+          .then(r =>
+            localThenApify('instagram', r, () =>
+              scrapeInstagram({ query, maxResults: maxResultsPerPlatform, timeRange }),
+            ),
+          ),
       );
     } else {
+      console.log('[scrape-all] instagram: local offline — using Apify only');
       scrapePromises.push(scrapeInstagram({ query, maxResults: maxResultsPerPlatform, timeRange }));
     }
   }

@@ -33,7 +33,7 @@ export function HashtagCloud({ videos }: HashtagCloudProps) {
 
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-5 space-y-3">
-      <h3 className="text-base font-semibold text-white flex items-center gap-2">
+      <h3 className="text-base font-semibold text-text-primary flex items-center gap-2">
         <Hash size={18} className="text-pink-400" />
         Popular hashtags
       </h3>

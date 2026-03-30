@@ -73,7 +73,6 @@ export function OutlierCreatorsTable({ videos }: OutlierCreatorsTableProps) {
   // Stats
   const avgRatio = Math.round(creators.reduce((s, c) => s + c.outlierRatio, 0) / creators.length);
   const bestRatio = creators[0]?.outlierRatio ?? 0;
-  const totalVideos = videos.length;
 
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-5 space-y-4">
@@ -93,15 +92,14 @@ export function OutlierCreatorsTable({ videos }: OutlierCreatorsTableProps) {
         </span>
       </div>
 
-      {/* Stats row */}
+      {/* Outlier-specific summary (totals live in search stats above) */}
       <div className="flex gap-4">
         {[
-          { label: 'Avg ratio', value: `${avgRatio}x` },
+          { label: 'Average ratio', value: `${avgRatio}x` },
           { label: 'Best ratio', value: `${bestRatio}x` },
-          { label: 'Videos analyzed', value: formatNumber(totalVideos) },
         ].map(stat => (
           <div key={stat.label} className="rounded-lg bg-surface-hover/50 px-3 py-2 flex-1">
-            <p className="text-[10px] text-text-muted uppercase tracking-wider">{stat.label}</p>
+            <p className="text-[10px] text-text-muted">{stat.label}</p>
             <p className="text-sm font-semibold text-white mt-0.5">{stat.value}</p>
           </div>
         ))}

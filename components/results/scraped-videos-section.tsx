@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { VideoGrid } from '@/components/research/video-grid';
+import { ViralCarousel } from '@/components/research/viral-carousel';
 import { OutlierCreatorsTable } from '@/components/research/outlier-creators-table';
 import { HashtagCloud } from '@/components/research/hashtag-cloud';
 import { HookPatterns } from '@/components/research/hook-patterns';
@@ -46,7 +47,7 @@ export function ScrapedVideosSection({ searchId, scrapedVideoCount, shareToken }
       });
 
     return () => { cancelled = true; };
-  }, [searchId, scrapedVideoCount]);
+  }, [searchId, scrapedVideoCount, shareToken]);
 
   if (scrapedVideoCount === 0 && videos.length === 0) return null;
 
@@ -65,20 +66,17 @@ export function ScrapedVideosSection({ searchId, scrapedVideoCount, shareToken }
 
   if (videos.length === 0) return null;
 
-  const platformCounts = {
-    tiktok: videos.filter(v => v.platform === 'tiktok').length,
-    youtube: videos.filter(v => v.platform === 'youtube').length,
-    instagram: videos.filter(v => v.platform === 'instagram').length,
-  };
-
   return (
     <div className="space-y-6">
       <SearchStatsRow videos={videos} />
+      <div className="rounded-xl border border-nativz-border bg-surface p-5">
+        <ViralCarousel videos={videos} />
+      </div>
+      <VideoGrid videos={videos} />
       <OutlierCreatorsTable videos={videos} />
-      <VideoGrid videos={videos} platformCounts={platformCounts} />
+      <HookPatterns hooks={hooks} />
       <HashtagCloud videos={videos} />
       <ViewsOverTime videos={videos} />
-      <HookPatterns hooks={hooks} />
     </div>
   );
 }

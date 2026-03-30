@@ -71,6 +71,7 @@ export async function scrapeTikTok(options: ScrapeOptions): Promise<ScrapeResult
     const client = getApifyClient();
     const maxItems = options.maxResults ?? 50;
 
+    console.log(`[tiktok-scraper] Running Apify actor ${ACTOR_ID}`);
     const run = await client.actor(ACTOR_ID).call(
       {
         searchQueries: [options.query],

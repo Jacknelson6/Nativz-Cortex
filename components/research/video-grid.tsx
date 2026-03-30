@@ -6,7 +6,6 @@ import { Card, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { VideoDetailPanel } from '@/components/research/video-detail-panel';
-import { ViralCarousel } from '@/components/research/viral-carousel';
 import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -94,8 +93,8 @@ function VideoCard({ video, onClick }: { video: TopicSearchVideoRow; onClick?: (
         </p>
 
         <div className="flex items-center gap-3 text-[11px] text-text-muted">
-          <span className="flex items-center gap-1">
-            <Eye size={11} /> {formatNumber(video.views)}
+          <span className="flex items-center gap-1 text-emerald-400/90">
+            <Eye size={11} className="text-emerald-500/70 shrink-0" /> {formatNumber(video.views)}
           </span>
           <span className="flex items-center gap-1">
             <Heart size={11} /> {formatNumber(video.likes)}
@@ -113,10 +112,9 @@ function VideoCard({ video, onClick }: { video: TopicSearchVideoRow; onClick?: (
 
 interface VideoGridProps {
   videos: TopicSearchVideoRow[];
-  platformCounts?: { tiktok: number; youtube: number; instagram: number };
 }
 
-export function VideoGrid({ videos, platformCounts }: VideoGridProps) {
+export function VideoGrid({ videos }: VideoGridProps) {
   const [sort, setSort] = useState<SortOption>('outlier_score');
   const [platform, setPlatform] = useState<PlatformFilter>('all');
   const [showAll, setShowAll] = useState(false);
@@ -140,30 +138,19 @@ export function VideoGrid({ videos, platformCounts }: VideoGridProps) {
 
   const displayed = showAll ? filtered : filtered.slice(0, 12);
 
-  const counts = platformCounts ?? {
-    tiktok: videos.filter(v => v.platform === 'tiktok').length,
-    youtube: videos.filter(v => v.platform === 'youtube').length,
-    instagram: videos.filter(v => v.platform === 'instagram').length,
-  };
+  const selectedTab = 'bg-pink-500/15 text-pink-300';
+  const idleTab = 'text-text-muted hover:text-text-secondary';
 
   return (
     <div className="space-y-6">
-      {/* Most viral carousel */}
-      <ViralCarousel videos={videos} />
-
-      {/* Full video grid */}
       <Card className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-base font-semibold text-text-primary">
-              Scraped videos
+              All videos
             </CardTitle>
             <p className="text-xs text-text-muted mt-1">
-              {counts.tiktok > 0 ? `${counts.tiktok} TikTok` : ''}
-              {counts.tiktok > 0 && counts.instagram > 0 ? ' · ' : ''}
-              {counts.instagram > 0 ? `${counts.instagram} IG Reels` : ''}
-              {(counts.tiktok > 0 || counts.instagram > 0) && counts.youtube > 0 ? ' · ' : ''}
-              {counts.youtube > 0 ? `${counts.youtube} YT Shorts` : ''}
+              Filter by platform and sort order
             </p>
           </div>
 
@@ -176,9 +163,7 @@ export function VideoGrid({ videos, platformCounts }: VideoGridProps) {
                   type="button"
                   onClick={() => setSort(s)}
                   className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                    sort === s
-                      ? 'bg-accent/10 text-accent-text'
-                      : 'text-text-muted hover:text-text-secondary'
+                    sort === s ? selectedTab : idleTab
                   }`}
                 >
                   {s === 'outlier_score' ? 'Outlier' : s === 'views' ? 'Views' : 'Recent'}
@@ -194,9 +179,7 @@ export function VideoGrid({ videos, platformCounts }: VideoGridProps) {
                   type="button"
                   onClick={() => setPlatform(p)}
                   className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                    platform === p
-                      ? 'bg-accent/10 text-accent-text'
-                      : 'text-text-muted hover:text-text-secondary'
+                    platform === p ? selectedTab : idleTab
                   }`}
                 >
                   {p === 'all' ? 'All' : PLATFORM_LABELS[p]}
