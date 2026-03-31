@@ -32,6 +32,7 @@ import {
   type VideoIdea,
   type SearchMode,
 } from '@/lib/types/search';
+import { gatherPlatformData, formatPlatformContext, type PlatformResults } from '@/lib/search/platform-router';
 
 function logLlmV1(event: Record<string, unknown>) {
   console.log(`[topic_search_llm_v1] ${JSON.stringify(event)}`);
@@ -492,6 +493,10 @@ export async function runLlmTopicPipeline(args: {
   userId: string;
   userEmail?: string;
   clientContext?: { name: string; industry: string | null; brandVoice: string | null } | null;
+  /** Platforms to scrape (from search record). Defaults to ["web"]. */
+  platforms?: SearchPlatform[];
+  /** Volume tier for platform scrapers. Defaults to "medium". */
+  volume?: string;
 }): Promise<RunLlmTopicPipelineResult> {
   const subtopics = Array.isArray(args.search.subtopics)
     ? (args.search.subtopics as string[]).map((s) => s.trim()).filter(Boolean)
@@ -517,43 +522,103 @@ export async function runLlmTopicPipeline(args: {
   let totalTokens = 0;
   let totalCost = 0;
 
-  const indexed = subtopics.map((s, i) => [i, s] as const);
-  for (const batch of chunk(indexed, limits.maxParallel)) {
-    const results = await Promise.all(
-      batch.map(([index, subtopic]) =>
-        researchOneSubtopic({
-          parentQuery: args.search.query,
-          subtopic,
-          index,
-          timeRange: args.search.time_range,
-          country: args.search.country,
-          language: args.search.language,
-          userId: args.userId,
-          userEmail: args.userEmail,
-          researchModel,
-          maxSearches: limits.maxSearchesPerSubtopic,
-          maxFetches: limits.maxFetchesPerSubtopic,
-          maxResearchTokens: limits.maxResearchTokens,
-          searchId: args.searchId,
-        }),
-      ),
-    );
-    for (const r of results) {
-      subReports.push(r.report);
-      allHits.push(...r.hits);
-      allAllowed.push(...r.allowed);
-      allRecords.push(...r.records);
-      totalTokens += r.tokens;
-      totalCost += r.cost;
-      stageRows.push({
-        phase: 'subtopic_research',
-        duration_ms: r.stageMs,
-        tokens: r.tokens,
-        search_calls: r.searchCalls,
-        fetches: r.fetchCalls,
-      });
+  // Determine if we should run platform scrapers (skip if only "web")
+  const platforms = args.platforms ?? ['web'];
+  const hasNonWebPlatforms = platforms.some((p) => p !== 'web');
+
+  // Run subtopic research + platform scrapers in parallel
+  const subtopicResearchPromise = (async () => {
+    const indexed = subtopics.map((s, i) => [i, s] as const);
+    for (const batch of chunk(indexed, limits.maxParallel)) {
+      const results = await Promise.all(
+        batch.map(([index, subtopic]) =>
+          researchOneSubtopic({
+            parentQuery: args.search.query,
+            subtopic,
+            index,
+            timeRange: args.search.time_range,
+            country: args.search.country,
+            language: args.search.language,
+            userId: args.userId,
+            userEmail: args.userEmail,
+            researchModel,
+            maxSearches: limits.maxSearchesPerSubtopic,
+            maxFetches: limits.maxFetchesPerSubtopic,
+            maxResearchTokens: limits.maxResearchTokens,
+            searchId: args.searchId,
+          }),
+        ),
+      );
+      for (const r of results) {
+        subReports.push(r.report);
+        allHits.push(...r.hits);
+        allAllowed.push(...r.allowed);
+        allRecords.push(...r.records);
+        totalTokens += r.tokens;
+        totalCost += r.cost;
+        stageRows.push({
+          phase: 'subtopic_research',
+          duration_ms: r.stageMs,
+          tokens: r.tokens,
+          search_calls: r.searchCalls,
+          fetches: r.fetchCalls,
+        });
+      }
     }
-  }
+  })();
+
+  // Platform scraper promise (only if non-web platforms selected)
+  const platformScraperPromise: Promise<PlatformResults | null> = hasNonWebPlatforms
+    ? (async () => {
+        const t0 = Date.now();
+        try {
+          // Use "light" volume — SearXNG already covers web research
+          const result = await gatherPlatformData(
+            args.search.query,
+            platforms as SearchPlatform[],
+            args.search.time_range,
+            'light',
+          );
+          const durationMs = Date.now() - t0;
+          logLlmV1({
+            search_id: args.searchId,
+            phase: 'platform_scrapers',
+            duration_ms: durationMs,
+            platforms: platforms.filter((p) => p !== 'web'),
+            source_count: result.sources.length,
+            stats: result.platformStats.map((s) => ({
+              platform: s.platform,
+              posts: s.postCount,
+              comments: s.commentCount,
+            })),
+          });
+          stageRows.push({
+            phase: 'platform_scrapers',
+            duration_ms: durationMs,
+            platforms: platforms.filter((p) => p !== 'web'),
+            source_count: result.sources.length,
+          });
+          return result;
+        } catch (e) {
+          const durationMs = Date.now() - t0;
+          logLlmV1({
+            search_id: args.searchId,
+            phase: 'platform_scrapers',
+            duration_ms: durationMs,
+            error: e instanceof Error ? e.message.slice(0, 200) : String(e),
+          });
+          stageRows.push({
+            phase: 'platform_scrapers',
+            duration_ms: durationMs,
+            error: true,
+          });
+          return null;
+        }
+      })()
+    : Promise.resolve(null);
+
+  // Wait for both to complete
+  const [, platformResults] = await Promise.all([subtopicResearchPromise, platformScraperPromise]);
 
   for (const r of subReports) {
     for (const s of r.sources ?? []) {
@@ -572,6 +637,12 @@ export async function runLlmTopicPipeline(args: {
     )
     .join('\n\n');
 
+  // Format platform context for the merger prompt if we have platform scraper results
+  let platformContextBlock = '';
+  if (platformResults && platformResults.sources.length > 0) {
+    platformContextBlock = formatPlatformContext(platformResults.sources, platformResults.platformStats);
+  }
+
   const brandLine =
     args.search.search_mode === 'client_strategy' && args.clientContext
       ? `Client: ${args.clientContext.name}. Industry: ${args.clientContext.industry ?? 'n/a'}. Voice: ${args.clientContext.brandVoice ?? 'n/a'}.`
@@ -583,6 +654,7 @@ ${brandLine}
 
 Research-angle findings:
 ${subtopicBlock}
+${platformContextBlock ? `\n---\n\nPlatform-specific data (Reddit threads, TikTok videos, YouTube content, Quora discussions):\n${platformContextBlock}` : ''}
 
 Return ONLY valid JSON matching:
 {
@@ -705,9 +777,43 @@ Rules:
   const coercePlatform = (p: string): SearchPlatform =>
     VALID_PLATFORMS.has(p as SearchPlatform) ? (p as SearchPlatform) : 'web';
 
-  const platform_breakdown: PlatformBreakdown[] = (merger.platform_breakdown ?? [
+  // Build platform_breakdown: merge LLM estimates with actual scraper stats
+  let platform_breakdown: PlatformBreakdown[] = (merger.platform_breakdown ?? [
     { platform: 'web', post_count: allHits.length, comment_count: 0, avg_sentiment: merger.overall_sentiment },
   ]).map((pb) => ({ ...pb, platform: coercePlatform(pb.platform) }));
+
+  // Override with real platform scraper stats where available
+  if (platformResults && platformResults.platformStats.length > 0) {
+    const scraperStatsByPlatform = new Map(
+      platformResults.platformStats.map((s) => [s.platform, s]),
+    );
+    const existingPlatforms = new Set(platform_breakdown.map((pb) => pb.platform));
+
+    // Update existing entries with real data
+    platform_breakdown = platform_breakdown.map((pb) => {
+      const real = scraperStatsByPlatform.get(pb.platform);
+      if (real) {
+        return {
+          ...pb,
+          post_count: real.postCount,
+          comment_count: real.commentCount,
+        };
+      }
+      return pb;
+    });
+
+    // Add entries for scraped platforms not already in breakdown
+    for (const [platform, stat] of scraperStatsByPlatform) {
+      if (!existingPlatforms.has(platform)) {
+        platform_breakdown.push({
+          platform,
+          post_count: stat.postCount,
+          comment_count: stat.commentCount,
+          avg_sentiment: merger.overall_sentiment,
+        });
+      }
+    }
+  }
 
   let aiResponse: TopicSearchAIResponse = {
     summary: merger.summary,
@@ -741,13 +847,18 @@ Rules:
     allRecords.length,
   );
 
-  const platformSources = toPlatformSources(allRecords);
+  // Combine web-research records with platform scraper sources
+  const webPlatformSources = toPlatformSources(allRecords);
+  const scraperPlatformSources = platformResults?.sources ?? [];
+  const platformSources = [...webPlatformSources, ...scraperPlatformSources];
 
   const pipelineState = {
     kind: 'llm_v1',
     at: new Date().toISOString(),
     search_id: args.searchId,
     web_research_mode: webResearchMode,
+    platforms_requested: platforms,
+    platform_scrapers_ran: hasNonWebPlatforms,
     limits,
     stages: stageRows,
     totals: {
@@ -755,6 +866,7 @@ Rules:
       estimated_cost: totalCost,
       subtopics: subtopics.length,
       research_sources: allRecords.length,
+      platform_sources: scraperPlatformSources.length,
     },
   };
 
