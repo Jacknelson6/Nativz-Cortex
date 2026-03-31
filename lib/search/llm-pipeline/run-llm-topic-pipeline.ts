@@ -498,11 +498,51 @@ export async function runLlmTopicPipeline(args: {
   /** Volume tier for platform scrapers. Defaults to "medium". */
   volume?: string;
 }): Promise<RunLlmTopicPipelineResult> {
-  const subtopics = Array.isArray(args.search.subtopics)
+  let subtopics = Array.isArray(args.search.subtopics)
     ? (args.search.subtopics as string[]).map((s) => s.trim()).filter(Boolean)
     : [];
-  if (subtopics.length === 0 || subtopics.length > 5) {
-    throw new Error('Subtopics must be a non-empty array (max 5). Confirm subtopics before processing.');
+
+  // Auto-generate subtopics if none were confirmed (fallback so searches never fail)
+  if (subtopics.length === 0) {
+    const topicModelsForPlan = await getTopicSearchModelsFromDb();
+    const timeLabel = getTimeRangeOptionLabel(args.search.time_range);
+    const planPrompt = `You are a keyword research assistant. Given a topic, generate specific, searchable keyword phrases.
+
+Main topic: ${JSON.stringify(args.search.query)}
+Time window: **${timeLabel}**.
+
+Return ONLY valid JSON: {"subtopics": string[]} with exactly 5 distinct items. Each string is a **2–4 word keyword phrase**.
+Rules: 2–4 words each, specific to the topic, no numbering, no full sentences.`;
+
+    try {
+      const planAi = await createCompletion({
+        messages: [{ role: 'user', content: planPrompt }],
+        maxTokens: 400,
+        feature: 'topic_search',
+        userId: args.userId,
+        userEmail: args.userEmail,
+        modelPreference: [topicModelsForPlan.planner],
+      });
+      const parsed = parseAIResponseJSON<{ subtopics?: string[] }>(planAi.text);
+      const generated = Array.isArray(parsed?.subtopics)
+        ? parsed.subtopics.map((s: string) => String(s).trim()).filter(Boolean).slice(0, 5)
+        : Array.isArray(parsed)
+          ? (parsed as string[]).map((s) => String(s).trim()).filter(Boolean).slice(0, 5)
+          : [];
+      if (generated.length > 0) subtopics = generated;
+    } catch {
+      // If auto-generation fails, use the main query as the single subtopic
+    }
+  }
+
+  // Final fallback: use the main query itself
+  if (subtopics.length === 0) {
+    subtopics = [args.search.query];
+  }
+
+  // Enforce max 5
+  if (subtopics.length > 5) {
+    subtopics = subtopics.slice(0, 5);
   }
 
   const timeRangeLabel = getTimeRangeOptionLabel(args.search.time_range);
