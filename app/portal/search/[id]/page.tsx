@@ -206,7 +206,11 @@ export default async function PortalSearchResultsPage({
         )}
 
         {/* Scraped videos v3 sections */}
-        <ScrapedVideosSection searchId={s.id} scrapedVideoCount={scrapedVideoCount ?? 0} />
+        <ScrapedVideosSection
+          searchId={s.id}
+          scrapedVideoCount={scrapedVideoCount ?? 0}
+          webContext={((s as { pipeline_state?: { web_context?: unknown } }).pipeline_state?.web_context ?? null) as never}
+        />
 
         {/* Sources panel — only for new searches with SERP data */}
         {hasSerp(s) && s.serp_data && (

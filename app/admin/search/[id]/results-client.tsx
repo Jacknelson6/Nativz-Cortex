@@ -299,7 +299,11 @@ export function AdminResultsClient({
         ) : null}
 
         {/* Scraped videos — outlier board, video grid, hook patterns */}
-        <ScrapedVideosSection searchId={search.id} scrapedVideoCount={scrapedVideoCount} />
+        <ScrapedVideosSection
+          searchId={search.id}
+          scrapedVideoCount={scrapedVideoCount}
+          webContext={((search as { pipeline_state?: { web_context?: unknown } }).pipeline_state?.web_context ?? null) as never}
+        />
 
         {aiResponse?.synthetic_audiences?.segments?.length ? (
           <TopicSyntheticAudiences data={aiResponse.synthetic_audiences} />

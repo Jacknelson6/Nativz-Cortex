@@ -128,7 +128,12 @@ export function SharedSearchClient({
           <TrendingTopicsTable topics={search.trending_topics} searchId={search.id} />
         )}
 
-        <ScrapedVideosSection searchId={search.id} scrapedVideoCount={scrapedVideoCount} shareToken={shareToken} />
+        <ScrapedVideosSection
+          searchId={search.id}
+          scrapedVideoCount={scrapedVideoCount}
+          shareToken={shareToken}
+          webContext={((search as { pipeline_state?: { web_context?: unknown } }).pipeline_state?.web_context ?? null) as never}
+        />
 
         {(aiResponse?.content_pillars || aiResponse?.niche_performance_insights) && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

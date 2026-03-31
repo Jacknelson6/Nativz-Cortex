@@ -8,7 +8,16 @@ import { HashtagCloud } from '@/components/research/hashtag-cloud';
 import { HookPatterns } from '@/components/research/hook-patterns';
 import { SearchStatsRow } from '@/components/results/search-stats-row';
 import { ViewsOverTime } from '@/components/charts/views-over-time';
+import { WebContextSection } from '@/components/results/web-context-section';
 import type { TopicSearchVideoRow, TopicSearchHookRow } from '@/lib/scrapers/types';
+
+interface WebContextData {
+  serp_results?: Array<{ title: string; url: string; snippet: string; publishedDate?: string }>;
+  reddit_threads?: Array<{
+    title: string; url: string; subreddit: string; score: number;
+    numComments: number; selftext: string; topComments: string[]; createdUtc: number;
+  }>;
+}
 
 interface ScrapedVideosSectionProps {
   searchId: string;
@@ -16,9 +25,11 @@ interface ScrapedVideosSectionProps {
   scrapedVideoCount: number;
   /** Optional share token for unauthenticated shared views */
   shareToken?: string;
+  /** Web context data from pipeline_state */
+  webContext?: WebContextData | null;
 }
 
-export function ScrapedVideosSection({ searchId, scrapedVideoCount, shareToken }: ScrapedVideosSectionProps) {
+export function ScrapedVideosSection({ searchId, scrapedVideoCount, shareToken, webContext }: ScrapedVideosSectionProps) {
   const [videos, setVideos] = useState<TopicSearchVideoRow[]>([]);
   const [hooks, setHooks] = useState<TopicSearchHookRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -77,6 +88,12 @@ export function ScrapedVideosSection({ searchId, scrapedVideoCount, shareToken }
       <HookPatterns hooks={hooks} />
       <HashtagCloud videos={videos} />
       <ViewsOverTime videos={videos} />
+      {webContext && (
+        <WebContextSection
+          serpResults={webContext.serp_results ?? []}
+          redditThreads={webContext.reddit_threads ?? []}
+        />
+      )}
     </div>
   );
 }
