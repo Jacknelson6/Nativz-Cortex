@@ -473,8 +473,13 @@ export function SearchProcessing({
           
         </div>
 
+        {/* Real-time pipeline stepper (primary view — reads actual DB state) */}
+        {!done && !error && (
+          <PipelineStepper searchId={searchId} />
+        )}
+
         {/* Progress bar */}
-        <div className="h-2 rounded-full bg-surface-hover overflow-hidden">
+        <div className="mt-5 h-1.5 rounded-full bg-surface-hover overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-300 ease-out"
             style={{
@@ -485,29 +490,22 @@ export function SearchProcessing({
         </div>
 
         {/* Progress info row */}
-        <div className="mt-2 flex items-center justify-between">
+        <div className="mt-1.5 flex items-center justify-between">
           <span className="text-[11px] text-text-muted tabular-nums">{formatElapsed(elapsed)} elapsed</span>
-          <span className="text-xs text-text-muted tabular-nums">{Math.round(progress)}%</span>
+          <span className="text-[11px] text-text-muted tabular-nums">{Math.round(progress)}%</span>
         </div>
 
-        {/* Real-time pipeline stepper (reads actual DB state) */}
-        {!done && !error && (
-          <PipelineStepper searchId={searchId} />
-        )}
-
-        {/* Fallback stage steps (time-based simulation while stepper has no data) */}
-        <div className="mt-5 space-y-2">
-          {done && (
-            <div className="flex items-center gap-2.5 animate-fade-slide-in">
-              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/15">
-                <Check size={12} className="text-emerald-400" />
-              </div>
-              <span className="text-sm text-emerald-400 font-medium">
-                Research complete — opening your report
-              </span>
+        {/* Done state */}
+        {done && (
+          <div className="mt-4 flex items-center gap-2.5 animate-fade-slide-in">
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/15">
+              <Check size={12} className="text-emerald-400" />
             </div>
-          )}
-        </div>
+            <span className="text-sm text-emerald-400 font-medium">
+              Research complete — opening your report
+            </span>
+          </div>
+        )}
 
         {/* Action buttons */}
         {!done && !error && elapsed > 10 && (
