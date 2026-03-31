@@ -334,7 +334,16 @@ export async function gatherPlatformData(
   // Execute all platform fetches in parallel
   await Promise.allSettled(promises);
 
-  return { sources: allSources, serpData, platformStats, peopleAlsoAsk, relatedSearches };
+  // Deduplicate sources by URL (keep first occurrence)
+  const seenUrls = new Set<string>();
+  const dedupedSources = allSources.filter((s) => {
+    const key = s.url.toLowerCase();
+    if (seenUrls.has(key)) return false;
+    seenUrls.add(key);
+    return true;
+  });
+
+  return { sources: dedupedSources, serpData, platformStats, peopleAlsoAsk, relatedSearches };
 }
 
 /**

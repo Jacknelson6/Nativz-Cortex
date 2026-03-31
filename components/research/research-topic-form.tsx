@@ -10,15 +10,19 @@ import {
   Clock,
   Compass,
   Globe,
+  HelpCircle,
   Loader2,
+  MessageCircle,
+  Music,
   Search,
   X,
+  Youtube,
 } from 'lucide-react';
 import { ClientPickerModal, type ClientOption } from '@/components/ui/client-picker';
 import { ClientLogo } from '@/components/clients/client-logo';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils/cn';
-import { TIME_RANGE_OPTIONS, LANGUAGE_OPTIONS } from '@/lib/types/search';
+import { TIME_RANGE_OPTIONS, LANGUAGE_OPTIONS, PLATFORM_OPTIONS } from '@/lib/types/search';
 import type { SearchPlatform, SearchVolume } from '@/lib/types/search';
 
 export type ContextMode = 'none' | 'client' | 'url';
@@ -133,8 +137,8 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
     const [clientPickerOpen, setClientPickerOpen] = useState(false);
     const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
     const [clientPickerPortal, setClientPickerPortal] = useState<HTMLElement | null>(null);
-    const [platforms] = useState<Set<SearchPlatform>>(
-      () => new Set(['web', 'reddit', 'youtube', 'tiktok'])
+    const [platforms, setPlatforms] = useState<Set<SearchPlatform>>(
+      () => new Set(['web', 'reddit', 'youtube', 'tiktok', 'quora'])
     );
     const [volume] = useState<SearchVolume>('medium');
     const [timeRange, setTimeRange] = useState('last_3_months');
@@ -292,6 +296,24 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
     const greetingName = greetingDisplayName(userFirstName);
     const timeLabel = TIME_RANGE_OPTIONS.find((o) => o.value === timeRange)?.label ?? 'Last 3 months';
     const languageLabel = LANGUAGE_OPTIONS.find((o) => o.value === language)?.label ?? 'All languages';
+
+    const platformIcons: Record<SearchPlatform, typeof Globe> = {
+      web: Globe,
+      reddit: MessageCircle,
+      youtube: Youtube,
+      tiktok: Music,
+      quora: HelpCircle,
+    };
+
+    function togglePlatform(p: SearchPlatform) {
+      if (p === 'web') return; // web is always on
+      setPlatforms((prev) => {
+        const next = new Set(prev);
+        if (next.has(p)) next.delete(p);
+        else next.add(p);
+        return next;
+      });
+    }
 
     const pillBtn =
       'inline-flex min-h-[2.25rem] max-w-[min(100%,11rem)] items-center gap-2 rounded-full border border-nativz-border bg-surface-hover/80 px-3 py-1.5 text-left text-xs font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover';
@@ -484,6 +506,56 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
                       {opt.label}
                     </button>
                   ))}
+                </PopoverContent>
+              </Popover>
+
+              {/* Platforms */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" className={pillBtn}>
+                    <Search size={15} className="shrink-0 text-text-muted" aria-hidden />
+                    <span className="truncate">Platforms ({platforms.size})</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  sideOffset={8}
+                  matchAnchorWidth={false}
+                  className="w-56 border-nativz-border bg-surface p-1 shadow-[var(--shadow-dropdown)]"
+                >
+                  {PLATFORM_OPTIONS.map((opt) => {
+                    const Icon = platformIcons[opt.value];
+                    const active = platforms.has(opt.value);
+                    const isWeb = opt.value === 'web';
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => togglePlatform(opt.value)}
+                        disabled={isWeb}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-text-secondary hover:bg-surface-hover',
+                          isWeb && 'cursor-default opacity-70'
+                        )}
+                      >
+                        <Icon size={15} className="shrink-0 text-text-muted" aria-hidden />
+                        <span className="flex-1">{opt.label}</span>
+                        <span
+                          className={cn(
+                            'flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors',
+                            active ? 'bg-accent' : 'bg-surface-hover border border-nativz-border'
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'h-3 w-3 rounded-full bg-white shadow-sm transition-transform',
+                              active ? 'translate-x-3' : 'translate-x-0'
+                            )}
+                          />
+                        </span>
+                      </button>
+                    );
+                  })}
                 </PopoverContent>
               </Popover>
             </div>
