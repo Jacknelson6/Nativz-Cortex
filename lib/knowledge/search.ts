@@ -105,6 +105,60 @@ export async function searchKnowledgeFTS(
 }
 
 /**
+ * Search for current (non-superseded, still-valid) knowledge entries.
+ * Filters out entries that have been superseded or expired past their valid_until date.
+ * If `asOfDate` is provided, returns knowledge that was current at that point in time.
+ */
+export async function searchCurrentKnowledge(
+  clientId: string,
+  query: string,
+  options: { limit?: number; threshold?: number; types?: string[]; asOfDate?: string } = {},
+): Promise<KnowledgeSearchResult[]> {
+  const { limit = 10, threshold = 0.3, types, asOfDate } = options;
+
+  // Get broader result set to filter from
+  const results = await searchKnowledge(clientId, query, {
+    limit: limit * 3,
+    threshold,
+    types,
+  });
+
+  if (results.length === 0) return [];
+
+  // Fetch temporal metadata for matched entries
+  const admin = createAdminClient();
+  const entryIds = results.map((r) => r.id);
+  const { data: entries } = await admin
+    .from('client_knowledge_entries')
+    .select('id, valid_from, valid_until, superseded_by')
+    .in('id', entryIds);
+
+  const temporalMap = new Map(
+    (entries ?? []).map((e: { id: string; valid_from: string | null; valid_until: string | null; superseded_by: string | null }) => [e.id, e]),
+  );
+
+  const referenceDate = asOfDate ? new Date(asOfDate) : new Date();
+
+  const filtered = results.filter((r) => {
+    const temporal = temporalMap.get(r.id);
+    if (!temporal) return true; // no temporal data — include by default
+
+    // Exclude superseded entries
+    if (temporal.superseded_by) return false;
+
+    // Exclude entries that expired before the reference date
+    if (temporal.valid_until && new Date(temporal.valid_until) < referenceDate) return false;
+
+    // For asOfDate queries, exclude entries created after the reference date
+    if (asOfDate && temporal.valid_from && new Date(temporal.valid_from) > referenceDate) return false;
+
+    return true;
+  });
+
+  return filtered.slice(0, limit);
+}
+
+/**
  * Global semantic search across all clients.
  * Useful for cross-client pattern discovery.
  */

@@ -19,7 +19,23 @@ export interface KnowledgeEntry {
   updated_at: string;
   created_by: string | null;
   client_visible?: boolean;
+  valid_from?: string | null;
+  valid_until?: string | null;
+  superseded_by?: string | null;
+  confidence?: number;
+  temporal_markers?: TemporalMarker[] | null;
 }
+
+export interface TemporalMarker {
+  type: 'valid_from' | 'valid_until' | 'supersedes' | 'contradicts' | 'as_of';
+  value: string;
+  source_text: string;
+  confidence: number;
+}
+
+export type KnowledgeLinkLabel =
+  | 'related_to' | 'references' | 'supersedes' | 'contradicts'
+  | 'produced_in' | 'assigned_to' | 'valid_during' | 'replaced_by';
 
 export interface KnowledgeLink {
   id: string;

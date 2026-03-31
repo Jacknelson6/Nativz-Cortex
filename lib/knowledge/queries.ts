@@ -7,7 +7,10 @@ import type {
   KnowledgeGraphData,
   KnowledgeNodeType,
   ExternalNode,
+  TemporalMarker,
 } from './types';
+import { extractTemporalMarkers } from './temporal-extractor';
+import { detectSupersessions } from './supersession-detector';
 
 // ---------------------------------------------------------------------------
 // Entries
@@ -237,7 +240,83 @@ export async function createKnowledgeEntry(
   // Auto-embed for semantic search (non-blocking)
   embedKnowledgeEntry(data.id).catch(() => {});
 
+  // Temporal enrichment (non-blocking): extract markers + detect supersessions
+  processTemporalEnrichment(data as KnowledgeEntry).catch(() => {});
+
   return data as KnowledgeEntry;
+}
+
+/**
+ * Post-ingestion temporal processing: extract temporal markers from content,
+ * detect supersessions against existing entries, and update accordingly.
+ */
+async function processTemporalEnrichment(entry: KnowledgeEntry): Promise<void> {
+  const admin = createAdminClient();
+
+  // 1. Extract temporal markers from content
+  const extraction = await extractTemporalMarkers(entry.content, entry.title);
+
+  const updates: Record<string, unknown> = {};
+  if (extraction.markers.length > 0) {
+    updates.temporal_markers = extraction.markers;
+  }
+  if (extraction.validFrom) {
+    updates.valid_from = extraction.validFrom;
+  }
+  if (extraction.validUntil) {
+    updates.valid_until = extraction.validUntil;
+  }
+
+  // Apply temporal marker updates if any were found
+  if (Object.keys(updates).length > 0) {
+    await admin
+      .from('client_knowledge_entries')
+      .update(updates)
+      .eq('id', entry.id);
+  }
+
+  // 2. Detect supersessions against existing entries
+  const supersessions = await detectSupersessions(entry.client_id, {
+    title: entry.title,
+    content: entry.content,
+    type: entry.type,
+    metadata: entry.metadata,
+  });
+
+  // Auto-apply high-confidence supersessions
+  for (const s of supersessions.supersedes) {
+    if (s.confidence < 0.8) continue;
+
+    // Mark old entry as superseded
+    await admin
+      .from('client_knowledge_entries')
+      .update({ superseded_by: entry.id })
+      .eq('id', s.entryId);
+
+    // Create a supersedes link
+    await createKnowledgeLink({
+      client_id: entry.client_id,
+      source_id: entry.id,
+      source_type: 'entry',
+      target_id: s.entryId,
+      target_type: 'entry',
+      label: 'supersedes',
+    });
+  }
+
+  // Create contradicts links (no auto-supersession, just record the relationship)
+  for (const c of supersessions.contradicts) {
+    if (c.confidence < 0.8) continue;
+
+    await createKnowledgeLink({
+      client_id: entry.client_id,
+      source_id: entry.id,
+      source_type: 'entry',
+      target_id: c.entryId,
+      target_type: 'entry',
+      label: 'contradicts',
+    });
+  }
 }
 
 export async function updateKnowledgeEntry(
