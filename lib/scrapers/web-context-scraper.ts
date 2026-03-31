@@ -60,13 +60,22 @@ export async function gatherWebContext(
   options: { timeRange?: string; language?: string; keywords?: string[] } = {},
 ): Promise<WebContextResult> {
   const errors: string[] = [];
-  const results = await Promise.allSettled([
-    fetchBraveSerpResults(query, options),
-    fetchRedditThreads(query, options),
-  ]);
 
-  const serpResults = results[0].status === 'fulfilled' ? results[0].value : (() => { errors.push(`SERP: ${(results[0] as PromiseRejectedResult).reason}`); return []; })();
-  const redditThreads = results[1].status === 'fulfilled' ? results[1].value : (() => { errors.push(`Reddit: ${(results[1] as PromiseRejectedResult).reason}`); return []; })();
+  // Run sequentially to avoid Brave API rate limits (free plan: 1 req/sec)
+  let serpResults: SerpSnippet[] = [];
+  let redditThreads: RedditThread[] = [];
+
+  try {
+    serpResults = await fetchBraveSerpResults(query, options);
+  } catch (e) {
+    errors.push(`SERP: ${e}`);
+  }
+
+  try {
+    redditThreads = await fetchRedditThreads(query, options);
+  } catch (e) {
+    errors.push(`Reddit: ${e}`);
+  }
 
   return { serpResults, redditThreads, errors };
 }
@@ -125,109 +134,131 @@ async function fetchBraveSerpResults(
 }
 
 /**
- * Fetch top Reddit threads for a query using Reddit's public JSON API.
- * Sorted by relevance within the selected time range.
+ * Fetch top Reddit threads using a two-phase approach:
+ * 1. Brave Search for "site:reddit.com" (finds the most relevant posts)
+ * 2. Reddit JSON API to fetch comments for the top hits
  */
 async function fetchRedditThreads(
   query: string,
   options: { timeRange?: string; keywords?: string[] },
 ): Promise<RedditThread[]> {
-  // Reddit time params: hour, day, week, month, year, all
-  const redditTimeMap: Record<string, string> = {
-    today: 'day',
-    day: 'day',
-    week: 'week',
-    last_7_days: 'week',
-    month: 'month',
-    last_30_days: 'month',
-    last_3_months: 'year',
-    last_6_months: 'year',
-    year: 'year',
-    last_year: 'year',
-  };
+  const apiKey = BRAVE_API_KEY();
 
-  let searchQuery = query;
-  if (options.keywords?.length) {
-    // Add first keyword for specificity
-    searchQuery = `${query} ${options.keywords[0]}`;
-  }
+  // Phase 1: Use Brave to find relevant Reddit posts (much better relevance than Reddit's own search)
+  let redditUrls: Array<{ title: string; url: string; snippet: string }> = [];
 
-  const t = options.timeRange ? redditTimeMap[options.timeRange] || 'month' : 'month';
-  const params = new URLSearchParams({
-    q: searchQuery,
-    sort: 'relevance',
-    t,
-    limit: '5',
-    type: 'link',
-  });
-
-  const res = await fetch(`https://www.reddit.com/search.json?${params}`, {
-    headers: {
-      'User-Agent': 'NativzCortex/1.0 (topic research bot)',
-    },
-    signal: AbortSignal.timeout(15000),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Reddit API ${res.status}`);
-  }
-
-  const data = await res.json() as {
-    data: {
-      children: Array<{
-        data: {
-          title: string;
-          permalink: string;
-          subreddit: string;
-          score: number;
-          num_comments: number;
-          selftext: string;
-          created_utc: number;
-        };
-      }>;
-    };
-  };
-
-  const threads: RedditThread[] = [];
-
-  for (const child of data.data.children) {
-    const post = child.data;
-    let topComments: string[] = [];
-
-    // Fetch top 3 comments for each thread (lightweight)
-    try {
-      const commentsRes = await fetch(
-        `https://www.reddit.com${post.permalink}.json?limit=3&sort=top&depth=1`,
-        {
-          headers: { 'User-Agent': 'NativzCortex/1.0 (topic research bot)' },
-          signal: AbortSignal.timeout(8000),
-        },
-      );
-      if (commentsRes.ok) {
-        const commentsData = await commentsRes.json() as Array<{
-          data: { children: Array<{ data: { body?: string } }> };
-        }>;
-        if (commentsData[1]?.data?.children) {
-          topComments = commentsData[1].data.children
-            .filter(c => c.data.body && c.data.body !== '[removed]' && c.data.body !== '[deleted]')
-            .slice(0, 3)
-            .map(c => (c.data.body || '').substring(0, 500));
-        }
-      }
-    } catch {
-      // Non-blocking — comments are optional
+  if (apiKey) {
+    let searchQuery = `site:reddit.com ${query}`;
+    if (options.keywords?.length) {
+      searchQuery += ` ${options.keywords[0]}`;
     }
 
-    threads.push({
-      title: post.title,
-      url: `https://www.reddit.com${post.permalink}`,
-      subreddit: post.subreddit,
-      score: post.score,
-      numComments: post.num_comments,
-      selftext: post.selftext?.substring(0, 1000) || '',
-      topComments,
-      createdUtc: post.created_utc,
+    const params = new URLSearchParams({
+      q: searchQuery,
+      count: '8',
+      text_decorations: 'false',
     });
+
+    const freshness = options.timeRange ? FRESHNESS_MAP[options.timeRange] : undefined;
+    if (freshness) params.set('freshness', freshness);
+
+    try {
+      const res = await fetch(`${BRAVE_SEARCH_URL}?${params}`, {
+        headers: {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip',
+          'X-Subscription-Token': apiKey,
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (res.ok) {
+        const data = await res.json() as { web?: { results?: Array<{ title: string; url: string; description: string }> } };
+        redditUrls = (data.web?.results ?? [])
+          .filter(r => r.url.includes('reddit.com/r/') && r.url.includes('/comments/'))
+          .slice(0, 5)
+          .map(r => ({ title: r.title, url: r.url, snippet: r.description }));
+      }
+    } catch {
+      // Fall through to direct Reddit search
+    }
+  }
+
+  // Fallback: direct Reddit search if Brave returned nothing
+  if (redditUrls.length === 0) {
+    const redditTimeMap: Record<string, string> = {
+      today: 'day', day: 'day', week: 'week', last_7_days: 'week',
+      month: 'month', last_30_days: 'month', last_3_months: 'year',
+      last_6_months: 'year', year: 'year', last_year: 'year',
+    };
+    const t = options.timeRange ? redditTimeMap[options.timeRange] || 'year' : 'year';
+
+    try {
+      const params = new URLSearchParams({ q: query, sort: 'relevance', t, limit: '5', type: 'link' });
+      const res = await fetch(`https://www.reddit.com/search.json?${params}`, {
+        headers: { 'User-Agent': 'NativzCortex/1.0 (topic research bot)' },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok) {
+        const data = await res.json() as { data: { children: Array<{ data: { title: string; permalink: string } }> } };
+        redditUrls = data.data.children.map(c => ({
+          title: c.data.title,
+          url: `https://www.reddit.com${c.data.permalink}`,
+          snippet: '',
+        }));
+      }
+    } catch {
+      // Give up on Reddit
+    }
+  }
+
+  // Phase 2: Fetch each Reddit thread's details + top comments
+  const threads: RedditThread[] = [];
+
+  for (const item of redditUrls) {
+    try {
+      // Convert URL to .json endpoint
+      const jsonUrl = item.url.replace(/\/?$/, '.json') + '?limit=3&sort=top&depth=1';
+      const res = await fetch(jsonUrl, {
+        headers: { 'User-Agent': 'NativzCortex/1.0 (topic research bot)' },
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (!res.ok) continue;
+
+      const data = await res.json() as Array<{
+        data: {
+          children: Array<{
+            data: {
+              title?: string; subreddit?: string; score?: number;
+              num_comments?: number; selftext?: string; created_utc?: number;
+              permalink?: string; body?: string;
+            };
+          }>;
+        };
+      }>;
+
+      const post = data[0]?.data?.children?.[0]?.data;
+      if (!post) continue;
+
+      const topComments = (data[1]?.data?.children ?? [])
+        .filter(c => c.data.body && c.data.body !== '[removed]' && c.data.body !== '[deleted]')
+        .slice(0, 3)
+        .map(c => (c.data.body || '').substring(0, 500));
+
+      threads.push({
+        title: post.title || item.title,
+        url: item.url,
+        subreddit: post.subreddit || '',
+        score: post.score || 0,
+        numComments: post.num_comments || 0,
+        selftext: post.selftext?.substring(0, 1000) || '',
+        topComments,
+        createdUtc: post.created_utc || 0,
+      });
+    } catch {
+      // Skip failed thread fetches
+    }
   }
 
   return threads;
