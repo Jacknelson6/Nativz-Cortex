@@ -8,6 +8,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateEmbedding } from '@/lib/ai/embeddings';
+import { classifyKnowledgeQuery, type KnowledgeQueryIntent } from './query-classifier';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -156,6 +157,41 @@ export async function searchCurrentKnowledge(
   });
 
   return filtered.slice(0, limit);
+}
+
+/**
+ * Classify the query, then run semantic (+ temporal filter when appropriate).
+ * Used by Nerd and other agents for intent-aware retrieval.
+ */
+export async function searchKnowledgeWithIntent(
+  clientId: string,
+  query: string,
+  options: { limit?: number; threshold?: number } = {},
+): Promise<{
+  results: KnowledgeSearchResult[];
+  intent: KnowledgeQueryIntent;
+  preferCurrentOnly: boolean;
+}> {
+  const { limit = 8, threshold = 0.3 } = options;
+  const classification = classifyKnowledgeQuery(query);
+
+  const results = classification.preferCurrentOnly
+    ? await searchCurrentKnowledge(clientId, query, {
+        limit,
+        threshold,
+        types: classification.types,
+      })
+    : await searchKnowledge(clientId, query, {
+        limit,
+        threshold,
+        types: classification.types,
+      });
+
+  return {
+    results,
+    intent: classification.intent,
+    preferCurrentOnly: classification.preferCurrentOnly,
+  };
 }
 
 /**

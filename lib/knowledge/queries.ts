@@ -226,7 +226,8 @@ export async function getKnowledgeGraph(clientId: string): Promise<KnowledgeGrap
 // ---------------------------------------------------------------------------
 
 export async function createKnowledgeEntry(
-  entry: Omit<KnowledgeEntry, 'id' | 'created_at' | 'updated_at'>
+  entry: Omit<KnowledgeEntry, 'id' | 'created_at' | 'updated_at'>,
+  options?: { skipTemporalEnrichment?: boolean },
 ): Promise<KnowledgeEntry> {
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -241,7 +242,9 @@ export async function createKnowledgeEntry(
   embedKnowledgeEntry(data.id).catch(() => {});
 
   // Temporal enrichment (non-blocking): extract markers + detect supersessions
-  processTemporalEnrichment(data as KnowledgeEntry).catch(() => {});
+  if (!options?.skipTemporalEnrichment) {
+    processTemporalEnrichment(data as KnowledgeEntry).catch(() => {});
+  }
 
   return data as KnowledgeEntry;
 }
@@ -276,12 +279,16 @@ async function processTemporalEnrichment(entry: KnowledgeEntry): Promise<void> {
   }
 
   // 2. Detect supersessions against existing entries
-  const supersessions = await detectSupersessions(entry.client_id, {
-    title: entry.title,
-    content: entry.content,
-    type: entry.type,
-    metadata: entry.metadata,
-  });
+  const supersessions = await detectSupersessions(
+    entry.client_id,
+    {
+      title: entry.title,
+      content: entry.content,
+      type: entry.type,
+      metadata: entry.metadata,
+    },
+    { excludeEntryIds: [entry.id] },
+  );
 
   // Auto-apply high-confidence supersessions
   for (const s of supersessions.supersedes) {

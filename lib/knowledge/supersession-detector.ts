@@ -61,22 +61,25 @@ export async function detectSupersessions(
     type: string;
     metadata: Record<string, unknown>;
   },
+  options?: { excludeEntryIds?: string[] },
 ): Promise<SupersessionResult> {
   const empty: SupersessionResult = { supersedes: [], contradicts: [] };
+  const exclude = new Set(options?.excludeEntryIds ?? []);
 
   try {
     // Find semantically similar existing entries
     const searchQuery = `${newEntry.title} ${newEntry.content.slice(0, 500)}`;
     const similar = await searchKnowledge(clientId, searchQuery, {
-      limit: 5,
+      limit: 8,
       threshold: 0.4,
     });
 
-    if (similar.length === 0) return empty;
+    const filtered = similar.filter((s) => !exclude.has(s.id));
+    if (filtered.length === 0) return empty;
 
     // Compare new entry against each similar entry in parallel
     const comparisons = await Promise.all(
-      similar.map(async (existing) => {
+      filtered.map(async (existing) => {
         try {
           const response = await createCompletion({
             messages: [

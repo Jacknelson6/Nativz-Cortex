@@ -3,10 +3,12 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getKnowledgeEntries, createKnowledgeEntry } from '@/lib/knowledge/queries';
-import type { KnowledgeEntryType } from '@/lib/knowledge/types';
+import { KNOWLEDGE_ENTRY_TYPES, type KnowledgeEntryType } from '@/lib/knowledge/types';
+
+const knowledgeTypeEnum = z.enum(KNOWLEDGE_ENTRY_TYPES as unknown as [string, ...string[]]);
 
 const createSchema = z.object({
-  type: z.enum(['brand_asset', 'brand_profile', 'document', 'web_page', 'note', 'idea', 'meeting_note']),
+  type: knowledgeTypeEnum,
   title: z.string().min(1),
   content: z.string().default(''),
   metadata: z.record(z.string(), z.unknown()).default({}),
@@ -100,7 +102,7 @@ export async function POST(
 
     const entry = await createKnowledgeEntry({
       client_id: clientId,
-      type: parsed.data.type,
+      type: parsed.data.type as KnowledgeEntryType,
       title: parsed.data.title,
       content: parsed.data.content,
       metadata: parsed.data.metadata,

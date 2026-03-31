@@ -308,7 +308,7 @@ async function getImportedEmailIds(): Promise<Set<string>> {
   const { data } = await admin
     .from('client_knowledge_entries')
     .select('metadata')
-    .eq('type', 'meeting_note')
+    .in('type', ['meeting_note', 'meeting'])
     .not('metadata->fyxer_email_id', 'is', null);
 
   const ids = new Set<string>();
@@ -426,16 +426,24 @@ export async function importFyxerEmails(createdBy?: string): Promise<FyxerImport
         ...(duration ? { duration } : {}),
       };
 
-      // Create knowledge entry
       const entry = await createKnowledgeEntry({
         client_id: targetClient.id,
-        type: 'meeting_note',
+        type: 'meeting',
         title,
         content: enrichedMarkdown,
         metadata: metadata as unknown as Record<string, unknown>,
         source: 'imported',
         created_by: createdBy ?? null,
       });
+
+      try {
+        const { extractMeetingDecompositionFromMarkdown } = await import('./decomposer');
+        const { persistMeetingDecomposition } = await import('./ingestion-pipeline');
+        const payload = await extractMeetingDecompositionFromMarkdown(enrichedMarkdown);
+        await persistMeetingDecomposition(targetClient.id, entry.id, payload, createdBy ?? null);
+      } catch (decompErr) {
+        console.error(`Fyxer import: decomposition failed for ${ref.id}`, decompErr);
+      }
 
       // Auto-link entities (no AI — just name matching)
       try {

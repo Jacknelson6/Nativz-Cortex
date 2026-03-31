@@ -1,10 +1,13 @@
 import { z } from 'zod';
 import { ToolDefinition } from '../types';
 import { getKnowledgeEntries, createKnowledgeEntry } from '@/lib/knowledge/queries';
-import { searchKnowledge } from '@/lib/knowledge/search';
+import { searchKnowledge, searchKnowledgeWithIntent } from '@/lib/knowledge/search';
+import { KNOWLEDGE_ENTRY_TYPES, type KnowledgeEntryType } from '@/lib/knowledge/types';
 import { generateBrandProfile } from '@/lib/knowledge/brand-profile';
 import { generateVideoIdeas } from '@/lib/knowledge/idea-generator';
 import { embedKnowledgeEntry } from '@/lib/ai/embeddings';
+
+const knowledgeTypeEnum = z.enum(KNOWLEDGE_ENTRY_TYPES as unknown as [string, ...string[]]);
 
 export const knowledgeTools: ToolDefinition[] = [
   // ── query_client_knowledge ──────────────────────────────────
@@ -14,9 +17,7 @@ export const knowledgeTools: ToolDefinition[] = [
       "Search a client's knowledge base for entries by keyword or type. Use when asked about a client's brand, website content, saved notes, or documents.",
     parameters: z.object({
       client_id: z.string(),
-      type: z
-        .enum(['brand_asset', 'brand_profile', 'document', 'web_page', 'note', 'idea', 'meeting_note'])
-        .optional(),
+      type: knowledgeTypeEnum.optional(),
       keyword: z.string().optional(),
     }),
     riskLevel: 'read',
@@ -26,7 +27,7 @@ export const knowledgeTools: ToolDefinition[] = [
         const type = params.type as string | undefined;
         const keyword = (params.keyword as string | undefined)?.toLowerCase();
 
-        let entries = await getKnowledgeEntries(clientId, type as Parameters<typeof getKnowledgeEntries>[1]);
+        let entries = await getKnowledgeEntries(clientId, type as KnowledgeEntryType | undefined);
 
         if (keyword) {
           entries = entries.filter(
@@ -73,7 +74,9 @@ export const knowledgeTools: ToolDefinition[] = [
         const admin = createAdminClient();
         const { data, error } = await admin
           .from('client_knowledge_entries')
-          .select('id, client_id, type, title, content, metadata, source, created_at')
+          .select(
+            'id, client_id, type, title, content, metadata, source, created_at, valid_from, valid_until, confidence, superseded_by',
+          )
           .eq('id', params.entry_id as string)
           .single();
 
@@ -91,6 +94,10 @@ export const knowledgeTools: ToolDefinition[] = [
             metadata: data.metadata,
             source: data.source,
             created_at: data.created_at,
+            valid_from: data.valid_from,
+            valid_until: data.valid_until,
+            confidence: data.confidence,
+            superseded_by: data.superseded_by,
           },
         };
       } catch (err) {
@@ -110,9 +117,7 @@ export const knowledgeTools: ToolDefinition[] = [
     parameters: z.object({
       client_id: z.string(),
       query: z.string().describe('Natural language search query describing what you need'),
-      type: z
-        .enum(['brand_asset', 'brand_profile', 'document', 'web_page', 'note', 'idea', 'meeting_note'])
-        .optional(),
+      type: knowledgeTypeEnum.optional(),
       limit: z.number().min(1).max(20).default(5),
     }),
     riskLevel: 'read',
@@ -123,10 +128,13 @@ export const knowledgeTools: ToolDefinition[] = [
         const type = params.type as string | undefined;
         const limit = (params.limit as number) ?? 5;
 
-        const results = await searchKnowledge(clientId, query, {
-          limit,
-          types: type ? [type] : undefined,
-        });
+        const { results, intent, preferCurrentOnly } = type
+          ? {
+              results: await searchKnowledge(clientId, query, { limit, types: [type] }),
+              intent: 'manual_type_filter',
+              preferCurrentOnly: false,
+            }
+          : await searchKnowledgeWithIntent(clientId, query, { limit, threshold: 0.3 });
 
         const formatted = results.map((r) => ({
           id: r.id,
@@ -138,7 +146,16 @@ export const knowledgeTools: ToolDefinition[] = [
 
         return {
           success: true,
-          data: { total: formatted.length, results: formatted },
+          data: {
+            total: formatted.length,
+            results: formatted,
+            retrieval: {
+              intent,
+              prefer_current_only: preferCurrentOnly,
+            },
+            citation_reminder:
+              'Cite sources by title and created_at (and valid_from when present). State temporal validity when answering.',
+          },
         };
       } catch (err) {
         return {
@@ -223,7 +240,10 @@ export const knowledgeTools: ToolDefinition[] = [
           data: {
             id: result.entry.id,
             title: result.entry.title,
+            type: result.entry.type,
             linkedEntries: result.linkedEntries,
+            extracted_decisions: result.extractedDecisions,
+            extracted_action_items: result.extractedActionItems,
           },
         };
       } catch (err) {

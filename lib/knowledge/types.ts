@@ -1,9 +1,35 @@
-export type KnowledgeEntryType =
-  | 'brand_asset' | 'brand_profile' | 'brand_guideline'
-  | 'document' | 'web_page' | 'note' | 'idea' | 'meeting_note'
-  | 'visual_identity' | 'verbal_identity' | 'target_audience'
-  | 'competitive_positioning' | 'product_catalog'
-  | 'brand_logo' | 'brand_screenshot';
+/** All allowed `client_knowledge_entries.type` values (ontology + legacy). Keep in sync with migration 077. */
+export const KNOWLEDGE_ENTRY_TYPES = [
+  // Ontology (PRD)
+  'document',
+  'meeting',
+  'decision',
+  'action_item',
+  'guideline',
+  'person',
+  'competitor',
+  'claim',
+  'campaign',
+  'product',
+  'insight',
+  // Legacy
+  'brand_asset',
+  'brand_profile',
+  'brand_guideline',
+  'web_page',
+  'note',
+  'idea',
+  'meeting_note',
+  'visual_identity',
+  'verbal_identity',
+  'target_audience',
+  'competitive_positioning',
+  'product_catalog',
+  'brand_logo',
+  'brand_screenshot',
+] as const;
+
+export type KnowledgeEntryType = (typeof KNOWLEDGE_ENTRY_TYPES)[number];
 export type KnowledgeSource = 'manual' | 'scraped' | 'generated' | 'imported';
 export type KnowledgeNodeType = 'entry' | 'contact' | 'search' | 'strategy' | 'idea_submission';
 
@@ -34,8 +60,19 @@ export interface TemporalMarker {
 }
 
 export type KnowledgeLinkLabel =
-  | 'related_to' | 'references' | 'supersedes' | 'contradicts'
-  | 'produced_in' | 'assigned_to' | 'valid_during' | 'replaced_by';
+  | 'related_to'
+  | 'wikilink'
+  | 'references'
+  | 'supersedes'
+  | 'contradicts'
+  | 'produced'
+  | 'produced_in'
+  | 'assigned_to'
+  | 'belongs_to'
+  | 'mentioned_in'
+  | 'about'
+  | 'valid_during'
+  | 'replaced_by';
 
 export interface KnowledgeLink {
   id: string;

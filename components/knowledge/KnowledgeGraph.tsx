@@ -86,14 +86,22 @@ const TYPE_COLORS: Record<string, string> = {
   contact: '#fb923c',
   search: '#2dd4bf',
   strategy: '#f59e0b',
+  meeting: '#94a3b8',
   meeting_note: '#a78bfa',
+  decision: '#3b82f6',
+  action_item: '#a855f7',
+  guideline: '#22c55e',
+  insight: '#f472b6',
+  competitor: '#f97316',
+  claim: '#eab308',
+  product: '#38bdf8',
+  campaign: '#c084fc',
+  person: '#fb923c',
   // Knowledge node types (from merged agency graph)
   domain: '#f59e0b',
   playbook: '#38bdf8',
   client: '#22c55e',
-  meeting: '#a78bfa',
   asset: '#64748b',
-  insight: '#f472b6',
 };
 
 const DEFAULT_COLOR = '#64748b';
@@ -159,9 +167,22 @@ function buildGraphologyGraph(data: KnowledgeGraphData, nodeSize: number): Graph
     const key = [sourceId, targetId].sort().join('::');
     if (seenEdges.has(key)) continue;
     seenEdges.add(key);
+    const typedLabels = new Set([
+      'produced',
+      'supersedes',
+      'contradicts',
+      'references',
+      'assigned_to',
+      'replaced_by',
+      'about',
+      'mentioned_in',
+    ]);
+    const edgeLabel = typedLabels.has(link.label) ? link.label : '';
+
     graph.addEdge(sourceId, targetId, {
       size: 0.3,
       color: EDGE_COLOR,
+      label: edgeLabel,
     });
   }
 
@@ -253,7 +274,9 @@ export function KnowledgeGraph({
       const DarkNodeProgram = createNodeCompoundProgram([NodeCircleProgram], drawDiscNodeLabel, drawDarkNodeHover as any);
 
       const renderer = new Sigma(graph, containerRef.current!, {
-        renderEdgeLabels: false,
+        renderEdgeLabels: true,
+        edgeLabelSize: 9,
+        edgeLabelColor: { color: '#94a3b8' },
         labelFont: 'system-ui, -apple-system, sans-serif',
         labelSize: 12,
         labelWeight: '500',

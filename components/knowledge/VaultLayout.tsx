@@ -1,19 +1,24 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { X, Copy, Trash2, Pencil } from 'lucide-react';
+import { X, Copy, Trash2, Pencil, Network, Activity, BarChart3, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import type { KnowledgeEntry, KnowledgeGraphData } from '@/lib/knowledge/types';
 import { VaultHeader } from './VaultHeader';
 import { FileExplorer } from './FileExplorer';
 import { EntryEditor } from './EntryEditor';
 import { KnowledgeGraph } from './KnowledgeGraph';
+import { KnowledgeFeed } from './KnowledgeFeed';
+import { KnowledgeHealthDashboard } from './KnowledgeHealthDashboard';
+
+type VaultMainTab = 'graph' | 'feed' | 'health';
 
 interface ContextMenuState {
   x: number;
   y: number;
   entryId: string;
   entryTitle: string;
+  entryType: string;
 }
 
 interface VaultLayoutProps {
@@ -37,6 +42,9 @@ export function VaultLayout({
   const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [mainTab, setMainTab] = useState<VaultMainTab>('graph');
+  const [decomposingId, setDecomposingId] = useState<string | null>(null);
+  const [healthAsOf] = useState(() => new Date());
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
   const selectedEntry = selectedEntryId
@@ -58,12 +66,38 @@ export function VaultLayout({
   }, []);
 
   const handleContextMenu = useCallback((entryId: string, x: number, y: number) => {
-    const entry = initialEntries.find((e) => e.id === entryId) ??
-      entries.find((e) => e.id === entryId);
+    const entry =
+      entries.find((e) => e.id === entryId) ?? initialEntries.find((e) => e.id === entryId);
     if (!entry) return;
-    setContextMenu({ x, y, entryId, entryTitle: entry.title });
+    setContextMenu({ x, y, entryId, entryTitle: entry.title, entryType: entry.type });
     setConfirmDelete(null);
   }, [entries, initialEntries]);
+
+  const handleDecomposeMeeting = useCallback(async () => {
+    if (!contextMenu) return;
+    const { entryId, entryType } = contextMenu;
+    if (entryType !== 'meeting' && entryType !== 'meeting_note') return;
+    setDecomposingId(entryId);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/knowledge/${entryId}/decompose`, {
+        method: 'POST',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? 'Decomposition failed');
+        return;
+      }
+      toast.success(
+        `Created ${data.decisions_created ?? 0} decisions, ${data.action_items_created ?? 0} action items`,
+      );
+      setContextMenu(null);
+      window.location.reload();
+    } catch {
+      toast.error('Decomposition failed');
+    } finally {
+      setDecomposingId(null);
+    }
+  }, [clientId, contextMenu]);
 
   // Close context menu on click outside or Escape
   useEffect(() => {
@@ -175,16 +209,48 @@ export function VaultLayout({
           links={initialGraphData.links}
         />
 
-        {/* Graph is always the main view */}
-        <div className="flex-1 min-w-0 relative">
-          <KnowledgeGraph
-            data={initialGraphData}
-            onNodeContextMenu={handleContextMenu}
-            onNodeClick={handleSelectEntry}
-            selectedNodeId={selectedEntryId}
-            hoveredEntryId={hoveredEntryId}
-            searchQuery={searchQuery}
-          />
+        <div className="flex-1 min-w-0 flex flex-col min-h-0">
+          <div className="flex shrink-0 border-b border-nativz-border bg-background">
+            {(
+              [
+                { id: 'graph' as const, label: 'Graph', Icon: Network },
+                { id: 'feed' as const, label: 'Activity', Icon: Activity },
+                { id: 'health' as const, label: 'Health', Icon: BarChart3 },
+              ] as const
+            ).map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setMainTab(id)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
+                  mainTab === id
+                    ? 'border-accent-text text-accent-text bg-surface/40'
+                    : 'border-transparent text-text-secondary hover:text-text-primary hover:bg-surface/20'
+                }`}
+              >
+                <Icon size={14} aria-hidden />
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 min-h-0 relative">
+            {mainTab === 'graph' && (
+              <KnowledgeGraph
+                data={initialGraphData}
+                onNodeContextMenu={handleContextMenu}
+                onNodeClick={handleSelectEntry}
+                selectedNodeId={selectedEntryId}
+                hoveredEntryId={hoveredEntryId}
+                searchQuery={searchQuery}
+              />
+            )}
+            {mainTab === 'feed' && (
+              <KnowledgeFeed entries={entries} links={initialGraphData.links} />
+            )}
+            {mainTab === 'health' && (
+              <KnowledgeHealthDashboard entries={entries} asOf={healthAsOf} />
+            )}
+          </div>
         </div>
       </div>
 
@@ -202,13 +268,26 @@ export function VaultLayout({
             <p className="text-[10px] text-text-muted truncate">{contextMenu.entryTitle}</p>
           </div>
           <button
+            type="button"
             onClick={() => handleEdit(contextMenu.entryId)}
             className="cursor-pointer w-full flex items-center gap-2.5 px-3 py-2 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
           >
             <Pencil size={13} />
             Edit
           </button>
+          {(contextMenu.entryType === 'meeting' || contextMenu.entryType === 'meeting_note') && (
+            <button
+              type="button"
+              disabled={decomposingId === contextMenu.entryId}
+              onClick={() => void handleDecomposeMeeting()}
+              className="cursor-pointer w-full flex items-center gap-2.5 px-3 py-2 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors disabled:opacity-50"
+            >
+              <Sparkles size={13} />
+              {decomposingId === contextMenu.entryId ? 'Decomposing…' : 'Decompose meeting'}
+            </button>
+          )}
           <button
+            type="button"
             onClick={() => handleDuplicate(contextMenu.entryId)}
             className="cursor-pointer w-full flex items-center gap-2.5 px-3 py-2 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
           >
@@ -216,6 +295,7 @@ export function VaultLayout({
             Duplicate
           </button>
           <button
+            type="button"
             onClick={() => handleDelete(contextMenu.entryId)}
             className={`cursor-pointer w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors ${
               confirmDelete === contextMenu.entryId

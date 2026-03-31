@@ -15,7 +15,7 @@ const importMeetingSchema = z.object({
  *
  * Import a meeting transcript as a structured knowledge entry for a client. Uses AI to
  * extract key information, action items, and entities from the transcript, then creates
- * a meeting_note entry with auto-generated embedding.
+ * a `meeting` entry plus extracted `decision` / `action_item` nodes (with `produced` links).
  *
  * @auth Required (any authenticated user)
  * @param id - Client UUID

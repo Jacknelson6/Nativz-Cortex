@@ -2,6 +2,7 @@ import { createCompletion } from '@/lib/ai/client';
 import { createKnowledgeEntry, getKnowledgeEntries } from './queries';
 import { autoLinkEntities } from './entity-linker';
 import type { KnowledgeEntry, MeetingNoteMetadata } from './types';
+import { payloadFromMeetingStrings, persistMeetingDecomposition } from './ingestion-pipeline';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -10,6 +11,8 @@ import type { KnowledgeEntry, MeetingNoteMetadata } from './types';
 export interface MeetingImportResult {
   entry: KnowledgeEntry;
   linkedEntries: number;
+  extractedDecisions: number;
+  extractedActionItems: number;
 }
 
 interface MeetingExtraction {
@@ -122,10 +125,10 @@ export async function importMeetingNotes(
     : '';
   const title = `Meeting notes ${dateStr}${topicSnippet}`;
 
-  // Create entry
+  // Create meeting node (ontology `meeting`; legacy UI may still show as meeting)
   const entry = await createKnowledgeEntry({
     client_id: clientId,
-    type: 'meeting_note',
+    type: 'meeting',
     title,
     content: extracted.structuredContent || extracted.summary,
     metadata: {
@@ -141,6 +144,14 @@ export async function importMeetingNotes(
     source: 'imported',
     created_by: options?.createdBy ?? null,
   });
+
+  const payload = payloadFromMeetingStrings(extracted.keyDecisions, extracted.actionItems);
+  const { decisionIds, actionIds } = await persistMeetingDecomposition(
+    clientId,
+    entry.id,
+    payload,
+    options?.createdBy ?? null,
+  );
 
   // Auto-link entities
   let linkedEntries = 0;
@@ -158,5 +169,10 @@ export async function importMeetingNotes(
     console.error('Meeting import: failed to auto-link entities', err);
   }
 
-  return { entry, linkedEntries };
+  return {
+    entry,
+    linkedEntries,
+    extractedDecisions: decisionIds.length,
+    extractedActionItems: actionIds.length,
+  };
 }
