@@ -49,14 +49,6 @@ export function KeyFindings({ summary, topics, overallSentiment }: KeyFindingsPr
 
   return (
     <div className="space-y-4">
-      {/* Quick stat chips */}
-      <div className="flex flex-wrap gap-3">
-        <div className="flex items-center gap-1.5 text-xs text-text-muted">
-          <TrendingUp size={12} className={sentimentColor} />
-          Sentiment: <span className={`font-medium ${sentimentColor}`}>{sentimentLabel}</span>
-        </div>
-      </div>
-
       {/* Top topics as compact chips */}
       {topTopics.length > 0 && (
         <div className="flex flex-wrap gap-2">

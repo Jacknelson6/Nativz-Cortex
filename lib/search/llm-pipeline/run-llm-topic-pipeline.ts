@@ -879,18 +879,22 @@ Rules:
   }
 
   const serpData = buildMinimalSerpFromHits(dedupedHits.slice(0, 40));
-  const metrics = computeMetricsFromSerp(
-    serpData,
-    merger.overall_sentiment,
-    merger.conversation_intensity,
-    aiResponse.trending_topics ?? [],
-    allRecords.length,
-  );
 
   // Combine web-research records with platform scraper sources
   const webPlatformSources = toPlatformSources(allRecords);
   const scraperPlatformSources = platformResults?.sources ?? [];
   const platformSources = [...webPlatformSources, ...scraperPlatformSources];
+
+  // Total sources = web research + all platform scrapers
+  const totalSourceCount = allRecords.length + scraperPlatformSources.length;
+
+  const metrics = computeMetricsFromSerp(
+    serpData,
+    merger.overall_sentiment,
+    merger.conversation_intensity,
+    aiResponse.trending_topics ?? [],
+    totalSourceCount,
+  );
 
   const pipelineState = {
     kind: 'llm_v1',
