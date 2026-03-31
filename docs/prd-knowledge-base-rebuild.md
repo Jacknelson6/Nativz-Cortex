@@ -280,11 +280,13 @@ Every search query gets classified before retrieval:
 
 Three retrieval mechanisms, results merged:
 
-1. **Vector search** (existing pgvector) — semantic similarity
-2. **Graph traversal** — follow typed relationships from entity nodes
-3. **BM25 keyword** (existing FTS) — exact phrase, proper nouns
+1. **BM25 keyword search** (primary) — QMD-powered BM25 for exact phrase, proper nouns, entity names. This is the workhorse. Meeting data is synced to local markdown via `fyxer-sync.py` and indexed by QMD. Always prefer QMD BM25 over Fyxer MCP or raw pgvector for meeting/knowledge search.
+2. **Vector search** (existing pgvector) — semantic similarity for fuzzy/conceptual queries
+3. **Graph traversal** — follow typed relationships from entity nodes for multi-hop questions
 
 Add cross-encoder reranking (BGE-reranker or Cohere) to merge results from all three.
+
+**Important:** QMD BM25 is the default retrieval path for meetings and knowledge entries. Vector search supplements it for semantic matching. The Fyxer MCP should NOT be used for retrieval — all meeting data flows through the local knowledge base indexed by QMD.
 
 ### 5.3 Citation Enforcement
 
@@ -319,7 +321,32 @@ A chronological feed of knowledge changes:
 - Stale knowledge alerts (guidelines older than 90 days with no review)
 - Action item status summary
 
-## 7. Implementation Plan
+## 7. Observability (From Day One)
+
+### 7.1 Langfuse Instrumentation
+
+Instrument with Langfuse from the very first query, not after. This is non-negotiable.
+
+- **Trace every query:** query text → classification → retrieval → synthesis → response (full chain)
+- **Track per-step latency:** decomposition, BM25 search, vector search, graph traversal, LLM synthesis
+- **Log retrieval quality:** which results were used vs discarded, citation accuracy
+- **Score outputs:** automated eval (did the response cite sources? was the temporal context correct?)
+- **Prompt versioning:** all LLM prompts (decomposer, classifier, synthesizer) managed in Langfuse
+
+Config: Langfuse is already available via mcporter (`langfuse.get-prompts`, `langfuse.get-prompt`). Use it for prompt storage and versioning from the start.
+
+### 7.2 Query Failure Analysis Loop
+
+Weekly automated review of query failures:
+1. Pull all queries with low confidence scores or missing citations from Langfuse traces
+2. Categorize failure modes: missing data, wrong query classification, bad retrieval, poor synthesis
+3. For retrieval failures → expand QMD indexing or add new query templates
+4. For classification failures → add training examples to classifier prompt
+5. For synthesis failures → update synthesis prompt with failure examples
+
+This is a recurring ops process, not a one-time build. Each cycle makes the system smarter. Build the failure report as a script that runs weekly and outputs a markdown summary.
+
+## 8. Implementation Plan
 
 ### Phase 1: Schema & Temporal Layer (Week 1-2)
 - [ ] Migration `075_knowledge_base_rebuild.sql`
@@ -329,6 +356,8 @@ A chronological feed of knowledge changes:
 - [ ] Wire temporal fields into existing `createKnowledgeEntry()`
 - [ ] Add `searchCurrentKnowledge()` to `search.ts`
 - [ ] Migrate existing entries to new type mapping (backward-compatible)
+- [ ] Add Langfuse SDK (`langfuse` npm package) and initialize tracing in the knowledge pipeline
+- [ ] Store all LLM prompts (decomposer, classifier, synthesizer) in Langfuse from day one
 
 ### Phase 2: Ingestion Pipeline (Week 2-3)
 - [ ] Build `decomposer.ts` — meeting decomposition (decisions + action items)
@@ -337,13 +366,18 @@ A chronological feed of knowledge changes:
 - [ ] Add semantic chunking for document ingestion
 - [ ] Build typed relationship creation (replace `related_to` with proper labels)
 - [ ] Re-ingest existing meeting notes through new pipeline (extract decisions/actions)
+- [ ] Wire `fyxer-sync.py` into the ingestion pipeline — all meetings save to local markdown AND Supabase
+- [ ] Trace all ingestion steps in Langfuse (decomposition quality, entity extraction, relationship creation)
 
 ### Phase 3: Query & Retrieval (Week 3-4)
 - [ ] Build `query-classifier.ts`
-- [ ] Add BM25 + cross-encoder reranking to search
+- [ ] Wire QMD BM25 as primary retrieval path (meetings collection + knowledge collection)
+- [ ] Add cross-encoder reranking to merge BM25 + vector results
 - [ ] Build temporal search (history, as-of-date queries)
 - [ ] Upgrade Nerd chat to use query classification + citation enforcement
 - [ ] Build parameterized query templates for each query type
+- [ ] Trace every query end-to-end in Langfuse (classification → retrieval → synthesis → response)
+- [ ] Build weekly query failure report script (`scripts/query-failure-report.ts`)
 
 ### Phase 4: UI & Polish (Week 4)
 - [ ] Upgrade graph view (color coding, type filters, temporal chains)
@@ -351,8 +385,9 @@ A chronological feed of knowledge changes:
 - [ ] Build knowledge health dashboard
 - [ ] Add "decompose this meeting" button for manual re-processing
 - [ ] Add relationship label display on graph edges
+- [ ] Add Langfuse dashboard link in admin settings for observability
 
-## 8. Success Metrics
+## 9. Success Metrics
 
 - **Decomposition coverage:** >80% of meetings produce at least 1 decision or action item node
 - **Temporal chain depth:** Average supersession chain length > 1.5 for guidelines
@@ -360,7 +395,7 @@ A chronological feed of knowledge changes:
 - **Citation rate:** 100% of Nerd responses include at least one source citation
 - **Stale knowledge:** <10% of guidelines older than 90 days without review flag
 
-## 9. What NOT to Build (Yet)
+## 10. What NOT to Build (Yet)
 
 - Multi-agent reflection loops for query answering
 - Real-time webhook ingestion from external sources
@@ -369,7 +404,7 @@ A chronological feed of knowledge changes:
 - Per-client Supabase provisioning (design for it, don't build it yet)
 - Mobile app or Slack bot (the Nerd IS the interface for now)
 
-## 10. Data Migration Strategy
+## 11. Data Migration Strategy
 
 The rebuild must not break existing functionality. Migration approach:
 
