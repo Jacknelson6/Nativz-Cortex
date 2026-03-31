@@ -207,27 +207,32 @@ export async function POST(
           volume,
         });
 
+        // Ensure all jsonb fields are valid (Supabase rejects null/undefined in jsonb columns)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const safeJson = (v: any, fallback: any): any =>
+          v !== null && v !== undefined ? v : fallback;
+
         const { error: llmUpdateErr } = await adminClient
           .from('topic_searches')
           .update({
             status: 'completed',
             processing_started_at: null,
-            summary: result.aiResponse.summary,
-            metrics: result.metrics,
-            emotions: result.aiResponse.emotions,
-            content_breakdown: result.aiResponse.content_breakdown,
-            trending_topics: result.aiResponse.trending_topics,
-            serp_data: result.serpData,
-            raw_ai_response: result.aiResponse,
-            research_sources: result.researchSources,
-            pipeline_state: result.pipelineState,
+            summary: result.aiResponse.summary || 'No summary generated.',
+            metrics: safeJson(result.metrics, {}),
+            emotions: safeJson(result.aiResponse.emotions, {}),
+            content_breakdown: safeJson(result.aiResponse.content_breakdown, {}),
+            trending_topics: safeJson(result.aiResponse.trending_topics, []),
+            serp_data: safeJson(result.serpData, { webResults: [], discussions: [], videos: [] }),
+            raw_ai_response: safeJson(result.aiResponse, {}),
+            research_sources: safeJson(result.researchSources, []),
+            pipeline_state: safeJson(result.pipelineState, {}),
             platform_data: {
               stats: [],
-              sourceCount: result.platformSources.length,
-              sources: result.platformSources,
+              sourceCount: result.platformSources?.length ?? 0,
+              sources: result.platformSources ?? [],
             },
-            tokens_used: result.totalTokens,
-            estimated_cost: result.estimatedCost,
+            tokens_used: result.totalTokens ?? 0,
+            estimated_cost: result.estimatedCost ?? 0,
             completed_at: new Date().toISOString(),
           })
           .eq('id', id);
