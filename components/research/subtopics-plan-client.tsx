@@ -24,33 +24,10 @@ const VIEW_THRESHOLDS = [
   { label: '100K', value: 100_000 },
 ] as const;
 
-const TIME_RANGES = [
-  { label: 'Today', value: 'today' },
-  { label: 'Week', value: 'week' },
-  { label: 'Month', value: 'month' },
-  { label: 'Year', value: 'year' },
-] as const;
-
-type TimeRange = (typeof TIME_RANGES)[number]['value'];
-
-function getResultsScope(minViews: number, timeRange: TimeRange): { label: string; color: string } {
-  const viewScore = minViews >= 50_000 ? 2 : minViews >= 10_000 ? 1 : 0;
-  const timeScore = timeRange === 'today' ? 2 : timeRange === 'week' ? 1 : 0;
-  const total = viewScore + timeScore;
-  if (total >= 3) return { label: 'Narrow results expected', color: 'text-amber-400' };
-  if (total >= 1) return { label: 'Balanced results expected', color: 'text-text-muted' };
-  return { label: 'Broad results expected', color: 'text-emerald-400' };
-}
-
 function formatViewLabel(v: number): string {
   if (v === 0) return '0+';
   if (v >= 1_000) return `${v / 1_000}K+`;
   return `${v}+`;
-}
-
-function formatPeriodLabel(t: TimeRange): string {
-  if (t === 'today') return 'today';
-  return `this ${t}`;
 }
 
 export function SubtopicsPlanClient({ searchId, query, timeRangeLabel }: SubtopicsPlanClientProps) {
@@ -60,7 +37,7 @@ export function SubtopicsPlanClient({ searchId, query, timeRangeLabel }: Subtopi
   const [saving, setSaving] = useState(false);
   const [customInput, setCustomInput] = useState('');
   const [minViews, setMinViews] = useState(0);
-  const [timeRange, setTimeRange] = useState<TimeRange>('month');
+  // Time range is set in step 1 and passed as timeRangeLabel prop
 
   const loadPlan = useCallback(async () => {
     setLoading(true);
@@ -139,7 +116,7 @@ export function SubtopicsPlanClient({ searchId, query, timeRangeLabel }: Subtopi
       const res = await fetch(`/api/search/${searchId}/subtopics`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subtopics: cleaned, start_processing: true, minViews, timeRange }),
+        body: JSON.stringify({ subtopics: cleaned, start_processing: true, minViews }),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
@@ -304,39 +281,12 @@ export function SubtopicsPlanClient({ searchId, query, timeRangeLabel }: Subtopi
             <p className="text-xs text-text-muted/70">Lower = more results, higher = viral only</p>
           </div>
 
-          {/* Time range */}
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-text-primary">How far back should I search?</p>
-            <div className="flex flex-wrap gap-2">
-              {TIME_RANGES.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => setTimeRange(t.value)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 ${
-                    timeRange === t.value
-                      ? 'bg-pink-600 text-white'
-                      : 'bg-surface border border-nativz-border text-text-muted hover:border-text-muted'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Info banner */}
-          <div className="flex items-center gap-2 rounded-lg border border-nativz-border bg-surface-hover/50 px-3 py-2.5">
-            <Info size={14} className="shrink-0 text-text-muted" />
-            <span className={`text-xs font-medium ${getResultsScope(minViews, timeRange).color}`}>
-              {getResultsScope(minViews, timeRange).label}
-            </span>
-          </div>
+          {/* Time range — already set in step 1, shown in header as timeRangeLabel */}
 
           {/* Summary line */}
           <p className="flex items-center gap-1.5 text-sm text-text-secondary">
             <Check size={14} className="shrink-0 text-emerald-400" />
-            {formatViewLabel(minViews)} views · {formatPeriodLabel(timeRange)}
+            {formatViewLabel(minViews)} views · {timeRangeLabel}
           </p>
         </div>
       )}
