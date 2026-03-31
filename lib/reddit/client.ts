@@ -47,33 +47,33 @@ async function findRedditThreadsViaSearxng(
 ): Promise<{ title: string; url: string; description: string; subreddit: string; answers: number | null; topComment: string | null }[]> {
   const threads: { title: string; url: string; description: string; subreddit: string; answers: number | null; topComment: string | null }[] = [];
 
-  // Run two searches for broad coverage
+  // Run multiple searches for broad coverage (SearXNG is free/self-hosted)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const results: (any | null)[] = [];
 
-  // First query: general search with reddit engine
-  try {
-    const res = await searxngSearch(query, {
-      timeRange,
-      categories: 'general',
-      engines: 'reddit',
-    });
-    results.push(res);
-  } catch (err) {
-    console.error('[reddit] SearXNG general search error:', err);
-    results.push(null);
+  const searches: { q: string; opts: Record<string, string> }[] = [
+    // Direct reddit engine search
+    { q: query, opts: { categories: 'general', engines: 'reddit' } },
+    // Broader web search scoped to reddit
+    { q: `reddit ${query} discussion`, opts: { categories: 'general' } },
+  ];
+
+  // For larger counts, add extra query variants for more coverage
+  if (count > 40) {
+    searches.push(
+      { q: `site:reddit.com ${query}`, opts: { categories: 'general' } },
+      { q: `reddit ${query} advice tips`, opts: { categories: 'general' } },
+    );
   }
 
-  // Second query: reddit keyword search for broader coverage
-  try {
-    const res = await searxngSearch(`reddit ${query} discussion`, {
-      timeRange,
-      categories: 'general',
-    });
-    results.push(res);
-  } catch (err) {
-    console.error('[reddit] SearXNG reddit search error:', err);
-    results.push(null);
+  for (const { q, opts } of searches) {
+    try {
+      const res = await searxngSearch(q, { timeRange, ...opts });
+      results.push(res);
+    } catch (err) {
+      console.error('[reddit] SearXNG search error:', err);
+      results.push(null);
+    }
   }
 
   const seenUrls = new Set<string>();
@@ -131,7 +131,7 @@ async function scrapeRedditThread(url: string): Promise<{
 }> {
   try {
     // Normalize URL to ensure we hit the .json endpoint
-    const jsonUrl = url.replace(/\/?$/, '.json') + '?limit=10&sort=top&depth=1&raw_json=1';
+    const jsonUrl = url.replace(/\/?$/, '.json') + '?limit=20&sort=top&depth=1&raw_json=1';
     const cleanJsonUrl = jsonUrl.replace('.json.json', '.json');
 
     const res = await fetch(cleanJsonUrl, {
@@ -182,7 +182,7 @@ async function scrapeRedditThread(url: string): Promise<{
       });
     }
 
-    return { post, comments: comments.slice(0, 10) };
+    return { post, comments: comments.slice(0, 20) };
   } catch {
     return { post: null, comments: [] };
   }
@@ -255,12 +255,12 @@ export async function gatherRedditData(
   timeRange: string,
   volume: string = 'medium',
 ): Promise<RedditSearchResult & { postsWithComments: (RedditPost & { top_comments: RedditComment[] })[] }> {
-  const limit = volume === 'deep' ? 40 : volume === 'medium' ? 40 : 20;
+  const limit = volume === 'deep' ? 100 : volume === 'medium' ? 60 : 20;
   const result = await searchReddit(query, timeRange, limit);
 
   // Scrape top threads for full content + comments.
-  // deep=40, medium=20, light=5 — matches VOLUME_CONFIG commentPosts targets.
-  const scrapeCount = volume === 'deep' ? 40 : volume === 'medium' ? 20 : 5;
+  // deep=50, medium=30, light=10
+  const scrapeCount = volume === 'deep' ? 50 : volume === 'medium' ? 30 : 10;
   const toScrape = result.posts.slice(0, scrapeCount);
 
   const postsWithComments: (RedditPost & { top_comments: RedditComment[] })[] = [];

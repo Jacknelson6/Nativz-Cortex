@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [],
+    "deny": []
+  },
+  "mcpServers": {
+    "token-savior": {
+      "command": "/opt/homebrew/lib/token-savior/.venv/bin/token-savior",
+      "env": {
+        "PROJECT_ROOT": "/Users/jacknelson/Nativz-Cortex"
+      }
+    }
+  }
+}
