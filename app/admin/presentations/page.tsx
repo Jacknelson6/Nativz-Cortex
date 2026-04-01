@@ -265,7 +265,6 @@ export default function PresentationsPage() {
                 { type: 'tier_list' as const, label: 'Tier list', desc: 'Rank content with drag-and-drop tiers for visual demos on calls', icon: ListOrdered, color: 'rgba(168, 85, 247, 0.15)', iconColor: 'text-accent2-text', bgColor: 'bg-accent2-surface' },
                 { type: 'social_audit' as const, label: 'Social audit', desc: 'Before & after analysis with real social data and growth projections', icon: BarChart3, color: 'rgba(16, 185, 129, 0.15)', iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10' },
                 { type: 'benchmarks' as const, label: 'Creative benchmarks', desc: 'Interactive charts and tables from $1.3B in ad spend data', icon: BarChart2, color: 'rgba(249, 115, 22, 0.15)', iconColor: 'text-orange-400', bgColor: 'bg-orange-500/15' },
-                // Prospect audit and Social results visualizer moved to Strategy Lab
               ].map(({ type, label, desc, icon: Icon, iconColor, bgColor }) => (
                 <button
                   key={type}

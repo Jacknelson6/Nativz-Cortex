@@ -156,15 +156,6 @@ export function StrategyLabContentStackCard({
             <span className="font-medium text-amber-200/90">Start with topic research.</span>{' '}
             Run at least one topic search to completion, then build pillars from those findings (or add pillars
             manually in the idea generator after you have research context).
-            <div className="mt-3">
-              <Link
-                href="/admin/search/new"
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent-text underline-offset-4 hover:underline"
-              >
-                New topic search
-                <ArrowRight className="h-4 w-4" aria-hidden />
-              </Link>
-            </div>
           </div>
         ) : null}
 

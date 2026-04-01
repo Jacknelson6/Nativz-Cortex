@@ -7,6 +7,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateEmbedding } from '@/lib/ai/embeddings';
+import { runAgencySearch } from '@/lib/context/run-agency-search';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -170,7 +171,24 @@ export async function searchKnowledgeNodes(
 ): Promise<Array<KnowledgeNode & { similarity: number }>> {
   const { clientId, kinds, domains, limit = 10 } = options ?? {};
 
-  // Try semantic search first
+  return runAgencySearch(
+    query,
+    { clientId, kinds, domains, limit },
+    async () => searchKnowledgeNodesFromSupabase(query, { clientId, kinds, domains, limit }),
+  );
+}
+
+async function searchKnowledgeNodesFromSupabase(
+  query: string,
+  options: {
+    clientId?: string | null;
+    kinds?: string[];
+    domains?: string[];
+    limit: number;
+  },
+): Promise<Array<KnowledgeNode & { similarity: number }>> {
+  const { clientId, kinds, domains, limit } = options;
+
   const embedding = await generateEmbedding(query);
 
   if (embedding) {
@@ -189,7 +207,6 @@ export async function searchKnowledgeNodes(
     }
   }
 
-  // Fallback: full-text search
   const ftsResults = await searchKnowledgeNodesFTS(query, { clientId, kinds, limit });
   return ftsResults.map((r) => ({ ...r, similarity: 0 }));
 }

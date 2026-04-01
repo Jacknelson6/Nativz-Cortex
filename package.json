@@ -35,6 +35,7 @@
     "supabase:apply-063": "tsx scripts/exec-sql-file.ts supabase/migrations/063_client_ad_generation_settings.sql",
     "supabase:apply-064": "tsx scripts/exec-sql-file.ts supabase/migrations/064_affiliate_digest_schedule.sql",
     "supabase:apply-065": "tsx scripts/exec-sql-file.ts supabase/migrations/065_brand_dna_jobs_updated_at.sql",
+    "trustgraph:smoke": "tsx scripts/trustgraph-smoke.ts",
     "supabase:migrate": "tsx scripts/apply-pending-migrations.ts",
     "env:vercel:sync": "tsx scripts/sync-env-to-vercel.ts",
     "env:vercel:sync:preview": "tsx scripts/sync-env-to-vercel.ts preview",

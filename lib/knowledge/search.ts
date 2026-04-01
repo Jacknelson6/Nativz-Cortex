@@ -4,25 +4,22 @@
  * QMD pattern: agents call searchKnowledge() to retrieve only the most
  * relevant entries instead of loading the entire knowledge corpus.
  * This keeps agent context windows lean regardless of how many entries exist.
+ *
+ * When TrustGraph is configured (see docs/trustgraph-context-layer.md), retrieval
+ * is orchestrated via {@link @/lib/context/run-client-search}.
  */
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateEmbedding } from '@/lib/ai/embeddings';
 import { classifyKnowledgeQuery, type KnowledgeQueryIntent } from './query-classifier';
+import { runClientSearch } from '@/lib/context/run-client-search';
+import { searchKnowledgeSupabase } from '@/lib/knowledge/search-supabase';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface KnowledgeSearchResult {
-  id: string;
-  client_id: string;
-  type: string;
-  title: string;
-  content: string;
-  metadata: Record<string, unknown>;
-  score: number;
-}
+export type { KnowledgeSearchResult } from './search-types';
 
 // ---------------------------------------------------------------------------
 // Search functions
@@ -37,73 +34,17 @@ export async function searchKnowledge(
   clientId: string,
   query: string,
   options: { limit?: number; threshold?: number; types?: string[] } = {},
-): Promise<KnowledgeSearchResult[]> {
-  const { limit = 5, threshold = 0.3, types } = options;
-
-  // Try semantic search first
-  const embedding = await generateEmbedding(query);
-
-  if (embedding) {
-    const admin = createAdminClient();
-    const { data, error } = await admin.rpc('search_knowledge_semantic', {
-      query_embedding: JSON.stringify(embedding),
-      target_client_id: clientId,
-      match_limit: limit,
-      similarity_threshold: threshold,
-    });
-
-    if (!error && data && data.length > 0) {
-      let results = data as KnowledgeSearchResult[];
-      if (types?.length) {
-        results = results.filter((r) => types.includes(r.type));
-      }
-      return results;
-    }
-  }
-
-  // Fallback: full-text search
-  return searchKnowledgeFTS(clientId, query, { limit, types });
+): Promise<import('./search-types').KnowledgeSearchResult[]> {
+  return runClientSearch(clientId, query, options, () =>
+    searchKnowledgeSupabase(clientId, query, options),
+  );
 }
 
 /**
  * Full-text search over a client's knowledge base.
  * Uses Postgres websearch_to_tsquery for natural language queries.
  */
-export async function searchKnowledgeFTS(
-  clientId: string,
-  query: string,
-  options: { limit?: number; types?: string[] } = {},
-): Promise<KnowledgeSearchResult[]> {
-  const { limit = 5, types } = options;
-  const admin = createAdminClient();
-
-  const { data, error } = await admin.rpc('search_knowledge_fts', {
-    query_text: query,
-    target_client_id: clientId,
-    match_limit: limit,
-  });
-
-  if (error) {
-    console.error('Knowledge FTS error:', error);
-    return [];
-  }
-
-  let results = (data ?? []).map((row: Record<string, unknown>) => ({
-    id: row.id as string,
-    client_id: row.client_id as string,
-    type: row.type as string,
-    title: row.title as string,
-    content: row.content as string,
-    metadata: row.metadata as Record<string, unknown>,
-    score: row.rank as number,
-  }));
-
-  if (types?.length) {
-    results = results.filter((r: KnowledgeSearchResult) => types.includes(r.type));
-  }
-
-  return results;
-}
+export { searchKnowledgeFTS } from '@/lib/knowledge/search-supabase';
 
 /**
  * Search for current (non-superseded, still-valid) knowledge entries.
@@ -114,7 +55,7 @@ export async function searchCurrentKnowledge(
   clientId: string,
   query: string,
   options: { limit?: number; threshold?: number; types?: string[]; asOfDate?: string } = {},
-): Promise<KnowledgeSearchResult[]> {
+): Promise<import('./search-types').KnowledgeSearchResult[]> {
   const { limit = 10, threshold = 0.3, types, asOfDate } = options;
 
   // Get broader result set to filter from
@@ -168,7 +109,7 @@ export async function searchKnowledgeWithIntent(
   query: string,
   options: { limit?: number; threshold?: number } = {},
 ): Promise<{
-  results: KnowledgeSearchResult[];
+  results: import('./search-types').KnowledgeSearchResult[];
   intent: KnowledgeQueryIntent;
   preferCurrentOnly: boolean;
 }> {
@@ -201,7 +142,7 @@ export async function searchKnowledgeWithIntent(
 export async function searchKnowledgeGlobal(
   query: string,
   options: { limit?: number; threshold?: number } = {},
-): Promise<KnowledgeSearchResult[]> {
+): Promise<import('./search-types').KnowledgeSearchResult[]> {
   const { limit = 10, threshold = 0.3 } = options;
 
   const embedding = await generateEmbedding(query);
@@ -219,5 +160,5 @@ export async function searchKnowledgeGlobal(
     return [];
   }
 
-  return (data ?? []) as KnowledgeSearchResult[];
+  return (data ?? []) as import('./search-types').KnowledgeSearchResult[];
 }

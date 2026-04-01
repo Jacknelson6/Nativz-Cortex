@@ -17,8 +17,8 @@ import { StrategyLabNerdChat } from '@/components/strategy-lab/strategy-lab-nerd
 import { AnalyticsDashboard } from '@/components/reporting/analytics-dashboard';
 import type { PillarReferencePreview } from '@/lib/strategy-lab/pillar-reference-previews';
 
-type MainTab = 'content-strategy' | 'brand-knowledge';
-type ContentStrategyPanel = 'chat' | 'knowledge' | 'analytics';
+type MainTab = 'content-strategy' | 'brand-knowledge' | 'analytics';
+type ContentStrategyPanel = 'chat' | 'knowledge';
 
 const STORAGE_PREFIX = 'strategy-lab:selected-topic-searches:';
 
@@ -122,15 +122,15 @@ export function StrategyLabWorkspace({
   const pillarStrategyHref = `${ideasHubBase}&focus=pillars`;
   const ideasHubPillarIdeasHref = `${ideasHubBase}&focus=pillar-ideas`;
 
-  const MAIN_TABS: { id: MainTab; label: string }[] = [
-    { id: 'content-strategy', label: 'Content strategy' },
-    { id: 'brand-knowledge', label: 'Brand knowledge' },
+  const MAIN_TABS: { id: MainTab; label: string; icon: typeof Compass }[] = [
+    { id: 'content-strategy', label: 'Content strategy', icon: Compass },
+    { id: 'brand-knowledge', label: 'Brand knowledge', icon: Library },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   ];
 
   const CS_PANELS: { id: ContentStrategyPanel; label: string; icon: typeof BotMessageSquare }[] = [
     { id: 'chat', label: 'Chat with the Nerd', icon: BotMessageSquare },
     { id: 'knowledge', label: 'Brand knowledge', icon: Library },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   ];
 
   return (
@@ -139,6 +139,7 @@ export function StrategyLabWorkspace({
       <div className="flex gap-1 rounded-lg border border-nativz-border bg-surface p-1">
         {MAIN_TABS.map((tab) => {
           const active = mainTab === tab.id;
+          const Icon = tab.icon;
           return (
             <button
               key={tab.id}
@@ -150,14 +151,24 @@ export function StrategyLabWorkspace({
                   : 'text-text-muted hover:bg-surface-hover hover:text-text-secondary'
               }`}
             >
-              {tab.id === 'content-strategy' ? <Compass size={16} /> : <Library size={16} />}
+              <Icon size={16} aria-hidden />
               {tab.label}
             </button>
           );
         })}
       </div>
 
-      {mainTab === 'brand-knowledge' ? (
+      {mainTab === 'analytics' ? (
+        <div className="overflow-hidden rounded-xl border border-nativz-border/60 bg-surface">
+          <div className="border-b border-nativz-border/50 px-4 py-3">
+            <h3 className="text-sm font-semibold text-text-primary">Client analytics</h3>
+            <p className="text-xs text-text-muted">Cross-platform social performance for this workspace.</p>
+          </div>
+          <div className="p-4">
+            <AnalyticsDashboard initialClientId={clientId} />
+          </div>
+        </div>
+      ) : mainTab === 'brand-knowledge' ? (
         <StrategyLabBrandKnowledgeTab
           clientId={clientId}
           clientSlug={clientSlug}
@@ -196,7 +207,7 @@ export function StrategyLabWorkspace({
             Pin topic searches above so the first message in chat includes them as context for Cortex.
           </p>
 
-          {/* Content strategy — chat / knowledge peek / analytics */}
+          {/* Content strategy — chat / knowledge peek */}
           <div className="flex flex-col gap-3">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
               Strategy workspace
@@ -258,18 +269,6 @@ export function StrategyLabWorkspace({
                 </ul>
               </div>
             ) : null}
-
-            {csPanel === 'analytics' ? (
-              <div className="overflow-hidden rounded-xl border border-nativz-border/60 bg-surface">
-                <div className="border-b border-nativz-border/50 px-4 py-3">
-                  <h3 className="text-sm font-semibold text-text-primary">Client analytics</h3>
-                  <p className="text-xs text-text-muted">Cross-platform social performance for this workspace.</p>
-                </div>
-                <div className="p-4">
-                  <AnalyticsDashboard initialClientId={clientId} />
-                </div>
-              </div>
-            ) : null}
           </div>
 
           <StrategyLabContentStackCard
@@ -288,19 +287,7 @@ export function StrategyLabWorkspace({
             variant="pillars-only"
           />
 
-          <StrategyLabSection
-            icon={Film}
-            title="Analysis boards"
-            actions={
-              <Link
-                href={`/admin/analysis?createBoard=1&clientId=${encodeURIComponent(clientId)}`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-accent-surface px-3 py-2 text-sm font-semibold text-accent-text transition hover:bg-accent-surface/80"
-              >
-                New analysis board
-                <ArrowRight className="h-4 w-4" aria-hidden />
-              </Link>
-            }
-          >
+          <StrategyLabSection icon={Film} title="Analysis boards">
             <ol className="mb-6 list-inside list-decimal space-y-2 rounded-lg border border-nativz-border/40 bg-background/30 px-4 py-3 text-sm text-text-secondary">
               <li>
                 Add videos from a topic search (it includes links) or paste your own URLs onto a board.
@@ -314,7 +301,8 @@ export function StrategyLabWorkspace({
 
             {moodBoards.length === 0 ? (
               <p className="text-sm text-text-muted">
-                No boards for this client yet. Create an analysis board to compare reference videos side by side.
+                No boards for this client yet. Use Cortex in chat to add reference videos and run the same analysis
+                flow.
               </p>
             ) : (
               <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
