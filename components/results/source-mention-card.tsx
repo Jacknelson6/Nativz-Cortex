@@ -10,14 +10,12 @@ import {
   Heart,
   MessageCircle,
   Share2,
-  Zap,
 } from 'lucide-react';
 
 import { PlatformIcon, PLATFORM_CONFIG } from '@/components/search/platform-icon';
 import { cn } from '@/lib/utils';
 import type { PlatformComment, PlatformSource } from '@/lib/types/search';
 import {
-  engagementRatePercent,
   resolveSourceThumbnailUrl,
   sourcePlaceLabel,
   formatViewsApprox,
@@ -80,10 +78,8 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
   const config = PLATFORM_CONFIG[source.platform];
   const thumb = resolveSourceThumbnailUrl(source);
   const isVideoThumb = thumb != null && (source.platform === 'youtube' || source.platform === 'tiktok');
-  const aspectClass =
-    source.platform === 'tiktok' || source.videoFormat === 'short'
-      ? 'aspect-[9/16] max-h-52 w-full mx-auto'
-      : 'aspect-video w-full';
+  /** 16:9 for all video thumbs so grid rows align */
+  const aspectClass = 'aspect-video w-full';
 
   const titleText = source.platform === 'web' ? stripHtml(source.title) : source.title;
   const bodyText =
@@ -92,14 +88,6 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
       : (source.content ?? source.title ?? '').trim();
 
   const place = sourcePlaceLabel(source);
-  const er = engagementRatePercent(source);
-
-  const authorLine =
-    source.platform === 'reddit' && source.author
-      ? `u/${source.author.replace(/^u\//, '')}`
-      : source.platform === 'tiktok' && source.author
-        ? `@${source.author.replace(/^@/, '')}`
-        : source.author || '';
 
   let timeLabel = '';
   try {
@@ -108,10 +96,8 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
     timeLabel = '';
   }
 
-  const sublineMeta =
-    source.platform === 'youtube'
-      ? timeLabel || 'Video'
-      : [authorLine, timeLabel].filter(Boolean).join(' · ');
+  /** Platform name + relative time so TikTok/YouTube stay identifiable next to creator in title */
+  const sublineMeta = [config.label, timeLabel].filter(Boolean).join(' · ');
 
   const commentPrefix =
     source.platform === 'reddit' ? 'u/' : source.platform === 'tiktok' ? '@' : '@';
@@ -129,14 +115,25 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
             <p className="text-[11px] text-text-muted truncate">{sublineMeta}</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onToggleSave}
-          className="shrink-0 p-1 rounded-md text-text-muted hover:text-accent-text hover:bg-white/[0.06] cursor-pointer transition-colors"
-          aria-label={saved ? 'Remove saved' : 'Save source'}
-        >
-          {saved ? <BookmarkCheck size={18} className="text-accent-text" /> : <Bookmark size={18} />}
-        </button>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-accent-text hover:bg-white/[0.06] transition-colors"
+          >
+            Open
+            <ExternalLink size={12} />
+          </a>
+          <button
+            type="button"
+            onClick={onToggleSave}
+            className="shrink-0 p-1 rounded-md text-text-muted hover:text-accent-text hover:bg-white/[0.06] cursor-pointer transition-colors"
+            aria-label={saved ? 'Remove saved' : 'Save source'}
+          >
+            {saved ? <BookmarkCheck size={18} className="text-accent-text" /> : <Bookmark size={18} />}
+          </button>
+        </div>
       </div>
 
       {/* Thumbnail */}
@@ -175,7 +172,7 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
         </a>
 
         {bodyText && (
-          <p className="text-xs text-text-secondary line-clamp-3 leading-relaxed">{bodyText}</p>
+          <p className="text-xs text-text-secondary line-clamp-2 leading-relaxed">{bodyText}</p>
         )}
 
         {/* Metrics */}
@@ -192,19 +189,7 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
           {source.engagement.shares != null && source.engagement.shares > 0 && (
             <StatChip icon={<Share2 size={12} />} value={formatNumber(source.engagement.shares)} />
           )}
-          {er != null && (
-            <StatChip icon={<Zap size={12} />} value={`${er}%`} />
-          )}
         </div>
-
-        {/* Tags — platform-specific context only (subreddit, publication) */}
-        {place !== config.label && (
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] text-text-secondary">
-              {place}
-            </span>
-          </div>
-        )}
 
         <CommentsBlock comments={source.comments ?? []} authorPrefix={commentPrefix} />
 
@@ -219,15 +204,6 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
             </p>
           </div>
         )}
-
-        <a
-          href={source.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-[11px] text-accent-text hover:underline mt-auto pt-1"
-        >
-          Open <ExternalLink size={10} />
-        </a>
       </div>
     </article>
   );

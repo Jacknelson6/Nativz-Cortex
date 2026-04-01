@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 
-import { Card } from '@/components/ui/card';
 import { SourceMentionCard } from '@/components/results/source-mention-card';
 import type { PlatformSource } from '@/lib/types/search';
 
@@ -46,7 +45,7 @@ export function SourceBrowser({ sources }: SourceBrowserProps) {
   const displayed = showAll ? shuffled : shuffled.slice(0, 12);
 
   return (
-    <Card>
+    <section className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5">
       <div className="mb-4">
         <h3 className="text-base font-semibold text-text-primary">Sources</h3>
         <p className="text-xs text-text-muted mt-0.5">
@@ -54,7 +53,7 @@ export function SourceBrowser({ sources }: SourceBrowserProps) {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {displayed.map((source) => {
           const key = sourceKey(source);
           return (
@@ -77,6 +76,6 @@ export function SourceBrowser({ sources }: SourceBrowserProps) {
           Show more
         </button>
       )}
-    </Card>
+    </section>
   );
 }

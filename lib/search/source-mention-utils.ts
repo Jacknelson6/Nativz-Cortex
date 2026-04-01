@@ -101,7 +101,7 @@ export function sourcePlaceLabel(source: PlatformSource): string {
     case 'youtube':
       return source.author || 'YouTube';
     case 'tiktok':
-      return 'TikTok';
+      return source.author ? `@${source.author.replace(/^@/, '')}` : 'TikTok';
     case 'quora':
       return 'Quora';
     case 'web': {

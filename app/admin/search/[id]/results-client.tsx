@@ -223,7 +223,7 @@ export function AdminResultsClient({
       </div>
 
       {/* Content */}
-      <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+      <div className="w-full px-6 py-8 space-y-6">
         {search.summary ? (
           <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5 space-y-5">
             <ExecutiveSummary summary={search.summary} />
