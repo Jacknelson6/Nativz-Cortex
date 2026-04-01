@@ -17,7 +17,6 @@ import {
   ChevronRight,
   Share2,
   Handshake,
-  Clapperboard,
   ImagePlus,
   StickyNote,
   Brain,
@@ -92,13 +91,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/scheduler', label: 'Post scheduler', icon: Send },
       { href: '/admin/search/new', label: 'Research', icon: Telescope },
       { href: '/admin/strategy-lab', label: 'Strategy lab', icon: Compass },
-      { href: '/admin/analysis', label: 'Analysis', icon: Clapperboard },
       { href: '/admin/ad-creatives', label: 'Ad creatives', icon: ImagePlus },
-    ],
-  },
-  {
-    label: 'Present',
-    items: [
       { href: '/admin/presentations', label: 'Notes', icon: StickyNote },
     ],
   },

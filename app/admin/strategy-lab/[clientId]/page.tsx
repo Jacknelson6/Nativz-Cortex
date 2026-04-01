@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { StrategyLabWorkspace } from '@/components/strategy-lab/strategy-lab-workspace';
 import { loadPillarReferencePreviews } from '@/lib/strategy-lab/pillar-reference-previews';
+import { getKnowledgeEntries, getKnowledgeGraph } from '@/lib/knowledge/queries';
 
 export default async function StrategyLabClientPage({
   params,
@@ -114,6 +115,11 @@ export default async function StrategyLabClientPage({
   const pillarIds = (pillars ?? []).map((p) => p.id as string);
   const pillarReferencePreviews = await loadPillarReferencePreviews(admin, client.id, pillarIds);
 
+  const [vaultEntries, vaultGraphData] = await Promise.all([
+    getKnowledgeEntries(client.id),
+    getKnowledgeGraph(client.id),
+  ]);
+
   return (
     <div className="cortex-page-gutter pb-12">
       <div className="mx-auto max-w-5xl">
@@ -140,6 +146,8 @@ export default async function StrategyLabClientPage({
         pillarReferencePreviews={pillarReferencePreviews}
         moodBoards={moodBoardsWithThumbs}
         hasCompletedIdeaGeneration={(completedIdeaGenCount ?? 0) > 0}
+        vaultEntries={vaultEntries}
+        vaultGraphData={vaultGraphData}
       />
       </div>
     </div>

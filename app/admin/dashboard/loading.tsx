@@ -49,12 +49,6 @@ export default function DashboardLoading() {
           ))}
         </div>
       </div>
-
-      {/* Pipeline widget */}
-      <div className="space-y-3 rounded-xl border border-nativz-border bg-surface p-4">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="h-28 w-full rounded-lg" />
-      </div>
     </div>
   );
 }

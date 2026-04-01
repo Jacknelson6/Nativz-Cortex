@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { HtmlVisualBlock, MermaidDiagramBlock } from '@/components/ai/rich-code-block';
 
 /** `present` = full-screen dark presenter (high contrast). `default` = in-app surfaces. */
 export type MarkdownVariant = 'default' | 'present';
@@ -68,24 +69,38 @@ export function Markdown({ content, variant = 'default' }: { content: string; va
   lines.forEach((line, i) => {
     if (line.startsWith('```')) {
       if (inCodeBlock) {
-        elements.push(
-          <div key={`code-${i}`} className="group relative my-3 overflow-hidden rounded-lg border border-white/[0.06]">
-            {codeLang && (
-              <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.03] px-3 py-1.5">
-                <span className={codeMetaCls}>{codeLang}</span>
-              </div>
-            )}
-            <pre
-              className={
-                present
-                  ? 'overflow-x-auto bg-black/50 p-3 text-[13px] leading-relaxed font-mono text-zinc-200'
-                  : 'overflow-x-auto bg-black/30 p-3 text-[13px] leading-relaxed font-mono text-gray-300'
-              }
-            >
-              {codeBuffer.join('\n')}
-            </pre>
-          </div>,
-        );
+        const codeBody = codeBuffer.join('\n');
+        const langLower = codeLang.toLowerCase();
+        const visualVariant = present ? 'present' : 'default';
+
+        if (langLower === 'mermaid') {
+          elements.push(
+            <MermaidDiagramBlock key={`code-${i}`} code={codeBody} variant={visualVariant} />,
+          );
+        } else if (langLower === 'html' || langLower === 'html-visual') {
+          elements.push(
+            <HtmlVisualBlock key={`code-${i}`} code={codeBody} variant={visualVariant} />,
+          );
+        } else {
+          elements.push(
+            <div key={`code-${i}`} className="group relative my-3 overflow-hidden rounded-lg border border-white/[0.06]">
+              {codeLang && (
+                <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.03] px-3 py-1.5">
+                  <span className={codeMetaCls}>{codeLang}</span>
+                </div>
+              )}
+              <pre
+                className={
+                  present
+                    ? 'overflow-x-auto bg-black/50 p-3 text-[13px] leading-relaxed font-mono text-zinc-200'
+                    : 'overflow-x-auto bg-black/30 p-3 text-[13px] leading-relaxed font-mono text-gray-300'
+                }
+              >
+                {codeBody}
+              </pre>
+            </div>,
+          );
+        }
         codeBuffer = [];
         codeLang = '';
       } else {
@@ -174,18 +189,27 @@ export function Markdown({ content, variant = 'default' }: { content: string; va
   });
 
   if (inCodeBlock && codeBuffer.length) {
-    elements.push(
-      <pre
-        key="code-final"
-        className={
-          present
-            ? 'my-3 overflow-x-auto rounded-lg border border-white/[0.1] bg-black/50 p-3 text-[13px] font-mono text-zinc-200'
-            : 'my-3 overflow-x-auto rounded-lg border border-white/[0.06] bg-black/30 p-3 text-[13px] font-mono text-gray-300'
-        }
-      >
-        {codeBuffer.join('\n')}
-      </pre>,
-    );
+    const codeBody = codeBuffer.join('\n');
+    const langLower = codeLang.toLowerCase();
+    const visualVariant = present ? 'present' : 'default';
+    if (langLower === 'mermaid') {
+      elements.push(<MermaidDiagramBlock key="code-final" code={codeBody} variant={visualVariant} />);
+    } else if (langLower === 'html' || langLower === 'html-visual') {
+      elements.push(<HtmlVisualBlock key="code-final" code={codeBody} variant={visualVariant} />);
+    } else {
+      elements.push(
+        <pre
+          key="code-final"
+          className={
+            present
+              ? 'my-3 overflow-x-auto rounded-lg border border-white/[0.1] bg-black/50 p-3 text-[13px] font-mono text-zinc-200'
+              : 'my-3 overflow-x-auto rounded-lg border border-white/[0.06] bg-black/30 p-3 text-[13px] font-mono text-gray-300'
+          }
+        >
+          {codeBody}
+        </pre>,
+      );
+    }
   }
 
   return <div className={present ? 'space-y-2' : 'space-y-1'}>{elements}</div>;

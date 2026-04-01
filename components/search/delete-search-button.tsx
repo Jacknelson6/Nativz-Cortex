@@ -36,7 +36,7 @@ export function DeleteSearchButton({ searchId }: { searchId: string }) {
       onClick={handleDelete}
       disabled={deleting}
       className="cursor-pointer p-1.5 rounded-md text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
-      title="Delete failed search"
+      title="Delete search (failed, stuck, or in progress)"
     >
       {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
     </button>

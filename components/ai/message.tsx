@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { Copy, Check, RotateCcw, Loader2, BotMessageSquare } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Copy, Check, RotateCcw, Loader2, BotMessageSquare, FileDown, Printer } from 'lucide-react';
 import { Markdown } from './markdown';
 import { ToolCard, type ToolResultData } from './tool-card';
+import { exportElementToPdf } from '@/lib/chat-export-pdf';
+import { printMessageElement } from '@/lib/chat-print';
 
 export interface ToolResult {
   toolCallId: string;
@@ -19,17 +21,18 @@ export interface ChatMessage {
 }
 
 function MessageActions({
-  messageId,
   content,
   onRetry,
   isLast,
+  exportRootRef,
 }: {
-  messageId: string;
   content: string;
   onRetry: () => void;
   isLast: boolean;
+  exportRootRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const [copied, setCopied] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   function handleCopy() {
     // Strip markdown to copy as plain text
@@ -54,9 +57,28 @@ function MessageActions({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function handleExportPdf() {
+    const el = exportRootRef.current;
+    if (!el) return;
+    setPdfBusy(true);
+    try {
+      await exportElementToPdf(el, 'cortex-message.pdf');
+    } catch {
+      /* toast optional */
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
+  function handlePrint() {
+    const el = exportRootRef.current;
+    if (el) printMessageElement(el);
+  }
+
   return (
     <div className={`flex gap-0.5 mt-1.5 transition-opacity duration-150 ${isLast ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
       <button
+        type="button"
         onClick={handleCopy}
         className="rounded-lg p-1.5 text-text-muted hover:text-text-primary hover:bg-white/[0.06] transition-colors cursor-pointer"
         title="Copy"
@@ -64,6 +86,24 @@ function MessageActions({
         {copied ? <Check size={14} /> : <Copy size={14} />}
       </button>
       <button
+        type="button"
+        onClick={handleExportPdf}
+        disabled={pdfBusy}
+        className="rounded-lg p-1.5 text-text-muted hover:text-text-primary hover:bg-white/[0.06] transition-colors cursor-pointer disabled:opacity-50"
+        title="Download PDF"
+      >
+        {pdfBusy ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
+      </button>
+      <button
+        type="button"
+        onClick={handlePrint}
+        className="rounded-lg p-1.5 text-text-muted hover:text-text-primary hover:bg-white/[0.06] transition-colors cursor-pointer"
+        title="Print or save as PDF"
+      >
+        <Printer size={14} />
+      </button>
+      <button
+        type="button"
         onClick={onRetry}
         className="rounded-lg p-1.5 text-text-muted hover:text-text-primary hover:bg-white/[0.06] transition-colors cursor-pointer"
         title="Retry"
@@ -83,6 +123,8 @@ export function AssistantMessage({
   isLast: boolean;
   onRetry: () => void;
 }) {
+  const exportRootRef = useRef<HTMLDivElement>(null);
+
   return (
     <div className="group flex gap-3 py-5">
       {/* Avatar */}
@@ -92,34 +134,34 @@ export function AssistantMessage({
 
       {/* Content */}
       <div className="min-w-0 flex-1 pt-0.5">
-        {/* Tool results */}
-        {message.toolResults && message.toolResults.length > 0 && (
-          <div className="mb-3">
-            {message.toolResults.map((tr, i) => (
-              <ToolCard key={`${tr.toolCallId}-${i}`} toolName={tr.toolName} result={tr.result} />
-            ))}
-          </div>
-        )}
+        <div ref={exportRootRef} className="text-text-secondary">
+          {/* Tool results */}
+          {message.toolResults && message.toolResults.length > 0 && (
+            <div className="mb-3">
+              {message.toolResults.map((tr, i) => (
+                <ToolCard key={`${tr.toolCallId}-${i}`} toolName={tr.toolName} result={tr.result} />
+              ))}
+            </div>
+          )}
 
-        {/* Text content */}
-        {message.content ? (
-          <div className="text-text-secondary">
+          {/* Text content + rich blocks */}
+          {message.content ? (
             <Markdown content={message.content} />
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 py-1 text-sm text-text-muted">
-            <Loader2 size={14} className="animate-spin" />
-            <span>Thinking...</span>
-          </div>
-        )}
+          ) : (
+            <div className="flex items-center gap-2 py-1 text-sm text-text-muted">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Thinking...</span>
+            </div>
+          )}
+        </div>
 
         {/* Actions */}
         {message.content && (
           <MessageActions
-            messageId={message.id}
             content={message.content}
             onRetry={onRetry}
             isLast={isLast}
+            exportRootRef={exportRootRef}
           />
         )}
       </div>

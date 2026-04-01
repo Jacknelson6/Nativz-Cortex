@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { ToolDefinition } from '../types';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { ensureNerdVideoAnalysisBoard, addVideoUrlToNerdBoard } from '@/lib/analysis/nerd-chat-pipeline';
+import { runMoodboardTranscribe } from '@/lib/analysis/moodboard-transcribe-internal';
+import { runMoodboardAnalyzeLlm } from '@/lib/analysis/moodboard-analyze-internal';
+import { runMoodboardRescript } from '@/lib/analysis/moodboard-rescript-internal';
 
 function truncate(text: string | null | undefined, max = 120): string {
   const value = (text ?? '').trim();
@@ -324,6 +328,171 @@ export const moodboardTools: ToolDefinition[] = [
         return {
           success: false,
           error: err instanceof Error ? err.message : 'Failed to summarize video',
+          cardType: 'moodboard' as const,
+        };
+      }
+    },
+  },
+
+  {
+    name: 'add_video_url_for_analysis',
+    description:
+      'Add a public video URL to the Nerd chat analysis pipeline: creates/finds a board, saves the video, and extracts a transcript (TikTok, YouTube, Instagram, or direct .mp4 URL). Use when the user shares a video link or wants transcript/hook work in chat. Optional client_id ties the board to a @mentioned client.',
+    parameters: z.object({
+      url: z.string().describe('Video page URL or direct link to an .mp4/.webm/.mov file'),
+      client_id: z.string().optional().describe('Optional client UUID when working in the context of a specific brand'),
+    }),
+    riskLevel: 'write',
+    handler: async (params, userId) => {
+      try {
+        const admin = createAdminClient();
+        const { data: profile } = await admin.from('users').select('email').eq('id', userId).single();
+        const clientId = (params.client_id as string | undefined) ?? undefined;
+        const { boardId } = await ensureNerdVideoAnalysisBoard(admin, userId, clientId ?? null);
+        const result = await addVideoUrlToNerdBoard(
+          admin,
+          userId,
+          profile?.email ?? null,
+          boardId,
+          params.url as string,
+        );
+        if (!result.ok) {
+          return { success: false, error: result.error, cardType: 'moodboard' as const };
+        }
+        return {
+          success: true,
+          data: {
+            itemId: result.itemId,
+            boardId: result.boardId,
+            transcribed: result.transcribed,
+            transcriptError: result.transcriptError ?? null,
+          },
+          cardType: 'moodboard' as const,
+          link: { href: `/admin/analysis/video/${result.itemId}`, label: 'Open video analysis' },
+        };
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to add video',
+          cardType: 'moodboard' as const,
+        };
+      }
+    },
+  },
+
+  {
+    name: 'transcribe_analysis_item',
+    description:
+      'Extract or refresh the transcript for a moodboard / analysis video item by item UUID. Use if transcription failed earlier or the user asks to try again.',
+    parameters: z.object({
+      item_id: z.string().describe('Moodboard item UUID'),
+    }),
+    riskLevel: 'write',
+    handler: async (params, userId) => {
+      try {
+        const admin = createAdminClient();
+        const { data: profile } = await admin.from('users').select('email').eq('id', userId).single();
+        const r = await runMoodboardTranscribe(admin, params.item_id as string, {
+          id: userId,
+          email: profile?.email ?? null,
+        });
+        if (!r.ok) {
+          return { success: false, error: r.error, cardType: 'moodboard' as const };
+        }
+        return {
+          success: true,
+          data: { itemId: params.item_id, hasTranscript: !!(r.item.transcript as string)?.length },
+          cardType: 'moodboard' as const,
+          link: { href: `/admin/analysis/video/${params.item_id}`, label: 'Open video analysis' },
+        };
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Transcription failed',
+          cardType: 'moodboard' as const,
+        };
+      }
+    },
+  },
+
+  {
+    name: 'run_hook_analysis_for_video',
+    description:
+      'Run AI hook analysis, scoring, themes, and improvement notes for a video item that has (or can work from) transcript/metadata. Call after transcription when the user wants strategic breakdown.',
+    parameters: z.object({
+      item_id: z.string().describe('Moodboard item UUID'),
+    }),
+    riskLevel: 'write',
+    handler: async (params, userId) => {
+      try {
+        const admin = createAdminClient();
+        const { data: profile } = await admin.from('users').select('email').eq('id', userId).single();
+        const r = await runMoodboardAnalyzeLlm(admin, params.item_id as string, {
+          id: userId,
+          email: profile?.email ?? null,
+        });
+        if (!r.ok) {
+          return { success: false, error: r.error, cardType: 'moodboard' as const };
+        }
+        const row = r.item;
+        return {
+          success: true,
+          data: {
+            hook: row.hook,
+            hookScore: row.hook_score,
+            hookAnalysis: row.hook_analysis,
+            conceptSummary: row.concept_summary,
+          },
+          cardType: 'moodboard' as const,
+          link: { href: `/admin/analysis/video/${params.item_id}`, label: 'Open video analysis' },
+        };
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Analysis failed',
+          cardType: 'moodboard' as const,
+        };
+      }
+    },
+  },
+
+  {
+    name: 'generate_video_rescript',
+    description:
+      'Rewrite the spoken-word script of an analyzed video for a brand (rescript / replication brief). Prefer after hook analysis. Pass client_id when adapting for a specific @mentioned client.',
+    parameters: z.object({
+      item_id: z.string().describe('Moodboard item UUID'),
+      client_id: z.string().optional().describe('Client UUID for brand voice from the database'),
+      brand_voice: z.string().optional(),
+      product: z.string().optional(),
+      target_audience: z.string().optional(),
+      notes: z.string().optional().describe('Extra adaptation notes from the user'),
+    }),
+    riskLevel: 'write',
+    handler: async (params, userId) => {
+      try {
+        const admin = createAdminClient();
+        const { data: profile } = await admin.from('users').select('email').eq('id', userId).single();
+        const r = await runMoodboardRescript(admin, params.item_id as string, { id: userId, email: profile?.email ?? null }, {
+          client_id: params.client_id as string | undefined,
+          brand_voice: params.brand_voice as string | undefined,
+          product: params.product as string | undefined,
+          target_audience: params.target_audience as string | undefined,
+          notes: params.notes as string | undefined,
+        });
+        if (!r.ok) {
+          return { success: false, error: r.error, cardType: 'moodboard' as const };
+        }
+        return {
+          success: true,
+          data: { scriptPreview: truncate(r.script, 400) },
+          cardType: 'moodboard' as const,
+          link: { href: `/admin/analysis/video/${params.item_id}`, label: 'Open video analysis' },
+        };
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Rescript failed',
           cardType: 'moodboard' as const,
         };
       }

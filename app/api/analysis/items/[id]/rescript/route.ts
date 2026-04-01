@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createCompletion } from '@/lib/ai/client';
+import { runMoodboardRescript } from '@/lib/analysis/moodboard-rescript-internal';
 
 const rescriptSchema = z.object({
   client_id: z.string().uuid().optional(),
@@ -30,12 +30,15 @@ const rescriptSchema = z.object({
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
     const supabase = await createServerSupabaseClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -43,113 +46,20 @@ export async function POST(
     const body = await request.json();
     const parsed = rescriptSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
+        { status: 400 },
+      );
     }
 
     const adminClient = createAdminClient();
+    const result = await runMoodboardRescript(adminClient, id, user, parsed.data);
 
-    const { data: item, error: fetchError } = await adminClient
-      .from('moodboard_items')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !item) {
-      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status ?? 500 });
     }
 
-    // Get client info if provided
-    let clientInfo = '';
-    if (parsed.data.client_id) {
-      const { data: client } = await adminClient
-        .from('clients')
-        .select('name, industry, target_audience, brand_voice')
-        .eq('id', parsed.data.client_id)
-        .single();
-
-      if (client) {
-        clientInfo = `Client: ${client.name}\nIndustry: ${client.industry}\nTarget audience: ${client.target_audience || parsed.data.target_audience || 'Not specified'}\nBrand voice: ${client.brand_voice || parsed.data.brand_voice || 'Not specified'}`;
-      }
-    }
-
-    const brandVoice = parsed.data.brand_voice || '';
-    const product = parsed.data.product || '';
-    const targetAudience = parsed.data.target_audience || '';
-    const userNotes = parsed.data.notes || '';
-
-    const prompt = `You are a senior video content strategist specializing in adapting viral content for brands.
-
-Original video analysis:
-- Title: ${item.title || 'Unknown'}
-- Concept: ${item.concept_summary || 'Not analyzed'}
-- Hook: ${item.hook || 'Not identified'}
-- Hook Score: ${item.hook_score || 'N/A'}/10
-- Hook Type: ${item.hook_type || 'N/A'}
-- CTA: ${item.cta || 'Not identified'}
-- Transcript: ${item.transcript ? item.transcript.substring(0, 3000) : 'Not available'}
-- Winning elements: ${(item.winning_elements ?? []).join(', ') || 'Not analyzed'}
-- Content themes: ${(item.content_themes ?? []).join(', ') || 'Not analyzed'}
-- Duration: ${item.duration ? `${item.duration}s` : 'Unknown'}
-
-${clientInfo ? `${clientInfo}\n` : ''}${brandVoice ? `Brand Voice: ${brandVoice}\n` : ''}${product ? `Product/Service: ${product}\n` : ''}${targetAudience ? `Target Audience: ${targetAudience}\n` : ''}${userNotes ? `Additional notes: ${userNotes}\n` : ''}
-
-Rescript this video for the specified brand. Write ONLY the spoken word script — the exact words the person on camera should say. Keep the same structural formula, hook style, and pacing that made the original work, but adapt the content entirely for the brand.
-
-Do NOT include shot descriptions, camera directions, stage directions, hashtags, or posting strategy. Just the spoken words, line by line.
-
-Return a JSON object with exactly this structure (no markdown, just raw JSON):
-{
-  "script": "The full spoken word script. Each line or beat on a new line. Just the words to say, nothing else."
-}`;
-
-    const aiResult = await createCompletion({
-      messages: [
-        { role: 'system', content: 'You are a senior video content strategist. Return only valid JSON, no markdown code fences.' },
-        { role: 'user', content: prompt },
-      ],
-      maxTokens: 2000,
-      feature: 'analysis_item_rescript',
-      modelPreference: ['openrouter/hunter-alpha'],
-      userId: user.id,
-      userEmail: user.email ?? undefined,
-    });
-    const content = aiResult.text || '';
-
-    if (!content) {
-      return NextResponse.json({ error: 'AI returned empty response' }, { status: 502 });
-    }
-
-    // Parse JSON from response (handle possible markdown fences)
-    let script: string;
-    try {
-      const jsonStr = content.replace(/^```json?\n?/gm, '').replace(/\n?```$/gm, '').trim();
-      const parsed2 = JSON.parse(jsonStr);
-      script = parsed2.script || parsed2.adapted_script || content;
-    } catch {
-      // If JSON parse fails, use the raw text as the script
-      script = content;
-    }
-
-    const rescriptData = {
-      script,
-      client_id: parsed.data.client_id || undefined,
-      brand_voice: brandVoice || undefined,
-      product: product || undefined,
-      target_audience: targetAudience || undefined,
-      generated_at: new Date().toISOString(),
-    };
-
-    // Save to DB
-    await adminClient
-      .from('moodboard_items')
-      .update({
-        rescript: rescriptData,
-        replication_brief: script,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id);
-
-    return NextResponse.json({ rescript: rescriptData });
+    return NextResponse.json({ rescript: result.rescript });
   } catch (error) {
     console.error('POST /api/analysis/items/[id]/rescript error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

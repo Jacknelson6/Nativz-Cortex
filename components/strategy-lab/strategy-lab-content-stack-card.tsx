@@ -57,6 +57,12 @@ type StrategyLabContentStackCardProps = {
   ideasHubPillarIdeasHref: string;
   ideasHref: string;
   brandDnaHref: string;
+  /**
+   * `full` — pillars, brand DNA, and pillar idea batches (default).
+   * `pillars-only` — strategy workspace: pillars + idea batches, no brand DNA block.
+   * `brand-dna-only` — brand knowledge tab: DNA bento only (no pillars / idea batches).
+   */
+  variant?: 'full' | 'pillars-only' | 'brand-dna-only';
 };
 
 /**
@@ -75,7 +81,11 @@ export function StrategyLabContentStackCard({
   ideasHubPillarIdeasHref,
   ideasHref,
   brandDnaHref,
+  variant = 'full',
 }: StrategyLabContentStackCardProps) {
+  const showPillars = variant === 'full' || variant === 'pillars-only';
+  const showBrandDna = variant === 'full' || variant === 'brand-dna-only';
+  const showPillarIdeas = variant === 'full' || variant === 'pillars-only';
   const router = useRouter();
   const [guidelineExpanded, setGuidelineExpanded] = useState(false);
   const [editingSection, setEditingSection] = useState<string | null>(null);
@@ -110,6 +120,7 @@ export function StrategyLabContentStackCard({
 
   return (
     <Card className="border-nativz-border/60 bg-surface p-0 overflow-hidden">
+      {showPillars ? (
       <div className="border-b border-nativz-border/45 bg-background/25 px-5 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
@@ -135,8 +146,10 @@ export function StrategyLabContentStackCard({
           ) : null}
         </div>
       </div>
+      ) : null}
 
       {/* — Pillars — */}
+      {showPillars ? (
       <div className="space-y-4 p-5">
         {!hasCompletedTopicSearch ? (
           <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm text-text-secondary">
@@ -262,9 +275,15 @@ export function StrategyLabContentStackCard({
           <p className="text-sm text-text-muted">Complete a topic search to unlock pillar strategy for this client.</p>
         ) : null}
       </div>
+      ) : null}
 
       {/* — Brand DNA — */}
-      <div className="border-t border-nativz-border/45 bg-background/[0.15] px-5 py-5">
+      {showBrandDna ? (
+      <div
+        className={`border-t border-nativz-border/45 bg-background/[0.15] px-5 py-5 ${
+          !showPillars ? 'border-t-0' : ''
+        }`}
+      >
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             <Dna className="h-5 w-5 shrink-0 text-accent-text" aria-hidden />
@@ -341,8 +360,10 @@ export function StrategyLabContentStackCard({
           </div>
         )}
       </div>
+      ) : null}
 
       {/* — Ideas — */}
+      {showPillarIdeas ? (
       <div className="border-t border-nativz-border/45 px-5 py-5">
         <div className="mb-3 flex items-center gap-2">
           <Zap className="h-5 w-5 text-accent-text" aria-hidden />
@@ -385,6 +406,7 @@ export function StrategyLabContentStackCard({
           </div>
         )}
       </div>
+      ) : null}
 
       {editingSection && brandGuideline ? (
         <BrandDNASectionEditor
