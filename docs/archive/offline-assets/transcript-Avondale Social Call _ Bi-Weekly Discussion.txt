@@ -1,0 +1,534 @@
+[00:02] Cole Feigl:
+Hey, Allison. I don't know if we can hear them. I think the Read AI meeting notes, that's probably John's, so I'm gonna go ahead and approve of that, too.
+
+[00:17] 1 214 07:
+Can you guys hear me? Okay?
+
+[00:19] Cole Feigl:
+Yes, we came. How was lunch?
+
+[00:19] Jack Nelson:
+Yep,
+
+[00:21] 1 214 07:
+Okay. Oh, it's good. It's my sister's birthday, but I'm up in McKinney, so I'm in the car for 40ish minutes. Going, going to 145 meeting. So it's back to back, but all good. Thanks for asking.
+
+[00:26] Cole Feigl:
+Oh, nice. Fun, fun, fun. Well, how. Is your sister older than you, or is she younger?
+
+[00:38] 1 214 07:
+Oh, yes, she's older. She's the big four seven today. And not thrilled about it, but she's embraced it, happy to be alive.
+
+[00:45] Cole Feigl:
+Oh, that's okay. I love it. That's fun.
+
+[00:48] 1 214 07:
+She's. She's like 47. Just very close to 50. I'm like, yes, it is. Or all going to be there one day.
+
+[00:54] Cole Feigl:
+Yeah. True that. True that. Well, that's fun. I'm happy you guys celebrated her 23rd birthday.
+
+[01:01] 1 214 07:
+Yes, exactly, exactly.
+
+[01:02] Cole Feigl:
+Yeah. All right, well, very cool. Well, we've got a lot of great data to run through. Are we waiting on John today, or will it just be us?
+
+[01:12] 1 214 07:
+No, no, he's definitely calling in. Maybe he's trying to log on right now. Let me shoot him a text.
+
+[01:16] Cole Feigl:
+Okay, no. No worries. Well, we'll just. We will wait for John then. And I've got his Read AI meeting notes here, too, so we can.
+
+[01:22] 1 214 07:
+Okay. Yeah, maybe he's just logging on.
+
+[01:26] Cole Feigl:
+Not the end of the world either way. Cool.
+
+[01:33] 1 214 07:
+Sorry about the cancellation. Yet again. I got a text from our. Is that Jake on you or just Jack and you pull.
+
+[01:39] Cole Feigl:
+No, no, it'll be Jack and me today, but we've got Jake. Jake's up in Canada right now for a shoot, so he's. He's available, by the way. Yeah, Isn't that crazy? He's. But he's available for. For Kumon just. They've got us helping with all these franchisees across the. Yeah, they have 2,500 franchisees, so it's kind of one of those things. We're still trying to figure out how to manage that effectively for, like, social content, but this one was. We kind of threw out an offer, and it was like, we can do it, you know, if you're willing to pay for it. And they said yes. And we're like, oh, okay. Like, right. Well, I guess we'll.
+
+[01:42] 1 214 07:
+Okay, okay. Oh, my gosh. No way. What's he shooting? Yeah, yeah, yeah, yeah, yeah. That's so funny. What part of. What part of Canada is he in? Is he like a Vancouver Whistler? Like, you know, what areas?
+
+[02:22] Cole Feigl:
+I think. I want to say he's in Toronto, but I'm. I'm almost positive it's Toronto, but I could be mistaken. One of the major cities. Yeah, yeah, yeah. He's. He's been a trooper with some travel, so.
+
+[02:26] 1 214 07:
+Very cool. That was so fun. Okay, let's see. Okay, cool. Did y' all see John? He said he's waiting. Oh, nice.
+
+[02:39] Cole Feigl:
+Thank you for sending that, Jack, huh? Yeah, we just sent him the link. Yeah, we haven't seen his notification just yet. But
+
+[02:44] 1 214 07:
+Is he logging in? Okay, okay.
+
+[02:54] Cole Feigl:
+no good news is, is we've got Cortex much further than even last time that we discussed, and we have actual live Avondale data in it today to discuss. So I think. I think you guys will be very happy with kind of the direction that Jack and team and that we've looked through this. It should help a ton on some of these build scripts, too, too. So these builder scripts.
+
+[03:06] 1 214 07:
+Oh, good. Okay, good, good, good, good. I know it's getting. It's getting harder because with kind of taking these, I mean, I feel like hopefully there'll be good, good data of kind of what we need to do more of, but it's just getting different content ideas is so specific. Like, we had a shoot with Janie a few weeks ago and two weeks ago, and I feel like we're getting repetitive. You know what I mean? Like with. With what we're saying. So I think some new ideas will be great.
+
+[03:32] Cole Feigl:
+Yeah, Yeah, yeah. And repetition's only good if it's on your best content pillars and it's hitting new audiences. So, you know, the good news is, is that with the boosting budget, like, we can force it to do that, but I'd rather have it where we feel really fresh and invigorated for all the top engagers of the people that are constant, constantly liking commenting, all that stuff, so that we're not just rotating through different versions of the same script. So the good news is this Cortex is. Is literally here to help us with that, so should help a ton.
+
+[03:53] 1 214 07:
+Yeah. Yeah, exactly. Yeah. Okay, good. Okay, good.
+
+[04:17] Cole Feigl:
+Oh, here's Don. Wait, yeah, he put his name as Don Spears. I like that.
+
+[04:18] Jack Nelson:
+There he is.
+
+[04:25] 1 214 07:
+That's what our daughter. Our daughter jokingly started calling him that years ago. She combined dad with John. So that's why we. That's why we all call it that.
+
+[04:32] Cole Feigl:
+Oh, that's cute. Yeah, I'm thinking like Don Draper of Private Lending, you know.
+
+[04:39] 1 214 07:
+Yeah, yeah, yeah, yeah. The dawn.
+
+[04:41] Cole Feigl:
+Hey, John, you're muted.
+
+[04:51] Dohn Spears:
+Okay, can you hear me now?
+
+[04:52] Cole Feigl:
+Yes, we can hear you now.
+
+[04:53] 1 214 07:
+Hey, babe.
+
+[04:57] Dohn Spears:
+That's weird. I was on the.
+
+[04:57] 1 214 07:
+Cole. John. Cole. Just go. He put his name on.
+
+[05:04] Cole Feigl:
+Don Spears.
+
+[05:05] 1 214 07:
+I did tell him where the name came from.
+
+[05:06] Dohn Spears:
+That's my Nick, my family nickname.
+
+[05:06] Cole Feigl:
+It. It sounds. Yeah, it sounds like, like a guy who would get like the medal of Honor or something, you know, Don Spears. I love it. I love it. Well, well, John, we've got quite a bit to go through today, so good news is, is that Cortex is like, we're days away from opening this up to all clients, and right now we have made some major improvements across, like, every single element of it. Like, we'll go through and do a show through today with some actual Avondale data too. So a big portion of this meeting is going to be strategy. So our goal is, is to avoid repetition across all content pillars. You know, it's where, you know, we. We might have something that's similar or there might be a similar build that's coming online or might be a similar conversation. The goal is, is even if the scenario is similar, we have a brand new script to provide and bring to the table. So whether that's Jamie or Jacob or whoever, you know, the goal is, is to avoid repetition. Now, the only thing I will say about repetition is that in some cases that where you can have something that's really scalable and reliable and it looks different and feels different, but it's delivering the same message. It's not the end of the world. But our goal is not to alienate our top engagers. Right? So the people that see your content the most, the builders, the, you know, different partners you guys have had in the past, or even competitors that might be liking and engaging with your content, we want to keep those people around. And that means that we need a fresh feed. Right? So with that being said, we've got quite a bit to discuss. So, Jack, you want to do Q1 data first and kind of, let's just do an analysis as to where we're at this year, because we are coming up on end of March, and I think this is always a good time to go through Quarterly data.
+
+[06:55] Jack Nelson:
+For sure. Yeah. So I've. I've added up all the numbers from all the different platforms here. Total views for this quarter, 407,000 views. Total follows 3,300, which, by the way, follows are up 50% across the board from last quarter. So this is really good. Plus, which is another thing to highlight here, which is just insane, is we continue to just absolutely crush it on the benchmarking data, and we're doing 36 times much more follows than the leading competitor here on the businesses that we're watching. So this is, you know, just kind of highlights the fact that we're still making the right decisions and we're still on the right track. Even though, you know, I know you guys feel like some of the content might get a little repetitive. It is helpful, like Cole said, to hit those, you know, those. Those specific pillar pieces where we're talking about the ideas that people really care about, and those are the ones that are making the most impact.
+
+[07:54] Cole Feigl:
+Yeah, yeah, exactly. No, I love that. I think it's, it's. It's exactly that. It is. We've got something that's scalable, repeatable, but we need rescripting. We need to say it in a, in a brand new fashion, make it more intriguing. And then I think really just providing you guys with the angles on that content direction is going to help tremendously. Jack, can you zoom in by chance?
+
+[08:15] Jack Nelson:
+Yeah.
+
+[08:17] Cole Feigl:
+Thank you, sir. Yeah, I think when we started, Longhorn Investments was like. Yeah, dwarfed us. And you guys are almost beating them now, which is amazing. So we are a little. Yeah, that's amazing. Okay, very good. So we're a little under a third of. Right. At a third of the biggest competitor that you guys have nationwide, which is that Oxygen Financial. But their, their engagement is so, so terrible. So, you know, I'm not super concerned with them. I wouldn't be surprised if they had purchased following, but, you know, it's one of those things that you guys are going to be on their tail. I mean, if you run the current math right now and where you guys are at and following every single month, I mean, you guys are going to be double by end of this year, which is just awesome. So you guys will be one of the largest in the country at that point.
+
+[08:36] Jack Nelson:
+Yep. All right,
+
+[09:01] Dohn Spears:
+And what is that. What is that metric that we're comparing it to? Is it just views?
+
+[09:06] Jack Nelson:
+these are follows.
+
+[09:06] Cole Feigl:
+Oh, this is Facebook followers. Yeah. So this is actual followers on your Facebook, which is awesome. That's. That's one of the best metrics to have because it's the total size of your following and then inherently the bigger that you get and when you start occupying those top, like, top following positions, what it gets you is when somebody types in stuff like private lending or something along those lines, you start becoming that suggested profile within the actual search algorithms of Facebook. So, you know, if you go specifically and search up private lending for real estate, like, where do you guys populate? Our goal is that we dominate that search result as well, because if somebody is looking to get educated on it, all of a sudden they see Avondale, right. Then there's this plethora of information that they can go through, and that just leads you to having the time to educate buyers through, you know, all your content, which is just great. So
+
+[09:08] Dohn Spears:
+Oh, Facebook. And is that specifically Facebook itself or is that, you know, meta, meaning Facebook and Instagram?
+
+[10:03] Cole Feigl:
+that's just Facebook. So we have. Yeah, yeah. We have benchmark data for Instagram as well through that. So if we wanted to, like. Jack, could you pull up their Instagram on Ben marking data?
+
+[10:14] Jack Nelson:
+Meta actually disabled their benchmarking data. So they only show you number of content and then total followers now. Yeah,
+
+[10:14] Cole Feigl:
+Yeah, Yeah, but that's okay. I mean, we can still see that you guys are in the following race and really doing well compared to everybody. Else. So, you know, I. Who, who's number one again? Remind me their name. It starts with an R. Yeah, there they are. Yeah, sorry, it's kind of small. RBI Private lending. Yeah.
+
+[10:30] Jack Nelson:
+right. Yeah. No, in comparison to. Yeah,
+
+[10:45] Dohn Spears:
+Okay, that's good to know. It.
+
+[10:45] Cole Feigl:
+Yeah, they're still. They're still the biggest in following, but that's just on. That's just on Instagram. You know, we're beating them on Facebook, so that's. That's a good thing to know. So.
+
+[10:54] Jack Nelson:
+yeah, yeah. They gained three followers this past month on Facebook.
+
+[10:58] 1 214 07:
+What about. Hey, guys. Three. Just because I can't see. Where do we rank against Casa Lindy and Renovo? Mainly just Casa Lindy. Just because that's kind of the biggest name we're hearing now for the last few months. I'm just curious.
+
+[11:13] Cole Feigl:
+I don't think we have them on our.
+
+[11:16] Jack Nelson:
+We have Renovo. Renovo was up 14 followers.
+
+[11:17] Cole Feigl:
+Yeah, we don't. Yeah, you guys dwarf them.
+
+[11:22] Jack Nelson:
+So we are.
+
+[11:22] 1 214 07:
+That's it. 14 for Renovo. That can't be right.
+
+[11:24] Cole Feigl:
+Yeah. On Facebook.
+
+[11:25] Jack Nelson:
+What
+
+[11:27] Cole Feigl:
+Well, just for Facebook. So that's. Yeah, yeah. So they're at 11600 roughly and following. But I mean you guys are over five times their size on Facebook.
+
+[11:27] 1 214 07:
+Oh, on Facebook. Okay. Okay. I think I sent
+
+[11:40] Jack Nelson:
+was the name of the other one? We can add that to the list.
+
+[11:40] Cole Feigl:
+Are they doing something? Yeah,
+
+[11:44] 1 214 07:
+Yeah, I think I sent that in the list a few months ago because I kind of. To refresh it. Yeah, I caught the LIN C. Asa.
+
+[11:49] Cole Feigl:
+yeah, yeah, yeah. It might not have been able to be found through because this is the only problem with, with Facebook on their benchmarking data is the search functionality to get competitors to port in there. It's just terrible. Like, I mean this is, you know, it's their software. So I mean, what we could do. I wonder, Jack, we might want to just look at if we can use Facebook's API to pull our own benchmarking data through Cortex. And I bet we could avoid a lot of the issues that they have with display, you know, with this being an open source deal.
+
+[11:52] 1 214 07:
+It's a.
+
+[12:05] Jack Nelson:
+Yeah, yeah. I think what. What we could do is we could analyze their posts every month. Facebook's API doesn't allow us to see how many followers they gain publicly. That's only internal that they show that. But what we could do is we could pull their posts every month, look at how many, you know, views, engagement, all their posts are getting, and then we can kind of estimate based on that, and that would be a really good tell.
+
+[12:27] Cole Feigl:
+Yeah. Yeah. Maybe we could even have a web scraping tool if they allow it. I don't know. Yeah. Cool. Well let's talk about that offline because.
+
+[12:50] 1 214 07:
+Yeah. And again and again. Casa. Yeah, it's not. It's not that big a deal because CASA lending is not. I mean, it's. It's nothing special. It's just still photos of, you know, loan amounts that they funded. So it's definitely nothing we want to try to be like. It's very dull, but it is a prominent know Linder in Dallas. It's kind of going after some of our business that. That's the only reason I was at. It's definitely. Not to mention they're doing good content. Like, it's just. It's. It. It's just still shots of. Of loan amount. I was just curious who's up there?
+
+[13:00] Cole Feigl:
+Yeah, yeah, That makes sense. I wonder if they're running. They're running ads. Is that. How do you see. Is it Casas? C A S A U S.
+
+[13:33] 1 214 07:
+I've never seen one. Like. Like copa Like H, C, A, F, A. I've never seen an ad. John, had you on the social.
+
+[13:39] Cole Feigl:
+Okay. Yeah,
+
+[13:44] Dohn Spears:
+I don't think so.
+
+[13:46] Cole Feigl:
+yeah. It doesn't look like if this is the right one. It doesn't look like they're running it. Yeah, well, very good. Didn't I.
+
+[13:47] 1 214 07:
+Yeah, it's just. It's just word of mouth. It just. Yeah, okay. Just curious. Didn't. Didn't want to interrupt.
+
+[13:55] Cole Feigl:
+No, no, that's great. That's what we need to hear. Well, perfect. Okay, well let. Won't we pull up Cortex data, Jack?
+
+[14:04] Jack Nelson:
+For sure. All right,
+
+[14:12] Cole Feigl:
+Yeah, I can find them on Instagram with the CASA underscore lending where they. There's such a boring social media.
+
+[14:22] 1 214 07:
+Yeah, it's bad. It's bad. But they're. I think they're. They're. They're. They're pretty active, you know, kind of the Dallas market.
+
+[14:24] Cole Feigl:
+Yeah. Oh yeah, yeah, I see they're number one lender in rally last year. Yeah, number one in Charlotte. So I mean they're. They're looks like they're big on east coast, which is good to. Good to keep an eye on them for sure.
+
+[14:33] 1 214 07:
+They're very unattractive. Yeah.
+
+[14:45] Cole Feigl:
+Okay, well we'll. We'll see what we can do to get them ported in there. Sorry, Jack, what were you saying?
+
+[14:50] Jack Nelson:
+No. No worries. So I pulled up right here, one of the reports. It renamed it to Fix and Flip Construction Lending. It was specifically. We split it into two different ones. So what I did is I imported Avondale Private Lending. It's great. Your guys's ideal customer profile built an entire, you know, plan for the scraping and the search. And so it built two different searches and it put them into two ones. One that it called Fix and Flip Construction Lending, which would be, you know, your borrowers, and then the other one would be the investor side of things. So the borrower side of things. Right here we've got an executive summary, we've got a brand alignment. These two just help us to tell. Okay, overhead, high view, what are we looking at. And then the brand alignment is exactly how we can adjust that messaging to structure around our content. But what's
+
+[14:50] 1 214 07:
+Okay, perfect.
+
+[15:41] Cole Feigl:
+Hey, hey, John, real quick. If, if, if this is too small for you to read on Google Hangouts. It allows you to expand with a, with a Mac. So if you wanted to just zoom in on your screen to this, it'll. It'll. You'll be able to read it clearly.
+
+[15:54] Dohn Spears:
+Okay. Yeah, I'm, I'm doing that right now. Yeah, I can see it now.
+
+[15:57] Cole Feigl:
+Yeah, sorry about that. We. We can't. For whatever reason, it doesn't allow us to zoom in on our screen and show that within it. It's just grabbing the full window view. So. Jack. And that might be. Anyways, I've got an idea for how we could fix that in the future. But anyways, please.
+
+[16:11] Jack Nelson:
+okay. Yeah, so just moving past the executive summary, we've got some insights. Basically just taking away what are the other creators. So this is the actual TikTok, Instagram, YouTube, what are other creators producing? And we can see here the type of content that's actually producing views is how tos and checklists. So those are, you know, probably people like how to get a loan, how to, you know, so not really what we're looking for, but this, this would be super strong for us. And I know we're already doing a lot of this explainer type content, but specifically this piece right here is talking about like plain language that's going to be super strong because, you know, most of these people, they're coming here to learn and so they're going to have no idea about, you know, a lot of the, the terminology. And we can either create, we can create multiple levels to it as well. So we can go a very basic. Just like here's like your intro to, you know, borrowing or how to get your, how to get started with, you know, a borrowing loan. And so we can work our way up from going through the complexities of things and so that we can, you know, if somebody's like completely fresh to it, we can get somebody super interested in the concept of borrowing to build and we can, you know, get somebody that way. Another thing that we.
+
+[17:30] Cole Feigl:
+Yeah, and. And Jack, real quick before we get off that subject, because I thought that this would be a really cool series for you guys want to launch. It's like a. From the basics to as deep as you guys want to go for literally the Borrow to Build series where it's like, you know, if you're looking to learn how to borrow to build, you know, and establish neighborhoods, we're going to teach you everything you need to know. First and foremost, draw schedule. What is a draw schedule? Like, you know, like information like that I think would help especially for all these novice builders. And it's, it's where, hey, if you're looking to break into some of these wonderful neighborhoods where you can be making, you know, much bigger returns for your construction of an individual property, here are. I think there are a few things that you need to know. You see what I'm saying? Like, those type of explainers, I think would do really well for us if we could speak directly to the target demographic that we're going after and that, you know, it could be something that you shoot on site, literally as you're walking at a property that's actively under construction. So you could kind of blend it, make a walk and talk style, or we could even do it at the desk. But just know that I think that that series would be really cool as an explainer series.
+
+[18:40] 1 214 07:
+Yeah, I think that's a great idea, too. I think we get. John, I told the guys before you got on, I said, I feel like me in particular, our last shoot, I'm just feeling so repetitive. Like, I'm kind of just saying the same messaging over and over again. So I think. And that's at a higher level if someone knows all the ins and outs of borrowing and why we target the neighborhoods. We do, but kind of taking it back to the basics of just. Just education, kind of starting at square one of basic stuff and then kind of building on it. I think that would be. I love that idea.
+
+[18:40] Jack Nelson:
+Yeah,
+
+[19:13] Cole Feigl:
+Yeah. And. And we can always go back to Alison the. I know that we talked about it a few meetings ago where we were talking about the Blackstone changes. It kind of directly correlates with the news and market commentary on what's driving engagement. Now you will notice, like, you'll see how it says 34% of content that we pulled and analyzed where, you know, most of the content was about how to checklist. 29% were explainers. And this is all the stuff with the highest engagement rates, mind you. So you'll notice that then it says 0.6% engagement rate. So that's their percentage of their audience. That's that's seeing the actual video, that's the views on the reels, that's actually going and liking sharing, sending, you know, bookmarking, stuff like that. So you'll notice that news and market commentary is a little bit less. But I think with scripting it correctly that we could really, really do well where we add value there. So, um, anyways, just something to think about.
+
+[20:07] Dohn Spears:
+Yeah, it's great information.
+
+[20:07] Jack Nelson:
+Yeah,
+
+[20:09] Cole Feigl:
+Yeah. That deal teardown one I thought was really cool when Jack pulled that earlier because, you know, imagine, you know, you guys have already done a lot of this where you talk with builders and you kind of do, but imagine a deal tear down where you keep it more agnostic and you know, it's kind of like, hey, I just wanted to, you know, quick, series deal tear down series. We're going to tell you exactly what got this funded. This project was based in this, you know, X, Y and Z community. The builder came to us for x million dollars. We, we got him funded in 70. Or, you know, you get the point. We got them funded in 72 hours because of this, this and this. Now this is what flagged it as such a good deal to us first. The builder had long standing history with us. The longer that you work with our firm, the more likely you are to get funded because we understand you get the point. I mean, I'm, I'm kind of throwing in some language that might not be approved, but you see how I'm saying, like a deal teardown series would be really cool because you could. Yeah. And this, this was one of those things that made us happy because when Cortex pulled it, we were sitting there. It's like, okay, what are the frustrations on current content? And it's like, well, if we go too hard on like telling exactly where these, these houses are and who the builder is, you see how you could get more agnostic with it with a deal teardown where it becomes cool more of like an educational series that, that you don't have to say the address, you know, so. Or you don't even have to say the builder. In that case, you just. Yeah, okay. Cool, cool, cool. All right. We were, we were happy with that one. Yep.
+
+[21:02] 1 214 07:
+Oh, it's great. Yeah. Yes. Yeah, yeah, yeah, yeah. I think that's great. Yeah, that's true. Just kind of general locations, the numbers. Yeah,
+
+[21:39] Cole Feigl:
+Yeah. And it could be super storytelling oriented where the, where the animations and stuff that we show, where it like highlights University park or wherever it might be, right as John or Alison's talking. Like, that could be a really, like, engaging way to keep, you know, keep watching. Because I just think it goes back to it. It's like, how do we, how do we talk directly to your demographic to educate them and give them value. Because value is what's going to leave them with, you know, and something to engage off of, you know, because if you get value for free then then turning around, giving you a like comment share, stuff like that becomes a lot easier.
+
+[22:17] 1 214 07:
+yeah.
+
+[22:18] Jack Nelson:
+Yeah. And I think one.
+
+[22:19] 1 214 07:
+Great, Great suggestions. I love.
+
+[22:22] Jack Nelson:
+Okay, we'll, we'll save that and we'll come back to it. Since, you know, Fyxer taking these notes after this call list, a full PDF of a bunch of topic ideas that Cortex pulled out because it's got, you know, hundreds of topic ideas. I'll pull those out and then attach them with these meeting notes and then we can kind of go from there and see what we can come up with for new, new content pieces. But one of the things that I really liked about this was that it talks about leaning into partner oriented messaging and I think we already do a lot of that where we don't really, you know, you're not, you're not positioning you guys as salespeople, right? It's all about, you know, how can we be a partner to you and you know, getting started as a partnership. And that's, you know, that's what we see as working here. So a lot of the questions that people are asking are things like how fast does it take? How you know, what documents do I need, you know, all of those type of things. So those very, like, easy to answer, quick and simple. Like, we could even do like a series where we're doing like, you know, Q A, like FAQ frequently asked questions for private lending. And we can just run through a ton of different ideas, kind of like comments that pull up on the screen. You guys could be reading off a phone and just easily just like run through some of like the biggest things that are coming up and some of the questions that a lot of people are having that's actually keeping them from borrowing or investing. And we can just run through those and kind of like, you know, like negate what people's objection. Handling. That's the word I'm looking for.
+
+[23:00] Cole Feigl:
+It. Yeah, well, and one thing too on that is, you know, any of the objection handling where people. I think some of the stuff that Cortex had pulled the other day was where there are some people talking about funding projects in cash. And I think that one thing that would be really wise at some point as we launch a video focused on like why leveraging debt and private lending is such a powerful thing for, you know, X, Y and Z audience, you know what I'm saying? Where you guys kind of frame it as, you know, we're in a debt based economy. So the reality is that when you leverage debt you can move faster and when you have set processes, you have a great team and you can get, you know, X dollars within, you know, 48 hours. You get the point. I think that there might be some fun stuff there where we do more objection handling, you know, where it's. And that is more of a viewer thing. Like you guys aren't getting phone calls and somebody's being like, oh, why should I, you know, why should I use private lending? Like they already know that they need you. Right. But this is more for the people that are curious about it but that could be on the fence and see your content if that makes sense.
+
+[25:03] 1 214 07:
+Yeah, I love that.
+
+[25:05] Cole Feigl:
+Okay, well something to, something to also note. Okay, cool.
+
+[25:10] 1 214 07:
+Yeah, definitely.
+
+[25:10] Cole Feigl:
+Well great. As you guys can see or at least as John can see. Go back up real quick, brother. We have been working heavily on getting Cortex even better laid out. So you'll see like topic research, the inspiration board, video ideas, scripts and production is kind of the four part series series to how Cortex is going to work. You'll also see under that the emotions and some of the things I thought was really interesting is that you guys have a super high anxiety rate with content and engagement specifically surrounding private lending. So a lot of content that people are putting out there is giving, you know, an emotional breakdown as anxiety being the number one thing. So we, we just did a hook like this the other day for a client in the Goldback. Well they're, they're called Gold back and they have a few hundred million assets under management and we're helping them on their socials and really their 360 marketing execution. And these guys have a really cool, basically a sound money that they, that they sell through distributors throughout the Country. So think like literally a United States dollar that's coated in gold. Like, I have a thing on my wall that shows them off. I could show it to you, but if you were curious. But the, the point I'm getting at is that they had anxiety as one of their top emotions as well as. What was the other one, Jack? It was like, it wasn't confusion, it was, it was something along those lines. It was an, it was a negative emotion to where somebody was like, they didn't fully understand why and they were like, was it frustrated? I can't remember, but
+
+[26:48] Jack Nelson:
+Yeah, I think it was frustration or something like that,
+
+[26:51] Cole Feigl:
+yeah, yeah. And it was the frustration of. Yeah, yeah. Because people were frustrated. Like, there was curiosity and then frustration. We're neck and neck and it's kind of like what you guys have here, where it's anxiety and curiosity. And so what we did with them is that we people, we learned that people were frustrated over the premiums. Like if you were to go and buy gold and silver, you, you pay, you go to a bullion dealer, right? Somebody who sells all these metals and then you would purchase it through them. Well, the dealer has to make money, so they assign a premium to it. Just like, you know, you guys lend out, you have a premium in the form of an interest rate. Right? So, you know, I, I think that that's kind of what we did for them is we, we literally nailed it on the head to where it was like, you know, we attacked the question right out the gate and we started running it within our ad network to where it's like, I'm going to butcher this because we're running so many ad units for them right now. But it was something like addressing a comment where it was like, you know, yeah, but the premiums are so high. And it's like, anyways, we had some great hook that we built off of it where it was like, hey, the premiums for a go back are high. But guess what you get out of it? You get spendability, you get collectability and you also have the, you know, blah, blah, blah, blah, blah. You have the distinct, you know, this, this and this. And every single one has melt value and all. So we like went through and we basically attack that as an angle head on. And so I think that for you guys, since you're not running advertising right now, we don't need to go super hard in this category, but it wouldn't hurt to where we kind of come up with a few scripts around addressing anxiety for taking on debt to do a build. Because I think that that's probably where this is stemming from, we can dive deeper and try and analyze like, hey, how'd this anxiety emotion get broken down? Like, you can see the little explain tab, which is pretty sweet. So we can actually generate an exploit explanation. Now, John, off of this, if you can see that. Yeah. See high stakes and operational fragility. Yep. People are just not asking, can I get a loan? They're worrying about whether the deal will actually stay funded once rehab starts, whether draw requests will be approved on time, and whether small documentation mistake will. Will stall the whole project. So invites? Oh yeah. Nice. Okay, so scroll down. I love that. I forgot we added the. Can you scroll down within that little. I don't think you can yet. Dang. Yeah, it's okay. We can, we can work on that later. But. But you see how it kind of breaks down exactly why they're anxious. So that, that gives us talking points. It gives us kind of comments that become cornerstone to what you guys can address. Head on. So food for thought.
+
+[26:52] 1 214 07:
+All. All the emotions. It.
+
+[29:09] Jack Nelson:
+Man.
+
+[29:18] 1 214 07:
+Yeah,
+
+[29:26] Dohn Spears:
+Yeah. Are we current? Currently, we don't have access to Tortex. Right. But is that, is that part of this rollout that you're talking about doing? Is. Well, we. We will have access to this.
+
+[29:26] Jack Nelson:
+Stuck.
+
+[29:35] Cole Feigl:
+Yes, it is. Yeah. Yep. Days, not weeks. So hoping this week. So it's just the result. Like you would be amazed at how much data flows through this thing and is an entire brain running it. And so we're trying to make it to where it's useful for our clients, but also where the API calls aren't like 20 bucks to use it every single time. So because this is going to be just an included service. So we're doing this to improve our services across the board so it's no additional cost to y'. All. But we also have to be careful with stability on margins because we're a margin based business. So anyways, with that being said, yeah, it's within days this week. We're just doing some final LLM kind of assignments based on, you know, how heavy the task is. It's. We don't have to really deeply explain it if you guys don't want to. But anyways. Yeah. So the emotion side, I think is really cool. That was a, that was a big thing because we, you know, when Jake and Jack and I were kind of sitting there and talking about like, what is it that we do at our core? And it is we, and a lot of times are influencing perception for our clients. Like we are trying to tell a story and sell the person on the other side of the screen through storytelling. It's really as simple as that. It might not be a very direct sell sometimes. Sometimes it's very indirect where we're providing educational or entertaining content. Right. So inherently a huge piece of that is emotions. And so that's why we have this emotional breakdown piece in this. But yeah. Anyways, John, as you saw, we can have literally our AI that grabs all this information within cortex, go and explain where that emotion's coming from, which is cool. So
+
+[29:39] Jack Nelson:
+Yes.
+
+[29:42] 1 214 07:
+It.
+
+[29:57] Dohn Spears:
+Okay, Got it.
+
+[31:20] Cole Feigl:
+awesome. Hey, Jack, I know, I. I know that we need to fix, like, the Z index and the scrolling part of that, but something we want to throw a note into that is I bet we could tie that right into the rescripting tool or a hook generation and just add that as an icon right next to the AI Deal.
+
+[31:20] Jack Nelson:
+Cool. That's a great idea. Yeah.
+
+[31:39] Cole Feigl:
+Yeah, that would tie it together, just like what we're doing with shk. Okay. All right. Well, cool. Sorry about that. Yeah. So content breakdowns. One thing that this is important to throw this out there. We don't want to overload what we're doing right now because we still have great content pillars. Like, you guys are moving faster than anybody else. And on social, in your space of all the people that we're following. So I think if anything, what we do is we kind of slow bleed into the current content pillars you have, get great scripts, and then we start adding in, testing content pillars starting this month. So saying in April, we're going to say, okay, guys, this month we're going to really want to test the, you know, the deal breakdown, you know, service where we go through. And you guys, you know, kind of explain that. That one area. Does that make sense? Like, we don't want such a strong deviation that it looks like you guys, like, totally abandoned. You know, why a lot of these people followed you, if that makes sense.
+
+[31:44] Jack Nelson:
+Cool.
+
+[32:38] Dohn Spears:
+Yeah. Makes sense. I think you're just saying keep the new content pillars, you know, similar or tied to some of the old ones.
+
+[32:39] Cole Feigl:
+Okay. Yes, exactly, exactly. You just don't want it to be like, we have one of our clients on the Oprah podcast this last week, and she was sitting there talking to me, and she was like, hey, you know, how do you feel about this recent video? I did. And the shares on it, like, vastly outweighed the comments and the likes. And it was because, you know, people were kind of talking negatively about that post specifically, and sitting there, it was kind of the same thing. It was like, well, the reason why people were talking negatively about it is it was a total detraction. Like, it. If you guys were driving on the highway and your followers are a caravan with you and they're watching you as the lead car and you take a hard left, you know, how many of those cars are going to really want to follow you? You know, and that's kind of the. That's kind of the thing, right? It's. It's. We really Want to make sure that we still stick to the core as to what does work, but be testing constantly and cutting the fat as to either what is getting old or what is not getting the engagement that it used to or what have you. So that's what all this is going to help with. So anyways, well, cool. Well, on this little bottom piece right here, John, this also goes into like a much clearer view for this because it tells you the trending topics right then and there. So, like, you can see the draw schedul and scope clarity, the hidden disbursement, risk and fix and flip loans. Like, it shows you all of what people have posted about that have gotten really high sentiment and high resonance, which are just fancy terms for. They resonated with the audience and the overall comments were positive, if that makes sense. So we. This gives you video ideas. It does the whole nine yards. And once again, I don't want you guys to have to like, look at this and be like, oh my gosh, this is such an overwhelming amount of data. That's what Jake is for. So that's what our team is for. We are going to help you guys take all this data, identify the lowest hanging fruits, align it with our shoots, and then provide you guys really great direction prior to the shoots so that you guys know without a shadow of a doubt. Okay, today we're going to be doing this. Here's a couple examples of the script and it's data backed. It's not just something that is a feeling or it's, you know, a quick. I wouldn't say quick, but
+
+[33:51] 1 214 07:
+Yeah, Yeah. Kind of a random idea from us. Yeah.
+
+[34:59] Cole Feigl:
+yeah, yeah, exactly, exactly. Like, we're not. We don't want to throw anything at the wall and see if it sticks. We would just want to know that, you know, this is. This is a solid way to go. So. Okay, well, cool. Well, yeah, I could. I mean,
+
+[35:02] 1 214 07:
+Yes. I think that's going to be super helpful.
+
+[35:13] Cole Feigl:
+yeah, yeah. I mean, yeah, across the board. I mean, we just want to. Like I said, we just want to improve. That's the goal. So we want to make it to where you guys have less stress surrounding each of these shoots that they get you excited that your engagement continues to grow as well as your followers pick up even faster. Like, it's great that we're seeing an increase in your follower growth because you guys have the same, you know, budget. So it's not like, you know, anything inherently has. Has like you guys aren't spending more to get more, if that makes sense. So, you know, you're getting more. Cause the content's resonating really well. But if we can Maximize that and get over a thousand Instagram followers or a thousand Facebook followers a month, which is, you know, personally, that's a goal of mine for you guys. I think it'll be a tremendous win, especially for same budget and everything else. So.
+
+[36:05] 1 214 07:
+Yeah. I think it'll help us to just feel better going into shoots where we're like, okay, we're not just. We talked about this last time. Let's talk about this topic. And. And Jack, if you have a Minute today just because we. Since we don't have access to Cortex, we are, we. We're having to kind of pivot from our investor shoot tomorrow because they've got a showing when we were going to film. So I think John and I are trying to figure out if we should still meet with Jamie tomorrow to kind of get some new content. But in the meantime, like if there were just three or four topics from kind of what cortex is showing now of what, you know, high, highly ranked, that, you know, we're getting a few just ideas, you could shoot my way till we get access to. It would be super helpful. That way. John and I kind of brainstorm tonight or today kind of, you know, if we do shoot tomorrow.
+
+[36:13] Cole Feigl:
+Yep, It.
+
+[36:50] Jack Nelson:
+Yeah, absolutely. I can send you all of the ones that it pulled out and just my personal recommendations of which ones I think are going to do the best
+
+[36:59] 1 214 07:
+Okay, that'd be great. Thank you.
+
+[37:02] Jack Nelson:
+first.
+
+[37:05] Cole Feigl:
+Well, lovely. Well, yeah, we'll send that over today so you guys have that and can review. And I think this will be a good first use case of everything here. So. Outside of that. So Jacob won't be available. I thought Jacob was going to be on the shoot tomorrow. I had him in my.
+
+[37:24] 1 214 07:
+I know. I think he. I hadn't heard he was out of town.
+
+[37:27] Cole Feigl:
+Yeah, yeah, he. Yeah, I see, I see it's on his calendar. So he said he was going to be there, so. Very good. Yeah. Because I. I mean, Jamie's fan.
+
+[37:34] 1 214 07:
+You think he's flying back from Canada tonight.
+
+[37:36] Cole Feigl:
+Yes, he is. Yeah, he's flying back this evening, so. Yeah, he's.
+
+[37:40] 1 214 07:
+Oh, okay. Okay, that makes sense.
+
+[37:43] Cole Feigl:
+Yeah, yeah, so he'll. He'll. I'm so sorry, he is flying back early. Early tomorrow, but it's literally a CNS notes here that he is going straight basically from the airport to you guys, which is awesome. Well, good, well, good, good, good.
+
+[37:56] 1 214 07:
+Okay, well, good. Well, he'll have less. He'll have less. He'll have less distance to drive now that we're not going to Heath. John, do you want to use some of these topics that Jack's sending over and we can get some stuff worked up tonight and just keep the shoot tomorrow even though Mark can't do it and you want to keep it or you want to push it?
+
+[38:02] Cole Feigl:
+Nice. Okay.
+
+[38:13] Dohn Spears:
+I think that. I think the best thing for us would be to come up with, you know, more of like a content calendar that, you know, and spend an hour or two or more on coming up with the, you know, a really. Just more of a plan on the, on the content. Because where, I think where we. We get to these situations or we have just due to some cancellations, where if, you know, if a borrower of ours who wants to, you know, do a walkthrough video with us and show their house, if they. They cancel on us the day before, then we're like, okay, well, what. What are we going to do with. With the Nativz team? And we don't really have a fallback strategy. You know, it's like, what. What can we talk about? Or. So that's why I just think we need to come up with a bunch of content ideas, maybe use Cortex to do that. And, and then, and then we have more of a plan of. Around the content. And I think it just means, Allison, me and you, you know, committing some time to kind of work. Work on that. I think that would be the best next step.
+
+[39:15] Cole Feigl:
+Yep. Well, the good news is, Don Spears, we will have you all of this today, so we can. We can. We can work on this. Yeah,
+
+[39:29] 1 214 07:
+Okay, so do you. Yeah, I agree.
+
+[39:33] Dohn Spears:
+Okay.
+
+[39:34] 1 214 07:
+Yeah, that's what I'm saying.
+
+[39:38] Dohn Spears:
+I just don't like, you know, showing up to, to these videos and, and not having,
+
+[39:39] 1 214 07:
+Yeah. So do you want to.
+
+[39:44] Cole Feigl:
+yeah,
+
+[39:45] Dohn Spears:
+you know, just good content to. That we've either rehearsed or that we really, you know, know what we want to talk about.
+
+[39:51] Cole Feigl:
+Yeah. You need. You need time to digest it. Yeah. I mean, it makes total sense. Yeah.
+
+[39:56] Dohn Spears:
+Yeah, it feels kind of, you know, pressure when we show up and we don't, you know, have it thought out or. And that's just what I want to avoid.
+
+[39:57] 1 214 07:
+Yeah. And, and. Yeah,
+
+[39:58] Cole Feigl:
+Thrown together. Yeah, yeah, yeah, Totally get it. Well, this is the. The whole goal of Cortex is to be that pressure release valve across the board, because I know our strategists end up in the same boat. Like imagine, for example, if Jake didn't have Cortex right now. He's, you know, has to fly back from Canada, show up to y' all shoot. He's going to be like, you know, trying to do data research or lean on another team member on his way to y', all, which is unacceptable from our internal processes and as well as what you guys can expect by partnering with us. Right. So, yeah, that's. This is in an effort to help everybody across the board. So we will produce a Cortex report and then package it up for you today. So that looks nice and neat and also, you know, presents the information really cleanly and easily for tomorrow. And you guys can go through and we can use it as a fallback sheet. It can be the lead. It doesn't. It's really based on what you guys would like at that point. And. Yeah. So. Well, we'd be happy to put that together for you today for review.
+
+[40:08] 1 214 07:
+yeah,
+
+[41:01] Dohn Spears:
+Okay,
+
+[41:02] 1 214 07:
+yeah. And you know, the last, the last two. The last two shoots, it's been completely out of control, kind of of everyone. Like one was, you know, the stairs weren't installed and we, they don't let us know till the night before, even when everything's kind of lined up. So there was just the two cases where we kind of had to pull together something the last minute. But I think especially now, you know, when we kind of had the borrower, kind of the interview style stuff with borrowers, that's kind of a no brainer, that's easy to sit and chat with them. But you know, not everyone is comfortable doing it on the fly. So I do like a little bit more. More prep time. And it's like, hey, this is what we. These are what we suggest you talk about. We kind of brainstorm. So I think it's great going forward. But Don, do you want to keep the shoot with Jake and Jamie tomorrow and go through this kind of today and tonight or do you want to not meet with them tomorrow?
+
+[41:35] Cole Feigl:
+Yep.
+
+[41:50] Dohn Spears:
+Let me see. I think that we. I. I'd feel more comfortable if we just planned it out because I just feel like it would be another kind of, you know, panic situation. Of like, okay, what are we going to talk about? You know?
+
+[42:06] Cole Feigl:
+Yeah, yeah. No, no, no. It makes total sense. Well, great. Why don't we. Why don't we plan it out and then we coordinate with you guys on schedule within this next 10 days just so that we've got great lead on a content, you know, build out for April.
+
+[42:22] 1 214 07:
+That's good. And I'll text I'll do a group text now. That way Jake knows if he wants to push it slide, he doesn't have to just Joe at a breakneck tape in the morning to get to us, you know?
+
+[42:23] Cole Feigl:
+Okay? Okay. Perfect. Perfect. Okay, well, easy peasy. Well, we've got some homework on our end. All right, well, any last notes, guys? If not, we will get to work and give you the 15 minutes back.
+
+[42:35] 1 214 07:
+Does that work?
+
+[42:46] Dohn Spears:
+Okay. All right. Thanks, guys. Excited about the cortex? That looks really good.
+
+[42:47] 1 214 07:
+No, that sounds great. I'm excited to see some topics.
+
+[42:51] Cole Feigl:
+Yeah, well, perfect. Well, we'll get those over to you all today. Looking forward to it. See you guys.
+
+[42:52] 1 214 07:
+Yes, totally.
+
+[42:55] Dohn Spears:
+Thanks, guys. Appreciate it.
+
+[42:56] Jack Nelson:
+See you later, guys. Thank you.
+
+[42:57] 1 214 07:
+Okay, thanks, guys. Thank you. Okay, bye.
+
+---
+
+Chat with your meeting and watch the full recording: https://app.fyxer.com/call-recordings/7e53242f-a4f0-414f-a34d-655255426131:5k0sv7qf3b8p0d8og95rhatt67

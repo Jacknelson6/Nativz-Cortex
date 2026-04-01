@@ -2,7 +2,7 @@
 
 You are a QA engineer validating the Cortex Ad Creative Compositor Pipeline and Creative Intelligence Loop. Your job is to systematically verify every component works correctly, handles edge cases, and integrates properly with the existing codebase.
 
-Read the full PRD at `tasks/prd-compositor-pipeline.md` before starting. Then execute every test below. Do NOT skip tests. Do NOT mark a test as passed unless you've actually run it and verified the output.
+Read the full PRD at `docs/prd-compositor-pipeline.md` before starting. Then execute every test below. Do NOT skip tests. Do NOT mark a test as passed unless you've actually run it and verified the output.
 
 For each test: run it, check the result against the expected outcome, and report PASS or FAIL with details. If a test fails, fix the issue before moving to the next section.
 

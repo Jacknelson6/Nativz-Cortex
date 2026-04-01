@@ -2,7 +2,7 @@
  * Generates Nativz-branded PDF: Avondale 50 video ideas with report-backed insights.
  *
  * Usage: npx tsx scripts/generate-avondale-video-ideas-pdf.tsx
- * Output: docs/avondale-50-video-ideas.pdf
+ * Output: docs/archive/offline-assets/avondale-50-video-ideas.pdf
  */
 
 import { createElement } from 'react';
@@ -13,7 +13,7 @@ import { AvondaleVideoIdeasPdfDocument } from '../lib/pdf/avondale-video-ideas-t
 import { AVONDALE_VIDEO_IDEAS } from '../lib/pdf/avondale-video-ideas-data';
 
 async function main() {
-  const outPath = resolve(process.cwd(), 'docs/avondale-50-video-ideas.pdf');
+  const outPath = resolve(process.cwd(), 'docs/archive/offline-assets/avondale-50-video-ideas.pdf');
   const doc = createElement(AvondaleVideoIdeasPdfDocument, { ideas: AVONDALE_VIDEO_IDEAS });
   const buffer = await renderToBuffer(doc);
   writeFileSync(outPath, buffer);
