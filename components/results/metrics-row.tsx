@@ -21,8 +21,8 @@ function SourcesPlatformFooter({ breakdown }: { breakdown: PlatformBreakdown[] }
     <div>
       <p className="mb-2 text-[11px] font-medium text-text-muted">Sources gathered</p>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        {breakdown.map((pb) => (
-          <span key={pb.platform} className="flex items-center gap-1.5 text-sm">
+        {breakdown.map((pb, i) => (
+          <span key={`${pb.platform}-${i}`} className="flex items-center gap-1.5 text-sm">
             <PlatformIcon platform={pb.platform} size={14} />
             <span className="font-medium text-text-secondary tabular-nums">{pb.post_count}</span>
           </span>

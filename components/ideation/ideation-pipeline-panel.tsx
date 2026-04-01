@@ -46,223 +46,197 @@ export function IdeationPipelinePanel({
 }: IdeationPipelinePanelProps) {
   const [selectedPath, setSelectedPath] = useState<Path | null>(null);
 
-  const step1Done = true;
   const step2Done = linkedIdeas.length > 0;
 
   return (
-    <Card className="border-accent/20 bg-gradient-to-br from-accent/5 via-transparent to-accent2/5">
-      <div className="flex items-center justify-between">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Layers size={18} className="text-accent" />
-          Ideation pipeline
-        </CardTitle>
+    <Card className="overflow-hidden border-accent/20 bg-gradient-to-br from-accent/5 via-transparent to-accent2/5 p-0">
+      {/* Header — full width */}
+      <div className="border-b border-nativz-border/60 px-5 py-4 sm:px-6">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <Layers size={18} className="text-accent" />
+            Ideation pipeline
+          </CardTitle>
+          <p className="text-xs text-text-muted max-w-xl sm:text-right">
+            Turn this topic search into short-form video ideas — pick a path, then create or explore.
+          </p>
+        </div>
       </div>
 
-      <div className="mt-5 space-y-0">
-        {/* Step 1: Topic search */}
-        <StepperItem
-          step={1}
-          title="Topic search"
-          done={step1Done}
-          active
-          isLast={false}
-        >
-          <p className="text-[11px] text-text-muted leading-snug truncate max-w-xs" title={query}>
-            &ldquo;{query}&rdquo;
-          </p>
-          <Link
-            href="/admin/search/new"
-            className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-medium text-accent-text hover:underline"
-          >
-            <Plus size={11} />
-            Add another search
-          </Link>
-        </StepperItem>
+      {/* Two-column layout on large screens: topic (narrow) + ideas (wide) */}
+      <div className="grid grid-cols-1 gap-6 p-5 sm:p-6 lg:grid-cols-12 lg:gap-8 lg:items-start">
+        {/* Step 1 — left rail */}
+        <aside className="lg:col-span-4 xl:col-span-3">
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4 shadow-sm shadow-black/10">
+            <div className="flex items-center gap-2 text-emerald-400">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/15">
+                <Check size={14} strokeWidth={2.5} />
+              </span>
+              <span className="text-xs font-semibold uppercase tracking-wide">Topic search</span>
+            </div>
+            <p className="mt-3 text-sm font-medium leading-snug text-text-primary [overflow-wrap:anywhere]">
+              &ldquo;{query}&rdquo;
+            </p>
+            <Link
+              href="/admin/search/new"
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-accent-text hover:underline"
+            >
+              <Plus size={12} />
+              Add another search
+            </Link>
+          </div>
+        </aside>
 
-        {/* Step 2: Choose path */}
-        <StepperItem
-          step={2}
-          title="Generate ideas"
-          done={step2Done}
-          active={step1Done}
-          isLast={!selectedPath}
-        >
-          {step2Done ? (
-            <div className="space-y-1.5">
-              <p className="text-[11px] text-emerald-400">
-                {linkedIdeas[0]?.count ?? 0} ideas generated
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
+        {/* Step 2 — main workspace */}
+        <section className="min-w-0 lg:col-span-8 xl:col-span-9">
+          <div className="rounded-xl border border-nativz-border bg-surface/40 p-4 sm:p-5">
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <span
+                className={cn(
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold',
+                  step2Done
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                    : 'border-accent/40 bg-accent/10 text-accent-text',
+                )}
+              >
+                {step2Done ? <Check size={15} strokeWidth={2.5} /> : '2'}
+              </span>
+              <div>
+                <h3 className="text-sm font-semibold text-text-primary">Generate ideas</h3>
+                <p className="text-[11px] text-text-muted mt-0.5">
+                  {step2Done
+                    ? 'Ideas are linked to this search — open them or generate more.'
+                    : 'Choose how you want to go from research to video concepts.'}
+                </p>
+              </div>
+            </div>
+
+            {step2Done ? (
+              <div className="flex flex-wrap items-center gap-3 border-t border-nativz-border/60 pt-4">
+                <p className="text-xs font-medium text-emerald-400">
+                  {linkedIdeas[0]?.count ?? 0} ideas generated
+                </p>
                 <Link
                   href={`/admin/ideas/${linkedIdeas[0].id}`}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-accent-text hover:underline"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-accent-text hover:underline"
                 >
-                  View ideas <ChevronRight size={11} />
+                  View ideas <ChevronRight size={12} />
                 </Link>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 text-[11px]"
+                  className="h-8 text-xs"
                   onClick={onOpenIdeasWizard}
                 >
                   Generate more
                 </Button>
               </div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-[11px] text-text-muted">Choose how to create video ideas from this research</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <PathCard
-                  selected={selectedPath === 'pillars'}
-                  onClick={() => setSelectedPath(selectedPath === 'pillars' ? null : 'pillars')}
-                  icon={<GitBranch size={15} />}
-                  title="Content pillars"
-                  description="Align existing pillars to topics, or let AI create new ones and generate ideas"
-                />
-                <PathCard
-                  selected={selectedPath === 'chat'}
-                  onClick={() => setSelectedPath(selectedPath === 'chat' ? null : 'chat')}
-                  icon={<MessageSquareText size={15} />}
-                  title="Chat with the data"
-                  description="Explore the research conversationally and surface ideas through dialogue"
-                />
-              </div>
-            </div>
-          )}
-        </StepperItem>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-2 xl:gap-5">
+                  <PathCard
+                    selected={selectedPath === 'pillars'}
+                    onClick={() => setSelectedPath(selectedPath === 'pillars' ? null : 'pillars')}
+                    icon={<GitBranch size={18} />}
+                    title="Content pillars"
+                    description="Align existing pillars to topics, or let AI create new ones and generate ideas"
+                  />
+                  <PathCard
+                    selected={selectedPath === 'chat'}
+                    onClick={() => setSelectedPath(selectedPath === 'chat' ? null : 'chat')}
+                    icon={<MessageSquareText size={18} />}
+                    title="Chat with the data"
+                    description="Explore the research conversationally and surface ideas through dialogue"
+                  />
+                </div>
 
-        {/* Step 2 sub-steps when a path is chosen and not yet done */}
-        {selectedPath && !step2Done ? (
-          selectedPath === 'pillars' ? (
-            <StepperItem
-              step={null}
-              title=""
-              done={false}
-              active
-              isLast
-              indent
-            >
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <span className="mt-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent/20 text-[9px] font-bold text-accent-text shrink-0">a</span>
-                  <p className="text-[11px] text-text-secondary leading-snug">
-                    Align existing content pillars to your topic searches and generate new video ideas
-                  </p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="mt-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent2/20 text-[9px] font-bold text-accent2-text shrink-0">b</span>
-                  <p className="text-[11px] text-text-secondary leading-snug">
-                    Create new content pillars based on AI recommendations and generate ideas from them
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  className="h-8 text-xs gap-1.5 mt-1"
-                  onClick={onOpenIdeasWizard}
-                >
-                  <Sparkles size={13} />
-                  Create ideas
-                </Button>
+                {selectedPath && !step2Done ? (
+                  <div className="border-t border-nativz-border/60 pt-4">
+                    {selectedPath === 'pillars' ? (
+                      <PathDetail>
+                        <div className="space-y-3">
+                          <SubStepRow label="a" accent="accent">
+                            Align existing content pillars to your topic searches and generate new video ideas
+                          </SubStepRow>
+                          <SubStepRow label="b" accent="accent2">
+                            Create new content pillars based on AI recommendations and generate ideas from them
+                          </SubStepRow>
+                          <Button
+                            type="button"
+                            variant="primary"
+                            size="sm"
+                            className="mt-2 h-9 gap-1.5 text-xs"
+                            onClick={onOpenIdeasWizard}
+                          >
+                            <Sparkles size={14} />
+                            Create ideas
+                          </Button>
+                        </div>
+                      </PathDetail>
+                    ) : (
+                      <PathDetail>
+                        <p className="text-xs leading-relaxed text-text-secondary">
+                          Ask questions about the research, explore angles, and discover ideas through conversation.
+                        </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          <Link href={`/admin/search/${searchId}/chat`}>
+                            <Button type="button" variant="primary" size="sm" className="h-9 gap-1.5 text-xs">
+                              <MessageSquareText size={14} />
+                              Open chat
+                            </Button>
+                          </Link>
+                          <Link
+                            href="/admin/search/new"
+                            className="inline-flex items-center gap-1 text-xs font-medium text-text-muted hover:text-accent-text"
+                          >
+                            <Search size={12} />
+                            Add more searches
+                          </Link>
+                        </div>
+                      </PathDetail>
+                    )}
+                  </div>
+                ) : null}
               </div>
-            </StepperItem>
-          ) : (
-            <StepperItem
-              step={null}
-              title=""
-              done={false}
-              active
-              isLast
-              indent
-            >
-              <div className="space-y-2">
-                <p className="text-[11px] text-text-secondary leading-snug">
-                  Ask questions about the research, explore angles, and discover ideas through conversation.
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link href={`/admin/search/${searchId}/chat`}>
-                    <Button type="button" variant="primary" size="sm" className="h-8 text-xs gap-1.5">
-                      <MessageSquareText size={13} />
-                      Open chat
-                    </Button>
-                  </Link>
-                  <Link
-                    href="/admin/search/new"
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-text-muted hover:text-accent-text"
-                  >
-                    <Search size={11} />
-                    Add more searches
-                  </Link>
-                </div>
-              </div>
-            </StepperItem>
-          )
-        ) : null}
+            )}
+          </div>
+        </section>
       </div>
     </Card>
   );
 }
 
-function StepperItem({
-  step,
-  title,
-  done,
-  active,
-  isLast,
-  indent = false,
+function PathDetail({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-lg bg-background/40 px-3 py-3 sm:px-4">{children}</div>
+  );
+}
+
+function SubStepRow({
+  label,
+  accent,
   children,
 }: {
-  step: number | null;
-  title: string;
-  done: boolean;
-  active: boolean;
-  isLast: boolean;
-  indent?: boolean;
-  children?: ReactNode;
+  label: string;
+  accent: 'accent' | 'accent2';
+  children: ReactNode;
 }) {
+  const circle =
+    accent === 'accent'
+      ? 'bg-accent/20 text-accent-text'
+      : 'bg-accent2/20 text-accent2-text';
   return (
-    <div className={cn('relative flex gap-3', indent && 'ml-5')}>
-      {/* Vertical connector line */}
-      <div className="flex flex-col items-center shrink-0">
-        {step !== null ? (
-          <div
-            className={cn(
-              'flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold shrink-0 transition-colors',
-              done
-                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-                : active
-                  ? 'border-accent/40 bg-accent/10 text-accent-text'
-                  : 'border-nativz-border bg-surface-hover text-text-muted',
-            )}
-          >
-            {done ? <Check size={14} /> : step}
-          </div>
-        ) : (
-          <div className="h-2 w-7" />
+    <div className="flex items-start gap-2.5">
+      <span
+        className={cn(
+          'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold',
+          circle,
         )}
-        {!isLast && (
-          <div className={cn(
-            'w-px flex-1 min-h-4',
-            done ? 'bg-emerald-500/30' : 'bg-nativz-border',
-          )} />
-        )}
-      </div>
-
-      {/* Content */}
-      <div className={cn('flex-1 min-w-0 pb-5', isLast && 'pb-0')}>
-        {title ? (
-          <p className={cn(
-            'text-xs font-semibold leading-7',
-            done ? 'text-emerald-400' : active ? 'text-text-primary' : 'text-text-muted',
-          )}>
-            {title}
-          </p>
-        ) : null}
-        {children}
-      </div>
+      >
+        {label}
+      </span>
+      <p className="text-xs leading-relaxed text-text-secondary">{children}</p>
     </div>
   );
 }
@@ -285,21 +259,21 @@ function PathCard({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex flex-col gap-1.5 rounded-xl border p-3 text-left transition-all cursor-pointer',
+        'flex min-h-[112px] w-full flex-col gap-2 rounded-xl border p-4 text-left transition-all cursor-pointer sm:min-h-[120px]',
         selected
-          ? 'border-accent/50 bg-accent/10 shadow-sm shadow-accent/10'
-          : 'border-nativz-border bg-surface/60 hover:border-accent/30 hover:bg-surface-hover/60',
+          ? 'border-accent/50 bg-accent/10 shadow-md shadow-accent/5 ring-1 ring-accent/20'
+          : 'border-nativz-border bg-surface/80 hover:border-accent/25 hover:bg-surface-hover',
       )}
     >
-      <div className="flex items-center gap-2">
-        <span className={cn('shrink-0', selected ? 'text-accent-text' : 'text-text-muted')}>
-          {icon}
-        </span>
-        <span className={cn('text-xs font-semibold', selected ? 'text-accent-text' : 'text-text-primary')}>
-          {title}
-        </span>
+      <div className="flex gap-3">
+        <span className={cn('mt-0.5 shrink-0', selected ? 'text-accent-text' : 'text-text-muted')}>{icon}</span>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <span className={cn('block text-sm font-semibold leading-tight', selected ? 'text-accent-text' : 'text-text-primary')}>
+            {title}
+          </span>
+          <p className="text-xs leading-relaxed text-text-muted">{description}</p>
+        </div>
       </div>
-      <p className="text-[10px] leading-snug text-text-muted">{description}</p>
     </button>
   );
 }

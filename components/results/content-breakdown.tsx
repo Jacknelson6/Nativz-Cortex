@@ -25,17 +25,17 @@ export function ContentBreakdown({ data }: ContentBreakdownProps) {
 
   return (
     <Card>
-      <CardTitle>Content breakdown</CardTitle>
+      <CardTitle className="text-xl">Content breakdown</CardTitle>
 
       {/* Tabs */}
-      <div className="mt-4 flex gap-1 rounded-lg bg-surface-hover p-1">
+      <div className="mt-5 flex gap-1 rounded-lg bg-surface-hover p-1">
         {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => {
           const tooltip = TOOLTIPS[tab];
           return (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-all ${
                 activeTab === tab
                   ? 'bg-surface text-text-primary shadow-sm'
                   : 'text-text-muted hover:text-text-secondary'
@@ -54,14 +54,16 @@ export function ContentBreakdown({ data }: ContentBreakdownProps) {
       </div>
 
       {/* Items */}
-      <div className="mt-4 space-y-3">
+      <div className="mt-5 space-y-4">
         {items.map((item: ContentBreakdownItem) => (
           <div key={item.name}>
-            <div className="flex items-baseline justify-between mb-1.5">
-              <span className="text-sm text-text-secondary">{item.name}</span>
-              <span className="text-xs font-medium text-text-muted tabular-nums">{item.percentage}%</span>
+            <div className="flex items-baseline justify-between gap-3 mb-1.5">
+              <span className="text-base text-text-secondary">{item.name}</span>
+              <span className="text-sm font-semibold text-text-muted tabular-nums shrink-0">
+                {item.percentage}%
+              </span>
             </div>
-            <div className="h-2 rounded-full bg-surface-hover overflow-hidden">
+            <div className="h-2.5 rounded-full bg-surface-hover overflow-hidden">
               <div
                 className="h-full rounded-full bg-accent transition-all duration-500"
                 style={{ width: `${item.percentage}%` }}

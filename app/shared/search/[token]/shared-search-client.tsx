@@ -4,7 +4,7 @@ import { Building2, Clock, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
 import { ExecutiveSummary } from '@/components/reports/executive-summary';
-import { MetricsRow } from '@/components/results/metrics-row';
+import { BrandApplication } from '@/components/reports/brand-application';
 import { EmotionsBreakdown } from '@/components/results/emotions-breakdown';
 import { ContentBreakdown } from '@/components/results/content-breakdown';
 import { TrendingTopicsTable } from '@/components/results/trending-topics-table';
@@ -12,7 +12,6 @@ import { ContentPillars } from '@/components/results/content-pillars';
 import { NicheInsights } from '@/components/results/niche-insights';
 import { SourcesPanel } from '@/components/results/sources-panel';
 import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
-import { KeyFindings } from '@/components/results/key-findings';
 import { SentimentBadge } from '@/components/results/sentiment-badge';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { formatRelativeTime } from '@/lib/utils/format';
@@ -85,22 +84,16 @@ export function SharedSearchClient({
       {/* Content */}
       <div className="w-full px-6 py-8 space-y-6">
         {search.summary ? (
-          <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5 space-y-5">
-            <ExecutiveSummary summary={search.summary} />
+          <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5">
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-10 lg:items-start">
+              <ExecutiveSummary summary={search.summary} />
+              <BrandApplication
+                content={aiResponse?.brand_alignment_notes}
+                clientName={clientName}
+              />
+            </div>
           </div>
         ) : null}
-
-        {search.summary && aiResponse?.trending_topics && (
-          <KeyFindings summary={search.summary} topics={aiResponse.trending_topics} />
-        )}
-
-        {search.metrics && (
-          <MetricsRow
-            metrics={search.metrics}
-            
-            platformBreakdown={aiResponse?.platform_breakdown}
-          />
-        )}
 
         {aiResponse?.synthetic_audiences?.segments?.length ? (
           <TopicSyntheticAudiences data={aiResponse.synthetic_audiences} />
@@ -113,7 +106,7 @@ export function SharedSearchClient({
         {(search.emotions || search.content_breakdown) && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {search.emotions && search.emotions.length > 0 && (
-              <EmotionsBreakdown emotions={search.emotions} shareToken={shareToken} />
+              <EmotionsBreakdown emotions={search.emotions} />
             )}
             {search.content_breakdown && (
               <ContentBreakdown data={search.content_breakdown} />

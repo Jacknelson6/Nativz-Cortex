@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
 import { ExecutiveSummary } from '@/components/reports/executive-summary';
-import { MetricsRow } from '@/components/results/metrics-row';
+import { BrandApplication } from '@/components/reports/brand-application';
 import { EmotionsBreakdown } from '@/components/results/emotions-breakdown';
 import { ContentBreakdown } from '@/components/results/content-breakdown';
 import { TrendingTopicsTable } from '@/components/results/trending-topics-table';
@@ -18,7 +18,6 @@ import { NicheInsights } from '@/components/results/niche-insights';
 import { SourcesPanel } from '@/components/results/sources-panel';
 import { SourceBrowser } from '@/components/results/source-browser';
 import { ActivityChart } from '@/components/charts/activity-chart';
-import { KeyFindings } from '@/components/results/key-findings';
 import { BigMovers } from '@/components/results/big-movers';
 import { CompetitiveAnalysis } from '@/components/results/competitive-analysis';
 import { ExportPdfButton } from '@/components/results/export-pdf-button';
@@ -26,7 +25,7 @@ import { ShareButton } from '@/components/results/share-button';
 import { SearchProgress } from '@/components/search/search-progress';
 import { SearchIdeasWizard } from '@/components/research/search-ideas-wizard';
 import type { ClientOption } from '@/components/ui/client-picker';
-import { hasSerp, isNewMetrics } from '@/lib/types/search';
+import { hasSerp } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
 import { RelatedTopics } from '@/components/search/related-topics';
 import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
@@ -225,8 +224,14 @@ export function AdminResultsClient({
       {/* Content */}
       <div className="w-full px-6 py-8 space-y-6">
         {search.summary ? (
-          <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5 space-y-5">
-            <ExecutiveSummary summary={search.summary} />
+          <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5">
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-10 lg:items-start">
+              <ExecutiveSummary summary={search.summary} />
+              <BrandApplication
+                content={aiResponse?.brand_alignment_notes}
+                clientName={clientInfo?.name}
+              />
+            </div>
           </div>
         ) : null}
 
@@ -275,25 +280,6 @@ export function AdminResultsClient({
           </div>
         ) : null}
 
-        {/* Key Findings Cards */}
-        {Boolean(search.summary && aiResponse?.trending_topics) ? (
-          <KeyFindings
-            summary={search.summary!}
-            topics={aiResponse!.trending_topics}
-            overallSentiment={
-              aiResponse!.overall_sentiment ??
-              (search.metrics && isNewMetrics(search.metrics) ? search.metrics.overall_sentiment : undefined)
-            }
-          />
-        ) : null}
-
-        {search.metrics ? (
-          <MetricsRow
-            metrics={search.metrics}
-            platformBreakdown={aiResponse?.platform_breakdown}
-          />
-        ) : null}
-
         {/* Scraped videos — outlier board, video grid, hook patterns */}
         <ScrapedVideosSection
           searchId={search.id}
@@ -312,7 +298,7 @@ export function AdminResultsClient({
         {(Boolean(search.emotions?.length) || Boolean(search.content_breakdown)) ? (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {search.emotions && search.emotions.length > 0 ? (
-              <EmotionsBreakdown emotions={search.emotions} searchId={search.id} />
+              <EmotionsBreakdown emotions={search.emotions} />
             ) : null}
             {search.content_breakdown ? (
               <ContentBreakdown data={search.content_breakdown} />

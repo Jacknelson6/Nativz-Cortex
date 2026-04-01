@@ -111,17 +111,28 @@ export function AiTakeaways({ aiResponse, summary, clientName }: AiTakeawaysProp
     return [];
   })();
 
-  const pullQuote = aiResponse?.brand_alignment_notes
-    ?? (aiResponse?.conversation_themes?.[0]?.representative_quotes?.[0])
-    ?? null;
+  /** Brand alignment copy lives in Brand application (next to executive summary); avoid duplicating here */
+  const pullQuote = aiResponse?.brand_alignment_notes?.trim()
+    ? null
+    : aiResponse?.conversation_themes?.[0]?.representative_quotes?.[0] ?? null;
 
   return (
-    <div className="space-y-5">
-      {/* What is driving engagement — bento grid */}
+    <div className="space-y-8">
+      {/* What is driving engagement — full-width: 4-up on xl, 2-up on md, stacks on mobile */}
       {engagementDrivers.length > 0 ? (
-        <div>
-          <h4 className="text-sm font-bold text-text-primary mb-3">What is driving engagement</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-4">
+          <div className="flex flex-col gap-1 border-b border-nativz-border/60 pb-4 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+            <div>
+              <h4 className="text-base font-semibold tracking-tight text-text-primary">
+                What is driving engagement
+              </h4>
+              <p className="mt-1 text-xs text-text-muted max-w-2xl">
+                Short-form patterns pulling views in this topic — pair each angle with a hook for your next posts.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-4 2xl:gap-5">
             {engagementDrivers.map((driver, i) => {
               const accentIdx = i % ACCENT_RING_COLORS.length;
               const displayHook = driver.hook ? cleanHookQuotes(driver.hook) : null;
@@ -129,18 +140,26 @@ export function AiTakeaways({ aiResponse, summary, clientName }: AiTakeawaysProp
               return (
                 <div
                   key={i}
-                  className={`group relative rounded-xl border border-nativz-border bg-surface p-4 ring-1 ${ACCENT_RING_COLORS[accentIdx]} transition-all hover:ring-2`}
+                  className={`group relative flex h-full min-h-0 flex-col rounded-xl border border-nativz-border bg-surface p-4 ring-1 ${ACCENT_RING_COLORS[accentIdx]} transition-all hover:ring-2`}
                 >
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${ACCENT_BG_COLORS[accentIdx]}`}>
-                      <Flame size={13} className={ACCENT_TEXT_COLORS[accentIdx]} />
+                  <div className="mb-3 flex items-start gap-2.5">
+                    <div
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${ACCENT_BG_COLORS[accentIdx]}`}
+                    >
+                      <Flame size={14} className={ACCENT_TEXT_COLORS[accentIdx]} />
                     </div>
-                    <p className="text-sm font-semibold text-text-primary leading-tight">{driver.title}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold leading-snug text-text-primary line-clamp-3">
+                        {driver.title}
+                      </p>
+                      <p className="mt-1.5 text-[11px] leading-relaxed text-text-muted tabular-nums">
+                        {driver.description}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-text-muted mb-3 tabular-nums">{driver.description}</p>
                   {displayHook ? (
-                    <div className="rounded-lg bg-background/60 border border-nativz-border/50 px-3 py-2.5">
-                      <p className="text-xs font-medium text-text-muted mb-1 uppercase tracking-wider">
+                    <div className="mt-auto rounded-lg border border-nativz-border/50 bg-background/50 px-3 py-2.5">
+                      <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-text-muted">
                         Example hook{clientName ? ` for ${clientName}` : ''}
                       </p>
                       <p className="text-[13px] leading-snug text-text-secondary italic">
@@ -155,14 +174,21 @@ export function AiTakeaways({ aiResponse, summary, clientName }: AiTakeawaysProp
         </div>
       ) : null}
 
-      {/* Pull quote */}
+      {/* Pull quote — constrained measure so long copy stays readable on ultra-wide */}
       {pullQuote ? (
-        <div className="flex gap-3 rounded-xl border border-nativz-border bg-surface/50 p-4">
-          <Quote size={16} className="mt-0.5 shrink-0 text-pink-400/60 rotate-180" />
-          <p className="text-sm italic leading-relaxed text-text-secondary">{pullQuote}</p>
+        <div className="rounded-xl border border-nativz-border bg-gradient-to-br from-surface to-surface-hover/80 p-5 sm:p-6">
+          <div className="mx-auto flex max-w-5xl flex-col gap-4 sm:flex-row sm:gap-6">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pink-500/10">
+              <Quote size={18} className="text-pink-400/80 rotate-180" />
+            </div>
+            <blockquote className="min-w-0 flex-1 border-l-2 border-pink-500/25 pl-4 sm:pl-5">
+              <p className="text-pretty text-sm italic leading-relaxed text-text-secondary md:text-[15px] md:leading-relaxed">
+                {pullQuote}
+              </p>
+            </blockquote>
+          </div>
         </div>
       ) : null}
-
     </div>
   );
 }

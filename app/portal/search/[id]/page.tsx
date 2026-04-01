@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ExecutiveSummary } from '@/components/reports/executive-summary';
-import { MetricsRow } from '@/components/results/metrics-row';
+import { BrandApplication } from '@/components/reports/brand-application';
 import { EmotionsBreakdown } from '@/components/results/emotions-breakdown';
 import { ContentBreakdown } from '@/components/results/content-breakdown';
 import { TrendingTopicsTable } from '@/components/results/trending-topics-table';
@@ -122,6 +122,13 @@ export default async function PortalSearchResultsPage({
   const s = search as TopicSearch;
   const aiResponse = s.raw_ai_response as TopicSearchAIResponse | null;
 
+  const { data: clientNameRow } = await adminClient
+    .from('clients')
+    .select('name')
+    .eq('id', s.client_id as string)
+    .single();
+  const portalClientName = clientNameRow?.name ?? null;
+
   return (
     <div className="min-h-full">
       {/* Header */}
@@ -155,17 +162,16 @@ export default async function PortalSearchResultsPage({
       {/* Content */}
       <div className="w-full px-6 py-8 space-y-6">
         {s.summary ? (
-          <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5 space-y-5">
-            <ExecutiveSummary summary={s.summary} />
+          <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5">
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-10 lg:items-start">
+              <ExecutiveSummary summary={s.summary} />
+              <BrandApplication
+                content={aiResponse?.brand_alignment_notes}
+                clientName={portalClientName}
+              />
+            </div>
           </div>
         ) : null}
-        {s.metrics && (
-          <MetricsRow
-            metrics={s.metrics}
-            platformBreakdown={aiResponse?.platform_breakdown}
-          />
-        )}
-
         {aiResponse?.synthetic_audiences?.segments?.length ? (
           <TopicSyntheticAudiences data={aiResponse.synthetic_audiences} />
         ) : null}
@@ -178,7 +184,7 @@ export default async function PortalSearchResultsPage({
         {(s.emotions || s.content_breakdown) && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {s.emotions && s.emotions.length > 0 && (
-              <EmotionsBreakdown emotions={s.emotions} searchId={s.id} />
+              <EmotionsBreakdown emotions={s.emotions} />
             )}
             {s.content_breakdown && (
               <ContentBreakdown data={s.content_breakdown} />

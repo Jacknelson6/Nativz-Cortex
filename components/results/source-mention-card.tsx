@@ -77,8 +77,7 @@ export interface SourceMentionCardProps {
 export function SourceMentionCard({ source, saved, onToggleSave }: SourceMentionCardProps) {
   const config = PLATFORM_CONFIG[source.platform];
   const thumb = resolveSourceThumbnailUrl(source);
-  const isVideoThumb = thumb != null && (source.platform === 'youtube' || source.platform === 'tiktok');
-  /** 16:9 for all video thumbs so grid rows align */
+  /** Show any resolved thumb in a fixed 16:9 frame so portrait assets crop cleanly and row heights match */
   const aspectClass = 'aspect-video w-full';
 
   const titleText = source.platform === 'web' ? stripHtml(source.title) : source.title;
@@ -103,7 +102,7 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
     source.platform === 'reddit' ? 'u/' : source.platform === 'tiktok' ? '@' : '@';
 
   return (
-    <article className="rounded-xl border border-nativz-border bg-surface overflow-hidden flex flex-col h-full shadow-sm">
+    <article className="rounded-xl border border-nativz-border bg-surface overflow-hidden flex flex-col shadow-sm">
       {/* Header */}
       <div className="flex items-start justify-between gap-2 px-3 pt-3 pb-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -137,7 +136,7 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
       </div>
 
       {/* Thumbnail */}
-      {isVideoThumb && thumb && (
+      {thumb && (
         <a
           href={source.url}
           target="_blank"
@@ -161,7 +160,7 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
         </a>
       )}
 
-      <div className="px-3 pb-3 flex flex-col flex-1 gap-2">
+      <div className="px-3 pb-3 flex flex-col gap-2">
         <a
           href={source.url}
           target="_blank"
