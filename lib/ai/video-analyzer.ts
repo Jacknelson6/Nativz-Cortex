@@ -4,6 +4,45 @@ import { resolveDashscopeApiKeyForFeature } from './provider-keys';
 const DASHSCOPE_BASE_URL = 'https://dashscope-us.aliyuncs.com/compatible-mode/v1';
 const VIDEO_ANALYSIS_MODEL = 'qwen3.5-omni-flash';
 
+/** ReClip local video downloader (yt-dlp backend) */
+const RECLIP_BASE_URL = process.env.RECLIP_URL || 'http://localhost:8899';
+
+/**
+ * Download a video via ReClip (local yt-dlp service).
+ * Returns the download URL for the mp4 file, or null on failure.
+ */
+export async function downloadVideoViaReclip(videoUrl: string): Promise<string | null> {
+  try {
+    // Start download
+    const dlResp = await fetch(`${RECLIP_BASE_URL}/api/download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: videoUrl, format: 'mp4' }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!dlResp.ok) return null;
+    const { job_id } = await dlResp.json() as { job_id: string };
+    if (!job_id) return null;
+
+    // Poll for completion (max 60s)
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const statusResp = await fetch(`${RECLIP_BASE_URL}/api/status/${job_id}`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!statusResp.ok) continue;
+      const status = await statusResp.json() as { status: string; filename?: string };
+      if (status.status === 'done' && status.filename) {
+        return `${RECLIP_BASE_URL}/api/file/${job_id}`;
+      }
+      if (status.status === 'error') return null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export interface VideoAnalysis {
   visualHooks: string[];
   onScreenText: string[];
@@ -35,6 +74,12 @@ export async function analyzeVideoWithVision(
 ): Promise<VideoAnalysis> {
   const apiKey = resolveDashscopeApiKeyForFeature('video_analysis');
   if (!apiKey) throw new Error('Dashscope API key not configured (add DASHSCOPE_API_KEY)');
+
+  // If no direct video URL provided, try downloading via ReClip
+  if (!directVideoUrl && videoUrl) {
+    const reclipUrl = await downloadVideoViaReclip(videoUrl);
+    if (reclipUrl) directVideoUrl = reclipUrl;
+  }
 
   // Fetch thumbnail and convert to base64
   const thumbResponse = await fetch(thumbnailUrl);
