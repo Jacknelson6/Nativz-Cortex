@@ -2,7 +2,7 @@ import { calculateCost, logUsage } from './usage';
 import { checkCostBudget } from './cost-guard';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_OPENROUTER_MODEL } from './openrouter-default-model';
-import { resolveOpenAiApiKeyForFeature, resolveOpenRouterApiKeyForFeature } from './provider-keys';
+import { resolveOpenAiApiKeyForFeature, resolveOpenRouterApiKeyForFeature, resolveDashscopeApiKeyForFeature } from './provider-keys';
 import { openAiChatCompletionTokenFields, toOpenAiChatModelId } from './openai-model-id';
 import { buildOrderedModelChain, getFeatureRoutingPolicy } from './routing-policy';
 import {
@@ -216,6 +216,60 @@ async function callOpenAI(
   return { data, response };
 }
 
+async function callDashscope(
+  model: string,
+  options: CompletionOptions,
+): Promise<{ data: Record<string, unknown>; response: Response }> {
+  const apiKey = resolveDashscopeApiKeyForFeature(options.feature);
+  if (!apiKey) throw new Error('Dashscope API key is not configured (add DASHSCOPE_API_KEY)');
+
+  const body: Record<string, unknown> = {
+    model,
+    max_tokens: options.maxTokens,
+    messages: options.messages,
+  };
+
+  const timeoutMs = options.timeoutMs ?? 0;
+  const controller = timeoutMs > 0 ? new AbortController() : null;
+  const timeoutId =
+    controller && timeoutMs > 0
+      ? setTimeout(() => controller.abort(), timeoutMs)
+      : null;
+
+  let response: Response;
+  try {
+    response = await fetch('https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: controller?.signal,
+    });
+  } catch (err) {
+    if (timeoutId) clearTimeout(timeoutId);
+    const aborted =
+      err instanceof Error &&
+      (err.name === 'AbortError' || err.message.toLowerCase().includes('abort'));
+    if (aborted) {
+      throw new Error(
+        `Dashscope request timed out after ${timeoutMs}ms. Try again or switch model in agency settings.`,
+      );
+    }
+    throw err;
+  }
+  if (timeoutId) clearTimeout(timeoutId);
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Dashscope API error (${response.status}): ${errorBody.substring(0, 300)}`);
+  }
+
+  const data = await response.json();
+  return { data, response };
+}
+
 function buildCompletionResultFromOpenRouter(
   data: Record<string, unknown>,
   model: string,
@@ -298,8 +352,58 @@ export async function createCompletion(options: CompletionOptions): Promise<AICo
 
   const openAiKey = await resolveOpenAiApiKeyForFeature(options.feature);
   const orKey = await resolveOpenRouterApiKeyForFeature(options.feature);
+  const dsKey = resolveDashscopeApiKeyForFeature(options.feature);
 
   for (const model of ordered) {
+    // Route dashscope/ prefixed models through the Dashscope provider
+    if (model.startsWith('dashscope/')) {
+      const dsModel = model.slice('dashscope/'.length);
+      if (!dsKey) {
+        lastError = new Error('Dashscope API key not configured (add DASHSCOPE_API_KEY)');
+        continue;
+      }
+      try {
+        const { data } = await callDashscope(dsModel, options);
+        if (!data.choices || (data.choices as unknown[]).length === 0) {
+          throw new Error('AI model returned no response. It may be overloaded.');
+        }
+        const content = (data.choices as { message?: { content?: string } }[])[0]?.message?.content || '';
+        if (!content) throw new Error('AI model returned an empty response.');
+        const usage = data.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
+        const promptTokens = usage?.prompt_tokens || 0;
+        const completionTokens = usage?.completion_tokens || 0;
+        const estimatedCost = calculateCost(model, promptTokens, completionTokens);
+        if (options.feature) {
+          logUsage({
+            service: 'dashscope',
+            model,
+            feature: options.feature,
+            inputTokens: promptTokens,
+            outputTokens: completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            costUsd: estimatedCost,
+            userId: options.userId,
+            userEmail: options.userEmail,
+          }).catch(() => {});
+        }
+        return {
+          text: content,
+          usage: { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens },
+          estimatedCost,
+          modelUsed: model,
+        };
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (lastError.message.includes('budget exceeded')) throw lastError;
+        const moreModels = ordered.indexOf(model) < ordered.length - 1;
+        console.warn(
+          `Dashscope model ${dsModel} failed, ${moreModels ? 'trying fallbacks' : 'no more fallbacks'}:`,
+          lastError.message,
+        );
+        continue;
+      }
+    }
+
     const openAiModelId = options.webSearch ? null : toOpenAiChatModelId(model);
 
     if (openAiKey && openAiModelId) {

@@ -22,6 +22,10 @@ const PRICING: Record<string, { input: number; output: number }> = {
   // OpenRouter — low-cost smart defaults
   'deepseek/deepseek-v3.2': { input: 0.26 / 1_000_000, output: 0.38 / 1_000_000 },
   'qwen/qwen3-30b-a3b': { input: 0.08 / 1_000_000, output: 0.28 / 1_000_000 },
+  // Dashscope (Alibaba/Qwen) direct
+  'dashscope/qwen3.5-flash': { input: 0.07 / 1_000_000, output: 0.26 / 1_000_000 },
+  'dashscope/qwen3.5-omni-flash': { input: 0.2 / 1_000_000, output: 0.6 / 1_000_000 },
+  'qwen3.5-flash': { input: 0.07 / 1_000_000, output: 0.26 / 1_000_000 },
   // Groq — Whisper (charged per second of audio, ~$0.006/min, approximate per-token)
   'whisper-large-v3': { input: 0, output: 0 },
   'whisper-large-v3-turbo': { input: 0, output: 0 },
@@ -37,6 +41,7 @@ const GROQ_AUDIO_PRICE_PER_SECOND = 0.006 / 60;
 export type TrackedService =
   | 'openrouter'
   | 'openai'
+  | 'dashscope'
   | 'groq'
   | 'gemini'
   | 'searxng'

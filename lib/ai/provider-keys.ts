@@ -7,6 +7,8 @@ export type LlmProviderKeysStored = {
   openrouter?: Partial<Record<LlmProviderKeyBucket, string>>;
   /** Direct OpenAI API keys (api.openai.com) per workload */
   openai?: Partial<Record<LlmProviderKeyBucket, string>>;
+  /** Dashscope (Alibaba/Qwen) API keys per workload */
+  dashscope?: Partial<Record<LlmProviderKeyBucket, string>>;
 };
 
 /** @deprecated use LlmProviderKeyBucket */
@@ -109,6 +111,13 @@ export async function resolveOpenAiApiKeyForFeature(feature?: string): Promise<s
   const fallbackChain = bucket === 'default' ? '' : keyForBucket(oa, 'default');
   const env = process.env.OPENAI_API_KEY?.trim();
   return specific || fallbackChain || env || '';
+}
+
+/**
+ * Dashscope API key — always from environment (no per-bucket DB overrides for now).
+ */
+export function resolveDashscopeApiKeyForFeature(_feature?: string): string {
+  return process.env.DASHSCOPE_API_KEY?.trim() ?? '';
 }
 
 export async function getNerdModelFromDb(): Promise<string> {

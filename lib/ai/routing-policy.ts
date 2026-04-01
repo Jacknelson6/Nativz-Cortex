@@ -11,19 +11,19 @@ export type AiRoutingSummaryItem = {
 
 export const DEFAULT_CHAIN_BY_TIER: Record<AiRoutingTier, string[]> = {
   premium: [
+    'dashscope/qwen3.5-flash',
     'openai/gpt-5.4-mini',
     'deepseek/deepseek-v3.2',
-    'qwen/qwen3-30b-a3b',
   ],
   standard: [
+    'dashscope/qwen3.5-flash',
     'deepseek/deepseek-v3.2',
     'openai/gpt-5.4-mini',
-    'qwen/qwen3-30b-a3b',
   ],
   utility: [
+    'dashscope/qwen3.5-flash',
     'qwen/qwen3-30b-a3b',
     'deepseek/deepseek-v3.2',
-    'openai/gpt-5.4-nano',
   ],
 };
 
@@ -51,6 +51,7 @@ const FEATURE_GROUPS: AiRoutingSummaryItem[] = [
       'brand_dna_verbal',
       'brand_dna_audience_benchmarks',
       'ad_copy_generation',
+      'video_analysis',
     ],
   },
   {
