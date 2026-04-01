@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { StatCard } from '@/components/shared/stat-card';
 import { PlatformIcon } from '@/components/search/platform-icon';
-import { Zap, TrendingUp, Heart, Eye, Users, MessageCircle, Building2, Globe } from 'lucide-react';
+import { Zap, TrendingUp, Heart, Eye, Users, MessageCircle, Globe } from 'lucide-react';
 import { TooltipCard } from '@/components/ui/tooltip-card';
 import { formatNumber } from '@/lib/utils/format';
 import { TOOLTIPS } from '@/lib/tooltips';
@@ -12,7 +12,6 @@ import { isNewMetrics } from '@/lib/types/search';
 
 interface MetricsRowProps {
   metrics: SearchMetrics | LegacySearchMetrics;
-  isBrandSearch?: boolean;
   /** When present, shown inside the Sources analyzed card (topic searches only). */
   platformBreakdown?: PlatformBreakdown[];
 }
@@ -33,44 +32,35 @@ function SourcesPlatformFooter({ breakdown }: { breakdown: PlatformBreakdown[] }
   );
 }
 
-export function MetricsRow({ metrics, isBrandSearch = false, platformBreakdown }: MetricsRowProps) {
+export function MetricsRow({ metrics, platformBreakdown }: MetricsRowProps) {
   if (isNewMetrics(metrics)) {
     const cards: {
-      tooltipKey: 'topic_score' | 'sources_analyzed' | 'brand_references';
+      tooltipKey: 'topic_score' | 'sources_analyzed';
       title: string;
       value: string;
       icon: ReactNode;
       footer?: ReactNode;
-    }[] = isBrandSearch
-      ? [
-          {
-            tooltipKey: 'brand_references',
-            title: 'Brand references',
-            value: String(metrics.total_sources ?? 0),
-            icon: <Building2 size={18} />,
-          },
-        ]
-      : [
-          {
-            tooltipKey: 'topic_score',
-            title: 'Topic score',
-            value: String(metrics.topic_score ?? 0),
-            icon: <Zap size={18} />,
-          },
-          {
-            tooltipKey: 'sources_analyzed',
-            title: 'Sources analyzed',
-            value: String(metrics.sources_analyzed ?? metrics.total_sources),
-            icon: <Globe size={18} />,
-            footer:
-              platformBreakdown && platformBreakdown.length > 0 ? (
-                <SourcesPlatformFooter breakdown={platformBreakdown} />
-              ) : undefined,
-          },
-        ];
+    }[] = [
+      {
+        tooltipKey: 'topic_score',
+        title: 'Topic score',
+        value: String(metrics.topic_score ?? 0),
+        icon: <Zap size={18} />,
+      },
+      {
+        tooltipKey: 'sources_analyzed',
+        title: 'Sources analyzed',
+        value: String(metrics.sources_analyzed ?? metrics.total_sources),
+        icon: <Globe size={18} />,
+        footer:
+          platformBreakdown && platformBreakdown.length > 0 ? (
+            <SourcesPlatformFooter breakdown={platformBreakdown} />
+          ) : undefined,
+      },
+    ];
 
     return (
-      <div className={`grid grid-cols-2 gap-4 ${isBrandSearch ? 'sm:grid-cols-2' : 'sm:grid-cols-2'}`}>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-2">
         {cards.map((card, i) => {
           const tooltip = TOOLTIPS[card.tooltipKey];
           return (

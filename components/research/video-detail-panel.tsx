@@ -14,7 +14,6 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -120,8 +119,10 @@ export function VideoDetailPanel({ videos, initialIndex, onClose }: VideoDetailP
           <X size={18} />
         </button>
 
-        {/* Thumbnail */}
-        <div className="relative aspect-video w-full bg-surface-hover overflow-hidden">
+        {/* Thumbnail — aspect ratio matches platform */}
+        <div className={`relative w-full bg-surface-hover overflow-hidden ${
+          video.platform === 'tiktok' || video.platform === 'instagram' ? 'aspect-[9/16] max-h-[480px]' : 'aspect-video'
+        }`}>
           {video.thumbnail_url ? (
             <img
               src={video.thumbnail_url}

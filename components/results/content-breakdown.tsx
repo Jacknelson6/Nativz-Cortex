@@ -14,7 +14,7 @@ type Tab = 'intentions' | 'categories';
 
 const TAB_LABELS: Record<Tab, string> = {
   intentions: 'Why people watch',
-  categories: 'Categories',
+  categories: 'Content pillars',
 };
 
 export function ContentBreakdown({ data }: ContentBreakdownProps) {
@@ -59,12 +59,7 @@ export function ContentBreakdown({ data }: ContentBreakdownProps) {
           <div key={item.name}>
             <div className="flex items-baseline justify-between mb-1.5">
               <span className="text-sm text-text-secondary">{item.name}</span>
-              <div className="flex items-baseline gap-3">
-                <span className="text-xs font-medium text-text-muted tabular-nums">{item.percentage}%</span>
-                <span className="text-xs text-text-muted tabular-nums">
-                  {(item.engagement_rate * 100).toFixed(1)}% ER
-                </span>
-              </div>
+              <span className="text-xs font-medium text-text-muted tabular-nums">{item.percentage}%</span>
             </div>
             <div className="h-2 rounded-full bg-surface-hover overflow-hidden">
               <div

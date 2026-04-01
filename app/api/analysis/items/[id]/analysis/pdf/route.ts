@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { chromium } from 'playwright-core';
 import { buildAnalysisHtml } from '@/lib/pdf/analysis-html';
-import { NATIVZ_LOGO_PNG } from '@/lib/brand-logo';
+import { NATIVZ_LOGO_ON_LIGHT_PNG } from '@/lib/brand-logo';
 import type { MoodboardItem } from '@/lib/types/moodboard';
 import { createCompletion } from '@/lib/ai/client';
 
@@ -106,7 +106,7 @@ export async function GET(
       item: item as MoodboardItem,
       clientName,
       generatedTitle,
-      logoBase64: NATIVZ_LOGO_PNG,
+      logoBase64: NATIVZ_LOGO_ON_LIGHT_PNG,
     });
 
     // Render to PDF with Playwright

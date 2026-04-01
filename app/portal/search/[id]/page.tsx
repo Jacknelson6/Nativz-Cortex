@@ -154,18 +154,14 @@ export default async function PortalSearchResultsPage({
 
       {/* Content */}
       <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
-        {(s.summary || aiResponse?.brand_alignment_notes) ? (
+        {s.summary ? (
           <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5 space-y-5">
-            {s.summary ? <ExecutiveSummary summary={s.summary} /> : null}
-            {aiResponse?.brand_alignment_notes ? (
-              <ExecutiveSummary summary={aiResponse.brand_alignment_notes} variant="brand" />
-            ) : null}
+            <ExecutiveSummary summary={s.summary} />
           </div>
         ) : null}
         {s.metrics && (
           <MetricsRow
             metrics={s.metrics}
-            isBrandSearch={!!aiResponse?.brand_alignment_notes}
             platformBreakdown={aiResponse?.platform_breakdown}
           />
         )}

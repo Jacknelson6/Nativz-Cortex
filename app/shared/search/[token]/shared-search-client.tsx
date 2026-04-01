@@ -22,7 +22,7 @@ import {
   searchHeaderQueryClassName,
 } from '@/lib/clients/client-abbreviations';
 import { hasSerp } from '@/lib/types/search';
-import type { TopicSearch, TopicSearchAIResponse, TrendingTopic } from '@/lib/types/search';
+import type { TopicSearch, TopicSearchAIResponse } from '@/lib/types/search';
 import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
 
 interface SharedSearchClientProps {
@@ -84,12 +84,9 @@ export function SharedSearchClient({
 
       {/* Content */}
       <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
-        {(search.summary || aiResponse?.brand_alignment_notes) ? (
+        {search.summary ? (
           <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5 space-y-5">
-            {search.summary ? <ExecutiveSummary summary={search.summary} /> : null}
-            {aiResponse?.brand_alignment_notes ? (
-              <ExecutiveSummary summary={aiResponse.brand_alignment_notes} variant="brand" />
-            ) : null}
+            <ExecutiveSummary summary={search.summary} />
           </div>
         ) : null}
 
@@ -100,7 +97,7 @@ export function SharedSearchClient({
         {search.metrics && (
           <MetricsRow
             metrics={search.metrics}
-            isBrandSearch={!!aiResponse?.brand_alignment_notes}
+            
             platformBreakdown={aiResponse?.platform_breakdown}
           />
         )}

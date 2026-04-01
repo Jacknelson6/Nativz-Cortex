@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
-import { NATIVZ_LOGO_PNG, AC_LOGO_PNG } from '@/lib/brand-logo';
+import { AC_LOGO_PNG } from '@/lib/brand-logo';
+import { NativzLogoPdf } from '@/lib/pdf/nativz-logo-pdf';
 
 // ─── Agency color palettes ──────────────────────────────────────────────────
 
@@ -191,7 +192,6 @@ export function IdeasPdfDocument({
 }: IdeasPdfProps) {
   const isAC = agency?.toLowerCase().includes('anderson');
   const palette = isAC ? palettes.ac : palettes.nativz;
-  const logo = isAC ? AC_LOGO_PNG : NATIVZ_LOGO_PNG;
 
   const heading = `${ideas.length} ${concept ?? 'video'} ideas${searchQuery ? ` from ${searchQuery} research` : ''}`;
   const date = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -210,7 +210,11 @@ export function IdeasPdfDocument({
               <Text style={s.subtitle}>{clientName}</Text>
               <Text style={s.meta}>{date}</Text>
             </View>
-            <Image src={logo} style={{ width: 60, height: 20, objectFit: 'contain' as const }} />
+            {isAC ? (
+              <Image src={AC_LOGO_PNG} style={{ width: 60, height: 20, objectFit: 'contain' as const }} />
+            ) : (
+              <NativzLogoPdf width={60} />
+            )}
           </View>
         </View>
 

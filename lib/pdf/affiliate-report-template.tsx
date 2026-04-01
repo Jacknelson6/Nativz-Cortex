@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
-import { NATIVZ_LOGO_PNG, AC_LOGO_PNG } from '@/lib/brand-logo';
+import { AC_LOGO_PNG } from '@/lib/brand-logo';
+import { NativzLogoPdf } from '@/lib/pdf/nativz-logo-pdf';
 import type { DateRange } from '@/lib/types/reporting';
 import type { AffiliateKpis, TopAffiliate, PendingPayout } from '@/components/affiliates/hooks/use-affiliates-data';
 
@@ -135,7 +136,6 @@ export function AffiliateReportPdf({
   sections,
 }: AffiliateReportProps) {
   const isAC = agency?.toLowerCase().includes('anderson');
-  const logo = isAC ? AC_LOGO_PNG : NATIVZ_LOGO_PNG;
 
   return (
     <Document>
@@ -153,7 +153,11 @@ export function AffiliateReportPdf({
                 {dateRange.start} — {dateRange.end}
               </Text>
             </View>
-            {logo && <Image src={logo} style={{ width: 80, height: 24 }} />}
+            {isAC ? (
+              <Image src={AC_LOGO_PNG} style={{ width: 80, height: 24 }} />
+            ) : (
+              <NativzLogoPdf width={80} />
+            )}
           </View>
         </View>
 

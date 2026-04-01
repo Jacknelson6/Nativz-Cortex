@@ -29,16 +29,21 @@ function formatNumber(n: number): string {
   return String(n);
 }
 
+function isVerticalPlatform(platform: string): boolean {
+  return platform === 'tiktok' || platform === 'instagram';
+}
+
 function VideoCard({ video, onClick }: { video: TopicSearchVideoRow; onClick?: () => void }) {
   const outlier = video.outlier_score ?? 0;
+  const vertical = isVerticalPlatform(video.platform);
   return (
     <button
       type="button"
       onClick={onClick}
       className="group block w-full text-left rounded-xl border border-nativz-border bg-surface hover:border-accent/40 transition-all overflow-hidden cursor-pointer"
     >
-      {/* Thumbnail */}
-      <div className="relative aspect-[9/16] max-h-48 w-full bg-surface-hover overflow-hidden">
+      {/* Thumbnail — 9:16 for short-form, 16:9 for YouTube */}
+      <div className={`relative w-full bg-surface-hover overflow-hidden ${vertical ? 'aspect-[9/16]' : 'aspect-video'}`}>
         {video.thumbnail_url ? (
           <img
             src={video.thumbnail_url}
@@ -147,7 +152,7 @@ export function VideoGrid({ videos }: VideoGridProps) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-base font-semibold text-text-primary">
-              All videos
+              Short-form videos
             </CardTitle>
             <p className="text-xs text-text-muted mt-1">
               Filter by platform and sort order
@@ -206,7 +211,7 @@ export function VideoGrid({ videos }: VideoGridProps) {
               size="sm"
               onClick={() => setShowAll(true)}
             >
-              Show all {filtered.length} videos
+              Show more
             </Button>
           </div>
         ) : null}

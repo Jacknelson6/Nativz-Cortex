@@ -5,8 +5,6 @@ import {
   BarChart3,
   Bookmark,
   BookmarkCheck,
-  ChevronDown,
-  ChevronUp,
   ExternalLink,
   FileText,
   Heart,
@@ -21,9 +19,6 @@ import type { PlatformComment, PlatformSource } from '@/lib/types/search';
 import {
   engagementRatePercent,
   resolveSourceThumbnailUrl,
-  roughSentimentScore,
-  sentimentChip,
-  sourceCategoryLabel,
   sourcePlaceLabel,
   formatViewsApprox,
 } from '@/lib/search/source-mention-utils';
@@ -82,7 +77,6 @@ export interface SourceMentionCardProps {
 }
 
 export function SourceMentionCard({ source, saved, onToggleSave }: SourceMentionCardProps) {
-  const [showTranscript, setShowTranscript] = useState(false);
   const config = PLATFORM_CONFIG[source.platform];
   const thumb = resolveSourceThumbnailUrl(source);
   const isVideoThumb = thumb != null && (source.platform === 'youtube' || source.platform === 'tiktok');
@@ -97,9 +91,6 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
       ? stripHtml(source.content ?? '')
       : (source.content ?? source.title ?? '').trim();
 
-  const sentiment = roughSentimentScore(`${titleText} ${bodyText}`);
-  const chip = sentimentChip(sentiment);
-  const category = sourceCategoryLabel(source);
   const place = sourcePlaceLabel(source);
   const er = engagementRatePercent(source);
 
@@ -148,7 +139,7 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
         </button>
       </div>
 
-      {/* Thumbnail (short-form vertical vs long-form wide) */}
+      {/* Thumbnail */}
       {isVideoThumb && thumb && (
         <a
           href={source.url}
@@ -206,34 +197,26 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
           )}
         </div>
 
-        {/* Tags */}
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] text-text-secondary">
-            {chip.emoji} {chip.label}
-          </span>
-          <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] text-text-secondary">
-            {category}
-          </span>
-        </div>
+        {/* Tags — platform-specific context only (subreddit, publication) */}
+        {place !== config.label && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] text-text-secondary">
+              {place}
+            </span>
+          </div>
+        )}
 
         <CommentsBlock comments={source.comments ?? []} authorPrefix={commentPrefix} />
 
         {source.transcript && (
           <div className="pt-1 border-t border-nativz-border/60">
-            <button
-              type="button"
-              onClick={() => setShowTranscript(!showTranscript)}
-              className="flex items-center gap-1.5 text-[11px] text-accent-text hover:underline cursor-pointer"
-            >
+            <div className="flex items-center gap-1.5 text-[11px] text-text-muted mb-1">
               <FileText size={10} />
-              {showTranscript ? 'Hide transcript' : 'Show transcript'}
-              {showTranscript ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-            </button>
-            {showTranscript && (
-              <p className="text-[11px] text-text-secondary leading-relaxed max-h-32 overflow-y-auto border-l-2 border-nativz-border pl-2.5 mt-1">
-                {source.transcript}
-              </p>
-            )}
+              Transcript
+            </div>
+            <p className="text-[11px] text-text-secondary leading-relaxed max-h-32 overflow-y-auto border-l-2 border-nativz-border pl-2.5">
+              {source.transcript}
+            </p>
           </div>
         )}
 

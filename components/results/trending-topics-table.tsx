@@ -38,7 +38,7 @@ type SortDir = 'asc' | 'desc';
 
 /** Matches mockup: topic | total views | resonance | sentiment | save */
 const GRID =
-  'grid-cols-[minmax(0,1fr)_minmax(88px,0.95fr)_minmax(72px,0.75fr)_minmax(88px,0.85fr)_40px]';
+  'grid-cols-[minmax(0,1fr)_minmax(80px,0.8fr)_minmax(72px,0.7fr)_minmax(140px,1.1fr)_40px]';
 
 function getTopicReachValue(topic: TrendingTopic | LegacyTrendingTopic): number {
   if ('total_engagement' in topic && typeof (topic as TrendingTopic).total_engagement === 'number') {
@@ -59,13 +59,16 @@ function formatTopicReach(topic: TrendingTopic | LegacyTrendingTopic): string {
 function SentimentSplitBar({ sentiment }: { sentiment: number }) {
   const pos = Math.max(0, Math.min(1, (sentiment + 1) / 2));
   const neg = 1 - pos;
+  const posPercent = Math.round(pos * 100);
+  const negPercent = Math.round(neg * 100);
   return (
-    <div
-      className="flex h-2 w-[72px] shrink-0 gap-0.5 overflow-hidden rounded-full"
-      title={getSentimentLabel(sentiment)}
-    >
-      <div className="h-full min-w-[3px] rounded-l-full bg-red-500/85" style={{ width: `${neg * 100}%` }} />
-      <div className="h-full min-w-[3px] rounded-r-full bg-emerald-500/85" style={{ width: `${pos * 100}%` }} />
+    <div className="flex items-center gap-1.5 shrink-0" title={getSentimentLabel(sentiment)}>
+      <span className="text-[10px] tabular-nums text-emerald-400/80 w-7 text-right">{posPercent}%</span>
+      <div className="flex h-2 w-[72px] gap-0.5 overflow-hidden rounded-full">
+        <div className="h-full min-w-[3px] rounded-l-full bg-emerald-500/85" style={{ width: `${pos * 100}%` }} />
+        <div className="h-full min-w-[3px] rounded-r-full bg-red-500/85" style={{ width: `${neg * 100}%` }} />
+      </div>
+      <span className="text-[10px] tabular-nums text-red-400/80 w-7">{negPercent}%</span>
     </div>
   );
 }
@@ -93,6 +96,7 @@ function SortHeader({
   activeDir,
   onSort,
   tooltip,
+  centered = false,
 }: {
   label: string;
   sortKey: SortKey;
@@ -100,6 +104,7 @@ function SortHeader({
   activeDir: SortDir;
   onSort: (key: SortKey) => void;
   tooltip?: { title: string; description: string };
+  centered?: boolean;
 }) {
   const isActive = activeKey === sortKey;
 
@@ -107,9 +112,9 @@ function SortHeader({
     <button
       type="button"
       onClick={() => onSort(sortKey)}
-      className={`flex w-full items-center justify-end gap-1 transition-colors hover:text-text-secondary ${
-        isActive ? 'text-text-secondary' : 'text-text-muted'
-      }`}
+      className={`flex w-full items-center gap-1 transition-colors hover:text-text-secondary ${
+        centered ? 'justify-center' : 'justify-end'
+      } ${isActive ? 'text-text-secondary' : 'text-text-muted'}`}
     >
       {tooltip ? (
         <TooltipCard title={tooltip.title} description={tooltip.description}>
@@ -215,7 +220,7 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
         <div className={`grid ${GRID} gap-3 items-end`}>
           <span className="text-xs font-medium uppercase tracking-wide text-text-muted">Trending topics</span>
           <SortHeader
-            label="Total views"
+            label="Est. views"
             sortKey="reach"
             activeKey={sortKey}
             activeDir={sortDir}
@@ -229,6 +234,7 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
             activeDir={sortDir}
             onSort={handleSort}
             tooltip={TOOLTIPS.resonance}
+            centered
           />
           <SortHeader
             label="Sentiment"
@@ -277,7 +283,7 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
                 <span className="text-right text-sm font-semibold tabular-nums text-text-primary">
                   {formatTopicReach(topic)}
                 </span>
-                <span className="text-right text-sm font-medium text-text-secondary">
+                <span className="text-center text-sm font-medium text-text-secondary">
                   {RESONANCE_LABEL[topic.resonance] ?? topic.resonance}
                 </span>
                 <div className="flex justify-end">

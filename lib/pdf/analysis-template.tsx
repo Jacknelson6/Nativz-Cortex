@@ -1,6 +1,6 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Image, Link } from '@react-pdf/renderer';
-import { NATIVZ_LOGO_PNG } from '@/lib/brand-logo';
+import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer';
+import { NativzLogoPdf } from '@/lib/pdf/nativz-logo-pdf';
 import type { MoodboardItem, TranscriptSegment, RescriptData } from '@/lib/types/moodboard';
 
 // ─── Palette ────────────────────────────────────────────────────────────────────
@@ -263,8 +263,7 @@ export function AnalysisPdfDocument({ item, clientName }: AnalysisPdfProps) {
               </View>
               <Link src={item.url} style={s.link}>{item.url}</Link>
             </View>
-            {/* eslint-disable-next-line jsx-a11y/alt-text */}
-            <Image src={NATIVZ_LOGO_PNG} style={{ width: 80, height: 20 }} />
+            <NativzLogoPdf width={80} />
           </View>
         </View>
 

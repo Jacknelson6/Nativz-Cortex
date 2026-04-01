@@ -224,18 +224,15 @@ export function AdminResultsClient({
 
       {/* Content */}
       <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
-        {(search.summary || aiResponse?.brand_alignment_notes) ? (
+        {search.summary ? (
           <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5 space-y-5">
-            {search.summary ? <ExecutiveSummary summary={search.summary} /> : null}
-            {aiResponse?.brand_alignment_notes ? (
-              <ExecutiveSummary summary={aiResponse.brand_alignment_notes} variant="brand" />
-            ) : null}
+            <ExecutiveSummary summary={search.summary} />
           </div>
         ) : null}
 
         {(aiResponse || search.summary) ? (
           <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5">
-            <AiTakeaways aiResponse={aiResponse} summary={search.summary} />
+            <AiTakeaways aiResponse={aiResponse} summary={search.summary} clientName={clientInfo?.name} />
           </div>
         ) : null}
 
@@ -293,7 +290,6 @@ export function AdminResultsClient({
         {search.metrics ? (
           <MetricsRow
             metrics={search.metrics}
-            isBrandSearch={!!aiResponse?.brand_alignment_notes}
             platformBreakdown={aiResponse?.platform_breakdown}
           />
         ) : null}

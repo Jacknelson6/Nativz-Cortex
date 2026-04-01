@@ -7,7 +7,7 @@ import type {
   ContentBreakdownItem,
   VideoIdea,
 } from '@/lib/types/search';
-import { NATIVZ_LOGO_PNG, AC_LOGO_PNG } from '@/lib/brand-logo';
+import { NATIVZ_LOGO_ON_LIGHT_PNG, AC_LOGO_PNG } from '@/lib/brand-logo';
 import { isNewMetrics } from '@/lib/types/search';
 
 // ─── Dark mode color palette ──────────────────────────────────────────────────
@@ -171,7 +171,7 @@ interface SearchPdfDocumentProps {
 
 export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocumentProps) {
   const isAC = agency?.toLowerCase().includes('anderson') || agency?.toLowerCase() === 'ac';
-  const logo = isAC ? AC_LOGO_PNG : NATIVZ_LOGO_PNG;
+  const logo = isAC ? AC_LOGO_PNG : NATIVZ_LOGO_ON_LIGHT_PNG;
   const brandColor = isAC ? c.green : c.accent;
   const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
   const topics = (search.trending_topics ?? []) as TrendingTopic[];

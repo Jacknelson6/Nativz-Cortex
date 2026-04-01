@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
-import { NATIVZ_LOGO_PNG, AC_LOGO_PNG } from '@/lib/brand-logo';
+import { AC_LOGO_PNG } from '@/lib/brand-logo';
+import { NativzLogoPdf } from '@/lib/pdf/nativz-logo-pdf';
 import type { SummaryReport, TopPostItem, PlatformSummary } from '@/lib/types/reporting';
 
 // ─── Light theme palette (client-facing print) ────────────────────────────────
@@ -210,7 +211,6 @@ export function ReportPdfDocument({
   const isAC =
     agency?.toLowerCase().includes('anderson') ||
     agency?.toLowerCase() === 'ac';
-  const logo = logoUrl ?? (isAC ? AC_LOGO_PNG : NATIVZ_LOGO_PNG);
   const brandColor = isAC ? c.green : c.accent;
   const brandName = isAC ? 'Anderson Collaborative' : 'Nativz';
 
@@ -242,8 +242,13 @@ export function ReportPdfDocument({
                 {startDate} — {endDate}
               </Text>
             </View>
-            {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer Image doesn't support alt */}
-            <Image src={logo} style={{ width: 80, height: 20 }} />
+            {logoUrl ? (
+              <Image src={logoUrl} style={{ width: 80, height: 20 }} />
+            ) : isAC ? (
+              <Image src={AC_LOGO_PNG} style={{ width: 80, height: 20 }} />
+            ) : (
+              <NativzLogoPdf width={80} />
+            )}
           </View>
         </View>
 

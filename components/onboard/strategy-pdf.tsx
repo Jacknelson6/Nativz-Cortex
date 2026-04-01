@@ -2,7 +2,7 @@
 
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import type { ClientStrategy } from '@/lib/types/strategy';
-import { NATIVZ_LOGO_PNG, AC_LOGO_PNG } from '@/lib/brand-logo';
+import { NATIVZ_LOGO_ON_LIGHT_PNG, AC_LOGO_PNG } from '@/lib/brand-logo';
 
 const colors = {
   primary: '#046BD2',
@@ -165,7 +165,7 @@ interface StrategyPdfProps {
 
 export function StrategyPdf({ strategy, clientName, agency }: StrategyPdfProps) {
   const isAC = agency?.toLowerCase().includes('anderson') || agency?.toLowerCase() === 'ac';
-  const logo = isAC ? AC_LOGO_PNG : NATIVZ_LOGO_PNG;
+  const logo = isAC ? AC_LOGO_PNG : NATIVZ_LOGO_ON_LIGHT_PNG;
   const brandColor = isAC ? '#10B981' : colors.primary;
   const date = new Date().toLocaleDateString('en-US', {
     year: 'numeric',

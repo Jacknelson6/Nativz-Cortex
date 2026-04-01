@@ -52,7 +52,8 @@
     "ads:goldback:idgt-samples5": "tsx scripts/generate-goldback-idaho-gtm-samples-5.ts",
     "seed:goldback-search": "tsx scripts/seed-goldback-topic-search.ts",
     "setup:college-hunks": "tsx scripts/college-hunks-setup.ts",
-    "seed:college-hunks-searches": "tsx scripts/seed-college-hunks-topic-searches.ts"
+    "seed:college-hunks-searches": "tsx scripts/seed-college-hunks-topic-searches.ts",
+    "pdf:avondale-video-ideas": "tsx scripts/generate-avondale-video-ideas-pdf.tsx"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
