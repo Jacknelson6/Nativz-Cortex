@@ -14,8 +14,19 @@ This app’s **client knowledge** (`client_knowledge_entries`) and **agency know
 | Structured logs | [`lib/context/telemetry.ts`](../lib/context/telemetry.ts) |
 | Client search entry | [`lib/knowledge/search.ts`](../lib/knowledge/search.ts) → `searchKnowledge` |
 | Agency search entry | [`lib/knowledge/graph-queries.ts`](../lib/knowledge/graph-queries.ts) → `searchKnowledgeNodes` |
+| Workbench embed (admin UI) | [`app/admin/knowledge/trustgraph-workbench-embed.tsx`](../app/admin/knowledge/trustgraph-workbench-embed.tsx) — iframe + “Open Workbench” |
 
 Nerd tools [`search_knowledge_base`](../lib/nerd/tools/knowledge.ts) and [`search_agency_knowledge`](../lib/nerd/tools/agency-knowledge.ts) use those functions unchanged.
+
+### Workbench UI in Cortex
+
+The [TrustGraph](https://github.com/trustgraph-ai/trustgraph) **Workbench** (vector search, 3D Graph Visualizer, Relationships, flows) runs as a separate web app. Cortex can **embed** it on **Admin → Knowledge graph** when you set:
+
+| Variable | Example |
+|----------|---------|
+| `NEXT_PUBLIC_TRUSTGRAPH_WORKBENCH_URL` | `http://localhost:8888` (typical local Workbench port; API gateway is often `8080`) |
+
+After setting, use the **Cortex** / **TrustGraph** toggle on that page. If the Workbench sends `X-Frame-Options: deny`, the iframe may be blank — use **Open Workbench** (same URL in a new tab). For production, point the URL at your deployed TrustGraph Workbench origin.
 
 ## Environment variables
 
