@@ -150,8 +150,10 @@ export function KnowledgeExplorer() {
     const params = new URLSearchParams();
     if (clientFilter === 'agency') params.set('client_id', 'agency');
     else if (clientFilter !== 'all') params.set('client_id', clientFilter);
+    // In AC mode, filter to paid-media domain nodes by default
+    if (isAC && clientFilter === 'all') params.set('domain', 'paid-media');
     return params.toString();
-  }, [clientFilter]);
+  }, [clientFilter, isAC]);
 
   // ── Fetch graph data ───────────────────────────────────────────────────────
 
