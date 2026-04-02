@@ -32,8 +32,15 @@ import {
 } from '@/lib/meetings/meeting-note-helpers';
 
 const DRY_RUN = process.argv.includes('--dry-run');
-const ACCOUNTS = ['jack@nativz.io', 'jack@andersoncollaborative.com'];
-const GWS_QUERY = 'from:notetaker@fyxer.com newer_than:7d';
+const ACCOUNTS = [
+  'jack@nativz.io',
+  'jack@andersoncollaborative.com',
+  'cole@nativz.io',
+  'trevor@andersoncollaborative.com',
+  'cole@andersoncollaborative.com',
+  'trevor@nativz.io',
+];
+const GWS_QUERY = 'from:notetaker@fyxer.com newer_than:60d';
 const MAX_RESULTS = 20;
 
 function createAdminClient() {
@@ -63,10 +70,21 @@ function queryGmailViaCLI(account: string): GmailMessage[] {
       q: GWS_QUERY,
       maxResults: MAX_RESULTS,
     });
-    const out = execSync(
-      `gws gmail users messages list --params '${params}' --account ${account}`,
-      { timeout: 30_000, encoding: 'utf-8' },
-    );
+    // Jack's accounts use OAuth via gws; others use SA impersonation via Python helper
+    const jackAccounts = ['jack@nativz.io', 'jack@andersoncollaborative.com'];
+    let out: string;
+    if (jackAccounts.includes(account)) {
+      out = execSync(
+        `gws gmail users messages list --params '${params}' --account ${account}`,
+        { timeout: 30_000, encoding: 'utf-8' }
+      );
+    } else {
+      const scriptPath = `${__dirname}/gmail-sa-query.py`;
+      out = execSync(
+        `python3 ${scriptPath} ${account} "${GWS_QUERY}" ${MAX_RESULTS}`,
+        { timeout: 30_000, encoding: 'utf-8' }
+      );
+    }
     const parsed = JSON.parse(out.trim());
     const messages: GmailMessage[] = [];
 
@@ -74,10 +92,20 @@ function queryGmailViaCLI(account: string): GmailMessage[] {
     const refs: { id: string }[] = parsed.messages ?? parsed ?? [];
     for (const ref of refs.slice(0, MAX_RESULTS)) {
       try {
-        const msgOut = execSync(
-          `gws gmail users messages get --params '{"userId":"me","id":"${ref.id}","format":"full"}' --account ${account}`,
-          { timeout: 15_000, encoding: 'utf-8' },
-        );
+        const jackAccounts2 = ['jack@nativz.io', 'jack@andersoncollaborative.com'];
+        let msgOut: string;
+        if (jackAccounts2.includes(account)) {
+          msgOut = execSync(
+            `gws gmail users messages get --params '{"userId":"me","id":"${ref.id}","format":"full"}' --account ${account}`,
+            { timeout: 15_000, encoding: 'utf-8' }
+          );
+        } else {
+          const getScriptPath = `${__dirname}/gmail-sa-get.py`;
+          msgOut = execSync(
+            `python3 ${getScriptPath} ${account} ${ref.id}`,
+            { timeout: 15_000, encoding: 'utf-8' }
+          );
+        }
         const msg = JSON.parse(msgOut.trim());
         const headers: { name: string; value: string }[] = msg.payload?.headers ?? [];
         const getHeader = (name: string) =>
@@ -189,10 +217,18 @@ async function main() {
   let totalSkipped = 0;
   const errors: string[] = [];
 
+  // Collect ALL messages first so we can detect one-off vs partnership
+  const allAccountMessages: Record<string, GmailMessage[]> = {};
   for (const account of ACCOUNTS) {
     console.log(`\n[fyxer-import] Querying ${account}...`);
     const messages = queryGmailViaCLI(account);
     console.log(`[fyxer-import]   Found ${messages.length} Fyxer emails`);
+    allAccountMessages[account] = messages;
+  }
+  const allMessages = Object.values(allAccountMessages).flat();
+
+  for (const account of ACCOUNTS) {
+    const messages = allAccountMessages[account];
 
     for (const msg of messages) {
       if (importedIds.has(msg.id)) {
@@ -222,8 +258,102 @@ async function main() {
           : null;
 
       if (!targetClient) {
-        console.log(`  [skip] No client match and no prospect bucket: ${msg.subject}`);
-        totalSkipped++;
+        // No existing client match — use one-off/partnership logic
+        const companyName = extractCompanyLabelFromSubject(msg.subject);
+        if (!companyName) {
+          console.log(`  [skip] No client match and no company name: ${msg.subject}`);
+          totalSkipped++;
+          continue;
+        }
+
+        // Check how many times this company appears across all collected messages
+        const allSubjects = allMessages.map(m => m.subject.toLowerCase());
+        const companyNameLower = companyName.toLowerCase();
+        const matchCount = allSubjects.filter(s => s.includes(companyNameLower)).length;
+        const meetingType = matchCount > 1 ? 'partnership' : 'one-off';
+
+        console.log(`  [${meetingType}] ${companyName}: ${msg.subject}`);
+
+        // For partnerships (2+ meetings), auto-create a client record
+        // For one-offs, skip for now (sales calls, internal meetings, etc.)
+        if (meetingType === 'one-off') {
+          console.log(`  [skip-one-off] ${companyName}: ${msg.subject}`);
+          totalSkipped++;
+          continue;
+        }
+
+        // Partnership: create or find the client, then import
+        try {
+          // Clean up company name — remove meeting type prefixes, x Nativz/AC suffixes
+          let cleanName = companyName
+            .replace(/^(meeting prep:|recurring marketing meeting|marketing coverage call|bi-weekly meeting|weekly meeting|kick-off call)[\s|/:-]*/i, '')
+            .replace(/[|].*$/, '')  // take part before |
+            .replace(/\s*[/x]\s*(Nativz|AC|Anderson Collaborative).*/i, '') // remove x Nativz etc
+            .replace(/\s*(General Agency LLC|LLC|Inc|Corp|Ltd)\.?$/i, '') // strip legal suffixes
+            .trim();
+          if (!cleanName || cleanName.length < 3) cleanName = companyName.split(/[|/]/)[0].trim();
+          const { data: existingClients } = await supabase
+            .from('clients')
+            .select('id, name')
+            .ilike('name', `%${cleanName.split(' ')[0]}%`)
+            .limit(5);
+
+          let clientId: string;
+          const exactMatch = existingClients?.find(
+            c => c.name.toLowerCase().includes(cleanName.toLowerCase().split(' ')[0])
+          );
+
+          if (exactMatch) {
+            clientId = exactMatch.id;
+            console.log(`  [matched-existing] ${cleanName} → ${exactMatch.name}`);
+          } else {
+            // Create new client
+            const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+            const { data: newClient, error: createErr } = await supabase
+              .from('clients')
+              .insert({ name: cleanName, slug, is_active: false, agency: 'Prospect', industry: 'Unknown' })
+              .select('id')
+              .single();
+            if (createErr || !newClient) {
+              console.log(`  [skip] Failed to create client ${cleanName}: ${createErr?.message}`);
+              totalSkipped++;
+              continue;
+            }
+            clientId = newClient.id;
+            console.log(`  [created-client] ${cleanName} (id=${clientId.slice(0,8)}...)`);
+          }
+
+          const meetingDate = extractMeetingDate(msg.body, msg.date);
+          const title = `Meeting notes ${meetingDate} — ${msg.subject}`;
+          const { error: insertError } = await supabase
+            .from('client_knowledge_entries')
+            .insert({
+              client_id: clientId,
+              type: 'meeting_note',
+              title,
+              content: fyxerHtmlToMarkdown(msg.body),
+              source: 'imported',
+              metadata: {
+                fyxer_email_id: msg.id,
+                meeting_date: meetingDate,
+                meeting_series: 'adhoc',
+                company_label: companyName,
+                meeting_type: meetingType,
+                account: account,
+              },
+              created_by: null,
+            });
+          if (insertError) {
+            console.log(`  [error] ${companyName}: ${insertError.message}`);
+            errors.push(`${companyName}: ${insertError.message}`);
+          } else {
+            console.log(`  [ok-partnership] Stored: ${title}`);
+            totalImported++;
+            importedIds.add(msg.id);
+          }
+        } catch (e) {
+          console.log(`  [skip] partnership insert failed: ${companyName}`);
+        }
         continue;
       }
 
@@ -256,7 +386,7 @@ async function main() {
               content: markdown,
               metadata,
               source: 'imported',
-              created_by: 'fyxer-import-script',
+              created_by: null,
             })
             .select()
             .single();
