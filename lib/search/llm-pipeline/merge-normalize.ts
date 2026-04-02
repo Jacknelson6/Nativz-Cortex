@@ -102,7 +102,7 @@ export function normalizeMergerPayload(raw: unknown): unknown {
   if (!Array.isArray(topics) || topics.length === 0) {
     throw new Error('Merger model returned no topics.');
   }
-  obj.topics = topics.map(normalizeTopicItem).slice(0, 12);
+  obj.topics = topics.map(normalizeTopicItem).slice(0, 15);
 
   if (typeof obj.summary !== 'string' || !obj.summary.trim()) {
     obj.summary = 'Summary of merged research.';

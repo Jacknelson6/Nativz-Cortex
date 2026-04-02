@@ -45,6 +45,7 @@ export async function getPortalClient(): Promise<PortalClientResult | null> {
 
   // ── 1. Admin impersonation (highest priority) ────────────────────────────
   const impersonateOrgId = cookieStore.get('x-impersonate-org')?.value;
+  const impersonateSlug = cookieStore.get('x-impersonate-slug')?.value?.trim();
 
   if (impersonateOrgId) {
     const { data: adminUser } = await adminClient
@@ -54,6 +55,19 @@ export async function getPortalClient(): Promise<PortalClientResult | null> {
       .single();
 
     if (adminUser?.role === 'admin') {
+      // One org can host multiple client rows (brands). Impersonation stores the slug to disambiguate.
+      if (impersonateSlug) {
+        const { data: client, error } = await adminClient
+          .from('clients')
+          .select('id, name, slug, industry, feature_flags, preferences')
+          .eq('organization_id', impersonateOrgId)
+          .eq('is_active', true)
+          .eq('slug', impersonateSlug)
+          .maybeSingle();
+        if (error || !client) return null;
+        return toPortalClientResult(client, impersonateOrgId);
+      }
+
       const { data: clients } = await adminClient
         .from('clients')
         .select('id, name, slug, industry, feature_flags, preferences')

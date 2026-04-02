@@ -147,7 +147,7 @@ export function TodoWidget() {
   }, []);
 
   return (
-    <Card className="flex min-h-0 flex-1 flex-col">
+    <Card className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <TaskDetailPanel
         task={selectedTask}
         onClose={() => setSelectedTask(null)}
@@ -180,7 +180,7 @@ export function TodoWidget() {
             <p className="text-sm text-text-muted">All caught up!</p>
           </div>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
             <AnimatePresence mode="popLayout">
               {visibleTasks.map((task) => (
                 <TaskRow

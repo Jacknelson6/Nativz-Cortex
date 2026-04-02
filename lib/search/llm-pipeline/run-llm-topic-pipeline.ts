@@ -683,16 +683,13 @@ Rules: 2–4 words each, specific to the topic, no numbering, no full sentences.
     platformContextBlock = formatPlatformContext(platformResults.sources, platformResults.platformStats);
   }
 
-  const brandLine =
-    args.search.search_mode === 'client_strategy' && args.clientContext
-      ? `Client: ${args.clientContext.name}. Industry: ${args.clientContext.industry ?? 'n/a'}. Voice: ${args.clientContext.brandVoice ?? 'n/a'}.`
-      : '';
+  const clientContextBlock = args.clientContext
+    ? `Attached client — ${args.clientContext.name}. Industry: ${args.clientContext.industry ?? 'n/a'}. Brand voice: ${args.clientContext.brandVoice ?? 'n/a'}.`
+    : '';
 
   const mergerPrompt = `You merge research-angle findings into one JSON report for "${args.search.query}".
 Time scope: The user chose **${timeRangeLabel}**. Emphasize themes, debates, and video ideas that fit audience and creator activity in that window (not generic evergreen filler unless the evidence supports it).
-${brandLine}
-
-Research-angle findings:
+${clientContextBlock ? `${clientContextBlock}\n\n` : ''}Research-angle findings:
 ${subtopicBlock}
 ${platformContextBlock ? `\n---\n\nPlatform-specific data (Reddit threads, TikTok videos, YouTube content, Quora discussions):\n${platformContextBlock}` : ''}
 
@@ -704,9 +701,9 @@ Return ONLY valid JSON matching:
   "conversation_intensity": "low"|"moderate"|"high"|"very_high",
   "emotions": [{"emotion": string, "percentage": number, "color": string}],
   "content_breakdown": {
-    "intentions": [{"name": string, "percentage": number, "engagement_rate": number}],
-    "categories": [{"name": string, "percentage": number, "engagement_rate": number}],
-    "formats": [{"name": string, "percentage": number, "engagement_rate": number}]
+    "intentions": [{"name": string, "percentage": number, "engagement_rate": number, "your_engagement_rate": number (omit if no Attached client)}],
+    "categories": [{"name": string, "percentage": number, "engagement_rate": number, "your_engagement_rate": number (omit if no Attached client)}],
+    "formats": [{"name": string, "percentage": number, "engagement_rate": number, "your_engagement_rate": number (omit if no Attached client)}]
   },
   "platform_breakdown": [{"platform": string, "post_count": number, "comment_count": number, "avg_sentiment": number}],
   "topics": [
@@ -726,11 +723,12 @@ Return ONLY valid JSON matching:
 }
 
 Rules:
-- 5–10 topics max; each must be distinct.
+- Generate **15** distinct trending topics when the evidence supports that many angles; each must be distinct and grounded in the research above. If fewer than 15 substantiated angles exist, include every strong angle you can — do not pad with duplicates or generic filler.
 - source_urls must be from the evidence URLs only.
 - If search_mode is general, omit brand_alignment_notes or use null.
 - emotions: 5-8 emotions that sum to ~100%. Analyze the actual tone and sentiment of the evidence text. Colors from: #5ba3e6 blue, #a855f7 purple, #22c55e green, #f59e0b amber, #ef4444 red, #ec4899 pink, #14b8a6 teal, #6366f1 indigo.
-- content_breakdown: intentions (3-5 viewer motivations like Educational, Entertainment, Debate), categories (3-5 content types like News, How-to, Opinion), formats (3-5 like Short video, Article, Thread). Each with percentage and engagement_rate (0-1). Derive from what the evidence actually shows.
+- content_breakdown: intentions (3-5 viewer motivations like Educational, Entertainment, Debate), categories (3-5 content types), formats (3-5 like Short video, Article, Thread). For **every** item include: **percentage** (share of posts in that bucket, 0–100). **engagement_rate**: typical engagement rate for that bucket **in this topic’s evidence**, expressed as **percentage points** where **0.7 means 0.7%** (not 70%, not a 0–1 fraction). Ground it in likes/views/comments patterns from the evidence; do not invent precision — one decimal is enough. **your_engagement_rate** (optional): only when an "Attached client" line appears above. For **each** intentions/categories/formats row, estimate the same metric **for that client** if they published this type of content in this topic: adjust typical ER up or down from topic–business fit, brand voice match, and how well the format fits their strategy. Same units as engagement_rate. If there is **no** Attached client block, **omit** your_engagement_rate on every row (do not send null).
+- For content_breakdown.categories: each "name" must be a **short, plain-language label** (ideally 2–6 words). Good: "How-to & checklists", "Explainers", "Walkthroughs", "News & commentary". Bad: long titles with parenthetical glossaries like "Explainers (definitions, structures, examples)" — keep names scannable; the merger evidence already carries nuance.
 - platform_breakdown: which platforms appeared most in the SERP results. Estimate post_count, comment_count, avg_sentiment from evidence.
 - Per-topic resonance: based on evidence volume and engagement signals for that specific topic (not array position).
 - Per-topic sentiment: specific to THIS topic's evidence tone, not just copying overall_sentiment.
@@ -799,17 +797,17 @@ Rules:
 
   const content_breakdown = merger.content_breakdown ?? {
     intentions: [
-      { name: 'Educational', percentage: 34, engagement_rate: 0.12 },
-      { name: 'Debate', percentage: 22, engagement_rate: 0.1 },
-      { name: 'Promotional', percentage: 18, engagement_rate: 0.08 },
+      { name: 'Educational', percentage: 34, engagement_rate: 1.2 },
+      { name: 'Debate', percentage: 22, engagement_rate: 1.0 },
+      { name: 'Promotional', percentage: 18, engagement_rate: 0.8 },
     ],
     categories: [
-      { name: 'News & updates', percentage: 28, engagement_rate: 0.11 },
-      { name: 'How-to', percentage: 24, engagement_rate: 0.13 },
+      { name: 'News & updates', percentage: 28, engagement_rate: 1.1 },
+      { name: 'How-to', percentage: 24, engagement_rate: 1.3 },
     ],
     formats: [
-      { name: 'Short video', percentage: 30, engagement_rate: 0.14 },
-      { name: 'Article', percentage: 26, engagement_rate: 0.1 },
+      { name: 'Short video', percentage: 30, engagement_rate: 1.4 },
+      { name: 'Article', percentage: 26, engagement_rate: 1.0 },
     ],
   };
 

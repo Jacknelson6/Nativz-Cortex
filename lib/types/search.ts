@@ -270,7 +270,10 @@ export interface ContentBreakdown {
 export interface ContentBreakdownItem {
   name: string;
   percentage: number;
+  /** Typical engagement rate for this bucket in this topic (percentage points, e.g. 0.7 → 0.7%). */
   engagement_rate: number;
+  /** When a client is attached: estimated engagement for that client (same units as engagement_rate). */
+  your_engagement_rate?: number;
 }
 
 export interface TrendingTopic {

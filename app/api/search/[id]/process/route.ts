@@ -439,7 +439,7 @@ export async function POST(
         const extractedTopicNames = [...topicMatches].map(m => m[1].replace(/\\"/g, '"'));
         const fallbackTopics = extractedTopicNames
           .filter(name => name.length > 3 && name.length < 80)
-          .slice(0, 10)
+          .slice(0, 15)
           .map(name => ({
             name,
             why_trending: '',
@@ -507,7 +507,7 @@ export async function POST(
 
       // If LLM returned no topics, fall back to code-extracted topics
       if (trendingTopics.length === 0) {
-        for (const topic of analytics.extracted_topics.slice(0, 10)) {
+        for (const topic of analytics.extracted_topics.slice(0, 15)) {
           trendingTopics.push({
             name: topic.name,
             resonance: computeResonance(topic.frequency, topic.totalEngagement),

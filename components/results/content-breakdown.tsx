@@ -25,7 +25,7 @@ export function ContentBreakdown({ data }: ContentBreakdownProps) {
 
   return (
     <Card>
-      <CardTitle className="text-xl">Content breakdown</CardTitle>
+      <CardTitle className="text-2xl">Content breakdown</CardTitle>
 
       {/* Tabs */}
       <div className="mt-5 flex gap-1 rounded-lg bg-surface-hover p-1">
@@ -35,7 +35,7 @@ export function ContentBreakdown({ data }: ContentBreakdownProps) {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-all ${
+              className={`flex-1 rounded-md px-3 py-2.5 text-base font-medium transition-all ${
                 activeTab === tab
                   ? 'bg-surface text-text-primary shadow-sm'
                   : 'text-text-muted hover:text-text-secondary'
@@ -57,9 +57,9 @@ export function ContentBreakdown({ data }: ContentBreakdownProps) {
       <div className="mt-5 space-y-4">
         {items.map((item: ContentBreakdownItem) => (
           <div key={item.name}>
-            <div className="flex items-baseline justify-between gap-3 mb-1.5">
-              <span className="text-base text-text-secondary">{item.name}</span>
-              <span className="text-sm font-semibold text-text-muted tabular-nums shrink-0">
+            <div className="flex items-baseline justify-between gap-3 mb-2">
+              <span className="text-lg text-text-secondary leading-snug">{item.name}</span>
+              <span className="text-base font-semibold text-text-muted tabular-nums shrink-0">
                 {item.percentage}%
               </span>
             </div>

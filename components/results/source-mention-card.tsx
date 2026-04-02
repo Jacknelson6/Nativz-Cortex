@@ -1,153 +1,111 @@
 'use client';
 
-import { useState } from 'react';
-import {
-  BarChart3,
-  Bookmark,
-  BookmarkCheck,
-  ExternalLink,
-  FileText,
-  Heart,
-  MessageCircle,
-  Share2,
-} from 'lucide-react';
+import { Eye, Heart, MessageCircle, Play, TrendingUp } from 'lucide-react';
 
-import { PlatformIcon, PLATFORM_CONFIG } from '@/components/search/platform-icon';
+import { PlatformBadgeSearch } from '@/components/search/platform-icon';
 import { cn } from '@/lib/utils';
-import type { PlatformComment, PlatformSource } from '@/lib/types/search';
-import {
-  resolveSourceThumbnailUrl,
-  sourcePlaceLabel,
-  formatViewsApprox,
-} from '@/lib/search/source-mention-utils';
-import { formatRelativeTime, formatNumber } from '@/lib/utils/format';
-
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '');
-}
-
-function StatChip({ icon, value }: { icon: React.ReactNode; value: string }) {
-  return (
-    <span className="flex items-center gap-1 text-[11px] text-text-muted tabular-nums">
-      {icon}
-      {value}
-    </span>
-  );
-}
-
-function CommentsBlock({ comments, authorPrefix = '@' }: { comments: PlatformComment[]; authorPrefix?: string }) {
-  const [open, setOpen] = useState(false);
-  if (comments.length === 0) return null;
-
-  const shown = open ? comments : comments.slice(0, 2);
-
-  return (
-    <div className="mt-2 space-y-1.5">
-      {shown.map((c) => (
-        <div key={c.id} className="border-l-2 border-nativz-border pl-2.5 py-0.5">
-          <p className="text-[11px] text-text-secondary leading-relaxed">
-            <span className="text-text-muted font-medium">
-              {authorPrefix}
-              {c.author}
-            </span>{' '}
-            {c.text}
-          </p>
-          {c.likes > 0 && <span className="text-[10px] text-text-muted">{c.likes} likes</span>}
-        </div>
-      ))}
-      {comments.length > 2 && (
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          className="text-[11px] text-accent-text hover:underline cursor-pointer"
-        >
-          {open ? 'Show less' : `Show all ${comments.length} comments`}
-        </button>
-      )}
-    </div>
-  );
-}
+import type { PlatformSource } from '@/lib/types/search';
+import { engagementRatePercent, resolveSourceThumbnailUrl } from '@/lib/search/source-mention-utils';
+import { formatCompactCount, formatRelativeTime } from '@/lib/utils/format';
 
 export interface SourceMentionCardProps {
   source: PlatformSource;
-  saved: boolean;
-  onToggleSave: () => void;
+  onOpenDetail: (opts?: { focusRescript?: boolean }) => void;
 }
 
-export function SourceMentionCard({ source, saved, onToggleSave }: SourceMentionCardProps) {
-  const config = PLATFORM_CONFIG[source.platform];
-  const thumb = resolveSourceThumbnailUrl(source);
-  /** Show any resolved thumb in a fixed 16:9 frame so portrait assets crop cleanly and row heights match */
-  const aspectClass = 'aspect-video w-full';
+function formatCreatorLine(source: PlatformSource): string {
+  const a = source.author?.trim();
+  if (!a) return 'Creator unknown';
+  if (source.platform === 'tiktok') return `@${a.replace(/^@/, '')}`;
+  return a;
+}
 
-  const titleText = source.platform === 'web' ? stripHtml(source.title) : source.title;
-  const bodyText =
-    source.platform === 'web'
-      ? stripHtml(source.content ?? '')
-      : (source.content ?? source.title ?? '').trim();
+export function SourceMentionCard({ source, onOpenDetail }: SourceMentionCardProps) {
+  const thumbRaw = resolveSourceThumbnailUrl(source);
+  const showThumb = source.platform !== 'web' && Boolean(thumbRaw);
+  const thumb = showThumb ? thumbRaw : null;
+  const isVerticalThumb =
+    source.platform === 'tiktok' || (source.platform === 'youtube' && source.videoFormat === 'short');
 
-  const place = sourcePlaceLabel(source);
-
-  let timeLabel = '';
-  try {
-    timeLabel = formatRelativeTime(source.createdAt);
-  } catch {
-    timeLabel = '';
-  }
-
-  /** Platform name + relative time so TikTok/YouTube stay identifiable next to creator in title */
-  const sublineMeta = [config.label, timeLabel].filter(Boolean).join(' · ');
-
-  const commentPrefix =
-    source.platform === 'reddit' ? 'u/' : source.platform === 'tiktok' ? '@' : '@';
+  const views = source.engagement.views ?? 0;
+  const likes = source.engagement.likes ?? 0;
+  const comments = source.engagement.comments ?? 0;
+  const er = engagementRatePercent(source);
 
   return (
-    <article className="rounded-xl border border-nativz-border bg-surface overflow-hidden flex flex-col shadow-sm">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2 px-3 pt-3 pb-2">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className={cn('shrink-0 inline-flex', config.color)}>
-            <PlatformIcon platform={source.platform} size={18} />
-          </span>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-text-primary truncate">{place}</p>
-            <p className="text-[11px] text-text-muted truncate">{sublineMeta}</p>
-          </div>
+    <article
+      className={cn(
+        'flex h-auto w-full flex-col self-start overflow-hidden rounded-2xl bg-surface-hover/25 transition-colors hover:bg-surface-hover/45',
+        'ring-1 ring-transparent hover:ring-accent/20',
+      )}
+    >
+      <div className="flex gap-2.5 px-4 pt-3 pb-3">
+        <div className="shrink-0 pt-0.5">
+          <PlatformBadgeSearch platform={source.platform} size="sm" />
         </div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <a
-            href={source.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-accent-text hover:bg-white/[0.06] transition-colors"
-          >
-            Open
-            <ExternalLink size={12} />
-          </a>
-          <button
-            type="button"
-            onClick={onToggleSave}
-            className="shrink-0 p-1 rounded-md text-text-muted hover:text-accent-text hover:bg-white/[0.06] cursor-pointer transition-colors"
-            aria-label={saved ? 'Remove saved' : 'Save source'}
-          >
-            {saved ? <BookmarkCheck size={18} className="text-accent-text" /> : <Bookmark size={18} />}
-          </button>
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="line-clamp-2 min-w-0 flex-1 text-base font-semibold leading-snug text-text-primary sm:text-[17px]">
+              {source.title || 'Untitled'}
+            </h3>
+            <time
+              className="shrink-0 pt-0.5 text-[11px] tabular-nums text-text-muted sm:text-xs"
+              dateTime={source.createdAt}
+            >
+              {formatRelativeTime(source.createdAt)}
+            </time>
+          </div>
+          <p className="truncate text-sm font-normal leading-snug text-text-muted">
+            {formatCreatorLine(source)}
+          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-text-muted sm:text-sm">
+            <span className="inline-flex items-center gap-1.5 text-text-secondary">
+              <Eye size={14} className="shrink-0 opacity-80" aria-hidden />
+              {formatCompactCount(views)} views
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-text-secondary">
+              <Heart size={14} className="shrink-0 opacity-80" aria-hidden />
+              {formatCompactCount(likes)}
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-text-secondary">
+              <MessageCircle size={14} className="shrink-0 opacity-80" aria-hidden />
+              {formatCompactCount(comments)}
+            </span>
+            <span className="inline-flex items-center gap-1.5 font-medium text-accent-text">
+              <TrendingUp size={14} className="shrink-0 opacity-90" aria-hidden />
+              {er != null ? `${er.toFixed(1)}% ER` : '— ER'}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Thumbnail */}
-      {thumb && (
-        <a
-          href={source.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`block relative bg-black/40 ${aspectClass}`}
+      {thumb ? (
+        <div
+          className={cn(
+            'relative w-full shrink-0 overflow-hidden bg-black/30 outline-none group/thumb',
+            // Shared max height for vertical + landscape so one Short doesn’t balloon the whole grid row.
+            isVerticalThumb
+              ? 'aspect-[9/16] min-h-0 w-full max-h-[min(15rem,45vw)] sm:max-h-[min(16rem,24vw)] lg:max-h-[min(17rem,20vw)]'
+              : 'aspect-video min-h-0 w-full max-h-[min(15rem,45vw)] sm:max-h-[min(16rem,24vw)] lg:max-h-[min(17rem,20vw)]',
+          )}
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest('[data-source-action]')) return;
+            onOpenDetail();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onOpenDetail();
+            }
+          }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={thumb}
             alt=""
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover object-center pointer-events-none"
             loading="lazy"
             onError={(e) => {
               const el = e.currentTarget;
@@ -157,53 +115,40 @@ export function SourceMentionCard({ source, saved, onToggleSave }: SourceMention
               }
             }}
           />
-        </a>
-      )}
-
-      <div className="px-3 pb-3 flex flex-col gap-2">
-        <a
-          href={source.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm font-semibold text-text-primary hover:text-accent-text transition-colors line-clamp-2 leading-snug"
-        >
-          {titleText}
-        </a>
-
-        {bodyText && (
-          <p className="text-xs text-text-secondary line-clamp-2 leading-relaxed">{bodyText}</p>
-        )}
-
-        {/* Metrics */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
-          {source.engagement.views != null && (
-            <StatChip icon={<BarChart3 size={12} />} value={formatViewsApprox(source.engagement.views)} />
-          )}
-          {source.engagement.likes != null && (
-            <StatChip icon={<Heart size={12} />} value={formatNumber(source.engagement.likes)} />
-          )}
-          {source.engagement.comments != null && (
-            <StatChip icon={<MessageCircle size={12} />} value={formatNumber(source.engagement.comments)} />
-          )}
-          {source.engagement.shares != null && source.engagement.shares > 0 && (
-            <StatChip icon={<Share2 size={12} />} value={formatNumber(source.engagement.shares)} />
-          )}
-        </div>
-
-        <CommentsBlock comments={source.comments ?? []} authorPrefix={commentPrefix} />
-
-        {source.transcript && (
-          <div className="pt-1 border-t border-nativz-border/60">
-            <div className="flex items-center gap-1.5 text-[11px] text-text-muted mb-1">
-              <FileText size={10} />
-              Transcript
-            </div>
-            <p className="text-[11px] text-text-secondary leading-relaxed max-h-32 overflow-y-auto border-l-2 border-nativz-border pl-2.5">
-              {source.transcript}
-            </p>
+          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/55 opacity-0 transition-opacity group-hover/thumb:pointer-events-auto group-hover/thumb:opacity-100">
+            <a
+              data-source-action
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-md hover:bg-white/95"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Play size={16} className="shrink-0 fill-current" aria-hidden />
+              Play
+            </a>
+            <button
+              data-source-action
+              type="button"
+              className="pointer-events-auto cursor-pointer rounded-full border border-white/30 bg-white/10 px-3 py-2 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/20"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenDetail({ focusRescript: true });
+              }}
+            >
+              Rescript
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onOpenDetail()}
+          className="mx-4 mb-2 flex min-h-[88px] shrink-0 items-center justify-center self-stretch rounded-xl border border-dashed border-nativz-border/50 bg-surface-hover/30 px-3 text-center text-sm text-text-muted transition-colors hover:bg-surface-hover/50 cursor-pointer"
+        >
+          Open details
+        </button>
+      )}
     </article>
   );
 }

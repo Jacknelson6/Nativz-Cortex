@@ -19,6 +19,8 @@ interface TopicSearchHistoryRailProps {
   onClose: () => void;
   /** Topic search rail lists topic runs only; idea generations are excluded by default */
   includeIdeas?: boolean;
+  enableStrategyLabBulkSelect?: boolean;
+  onStrategyLabSelectionChange?: (payload: { ids: string[]; clientId: string | null }) => void;
 }
 
 export function TopicSearchHistoryRail({
@@ -30,6 +32,8 @@ export function TopicSearchHistoryRail({
   onOpen,
   onClose,
   includeIdeas = false,
+  enableStrategyLabBulkSelect = false,
+  onStrategyLabSelectionChange,
 }: TopicSearchHistoryRailProps) {
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col lg:h-full lg:min-h-0">
@@ -42,6 +46,8 @@ export function TopicSearchHistoryRail({
           historyResetKey={historyResetKey}
           serverHistoryCount={serverHistoryCount}
           clients={clients}
+          enableStrategyLabBulkSelect={enableStrategyLabBulkSelect}
+          onStrategyLabSelectionChange={onStrategyLabSelectionChange}
         />
       </div>
 
@@ -90,6 +96,8 @@ export function TopicSearchHistoryRail({
               historyResetKey={historyResetKey}
               serverHistoryCount={serverHistoryCount}
               clients={clients}
+              enableStrategyLabBulkSelect={enableStrategyLabBulkSelect}
+              onStrategyLabSelectionChange={onStrategyLabSelectionChange}
             />
           </div>
         )}

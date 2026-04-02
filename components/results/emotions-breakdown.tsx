@@ -133,8 +133,8 @@ export function EmotionsBreakdown({ emotions }: EmotionsBreakdownProps) {
 
   return (
     <Card>
-      <CardTitle className="text-xl">Emotions</CardTitle>
-      <div className="mt-5 space-y-4">
+      <CardTitle className="text-2xl">Emotions</CardTitle>
+      <div className="mt-5 space-y-5">
         {emotions.map((e) => {
           const key = e.emotion.toLowerCase();
           const tooltip = TOOLTIPS[key];
@@ -142,9 +142,9 @@ export function EmotionsBreakdown({ emotions }: EmotionsBreakdownProps) {
           const subtext = getSubtext(e.emotion);
           return (
             <div key={e.emotion} className="relative">
-              <div className="flex items-baseline justify-between gap-3 mb-1.5">
-                <span className="text-base font-medium text-text-primary flex items-center gap-2 min-w-0">
-                  <span className="text-lg leading-none shrink-0" aria-hidden>
+              <div className="flex items-baseline justify-between gap-3 mb-2">
+                <span className="text-lg font-medium text-text-primary flex items-center gap-2 min-w-0">
+                  <span className="text-xl leading-none shrink-0" aria-hidden>
                     {emoji}
                   </span>
                   {tooltip ? (
@@ -155,12 +155,12 @@ export function EmotionsBreakdown({ emotions }: EmotionsBreakdownProps) {
                     <span className="text-text-secondary">{e.emotion}</span>
                   )}
                 </span>
-                <span className="text-sm font-semibold text-text-muted tabular-nums shrink-0">
+                <span className="text-base font-semibold text-text-muted tabular-nums shrink-0">
                   {e.percentage}%
                 </span>
               </div>
               {subtext ? (
-                <p className="text-sm leading-relaxed text-text-secondary mb-2 pl-[1.75rem]">
+                <p className="text-base leading-relaxed text-text-secondary mb-2 pl-[1.75rem]">
                   {subtext}
                 </p>
               ) : null}

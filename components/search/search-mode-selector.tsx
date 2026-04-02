@@ -4,15 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, Search, Sparkles, TrendingUp } from 'lucide-react';
 import { GlassButton } from '@/components/ui/glass-button';
-import { ClientLogo } from '@/components/clients/client-logo';
+import { ClientPickerModal, type ClientOption } from '@/components/ui/client-picker';
 import { createClient } from '@/lib/supabase/client';
-
-interface ClientOption {
-  id: string;
-  name: string;
-  logo_url?: string | null;
-  agency?: string | null;
-}
 
 interface SearchModeSelectorProps {
   redirectPrefix: string;
@@ -57,6 +50,7 @@ export function SearchModeSelector({
       if (data) setClients(data);
     }
     fetchClients();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialClients only gates mount fetch when provided by parent
   }, [portalMode]);
 
   const selectedBrandClient = clients.find((c) => c.id === brandClientId);
@@ -348,126 +342,5 @@ function ClientPickerTrigger({
         />
       )}
     </>
-  );
-}
-
-// ─── Bento client picker modal ──────────────────────────────────────────────
-
-function ClientPickerModal({
-  clients,
-  value,
-  onSelect,
-  onClose,
-}: {
-  clients: ClientOption[];
-  value: string | null;
-  onSelect: (id: string) => void;
-  onClose: () => void;
-}) {
-  const [search, setSearch] = useState('');
-  const searchRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    searchRef.current?.focus();
-  }, []);
-
-  // Close on escape
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [onClose]);
-
-  // Lock body scroll
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, []);
-
-  const filtered = search.trim()
-    ? clients.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
-    : clients;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div className="relative w-full max-w-2xl rounded-xl border border-nativz-border bg-surface shadow-2xl animate-modal-pop-in">
-        {/* Header */}
-        <div className="p-5 pb-0">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-text-primary">Select a client</h3>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Search */}
-          <div className="relative mb-4">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input
-              ref={searchRef}
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search clients..."
-              className="w-full rounded-lg border border-nativz-border bg-surface pl-9 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
-            />
-          </div>
-        </div>
-
-        {/* Bento grid */}
-        <div className="px-5 pb-5 max-h-[50vh] overflow-y-auto">
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <Search size={20} className="text-text-muted mb-2" />
-              <p className="text-sm text-text-muted">No clients match &ldquo;{search}&rdquo;</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {filtered.map((client) => (
-                <button
-                  key={client.id}
-                  type="button"
-                  onClick={() => onSelect(client.id)}
-                  className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-3 text-left text-sm transition-all hover:scale-[1.02] active:scale-[0.98] ${
-                    client.id === value
-                      ? 'border-accent/50 bg-accent-surface text-accent-text font-medium shadow-[0_0_12px_var(--focus-ring)]'
-                      : 'border-nativz-border bg-surface text-text-secondary hover:border-nativz-border/80 hover:bg-surface-hover'
-                  }`}
-                >
-                  <ClientLogo src={client.logo_url} name={client.name} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-text-primary">{client.name}</p>
-                    {client.agency && (
-                      <p className={`text-[9px] font-bold uppercase tracking-wider ${
-                        client.agency.toLowerCase().includes('anderson') || client.agency.toLowerCase() === 'ac'
-                          ? 'text-emerald-400'
-                          : 'text-blue-400'
-                      }`}>
-                        {client.agency.toLowerCase().includes('anderson') || client.agency.toLowerCase() === 'ac' ? 'Anderson Collaborative' : 'Nativz'}
-                      </p>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
   );
 }

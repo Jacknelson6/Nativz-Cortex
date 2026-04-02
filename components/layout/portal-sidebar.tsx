@@ -65,8 +65,8 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
   const showBrandSwitcher = brands && brands.length > 1 && activeBrandId;
 
   return (
-    <Sidebar variant="portal">
-      <SidebarHeader className="border-b border-white/[0.06]">
+    <Sidebar>
+      <SidebarHeader className="border-b border-nativz-border">
         <Link
           href="/portal/dashboard"
           className={`flex items-center hover:opacity-90 transition-opacity duration-150 mb-3 ${
@@ -103,7 +103,7 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
             {open ? (
               <Button
                 shape="pill"
-                className="w-full border border-white/[0.08] bg-white/[0.04] text-text-primary shadow-none hover:bg-white/[0.08] hover:border-white/[0.12]"
+                className="w-full border border-nativz-border bg-background text-text-primary shadow-none hover:bg-surface-hover hover:border-nativz-border/80"
               >
                 <Search size={16} />
                 New search
@@ -111,7 +111,7 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
             ) : (
               <Button
                 shape="pill"
-                className="w-full !px-0 justify-center border border-white/[0.08] bg-white/[0.04] shadow-none hover:bg-white/[0.08]"
+                className="w-full !px-0 justify-center border border-nativz-border bg-background shadow-none hover:bg-surface-hover"
               >
                 <Search size={16} />
               </Button>
@@ -128,7 +128,7 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
               return (
                 <SidebarMenuItem key={item.href}>
                   <Link href={item.href} className="block w-full">
-                    <SidebarMenuButton isActive={active} tooltip={item.label} variant="portal">
+                    <SidebarMenuButton isActive={active} tooltip={item.label}>
                       <item.icon size={18} className="shrink-0 opacity-90" />
                       {open && <span className="truncate font-medium">{item.label}</span>}
                     </SidebarMenuButton>
@@ -140,19 +140,19 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-white/[0.06]">
+      <SidebarFooter>
         <button
           type="button"
           onClick={toggleSidebar}
-          className={`flex items-center rounded-lg border border-transparent text-text-muted transition-colors mb-2 hover:border-white/[0.06] hover:bg-white/[0.04] hover:text-text-secondary ${
-            open ? 'gap-2 px-2.5 py-2 w-full text-xs' : 'w-full justify-center py-2'
-          } cursor-pointer`}
+          className={`mb-2 flex cursor-pointer items-center rounded-lg border border-transparent text-text-muted transition-colors hover:border-nativz-border hover:bg-surface-hover hover:text-text-secondary ${
+            open ? 'w-full gap-2 px-2.5 py-2 text-xs' : 'w-full justify-center py-2'
+          }`}
         >
           <PanelLeftClose size={14} className={`transition-transform duration-200 ${open ? '' : 'rotate-180'}`} />
           {open && <span>Collapse</span>}
         </button>
 
-        <SidebarSeparator className="bg-white/[0.06]" />
+        <SidebarSeparator />
 
         <SidebarAccount
           userName={userName}

@@ -1,11 +1,57 @@
 'use client';
 
-import { ExternalLink } from 'lucide-react';
+import { BookOpen, ExternalLink } from 'lucide-react';
 
 type Props = {
-  /** Base URL of the TrustGraph Workbench (e.g. http://localhost:8888) */
+  /** Base URL of the TrustGraph Workbench (e.g. http://localhost:8081) */
   baseUrl: string;
 };
+
+/**
+ * Shown when the user picks TrustGraph but `NEXT_PUBLIC_TRUSTGRAPH_WORKBENCH_URL` is unset.
+ * Makes the tab discoverable without silent failure.
+ */
+export function TrustGraphWorkbenchSetup() {
+  return (
+    <div className="flex flex-1 min-h-0 flex-col items-center justify-center p-8 bg-background">
+      <div className="max-w-lg w-full rounded-xl border border-nativz-border bg-surface p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <BookOpen size={18} className="text-accent-text" />
+          <h2 className="text-sm font-semibold text-text-primary">Connect TrustGraph Workbench</h2>
+        </div>
+        <p className="text-xs text-text-muted leading-relaxed mb-4">
+          The Workbench (graph visualizer, relationships, vector search) runs as its own app. Point Cortex at it with a public env var, then restart{' '}
+          <code className="text-[10px] px-1 py-0.5 rounded bg-background">npm run dev</code>.
+        </p>
+        <p className="text-[11px] font-medium text-text-secondary mb-2">Add to <code className="text-[10px] text-text-muted">.env.local</code>:</p>
+        <pre className="text-left text-[11px] font-mono text-text-primary bg-background border border-nativz-border rounded-lg p-3 mb-4 overflow-x-auto">
+          {`NEXT_PUBLIC_TRUSTGRAPH_WORKBENCH_URL=http://localhost:8081`}
+        </pre>
+        <p className="text-[11px] text-text-muted mb-4">
+          Use the host and port where <strong className="text-text-secondary">Workbench</strong> is listening (here <strong className="text-text-secondary">8081</strong> on your Mac mini; upstream quickstarts often use <strong className="text-text-secondary">8888</strong>). The API gateway may be a different port (e.g. <strong className="text-text-secondary">8080</strong>). See{' '}
+          <a
+            href="https://github.com/trustgraph-ai/trustgraph#quickstart"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent-text hover:underline"
+          >
+            TrustGraph quickstart
+          </a>
+          .
+        </p>
+        <a
+          href="https://github.com/trustgraph-ai/trustgraph"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-accent-text hover:underline"
+        >
+          <ExternalLink size={13} />
+          trustgraph-ai/trustgraph on GitHub
+        </a>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Embeds the TrustGraph Workbench UI (vector search, Graph Visualizer, Relationships, flows).

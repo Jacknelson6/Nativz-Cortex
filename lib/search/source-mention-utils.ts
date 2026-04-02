@@ -116,6 +116,29 @@ export function sourcePlaceLabel(source: PlatformSource): string {
   }
 }
 
+/** Card header: platform or site — never the creator handle (use for Sources rail). */
+export function sourceHeaderLabel(source: PlatformSource): string {
+  switch (source.platform) {
+    case 'reddit':
+      return source.subreddit ? `r/${source.subreddit}` : 'Reddit';
+    case 'youtube':
+      return 'YouTube';
+    case 'tiktok':
+      return 'TikTok';
+    case 'quora':
+      return 'Quora';
+    case 'web': {
+      try {
+        return new URL(source.url).hostname.replace(/^www\./, '');
+      } catch {
+        return 'Web';
+      }
+    }
+    default:
+      return (source.platform as SearchPlatform) || 'Source';
+  }
+}
+
 export function formatViewsApprox(n: number | undefined): string {
   if (n == null || !Number.isFinite(n)) return '—';
   return `~${compactCount(n)}`;

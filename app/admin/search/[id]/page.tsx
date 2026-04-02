@@ -4,7 +4,6 @@ import { notFound, redirect } from 'next/navigation';
 import type { TopicSearch } from '@/lib/types/search';
 import { extractVideoCandidatesFromSearch } from '@/lib/ideation/extract-video-candidates';
 import { AdminResultsClient } from './results-client';
-import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 
 export default async function AdminSearchResultsPage({
   params,
@@ -35,11 +34,17 @@ export default async function AdminSearchResultsPage({
   const adminClient = createAdminClient();
 
   // Fetch client info if attached
-  let clientInfo: { id: string; name: string; slug: string; industry: string } | null = null;
+  let clientInfo: {
+    id: string;
+    name: string;
+    slug: string;
+    industry: string;
+    topic_keywords: string[] | null;
+  } | null = null;
   if (search.client_id) {
     const { data } = await adminClient
       .from('clients')
-      .select('id, name, slug, industry')
+      .select('id, name, slug, industry, topic_keywords')
       .eq('id', search.client_id)
       .single();
     clientInfo = data || null;
@@ -84,15 +89,6 @@ export default async function AdminSearchResultsPage({
 
   return (
     <>
-      <div className="px-6 pt-4">
-        <Breadcrumbs
-          className="mb-2"
-          items={[
-            { label: 'Search history', href: '/admin/search/new' },
-            { label: 'Results' },
-          ]}
-        />
-      </div>
       <AdminResultsClient
         search={search as TopicSearch}
         clientInfo={clientInfo}

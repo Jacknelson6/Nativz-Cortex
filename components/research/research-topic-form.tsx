@@ -18,10 +18,12 @@ import {
   X,
   Youtube,
 } from 'lucide-react';
-import { ClientPickerModal, type ClientOption } from '@/components/ui/client-picker';
+import { AgencyAssignmentLabel } from '@/components/clients/agency-assignment-label';
 import { ClientLogo } from '@/components/clients/client-logo';
+import { ClientPickerModal, type ClientOption } from '@/components/ui/client-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils/cn';
+import { mergeTopicSearchSelectionIntoLocalStorage } from '@/lib/strategy-lab/topic-search-selection-storage';
 import { TIME_RANGE_OPTIONS, LANGUAGE_OPTIONS, PLATFORM_OPTIONS } from '@/lib/types/search';
 import type { SearchPlatform, SearchVolume } from '@/lib/types/search';
 
@@ -58,22 +60,8 @@ interface ResearchTopicFormProps {
     needsSubtopics?: boolean;
   }) => void;
   onLegacyContinue?: (snapshot: ResearchTopicSnapshot) => void;
-}
-
-function ClientAgencySublabel({ agency }: { agency: string | null | undefined }) {
-  const a = agency?.trim();
-  if (!a) return null;
-  const lower = a.toLowerCase();
-  const isAc = lower.includes('anderson') || lower === 'ac';
-  return (
-    <p
-      className={`text-[9px] font-bold uppercase tracking-wider ${
-        isAc ? 'text-emerald-400' : 'text-blue-400'
-      }`}
-    >
-      {isAc ? 'Anderson Collaborative' : 'Nativz'}
-    </p>
-  );
+  /** Topic searches selected in the History rail to merge into Strategy lab for that client. */
+  strategyLabBulkSelection?: { ids: string[]; clientId: string | null };
 }
 
 /** First name for "Hello, …" — title-cases a single token (e.g. email local-part). */
@@ -125,6 +113,7 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
       userFirstName,
       onStarted,
       onLegacyContinue,
+      strategyLabBulkSelection,
     },
     ref
   ) {
@@ -318,6 +307,11 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
     const pillBtn =
       'inline-flex min-h-[2.25rem] max-w-[min(100%,11rem)] items-center gap-2 rounded-full border border-nativz-border bg-surface-hover/80 px-3 py-1.5 text-left text-xs font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover';
 
+    const bulkIds = strategyLabBulkSelection?.ids ?? [];
+    const bulkClientId = strategyLabBulkSelection?.clientId ?? null;
+    const bulkReady = bulkIds.length > 0 && bulkClientId != null;
+    const strategyLabHref = bulkReady ? `/admin/strategy-lab/${bulkClientId}` : '/admin/strategy-lab';
+
     return (
       <div className="w-full">
         <div className="text-center">
@@ -417,7 +411,9 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
                         <ClientLogo src={c.logo_url} name={c.name} size="sm" className="shrink-0 rounded-md" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-text-primary">{c.name}</p>
-                          <ClientAgencySublabel agency={c.agency} />
+                          <div className="mt-0.5">
+                            <AgencyAssignmentLabel agency={c.agency} showWhenUnassigned />
+                          </div>
                         </div>
                       </button>
                     ))}
@@ -578,11 +574,21 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
 
         <div className="mt-3 flex justify-center">
           <Link
-            href="/admin/strategy-lab"
+            href={strategyLabHref}
+            onClick={() => {
+              if (bulkReady && bulkClientId) {
+                mergeTopicSearchSelectionIntoLocalStorage(bulkClientId, bulkIds);
+              }
+            }}
+            title={
+              bulkReady
+                ? 'Opens this client’s Strategy lab and adds the selected topic searches to the workspace'
+                : undefined
+            }
             className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border/80 bg-surface-hover/45 px-2.5 py-1.5 text-[11px] font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover hover:text-text-primary"
           >
             <Compass size={12} className="shrink-0 text-text-muted" aria-hidden />
-            Go to Strategy lab
+            {bulkReady ? `Open Strategy lab (${bulkIds.length})` : 'Go to Strategy lab'}
           </Link>
         </div>
 

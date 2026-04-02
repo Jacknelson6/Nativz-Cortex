@@ -130,7 +130,7 @@ export function TaskRow({
     >
       <div
         onClick={() => { if (!menuOpen) onSelect(task); }}
-        className="flex items-center gap-3 py-3 px-1 cursor-pointer hover:bg-surface-hover/30 transition-colors rounded-md -mx-1"
+        className="flex min-w-0 items-center gap-3 py-3 px-1 cursor-pointer hover:bg-surface-hover/30 transition-colors rounded-md -mx-1"
       >
         <div className="pt-0.5">
           <PriorityCheckbox
@@ -142,7 +142,7 @@ export function TaskRow({
 
         <div className="flex-1 min-w-0">
           <p
-            className={`text-sm font-medium transition-all duration-200 ${
+            className={`min-w-0 truncate text-sm font-medium transition-all duration-200 ${
               isChecked
                 ? 'line-through text-text-muted/60'
                 : 'text-text-primary'
@@ -151,7 +151,7 @@ export function TaskRow({
             {task.title}
           </p>
           {task.description && !isChecked && (
-            <p className="text-xs text-text-muted mt-0.5 truncate max-w-[400px]">
+            <p className="mt-0.5 max-w-full truncate text-xs text-text-muted">
               {task.description.slice(0, 60)}
               {task.description.length > 60 ? '...' : ''}
             </p>

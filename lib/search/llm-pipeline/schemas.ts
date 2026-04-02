@@ -53,6 +53,7 @@ export const mergerContentBreakdownItemSchema = z.object({
   name: z.string(),
   percentage: z.number(),
   engagement_rate: z.number(),
+  your_engagement_rate: z.number().optional(),
 });
 
 export const mergerPlatformBreakdownItemSchema = z.object({
@@ -67,7 +68,7 @@ export const mergerOutputSchema = z.object({
   brand_alignment_notes: z.string().optional(),
   overall_sentiment: z.number().min(-1).max(1),
   conversation_intensity: z.enum(['low', 'moderate', 'high', 'very_high']),
-  topics: z.array(mergerTopicItemSchema).min(1).max(12),
+  topics: z.array(mergerTopicItemSchema).min(1).max(15),
   emotions: z.array(mergerEmotionSchema).optional(),
   content_breakdown: z.object({
     intentions: z.array(mergerContentBreakdownItemSchema),

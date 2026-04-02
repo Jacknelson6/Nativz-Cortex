@@ -3,13 +3,46 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Search, Sparkles, Building2, Clock, Loader2, Trash2 } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import {
+  Search,
+  Sparkles,
+  Building2,
+  Clock,
+  Loader2,
+  Trash2,
+  Check,
+  Compass,
+  Link2,
+  ExternalLink,
+  MoreHorizontal,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { cn } from '@/lib/utils/cn';
+import { mergeTopicSearchSelectionIntoLocalStorage } from '@/lib/strategy-lab/topic-search-selection-storage';
 import {
   TOPIC_SEARCH_HUB_HISTORY_LIMIT,
   type HistoryItem,
@@ -29,6 +62,9 @@ interface HistoryFeedProps {
   embeddedInNerdRail?: boolean;
   /** When false, “Load more” requests omit idea generations (`include_ideas=false`). Default true. */
   includeIdeas?: boolean;
+  /** Sidebar: checkboxes to pin topic searches for Strategy lab (client-linked rows only). */
+  enableStrategyLabBulkSelect?: boolean;
+  onStrategyLabSelectionChange?: (payload: { ids: string[]; clientId: string | null }) => void;
 }
 
 const HISTORY_TITLE_MAX = 50;
@@ -116,6 +152,135 @@ function mergeHistoryRows(rows: HistoryItem[]): HistoryItem[] {
   );
 }
 
+/** Topic / brand intel searches can be bulk-selected for Strategy lab (including unbranded). */
+function canSelectForStrategyLab(item: HistoryItem): boolean {
+  return item.type === 'topic' || item.type === 'brand_intel';
+}
+
+type RowMenuPrimitives = {
+  Item: typeof ContextMenuItem | typeof DropdownMenuItem;
+  Separator: typeof ContextMenuSeparator | typeof DropdownMenuSeparator;
+  Sub: typeof ContextMenuSub | typeof DropdownMenuSub;
+  SubTrigger: typeof ContextMenuSubTrigger | typeof DropdownMenuSubTrigger;
+  SubContent: typeof ContextMenuSubContent | typeof DropdownMenuSubContent;
+};
+
+const CONTEXT_MENU_PRIMITIVES: RowMenuPrimitives = {
+  Item: ContextMenuItem,
+  Separator: ContextMenuSeparator,
+  Sub: ContextMenuSub,
+  SubTrigger: ContextMenuSubTrigger,
+  SubContent: ContextMenuSubContent,
+};
+
+const DROPDOWN_MENU_PRIMITIVES: RowMenuPrimitives = {
+  Item: DropdownMenuItem,
+  Separator: DropdownMenuSeparator,
+  Sub: DropdownMenuSub,
+  SubTrigger: DropdownMenuSubTrigger,
+  SubContent: DropdownMenuSubContent,
+};
+
+function HistoryRowMenuBody({
+  M,
+  isTopicLike,
+  showSelection,
+  checked,
+  bulkCount,
+  menuItemClass,
+  menuSurfaceClass,
+  onOpen,
+  onCopyLink,
+  onOpenStrategyLab,
+  onToggleStrategyLab,
+  onDelete,
+  onDeleteAllSelected,
+  onOpenAllSelectedInStrategyLab,
+}: {
+  M: RowMenuPrimitives;
+  isTopicLike: boolean;
+  showSelection: boolean;
+  checked: boolean;
+  bulkCount: number;
+  menuItemClass: string;
+  menuSurfaceClass: string;
+  onOpen: () => void;
+  onCopyLink: () => void;
+  onOpenStrategyLab: () => void;
+  onToggleStrategyLab: () => void;
+  onDelete: () => void;
+  onDeleteAllSelected: () => void;
+  onOpenAllSelectedInStrategyLab: () => void;
+}) {
+  const { Item, Separator, Sub, SubTrigger, SubContent } = M;
+  return (
+    <>
+      <Item className={menuItemClass} onSelect={onOpen}>
+        <ExternalLink size={14} aria-hidden />
+        Open
+      </Item>
+      <Item
+        className={menuItemClass}
+        onSelect={() => {
+          void onCopyLink();
+        }}
+      >
+        <Link2 size={14} aria-hidden />
+        Copy link to search
+      </Item>
+      {isTopicLike ? (
+        <Item className={menuItemClass} onSelect={onOpenStrategyLab}>
+          <Compass size={14} aria-hidden />
+          Open in Strategy lab
+        </Item>
+      ) : null}
+      {showSelection && isTopicLike ? (
+        <Item className={menuItemClass} onSelect={onToggleStrategyLab}>
+          <Check size={14} aria-hidden />
+          {checked ? 'Deselect for Strategy lab' : 'Select for Strategy lab'}
+        </Item>
+      ) : null}
+      <Separator className="bg-nativz-border" />
+      <Item variant="destructive" className={menuItemClass} onSelect={onDelete}>
+        <Trash2 size={14} aria-hidden />
+        Delete
+      </Item>
+      {showSelection ? (
+        <>
+          <Separator className="bg-nativz-border" />
+          <Sub>
+            <SubTrigger className={cn(menuItemClass, 'data-[state=open]:bg-surface-hover')}>
+              Selection
+            </SubTrigger>
+            <SubContent className={cn(menuSurfaceClass, 'min-w-[10rem]')}>
+              <Item
+                className={menuItemClass}
+                disabled={bulkCount === 0}
+                onSelect={() => {
+                  void onDeleteAllSelected();
+                }}
+              >
+                Delete all selected
+                {bulkCount > 0 ? (
+                  <span className="ml-auto text-[10px] text-text-muted">({bulkCount})</span>
+                ) : null}
+              </Item>
+              <Item
+                className={menuItemClass}
+                disabled={bulkCount === 0}
+                onSelect={onOpenAllSelectedInStrategyLab}
+              >
+                <Compass size={14} aria-hidden />
+                Open all in Strategy lab
+              </Item>
+            </SubContent>
+          </Sub>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 export function HistoryFeed({
   items,
   historyResetKey,
@@ -124,10 +289,13 @@ export function HistoryFeed({
   variant = 'default',
   embeddedInNerdRail = false,
   includeIdeas = true,
+  enableStrategyLabBulkSelect = false,
+  onStrategyLabSelectionChange,
 }: HistoryFeedProps) {
   const sidebar = variant === 'sidebar';
   const nerdEmbed = sidebar && embeddedInNerdRail;
   const pathname = usePathname();
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
@@ -136,6 +304,7 @@ export function HistoryFeed({
   const [loadedMore, setLoadedMore] = useState<HistoryItem[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [selectedTopicSearchIds, setSelectedTopicSearchIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setLoadedMore([]);
@@ -182,6 +351,75 @@ export function HistoryFeed({
     [items, loadedMore],
   );
 
+  useEffect(() => {
+    if (!enableStrategyLabBulkSelect) return;
+    setSelectedTopicSearchIds((prev) => {
+      const valid = new Set(
+        mergedItems.filter((i) => !hiddenIds.has(i.id)).map((i) => i.id),
+      );
+      const next = new Set([...prev].filter((id) => valid.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [mergedItems, hiddenIds, enableStrategyLabBulkSelect]);
+
+  const strategyLabPayload = useMemo(() => {
+    if (!enableStrategyLabBulkSelect) {
+      return { ids: [] as string[], clientId: null as string | null };
+    }
+    if (selectedTopicSearchIds.size === 0) return { ids: [], clientId: null };
+    const ids = [...selectedTopicSearchIds];
+    const first = mergedItems.find((i) => i.id === ids[0]);
+    return { ids, clientId: first?.clientId ?? null };
+  }, [enableStrategyLabBulkSelect, selectedTopicSearchIds, mergedItems]);
+
+  const strategyLabNotifyKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!enableStrategyLabBulkSelect) {
+      strategyLabNotifyKeyRef.current = null;
+      return;
+    }
+    if (!onStrategyLabSelectionChange) return;
+    const { ids, clientId } = strategyLabPayload;
+    const key = `${clientId ?? 'null'}|${[...ids].sort().join(',')}`;
+    if (strategyLabNotifyKeyRef.current === key) return;
+    strategyLabNotifyKeyRef.current = key;
+    onStrategyLabSelectionChange({ ids: [...ids], clientId });
+  }, [strategyLabPayload, enableStrategyLabBulkSelect, onStrategyLabSelectionChange]);
+
+  const handleStrategyLabToggle = useCallback(
+    (item: HistoryItem) => {
+      if (!canSelectForStrategyLab(item)) return;
+      setSelectedTopicSearchIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(item.id)) {
+          next.delete(item.id);
+          return next;
+        }
+        if (next.size === 0) {
+          next.add(item.id);
+          return next;
+        }
+        const firstId = [...next][0];
+        const firstItem = mergedItems.find((i) => i.id === firstId);
+        if (!firstItem) {
+          next.clear();
+          next.add(item.id);
+          return next;
+        }
+        if (item.clientId !== firstItem.clientId) {
+          toast.error(
+            'Strategy lab can only include topic searches for the same client, or only unbranded searches together',
+          );
+          return prev;
+        }
+        next.add(item.id);
+        return next;
+      });
+    },
+    [mergedItems],
+  );
+
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     const merged = mergeHistoryRows([...items, ...loadedMore]);
@@ -217,9 +455,7 @@ export function HistoryFeed({
     }
   }, [hasMore, includeIdeas, items, loadedMore, loadingMore]);
 
-  async function handleDelete(e: React.MouseEvent, item: HistoryItem) {
-    e.preventDefault();
-    e.stopPropagation();
+  async function deleteHistoryItem(item: HistoryItem): Promise<boolean> {
     setDeletingId(item.id);
     try {
       const endpoint = item.type === 'ideas'
@@ -234,12 +470,83 @@ export function HistoryFeed({
       setLoadedMore((prev) => prev.filter((h) => h.id !== item.id));
       onItemDeleted?.(item.id);
       toast.success('Removed from history');
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete');
+      return false;
     } finally {
       setDeletingId(null);
     }
   }
+
+  async function handleDelete(e: React.MouseEvent, item: HistoryItem) {
+    e.preventDefault();
+    e.stopPropagation();
+    await deleteHistoryItem(item);
+  }
+
+  const copyLinkToSearch = useCallback(async (item: HistoryItem) => {
+    try {
+      const url = `${window.location.origin}${item.href}`;
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied');
+    } catch {
+      toast.error('Could not copy link');
+    }
+  }, []);
+
+  const openInStrategyLab = useCallback(
+    (item: HistoryItem) => {
+      if (item.type === 'ideas') return;
+      if (item.clientId) {
+        mergeTopicSearchSelectionIntoLocalStorage(item.clientId, [item.id]);
+        router.push(`/admin/strategy-lab/${item.clientId}`);
+      } else {
+        toast.message('Pick a client in Strategy lab, then pin topic searches from your history.');
+        router.push('/admin/strategy-lab');
+      }
+    },
+    [router],
+  );
+
+  const openAllSelectedInStrategyLab = useCallback(() => {
+    const ids = [...selectedTopicSearchIds];
+    if (ids.length === 0) return;
+    const first = mergedItems.find((i) => i.id === ids[0]);
+    if (!first?.clientId) {
+      toast.message('Pick a client in Strategy lab, then pin topic searches from your history.');
+      router.push('/admin/strategy-lab');
+      return;
+    }
+    mergeTopicSearchSelectionIntoLocalStorage(first.clientId, ids);
+    router.push(`/admin/strategy-lab/${first.clientId}`);
+  }, [mergedItems, router, selectedTopicSearchIds]);
+
+  const deleteAllSelected = useCallback(async () => {
+    const ids = [...selectedTopicSearchIds];
+    if (ids.length === 0) return;
+    if (!window.confirm(`Delete ${ids.length} items from history?`)) return;
+    let ok = 0;
+    for (const id of ids) {
+      const item = mergedItems.find((i) => i.id === id);
+      if (!item) continue;
+      try {
+        const endpoint = item.type === 'ideas' ? `/api/ideas/${id}` : `/api/search/${id}`;
+        const res = await fetch(endpoint, { method: 'DELETE' });
+        if (res.ok) {
+          ok += 1;
+          setHiddenIds((prev) => new Set(prev).add(id));
+          setLoadedMore((prev) => prev.filter((h) => h.id !== id));
+          onItemDeleted?.(id);
+        }
+      } catch {
+        /* continue */
+      }
+    }
+    setSelectedTopicSearchIds(new Set());
+    if (ok > 0) toast.success(ok === ids.length ? 'Removed from history' : `Removed ${ok} of ${ids.length}`);
+    else toast.error('Could not delete selected items');
+  }, [mergedItems, onItemDeleted, selectedTopicSearchIds]);
 
   const filtered = useMemo(() => {
     return mergedItems.filter((item) => {
@@ -336,14 +643,90 @@ export function HistoryFeed({
 
   const showLoadMore = hasMore && !searchQuery.trim();
 
+  const ctxMenuSurface =
+    'z-[200] min-w-[12rem] overflow-hidden rounded-lg border border-nativz-border bg-surface p-1 text-text-primary shadow-dropdown';
+  const ctxMenuItem =
+    'cursor-pointer rounded-md px-2 py-1.5 text-sm text-text-primary focus:bg-surface-hover focus:text-text-primary [&_svg]:text-text-muted';
+
   function renderHistoryRow(item: HistoryItem, index: number) {
     const isProcessing = item.status === 'processing' || item.status === 'pending';
     const uniqueKey = `${item.type}-${item.id}-${index}`;
     const isActive =
       pathname === item.href || (item.href.length > 1 && pathname.startsWith(`${item.href}/`));
 
+    const showSelection = enableStrategyLabBulkSelect;
+    const selectable = showSelection && canSelectForStrategyLab(item);
+    const checked = selectedTopicSearchIds.has(item.id);
+    const isTopicLike = item.type === 'topic' || item.type === 'brand_intel';
+    const bulkCount = selectedTopicSearchIds.size;
+
+    const selectionCell = showSelection ? (
+      <div
+        className={cn(
+          'flex shrink-0 items-start justify-center',
+          sidebar ? 'w-5 pt-0.5' : 'w-6 pt-1',
+        )}
+      >
+        {selectable ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleStrategyLabToggle(item);
+            }}
+            className={cn(
+              'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+              checked
+                ? 'border-accent bg-accent/15 text-accent-text'
+                : 'border-nativz-border bg-background hover:border-accent/40',
+            )}
+            aria-label={
+              checked
+                ? `Deselect for Strategy lab: ${displayTitle(item)}`
+                : `Select for Strategy lab: ${displayTitle(item)}`
+            }
+            aria-pressed={checked}
+          >
+            {checked ? <Check size={10} strokeWidth={3} className="text-accent-text" aria-hidden /> : null}
+          </button>
+        ) : (
+          <span className="inline-block h-4 w-4 shrink-0" aria-hidden />
+        )}
+      </div>
+    ) : null;
+
+    const rowActionMenuProps = {
+      isTopicLike,
+      showSelection,
+      checked,
+      bulkCount,
+      menuItemClass: ctxMenuItem,
+      menuSurfaceClass: ctxMenuSurface,
+      onOpen: () => {
+        router.push(item.href);
+      },
+      onCopyLink: () => {
+        void copyLinkToSearch(item);
+      },
+      onOpenStrategyLab: () => {
+        openInStrategyLab(item);
+      },
+      onToggleStrategyLab: () => {
+        handleStrategyLabToggle(item);
+      },
+      onDelete: () => {
+        void deleteHistoryItem(item);
+      },
+      onDeleteAllSelected: () => {
+        void deleteAllSelected();
+      },
+      onOpenAllSelectedInStrategyLab: openAllSelectedInStrategyLab,
+    };
+
     const rowInner = (
       <>
+        {selectionCell}
         <Link
           href={item.href}
           className="flex min-w-0 flex-1 flex-col gap-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
@@ -386,6 +769,25 @@ export function HistoryFeed({
             </>
           )}
           {item.status === 'failed' && <Badge variant="danger">Failed</Badge>}
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                className={cn(
+                  'shrink-0 rounded-md p-1 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35',
+                )}
+                aria-label="More actions"
+                title="More actions"
+              >
+                <MoreHorizontal size={16} strokeWidth={2} aria-hidden />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={4} className={ctxMenuSurface}>
+              <HistoryRowMenuBody M={DROPDOWN_MENU_PRIMITIVES} {...rowActionMenuProps} />
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             type="button"
             onClick={(e) => handleDelete(e, item)}
@@ -399,37 +801,52 @@ export function HistoryFeed({
       </>
     );
 
+    const contextMenu = (
+      <ContextMenuContent className={ctxMenuSurface}>
+        <HistoryRowMenuBody M={CONTEXT_MENU_PRIMITIVES} {...rowActionMenuProps} />
+      </ContextMenuContent>
+    );
+
     if (sidebar) {
       return (
-        <div
-          key={uniqueKey}
-          className={cn(
-            'group flex animate-stagger-in items-start justify-between gap-2 rounded-lg border px-1.5 py-2 pr-1 transition-colors',
-            isActive
-              ? 'border-accent/10 bg-accent-surface/20'
-              : 'border-transparent hover:bg-surface-hover',
-            isProcessing && 'opacity-70',
-          )}
-          style={{ animationDelay: `${index * 30}ms` }}
-        >
-          {rowInner}
-        </div>
+        <ContextMenu key={uniqueKey}>
+          <ContextMenuTrigger asChild>
+            <div
+              className={cn(
+                'group flex animate-stagger-in cursor-default items-start justify-between gap-2 rounded-lg border px-1.5 py-2 pr-1 transition-colors',
+                isActive
+                  ? 'border-accent/10 bg-accent-surface/20'
+                  : 'border-transparent hover:bg-surface-hover',
+                isProcessing && 'opacity-70',
+              )}
+              style={{ animationDelay: `${index * 30}ms` }}
+            >
+              {rowInner}
+            </div>
+          </ContextMenuTrigger>
+          {contextMenu}
+        </ContextMenu>
       );
     }
 
     return (
-      <div key={uniqueKey}>
-        <Card
-          interactive
-          className={cn(
-            'group flex animate-stagger-in items-start justify-between gap-3 px-4 py-3',
-            isProcessing && 'opacity-70',
-          )}
-          style={{ animationDelay: `${index * 30}ms` }}
-        >
-          {rowInner}
-        </Card>
-      </div>
+      <ContextMenu key={uniqueKey}>
+        <ContextMenuTrigger asChild>
+          <div>
+            <Card
+              interactive
+              className={cn(
+                'group flex animate-stagger-in cursor-default items-start justify-between gap-3 px-4 py-3',
+                isProcessing && 'opacity-70',
+              )}
+              style={{ animationDelay: `${index * 30}ms` }}
+            >
+              {rowInner}
+            </Card>
+          </div>
+        </ContextMenuTrigger>
+        {contextMenu}
+      </ContextMenu>
     );
   }
 
@@ -473,6 +890,22 @@ export function HistoryFeed({
     </div>
   );
 
+  const strategyLabHintBar =
+    enableStrategyLabBulkSelect && selectedTopicSearchIds.size > 0 ? (
+      <div className="flex shrink-0 items-center justify-between border-b border-nativz-border/50 px-3 py-1.5">
+        <span className="text-[10px] text-text-muted">
+          {selectedTopicSearchIds.size} selected for Strategy lab — right-click a row or use the menu (⋯) for actions
+        </span>
+        <button
+          type="button"
+          className="text-[10px] font-medium text-accent-text hover:underline"
+          onClick={() => setSelectedTopicSearchIds(new Set())}
+        >
+          Clear
+        </button>
+      </div>
+    ) : null;
+
   return (
     <div
       className={cn(
@@ -487,7 +920,10 @@ export function HistoryFeed({
       {/* Header + search */}
       {sidebar ? (
         nerdEmbed ? (
-          <div className="shrink-0 border-b border-nativz-border/50 px-3 py-2">{searchInput}</div>
+          <>
+            <div className="shrink-0 border-b border-nativz-border/50 px-3 py-2">{searchInput}</div>
+            {strategyLabHintBar}
+          </>
         ) : (
           <>
             <div className="shrink-0 border-b border-nativz-border/50 px-3 py-3">
@@ -497,6 +933,7 @@ export function HistoryFeed({
               </h2>
             </div>
             <div className="shrink-0 border-b border-nativz-border/50 px-3 py-2">{searchInput}</div>
+            {strategyLabHintBar}
           </>
         )
       ) : (

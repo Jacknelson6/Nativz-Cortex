@@ -27,7 +27,6 @@ import { SearchIdeasWizard } from '@/components/research/search-ideas-wizard';
 import type { ClientOption } from '@/components/ui/client-picker';
 import { hasSerp } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
-import { RelatedTopics } from '@/components/search/related-topics';
 import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
 import { AiTakeaways } from '@/components/results/ai-takeaways';
 import { IdeationPipelinePanel } from '@/components/ideation/ideation-pipeline-panel';
@@ -48,7 +47,13 @@ interface LinkedBoardRow {
 
 interface AdminResultsClientProps {
   search: TopicSearch;
-  clientInfo?: { id: string; name: string; slug: string; industry?: string } | null;
+  clientInfo?: {
+    id: string;
+    name: string;
+    slug: string;
+    industry?: string;
+    topic_keywords?: string[] | null;
+  } | null;
   clients: ClientOption[];
   linkedIdeas?: LinkedIdea[];
   linkedBoards?: LinkedBoardRow[];
@@ -163,7 +168,7 @@ export function AdminResultsClient({
                       if (e.key === 'Enter') void saveTopicTitle();
                     }}
                     aria-label="Topic search name"
-                    className="block w-full min-w-0 flex-1 rounded-lg border border-nativz-border bg-background px-3 py-2 text-base font-semibold leading-snug text-text-primary shadow-[var(--shadow-card)] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent sm:text-lg"
+                    className="block w-full min-w-0 flex-1 rounded-lg border border-nativz-border bg-background px-3 py-2 text-lg font-semibold leading-snug text-text-primary shadow-[var(--shadow-card)] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent sm:text-xl"
                   />
                   <div className="flex shrink-0 items-center gap-1.5">
                     <Button type="button" size="sm" disabled={savingTitle} onClick={() => void saveTopicTitle()}>
@@ -189,7 +194,7 @@ export function AdminResultsClient({
                     type="button"
                     title="Click to edit"
                     onClick={beginEditingTitle}
-                    className="w-full rounded-md px-1 py-0.5 text-left text-base font-semibold leading-snug text-text-primary break-words [overflow-wrap:anywhere] transition-colors hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:text-lg"
+                    className="w-full rounded-md px-1 py-0.5 text-left text-lg font-semibold leading-snug text-text-primary break-words [overflow-wrap:anywhere] transition-colors hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:text-xl"
                   >
                     {search.query}
                   </button>
@@ -202,13 +207,13 @@ export function AdminResultsClient({
                   aria-label={`View client ${clientInfo.name}`}
                   className="inline-flex max-w-full"
                 >
-                  <Badge variant="info" className="gap-1.5 px-2.5 py-1 text-xs font-medium">
-                    <Building2 size={12} className="shrink-0 opacity-90" aria-hidden />
+                  <Badge variant="info" className="gap-1.5 px-2.5 py-1 text-sm font-medium">
+                    <Building2 size={14} className="shrink-0 opacity-90" aria-hidden />
                     <span className="truncate">{getClientAbbreviationLabel(clientInfo.name, clientInfo.slug)}</span>
                   </Badge>
                 </Link>
               ) : search.client_id === null ? (
-                <Badge variant="mono" className="text-[11px]">
+                <Badge variant="mono" className="text-xs sm:text-sm">
                   No client attached
                 </Badge>
               ) : null}
@@ -222,9 +227,9 @@ export function AdminResultsClient({
       </div>
 
       {/* Content */}
-      <div className="w-full px-6 py-8 space-y-6">
+      <div className="w-full px-6 py-8 space-y-6 sm:space-y-8">
         {search.summary ? (
-          <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5">
+          <div className="rounded-xl border border-nativz-border bg-surface p-5 sm:p-6">
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-10 lg:items-start">
               <ExecutiveSummary summary={search.summary} />
               <BrandApplication
@@ -236,8 +241,13 @@ export function AdminResultsClient({
         ) : null}
 
         {(aiResponse || search.summary) ? (
-          <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5">
-            <AiTakeaways aiResponse={aiResponse} summary={search.summary} clientName={clientInfo?.name} />
+          <div className="rounded-xl border border-nativz-border bg-surface p-5 sm:p-6">
+            <AiTakeaways
+              aiResponse={aiResponse}
+              summary={search.summary}
+              clientName={clientInfo?.name}
+              hasAttachedClient={!!clientInfo}
+            />
           </div>
         ) : null}
 
@@ -256,24 +266,24 @@ export function AdminResultsClient({
 
         {/* Linked ideas banner */}
         {linkedIdeas.length > 0 ? (
-          <div className="rounded-xl border border-accent2/20 bg-accent2/5 p-4">
+          <div className="rounded-xl border border-accent2/20 bg-accent2/5 p-4 sm:p-5">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent2-surface shrink-0">
-                <Sparkles size={16} className="text-accent2-text" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent2-surface shrink-0">
+                <Sparkles size={18} className="text-accent2-text" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-text-primary">
+                <p className="text-base font-medium text-text-primary">
                   {linkedIdeas.length === 1 ? 'Video ideas generated from this research' : `${linkedIdeas.length} idea sets generated from this research`}
                 </p>
-                <p className="text-xs text-text-muted mt-0.5">
+                <p className="text-sm text-text-muted mt-1 leading-relaxed">
                   {linkedIdeas.map((g) => `${g.count} ideas${g.concept ? ` — "${g.concept}"` : ''}`).join(' · ')}
                 </p>
               </div>
               <Link
                 href={`/admin/ideas/${linkedIdeas[0].id}`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-accent2-surface px-3 py-1.5 text-xs font-medium text-accent2-text hover:bg-accent2-surface transition-colors shrink-0"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-accent2-surface px-3 py-2 text-sm font-medium text-accent2-text hover:bg-accent2-surface transition-colors shrink-0"
               >
-                <Sparkles size={12} />
+                <Sparkles size={14} />
                 View ideas
               </Link>
             </div>
@@ -336,15 +346,28 @@ export function AdminResultsClient({
         {Boolean(
           search.platform_data && (search.platform_data as Record<string, unknown>).sources,
         ) ? (
-          <SourceBrowser sources={(search.platform_data as Record<string, unknown>).sources as PlatformSource[]} />
+          <SourceBrowser
+            sources={(search.platform_data as Record<string, unknown>).sources as PlatformSource[]}
+            searchId={search.id}
+            searchQuery={search.query}
+            clientContext={
+              clientInfo
+                ? {
+                    name: clientInfo.name,
+                    industry: clientInfo.industry,
+                    topicKeywords: clientInfo.topic_keywords ?? undefined,
+                  }
+                : null
+            }
+            defaultClientId={search.client_id}
+            clients={clients}
+            linkedIdeas={linkedIdeas.map((g) => ({ id: g.id, concept: g.concept, count: g.count }))}
+          />
         ) : null}
 
         {hasSerp(search) && search.serp_data ? (
           <SourcesPanel serpData={search.serp_data} />
         ) : null}
-
-        {/* Explore related topics */}
-        <RelatedTopics searchId={search.id} />
       </div>
 
       <ScrollToTop />

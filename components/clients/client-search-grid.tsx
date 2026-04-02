@@ -6,7 +6,7 @@ import { Search, UserX, LayoutGrid, List, Trash2, Loader2, Eye } from 'lucide-re
 import { Badge } from '@/components/ui/badge';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { HealthBadge } from '@/components/clients/health-badge';
-import { AgencyBadge } from '@/components/clients/agency-badge';
+import { AgencyAssignmentLabel } from '@/components/clients/agency-assignment-label';
 import { ClientLogo } from '@/components/clients/client-logo';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { toast } from 'sonner';
@@ -177,7 +177,7 @@ function ClientCard({
               </div>
             </div>
             <span className="text-xs text-text-muted shrink-0 hidden sm:block">{client.industry || 'General'}</span>
-            <AgencyBadge agency={client.agency} className="shrink-0 hidden md:inline-flex" />
+            <AgencyAssignmentLabel agency={client.agency} showWhenUnassigned className="shrink-0 hidden md:block" />
             {client.lastActivityAt && (
               <span className="text-xs text-text-muted shrink-0 hidden lg:block">{formatRelativeTime(client.lastActivityAt)}</span>
             )}
@@ -212,7 +212,7 @@ function ClientCard({
               </div>
               <p className="text-xs text-text-muted">{client.industry || 'General'}</p>
               <div className="mt-1.5 space-y-1">
-                <AgencyBadge agency={client.agency} />
+                <AgencyAssignmentLabel agency={client.agency} showWhenUnassigned />
                 <div className="flex items-center gap-1">
                   {client.services.map((s) => <Badge key={s} className="text-[10px] px-1.5 py-0 shrink-0">{s}</Badge>)}
                 </div>

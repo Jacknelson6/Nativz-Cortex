@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AgencyKnowledgeGraph } from './agency-knowledge-graph';
-import { TrustGraphWorkbenchEmbed } from './trustgraph-workbench-embed';
+import { TrustGraphWorkbenchEmbed, TrustGraphWorkbenchSetup } from './trustgraph-workbench-embed';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ export function KnowledgeExplorer() {
   // Collapsed groups in node list
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
-  /** TrustGraph Workbench embed — set NEXT_PUBLIC_TRUSTGRAPH_WORKBENCH_URL (e.g. http://localhost:8888) */
+  /** TrustGraph Workbench embed — set NEXT_PUBLIC_TRUSTGRAPH_WORKBENCH_URL (e.g. http://localhost:8081) */
   const trustgraphWorkbenchUrl =
     typeof process.env.NEXT_PUBLIC_TRUSTGRAPH_WORKBENCH_URL === 'string'
       ? process.env.NEXT_PUBLIC_TRUSTGRAPH_WORKBENCH_URL.trim()
@@ -328,42 +328,40 @@ export function KnowledgeExplorer() {
             </p>
           </div>
 
-          {trustgraphWorkbenchUrl ? (
-            <div
-              className="flex rounded-lg border border-nativz-border p-0.5 bg-background"
-              role="tablist"
-              aria-label="Graph data source"
+          <div
+            className="flex rounded-lg border border-nativz-border p-0.5 bg-background"
+            role="tablist"
+            aria-label="Graph data source"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={graphView === 'cortex'}
+              onClick={() => setGraphView('cortex')}
+              className={`cursor-pointer flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                graphView === 'cortex'
+                  ? 'bg-accent-surface text-accent-text'
+                  : 'text-text-muted hover:text-text-secondary'
+              }`}
             >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={graphView === 'cortex'}
-                onClick={() => setGraphView('cortex')}
-                className={`cursor-pointer flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                  graphView === 'cortex'
-                    ? 'bg-accent-surface text-accent-text'
-                    : 'text-text-muted hover:text-text-secondary'
-                }`}
-              >
-                <LayoutGrid size={13} />
-                Cortex
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={graphView === 'trustgraph'}
-                onClick={() => setGraphView('trustgraph')}
-                className={`cursor-pointer flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                  graphView === 'trustgraph'
-                    ? 'bg-accent-surface text-accent-text'
-                    : 'text-text-muted hover:text-text-secondary'
-                }`}
-              >
-                <Network size={13} />
-                TrustGraph
-              </button>
-            </div>
-          ) : null}
+              <LayoutGrid size={13} />
+              Cortex
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={graphView === 'trustgraph'}
+              onClick={() => setGraphView('trustgraph')}
+              className={`cursor-pointer flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                graphView === 'trustgraph'
+                  ? 'bg-accent-surface text-accent-text'
+                  : 'text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              <Network size={13} />
+              TrustGraph
+            </button>
+          </div>
 
           {/* Client picker */}
           <select
@@ -410,10 +408,14 @@ export function KnowledgeExplorer() {
         </button>
       </div>
 
-      {/* Main content: node list + graph + detail — or TrustGraph Workbench embed */}
-      {graphView === 'trustgraph' && trustgraphWorkbenchUrl ? (
-        <div className="flex-1 min-h-0 flex flex-col">
-          <TrustGraphWorkbenchEmbed baseUrl={trustgraphWorkbenchUrl} />
+      {/* Main content: node list + graph + detail — or TrustGraph Workbench embed / setup */}
+      {graphView === 'trustgraph' ? (
+        <div className="flex-1 min-h-0 flex flex-col min-w-0">
+          {trustgraphWorkbenchUrl ? (
+            <TrustGraphWorkbenchEmbed baseUrl={trustgraphWorkbenchUrl} />
+          ) : (
+            <TrustGraphWorkbenchSetup />
+          )}
         </div>
       ) : (
       <div className="flex flex-1 min-h-0 relative">

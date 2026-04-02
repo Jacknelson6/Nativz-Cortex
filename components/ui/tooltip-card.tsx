@@ -8,9 +8,11 @@ interface TooltipCardProps {
   title: string;
   description: string;
   children: ReactNode;
+  /** Icon-only or custom control: no help icon; hover shows the same card tooltip. */
+  iconTrigger?: boolean;
 }
 
-export function TooltipCard({ title, description, children }: TooltipCardProps) {
+export function TooltipCard({ title, description, children, iconTrigger = false }: TooltipCardProps) {
   const [visible, setVisible] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -35,10 +37,14 @@ export function TooltipCard({ title, description, children }: TooltipCardProps) 
       <span
         onMouseEnter={show}
         onMouseLeave={hide}
-        className="inline-flex items-center gap-1 cursor-help"
+        className={
+          iconTrigger
+            ? 'inline-flex'
+            : 'inline-flex cursor-help items-center gap-1'
+        }
       >
         {children}
-        <HelpCircle size={12} className="text-text-muted/50" />
+        {!iconTrigger && <HelpCircle size={12} className="text-text-muted/50" />}
       </span>
       {visible && typeof document !== 'undefined' && createPortal(
         <div

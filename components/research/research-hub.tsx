@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ResearchTopicForm, type ResearchTopicSnapshot } from './research-topic-form';
 import { ResearchWizard } from './research-wizard';
@@ -36,8 +36,19 @@ export function ResearchHub({
 
   const [optimisticItems, setOptimisticItems] = useState<HistoryItem[]>([]);
   const [historyRailOpen, setHistoryRailOpen] = useTopicSearchHistoryRailOpen();
+  const [strategyLabBulkSelection, setStrategyLabBulkSelection] = useState<{
+    ids: string[];
+    clientId: string | null;
+  }>({ ids: [], clientId: null });
   const prevHistoryRef = useRef(historyItems);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const handleStrategyLabSelectionChange = useCallback(
+    (payload: { ids: string[]; clientId: string | null }) => {
+      setStrategyLabBulkSelection(payload);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (prevHistoryRef.current !== historyItems) {
@@ -91,7 +102,11 @@ export function ResearchHub({
     };
   }, [optimisticItems, historyItems, router]);
 
-  const allItems = [...optimisticItems, ...historyItems];
+  /** Stable array identity when contents unchanged — avoids HistoryFeed strategy-lab sync loops. */
+  const allItems = useMemo(
+    () => [...optimisticItems, ...historyItems],
+    [optimisticItems, historyItems],
+  );
 
   const handleResearchStarted = useCallback((item: {
     id: string;
@@ -154,6 +169,7 @@ export function ResearchHub({
                 initialQuery={prefillQuery}
                 topicPipelineLlmV1={topicPipelineLlmV1}
                 userFirstName={userFirstName}
+                strategyLabBulkSelection={strategyLabBulkSelection}
                 onStarted={handleResearchStarted}
                 onLegacyContinue={(snap) => {
                   setLegacySnapshot(snap);
@@ -178,6 +194,8 @@ export function ResearchHub({
               historyResetKey={historyItems.map((i) => i.id).join(',')}
               serverHistoryCount={historyItems.length}
               clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+              enableStrategyLabBulkSelect
+              onStrategyLabSelectionChange={handleStrategyLabSelectionChange}
             />
           </aside>
         </div>

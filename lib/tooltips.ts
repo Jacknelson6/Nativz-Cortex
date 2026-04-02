@@ -17,6 +17,23 @@ export const TOOLTIPS: Record<string, TooltipDef> = {
     description:
       'Estimated reach from sources tied to this topic (views, likes, and comments blended). Shown as a compact number; not a census of unique viewers.',
   },
+  views: {
+    title: 'Views',
+    description:
+      'Estimated reach from sources tied to this topic (views, likes, and comments blended). Shown as a compact number; not a census of unique viewers.',
+  },
+  trending_topic_copy: {
+    title: 'Copy topic',
+    description: 'Copy this topic title to your clipboard so you can paste it into scripts, briefs, or other tools.',
+  },
+  trending_topic_save: {
+    title: 'Save to ideas',
+    description: 'Add this topic to your Ideas list so your team can turn it into concepts and productions later.',
+  },
+  trending_topic_saved: {
+    title: 'Saved',
+    description: 'This topic is already in your Ideas list.',
+  },
   conversation_intensity: {
     title: 'Conversation intensity',
     description: 'How actively people are discussing this topic — measured by reply depth and discussion frequency.',
@@ -86,5 +103,20 @@ export const TOOLTIPS: Record<string, TooltipDef> = {
   categories: {
     title: 'Categories',
     description: 'Content types being created — tutorials, reviews, news, opinion pieces, and more.',
+  },
+  pillar_pct_of_content: {
+    title: '% of content',
+    description:
+      'Share of posts in this topic that fall into this format or pillar (volume mix, not a quality score).',
+  },
+  pillar_er_typical: {
+    title: 'ER',
+    description:
+      'Typical engagement rate for this content type within this topic’s evidence — likes, comments, and views relative to reach, expressed as a percentage (e.g. 0.7% means seven-tenths of a percent).',
+  },
+  pillar_er_your: {
+    title: 'Your ER',
+    description:
+      'Estimated engagement if your attached client published this format for this topic — based on how well the angle fits their business, brand voice, and content strategy versus the typical rate above. Shown when a client is linked to the search.',
   },
 };

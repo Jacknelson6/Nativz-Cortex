@@ -49,15 +49,53 @@ function formatInline(text: string, variant: MarkdownVariant = 'default'): React
   return parts.length ? <>{parts}</> : text;
 }
 
-export function Markdown({ content, variant = 'default' }: { content: string; variant?: MarkdownVariant }) {
+export function Markdown({
+  content,
+  variant = 'default',
+  bodySize = 'sm',
+}: {
+  content: string;
+  variant?: MarkdownVariant;
+  /** `md` = larger body copy for reports and long-form summaries (default `sm` for chat/dense UI). */
+  bodySize?: 'sm' | 'md';
+}) {
   const present = variant === 'present';
-  const h2Cls = present ? 'mt-5 mb-2 text-base font-bold text-white' : 'mt-5 mb-2 text-base font-bold text-text-primary';
-  const h3Cls = present ? 'mt-5 mb-1.5 text-[15px] font-semibold text-white' : 'mt-5 mb-1.5 text-[15px] font-semibold text-text-primary';
-  const h4Cls = present ? 'mt-4 mb-1.5 text-sm font-semibold text-white' : 'mt-4 mb-1.5 text-sm font-semibold text-text-primary';
-  const boldLineCls = present ? 'mt-4 mb-1 text-sm font-semibold text-white' : 'mt-4 mb-1 text-sm font-semibold text-text-primary';
-  const pCls = present ? 'text-[15px] leading-relaxed text-zinc-200/95' : 'text-sm leading-relaxed';
-  const bulletDotCls = present ? 'mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400/90' : 'mt-1.5 h-1 w-1 shrink-0 rounded-full bg-text-muted/60';
-  const bulletTextCls = present ? 'text-[15px] leading-relaxed text-zinc-200/95' : 'text-sm leading-relaxed';
+  const large = !present && bodySize === 'md';
+  const h2Cls = present
+    ? 'mt-5 mb-2 text-base font-bold text-white'
+    : large
+      ? 'mt-5 mb-2 text-lg font-bold text-text-primary'
+      : 'mt-5 mb-2 text-base font-bold text-text-primary';
+  const h3Cls = present
+    ? 'mt-5 mb-1.5 text-[15px] font-semibold text-white'
+    : large
+      ? 'mt-5 mb-1.5 text-[17px] font-semibold text-text-primary'
+      : 'mt-5 mb-1.5 text-[15px] font-semibold text-text-primary';
+  const h4Cls = present
+    ? 'mt-4 mb-1.5 text-sm font-semibold text-white'
+    : large
+      ? 'mt-4 mb-1.5 text-base font-semibold text-text-primary'
+      : 'mt-4 mb-1.5 text-sm font-semibold text-text-primary';
+  const boldLineCls = present
+    ? 'mt-4 mb-1 text-sm font-semibold text-white'
+    : large
+      ? 'mt-4 mb-1 text-base font-semibold text-text-primary'
+      : 'mt-4 mb-1 text-sm font-semibold text-text-primary';
+  const pCls = present
+    ? 'text-[15px] leading-relaxed text-zinc-200/95'
+    : large
+      ? 'text-base leading-relaxed text-text-primary'
+      : 'text-sm leading-relaxed';
+  const bulletDotCls = present
+    ? 'mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400/90'
+    : large
+      ? 'mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-text-muted/60'
+      : 'mt-1.5 h-1 w-1 shrink-0 rounded-full bg-text-muted/60';
+  const bulletTextCls = present
+    ? 'text-[15px] leading-relaxed text-zinc-200/95'
+    : large
+      ? 'text-base leading-relaxed text-text-primary'
+      : 'text-sm leading-relaxed';
   const codeMetaCls = present ? 'text-[11px] font-medium text-zinc-400' : 'text-[11px] font-medium text-text-muted';
 
   const lines = content.split('\n');

@@ -53,11 +53,11 @@ export function IdeationPipelinePanel({
       {/* Header — full width */}
       <div className="border-b border-nativz-border/60 px-5 py-4 sm:px-6">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <CardTitle className="flex items-center gap-2 text-base font-semibold">
-            <Layers size={18} className="text-accent" />
+          <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+            <Layers size={20} className="text-accent" />
             Ideation pipeline
           </CardTitle>
-          <p className="text-xs text-text-muted max-w-xl sm:text-right">
+          <p className="text-sm text-text-muted max-w-xl leading-relaxed sm:text-right">
             Turn this topic search into short-form video ideas — pick a path, then create or explore.
           </p>
         </div>
@@ -72,14 +72,14 @@ export function IdeationPipelinePanel({
               <span className="flex h-7 w-7 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/15">
                 <Check size={14} strokeWidth={2.5} />
               </span>
-              <span className="text-xs font-semibold uppercase tracking-wide">Topic search</span>
+              <span className="text-sm font-semibold uppercase tracking-wide">Topic search</span>
             </div>
-            <p className="mt-3 text-sm font-medium leading-snug text-text-primary [overflow-wrap:anywhere]">
+            <p className="mt-3 text-base font-medium leading-snug text-text-primary [overflow-wrap:anywhere] sm:text-[17px]">
               &ldquo;{query}&rdquo;
             </p>
             <Link
               href="/admin/search/new"
-              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-accent-text hover:underline"
+              className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent-text hover:underline"
             >
               <Plus size={12} />
               Add another search
@@ -102,8 +102,8 @@ export function IdeationPipelinePanel({
                 {step2Done ? <Check size={15} strokeWidth={2.5} /> : '2'}
               </span>
               <div>
-                <h3 className="text-sm font-semibold text-text-primary">Generate ideas</h3>
-                <p className="text-[11px] text-text-muted mt-0.5">
+                <h3 className="text-base font-semibold text-text-primary">Generate ideas</h3>
+                <p className="mt-1 text-sm text-text-muted leading-relaxed">
                   {step2Done
                     ? 'Ideas are linked to this search — open them or generate more.'
                     : 'Choose how you want to go from research to video concepts.'}
@@ -113,12 +113,12 @@ export function IdeationPipelinePanel({
 
             {step2Done ? (
               <div className="flex flex-wrap items-center gap-3 border-t border-nativz-border/60 pt-4">
-                <p className="text-xs font-medium text-emerald-400">
+                <p className="text-sm font-medium text-emerald-400">
                   {linkedIdeas[0]?.count ?? 0} ideas generated
                 </p>
                 <Link
                   href={`/admin/ideas/${linkedIdeas[0].id}`}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-accent-text hover:underline"
+                  className="inline-flex items-center gap-1 text-sm font-medium text-accent-text hover:underline"
                 >
                   View ideas <ChevronRight size={12} />
                 </Link>
@@ -166,7 +166,7 @@ export function IdeationPipelinePanel({
                             type="button"
                             variant="primary"
                             size="sm"
-                            className="mt-2 h-9 gap-1.5 text-xs"
+                            className="mt-2 h-9 gap-1.5 text-sm"
                             onClick={onOpenIdeasWizard}
                           >
                             <Sparkles size={14} />
@@ -176,19 +176,19 @@ export function IdeationPipelinePanel({
                       </PathDetail>
                     ) : (
                       <PathDetail>
-                        <p className="text-xs leading-relaxed text-text-secondary">
+                        <p className="text-sm leading-relaxed text-text-secondary">
                           Ask questions about the research, explore angles, and discover ideas through conversation.
                         </p>
                         <div className="mt-3 flex flex-wrap items-center gap-3">
-                          <Link href={`/admin/search/${searchId}/chat`}>
-                            <Button type="button" variant="primary" size="sm" className="h-9 gap-1.5 text-xs">
+                          <Link href={`/admin/search/${searchId}/processing`}>
+                            <Button type="button" variant="primary" size="sm" className="h-9 gap-1.5 text-sm">
                               <MessageSquareText size={14} />
-                              Open chat
+                              Continue research
                             </Button>
                           </Link>
                           <Link
                             href="/admin/search/new"
-                            className="inline-flex items-center gap-1 text-xs font-medium text-text-muted hover:text-accent-text"
+                            className="inline-flex items-center gap-1 text-sm font-medium text-text-muted hover:text-accent-text"
                           >
                             <Search size={12} />
                             Add more searches
@@ -236,7 +236,7 @@ function SubStepRow({
       >
         {label}
       </span>
-      <p className="text-xs leading-relaxed text-text-secondary">{children}</p>
+      <p className="text-sm leading-relaxed text-text-secondary">{children}</p>
     </div>
   );
 }
@@ -268,10 +268,10 @@ function PathCard({
       <div className="flex gap-3">
         <span className={cn('mt-0.5 shrink-0', selected ? 'text-accent-text' : 'text-text-muted')}>{icon}</span>
         <div className="min-w-0 flex-1 space-y-1.5">
-          <span className={cn('block text-sm font-semibold leading-tight', selected ? 'text-accent-text' : 'text-text-primary')}>
+          <span className={cn('block text-base font-semibold leading-tight', selected ? 'text-accent-text' : 'text-text-primary')}>
             {title}
           </span>
-          <p className="text-xs leading-relaxed text-text-muted">{description}</p>
+          <p className="text-sm leading-relaxed text-text-muted">{description}</p>
         </div>
       </div>
     </button>

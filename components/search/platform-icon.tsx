@@ -4,16 +4,15 @@ import { cn } from '@/lib/utils';
 import { TikTokMark } from '@/components/integrations/tiktok-mark';
 import { YouTubeMark } from '@/components/integrations/youtube-mark';
 
-function YouTubeSearchMark({
+/** White play on red — use with `PLATFORM_CONFIG.youtube.bg` (not `variant="full"` inside a red badge). */
+function YouTubePlatformIcon({
   size,
   className,
 }: {
   size?: number;
   className?: string;
 }) {
-  return (
-    <YouTubeMark variant="onBrand" size={size} className={cn('text-white', className)} />
-  );
+  return <YouTubeMark variant="onBrand" size={size} className={cn('shrink-0', className)} />;
 }
 
 // ── Brand SVG icons ──────────────────────────────────────────────────────────
@@ -42,9 +41,9 @@ export const PLATFORM_CONFIG: Record<
   reddit: { label: 'Reddit', icon: RedditLogo, color: 'text-orange-400', bg: 'bg-orange-400/10' },
   youtube: {
     label: 'YouTube',
-    icon: YouTubeSearchMark,
+    icon: YouTubePlatformIcon,
     color: 'text-white',
-    bg: 'bg-[#FF0300] ring-1 ring-black/20',
+    bg: 'bg-[#FF0000]',
   },
   tiktok: { label: 'TikTok', icon: TikTokMark, color: 'text-text-primary', bg: 'bg-black/65 ring-1 ring-white/12' },
   quora: { label: 'Quora', icon: QuoraLogo, color: 'text-red-500', bg: 'bg-red-500/10' },
@@ -74,11 +73,22 @@ export function PlatformBadgeSearch({ platform, size = 'sm' }: { platform: Searc
   const config = PLATFORM_CONFIG[platform];
   if (!config) return null;
   const Icon = config.icon;
-  const sizeStyles = size === 'sm' ? 'h-5 w-5' : 'h-6 w-6';
+  const sizeStyles = size === 'sm' ? 'h-5 w-5' : 'h-7 w-7';
+  const iconSize = size === 'sm' ? 14 : 16;
+
+  /** Full YouTube mark (red tile + play in one SVG) — avoids a chunky red box + separate play icon. */
+  if (platform === 'youtube') {
+    const yt = size === 'sm' ? 20 : 24;
+    return (
+      <span className="inline-flex shrink-0 items-center justify-center" aria-hidden>
+        <YouTubeMark variant="full" size={yt} />
+      </span>
+    );
+  }
 
   return (
     <span className={`inline-flex items-center justify-center rounded-md ${config.bg} ${sizeStyles}`}>
-      <Icon size={size === 'sm' ? 12 : 14} className={config.color} />
+      <Icon size={iconSize} className={config.color} />
     </span>
   );
 }

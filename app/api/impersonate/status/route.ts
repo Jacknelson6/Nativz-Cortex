@@ -19,19 +19,35 @@ export async function GET() {
     return NextResponse.json({ impersonating: false });
   }
 
-  // Get client name for display
   const adminClient = createAdminClient();
-  const { data: client } = await adminClient
+  const slugTrim = slug?.trim();
+
+  if (slugTrim) {
+    const { data: client } = await adminClient
+      .from('clients')
+      .select('name')
+      .eq('organization_id', orgId)
+      .eq('is_active', true)
+      .eq('slug', slugTrim)
+      .maybeSingle();
+
+    return NextResponse.json({
+      impersonating: true,
+      client_name: client?.name ?? 'Unknown client',
+      client_slug: slug,
+    });
+  }
+
+  const { data: clients } = await adminClient
     .from('clients')
     .select('name')
     .eq('organization_id', orgId)
     .eq('is_active', true)
-    .limit(1)
-    .single();
+    .limit(1);
 
   return NextResponse.json({
     impersonating: true,
-    client_name: client?.name ?? 'Unknown client',
+    client_name: clients?.[0]?.name ?? 'Unknown client',
     client_slug: slug ?? '',
   });
 }

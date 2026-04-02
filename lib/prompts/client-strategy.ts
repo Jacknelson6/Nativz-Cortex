@@ -185,13 +185,13 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 
   "content_breakdown": {
     "intentions": [
-      { "name": "To learn something new", "percentage": 0, "engagement_rate": 0.0 }
+      { "name": "To learn something new", "percentage": 0, "engagement_rate": 0.0, "your_engagement_rate": 0.0 }
     ],
     "categories": [
-      { "name": "How-to", "percentage": 0, "engagement_rate": 0.0 }
+      { "name": "How-to", "percentage": 0, "engagement_rate": 0.0, "your_engagement_rate": 0.0 }
     ],
     "formats": [
-      { "name": "Short-form video", "percentage": 0, "engagement_rate": 0.0 }
+      { "name": "Short-form video", "percentage": 0, "engagement_rate": 0.0, "your_engagement_rate": 0.0 }
     ]
   },
 
@@ -266,7 +266,8 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 - Include 3-5 big_movers — the brands, creators, companies, or products generating the most conversation in this space. For each, explain WHY they're making noise, list 3-5 specific tactics, and give a takeaway tailored to ${ctx.name}
 - Include 5-8 emotions that sum to approximately 100%
 - Include 3-5 items each for intentions (viewer motivations — why people watch, e.g. "To learn something new", "For entertainment", "To stay informed", "To feel inspired"), categories, and formats
-- Generate 5-8 trending_topics, each with 2-4 video_ideas
+- For content_breakdown.categories: each "name" must be short and scannable (2–6 words). Do not pack definitions into the name — use a simple label only
+- Generate **15** trending_topics when the search data supports that many distinct angles; each with 2-4 video_ideas. If the data supports fewer distinct angles, include all substantiated topics — do not invent filler to reach 15.
 - Each trending_topic MUST have 2-5 items in its "sources" array
 - **Do NOT invent URLs.** Every URL in sources must be copied exactly from the search data above.
 - Include 3-5 content_pillars specific to ${ctx.name}
@@ -277,7 +278,7 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 - All video ideas should match ${ctx.name}'s brand voice: ${ctx.brandVoice || 'professional and approachable'}
 - Emotion colors: #6366F1 indigo, #10B981 emerald, #F59E0B amber, #EF4444 red, #8B5CF6 purple, #3B82F6 blue, #EC4899 pink, #14B8A6 teal
 - Resonance values: "low", "medium", "high", or "viral"
-- Sentiment scores range from -1.0 (very negative) to 1.0 (very positive). IMPORTANT: Be realistic — NOT every topic is positive. Use the FULL range: negative topics (complaints, frustrations, risks) should be -0.3 to -1.0, neutral/mixed topics should be -0.2 to 0.2, and only genuinely positive topics should be above 0.3. A typical set of 6-8 topics should have a mix of positive, neutral, and negative sentiments.
-- engagement_rate should be a decimal between 0 and 1 (e.g., 0.045 for 4.5%)${hasPreferences(config.brandPreferences) ? `
+- Sentiment scores range from -1.0 (very negative) to 1.0 (very positive). IMPORTANT: Be realistic — NOT every topic is positive. Use the FULL range: negative topics (complaints, frustrations, risks) should be -0.3 to -1.0, neutral/mixed topics should be -0.2 to 0.2, and only genuinely positive topics should be above 0.3. Across ~15 topics, include a mix of positive, neutral, and negative sentiments.
+- engagement_rate: typical engagement for that bucket as **percentage points** (0.7 means 0.7%, not a 0–1 fraction). Include **your_engagement_rate** on each content_breakdown row: same units, estimated for ${ctx.name} based on topic fit and strategy${hasPreferences(config.brandPreferences) ? `
 - BRAND PREFERENCES ARE HARD CONSTRAINTS: The <brand_context> block above MUST be followed. Topics listed under "avoid" must NOT appear in any trending topic, content pillar, or video idea. Topics listed under "lean into" should be prioritized. Tone keywords must influence the style of all video titles, hooks, and content pillar descriptions. Seasonal priorities should be weighted if relevant to the current date. Content pillars should align with the brand's stated priorities.` : ''}`;
 }

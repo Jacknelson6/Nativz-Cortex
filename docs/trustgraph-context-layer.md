@@ -24,9 +24,9 @@ The [TrustGraph](https://github.com/trustgraph-ai/trustgraph) **Workbench** (vec
 
 | Variable | Example |
 |----------|---------|
-| `NEXT_PUBLIC_TRUSTGRAPH_WORKBENCH_URL` | `http://localhost:8888` (typical local Workbench port; API gateway is often `8080`) |
+| `NEXT_PUBLIC_TRUSTGRAPH_WORKBENCH_URL` | `http://localhost:8081` (example — use the host:port where Workbench actually listens; upstream docs often use `8888`) |
 
-After setting, use the **Cortex** / **TrustGraph** toggle on that page. If the Workbench sends `X-Frame-Options: deny`, the iframe may be blank — use **Open Workbench** (same URL in a new tab). For production, point the URL at your deployed TrustGraph Workbench origin.
+After setting, use the **Cortex** / **TrustGraph** toggle on that page. If the Workbench sends `X-Frame-Options: deny`, the iframe may be blank — use **Open Workbench** (same URL in a new tab). For production, point the URL at your deployed TrustGraph Workbench origin. Local port is not fixed (e.g. `8081` on a Mac mini vs `8888` in upstream quickstarts).
 
 ## Environment variables
 

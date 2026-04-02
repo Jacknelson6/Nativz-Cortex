@@ -252,18 +252,19 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 - Include 3-5 big_movers — the brands, creators, companies, or products generating the most conversation in this space. For each, explain WHY they're making noise, list 3-5 specific tactics they use, and give a 1-sentence takeaway on how to replicate their success. Base this on the search data — who appears most frequently? Who gets the most engagement?
 - Include 5-8 emotions that sum to approximately 100%
 - Include 3-5 items each for intentions (viewer motivations — why people watch, e.g. "To learn something new", "For entertainment", "To stay informed", "To feel inspired"), categories, and formats
-- Generate 5-8 trending_topics, each with 2-4 video_ideas
+- For content_breakdown.categories: each "name" must be short and scannable (2–6 words), e.g. "How-to & checklists", "Explainers", "News & commentary". Do not pack definitions into the name — use a simple label only
+- Generate **15** trending_topics when the search data supports that many distinct angles; each with 2-4 video_ideas. If the data supports fewer distinct angles, include all substantiated topics — do not invent filler to reach 15.
 - Each trending_topic MUST have 2-5 items in its "sources" array
 - **Do NOT invent URLs.** Every URL in sources must be copied exactly from the search data above. If you cannot find a relevant URL, do not include a source entry for it.
 - Reference specific articles, posts, or discussions from the search data in your posts_overview and comments_overview
 - Emotion colors should be distinct hex values (use: #6366F1 indigo, #10B981 emerald, #F59E0B amber, #EF4444 red, #8B5CF6 purple, #3B82F6 blue, #EC4899 pink, #14B8A6 teal)
 - Resonance values: "low", "medium", "high", or "viral"
-- Sentiment scores range from -1.0 (very negative) to 1.0 (very positive). IMPORTANT: Be realistic — NOT every topic is positive. Use the FULL range: negative topics (complaints, frustrations, risks) should be -0.3 to -1.0, neutral/mixed topics should be -0.2 to 0.2, and only genuinely positive topics should be above 0.3. A typical set of 6-8 topics should have a mix of positive, neutral, and negative sentiments.
+- Sentiment scores range from -1.0 (very negative) to 1.0 (very positive). IMPORTANT: Be realistic — NOT every topic is positive. Use the FULL range: negative topics (complaints, frustrations, risks) should be -0.3 to -1.0, neutral/mixed topics should be -0.2 to 0.2, and only genuinely positive topics should be above 0.3. Across ~15 topics, include a mix of positive, neutral, and negative sentiments.
 - overall_sentiment: a single number from -1.0 to 1.0 representing the overall sentiment across all search data
 - conversation_intensity: "low", "moderate", "high", or "very_high" based on volume and engagement in the search data
 - All video ideas are for SHORT-FORM VIDEO ONLY (TikTok, Instagram Reels, YouTube Shorts, Facebook Reels). No long-form video, no blog posts, no articles, no written content.
 - Each video idea MUST include "script_outline" (3-5 bullet talking points) and "cta" (call-to-action)
 - All video ideas should be specific and actionable — ready to produce on set
-- engagement_rate should be a decimal between 0 and 1 (e.g., 0.045 for 4.5%)${config.brandPreferences ? `
+- engagement_rate: typical engagement for that bucket as **percentage points** (0.7 means 0.7%, not 70% and not a 0–1 fraction)${config.brandPreferences ? `
 - BRAND PREFERENCES ARE HARD CONSTRAINTS: If <brand_context> is present above, you MUST follow it. Topics listed under "avoid" must NOT appear in any trending topic or video idea. Topics listed under "lean into" should be prioritized. Tone keywords must influence the style of all video titles and hooks. Seasonal priorities should be weighted if relevant to the current date.` : ''}`;
 }

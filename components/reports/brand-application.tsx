@@ -24,16 +24,16 @@ export function BrandApplication({ content, clientName }: BrandApplicationProps)
   const body = trimmed.length > 0 ? trimmed : fallback;
 
   return (
-    <div className="flex items-start gap-3 h-full min-h-[4rem] lg:border-l lg:border-nativz-border/50 lg:pl-8">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent2-surface mt-0.5">
-        <Target size={16} className="text-accent2-text" />
+    <div className="flex items-start gap-3 sm:gap-4 h-full min-h-[4rem] lg:border-l lg:border-nativz-border/50 lg:pl-8">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent2-surface mt-0.5">
+        <Target size={18} className="text-accent2-text" />
       </div>
       <div className="min-w-0 flex-1">
-        <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
+        <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-2.5">
           Brand application
         </h3>
-        <div className="text-sm leading-relaxed text-text-primary [&_p]:text-text-primary [&_p]:m-0 [&_strong]:font-semibold">
-          <Markdown content={body} />
+        <div className="leading-relaxed text-text-primary [&_p]:text-text-primary [&_p]:m-0 [&_strong]:font-semibold">
+          <Markdown content={body} bodySize="md" />
         </div>
       </div>
     </div>

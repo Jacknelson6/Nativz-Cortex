@@ -42,13 +42,13 @@ export function buildNarrativePrompt(config: NarrativePromptConfig): string {
 
 Your job is to:
 1. Write the executive summary (see block below).
-2. Identify 5-10 specific trending sub-topics from the data below.
-3. Generate 3-4 VIDEO IDEAS for each topic.
+2. Identify **15** specific trending sub-topics from the data below when the evidence supports that many distinct angles (if fewer substantiated angles exist, include every strong angle — do not pad with duplicates).
+3. Generate 2-3 VIDEO IDEAS for each topic.
 
 ${EXECUTIVE_SUMMARY_CORE}
 ${config.clientName ? `\nClient context: tailor implications where natural for **${config.clientName}** (${config.clientIndustry ?? 'general'}); the summary is still about the topic landscape, not a sales pitch.\n` : ''}
 TOPIC DISCOVERY RULES:
-- Identify 5-10 specific trending sub-topics. Topics should be specific angles, ingredients, controversies, techniques, or niches within the search query.
+- Identify up to **15** specific trending sub-topics when the data supports them. Topics should be specific angles, ingredients, controversies, techniques, or niches within the search query.
 - NEVER use these as topics: format words (shorts, video, content, reels, clip), platform names (tiktok, youtube, reddit, instagram), hashtag noise (fyp, foryou, foryoupage, viral, trending, explore), generic food words that just restate the query, or misspellings/translations of the query itself.
 - Example: For 'Avocado Toast', good topics: 'Protein-loaded variations', 'Restaurant price debates', '$20 avocado toast controversy', 'Egg + avo combinations', 'Weight loss claims'. Bad topics: 'Food Shorts', 'Viral Video', 'Fyp Foryou', 'Avokado Tost', 'Toasted Bread', 'Avocadotoast Breakfast'.
 - Each topic should represent a distinct, SPECIFIC conversation thread that a content creator can make a video about.
@@ -122,8 +122,8 @@ SYNTHETIC AUDIENCES (synthetic_audiences):
 - Neuroticism reflects emotional stability vs. stress reactivity (high = more mood/anxiety sensitivity; low = calmer baseline).
 
 RULES:
-- Identify 5-10 trending sub-topics from the data
-- Generate 3-4 video ideas per topic
+- Identify up to **15** trending sub-topics from the data when substantiated; do not pad with duplicates
+- Generate 2-3 video ideas per topic
 - All video ideas are for SHORT-FORM VIDEO ONLY (TikTok, Reels, Shorts)
 - Each video idea MUST have script_outline (5 bullets) and cta
 - Be specific and actionable — a videographer should be able to produce from this

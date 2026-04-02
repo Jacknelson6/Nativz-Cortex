@@ -24,10 +24,6 @@ import {
   ThumbsUp,
   Megaphone,
   Camera,
-  Mic2,
-  List,
-  RefreshCw,
-  Sparkles,
   Compass,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
@@ -92,7 +88,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/search/new', label: 'Research', icon: Telescope },
       { href: '/admin/strategy-lab', label: 'Strategy lab', icon: Compass },
       { href: '/admin/ad-creatives', label: 'Ad creatives', icon: ImagePlus },
-      { href: '/admin/presentations', label: 'Notes', icon: StickyNote },
     ],
   },
   {
@@ -100,16 +95,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/admin/clients', label: 'Clients', icon: Building2 },
       { href: '/admin/team', label: 'Team', icon: UsersRound },
-      {
-        href: '/admin/meetings',
-        label: 'Meetings',
-        icon: Mic2,
-        children: [
-          { href: '/admin/meetings', label: 'All', icon: List },
-          { href: '/admin/meetings?series=recurring', label: 'Recurring', icon: RefreshCw },
-          { href: '/admin/meetings?series=adhoc', label: 'Ad hoc', icon: Sparkles },
-        ],
-      },
+      { href: '/admin/presentations', label: 'Notes', icon: StickyNote },
       {
         href: '/admin/analytics',
         label: 'Analytics',
@@ -132,6 +118,12 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
   // Pipeline root "All stages" shares /admin/pipeline with ?stage=… filtered views
   if (href === '/admin/pipeline' && pathname === '/admin/pipeline') {
     return !searchParams?.get('stage');
+  }
+
+  // Knowledge: graph and meetings are one area (single sidebar item)
+  if (href === '/admin/knowledge') {
+    if (pathname === '/admin/meetings' || pathname.startsWith('/admin/meetings/')) return true;
+    return pathname === '/admin/knowledge' || pathname.startsWith('/admin/knowledge/');
   }
 
   // Handle hrefs with query params (e.g. /admin/pipeline?stage=editing)

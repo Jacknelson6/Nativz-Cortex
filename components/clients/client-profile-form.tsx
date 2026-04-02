@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { ImageUpload } from '@/components/ui/image-upload';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
-import { AgencyBadge } from '@/components/clients/agency-badge';
+import { AgencyAssignmentLabel } from '@/components/clients/agency-assignment-label';
 import { ClientContactsCard } from '@/components/clients/client-contacts-card';
 import { ClientStrategyCard } from '@/components/clients/client-strategy-card';
 import { ConnectedAccounts } from '@/components/clients/connected-accounts';
@@ -210,7 +210,7 @@ export function ClientProfileForm({
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="truncate ui-page-title">{clientName}</h1>
-                <AgencyBadge agency={agency} />
+                <AgencyAssignmentLabel agency={agency} showWhenUnassigned className="shrink-0" />
                 {client.organization_id && (
                   <ImpersonateButton organizationId={client.organization_id} clientSlug={slug} />
                 )}

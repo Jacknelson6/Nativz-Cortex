@@ -182,7 +182,7 @@ export default async function PortalLayout({
           brands={brandData.brands}
           activeBrandId={brandData.activeBrandId}
         />
-        <SidebarInset variant="portal">
+        <SidebarInset>
           <PortalHeader />
           {children}
         </SidebarInset>

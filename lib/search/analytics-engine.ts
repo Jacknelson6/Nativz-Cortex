@@ -260,7 +260,7 @@ function extractTopics(
       return true;
     })
     .sort((a, b) => (b[1].count * b[1].engagement) - (a[1].count * a[1].engagement))
-    .slice(0, 8)
+    .slice(0, 15)
     .map(([name, data]) => ({
       name: name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
       frequency: data.count,

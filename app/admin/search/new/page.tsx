@@ -12,16 +12,17 @@ type ResearchHubDbClientRow = {
   slug: string;
   logo_url: string | null;
   is_active: boolean;
+  agency: string | null;
 };
 
 export default async function AdminNewSearchPage() {
   const supabase = createAdminClient();
 
-  // Fetch clients with logos and agencies
+  // Vault supplies display name when present; agency comes from vault first, else Postgres (admin client profile)
   const [vaultClients, rosterResult] = await Promise.all([
     getVaultClients(),
     selectClientsWithRosterVisibility<ResearchHubDbClientRow>(supabase, {
-      select: 'id, slug, logo_url, is_active',
+      select: 'id, slug, logo_url, is_active, agency',
       onlyActive: true,
     }),
   ]);
@@ -33,11 +34,13 @@ export default async function AdminNewSearchPage() {
 
   const clients = (dbClients || []).map((db) => {
     const vault = vaultClients.find((v) => v.slug === db.slug);
+    const agencyFromVault = vault?.agency?.trim();
+    const agencyFromDb = db.agency?.trim();
     return {
       id: db.id,
       name: vault?.name || db.slug,
       logo_url: db.logo_url,
-      agency: vault?.agency,
+      agency: agencyFromVault || agencyFromDb || null,
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
 

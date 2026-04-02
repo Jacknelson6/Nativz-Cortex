@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Film, ClipboardList, ArrowRight, Compass, BotMessageSquare, Library, BarChart3 } from 'lucide-react';
+import { Film, ClipboardList, ArrowRight, Compass, Library, BarChart3 } from 'lucide-react';
 import type { KnowledgeEntry, KnowledgeGraphData } from '@/lib/knowledge/types';
 import { StrategyLabSection } from '@/components/strategy-lab/strategy-lab-section';
 import type { Pillar } from '@/components/ideas-hub/pillar-card';
@@ -16,11 +16,9 @@ import { StrategyLabBrandKnowledgeTab } from '@/components/strategy-lab/strategy
 import { StrategyLabNerdChat } from '@/components/strategy-lab/strategy-lab-nerd-chat';
 import { AnalyticsDashboard } from '@/components/reporting/analytics-dashboard';
 import type { PillarReferencePreview } from '@/lib/strategy-lab/pillar-reference-previews';
+import { strategyLabTopicSearchStorageKey } from '@/lib/strategy-lab/topic-search-selection-storage';
 
 type MainTab = 'content-strategy' | 'brand-knowledge' | 'analytics';
-type ContentStrategyPanel = 'chat' | 'knowledge';
-
-const STORAGE_PREFIX = 'strategy-lab:selected-topic-searches:';
 
 type MoodboardRow = {
   id: string;
@@ -64,13 +62,15 @@ export function StrategyLabWorkspace({
   vaultEntries: KnowledgeEntry[];
   vaultGraphData: KnowledgeGraphData;
 }) {
-  const storageKey = `${STORAGE_PREFIX}${clientId}`;
+  const storageKey = strategyLabTopicSearchStorageKey(clientId);
 
   const [mainTab, setMainTab] = useState<MainTab>('content-strategy');
-  const [csPanel, setCsPanel] = useState<ContentStrategyPanel>('chat');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [selectedTopicSearchId, setSelectedTopicSearchId] = useState<string | null>(null);
 
-  const pinnedTopicSearchIds = useMemo(() => [...selectedIds], [selectedIds]);
+  const pinnedTopicSearchIds = useMemo(
+    () => (selectedTopicSearchId ? [selectedTopicSearchId] : []),
+    [selectedTopicSearchId],
+  );
 
   const hasCompletedTopicSearch = useMemo(
     () => topicSearches.some((s) => s.status === 'completed'),
@@ -88,32 +88,36 @@ export function StrategyLabWorkspace({
       const parsed = JSON.parse(raw) as unknown;
       if (!Array.isArray(parsed)) return;
       const ids = parsed.filter((x): x is string => typeof x === 'string');
-      setSelectedIds(new Set(ids));
+      const mostRecent = ids.at(-1);
+      if (mostRecent) setSelectedTopicSearchId(mostRecent);
     } catch {
       /* ignore corrupt storage */
     }
   }, [storageKey]);
 
-  const persistSelection = useCallback(
-    (next: Set<string>) => {
-      setSelectedIds(next);
+  useEffect(() => {
+    if (!selectedTopicSearchId) return;
+    const exists = topicSearches.some((search) => search.id === selectedTopicSearchId);
+    if (!exists) {
+      setSelectedTopicSearchId(null);
       try {
-        window.localStorage.setItem(storageKey, JSON.stringify([...next]));
+        window.localStorage.setItem(storageKey, JSON.stringify([]));
+      } catch {
+        /* ignore quota */
+      }
+    }
+  }, [selectedTopicSearchId, topicSearches, storageKey]);
+
+  const attachTopicSearch = useCallback(
+    (id: string) => {
+      setSelectedTopicSearchId(id);
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify([id]));
       } catch {
         /* ignore quota */
       }
     },
     [storageKey],
-  );
-
-  const toggleId = useCallback(
-    (id: string) => {
-      const next = new Set(selectedIds);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      persistSelection(next);
-    },
-    [selectedIds, persistSelection],
   );
 
   const brandDnaHref = `/admin/clients/${clientSlug}/brand-dna`;
@@ -126,11 +130,6 @@ export function StrategyLabWorkspace({
     { id: 'content-strategy', label: 'Content strategy', icon: Compass },
     { id: 'brand-knowledge', label: 'Brand knowledge', icon: Library },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-  ];
-
-  const CS_PANELS: { id: ContentStrategyPanel; label: string; icon: typeof BotMessageSquare }[] = [
-    { id: 'chat', label: 'Chat with the Nerd', icon: BotMessageSquare },
-    { id: 'knowledge', label: 'Brand knowledge', icon: Library },
   ];
 
   return (
@@ -199,77 +198,20 @@ export function StrategyLabWorkspace({
 
           <TopicSearchSelectionCard
             topicSearches={topicSearches}
-            selectedIds={selectedIds}
-            onToggle={toggleId}
+            selectedId={selectedTopicSearchId}
+            onAttach={attachTopicSearch}
           />
 
           <p className="text-sm text-text-muted">
-            Pin topic searches above so the first message in chat includes them as context for Cortex.
+            Attach one topic search above so the first message in chat includes it as context for Cortex.
           </p>
 
-          {/* Content strategy — chat / knowledge peek */}
-          <div className="flex flex-col gap-3">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-              Strategy workspace
-            </span>
-            <div className="flex flex-wrap gap-1 rounded-lg border border-nativz-border/80 bg-background/30 p-1">
-              {CS_PANELS.map((p) => {
-                const Icon = p.icon;
-                const active = csPanel === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setCsPanel(p.id)}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition-all sm:text-sm ${
-                      active
-                        ? 'bg-accent-surface text-accent-text'
-                        : 'text-text-muted hover:bg-surface-hover hover:text-text-secondary'
-                    }`}
-                  >
-                    <Icon size={14} className="shrink-0" />
-                    <span className="hidden sm:inline">{p.label}</span>
-                    <span className="sm:hidden">{p.label.split(' ')[0]}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {csPanel === 'chat' ? (
-              <StrategyLabNerdChat
-                clientId={clientId}
-                clientName={clientName}
-                clientSlug={clientSlug}
-                pinnedTopicSearchIds={pinnedTopicSearchIds}
-              />
-            ) : null}
-
-            {csPanel === 'knowledge' ? (
-              <div className="space-y-4 rounded-xl border border-nativz-border/60 bg-surface/50 p-5">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h3 className="text-base font-semibold text-text-primary">Brand knowledge in Cortex</h3>
-                    <p className="mt-1 text-sm text-text-secondary">
-                      Vault entries, brand DNA, meeting notes, and uploads stay synced for this client. Open the full
-                      Brand knowledge tab to manage everything.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setMainTab('brand-knowledge')}
-                    className="shrink-0 rounded-lg bg-accent-surface px-4 py-2 text-sm font-semibold text-accent-text transition hover:bg-accent-surface/80"
-                  >
-                    Open Brand knowledge
-                  </button>
-                </div>
-                <ul className="list-inside list-disc space-y-1 text-sm text-text-muted">
-                  <li>Knowledge vault (documents, graph, feed)</li>
-                  <li>Brand DNA bento, color palette, and guideline</li>
-                  <li>Meeting notes and prospect tools</li>
-                </ul>
-              </div>
-            ) : null}
-          </div>
+          <StrategyLabNerdChat
+            clientId={clientId}
+            clientName={clientName}
+            clientSlug={clientSlug}
+            pinnedTopicSearchIds={pinnedTopicSearchIds}
+          />
 
           <StrategyLabContentStackCard
             clientId={clientId}

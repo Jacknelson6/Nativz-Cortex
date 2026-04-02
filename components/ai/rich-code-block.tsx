@@ -39,6 +39,40 @@ function setSvgFromString(container: HTMLDivElement, svgMarkup: string) {
   container.appendChild(doc.documentElement);
 }
 
+/**
+ * Mermaid 11+ returns a valid SVG for parse failures (bomb icon + "Syntax error in text"),
+ * so render() does not throw. Treat that as failure and show a text fallback instead.
+ */
+function isMermaidErrorSvg(svg: string): boolean {
+  const s = svg.toLowerCase();
+  return (
+    s.includes('syntax error in text') ||
+    s.includes('class="error-text"') ||
+    s.includes("class='error-text'") ||
+    (s.includes('error-icon') && s.includes('error-text'))
+  );
+}
+
+function renderMermaidFallback(container: HTMLDivElement, code: string, detail?: string) {
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
+  const wrap = document.createElement('div');
+  wrap.className = 'space-y-2 text-left';
+  const msg = document.createElement('p');
+  msg.className = 'text-xs text-text-muted';
+  msg.textContent =
+    detail ??
+    'This diagram could not be rendered. The Mermaid syntax may be invalid or unsupported.';
+  const pre = document.createElement('pre');
+  pre.className =
+    'max-h-40 overflow-auto rounded-md bg-black/40 p-2 text-[11px] leading-relaxed text-text-secondary whitespace-pre-wrap break-words';
+  pre.textContent = code.trim();
+  wrap.appendChild(msg);
+  wrap.appendChild(pre);
+  container.appendChild(wrap);
+}
+
 export function MermaidDiagramBlock({
   code,
   variant = 'default',
@@ -57,16 +91,18 @@ export function MermaidDiagramBlock({
         const mermaid = await initMermaid(variant);
         const { svg } = await mermaid.render(id, code.trim());
         if (cancelled || !containerRef.current) return;
+        if (isMermaidErrorSvg(svg)) {
+          renderMermaidFallback(containerRef.current, code);
+          return;
+        }
         setSvgFromString(containerRef.current, svg);
       } catch (e) {
         if (cancelled || !containerRef.current) return;
-        while (containerRef.current.firstChild) {
-          containerRef.current.removeChild(containerRef.current.firstChild);
-        }
-        const p = document.createElement('p');
-        p.className = 'text-xs text-red-400/90';
-        p.textContent = `Could not render diagram: ${e instanceof Error ? e.message : String(e)}`;
-        containerRef.current.appendChild(p);
+        renderMermaidFallback(
+          containerRef.current,
+          code,
+          `Could not render diagram: ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
     })();
 

@@ -121,28 +121,22 @@ export function SidebarProvider({ defaultOpen = true, children }: SidebarProvide
 // Sidebar
 // ---------------------------------------------------------------------------
 
-type ShellVariant = 'default' | 'portal';
-
 interface SidebarProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
   children: ReactNode;
-  /** `portal` — darker rail, low-opacity borders (client portal shell). */
-  variant?: ShellVariant;
 }
 
-export function Sidebar({ children, className = '', variant = 'default', ...props }: SidebarProps) {
+export function Sidebar({ children, className = '', ...props }: SidebarProps) {
   const { state, open, openMobile, setOpenMobile } = useSidebar();
 
-  const shell =
-    variant === 'portal'
-      ? 'border-r border-white/[0.06] bg-[#12141a]'
-      : 'border-r border-nativz-border bg-surface';
+  /** Same rail as admin — portal and app shell share one visual system */
+  const shell = 'border-r border-nativz-border bg-surface';
 
   return (
     <>
       {/* Desktop sidebar */}
       <aside
         data-state={state}
-        data-shell={variant}
+        data-shell="default"
         suppressHydrationWarning
         className={`sticky top-0 h-screen hidden md:flex flex-col shrink-0 transition-[width] duration-200 ease-out overflow-hidden ${shell} ${className}`}
         style={{ width: open ? 'var(--sidebar-width)' : 'var(--sidebar-width-icon)' }}
@@ -252,34 +246,18 @@ interface SidebarMenuButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   isActive?: boolean;
   tooltip?: string;
   asChild?: boolean;
-  /**
-   * `portal` — bordered row cards when expanded (matches client portal settings mockup);
-   * icon-only rail when collapsed.
-   */
-  variant?: ShellVariant;
 }
 
 export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButtonProps>(
-  ({ children, isActive, tooltip, className = '', variant = 'default', ...props }, ref) => {
+  ({ children, isActive, tooltip, className = '', ...props }, ref) => {
     const { open } = useSidebar();
     const [showTooltip, setShowTooltip] = useState(false);
 
     const layout = open ? 'gap-2.5 px-2.5' : 'justify-center px-0';
 
-    const defaultStyles = isActive
+    const shellStyles = isActive
       ? 'bg-accent-surface text-text-primary font-semibold'
       : 'text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium';
-
-    const portalExpanded = isActive
-      ? 'border border-accent-border/35 bg-accent/10 text-text-primary font-semibold shadow-[0_0_20px_-8px_rgba(59,130,246,0.35)]'
-      : 'border border-white/[0.06] bg-white/[0.02] text-text-secondary hover:border-white/[0.1] hover:bg-white/[0.04] hover:text-text-primary font-medium';
-
-    const portalCollapsed = isActive
-      ? 'text-accent-text bg-accent/12'
-      : 'text-text-muted hover:bg-white/[0.06] hover:text-text-secondary';
-
-    const shellStyles =
-      variant === 'portal' ? (open ? portalExpanded : portalCollapsed) : defaultStyles;
 
     return (
       <button
@@ -369,19 +347,17 @@ export function SidebarTrigger({ className = '' }: { className?: string }) {
 export function SidebarInset({
   children,
   className = '',
-  variant = 'default',
 }: {
   children: ReactNode;
   className?: string;
-  variant?: ShellVariant;
 }) {
-  const shell =
-    variant === 'portal'
-      ? 'bg-[#0e1016] bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(59,130,246,0.06),transparent_55%)]'
-      : 'bg-background';
-
   return (
-    <main className={cn('cortex-main flex-1 min-w-0 overflow-x-hidden overflow-y-auto', shell, className)}>
+    <main
+      className={cn(
+        'cortex-main flex-1 min-w-0 overflow-x-hidden overflow-y-auto bg-background',
+        className,
+      )}
+    >
       {children}
     </main>
   );
