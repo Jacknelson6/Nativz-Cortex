@@ -84,6 +84,40 @@ TRUSTGRAPH_API_KEY=<optional> TRUSTGRAPH_SMOKE_CLIENT_ID=<uuid> npm run trustgra
 4. **Primary (agency)**: extend scope to `both` or `agency` after client primary is stable.
 5. **Rollback**: set `CONTEXT_PLATFORM_MODE=off` or remove `TRUSTGRAPH_BASE_URL`; behavior reverts to Supabase only.
 
+## Ingesting from AC Knowledge Graph into TrustGraph
+
+Agency knowledge in Cortex comes from **`knowledge_nodes`** in Supabase. The **AC Knowledge Graph** vault (`ac-knowledge-graph/vault/`) is synced into that table first; **`scripts/ingest-knowledge-to-trustgraph.ts`** then loads those rows into TrustGraph collections (`agency`, or `cortex-client-{uuid}` per node).
+
+**1. Vault → Supabase** (refresh `knowledge_nodes` from the current markdown graph)
+
+From **`ac-knowledge-graph/`** (uses `ac-knowledge-graph/.env` with `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`; calls the `ai-import-kg` edge function):
+
+```bash
+cd ac-knowledge-graph
+node scripts/sync-to-supabase.mjs --full
+# or incremental:  node scripts/sync-to-supabase.mjs --incremental
+```
+
+**2. Supabase → TrustGraph** (bulk ingest for embeddings / graph search)
+
+From the **repo root** (loads `.env.local` via `scripts/load-env-local` — same Supabase + app env as dev). Start TrustGraph so the gateway WebSocket is reachable (default `ws://localhost:8080/api/v1/socket`).
+
+```bash
+TRUSTGRAPH_BASE_URL=http://127.0.0.1:8080 \
+TRUSTGRAPH_FLOW_ID=cortex-main \
+npm run trustgraph:ingest-kg
+```
+
+Dry run: `npm run trustgraph:ingest-kg -- --dry-run`. Options: `--kind <kind>`, `--batch-size`, `--delay`, `--flow <id>`.
+
+**3. Fyxer meeting notes → TrustGraph** (optional separate corpus)
+
+```bash
+npm run trustgraph:ingest-fyxer
+```
+
+See also: `npm run fyxer:import` for importing meetings into Supabase first.
+
 ## Related
 
 - TrustGraph: [trustgraph-ai/trustgraph](https://github.com/trustgraph-ai/trustgraph)
