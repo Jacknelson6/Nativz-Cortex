@@ -22,3 +22,7 @@ These files are essential. Read them.
 - `$AGENT_HOME/HEARTBEAT.md` -- execution and extraction checklist. Run every heartbeat.
 - `$AGENT_HOME/SOUL.md` -- who you are and how you should act.
 - `$AGENT_HOME/TOOLS.md` -- tools you have access to
+
+## Marketing skills (repo-wide)
+
+[Corey Haines marketingskills](https://github.com/coreyhaines31/marketingskills) is under `.agents/skills/<skill-name>/SKILL.md` (Claude Code: `.claude/skills/<skill-name>`). Read **`.agents/MARKETING-SKILLS.md`** and the matching skill for any CRO, copy, SEO, paid, email, or growth deliverable; use **`product-marketing-context`** when positioning matters.

@@ -18,3 +18,7 @@ Your home directory is $AGENT_HOME. The project root contains the Nativz Cortex 
 
 ## Safety
 - Never expose API keys. Never push to main. Never run destructive DB operations without approval.
+
+## Marketing skills (repo-wide)
+
+[Corey Haines marketingskills](https://github.com/coreyhaines31/marketingskills) is under `.agents/skills/<skill-name>/SKILL.md` (Claude Code: `.claude/skills/<skill-name>`). Read **`.agents/MARKETING-SKILLS.md`** and the matching skill for any CRO, copy, SEO, paid, email, or growth deliverable; use **`product-marketing-context`** when positioning matters.

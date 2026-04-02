@@ -41,3 +41,7 @@ The project root contains the Nativz Cortex codebase (Next.js + Supabase). You b
 - `$AGENT_HOME/HEARTBEAT.md` -- execution checklist for every heartbeat.
 - `$AGENT_HOME/SOUL.md` -- your persona and coding philosophy.
 - `$AGENT_HOME/TOOLS.md` -- available tools and notes.
+
+## Marketing skills (repo-wide)
+
+[Corey Haines marketingskills](https://github.com/coreyhaines31/marketingskills) is under `.agents/skills/<skill-name>/SKILL.md` (Claude Code: `.claude/skills/<skill-name>`). Read **`.agents/MARKETING-SKILLS.md`** and the matching skill for any CRO, copy, SEO, paid, email, or growth deliverable; use **`product-marketing-context`** when positioning matters.

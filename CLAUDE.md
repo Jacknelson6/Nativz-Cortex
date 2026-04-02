@@ -89,6 +89,10 @@ This project uses **Ars Contexta** (`~/.claude/plugins/arscontexta/`). Key comma
 - **Cursor rule:** `.cursor/rules/mcp-and-tools.mdc` (always on) — **MCP-first** when the task matches Vercel, Supabase, Context7 docs, browser automation, Stripe, Figma, or Serena symbols; read each tool’s schema in `~/.cursor/projects/.../mcps/<server>/tools/*.json` before `call_mcp_tool`; pair with the matching **skill** in `.claude/skills/` / `.agents/skills/`.
 - **Inventory:** Full list of **MCP tool names** and the **built-in Cursor tool categories** lives in that rule file (update the list if you add/remove MCP servers).
 
+## Marketing skills (all agents)
+
+**[Corey Haines marketingskills](https://github.com/coreyhaines31/marketingskills)** is installed under `.agents/skills/<name>/` with Claude Code symlinks in `.claude/skills/<name>/`. For any marketing/CRO/copy/SEO/growth task, read **`.agents/MARKETING-SKILLS.md`** and the relevant **`SKILL.md`** before answering. Use **`product-marketing-context`** first when product positioning matters. Lockfile: **`skills-lock.json`**.
+
 ## Working Preferences
 
 - **Plans are always approved** — proceed with implementation without asking for permission

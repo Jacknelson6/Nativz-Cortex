@@ -7,7 +7,7 @@ alwaysApply: true
 
 ## Workflow (non-negotiable for scoped asks)
 
-When the user asks for something that maps to a **deployment platform, database, browser automation, library docs, payments, or design tools**, **use the matching MCP first** (after reading that tool’s JSON schema under `mcps/<server>/tools/`), then apply **project skills** (`.claude/skills/`, `.agents/skills/`, `CLAUDE.md` “Skills” references). Use **grep/read/run_terminal_cmd** only when no MCP fits or MCP is unavailable.
+When the user asks for something that maps to a **deployment platform, database, browser automation, library docs, payments, design tools, or marketing/CRO/growth deliverables**, **use the matching MCP first** when an MCP exists (after reading that tool’s JSON schema under `mcps/<server>/tools/`), then apply **project skills** (`.claude/skills/`, `.agents/skills/`, `CLAUDE.md` references). Use **grep/read/run_terminal_cmd** only when no MCP fits or MCP is unavailable.
 
 | User intent | MCP server (this workspace) | Skills to pair |
 |-------------|-----------------------------|----------------|
@@ -19,6 +19,7 @@ When the user asks for something that maps to a **deployment platform, database,
 | Semantic code symbols / replace symbol | `plugin-serena-serena` | cortex-review, explore |
 | Stripe (after auth) | `plugin-stripe-stripe` | stripe skills in plugin cache |
 | Figma (after auth) | `plugin-figma-figma` | `figma-use`, `figma-implement-design` |
+| CRO, copy, SEO, ads, email, analytics, growth strategy | *(no MCP — read skills)* | **`.agents/MARKETING-SKILLS.md`**, then matching `.agents/skills/<name>/SKILL.md` ([coreyhaines31/marketingskills](https://github.com/coreyhaines31/marketingskills)); often **`product-marketing-context`** first |
 
 **Before any `call_mcp_tool`:** read the tool’s descriptor JSON (`description`, `parameters`, `required`) so arguments match the schema.
 
@@ -76,4 +77,4 @@ Paths are under the Cursor project folder: `~/.cursor/projects/Users-jack-Claude
 
 ## Skills pointer
 
-For implementation patterns, read the relevant **SKILL.md** from `.claude/skills/` and `.agents/skills/` when the task matches (Supabase, cortex-route, bedrock UI, QA, etc.). MCPs supply **live platform state**; skills supply **how we build and review** in this repo.
+For implementation patterns, read the relevant **SKILL.md** from `.claude/skills/` and `.agents/skills/` when the task matches (Supabase, cortex-route, bedrock UI, QA, **Corey Haines marketing skills**, etc.). MCPs supply **live platform state**; skills supply **how we build and review** in this repo. Marketing work: see **`.agents/MARKETING-SKILLS.md`**.

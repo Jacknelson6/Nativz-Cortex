@@ -54,3 +54,7 @@ When the task is a **whole page, marketing site, landing flow, or multi-section 
 **Pipeline:** Shadcn blocks/primitives first → lock **type + spacing** → then **at most one or two** deliberate Bedrock/React Bits surprises so the result feels **bold but calm**, not overwhelming.
 
 **Cursor:** Use slash **`/northstone-app-ui`** (not `/bedrock` — that’s the global React Bits skill). Rule **`.cursor/rules/northstone-app-ui.mdc`** applies when editing under `app/**` or `components/**`. Full React Bits source: **[github.com/Jacknelson6/bedrock](https://github.com/Jacknelson6/bedrock)** → `~/.claude/skills/bedrock` if needed.
+
+## Marketing & growth (Corey Haines skills)
+
+For **CRO, copy, SEO, paid media, email, analytics, launches, pricing, RevOps, or growth strategy** work, read **`.agents/MARKETING-SKILLS.md`** and the matching **`.agents/skills/<skill-name>/SKILL.md`** (Claude Code: `.claude/skills/<skill-name>`). Upstream: **[coreyhaines31/marketingskills](https://github.com/coreyhaines31/marketingskills)**. Start with **`product-marketing-context`** when positioning or audience context is unclear.
