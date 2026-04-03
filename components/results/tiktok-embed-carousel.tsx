@@ -184,12 +184,8 @@ export function TikTokEmbedCarousel({
 
       {/* Main layout */}
       <div className="relative flex h-full w-full" onClick={onClose}>
-        {/* Left section: arrows + video — stop propagation so clicking here doesn't close */}
-        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-        <div
-          className="flex flex-1 items-center justify-center pr-[420px]"
-          onClick={(e) => e.stopPropagation()}
-        >
+        {/* Left section: video area — clicking blank space here DOES close */}
+        <div className="flex flex-1 items-center justify-center pr-[420px]">
           {/* Arrow + Video + Arrow — inline flex so arrows stay next to video */}
           <div className="flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
             <button
@@ -205,14 +201,14 @@ export function TikTokEmbedCarousel({
             {videoId ? (
               <iframe
                 key={videoId}
-                src={`https://www.tiktok.com/player/v1/${videoId}?&music_info=1&description=1`}
+                src={`https://www.tiktok.com/player/v1/${videoId}?music_info=1&description=1&autoplay=1&mute=1`}
                 className="rounded-2xl border-0"
-                style={{ width: '380px', height: '675px' }}
+                style={{ width: '420px', height: '750px' }}
                 allow="encrypted-media; fullscreen"
                 allowFullScreen
               />
             ) : (
-              <div className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm text-white/50" style={{ width: '380px', height: '675px' }}>
+              <div className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm text-white/50" style={{ width: '420px', height: '750px' }}>
                 <div className="text-center px-4">
                   <p>Embed unavailable</p>
                   <a
