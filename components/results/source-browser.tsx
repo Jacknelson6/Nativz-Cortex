@@ -7,6 +7,7 @@ import { SourceMentionCard } from '@/components/results/source-mention-card';
 import type { PlatformSource } from '@/lib/types/search';
 import { sortSources } from '@/lib/search/source-sources-sort';
 import { VideoAnalysisPanel } from '@/components/research/video-analysis-panel';
+import { TikTokEmbedCarousel } from '@/components/results/tiktok-embed-carousel';
 
 function sourceKey(source: PlatformSource): string {
   return `${source.platform}:${source.id}`;
@@ -33,23 +34,40 @@ export function SourceBrowser({
 }: SourceBrowserProps) {
   const [showAll, setShowAll] = useState(false);
   const [analysisSource, setAnalysisSource] = useState<PlatformSource | null>(null);
+  const [carouselIndex, setCarouselIndex] = useState<number | null>(null);
 
   const listSources = sources ?? [];
 
-  const displayed = useMemo(() => {
-    const sorted = sortSources(listSources, 'views', {
-      searchQuery,
-      industry: clientContext?.industry,
-      clientName: clientContext?.name,
-      topicKeywords: clientContext?.topicKeywords,
-    });
-    return showAll ? sorted : sorted.slice(0, 12);
-  }, [listSources, showAll, searchQuery, clientContext]);
+  const allSorted = useMemo(
+    () =>
+      sortSources(listSources, 'views', {
+        searchQuery,
+        industry: clientContext?.industry,
+        clientName: clientContext?.name,
+        topicKeywords: clientContext?.topicKeywords,
+      }),
+    [listSources, searchQuery, clientContext],
+  );
+
+  const displayed = showAll ? allSorted : allSorted.slice(0, 12);
+
+  // TikTok sources for the carousel (all sorted, not just displayed)
+  const tiktokSources = useMemo(
+    () => allSorted.filter((s) => s.platform === 'tiktok'),
+    [allSorted],
+  );
 
   if (!listSources.length) return null;
 
   const hasMore = listSources.length > 12;
   const showBottomFade = !showAll && hasMore;
+
+  function openCarousel(source: PlatformSource) {
+    const idx = tiktokSources.findIndex(
+      (s) => s.id === source.id && s.platform === source.platform,
+    );
+    setCarouselIndex(idx >= 0 ? idx : 0);
+  }
 
   return (
     <section className="rounded-2xl border border-nativz-border/50 bg-background/20 p-4 sm:p-5">
@@ -70,15 +88,18 @@ export function SourceBrowser({
           {displayed.map((source) => {
             const key = sourceKey(source);
             const isVideo = source.platform === 'tiktok' || source.platform === 'youtube';
+            const isTikTok = source.platform === 'tiktok';
             return (
               <div key={key} className="min-w-0 self-start">
                 <SourceMentionCard
                   source={source}
                   onOpenDetail={() => {
-                    if (isVideo) {
+                    if (isTikTok) {
+                      // Clicking the card opens the TikTok embed carousel
+                      openCarousel(source);
+                    } else if (isVideo) {
                       setAnalysisSource(source);
                     } else {
-                      // Non-video sources open the URL directly
                       window.open(source.url, '_blank', 'noopener,noreferrer');
                     }
                   }}
@@ -106,6 +127,16 @@ export function SourceBrowser({
         </button>
       )}
 
+      {/* TikTok embed carousel */}
+      <TikTokEmbedCarousel
+        sources={tiktokSources}
+        initialIndex={carouselIndex ?? 0}
+        open={carouselIndex != null}
+        onClose={() => setCarouselIndex(null)}
+        onAnalyze={(source) => setAnalysisSource(source)}
+      />
+
+      {/* Video analysis panel */}
       <VideoAnalysisPanel
         open={analysisSource != null}
         onClose={() => setAnalysisSource(null)}

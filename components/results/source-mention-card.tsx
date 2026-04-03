@@ -119,17 +119,18 @@ export function SourceMentionCard({ source, onOpenDetail, onAnalyze }: SourceMen
             }}
           />
           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/55 opacity-0 transition-opacity group-hover/thumb:pointer-events-auto group-hover/thumb:opacity-100">
-            <a
+            <button
               data-source-action
-              href={source.url}
-              target="_blank"
-              rel="noopener noreferrer"
+              type="button"
               className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-md hover:bg-white/95"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenDetail();
+              }}
             >
               <Play size={16} className="shrink-0 fill-current" aria-hidden />
               Play
-            </a>
+            </button>
             <button
               data-source-action
               type="button"
