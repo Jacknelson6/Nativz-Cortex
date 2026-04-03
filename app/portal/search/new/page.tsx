@@ -1,5 +1,5 @@
 import { SearchX } from 'lucide-react';
-import { SearchModeSelector } from '@/components/search/search-mode-selector';
+import { ResearchTopicForm } from '@/components/research/research-topic-form';
 import { EmptyState } from '@/components/shared/empty-state';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 
@@ -23,13 +23,18 @@ export default async function PortalNewSearchPage() {
   }
 
   return (
-    <div className="flex flex-col items-center p-6 pt-12 md:pt-16">
-      <div className="w-full max-w-4xl">
-        <SearchModeSelector
-          redirectPrefix="/portal"
+    <div className="cortex-page-gutter flex flex-col items-center pt-12 md:pt-16">
+      <div className="w-full max-w-xl">
+        <ResearchTopicForm
+          clients={[{
+            id: result.client.id,
+            name: result.client.name,
+            logo_url: null,
+            agency: null,
+          }]}
+          portalMode
           fixedClientId={result.client.id}
           fixedClientName={result.client.name}
-          portalMode
         />
       </div>
     </div>

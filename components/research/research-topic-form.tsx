@@ -44,6 +44,10 @@ interface ResearchTopicFormProps {
   }) => void;
   /** Topic searches selected in the History rail to merge into Strategy lab for that client. */
   strategyLabBulkSelection?: { ids: string[]; clientId: string | null };
+  /** Portal mode: lock to a specific client, hide client picker, redirect to /portal */
+  portalMode?: boolean;
+  fixedClientId?: string | null;
+  fixedClientName?: string | null;
 }
 
 /** First name for "Hello, …" — title-cases a single token (e.g. email local-part). */
@@ -92,6 +96,9 @@ export function ResearchTopicForm({
   userFirstName,
   onStarted,
   strategyLabBulkSelection,
+  portalMode = false,
+  fixedClientId = null,
+  fixedClientName = null,
 }: ResearchTopicFormProps) {
     const router = useRouter();
     const [topicQuery, setTopicQuery] = useState(initialQuery);
@@ -189,7 +196,7 @@ export function ResearchTopicForm({
           time_range: timeRange,
           language,
           country,
-          client_id: contextMode === 'client' ? clientId : null,
+          client_id: portalMode ? fixedClientId : (contextMode === 'client' ? clientId : null),
           search_mode: searchMode,
           platforms: Array.from(new Set([...platforms, 'web'])).filter((p) => p !== 'quora'),
           volume,
@@ -210,17 +217,18 @@ export function ResearchTopicForm({
         }
 
         const needsSubtopics = data.topic_pipeline === 'llm_v1';
+        const prefix = portalMode ? '/portal' : '/admin';
 
         onStarted?.({
           id: data.id!,
           query: topicQuery.trim(),
           mode: searchMode,
-          clientName: selectedClient?.name ?? null,
+          clientName: portalMode ? fixedClientName : (selectedClient?.name ?? null),
           needsSubtopics,
         });
         const dest = needsSubtopics
-          ? `/admin/search/${data.id}/subtopics`
-          : `/admin/search/${data.id}/processing`;
+          ? `${prefix}/search/${data.id}/subtopics`
+          : `${prefix}/search/${data.id}/processing`;
         router.push(dest);
       } catch {
         setError('Something went wrong. Try again.');
