@@ -155,7 +155,8 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { open } = useSidebar();
-  const { mode, toggleMode } = useBrandMode();
+  const { mode, toggleMode, isForced } = useBrandMode();
+  const [showHiTooltip, setShowHiTooltip] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
 
   function toggleMenu(href: string) {
@@ -169,32 +170,51 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
 
   return (
     <Sidebar>
-      {/* Logo — click toggles brand mode (Nativz ↔ Anderson Collaborative) */}
+      {/* Logo — click toggles brand mode (Nativz ↔ Anderson Collaborative), or shows 'Hi there!' when forced */}
       <SidebarHeader>
-        <button
-          type="button"
-          onClick={(e) => toggleMode(e)}
-          aria-label={`Switch to ${mode === 'nativz' ? 'Anderson Collaborative' : 'Nativz'} mode`}
-          className="flex w-full items-center justify-center hover:opacity-80 transition-all duration-200 mb-3 cursor-pointer"
-        >
-          {mode === 'nativz' ? (
-            <Image
-              src="/nativz-logo.svg"
-              alt="Nativz"
-              width={open ? 120 : 28}
-              height={open ? 46 : 10}
-              className={`${open ? 'h-9 w-auto' : 'h-5 w-auto'} transition-opacity duration-200`}
-              priority
-            />
-          ) : (
-            <img
-              src="/anderson-logo-dark.svg"
-              alt="Anderson Collaborative"
-              className={`${open ? 'h-9 w-auto' : 'h-5 w-auto'} transition-opacity duration-200`}
-            />
-          )}
-        </button>
+        <div className="relative flex w-full items-center justify-center mb-3">
+          <button
+            type="button"
+            onClick={(e) => {
+              if (isForced) {
+                setShowHiTooltip(true);
+                setTimeout(() => setShowHiTooltip(false), 2000);
+              } else {
+                toggleMode(e);
+              }
+            }}
+            aria-label={isForced ? 'Hi there!' : `Switch to ${mode === 'nativz' ? 'Anderson Collaborative' : 'Nativz'} mode`}
+            className="flex w-full items-center justify-center hover:opacity-80 transition-all duration-200 cursor-pointer"
+          >
+            {mode === 'nativz' ? (
+              <Image
+                src="/nativz-logo.svg"
+                alt="Nativz"
+                width={open ? 120 : 28}
+                height={open ? 46 : 10}
+                className={`${open ? 'h-9 w-auto' : 'h-5 w-auto'} transition-opacity duration-200`}
+                priority
+              />
+            ) : (
+              <img
+                src="/anderson-logo-dark.svg"
+                alt="Anderson Collaborative"
+                className={`${open ? 'h-9 w-auto' : 'h-5 w-auto'} transition-opacity duration-200`}
+              />
+            )}
+          </button>
 
+          {/* 'Hi there!' tooltip — shown on AC domain where toggle is locked */}
+          {showHiTooltip && (
+            <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 z-50 animate-[popIn_150ms_cubic-bezier(0.16,1,0.3,1)_forwards]">
+              <div className="rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-xs font-medium text-text-primary shadow-elevated whitespace-nowrap">
+                Hi there! 👋
+              </div>
+              {/* Arrow */}
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 border-l border-t border-nativz-border bg-surface" />
+            </div>
+          )}
+        </div>
       </SidebarHeader>
 
       {/* Navigation */}
