@@ -20,7 +20,6 @@ import { PlatformBadgeSearch } from '@/components/search/platform-icon';
 
 /**
  * Extract TikTok video ID from a TikTok URL.
- * Handles: /video/1234, /@user/video/1234, /t/XXXXX (short links won't work for embed)
  */
 function extractTikTokVideoId(url: string): string | null {
   try {
@@ -47,7 +46,6 @@ export function TikTokEmbedCarousel({
   onAnalyze,
 }: TikTokEmbedCarouselProps) {
   const [index, setIndex] = useState(initialIndex);
-
   useEffect(() => {
     if (open) setIndex(initialIndex);
   }, [open, initialIndex]);
@@ -64,6 +62,8 @@ export function TikTokEmbedCarousel({
     setIndex((i) => (i < total - 1 ? i + 1 : 0));
   }, [total]);
 
+  // No embed script needed — using direct iframe
+
   // Keyboard navigation
   useEffect(() => {
     if (!open) return;
@@ -79,79 +79,77 @@ export function TikTokEmbedCarousel({
   if (!open || !source) return null;
 
   const er = engagementRatePercent(source);
+  const hasTranscript = !!(source.transcript ?? '').trim();
 
   return (
     <div className="fixed inset-0 z-[70] flex">
-      {/* Backdrop */}
+      {/* Backdrop — clicking anywhere in the dimmed area closes */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
       <div
-        className="absolute inset-0 bg-black/85 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/90"
         onClick={onClose}
-        aria-hidden
       />
 
-      {/* Close button */}
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute right-4 top-4 z-10 rounded-full bg-white/10 p-2 text-white/80 transition hover:bg-white/20 hover:text-white"
-        aria-label="Close"
-      >
-        <X size={20} />
-      </button>
-
-      {/* Main layout: arrows + video + sidebar */}
-      <div className="relative flex h-full w-full items-center justify-center">
-        {/* Left arrow */}
-        <button
-          type="button"
-          onClick={goPrev}
-          className="absolute left-4 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white sm:left-8"
-          aria-label="Previous video"
+      {/* Main layout */}
+      <div className="relative flex h-full w-full" onClick={onClose}>
+        {/* Left section: arrows + video — stop propagation so clicking here doesn't close */}
+        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+        <div
+          className="flex flex-1 items-center justify-center pr-[340px]"
+          onClick={(e) => e.stopPropagation()}
         >
-          <ChevronLeft size={24} />
-        </button>
+          {/* Left arrow */}
+          <button
+            type="button"
+            onClick={goPrev}
+            className="absolute left-8 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
+            aria-label="Previous video"
+          >
+            <ChevronLeft size={20} />
+          </button>
 
-        {/* Center: TikTok embed */}
-        <div className="relative z-10 flex h-full max-h-[min(85vh,700px)] w-full max-w-[400px] items-center justify-center px-16 sm:px-20">
-          {videoId ? (
-            <iframe
-              key={videoId}
-              src={`https://www.tiktok.com/embed/v2/${videoId}?lang=en-US`}
-              className="h-full w-full rounded-2xl"
-              style={{ aspectRatio: '9/16', maxHeight: '85vh' }}
-              allow="encrypted-media"
-              allowFullScreen
-              sandbox="allow-scripts allow-same-origin allow-popups"
-            />
-          ) : (
-            <div className="flex aspect-[9/16] w-full items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm text-white/50">
-              <div className="text-center px-4">
-                <p>Embed unavailable</p>
-                <a
-                  href={source.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-flex items-center gap-1 text-accent-text hover:underline"
-                >
-                  Open on TikTok <ExternalLink size={12} />
-                </a>
+          {/* TikTok embed — direct iframe, no sandbox */}
+          <div className="relative z-10 flex items-center justify-center">
+            {videoId ? (
+              <iframe
+                key={videoId}
+                src={`https://www.tiktok.com/player/v1/${videoId}?&music_info=1&description=1`}
+                className="rounded-2xl border-0"
+                style={{ width: '325px', height: '580px' }}
+                allow="encrypted-media; fullscreen"
+                allowFullScreen
+              />
+            ) : (
+              <div className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm text-white/50" style={{ width: '325px', height: '580px' }}>
+                <div className="text-center px-4">
+                  <p>Embed unavailable</p>
+                  <a
+                    href={source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-accent-text hover:underline"
+                  >
+                    Open on TikTok <ExternalLink size={12} />
+                  </a>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* Right arrow */}
+          <button
+            type="button"
+            onClick={goNext}
+            className="absolute right-[360px] z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
+            aria-label="Next video"
+          >
+            <ChevronRight size={20} />
+          </button>
         </div>
 
-        {/* Right arrow */}
-        <button
-          type="button"
-          onClick={goNext}
-          className="absolute right-[340px] z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white sm:right-[360px] lg:right-[380px]"
-          aria-label="Next video"
-        >
-          <ChevronRight size={24} />
-        </button>
-
-        {/* Right sidebar — details */}
-        <div className="absolute right-0 top-0 z-10 flex h-full w-[320px] flex-col border-l border-white/10 bg-surface/95 backdrop-blur-md sm:w-[340px]">
+        {/* Right sidebar — stop propagation so clicking here doesn't close */}
+        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+        <div className="absolute right-0 top-0 z-10 flex h-full w-[340px] flex-col border-l border-white/10 bg-surface/95 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between border-b border-nativz-border/60 px-5 py-4">
             <h3 className="text-sm font-semibold text-text-primary">Video details</h3>
             <button
@@ -168,9 +166,18 @@ export function TikTokEmbedCarousel({
             <section>
               <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted mb-2">Creator</p>
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-hover text-sm font-semibold text-text-secondary">
-                  {(source.author?.[0] ?? '?').toUpperCase()}
-                </div>
+                {source.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={source.thumbnailUrl}
+                    alt={source.author ?? ''}
+                    className="h-9 w-9 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-hover text-sm font-semibold text-text-secondary">
+                    {(source.author?.[0] ?? '?').toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <p className="text-sm font-medium text-text-primary">
                     {source.author || 'Unknown creator'}
@@ -185,7 +192,7 @@ export function TikTokEmbedCarousel({
             {/* Description */}
             <section>
               <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted mb-2">Description</p>
-              <p className="text-sm leading-relaxed text-text-secondary line-clamp-6">
+              <p className="text-sm leading-relaxed text-text-secondary">
                 {source.content || source.title || 'No description'}
               </p>
             </section>
@@ -197,8 +204,7 @@ export function TikTokEmbedCarousel({
                 {source.engagement.views != null && (
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-sm text-text-secondary">
-                      <Eye size={14} className="text-text-muted" />
-                      Views
+                      <Eye size={14} className="text-text-muted" /> Views
                     </span>
                     <span className="text-sm font-semibold tabular-nums text-text-primary">
                       {formatCompactCount(source.engagement.views)}
@@ -208,8 +214,7 @@ export function TikTokEmbedCarousel({
                 {source.engagement.likes != null && (
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-sm text-text-secondary">
-                      <Heart size={14} className="text-text-muted" />
-                      Likes
+                      <Heart size={14} className="text-text-muted" /> Likes
                     </span>
                     <span className="text-sm font-semibold tabular-nums text-text-primary">
                       {formatCompactCount(source.engagement.likes)}
@@ -219,8 +224,7 @@ export function TikTokEmbedCarousel({
                 {source.engagement.comments != null && (
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-sm text-text-secondary">
-                      <MessageCircle size={14} className="text-text-muted" />
-                      Comments
+                      <MessageCircle size={14} className="text-text-muted" /> Comments
                     </span>
                     <span className="text-sm font-semibold tabular-nums text-text-primary">
                       {formatCompactCount(source.engagement.comments)}
@@ -230,8 +234,7 @@ export function TikTokEmbedCarousel({
                 {source.engagement.shares != null && source.engagement.shares > 0 && (
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-sm text-text-secondary">
-                      <Share2 size={14} className="text-text-muted" />
-                      Shares
+                      <Share2 size={14} className="text-text-muted" /> Shares
                     </span>
                     <span className="text-sm font-semibold tabular-nums text-text-primary">
                       {formatCompactCount(source.engagement.shares)}
@@ -241,9 +244,7 @@ export function TikTokEmbedCarousel({
                 {er != null && (
                   <div className="flex items-center justify-between border-t border-nativz-border/40 pt-2.5">
                     <span className="text-sm font-medium text-text-secondary">Engagement rate</span>
-                    <span className="text-sm font-semibold tabular-nums text-accent-text">
-                      {er.toFixed(1)}%
-                    </span>
+                    <span className="text-sm font-semibold tabular-nums text-accent-text">{er.toFixed(1)}%</span>
                   </div>
                 )}
               </div>
@@ -255,24 +256,28 @@ export function TikTokEmbedCarousel({
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-2 text-sm text-text-secondary">
-                    <Calendar size={14} className="text-text-muted" />
-                    Published
+                    <Calendar size={14} className="text-text-muted" /> Published
                   </span>
-                  <span className="text-sm text-text-primary">
-                    {formatRelativeTime(source.createdAt)}
-                  </span>
+                  <span className="text-sm text-text-primary">{formatRelativeTime(source.createdAt)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-2 text-sm text-text-secondary">
-                    <PlatformBadgeSearch platform={source.platform} size="sm" />
-                    Platform
+                    <PlatformBadgeSearch platform={source.platform} size="sm" /> Platform
                   </span>
-                  <span className="text-sm font-medium capitalize text-text-primary">
-                    {source.platform}
-                  </span>
+                  <span className="text-sm font-medium capitalize text-text-primary">{source.platform}</span>
                 </div>
               </div>
             </section>
+
+            {/* Transcript preview */}
+            {hasTranscript && (
+              <section>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted mb-2">Transcript</p>
+                <div className="max-h-32 overflow-y-auto rounded-lg border border-nativz-border bg-background/40 p-3 text-xs leading-relaxed text-text-secondary">
+                  {source.transcript}
+                </div>
+              </section>
+            )}
 
             {/* Actions */}
             <div className="space-y-2 pt-2">
@@ -299,13 +304,6 @@ export function TikTokEmbedCarousel({
                 View original
               </a>
             </div>
-          </div>
-
-          {/* Counter */}
-          <div className="border-t border-nativz-border/60 px-5 py-3 text-right">
-            <span className="text-xs tabular-nums text-text-muted">
-              {index + 1} of {total}
-            </span>
           </div>
         </div>
       </div>
