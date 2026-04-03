@@ -50,6 +50,8 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
   children?: { href: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[];
+  /** When true, item is grayed out and non-clickable with "Coming soon" tooltip */
+  comingSoon?: boolean;
 }
 
 interface NavSection {
@@ -148,7 +150,7 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
 // AdminSidebar
 // ---------------------------------------------------------------------------
 
-/** Items hidden from portal (viewer) users */
+/** Items completely hidden from portal (viewer) users */
 const ADMIN_ONLY_HREFS = new Set([
   '/admin/dashboard',
   '/admin/tasks',
@@ -159,6 +161,13 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/team',
   '/admin/presentations',
   '/admin/shoots',
+  '/admin/knowledge',
+]);
+
+/** Items shown but grayed out with "Coming soon" tooltip for viewers */
+const COMING_SOON_HREFS = new Set([
+  '/admin/analytics',
+  '/admin/strategy-lab',
 ]);
 
 function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSection[] {
@@ -169,11 +178,13 @@ function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSec
   for (const section of NAV_SECTIONS) {
     for (const item of section.items) {
       if (ADMIN_ONLY_HREFS.has(item.href)) continue;
+      const isComingSoon = COMING_SOON_HREFS.has(item.href);
       // Remap /admin/ → portal prefix
       const remapped: NavItem = {
         ...item,
-        href: item.href.replace('/admin/', `${prefix}/`),
-        children: item.children?.filter(c => !ADMIN_ONLY_HREFS.has(c.href)).map(c => ({
+        href: isComingSoon ? '#' : item.href.replace('/admin/', `${prefix}/`),
+        comingSoon: isComingSoon,
+        children: isComingSoon ? undefined : item.children?.filter(c => !ADMIN_ONLY_HREFS.has(c.href)).map(c => ({
           ...c,
           href: c.href.replace('/admin/', `${prefix}/`),
         })),
@@ -339,6 +350,17 @@ export function AdminSidebar({
                   );
                 }
 
+                if (item.comingSoon) {
+                  return (
+                    <SidebarMenuItem key={item.href + '-soon'}>
+                      <SidebarMenuButton isActive={false} tooltip="Coming soon" className="opacity-40 pointer-events-none">
+                        <item.icon size={18} className="shrink-0" />
+                        {open && <span className="truncate">{item.label}</span>}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                }
+
                 return (
                   <SidebarMenuItem key={item.href}>
                     <Link href={item.href}>
@@ -359,9 +381,9 @@ export function AdminSidebar({
       {/* Footer: The Nerd + account */}
       <SidebarFooter className="border-t-0">
         {/* The Nerd — AI chat agent (StarBorder pattern) */}
-        <div className="px-1 pb-2">
+        <div className={`px-1 pb-2 ${role === 'viewer' ? 'opacity-40 pointer-events-none' : ''}`} title={role === 'viewer' ? 'Coming soon' : undefined}>
           <Link
-            href={`${routePrefix}/nerd`}
+            href={role === 'viewer' ? '#' : `${routePrefix}/nerd`}
             className={`group/nerd relative block overflow-hidden rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200 ${open ? '' : 'rounded-lg'}`}
             style={{ padding: '1px 0' }}
           >
