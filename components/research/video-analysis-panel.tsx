@@ -458,17 +458,26 @@ export function VideoAnalysisPanel({
             </div>
           </section>
 
-          {/* Transcript */}
+          {/* Frame Type Breakdown Pie Chart */}
+          {clips.length > 0 && (
+            <section className="space-y-2">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
+                Frame type breakdown
+              </p>
+              <FrameTypePieChart clips={clips} />
+            </section>
+          )}
+
+          {/* Transcript — plain text, no timestamps */}
           <section className="space-y-2">
             <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">Transcript</p>
             <div className="max-h-48 overflow-y-auto rounded-lg border border-nativz-border bg-background/40 p-3 text-sm leading-relaxed text-text-secondary">
-              {(item?.transcript_segments?.length ?? 0) > 0 ? (
-                item!.transcript_segments!.map((s, i) => (
-                  <p key={i} className="mb-2 last:mb-0">
-                    <span className="mr-2 font-mono text-[11px] text-accent-text">{formatTs(s.start)}</span>
-                    {s.text}
-                  </p>
-                ))
+              {item?.transcript?.trim() ? (
+                <p className="whitespace-pre-wrap">{item.transcript}</p>
+              ) : (item?.transcript_segments?.length ?? 0) > 0 ? (
+                <p className="whitespace-pre-wrap">
+                  {item!.transcript_segments!.map((s) => s.text).join(' ')}
+                </p>
               ) : transcribeStep === 'running' ? (
                 <p className="flex items-center gap-2 text-text-muted">
                   <Loader2 size={14} className="animate-spin" /> Transcribing…
@@ -479,33 +488,66 @@ export function VideoAnalysisPanel({
             </div>
           </section>
 
-          {/* ~3s segments + clip type */}
+          {/* Frame-by-frame breakdown — extracted frames + transcript + clip type */}
           <section className="space-y-2">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">3s segments</p>
-            {buckets.length === 0 ? (
-              <p className="text-xs text-text-muted">Run completes when transcript and frames are ready.</p>
-            ) : (
-              <ul className="space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
+              Frame breakdown{(item?.frames?.length ?? 0) > 0 ? ` (${item!.frames.length} frames)` : ''}
+            </p>
+            {buckets.length > 0 ? (
+              <ul className="max-h-[min(60vh,520px)] space-y-2 overflow-y-auto pr-1">
                 {buckets.map((b) => {
                   const ct = findClipTypeForRange(clips, b.start, b.end);
+                  const frames = item?.frames ?? [];
+                  const matchingFrame = frames.length > 0
+                    ? frames.reduce((best, frame) => {
+                        return Math.abs(frame.timestamp - b.start) < Math.abs(best.timestamp - b.start) ? frame : best;
+                      })
+                    : undefined;
                   return (
                     <li
                       key={b.start}
-                      className="rounded-lg border border-nativz-border/80 bg-surface-hover/20 px-3 py-2 text-xs"
+                      className="flex gap-3 rounded-lg border border-nativz-border/80 bg-surface-hover/20 p-2 text-xs"
                     >
-                      <div className="mb-1 flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-[10px] text-text-muted">
-                          {formatTs(b.start)}–{formatTs(b.end)}
-                        </span>
-                        <Badge variant="mono" className="text-[10px]">
-                          {clipLabel(ct)}
-                        </Badge>
+                      {matchingFrame && (
+                        <div className="relative w-16 shrink-0 overflow-hidden rounded-md border border-nativz-border">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={matchingFrame.url} alt={matchingFrame.label} className="aspect-[9/16] w-full object-cover" loading="lazy" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1 py-0.5">
+                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-[10px] text-text-muted">
+                            {formatTs(b.start)}–{formatTs(b.end)}
+                          </span>
+                          <Badge variant="mono" className="text-[10px]">
+                            {clipLabel(ct)}
+                          </Badge>
+                        </div>
+                        <p className="text-text-secondary leading-snug">{b.text || '—'}</p>
                       </div>
-                      <p className="text-text-secondary leading-snug">{b.text || '—'}</p>
                     </li>
                   );
                 })}
               </ul>
+            ) : (item?.frames?.length ?? 0) > 0 ? (
+              /* Frames exist but no transcript segments — show frames in a grid */
+              <div className="grid grid-cols-4 gap-1.5">
+                {item!.frames.map((frame, fi) => (
+                  <div key={fi} className="relative overflow-hidden rounded-lg border border-nativz-border">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={frame.url} alt={frame.label} className="aspect-[9/16] w-full object-cover" loading="lazy" />
+                    <div className="absolute inset-x-0 bottom-0 bg-black/70 py-0.5 text-center font-mono text-[9px] text-white">
+                      {frame.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : framesStep === 'running' ? (
+              <p className="flex items-center gap-2 text-xs text-text-muted">
+                <Loader2 size={12} className="animate-spin" /> Extracting frames…
+              </p>
+            ) : (
+              <p className="text-xs text-text-muted">No frames extracted yet.</p>
             )}
           </section>
 
@@ -613,5 +655,87 @@ function StepChip({ label, state }: { label: string; state: StepState }) {
       {icon}
       {label}
     </span>
+  );
+}
+
+const PIE_COLORS: Record<string, string> = {
+  talking_head: '#5ba3e6',
+  b_roll: '#22c55e',
+  broll: '#22c55e',
+  product_focus: '#f59e0b',
+  product_shot: '#f59e0b',
+  text_overlay_heavy: '#a855f7',
+  text_screen: '#a855f7',
+  meme_or_reaction: '#ec4899',
+  screen_recording: '#6366f1',
+  dance_or_trend: '#14b8a6',
+  montage: '#ef4444',
+  transition: '#64748b',
+  other: '#475569',
+};
+
+function FrameTypePieChart({
+  clips,
+}: {
+  clips: { startSec: number; endSec: number; clipType: string }[];
+}) {
+  const totalDuration = clips.reduce((sum, c) => sum + (c.endSec - c.startSec), 0) || 1;
+  const typeMap = new Map<string, number>();
+  for (const clip of clips) {
+    const dur = clip.endSec - clip.startSec;
+    typeMap.set(clip.clipType, (typeMap.get(clip.clipType) ?? 0) + dur);
+  }
+
+  const segments = [...typeMap.entries()]
+    .map(([type, dur]) => ({
+      type,
+      label: clipLabel(type),
+      pct: Math.round((dur / totalDuration) * 100),
+      color: PIE_COLORS[type] ?? '#475569',
+    }))
+    .sort((a, b) => b.pct - a.pct);
+
+  // Build SVG pie chart (conic via stroke-dasharray on circles)
+  const radius = 40;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+
+  return (
+    <div className="flex items-center gap-4">
+      <svg width={100} height={100} viewBox="0 0 100 100" className="shrink-0">
+        {segments.map((seg) => {
+          const dashLen = (seg.pct / 100) * circumference;
+          const dashGap = circumference - dashLen;
+          const currentOffset = offset;
+          offset += dashLen;
+          return (
+            <circle
+              key={seg.type}
+              cx={50}
+              cy={50}
+              r={radius}
+              fill="none"
+              stroke={seg.color}
+              strokeWidth={18}
+              strokeDasharray={`${dashLen} ${dashGap}`}
+              strokeDashoffset={-currentOffset}
+              transform="rotate(-90 50 50)"
+            />
+          );
+        })}
+      </svg>
+      <ul className="flex-1 space-y-1.5">
+        {segments.map((seg) => (
+          <li key={seg.type} className="flex items-center gap-2 text-xs">
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: seg.color }}
+            />
+            <span className="flex-1 text-text-secondary">{seg.label}</span>
+            <span className="tabular-nums text-text-muted">{seg.pct}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

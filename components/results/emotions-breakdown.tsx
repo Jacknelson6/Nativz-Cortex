@@ -152,25 +152,30 @@ function getSubtext(emotion: string): string {
 export function EmotionsBreakdown({ emotions }: EmotionsBreakdownProps) {
   if (!emotions.length) return null;
 
+  // Cap at 6 emotions, sorted by percentage descending
+  const displayed = [...emotions]
+    .sort((a, b) => b.percentage - a.percentage)
+    .slice(0, 6);
+
   return (
     <Card>
       <CardTitle className="text-base font-semibold">Emotions</CardTitle>
-      <div className="mt-5 space-y-3.5">
-        {emotions.map((e) => {
+      <div className="mt-5 space-y-4">
+        {displayed.map((e) => {
           const emoji = getEmoji(e.emotion);
           const tooltip = e.subtext?.trim() || getSubtext(e.emotion);
           return (
-            <div key={e.emotion} className="relative">
-              <div className="mb-1 flex items-center justify-between gap-3">
+            <div key={e.emotion}>
+              <div className="flex items-baseline justify-between gap-3 mb-2">
                 <TooltipCard title={e.emotion} description={tooltip}>
-                  <span className="flex min-w-0 items-center gap-1.5 text-xs text-text-primary">
-                    <span className="shrink-0 text-sm leading-none" aria-hidden>
+                  <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-text-secondary">
+                    <span className="shrink-0 text-base leading-none" aria-hidden>
                       {emoji}
                     </span>
-                    <span className="truncate font-medium text-text-secondary">{e.emotion}</span>
+                    {e.emotion}
                   </span>
                 </TooltipCard>
-                <span className="shrink-0 text-xs tabular-nums text-text-muted">
+                <span className="shrink-0 text-sm font-semibold tabular-nums text-text-muted">
                   {e.percentage}%
                 </span>
               </div>

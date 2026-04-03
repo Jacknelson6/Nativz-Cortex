@@ -300,27 +300,27 @@ function VideoIdeaListItem({
           {/* Why it works */}
           <p className="mt-2 text-sm leading-relaxed text-text-secondary">{idea.why_it_works}</p>
 
-          <IdeaValidationChips topic={topic} />
-
-          {/* Inline meta: format + virality — tucked at bottom */}
+          {/* Inline meta: format + virality (hide "low") */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center rounded-md bg-white/[0.04] px-2 py-0.5 text-xs font-medium text-text-muted">
               {displayIdeaFormat(idea.format)}
             </span>
-            <span className={`inline-flex items-center gap-1 text-xs font-medium ${
-              virality === 'viral_potential' ? 'text-accent2-text' :
-              virality === 'high' ? 'text-emerald-400' :
-              virality === 'medium' ? 'text-blue-400' :
-              'text-text-muted'
-            }`}>
-              <span className={`inline-block h-1 w-1 rounded-full ${
-                virality === 'viral_potential' ? 'bg-accent2' :
-                virality === 'high' ? 'bg-emerald-400' :
-                virality === 'medium' ? 'bg-blue-400' :
-                'bg-text-muted'
-              }`} />
-              {displayIdeaVirality(idea.virality)}
-            </span>
+            {virality !== 'low' && (
+              <span className={`inline-flex items-center gap-1 text-xs font-medium ${
+                virality === 'viral_potential' ? 'text-accent2-text' :
+                virality === 'high' ? 'text-emerald-400' :
+                virality === 'medium' ? 'text-blue-400' :
+                'text-text-muted'
+              }`}>
+                <span className={`inline-block h-1 w-1 rounded-full ${
+                  virality === 'viral_potential' ? 'bg-accent2' :
+                  virality === 'high' ? 'bg-emerald-400' :
+                  virality === 'medium' ? 'bg-blue-400' :
+                  'bg-text-muted'
+                }`} />
+                {displayIdeaVirality(idea.virality)}
+              </span>
+            )}
           </div>
 
           {/* Script outline (expandable) */}
