@@ -103,7 +103,7 @@ export function AiTakeaways({
                             title={TOOLTIPS.pillar_er_typical.title}
                             description={TOOLTIPS.pillar_er_typical.description}
                           >
-                            <span className="cursor-help border-b border-dotted border-text-muted/40">ER</span>
+                            <span className="cursor-help border-b border-dotted border-text-muted/40">Engagement rate</span>
                           </TooltipCard>
                         </dt>
                         <dd className="font-medium text-text-secondary">{driver.erTypical}</dd>
@@ -115,7 +115,7 @@ export function AiTakeaways({
                             description={TOOLTIPS.pillar_er_your.description}
                           >
                             <span className="cursor-help border-b border-dotted border-text-muted/40">
-                              Your ER
+                              Your engagement rate
                             </span>
                           </TooltipCard>
                         </dt>
