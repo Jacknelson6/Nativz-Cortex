@@ -104,6 +104,21 @@ export async function POST(request: NextRequest) {
     }
 
     const url = parsed.data.url;
+
+    // Deduplicate: if an item with the same URL already exists on this board, return it
+    const { data: existingItem } = await adminClient
+      .from('moodboard_items')
+      .select('*')
+      .eq('board_id', resolvedBoardId as string)
+      .eq('url', url)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingItem) {
+      return NextResponse.json(existingItem, { status: 200 });
+    }
+
     let quickTitle = parsed.data.title ?? null;
     let quickThumbnail: string | null = null;
     let detectedPlatform: string | null = null;

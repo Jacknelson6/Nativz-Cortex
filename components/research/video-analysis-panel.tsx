@@ -157,6 +157,7 @@ export function VideoAnalysisPanel({
       reset();
       setCreateStep('running');
       try {
+        // Create or reuse existing analysis item (API deduplicates by URL + board)
         const createRes = await fetch('/api/analysis/items', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -170,61 +171,97 @@ export function VideoAnalysisPanel({
           const err = await createRes.json().catch(() => ({}));
           throw new Error((err as { error?: string }).error || 'Could not start analysis');
         }
-        const created = (await createRes.json()) as MoodboardItem;
+        let current = (await createRes.json()) as MoodboardItem;
         if (cancelled) return;
-        setItem(created);
+        setItem(current);
         setCreateStep('done');
-        setTranscribeStep('running');
 
-        const deadline = Date.now() + 120_000;
-        let current = created;
-        while (Date.now() < deadline && !cancelled) {
-          current = await fetchItem(created.id);
-          setItem(current);
-          const hasTranscript =
-            (current.transcript && current.transcript.length > 0) ||
-            (current.transcript_segments?.length ?? 0) > 0;
-          if (hasTranscript) break;
-          await new Promise((r) => setTimeout(r, 2000));
+        // Check what's already been done — skip completed steps
+        const hasTranscript =
+          (current.transcript && current.transcript.length > 0) ||
+          (current.transcript_segments?.length ?? 0) > 0;
+        const hasFrames = Array.isArray(current.frames) && current.frames.length > 0;
+        const hasAnalysis = !!current.hook_analysis;
+
+        // If everything is already done, just show the existing analysis
+        if (hasTranscript && hasFrames && hasAnalysis) {
+          setTranscribeStep('done');
+          setFramesStep('done');
+          setAnalyzeStep('done');
+          // Try to get video URL
+          try {
+            const vu = await fetch(`/api/analysis/items/${current.id}/video-url`);
+            if (vu.ok) {
+              const { videoUrl } = (await vu.json()) as { videoUrl?: string };
+              if (videoUrl && !cancelled) setMp4Url(videoUrl);
+            }
+          } catch { /* optional */ }
+          return;
         }
 
-        if (!cancelled) {
-          const hasTranscript =
-            (current.transcript && current.transcript.length > 0) ||
-            (current.transcript_segments?.length ?? 0) > 0;
-          if (!hasTranscript) {
-            const tr = await fetch(`/api/analysis/items/${created.id}/transcribe`, { method: 'POST' });
-            if (tr.ok) {
-              current = await tr.json();
-              setItem(current);
+        // Transcribe if needed
+        if (!hasTranscript) {
+          setTranscribeStep('running');
+          const deadline = Date.now() + 120_000;
+          while (Date.now() < deadline && !cancelled) {
+            current = await fetchItem(current.id);
+            setItem(current);
+            const gotTranscript =
+              (current.transcript && current.transcript.length > 0) ||
+              (current.transcript_segments?.length ?? 0) > 0;
+            if (gotTranscript) break;
+            await new Promise((r) => setTimeout(r, 2000));
+          }
+
+          if (!cancelled) {
+            const gotTranscript =
+              (current.transcript && current.transcript.length > 0) ||
+              (current.transcript_segments?.length ?? 0) > 0;
+            if (!gotTranscript) {
+              const tr = await fetch(`/api/analysis/items/${current.id}/transcribe`, { method: 'POST' });
+              if (tr.ok) {
+                current = await tr.json();
+                setItem(current);
+              }
             }
           }
         }
         setTranscribeStep('done');
 
-        setFramesStep('running');
-        const fr = await fetch(`/api/analysis/items/${created.id}/extract-frames`, { method: 'POST' });
-        if (fr.ok) {
-          current = await fr.json();
-          setItem(current);
+        // Extract frames if needed
+        if (!hasFrames) {
+          setFramesStep('running');
+          const fr = await fetch(`/api/analysis/items/${current.id}/extract-frames`, { method: 'POST' });
+          if (fr.ok) {
+            current = await fr.json();
+            setItem(current);
+            setFramesStep('done');
+          } else {
+            setFramesStep('error');
+          }
+        } else {
           setFramesStep('done');
-        } else {
-          setFramesStep('error');
         }
 
-        setAnalyzeStep('running');
-        const an = await fetch(`/api/analysis/items/${created.id}/analyze`, { method: 'POST' });
-        if (an.ok) {
-          current = await an.json();
-          setItem(current);
+        // Analyze if needed
+        if (!hasAnalysis) {
+          setAnalyzeStep('running');
+          const an = await fetch(`/api/analysis/items/${current.id}/analyze`, { method: 'POST' });
+          if (an.ok) {
+            current = await an.json();
+            setItem(current);
+            setAnalyzeStep('done');
+          } else {
+            setAnalyzeStep('error');
+          }
+        } else {
           setAnalyzeStep('done');
-        } else {
-          setAnalyzeStep('error');
         }
 
+        // Try to get video URL
         let resolvedMp4: string | null = null;
         try {
-          const vu = await fetch(`/api/analysis/items/${created.id}/video-url`);
+          const vu = await fetch(`/api/analysis/items/${current.id}/video-url`);
           if (vu.ok) {
             const { videoUrl } = (await vu.json()) as { videoUrl?: string };
             if (videoUrl && !cancelled) {
