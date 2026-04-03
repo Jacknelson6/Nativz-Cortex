@@ -263,63 +263,11 @@ export function SubtopicsPlanClient({
             Two to three word phrases like &ldquo;cooking hacks&rdquo; or &ldquo;indie game dev&rdquo; find much more relevant content than single generic words.
           </p>
 
-          {/* Date range */}
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-text-primary">Date range</p>
-            <div className="flex flex-wrap gap-2">
-              {TIME_RANGE_OPTIONS.map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() => setTimeRange(o.value)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 ${
-                    timeRange === o.value
-                      ? 'bg-accent/20 text-accent-text border border-accent/40'
-                      : 'bg-surface border border-nativz-border text-text-muted hover:border-text-muted'
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Platforms */}
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-text-primary">Platforms</p>
-            <div className="flex flex-wrap gap-2">
-              {PLATFORM_OPTIONS.map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() => setSource(o.value)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 ${
-                    source === o.value
-                      ? 'bg-accent/20 text-accent-text border border-accent/40'
-                      : 'bg-surface border border-nativz-border text-text-muted hover:border-text-muted'
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Summary line */}
-          <p className="flex items-center gap-1.5 text-sm text-text-secondary">
-            <Check size={14} className="shrink-0 text-emerald-400" />
-            {selectedTimeRangeLabel} · {selectedPlatformLabel}
-          </p>
         </div>
       )}
 
       {/* Bottom actions */}
-      <div className="flex items-center justify-between pt-4 border-t border-nativz-border">
-        <Link href="/admin/search/new">
-          <Button type="button" variant="outline">
-            Back
-          </Button>
-        </Link>
+      <div className="flex items-center justify-end pt-4 border-t border-nativz-border">
         <Button type="button" onClick={() => void confirmAndRun()} disabled={loading || saving || selectedCount === 0}>
           {saving ? (
             <>
