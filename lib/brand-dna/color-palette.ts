@@ -55,10 +55,17 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
 // ---------------------------------------------------------------------------
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.startsWith('#') ? hex.slice(1) : hex;
+  if (h.length < 6) {
+    return { r: 0, g: 0, b: 0 };
+  }
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
   return {
-    r: parseInt(hex.slice(1, 3), 16),
-    g: parseInt(hex.slice(3, 5), 16),
-    b: parseInt(hex.slice(5, 7), 16),
+    r: Number.isFinite(r) ? r : 0,
+    g: Number.isFinite(g) ? g : 0,
+    b: Number.isFinite(b) ? b : 0,
   };
 }
 
@@ -84,9 +91,14 @@ function hexToHsl(hex: string): { h: number; s: number; l: number } {
 }
 
 function colorDistance(hex1: string, hex2: string): number {
+  const u = hex1.trim().toLowerCase();
+  const v = hex2.trim().toLowerCase();
+  if (u === v) return 0;
   const a = hexToRgb(hex1);
   const b = hexToRgb(hex2);
-  return Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
+  const d = Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
+  // Invalid / malformed hex can yield NaN; never return NaN (breaks cluster merge thresholds).
+  return Number.isFinite(d) ? d : 1e12;
 }
 
 /** Near white/black — drop from chromatic candidates. */
@@ -235,8 +247,11 @@ function mergeByRepresentative(sorted: { hex: string; score: number }[]): { hex:
         cluster.push(other);
       }
     }
+    // Invalid hex can yield NaN distance so c never joins — still need a cluster.
+    if (cluster.length === 0) cluster.push(c);
     for (const x of cluster) used.add(x.hex);
-    const rep = cluster.reduce((a, b) => (b.score > a.score ? b : a)).hex;
+    const seed = cluster[0]!;
+    const rep = cluster.reduce((a, b) => (b.score > a.score ? b : a), seed).hex;
     const total = cluster.reduce((s, x) => s + x.score, 0);
     out.push({ hex: rep, score: total });
   }
@@ -289,8 +304,10 @@ function assignSemanticRoles(merged: { hex: string; score: number }[]): BrandCol
 
   const pool = chromatic.filter((c) => !taken.has(c.hex));
   if (pool.length > 0) {
-    const accentPick = pool.reduce((a, b) =>
-      chromaScore(a.hex) * a.score >= chromaScore(b.hex) * b.score ? a : b,
+    const accentPick = pool.reduce(
+      (a, b) =>
+        chromaScore(a.hex) * a.score >= chromaScore(b.hex) * b.score ? a : b,
+      pool[0],
     );
     pushUnique(accentPick);
   }

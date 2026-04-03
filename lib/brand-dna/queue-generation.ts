@@ -1,6 +1,5 @@
 import { after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateBrandDNA } from './generate';
 import { BRAND_DNA_JOB_IN_FLIGHT_STATUSES } from './constants';
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -52,6 +51,8 @@ export async function queueBrandDNAGeneration(params: {
   after(async () => {
     const bg = createAdminClient();
     try {
+      // Dynamic import keeps POST /brand-dna/generate from loading crawl/jsdom/generate until the job runs.
+      const { generateBrandDNA } = await import('./generate');
       await generateBrandDNA(clientId, websiteUrl, {
         uploadedContent,
         onProgress: async (status, progressPct, stepLabel) => {

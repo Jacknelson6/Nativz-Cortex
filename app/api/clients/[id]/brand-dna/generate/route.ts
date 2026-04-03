@@ -15,7 +15,7 @@ const bodySchema = z.object({
   uploadedContent: z.string().nullish().optional(),
 });
 
-export const maxDuration = 300;
+export const maxDuration = 600;
 
 /**
  * POST /api/clients/[id]/brand-dna/generate

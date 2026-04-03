@@ -47,9 +47,18 @@ export async function generateBrandDNA(
     const clientName = clientRow?.name ?? 'Unknown';
     const clientIndustry = typeof clientRow?.industry === 'string' ? clientRow.industry : '';
 
-    // Step 1: Crawl
-    await onProgress('crawling', 10, 'Crawling website...');
-    const pages = await crawlForBrandDNA(websiteUrl, 30);
+    // Step 1: Crawl (parallel fetches; progress moves 10→27% as pages land)
+    await onProgress('crawling', 10, 'Crawling website…');
+    const pages = await crawlForBrandDNA(websiteUrl, 30, {
+      onPageCrawled: async (current, max) => {
+        const pct = 10 + Math.min(17, Math.floor((current / max) * 17));
+        await onProgress(
+          'crawling',
+          pct,
+          `Crawling website (${current}/${max})…`,
+        );
+      },
+    });
 
     if (pages.length === 0) {
       throw new Error('Could not crawl any pages from the provided URL');

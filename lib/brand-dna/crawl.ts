@@ -19,6 +19,14 @@ const SITEMAP_NESTED_MAX = 6;
 const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID ?? '';
 const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN ?? '';
 
+/**
+ * Brand DNA uses Cloudflare **Browser Rendering → /content** (headless render per URL), not the
+ * separate Crawl API job. Each page can take several seconds; we fetch up to `maxPages` URLs with
+ * bounded parallelism to avoid long serial waits.
+ */
+const CRAWL_CONCURRENCY = 3;
+const CF_CONTENT_TIMEOUT_MS = 22_000;
+
 const PRIORITY_PATHS = [
   '/',
   '/about',
@@ -132,7 +140,7 @@ function extractCanonicalUrl(html: string, pageUrl: string, origin: string): str
 async function fetchWithCloudflare(url: string): Promise<string | null> {
   if (!CF_ACCOUNT_ID || !CF_API_TOKEN) return null;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30_000);
+  const timer = setTimeout(() => controller.abort(), CF_CONTENT_TIMEOUT_MS);
   try {
     const res = await fetch(
       `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/browser-rendering/content`,
@@ -373,17 +381,52 @@ function mergeDiscoveredUrls(linkUrls: string[], sitemapUrls: string[]): string[
   return merged;
 }
 
+async function runCrawlPool(
+  urls: string[],
+  maxPages: number,
+  crawlOne: (url: string) => Promise<void>,
+  getPageCount: () => number,
+): Promise<void> {
+  if (urls.length === 0) return;
+  const queue = [...urls];
+  const workerCount = Math.min(CRAWL_CONCURRENCY, queue.length);
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (queue.length > 0 && getPageCount() < maxPages) {
+      const url = queue.shift();
+      if (!url) break;
+      await crawlOne(url);
+    }
+  });
+  await Promise.all(workers);
+}
+
 /**
  * Crawl a website for Brand DNA extraction.
  * Returns pages with raw HTML (for CSS/meta parsing) and extracted text content.
  * Tries priority paths, merges sitemap + link discovery, then crawls by relevance score.
  */
-export async function crawlForBrandDNA(websiteUrl: string, maxPages = 30): Promise<CrawledPage[]> {
+export async function crawlForBrandDNA(
+  websiteUrl: string,
+  maxPages = 30,
+  options?: {
+    /** Fires after each page is stored (for progress UI). */
+    onPageCrawled?: (current: number, max: number) => void | Promise<void>;
+  },
+): Promise<CrawledPage[]> {
   const startUrl = normalizeUrl(websiteUrl, websiteUrl) ?? websiteUrl;
   const origin = new URL(startUrl).origin;
   const visited = new Set<string>();
   const seenContentKeys = new Set<string>();
   const pages: CrawledPage[] = [];
+
+  const onPageCrawled = options?.onPageCrawled;
+  /** Serializes dedupe + push so parallel fetches cannot race on seenContentKeys / pages. */
+  let mutex = Promise.resolve();
+  function withMutex(fn: () => Promise<void>): Promise<void> {
+    const run = mutex.then(fn, fn);
+    mutex = run.then(() => undefined).catch(() => undefined);
+    return run;
+  }
 
   const pacer = new HostPacer(PACER_INITIAL_MS, PACER_FLOOR_MS, PACER_CAP_MS);
   const robotsPolicy = await (async () => {
@@ -409,29 +452,32 @@ export async function crawlForBrandDNA(websiteUrl: string, maxPages = 30): Promi
     if (!isUrlAllowedByRobots(url, robotsPolicy)) return;
     const html = await fetchPage(url, pacer);
     if (!html) return;
+    if (pages.length >= maxPages) return;
 
-    const canonical = extractCanonicalUrl(html, url, origin);
-    const contentKey = normalizeUrl(canonical ?? url, canonical ?? url) ?? url;
-    if (seenContentKeys.has(contentKey)) return;
-    seenContentKeys.add(contentKey);
-
-    const extracted = extractFromHtml(html, url);
-    if (!extracted) return;
-
-    pages.push({
-      url,
-      html,
-      title: extracted.title,
-      content: extracted.content,
-      wordCount: extracted.content.split(/\s+/).filter(Boolean).length,
-      pageType: classifyPage(url, extracted.content),
+    await withMutex(async () => {
+      const canonical = extractCanonicalUrl(html, url, origin);
+      const contentKey = normalizeUrl(canonical ?? url, canonical ?? url) ?? url;
+      if (seenContentKeys.has(contentKey)) return;
+      const extracted = extractFromHtml(html, url);
+      if (!extracted) {
+        seenContentKeys.add(contentKey);
+        return;
+      }
+      seenContentKeys.add(contentKey);
+      if (pages.length >= maxPages) return;
+      pages.push({
+        url,
+        html,
+        title: extracted.title,
+        content: extracted.content,
+        wordCount: extracted.content.split(/\s+/).filter(Boolean).length,
+        pageType: classifyPage(url, extracted.content),
+      });
+      await onPageCrawled?.(pages.length, maxPages);
     });
   }
 
-  for (const url of priorityUrls) {
-    if (pages.length >= maxPages) break;
-    await crawlOne(url);
-  }
+  await runCrawlPool(priorityUrls, maxPages, crawlOne, () => pages.length);
 
   const fromLinks: string[] = [];
   for (const page of pages) {
@@ -457,11 +503,8 @@ export async function crawlForBrandDNA(websiteUrl: string, maxPages = 30): Promi
   const fromSitemap = await collectSitemapUrls(origin, visited, pacer, robotsPolicy);
   const discovered = mergeDiscoveredUrls(fromLinks, fromSitemap);
 
-  for (const url of discovered) {
-    if (pages.length >= maxPages) break;
-    if (pages.some((p) => p.url === url)) continue;
-    await crawlOne(url);
-  }
+  const toFetch = discovered.filter((url) => !pages.some((p) => p.url === url));
+  await runCrawlPool(toFetch, maxPages, crawlOne, () => pages.length);
 
   return pages;
 }
