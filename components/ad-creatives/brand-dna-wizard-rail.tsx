@@ -90,7 +90,7 @@ export function BrandDnaWizardPanel({ clientId, clientName, variant }: BrandDnaW
     : 'Brand DNA';
 
   const header = (
-    <div className="border-b border-nativz-border/80 px-3 py-2.5 bg-white/[0.02]">
+    <div className="border-b border-nativz-border/80 px-3 py-2.5 bg-surface/20">
       <p className="min-w-0 truncate text-xs font-semibold text-text-primary tracking-tight" title={title}>
         {title}
       </p>

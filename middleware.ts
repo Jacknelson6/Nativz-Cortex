@@ -3,6 +3,7 @@ import type { User } from '@supabase/supabase-js';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/supabase/public-env';
 import { PORTAL_HOME_PATH, shouldRedirectPortalToMinimalHome } from '@/lib/portal/client-surface';
+import { detectAgencyFromHostname } from '@/lib/agency/detect';
 
 type SupabaseFromMiddleware = ReturnType<typeof createServerClient>;
 
@@ -87,6 +88,7 @@ export async function middleware(request: NextRequest) {
           supabaseResponse = NextResponse.next({ request });
           // BUG 9: preserve x-pathname after cookie-triggered response recreation
           supabaseResponse.headers.set('x-pathname', pathname);
+          supabaseResponse.headers.set('x-agency', detectAgencyFromHostname(request.nextUrl.hostname));
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
@@ -122,6 +124,7 @@ export async function middleware(request: NextRequest) {
     }
     // BUG 9: expose pathname so portal layout can detect auth pages
     supabaseResponse.headers.set('x-pathname', pathname);
+          supabaseResponse.headers.set('x-agency', detectAgencyFromHostname(request.nextUrl.hostname));
     return supabaseResponse;
   }
 
@@ -136,6 +139,7 @@ export async function middleware(request: NextRequest) {
     }
     // BUG 9: expose pathname so portal layout can detect auth pages
     supabaseResponse.headers.set('x-pathname', pathname);
+          supabaseResponse.headers.set('x-agency', detectAgencyFromHostname(request.nextUrl.hostname));
     return supabaseResponse;
   }
 
@@ -208,6 +212,7 @@ export async function middleware(request: NextRequest) {
     supabaseResponse.cookies.delete('x-impersonate-org');
     supabaseResponse.cookies.delete('x-impersonate-slug');
     supabaseResponse.headers.set('x-pathname', pathname);
+          supabaseResponse.headers.set('x-agency', detectAgencyFromHostname(request.nextUrl.hostname));
     return supabaseResponse;
   }
 
@@ -237,6 +242,7 @@ export async function middleware(request: NextRequest) {
 
   // BUG 9: expose pathname so portal layout can detect auth pages
   supabaseResponse.headers.set('x-pathname', pathname);
+          supabaseResponse.headers.set('x-agency', detectAgencyFromHostname(request.nextUrl.hostname));
 
   return supabaseResponse;
 }

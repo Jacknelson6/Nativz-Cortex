@@ -167,9 +167,15 @@ export default async function PortalLayout({
     featureFlags = buildPortalFeatureFlags(cached.featureFlags);
   }
 
-  // Lock brand mode based on active brand's agency
+  // Lock brand mode: domain wins, then fall back to client's agency field
+  const domainAgency = headersList.get('x-agency') as 'anderson' | 'nativz' | null;
   const activeAgency = brandData.activeAgency ?? cached?.agency ?? null;
-  const forcedBrandMode = activeAgency === 'Anderson Collaborative' ? 'anderson' as const : 'nativz' as const;
+  const forcedBrandMode: 'anderson' | 'nativz' =
+    domainAgency === 'anderson'
+      ? 'anderson'
+      : activeAgency === 'Anderson Collaborative'
+      ? 'anderson'
+      : 'nativz';
 
   return (
     <BrandModeProvider forcedMode={forcedBrandMode}>
