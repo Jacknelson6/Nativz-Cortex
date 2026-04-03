@@ -353,6 +353,9 @@ export function OnboardWizard({
 
   const totalSteps = existingClientId ? 3 : 4;
   const displayStep = step;
+  const wizardStepLabels = existingClientId
+    ? ['Website URL', 'Processing', 'Brand Profile']
+    : ['Website URL', 'Processing', 'Brand Profile', ''];
 
   return (
     <WizardShell
@@ -361,6 +364,7 @@ export function OnboardWizard({
       accentColor="var(--accent)"
       totalSteps={totalSteps}
       currentStep={displayStep}
+      stepLabels={wizardStepLabels}
       layout={layout}
       className={className}
     >

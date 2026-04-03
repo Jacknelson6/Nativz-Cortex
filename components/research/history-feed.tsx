@@ -959,6 +959,7 @@ export function HistoryFeed({
                     : 'break-words font-medium leading-normal text-text-primary',
                   sidebar && isActive && 'text-text-primary',
                 )}
+                title={item.title}
               >
                 {displayTitle(item)}
               </p>
@@ -974,7 +975,7 @@ export function HistoryFeed({
                     className="shrink-0 text-accent-text/70"
                     aria-hidden
                   />
-                  <span className="truncate">{item.clientName}</span>
+                  <span className="truncate" title={item.clientName}>{item.clientName}</span>
                 </p>
               ) : null}
               {!(hideClientInSidebar && sidebar) ? (

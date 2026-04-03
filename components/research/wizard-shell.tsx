@@ -5,18 +5,33 @@ import { useEffect, useRef, useLayoutEffect, useState, Children, type ReactNode 
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { lockScroll, unlockScroll } from '@/lib/utils/scroll-lock';
 
-function StepBar({ total, current, accentColor }: { total: number; current: number; accentColor: string }) {
+function StepBar({ total, current, accentColor, stepLabels }: { total: number; current: number; accentColor: string; stepLabels?: string[] }) {
   return (
-    <div className="flex gap-1.5 mb-6">
-      {Array.from({ length: total }).map((_, i) => (
-        <div
-          key={i}
-          className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-            i < current ? '' : 'bg-nativz-border'
-          }`}
-          style={i < current ? { backgroundColor: accentColor } : undefined}
-        />
-      ))}
+    <div className="mb-6">
+      <div className="flex gap-1.5">
+        {Array.from({ length: total }).map((_, i) => (
+          <div
+            key={i}
+            className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
+              i < current ? '' : 'bg-nativz-border'
+            }`}
+            style={i < current ? { backgroundColor: accentColor } : undefined}
+          />
+        ))}
+      </div>
+      {stepLabels && stepLabels.length > 0 && (
+        <div className="flex gap-1.5 mt-1.5">
+          {Array.from({ length: total }).map((_, i) => (
+            <div key={i} className="flex-1 text-center">
+              {stepLabels[i] && (
+                <span className={`text-xs ${i < current ? 'text-text-secondary' : 'text-text-muted'}`}>
+                  {stepLabels[i]}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -83,6 +98,8 @@ interface WizardShellProps {
   totalSteps: number;
   currentStep: number;
   children: ReactNode;
+  /** Optional labels shown below each step dot. */
+  stepLabels?: string[];
   /** `inline` = embedded in a page (no overlay, no scroll lock). Default `modal`. */
   layout?: WizardShellLayout;
   /** Wrapper classes when `layout="inline"` */
@@ -96,6 +113,7 @@ export function WizardShell({
   totalSteps,
   currentStep,
   children,
+  stepLabels,
   layout = 'modal',
   className = '',
 }: WizardShellProps) {
@@ -127,7 +145,7 @@ export function WizardShell({
 
   const stepBody = (
     <div className={layout === 'modal' ? 'p-7' : 'p-6 sm:p-8'}>
-      <StepBar total={totalSteps} current={currentStep} accentColor={accentColor} />
+      <StepBar total={totalSteps} current={currentStep} accentColor={accentColor} stepLabels={stepLabels} />
       <motion.div
         style={{ position: 'relative', overflow: 'hidden' }}
         animate={{ height: contentHeight }}

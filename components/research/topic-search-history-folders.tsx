@@ -277,7 +277,7 @@ function FolderRowDroppable({
           aria-hidden
         />
         <Folder size={14} className={cn('shrink-0', folderIconClass(folder.color))} aria-hidden />
-        <span className="min-w-0 flex-1 truncate font-medium">{folder.name}</span>
+        <span className="min-w-0 flex-1 truncate font-medium" title={folder.name}>{folder.name}</span>
         {items && items.length > 0 ? (
           <span className="shrink-0 text-[10px] tabular-nums text-text-secondary/70">{items.length}</span>
         ) : null}
@@ -298,6 +298,7 @@ function FolderRowDroppable({
               <Link
                 href={item.href}
                 className="min-w-0 flex-1 truncate text-sm font-normal leading-snug text-text-secondary transition-colors group-hover:text-text-primary"
+                title={item.title}
               >
                 {item.title}
               </Link>

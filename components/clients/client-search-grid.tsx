@@ -172,7 +172,7 @@ function ClientCard({
             <ClientLogo src={client.logoUrl} name={client.name} abbreviation={client.abbreviation} size="sm" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <p className="text-sm font-medium text-text-primary truncate">{client.name}</p>
+                <p className="text-sm font-medium text-text-primary truncate" title={client.name}>{client.name}</p>
                 {client.abbreviation && <span className="shrink-0 text-[10px] font-medium text-text-muted">{client.abbreviation}</span>}
               </div>
             </div>
@@ -206,7 +206,7 @@ function ClientCard({
             <ClientLogo src={client.logoUrl} name={client.name} abbreviation={client.abbreviation} size="md" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <p className="text-sm font-medium text-text-primary truncate">{client.name}</p>
+                <p className="text-sm font-medium text-text-primary truncate" title={client.name}>{client.name}</p>
                 {client.abbreviation && <span className="shrink-0 text-[10px] font-medium text-text-muted">{client.abbreviation}</span>}
                 <HealthBadge healthScore={client.healthScore} className="ml-auto" />
               </div>
