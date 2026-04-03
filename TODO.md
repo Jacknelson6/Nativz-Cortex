@@ -63,3 +63,6 @@
 - **AI/Nerd Tools** — Knowledge tools, Fyxer integration, meeting import, usage tracking
 - **Client Profiles** — Connected accounts, agency badges, Google service account support
 - **Todo Widget** — Centered empty state with add task button
+
+## Next Week
+- [ ] Set up Google OAuth (Sign in with Google) for admin users — needs Google Cloud Console OAuth app first (Client ID + Secret → Supabase Auth settings)

@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    const baseUrl = request.nextUrl.origin;
 
     const enriched = (invites ?? []).map(inv => {
       const now = new Date();
@@ -143,7 +143,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create invite' }, { status: 500 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    // Use request origin so invite URLs match the domain the admin is on
+    // (cortex.nativz.io or cortex.andersoncollaborative.com)
+    const baseUrl = request.nextUrl.origin;
     const inviteUrl = `${baseUrl}/portal/join/${invite.token}`;
 
     return NextResponse.json({

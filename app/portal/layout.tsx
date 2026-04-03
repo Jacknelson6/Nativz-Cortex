@@ -168,7 +168,6 @@ export default async function PortalLayout({
   }
 
   // Lock brand mode: domain wins, then fall back to client's agency field
-  const headersList = await headers();
   const domainAgency = headersList.get('x-agency') as 'anderson' | 'nativz' | null;
   const activeAgency = brandData.activeAgency ?? cached?.agency ?? null;
   const forcedBrandMode: 'anderson' | 'nativz' =

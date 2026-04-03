@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { Toaster } from 'sonner';
+import { headers } from 'next/headers';
 import './globals.css';
 import { BrandModeProvider } from '@/components/layout/brand-mode-provider';
 
@@ -21,18 +22,22 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const headersList = await headers();
+  const agency = headersList.get('x-agency') as 'anderson' | 'nativz' | null;
+  const forcedMode = agency === 'anderson' ? 'anderson' as const : undefined;
+
   return (
     <html lang="en">
       <head>
         <meta name="theme-color" content="#0f1117" />
       </head>
       <body className={`${jakarta.variable} font-sans antialiased`}>
-        <BrandModeProvider>
+        <BrandModeProvider forcedMode={forcedMode}>
           {children}
         </BrandModeProvider>
         <Toaster
