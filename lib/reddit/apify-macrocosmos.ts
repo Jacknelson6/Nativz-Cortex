@@ -77,9 +77,14 @@ export async function pickSubredditsForApify(
   const cap = maxSubreddits(volume);
   const fallback = parseFallbackSubreddits();
 
-  const { searchReddit } = await import('@/lib/reddit/client');
-  const search = await searchReddit(query, timeRange, 80);
-  const fromSearch = search.topSubreddits.filter(Boolean).slice(0, cap);
+  let fromSearch: string[] = [];
+  try {
+    const { searchReddit } = await import('@/lib/reddit/client');
+    const search = await searchReddit(query, timeRange, 80);
+    fromSearch = search.topSubreddits.filter(Boolean).slice(0, cap);
+  } catch {
+    // SearXNG may be unavailable — continue with fallback
+  }
 
   const merged: string[] = [];
   const seen = new Set<string>();
@@ -91,6 +96,8 @@ export async function pickSubredditsForApify(
     if (merged.length >= cap) break;
   }
 
+  // If no subreddits found via search or fallback, use the query as a keyword search
+  // by returning an empty array — the caller will use direct Reddit search instead
   return merged;
 }
 
@@ -160,23 +167,30 @@ export async function gatherRedditViaMacrocosmosApify(
   volume: string,
   apiKey: string,
 ): Promise<(RedditSearchResult & { postsWithComments: (RedditPost & { top_comments: RedditComment[] })[] }) | null> {
-  const subreddits = await pickSubredditsForApify(query, timeRange, volume);
-  if (subreddits.length === 0) {
-    console.warn('[reddit-apify] No subreddits discovered; skip macrocosmos actor');
-    return null;
+  let subreddits: string[] = [];
+  try {
+    subreddits = await pickSubredditsForApify(query, timeRange, volume);
+  } catch {
+    // SearXNG unavailable — proceed with keyword-only search
   }
 
   const totalTarget = targetTotalPosts(volume);
-  const limitPerSub = Math.min(100, Math.max(3, Math.ceil(totalTarget / subreddits.length)));
   const sort = parseSort();
-  const keyword = process.env.APIFY_REDDIT_KEYWORD_MODE === '0' ? '' : query;
 
   const input: Record<string, unknown> = {
-    subreddits,
-    limit: limitPerSub,
     sort,
+    keyword: query, // Always use query as keyword — works even without subreddits
   };
-  if (keyword) input.keyword = keyword;
+
+  if (subreddits.length > 0) {
+    const limitPerSub = Math.min(100, Math.max(3, Math.ceil(totalTarget / subreddits.length)));
+    input.subreddits = subreddits;
+    input.limit = limitPerSub;
+  } else {
+    // No subreddits — use keyword search across all of Reddit
+    input.limit = Math.min(100, totalTarget);
+    console.log('[reddit-apify] No subreddits — running keyword-only search for:', query);
+  }
 
   const actorId = getActorId();
   const runId = await startApifyActorRun(actorId, input, apiKey);

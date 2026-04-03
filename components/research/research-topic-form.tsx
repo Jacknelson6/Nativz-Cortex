@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
+  BarChart3,
   Building2,
   Clock,
   Compass,
@@ -25,30 +26,13 @@ import { toast } from 'sonner';
 import { mergeTopicSearchSelectionIntoLocalStorage } from '@/lib/strategy-lab/topic-search-selection-storage';
 import { TIME_RANGE_OPTIONS } from '@/lib/types/search';
 import type { SearchPlatform, SearchVolume } from '@/lib/types/search';
+import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
 
 export type ContextMode = 'none' | 'client' | 'url';
-
-export type ResearchTopicSnapshot = {
-  topicQuery: string;
-  contextMode: ContextMode;
-  clientId: string | null;
-  url: string;
-  contextSearch: string;
-  timeRange: string;
-  language: string;
-  country: string;
-};
-
-export type ResearchTopicFormHandle = {
-  getSnapshot: () => ResearchTopicSnapshot;
-};
 
 interface ResearchTopicFormProps {
   clients: ClientOption[];
   initialQuery?: string;
-  topicPipelineLlmV1: boolean;
-  /** Reserved; hub uses inline layout only */
-  variant?: 'inline' | 'modal';
   /** First name for greeting (inline hero) */
   userFirstName?: string | null;
   onStarted?: (item: {
@@ -58,7 +42,6 @@ interface ResearchTopicFormProps {
     clientName: string | null;
     needsSubtopics?: boolean;
   }) => void;
-  onLegacyContinue?: (snapshot: ResearchTopicSnapshot) => void;
   /** Topic searches selected in the History rail to merge into Strategy lab for that client. */
   strategyLabBulkSelection?: { ids: string[]; clientId: string | null };
 }
@@ -103,19 +86,13 @@ function brandPillLabel(
   return 'Brand';
 }
 
-export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTopicFormProps>(
-  function ResearchTopicForm(
-    {
-      clients,
-      initialQuery = '',
-      topicPipelineLlmV1,
-      userFirstName,
-      onStarted,
-      onLegacyContinue,
-      strategyLabBulkSelection,
-    },
-    ref
-  ) {
+export function ResearchTopicForm({
+  clients,
+  initialQuery = '',
+  userFirstName,
+  onStarted,
+  strategyLabBulkSelection,
+}: ResearchTopicFormProps) {
     const router = useRouter();
     const [topicQuery, setTopicQuery] = useState(initialQuery);
     const [contextMode, setContextMode] = useState<ContextMode>('none');
@@ -125,10 +102,8 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
     const [clientPickerOpen, setClientPickerOpen] = useState(false);
     const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
     const [clientPickerPortal, setClientPickerPortal] = useState<HTMLElement | null>(null);
-    const [platforms, setPlatforms] = useState<Set<SearchPlatform>>(
-      () => new Set(['web', 'reddit', 'youtube', 'tiktok'])
-    );
-    const [volume] = useState<SearchVolume>('medium');
+    const platforms = new Set<SearchPlatform>(['web', 'reddit', 'youtube', 'tiktok']);
+    const volume: SearchVolume = 'deep';
     const [timeRange, setTimeRange] = useState('last_3_months');
     const [language] = useState('all');
     const [country] = useState('us');
@@ -203,23 +178,6 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
         (contextMode === 'client' && !!clientId) ||
         (contextMode === 'url' && url.trim().length > 0));
 
-    function buildSnapshot(): ResearchTopicSnapshot {
-      return {
-        topicQuery,
-        contextMode,
-        clientId,
-        url,
-        contextSearch,
-        timeRange,
-        language,
-        country,
-      };
-    }
-
-    useImperativeHandle(ref, () => ({
-      getSnapshot: buildSnapshot,
-    }));
-
     async function handleRunResearch() {
       setError('');
       setLoading(true);
@@ -251,7 +209,7 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
           return;
         }
 
-        const needsSubtopics = topicPipelineLlmV1 || data.topic_pipeline === 'llm_v1';
+        const needsSubtopics = data.topic_pipeline === 'llm_v1';
 
         onStarted?.({
           id: data.id!,
@@ -273,14 +231,9 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
 
     function handlePrimaryClick() {
       if (!step1Valid) return;
-      if (topicPipelineLlmV1) {
-        void handleRunResearch();
-      } else {
-        onLegacyContinue?.(buildSnapshot());
-      }
+      void handleRunResearch();
     }
 
-    const singleStep = topicPipelineLlmV1;
     const greetingName = greetingDisplayName(userFirstName);
     const timeLabel = TIME_RANGE_OPTIONS.find((o) => o.value === timeRange)?.label ?? 'Last 3 months';
     const platformPopoverIcons: Record<
@@ -300,17 +253,6 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
       { value: 'youtube', label: 'YouTube' },
       { value: 'tiktok', label: 'TikTok' },
     ];
-
-    function togglePlatform(p: SearchPlatform) {
-      if (p === 'web') return;
-      setPlatforms((prev) => {
-        const next = new Set(prev);
-        next.add('web');
-        if (next.has(p)) next.delete(p);
-        else next.add(p);
-        return next;
-      });
-    }
 
     const pillBtn =
       'inline-flex shrink-0 h-9 max-w-[min(100%,11rem)] items-center gap-2 rounded-full border border-nativz-border bg-surface-hover/80 px-3 text-left text-xs font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover';
@@ -348,7 +290,7 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
               onKeyDown={(e) => {
                 if (e.key !== 'Enter' || !step1Valid) return;
                 e.preventDefault();
-                handlePrimaryClick();
+                void handleRunResearch();
               }}
             />
 
@@ -480,6 +422,8 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
                 </PopoverContent>
               </Popover>
 
+              {/* (Depth removed — always deep) */}
+
               {/* Time range */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -511,65 +455,26 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
               </Popover>
 
               {/* Platforms — Web always on (toggle disabled); Reddit / YouTube / TikTok optional */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button type="button" className={pillBtn}>
-                    <Search size={15} className="shrink-0 text-text-muted" aria-hidden />
-                    <span className="truncate">Platforms ({platforms.size})</span>
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent
-                  align="start"
-                  sideOffset={8}
-                  matchAnchorWidth={false}
-                  className="w-56 border-nativz-border bg-surface p-1 shadow-[var(--shadow-dropdown)]"
-                >
-                  {platformPopoverRows.map((opt) => {
-                    const Icon = platformPopoverIcons[opt.value];
-                    const isWeb = opt.value === 'web';
-                    const active = platforms.has(opt.value);
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        disabled={isWeb}
-                        onClick={() => togglePlatform(opt.value)}
-                        aria-pressed={active}
-                        aria-disabled={isWeb}
-                        title={isWeb ? 'Web search is always included' : undefined}
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-text-secondary',
-                          isWeb ? 'cursor-default opacity-95' : 'hover:bg-surface-hover',
-                        )}
-                      >
-                        <Icon size={15} className="shrink-0 text-text-muted" aria-hidden />
-                        <span className="flex-1">{opt.label}</span>
-                        <span
-                          className={cn(
-                            'flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors',
-                            active ? 'bg-accent' : 'border border-nativz-border bg-surface-hover',
-                          )}
-                          aria-hidden
-                        >
-                          <span
-                            className={cn(
-                              'h-3 w-3 rounded-full bg-white shadow-sm transition-transform',
-                              active ? 'translate-x-3' : 'translate-x-0',
-                            )}
-                          />
-                        </span>
-                      </button>
-                    );
-                  })}
-                </PopoverContent>
-              </Popover>
+              {/* Static platform badges — all always on */}
+              <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-nativz-border bg-surface-hover/80 px-3 py-2">
+                {(['web', 'reddit', 'youtube', 'tiktok'] as const).map((p) => {
+                  const cfg = PLATFORM_CONFIG[p];
+                  if (!cfg) return null;
+                  const Icon = cfg.icon;
+                  return (
+                    <span key={p} title={cfg.label} className="text-text-secondary">
+                      <Icon size={14} />
+                    </span>
+                  );
+                })}
+              </div>
             </div>
 
             <button
               type="button"
               onClick={handlePrimaryClick}
               disabled={!step1Valid || loading}
-              aria-label={singleStep ? 'Run research' : 'Configure search'}
+              aria-label="Run research"
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/40 bg-accent text-white shadow-[0_0_24px_-6px_rgba(91,163,230,0.55)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9"
             >
               {loading ? (
@@ -581,37 +486,7 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
           </div>
           </div>
 
-        <div className="mx-auto mt-4 flex w-full max-w-xl justify-center">
-          <Link
-            href={strategyLabHref}
-            onClick={() => {
-              if (bulkReady && bulkClientId) {
-                mergeTopicSearchSelectionIntoLocalStorage(bulkClientId, bulkIds);
-              } else if (bulkHasSelection && !bulkClientId) {
-                toast.message(
-                  'Pick a client in Strategy lab, then pin topic searches from your history.',
-                );
-              }
-            }}
-            title={
-              bulkReady
-                ? 'Opens this client’s Strategy lab and adds the selected topic searches to the workspace'
-                : bulkHasSelection && !bulkClientId
-                  ? 'Unbranded searches — open Strategy lab and pick a client to pin them'
-                  : 'Go to strategy lab'
-            }
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-              bulkReady
-                ? 'border-accent/40 bg-accent/15 text-accent-text hover:bg-accent/25'
-                : 'border-nativz-border/70 bg-surface-hover/40 text-text-secondary hover:border-accent/30 hover:bg-surface-hover hover:text-text-primary',
-            )}
-          >
-            <Compass size={13} className="shrink-0 opacity-90" aria-hidden />
-            Go to strategy lab
-          </Link>
-        </div>
+        {/* Strategy Lab link removed — accessible from sidebar */}
 
         {contextMode === 'url' && url && (
           <p className="mt-4 text-center text-xs text-text-muted">
@@ -619,14 +494,8 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
           </p>
         )}
 
-        {error && singleStep && (
+        {error && (
           <p className="mt-4 text-center text-sm text-red-400">{error}</p>
-        )}
-
-        {!singleStep && (
-          <p className="mt-4 text-center text-xs text-text-muted">
-            Next step: configure platforms and depth for this search.
-          </p>
         )}
 
         {clientPickerPortal &&
@@ -647,7 +516,4 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
           )}
       </div>
     );
-  }
-);
-
-ResearchTopicForm.displayName = 'ResearchTopicForm';
+}
