@@ -120,7 +120,7 @@ export function TikTokEmbedCarousel({
         setAnalysisItem(item);
 
         const hasTranscriptAlready = (item.transcript && item.transcript.length > 0) || (item.transcript_segments?.length ?? 0) > 0;
-        const hasFramesAlready = item.frames?.length > 0;
+        const hasFramesAlready = Array.isArray(item.frames) && item.frames.length > 0;
         const hasHookAlready = !!item.hook_analysis;
 
         if (hasTranscriptAlready && hasFramesAlready && hasHookAlready) {
@@ -136,8 +136,18 @@ export function TikTokEmbedCarousel({
 
         // Extract frames if needed
         if (!hasFramesAlready) {
-          const fr = await fetch(`/api/analysis/items/${item.id}/extract-frames`, { method: 'POST' });
-          if (fr.ok && !cancelled) { item = await fr.json(); setAnalysisItem(item); }
+          try {
+            const fr = await fetch(`/api/analysis/items/${item.id}/extract-frames`, { method: 'POST' });
+            if (fr.ok && !cancelled) {
+              item = await fr.json();
+              setAnalysisItem(item);
+            } else if (!cancelled) {
+              const errData = await fr.json().catch(() => ({}));
+              console.warn('[carousel] Frame extraction failed:', fr.status, errData);
+            }
+          } catch (e) {
+            console.warn('[carousel] Frame extraction error:', e);
+          }
         }
 
         // Analyze hook if needed
