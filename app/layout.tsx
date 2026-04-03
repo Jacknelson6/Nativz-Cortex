@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { headers } from 'next/headers';
 import './globals.css';
 import { BrandModeProvider } from '@/components/layout/brand-mode-provider';
+import { MobileBlocker } from '@/components/shared/mobile-blocker';
 
 const jakarta = Plus_Jakarta_Sans({
   variable: '--font-geist-sans',
@@ -65,6 +66,7 @@ export default async function RootLayout({
       </head>
       <body className={`${jakarta.variable} font-sans antialiased`}>
         <BrandModeProvider forcedMode={forcedMode}>
+          <MobileBlocker />
           {children}
         </BrandModeProvider>
         <Toaster
