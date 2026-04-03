@@ -1,7 +1,8 @@
 import { Resend } from 'resend';
 import { logUsage } from '@/lib/ai/usage';
-import { EMAIL_BRAND as BRAND, nativzEmailLogoUrl } from '@/lib/email/brand-tokens';
+import { getEmailBrand, getEmailLogoUrl } from '@/lib/email/brand-tokens';
 import { buildAffiliateWeeklyReportCardHtml } from '@/lib/email/templates/affiliate-weekly-report-html';
+import type { AgencyBrand } from '@/lib/agency/detect';
 
 let _resend: Resend | null = null;
 function getResend() {
@@ -9,12 +10,43 @@ function getResend() {
   return _resend;
 }
 
-const FROM_ADDRESS = 'Nativz Cortex <notifications@nativz.io>';
+function getFromAddress(agency: AgencyBrand): string {
+  if (agency === 'anderson') return 'Cortex <cortex@andersoncollaborative.com>';
+  return 'Nativz Cortex <notifications@nativz.io>';
+}
 
 // ── Shared layout ────────────────────────────────────────────────────────────
 
-function layout(content: string) {
-  const logoSrc = nativzEmailLogoUrl();
+function layout(content: string, agency: AgencyBrand = 'nativz') {
+  const BRAND = getEmailBrand(agency);
+  const logoSrc = getEmailLogoUrl(agency);
+  const isAC = agency === 'anderson';
+
+  // For AC (light theme) the logo sits directly on the card background.
+  // For Nativz (dark theme) we wrap the logo in a white panel so the
+  // opaque-white-canvas marketing JPG doesn't clash with the dark background.
+  const logoPanel = isAC
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td align="center" style="padding:28px 40px;">
+            <img src="${logoSrc}" width="200" height="80" alt="${isAC ? 'Anderson Collaborative' : 'Nativz'}" style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;max-width:200px;height:auto;width:auto;" />
+          </td>
+        </tr>
+      </table>`
+    : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;border-radius:16px;border:1px solid #e5e7eb;">
+        <tr>
+          <td align="center" style="padding:28px 40px;background-color:#ffffff;border-radius:16px;">
+            <img src="${logoSrc}" width="200" height="80" alt="Nativz" style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;max-width:200px;height:auto;width:auto;" />
+          </td>
+        </tr>
+      </table>`;
+
+  const footerCopy = isAC
+    ? `<p>&copy; ${new Date().getFullYear()} Anderson Collaborative &middot; <a href="https://cortex.andersoncollaborative.com">cortex.andersoncollaborative.com</a></p>
+       <p style="margin-top:8px;"><a href="https://andersoncollaborative.com">andersoncollaborative.com</a></p>`
+    : `<p>&copy; ${new Date().getFullYear()} Nativz &middot; <a href="https://cortex.nativz.io">cortex.nativz.io</a></p>
+       <p style="margin-top:8px;"><a href="https://nativz.io">nativz.io</a></p>`;
+
   return `
 <!DOCTYPE html>
 <html>
@@ -74,21 +106,14 @@ function layout(content: string) {
   </style>
 </head>
 <body style="margin:0;padding:0;background-color:${BRAND.bgDark};">
-  <!-- Table shell: Gmail strips body backgrounds; bgcolor + td styles keep the white logo visible. -->
+  <!-- Table shell: Gmail strips body backgrounds; bgcolor + td styles keep the logo visible. -->
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${BRAND.bgDark}" style="background-color:${BRAND.bgDark};">
     <tr>
       <td align="center" style="padding:48px 24px;background-color:${BRAND.bgDark};">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background-color:${BRAND.bgDark};">
           <tr>
             <td align="center" style="padding:0 0 16px;background-color:${BRAND.bgDark};">
-              <!-- White header panel: marketing JPG has an opaque white canvas — don’t float it on dark (harsh box). -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;border-radius:16px;border:1px solid #e5e7eb;">
-                <tr>
-                  <td align="center" style="padding:28px 40px;background-color:#ffffff;border-radius:16px;">
-                    <img src="${logoSrc}" width="200" height="80" alt="Nativz" style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;max-width:200px;height:auto;width:auto;" />
-                  </td>
-                </tr>
-              </table>
+              ${logoPanel}
             </td>
           </tr>
           <tr>
@@ -99,8 +124,7 @@ function layout(content: string) {
           <tr>
             <td align="center" class="footer" style="background-color:${BRAND.bgDark};padding-top:36px;">
               <div class="footer-line"></div>
-              <p>&copy; ${new Date().getFullYear()} Nativz &middot; <a href="https://cortex.nativz.io">cortex.nativz.io</a></p>
-              <p style="margin-top:8px;"><a href="https://nativz.io">nativz.io</a></p>
+              ${footerCopy}
             </td>
           </tr>
         </table>
@@ -118,9 +142,11 @@ export async function sendTeamInviteEmail(opts: {
   memberName: string;
   inviteUrl: string;
   invitedBy: string;
+  agency?: AgencyBrand;
 }) {
+  const agency = opts.agency ?? 'nativz';
   const result = await getResend().emails.send({
-    from: FROM_ADDRESS,
+    from: getFromAddress(agency),
     to: opts.to,
     subject: `You're invited to join Nativz Cortex`,
     html: layout(`
@@ -145,7 +171,7 @@ export async function sendTeamInviteEmail(opts: {
           This link expires in 7 days. If it expires, ask your admin for a new one.
         </p>
       </div>
-    `),
+    `, agency),
   });
 
   logUsage({
@@ -169,9 +195,11 @@ export async function sendClientInviteEmail(opts: {
   clientName: string;
   inviteUrl: string;
   invitedBy: string;
+  agency?: AgencyBrand;
 }) {
+  const agency = opts.agency ?? 'nativz';
   const result = await getResend().emails.send({
-    from: FROM_ADDRESS,
+    from: getFromAddress(agency),
     to: opts.to,
     subject: `${opts.clientName} — Your content portal is ready`,
     html: layout(`
@@ -197,7 +225,7 @@ export async function sendClientInviteEmail(opts: {
           This link expires in 7 days. Contact ${opts.invitedBy} if you need a new one.
         </p>
       </div>
-    `),
+    `, agency),
   });
 
   logUsage({
@@ -220,10 +248,12 @@ export async function sendWelcomeEmail(opts: {
   name: string;
   role: 'admin' | 'viewer';
   loginUrl: string;
+  agency?: AgencyBrand;
 }) {
+  const agency = opts.agency ?? 'nativz';
   const isTeam = opts.role === 'admin';
   const result = await getResend().emails.send({
-    from: FROM_ADDRESS,
+    from: getFromAddress(agency),
     to: opts.to,
     subject: `Welcome to Nativz Cortex`,
     html: layout(`
@@ -252,7 +282,7 @@ export async function sendWelcomeEmail(opts: {
           </tr>
         </table>
       </div>
-    `),
+    `, agency),
   });
 
   logUsage({
@@ -284,7 +314,9 @@ export async function sendAffiliateWeeklyReportEmail(opts: {
   };
   topAffiliates: { name: string; revenue: number; referrals: number }[];
   isTestOverride: boolean;
+  agency?: AgencyBrand;
 }) {
+  const agency = opts.agency ?? 'nativz';
   const subjectPrefix = opts.isTestOverride ? '[Test] ' : '';
   const subject = `${subjectPrefix}Weekly affiliate report — ${opts.clientName} (${opts.rangeLabel})`;
 
@@ -296,10 +328,10 @@ export async function sendAffiliateWeeklyReportEmail(opts: {
   });
 
   const result = await getResend().emails.send({
-    from: FROM_ADDRESS,
+    from: getFromAddress(agency),
     to: opts.to,
     subject,
-    html: layout(cardHtml),
+    html: layout(cardHtml, agency),
   });
 
   logUsage({
@@ -323,13 +355,15 @@ export async function sendSearchCompletedEmail(opts: {
   clientName: string | null;
   summaryPreview: string;
   resultsUrl: string;
+  agency?: AgencyBrand;
 }) {
+  const agency = opts.agency ?? 'nativz';
   const clientLine = opts.clientName
     ? `<p class="detail-label">Client</p><p class="detail-value">${opts.clientName}</p>`
     : '';
 
   const result = await getResend().emails.send({
-    from: FROM_ADDRESS,
+    from: getFromAddress(agency),
     to: opts.to,
     subject: 'Your topic search is ready',
     html: layout(`
@@ -350,7 +384,7 @@ export async function sendSearchCompletedEmail(opts: {
           You received this because you ran a topic search on Nativz Cortex. You can disable these emails in your profile settings.
         </p>
       </div>
-    `),
+    `, agency),
   });
 
   logUsage({

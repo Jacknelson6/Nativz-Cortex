@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendWelcomeEmail } from '@/lib/email/resend';
+import { detectAgencyFromHostname } from '@/lib/agency/detect';
 
 export async function POST(request: NextRequest) {
   try {
@@ -142,7 +143,8 @@ export async function POST(request: NextRequest) {
 
     // Send welcome email (non-blocking)
     const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io'}/portal/login`;
-    sendWelcomeEmail({ to: email, name: full_name, role: 'viewer', loginUrl }).catch((err) =>
+    const agency = detectAgencyFromHostname(request.headers.get('x-agency') ?? request.nextUrl.hostname);
+    sendWelcomeEmail({ to: email, name: full_name, role: 'viewer', loginUrl, agency }).catch((err) =>
       console.error('Welcome email failed:', err),
     );
 

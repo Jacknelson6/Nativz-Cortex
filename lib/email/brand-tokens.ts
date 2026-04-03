@@ -1,6 +1,9 @@
 /**
- * Shared Nativz email chrome (layout + transactional templates).
+ * Shared email brand tokens (layout + transactional templates).
+ * Supports Nativz (dark theme) and Anderson Collaborative (light theme).
  */
+
+import type { AgencyBrand } from '@/lib/agency/detect';
 
 export const EMAIL_BRAND = {
   bgDark: '#000C11',
@@ -17,12 +20,60 @@ export const EMAIL_BRAND = {
   fontStack: '"futura-pt", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Oxygen-Sans", Ubuntu, Cantarell, "Helvetica Neue", sans-serif',
 } as const;
 
+export const AC_EMAIL_BRAND = {
+  bgDark: '#F4F6F8',
+  bgCard: '#FFFFFF',
+  borderCard: '#D6DCE2',
+  textPrimary: '#00161F',
+  textBody: '#617792',
+  textMuted: '#8A99A8',
+  textFooter: '#617792',
+  blue: '#36D1C2',
+  blueCta: '#1A9E91',
+  blueHover: '#178A7F',
+  blueSurface: 'rgba(54, 209, 194, 0.10)',
+  fontStack: '"futura-pt", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Oxygen-Sans", Ubuntu, Cantarell, "Helvetica Neue", sans-serif',
+} as const;
+
+export type EmailBrand = {
+  readonly bgDark: string;
+  readonly bgCard: string;
+  readonly borderCard: string;
+  readonly textPrimary: string;
+  readonly textBody: string;
+  readonly textMuted: string;
+  readonly textFooter: string;
+  readonly blue: string;
+  readonly blueCta: string;
+  readonly blueHover: string;
+  readonly blueSurface: string;
+  readonly fontStack: string;
+};
+
+export function getEmailBrand(agency: AgencyBrand): EmailBrand {
+  return agency === 'anderson' ? AC_EMAIL_BRAND : EMAIL_BRAND;
+}
+
 /** Raster logo from www.nativz.io (opaque white canvas — paired with white header panel in layout). */
 const NATIVZ_MARKETING_LOGO_DEFAULT =
   'https://nativz.io/wp-content/uploads/2022/12/nativz-logo-square-scaled.jpg';
+
+/** Anderson Collaborative logo URL — override via EMAIL_AC_LOGO_URL env var. */
+const AC_MARKETING_LOGO_DEFAULT =
+  'https://andersoncollaborative.com/wp-content/uploads/ac-logo.png';
 
 export function nativzEmailLogoUrl(): string {
   const custom = process.env.EMAIL_NATIVZ_LOGO_URL?.trim();
   if (custom) return custom;
   return NATIVZ_MARKETING_LOGO_DEFAULT;
+}
+
+export function acEmailLogoUrl(): string {
+  const custom = process.env.EMAIL_AC_LOGO_URL?.trim();
+  if (custom) return custom;
+  return AC_MARKETING_LOGO_DEFAULT;
+}
+
+export function getEmailLogoUrl(agency: AgencyBrand): string {
+  return agency === 'anderson' ? acEmailLogoUrl() : nativzEmailLogoUrl();
 }

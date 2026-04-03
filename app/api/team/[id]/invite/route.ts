@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendTeamInviteEmail } from '@/lib/email/resend';
+import { detectAgencyFromHostname } from '@/lib/agency/detect';
 
 async function requireAdmin() {
   const supabase = await createServerSupabaseClient();
@@ -94,11 +95,14 @@ export async function POST(
       .single();
 
     // Send invite email (non-blocking)
+    const agencyHeader = request.headers.get('x-agency') ?? request.nextUrl.hostname;
+    const agency = detectAgencyFromHostname(agencyHeader);
     sendTeamInviteEmail({
       to: member.email,
       memberName: member.full_name,
       inviteUrl,
       invitedBy: inviter?.full_name ?? 'The Nativz team',
+      agency,
     }).catch((err) => console.error('Team invite email failed:', err));
 
     return NextResponse.json({
