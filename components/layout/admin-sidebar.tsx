@@ -200,14 +200,12 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
             )}
           </button>
 
-          {/* 'Hi there!' tooltip — shown on AC domain where toggle is locked */}
+          {/* 'Hi there!' tooltip — fixed position to escape sidebar overflow:hidden */}
           {showHiTooltip && (
-            <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 z-50 animate-[popIn_150ms_cubic-bezier(0.16,1,0.3,1)_forwards]">
-              <div className="rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-xs font-medium text-text-primary shadow-elevated whitespace-nowrap">
+            <div className="fixed top-16 left-4 z-[9999] animate-[popIn_150ms_cubic-bezier(0.16,1,0.3,1)_forwards]">
+              <div className="rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm font-medium text-text-primary shadow-elevated whitespace-nowrap">
                 Hi there! 👋
               </div>
-              {/* Arrow */}
-              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 border-l border-t border-nativz-border bg-surface" />
             </div>
           )}
         </div>
