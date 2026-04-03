@@ -115,3 +115,60 @@ This project uses **Ars Contexta** (`~/.claude/plugins/arscontexta/`). Key comma
 
 - **`app/admin/nerd/api/api-docs-data.ts`** (2,600 lines) — Static API endpoint catalog for the docs viewer. Pure data, not logic. Only read when editing the API docs UI.
 - **`docs/api-reference.md`** (1,594 lines) — Auto-generated API reference. Only read when verifying API documentation accuracy.
+
+## Portal Security (CRITICAL)
+
+**Every API route that a portal user (role=`viewer`) can hit MUST scope data by `organization_id`.**
+
+- Portal users are scoped via `user_client_access` table → `organization_id`
+- Use `getPortalClient()` (from `lib/portal/get-portal-client.ts`) in portal pages to get the user's client + org
+- API routes: check `users.organization_id` and filter results accordingly. Never return unscoped data to non-admin users.
+- `createAdminClient()` bypasses RLS — if using it, you MUST manually enforce org scoping in the query
+- `createServerSupabaseClient()` respects RLS — prefer this for portal-facing routes when possible
+- Supabase RLS is enabled on all tables with admin + viewer policies. The `topic_searches` table has org-scoped RLS.
+
+**Pattern for API route scoping:**
+```typescript
+const { data: userData } = await adminClient
+  .from('users')
+  .select('role, organization_id')
+  .eq('id', user.id)
+  .single();
+
+const isAdmin = userData?.role === 'admin';
+if (!isAdmin) {
+  query = query.eq('clients.organization_id', userData.organization_id);
+}
+```
+
+## Roles
+
+| Role | Access | Scoping |
+|------|--------|---------|
+| `admin` / `super_admin` | Full admin dashboard, all clients | No org filter |
+| `viewer` | Portal only, research + settings | Scoped to their `organization_id` |
+
+## TrustGraph Context Layer
+
+Shadow-mode context layer running alongside Supabase search. Code in `lib/context/`.
+
+- **Config:** `CONTEXT_PLATFORM_MODE` (`off` | `shadow` | `primary`), `TRUSTGRAPH_BASE_URL`, `TRUSTGRAPH_FLOW_ID`
+- **Shadow mode:** Every search also queries TrustGraph in parallel, logs parity. Zero user impact.
+- **Primary mode:** TrustGraph is the main search layer, Supabase is fallback.
+- Do NOT modify `lib/context/` without understanding the full adapter pattern.
+
+## Short-form Video Focus
+
+Cortex is exclusively for **short-form video content** (TikTok, Reels, Shorts). All topic search results, video analysis, content ideas, and scripting assume short-form vertical video. Never reference long-form content in user-facing copy.
+
+## Current Deploy
+
+- **Vercel** at `cortex.nativz.io`
+- **Supabase** project `phypsgxszrvwdaaqpxup`
+- **SearXNG** at `localhost:8888` (Mac mini only, not in production)
+- **TrustGraph** at `localhost:8080` (Mac mini only, shadow mode)
+- **ReClip** at `localhost:8899` (video downloader, Mac mini only)
+
+## Task Specs
+
+For complex features, check `tasks/` directory for detailed specs. Build from specs without asking for confirmation.
