@@ -1,6 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react';
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -16,6 +24,7 @@ import {
   Link2,
   ExternalLink,
   MoreHorizontal,
+  Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
@@ -48,6 +57,10 @@ import {
   type HistoryItem,
   type HistoryItemType,
 } from '@/lib/research/history';
+import { useTopicSearchFolders } from '@/lib/hooks/use-topic-search-folders';
+import { TopicSearchHistoryFolders } from '@/components/research/topic-search-history-folders';
+import { researchHistorySidebarSectionTitleClass } from '@/components/research/research-history-sidebar-section-title';
+import { DraggableSearchRow, DragOverlayCard } from '@/components/research/history-dnd';
 
 interface HistoryFeedProps {
   items: HistoryItem[];
@@ -65,6 +78,10 @@ interface HistoryFeedProps {
   /** Sidebar: checkboxes to pin topic searches for Strategy lab (client-linked rows only). */
   enableStrategyLabBulkSelect?: boolean;
   onStrategyLabSelectionChange?: (payload: { ids: string[]; clientId: string | null }) => void;
+  /** Research hub rail: hide client line in rows; show client in ⋯ menu instead. */
+  hideClientInSidebar?: boolean;
+  /** Research hub rail: folders + infinite scroll styling. */
+  enableFolders?: boolean;
 }
 
 const HISTORY_TITLE_MAX = 50;
@@ -122,7 +139,7 @@ function TypeIcon({ type }: { type: HistoryItemType }) {
           <div
             id={tipId}
             role="tooltip"
-            className="pointer-events-none fixed z-[200] w-max max-w-[200px] -translate-x-1/2 rounded-md border border-nativz-border bg-surface px-2 py-1 text-[11px] font-medium text-text-primary shadow-dropdown animate-in fade-in-0 zoom-in-95 duration-150"
+            className="pointer-events-none fixed z-[200] w-max max-w-[200px] -translate-x-1/2 rounded-md border border-nativz-border bg-surface px-2 py-1 text-xs font-medium text-text-primary shadow-dropdown animate-in fade-in-0 zoom-in-95 duration-150"
             style={{ left: pos.left, top: pos.top }}
           >
             {label}
@@ -184,7 +201,9 @@ const DROPDOWN_MENU_PRIMITIVES: RowMenuPrimitives = {
 function HistoryRowMenuBody({
   M,
   isTopicLike,
-  showSelection,
+  showStrategyLabToggleItem,
+  strategyLabToggleDisabled,
+  showBulkSelectionSubmenu,
   checked,
   bulkCount,
   menuItemClass,
@@ -196,10 +215,18 @@ function HistoryRowMenuBody({
   onDelete,
   onDeleteAllSelected,
   onOpenAllSelectedInStrategyLab,
+  onCopyAllSelectedLinks,
+  clientMenuLabel,
+  folders,
+  onAddToFolder,
+  onCreateFolder,
+  folderContext,
 }: {
   M: RowMenuPrimitives;
   isTopicLike: boolean;
-  showSelection: boolean;
+  showStrategyLabToggleItem: boolean;
+  strategyLabToggleDisabled: boolean;
+  showBulkSelectionSubmenu: boolean;
   checked: boolean;
   bulkCount: number;
   menuItemClass: string;
@@ -211,6 +238,12 @@ function HistoryRowMenuBody({
   onDelete: () => void;
   onDeleteAllSelected: () => void;
   onOpenAllSelectedInStrategyLab: () => void;
+  onCopyAllSelectedLinks: () => void;
+  clientMenuLabel?: string | null;
+  folders?: { id: string; name: string }[];
+  onAddToFolder?: (folderId: string) => void;
+  onCreateFolder?: () => void;
+  folderContext?: { onRemoveFromFolder: () => void };
 }) {
   const { Item, Separator, Sub, SubTrigger, SubContent } = M;
   return (
@@ -228,31 +261,82 @@ function HistoryRowMenuBody({
         <Link2 size={14} aria-hidden />
         Copy link to search
       </Item>
+      {clientMenuLabel ? (
+        <div className="pointer-events-none select-none px-2 py-1.5 text-xs text-text-muted">
+          Client: {clientMenuLabel}
+        </div>
+      ) : null}
       {isTopicLike ? (
         <Item className={menuItemClass} onSelect={onOpenStrategyLab}>
           <Compass size={14} aria-hidden />
           Open in Strategy lab
         </Item>
       ) : null}
-      {showSelection && isTopicLike ? (
-        <Item className={menuItemClass} onSelect={onToggleStrategyLab}>
+      {showStrategyLabToggleItem && isTopicLike ? (
+        <Item
+          className={menuItemClass}
+          disabled={strategyLabToggleDisabled}
+          onSelect={onToggleStrategyLab}
+        >
           <Check size={14} aria-hidden />
           {checked ? 'Deselect for Strategy lab' : 'Select for Strategy lab'}
         </Item>
+      ) : null}
+      {isTopicLike && ((folders && folders.length > 0 && onAddToFolder) || onCreateFolder) ? (
+        <>
+          <Separator className="bg-nativz-border" />
+          {folders && folders.length > 0 && onAddToFolder ? (
+            <Sub>
+              <SubTrigger className={cn(menuItemClass, 'data-[state=open]:bg-surface-hover')}>
+                Add to folder
+              </SubTrigger>
+              <SubContent className={cn(menuSurfaceClass, 'min-w-[11rem]')}>
+                {folders.map((f) => (
+                  <Item
+                    key={f.id}
+                    className={menuItemClass}
+                    onSelect={() => {
+                      onAddToFolder(f.id);
+                    }}
+                  >
+                    {f.name}
+                  </Item>
+                ))}
+                {onCreateFolder ? (
+                  <Item className={menuItemClass} onSelect={onCreateFolder}>
+                    New folder…
+                  </Item>
+                ) : null}
+              </SubContent>
+            </Sub>
+          ) : onCreateFolder ? (
+            <Item className={menuItemClass} onSelect={onCreateFolder}>
+              New folder…
+            </Item>
+          ) : null}
+        </>
+      ) : null}
+      {folderContext ? (
+        <>
+          <Separator className="bg-nativz-border" />
+          <Item className={menuItemClass} onSelect={folderContext.onRemoveFromFolder}>
+            Remove from folder
+          </Item>
+        </>
       ) : null}
       <Separator className="bg-nativz-border" />
       <Item variant="destructive" className={menuItemClass} onSelect={onDelete}>
         <Trash2 size={14} aria-hidden />
         Delete
       </Item>
-      {showSelection ? (
+      {showBulkSelectionSubmenu ? (
         <>
           <Separator className="bg-nativz-border" />
           <Sub>
             <SubTrigger className={cn(menuItemClass, 'data-[state=open]:bg-surface-hover')}>
-              Selection
+              Selected searches
             </SubTrigger>
-            <SubContent className={cn(menuSurfaceClass, 'min-w-[10rem]')}>
+            <SubContent className={cn(menuSurfaceClass, 'min-w-[11rem]')}>
               <Item
                 className={menuItemClass}
                 disabled={bulkCount === 0}
@@ -264,6 +348,16 @@ function HistoryRowMenuBody({
                 {bulkCount > 0 ? (
                   <span className="ml-auto text-[10px] text-text-muted">({bulkCount})</span>
                 ) : null}
+              </Item>
+              <Item
+                className={menuItemClass}
+                disabled={bulkCount === 0}
+                onSelect={() => {
+                  void onCopyAllSelectedLinks();
+                }}
+              >
+                <Copy size={14} aria-hidden />
+                Copy links to selected
               </Item>
               <Item
                 className={menuItemClass}
@@ -291,13 +385,14 @@ export function HistoryFeed({
   includeIdeas = true,
   enableStrategyLabBulkSelect = false,
   onStrategyLabSelectionChange,
+  hideClientInSidebar = false,
+  enableFolders = false,
 }: HistoryFeedProps) {
   const sidebar = variant === 'sidebar';
   const nerdEmbed = sidebar && embeddedInNerdRail;
   const pathname = usePathname();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [shortTitleCache, setShortTitleCache] = useState<Record<string, ShortTitleEntry>>({});
   const [shortTitleCacheReady, setShortTitleCacheReady] = useState(false);
@@ -305,6 +400,19 @@ export function HistoryFeed({
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [selectedTopicSearchIds, setSelectedTopicSearchIds] = useState<Set<string>>(new Set());
+  /** Checkboxes and bulk actions only after user chooses “Select for Strategy lab” from the row menu. */
+  const [selectionModeActive, setSelectionModeActive] = useState(false);
+
+  const {
+    folders: topicSearchFolders,
+    createFolder: createTopicFolder,
+    addTopicToFolder,
+    removeTopicFromFolder,
+  } = useTopicSearchFolders(Boolean(enableFolders && sidebar));
+
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     setLoadedMore([]);
@@ -362,15 +470,39 @@ export function HistoryFeed({
     });
   }, [mergedItems, hiddenIds, enableStrategyLabBulkSelect]);
 
+  useEffect(() => {
+    if (!enableStrategyLabBulkSelect) {
+      setSelectionModeActive(false);
+    }
+  }, [enableStrategyLabBulkSelect]);
+
+  /** Stable list order for Strategy lab payload (same order as history list, newest first). */
+  const orderedSelectedIds = useMemo(() => {
+    if (selectedTopicSearchIds.size === 0) return [];
+    const out: string[] = [];
+    for (const it of mergedItems) {
+      if (selectedTopicSearchIds.has(it.id)) out.push(it.id);
+    }
+    return out;
+  }, [mergedItems, selectedTopicSearchIds]);
+
+  const firstSelectedInOrder = useMemo(() => {
+    if (selectedTopicSearchIds.size === 0) return null;
+    for (const it of mergedItems) {
+      if (hiddenIds.has(it.id)) continue;
+      if (selectedTopicSearchIds.has(it.id)) return it;
+    }
+    return null;
+  }, [mergedItems, selectedTopicSearchIds, hiddenIds]);
+
   const strategyLabPayload = useMemo(() => {
     if (!enableStrategyLabBulkSelect) {
       return { ids: [] as string[], clientId: null as string | null };
     }
-    if (selectedTopicSearchIds.size === 0) return { ids: [], clientId: null };
-    const ids = [...selectedTopicSearchIds];
-    const first = mergedItems.find((i) => i.id === ids[0]);
-    return { ids, clientId: first?.clientId ?? null };
-  }, [enableStrategyLabBulkSelect, selectedTopicSearchIds, mergedItems]);
+    if (orderedSelectedIds.length === 0) return { ids: [], clientId: null };
+    const first = mergedItems.find((i) => i.id === orderedSelectedIds[0]);
+    return { ids: orderedSelectedIds, clientId: first?.clientId ?? null };
+  }, [enableStrategyLabBulkSelect, orderedSelectedIds, mergedItems]);
 
   const strategyLabNotifyKeyRef = useRef<string | null>(null);
 
@@ -396,21 +528,8 @@ export function HistoryFeed({
           next.delete(item.id);
           return next;
         }
-        if (next.size === 0) {
-          next.add(item.id);
-          return next;
-        }
-        const firstId = [...next][0];
-        const firstItem = mergedItems.find((i) => i.id === firstId);
-        if (!firstItem) {
-          next.clear();
-          next.add(item.id);
-          return next;
-        }
-        if (item.clientId !== firstItem.clientId) {
-          toast.error(
-            'Strategy lab can only include topic searches for the same client, or only unbranded searches together',
-          );
+        const firstInOrder = mergedItems.find((i) => prev.has(i.id));
+        if (firstInOrder && item.clientId !== firstInOrder.clientId) {
           return prev;
         }
         next.add(item.id);
@@ -455,8 +574,9 @@ export function HistoryFeed({
     }
   }, [hasMore, includeIdeas, items, loadedMore, loadingMore]);
 
+  loadMoreRef.current = loadMore;
+
   async function deleteHistoryItem(item: HistoryItem): Promise<boolean> {
-    setDeletingId(item.id);
     try {
       const endpoint = item.type === 'ideas'
         ? `/api/ideas/${item.id}`
@@ -474,15 +594,7 @@ export function HistoryFeed({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete');
       return false;
-    } finally {
-      setDeletingId(null);
     }
-  }
-
-  async function handleDelete(e: React.MouseEvent, item: HistoryItem) {
-    e.preventDefault();
-    e.stopPropagation();
-    await deleteHistoryItem(item);
   }
 
   const copyLinkToSearch = useCallback(async (item: HistoryItem) => {
@@ -510,7 +622,7 @@ export function HistoryFeed({
   );
 
   const openAllSelectedInStrategyLab = useCallback(() => {
-    const ids = [...selectedTopicSearchIds];
+    const ids = orderedSelectedIds;
     if (ids.length === 0) return;
     const first = mergedItems.find((i) => i.id === ids[0]);
     if (!first?.clientId) {
@@ -520,7 +632,25 @@ export function HistoryFeed({
     }
     mergeTopicSearchSelectionIntoLocalStorage(first.clientId, ids);
     router.push(`/admin/strategy-lab/${first.clientId}`);
-  }, [mergedItems, router, selectedTopicSearchIds]);
+  }, [mergedItems, orderedSelectedIds, router]);
+
+  const copyAllSelectedLinks = useCallback(async () => {
+    const ids = orderedSelectedIds;
+    if (ids.length === 0) return;
+    const lines = ids
+      .map((id) => {
+        const row = mergedItems.find((i) => i.id === id);
+        return row ? `${window.location.origin}${row.href}` : '';
+      })
+      .filter(Boolean);
+    if (lines.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      toast.success(ids.length === 1 ? 'Link copied' : 'Links copied');
+    } catch {
+      toast.error('Could not copy links');
+    }
+  }, [mergedItems, orderedSelectedIds]);
 
   const deleteAllSelected = useCallback(async () => {
     const ids = [...selectedTopicSearchIds];
@@ -565,6 +695,24 @@ export function HistoryFeed({
     () => filtered.map((i) => `${i.id}:${i.title}`).join('|'),
     [filtered],
   );
+
+  const showLoadMore = hasMore && !searchQuery.trim();
+
+  useEffect(() => {
+    if (!showLoadMore) return;
+    const el = loadMoreSentinelRef.current;
+    if (!el) return;
+    const root = sidebar ? listScrollRef.current : null;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        void loadMoreRef.current();
+      },
+      { root, rootMargin: '120px', threshold: 0 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [showLoadMore, sidebar, filteredKey, historyResetKey]);
 
   const shortTitleCacheRef = useRef(shortTitleCache);
   shortTitleCacheRef.current = shortTitleCache;
@@ -641,8 +789,6 @@ export function HistoryFeed({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- filteredKey tracks id+title; filtered is same render
   }, [filteredKey, shortTitleCacheReady, persistShortTitleCache]);
 
-  const showLoadMore = hasMore && !searchQuery.trim();
-
   const ctxMenuSurface =
     'z-[200] min-w-[12rem] overflow-hidden rounded-lg border border-nativz-border bg-surface p-1 text-text-primary shadow-dropdown';
   const ctxMenuItem =
@@ -654,13 +800,27 @@ export function HistoryFeed({
     const isActive =
       pathname === item.href || (item.href.length > 1 && pathname.startsWith(`${item.href}/`));
 
-    const showSelection = enableStrategyLabBulkSelect;
-    const selectable = showSelection && canSelectForStrategyLab(item);
-    const checked = selectedTopicSearchIds.has(item.id);
+    const showCheckboxColumn = enableStrategyLabBulkSelect && selectionModeActive;
     const isTopicLike = item.type === 'topic' || item.type === 'brand_intel';
     const bulkCount = selectedTopicSearchIds.size;
 
-    const selectionCell = showSelection ? (
+    const anchorCompatible =
+      canSelectForStrategyLab(item) &&
+      (selectedTopicSearchIds.size === 0 ||
+        (firstSelectedInOrder !== null && item.clientId === firstSelectedInOrder.clientId));
+
+    const selectable = showCheckboxColumn && anchorCompatible;
+    const showIncompatibleRow =
+      showCheckboxColumn &&
+      canSelectForStrategyLab(item) &&
+      !anchorCompatible &&
+      selectedTopicSearchIds.size > 0;
+
+    const checked = selectedTopicSearchIds.has(item.id);
+    const strategyLabToggleDisabled =
+      enableStrategyLabBulkSelect && isTopicLike && canSelectForStrategyLab(item) && !anchorCompatible;
+
+    const selectionCell = showCheckboxColumn ? (
       <div
         className={cn(
           'flex shrink-0 items-start justify-center',
@@ -670,6 +830,7 @@ export function HistoryFeed({
         {selectable ? (
           <button
             type="button"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -677,6 +838,7 @@ export function HistoryFeed({
             }}
             className={cn(
               'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
               checked
                 ? 'border-accent bg-accent/15 text-accent-text'
                 : 'border-nativz-border bg-background hover:border-accent/40',
@@ -690,6 +852,12 @@ export function HistoryFeed({
           >
             {checked ? <Check size={10} strokeWidth={3} className="text-accent-text" aria-hidden /> : null}
           </button>
+        ) : showIncompatibleRow ? (
+          <span
+            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-dashed border-nativz-border/40 bg-background/30 opacity-40"
+            title="Different client — only searches for the same brand can be selected together"
+            aria-hidden
+          />
         ) : (
           <span className="inline-block h-4 w-4 shrink-0" aria-hidden />
         )}
@@ -698,7 +866,9 @@ export function HistoryFeed({
 
     const rowActionMenuProps = {
       isTopicLike,
-      showSelection,
+      showStrategyLabToggleItem: Boolean(enableStrategyLabBulkSelect),
+      strategyLabToggleDisabled,
+      showBulkSelectionSubmenu: Boolean(enableStrategyLabBulkSelect && selectionModeActive),
       checked,
       bulkCount,
       menuItemClass: ctxMenuItem,
@@ -713,6 +883,10 @@ export function HistoryFeed({
         openInStrategyLab(item);
       },
       onToggleStrategyLab: () => {
+        if (!selectionModeActive) {
+          setSelectionModeActive(true);
+          return;
+        }
         handleStrategyLabToggle(item);
       },
       onDelete: () => {
@@ -722,6 +896,45 @@ export function HistoryFeed({
         void deleteAllSelected();
       },
       onOpenAllSelectedInStrategyLab: openAllSelectedInStrategyLab,
+      onCopyAllSelectedLinks: () => {
+        void copyAllSelectedLinks();
+      },
+      clientMenuLabel: hideClientInSidebar && sidebar ? item.clientName : null,
+      folders:
+        enableFolders && isTopicLike
+          ? topicSearchFolders.map((f) => ({ id: f.id, name: f.name }))
+          : undefined,
+      onAddToFolder:
+        enableFolders && isTopicLike
+          ? (folderId: string) => {
+              void (async () => {
+                try {
+                  await addTopicToFolder(folderId, item.id);
+                  toast.success('Added to folder');
+                  setLastDropFolderId(folderId);
+                  setFolderRefreshKey((k) => k + 1);
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : 'Could not add to folder');
+                }
+              })();
+            }
+          : undefined,
+      onCreateFolder:
+        enableFolders && isTopicLike
+          ? () => {
+              const name = window.prompt('Folder name');
+              if (!name?.trim()) return;
+              void (async () => {
+                try {
+                  await createTopicFolder(name.trim());
+                  toast.success('Folder created');
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : 'Could not create folder');
+                }
+              })();
+            }
+          : undefined,
+      folderContext: undefined,
     };
 
     const rowInner = (
@@ -729,41 +942,71 @@ export function HistoryFeed({
         {selectionCell}
         <Link
           href={item.href}
-          className="flex min-w-0 flex-1 flex-col gap-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className="flex min-w-0 flex-1 overflow-hidden flex-col gap-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
-          <div className={cn('flex items-start', sidebar ? 'gap-2' : 'gap-3')}>
-            <div className="mt-0.5 shrink-0">
-              <TypeIcon type={item.type} />
-            </div>
+          <div className={cn('flex min-w-0 flex-1 items-start', sidebar ? 'gap-0' : 'gap-3')}>
+            {!sidebar ? (
+              <div className="mt-0.5 shrink-0">
+                <TypeIcon type={item.type} />
+              </div>
+            ) : null}
             <div className="min-w-0 flex-1">
               <p
                 className={cn(
-                  'break-words font-medium text-text-primary',
-                  sidebar ? 'text-xs leading-snug' : 'text-sm',
+                  'text-sm leading-snug',
+                  sidebar
+                    ? 'truncate font-normal text-text-secondary transition-colors group-hover:text-text-primary'
+                    : 'break-words font-medium leading-normal text-text-primary',
+                  sidebar && isActive && 'text-text-primary',
                 )}
               >
                 {displayTitle(item)}
               </p>
-              {item.clientName ? (
-                <p className="mt-1 flex min-w-0 items-center gap-1 text-[10px] text-text-muted">
-                  <Building2 size={10} className="shrink-0 text-accent-text/70" aria-hidden />
+              {item.clientName && !(hideClientInSidebar && sidebar) ? (
+                <p
+                  className={cn(
+                    'mt-1 flex min-w-0 items-center gap-1 text-text-secondary/90',
+                    sidebar ? 'text-sm' : 'text-[10px]',
+                  )}
+                >
+                  <Building2
+                    size={sidebar ? 12 : 10}
+                    className="shrink-0 text-accent-text/70"
+                    aria-hidden
+                  />
                   <span className="truncate">{item.clientName}</span>
                 </p>
               ) : null}
-              <div className={cn(item.clientName ? 'mt-0.5' : 'mt-1')}>
-                <span className="flex items-center gap-1 text-[10px] text-text-muted sm:text-[11px]">
-                  <Clock size={10} aria-hidden />
-                  {formatRelativeTime(item.createdAt)}
-                </span>
-              </div>
+              {!(hideClientInSidebar && sidebar) ? (
+                <div
+                  className={cn(
+                    item.clientName && !(hideClientInSidebar && sidebar) ? 'mt-0.5' : 'mt-1',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'flex items-center gap-1 text-text-secondary/75',
+                      sidebar ? 'text-xs' : 'text-[10px] sm:text-xs',
+                    )}
+                  >
+                    <Clock size={sidebar ? 11 : 10} aria-hidden />
+                    {formatRelativeTime(item.createdAt)}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
         </Link>
-        <div className="flex shrink-0 items-start gap-1 pt-0.5 sm:gap-2">
+        <div
+          className={cn(
+            'flex shrink-0 items-start',
+            sidebar ? 'gap-0.5 pt-0' : 'gap-1 pt-0.5 sm:gap-2',
+          )}
+        >
           {isProcessing && (
             <>
               <Loader2 size={14} className="animate-spin text-text-muted" />
-              <Badge variant="default" className="px-1.5 py-0 text-[10px]">
+              <Badge variant="default" className={cn('px-1.5 py-0', sidebar ? 'text-xs' : 'text-[10px]')}>
                 Processing
               </Badge>
             </>
@@ -775,8 +1018,11 @@ export function HistoryFeed({
                 type="button"
                 onPointerDown={(e) => e.stopPropagation()}
                 className={cn(
-                  'shrink-0 rounded-md p-1 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35',
+                  'shrink-0 rounded-md p-1 text-text-muted transition-[opacity,background-color,color] duration-150 hover:bg-surface-hover hover:text-text-primary',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:opacity-100',
+                  // Sidebar: hide ⋯ until row hover (mobile: always visible for touch)
+                  sidebar &&
+                    'opacity-100 md:opacity-0 md:group-hover:opacity-100 md:data-[state=open]:opacity-100',
                 )}
                 aria-label="More actions"
                 title="More actions"
@@ -788,15 +1034,6 @@ export function HistoryFeed({
               <HistoryRowMenuBody M={DROPDOWN_MENU_PRIMITIVES} {...rowActionMenuProps} />
             </DropdownMenuContent>
           </DropdownMenu>
-          <button
-            type="button"
-            onClick={(e) => handleDelete(e, item)}
-            disabled={deletingId === item.id}
-            className="cursor-pointer rounded-md p-1 text-text-muted/30 opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-            title="Remove"
-          >
-            {deletingId === item.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-          </button>
         </div>
       </>
     );
@@ -808,16 +1045,18 @@ export function HistoryFeed({
     );
 
     if (sidebar) {
-      return (
+      const isDraggable = enableFolders && isTopicLike;
+      const sidebarRow = (
         <ContextMenu key={uniqueKey}>
           <ContextMenuTrigger asChild>
             <div
               className={cn(
-                'group flex animate-stagger-in cursor-default items-start justify-between gap-2 rounded-lg border px-1.5 py-2 pr-1 transition-colors',
+                'group flex w-full min-w-0 animate-stagger-in cursor-default items-center gap-1 rounded-lg border px-1.5 py-1 pr-1 transition-colors',
                 isActive
                   ? 'border-accent/10 bg-accent-surface/20'
                   : 'border-transparent hover:bg-surface-hover',
                 isProcessing && 'opacity-70',
+                showIncompatibleRow && 'opacity-45',
               )}
               style={{ animationDelay: `${index * 30}ms` }}
             >
@@ -827,6 +1066,21 @@ export function HistoryFeed({
           {contextMenu}
         </ContextMenu>
       );
+
+      if (isDraggable) {
+        return (
+          <DraggableSearchRow
+            key={uniqueKey}
+            searchId={item.id}
+            searchTitle={item.title}
+            disabled={false}
+          >
+            {sidebarRow}
+          </DraggableSearchRow>
+        );
+      }
+
+      return sidebarRow;
     }
 
     return (
@@ -836,8 +1090,9 @@ export function HistoryFeed({
             <Card
               interactive
               className={cn(
-                'group flex animate-stagger-in cursor-default items-start justify-between gap-3 px-4 py-3',
+                'flex animate-stagger-in cursor-default items-start justify-between gap-3 px-4 py-3',
                 isProcessing && 'opacity-70',
+                showIncompatibleRow && 'opacity-45',
               )}
               style={{ animationDelay: `${index * 30}ms` }}
             >
@@ -850,29 +1105,10 @@ export function HistoryFeed({
     );
   }
 
-  const loadMoreFooter = (
-    <div
-      className={cn(
-        'flex justify-center',
-        sidebar ? 'shrink-0 border-t border-nativz-border/50 px-1.5 py-2.5' : 'pt-2',
-        !sidebar && 'mt-4',
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => void loadMore()}
-        disabled={loadingMore}
-        className="text-sm font-medium text-accent-text transition-colors hover:text-accent-hover disabled:opacity-50"
-      >
-        {loadingMore ? 'Loading…' : 'View more'}
-      </button>
-    </div>
-  );
-
   const searchInput = (
     <div className={cn('relative w-full', !sidebar && 'sm:max-w-xs')}>
       <Search
-        size={sidebar ? 14 : 13}
+        size={sidebar ? 15 : 13}
         className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted"
       />
       <input
@@ -881,7 +1117,8 @@ export function HistoryFeed({
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         className={cn(
-          'w-full rounded-lg py-1.5 pl-8 pr-3 text-xs text-text-primary placeholder:text-text-muted/60 focus:outline-none',
+          'w-full rounded-lg py-1.5 pl-8 pr-3 text-text-primary placeholder:text-text-muted/60 focus:outline-none',
+          sidebar ? 'text-sm' : 'text-xs',
           sidebar
             ? 'border border-nativz-border bg-background focus:border-accent/50 focus:ring-1 focus:ring-accent/50'
             : 'border border-white/[0.08] bg-white/[0.04] placeholder-text-muted focus:border-accent',
@@ -890,60 +1127,236 @@ export function HistoryFeed({
     </div>
   );
 
-  const strategyLabHintBar =
-    enableStrategyLabBulkSelect && selectedTopicSearchIds.size > 0 ? (
-      <div className="flex shrink-0 items-center justify-between border-b border-nativz-border/50 px-3 py-1.5">
-        <span className="text-[10px] text-text-muted">
-          {selectedTopicSearchIds.size} selected for Strategy lab — right-click a row or use the menu (⋯) for actions
-        </span>
-        <button
-          type="button"
-          className="text-[10px] font-medium text-accent-text hover:underline"
-          onClick={() => setSelectedTopicSearchIds(new Set())}
-        >
-          Clear
-        </button>
+  const bringFirstClientId = firstSelectedInOrder?.clientId ?? null;
+  const canBringSelection = orderedSelectedIds.length > 0;
+
+  const strategyLabSelectionPanel =
+    enableStrategyLabBulkSelect && selectionModeActive ? (
+      <div
+        className={cn(
+          'shrink-0 space-y-3 border-b border-nativz-border/50 bg-surface/55',
+          sidebar ? 'px-3 py-3' : 'mb-4 rounded-xl border border-nativz-border/60 bg-surface-hover/30 p-4',
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className={cn('font-semibold text-text-primary', sidebar ? 'text-sm' : 'text-xs')}>
+              Strategy lab
+            </p>
+            <p
+              className={cn(
+                'mt-0.5 leading-snug text-text-muted',
+                sidebar ? 'text-xs' : 'text-[10px]',
+              )}
+            >
+              {selectedTopicSearchIds.size > 0
+                ? `${selectedTopicSearchIds.size} selected${
+                    firstSelectedInOrder?.clientName ? ` · ${firstSelectedInOrder.clientName}` : ''
+                  }`
+                : 'Right-click a topic search → “Select for Strategy lab” to show checkboxes, then tick rows here.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            className={cn(
+              'shrink-0 rounded-md px-2 py-1 font-medium text-text-muted transition hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35',
+              sidebar ? 'text-xs' : 'text-[10px]',
+            )}
+            onClick={() => {
+              setSelectionModeActive(false);
+              setSelectedTopicSearchIds(new Set());
+            }}
+          >
+            Done
+          </button>
+        </div>
+
+        {canBringSelection ? (
+          <Link
+            href={
+              bringFirstClientId ? `/admin/strategy-lab/${bringFirstClientId}` : '/admin/strategy-lab'
+            }
+            onClick={() => {
+              if (bringFirstClientId) {
+                mergeTopicSearchSelectionIntoLocalStorage(bringFirstClientId, orderedSelectedIds);
+              } else {
+                toast.message(
+                  'Pick a client in Strategy lab, then pin topic searches from your history.',
+                );
+              }
+            }}
+            className={cn(
+              'flex w-full items-center justify-center gap-2 rounded-lg border border-accent/50 bg-accent px-3 py-2.5 text-sm font-semibold text-white shadow-[0_0_24px_-8px_rgba(91,163,230,0.55)] transition',
+              'hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
+            )}
+          >
+            <Compass size={16} className="shrink-0 opacity-90" aria-hidden />
+            Bring to Strategy lab
+            <span className="tabular-nums opacity-90">({selectedTopicSearchIds.size})</span>
+          </Link>
+        ) : (
+          <span
+            className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-nativz-border/60 bg-surface-hover/30 px-3 py-2.5 text-sm font-semibold text-text-muted opacity-60"
+            aria-disabled
+          >
+            <Compass size={16} className="shrink-0 opacity-90" aria-hidden />
+            Bring to Strategy lab
+          </span>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={selectedTopicSearchIds.size === 0}
+            onClick={() => {
+              void deleteAllSelected();
+            }}
+            className={cn(
+              'inline-flex min-h-[2.25rem] flex-1 items-center justify-center gap-1.5 rounded-lg border border-nativz-border bg-surface-hover/80 px-2.5 py-1.5 font-medium text-text-secondary transition hover:border-accent/35 hover:bg-surface-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-40',
+              sidebar ? 'text-xs' : 'text-xs',
+            )}
+          >
+            <Trash2 size={13} className="shrink-0 text-text-muted" aria-hidden />
+            Delete selected
+          </button>
+          <button
+            type="button"
+            disabled={selectedTopicSearchIds.size === 0}
+            onClick={() => {
+              void copyAllSelectedLinks();
+            }}
+            className={cn(
+              'inline-flex min-h-[2.25rem] flex-1 items-center justify-center gap-1.5 rounded-lg border border-nativz-border bg-surface-hover/80 px-2.5 py-1.5 font-medium text-text-secondary transition hover:border-accent/35 hover:bg-surface-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-40',
+              sidebar ? 'text-xs' : 'text-xs',
+            )}
+          >
+            <Copy size={13} className="shrink-0 text-text-muted" aria-hidden />
+            Copy links
+          </button>
+          <button
+            type="button"
+            disabled={selectedTopicSearchIds.size === 0}
+            onClick={() => {
+              openAllSelectedInStrategyLab();
+            }}
+            className={cn(
+              'inline-flex min-h-[2.25rem] flex-1 items-center justify-center gap-1.5 rounded-lg border border-nativz-border bg-surface-hover/80 px-2.5 py-1.5 font-medium text-text-secondary transition hover:border-accent/35 hover:bg-surface-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-40',
+              sidebar ? 'text-xs' : 'text-xs',
+            )}
+          >
+            <Compass size={13} className="shrink-0 text-text-muted" aria-hidden />
+            Open all in lab
+          </button>
+        </div>
+
+        {selectedTopicSearchIds.size > 0 ? (
+          <button
+            type="button"
+            className={cn(
+              'w-full text-center font-medium text-accent-text transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35',
+              sidebar ? 'text-xs' : 'text-[10px]',
+            )}
+            onClick={() => setSelectedTopicSearchIds(new Set())}
+          >
+            Clear selection
+          </button>
+        ) : null}
       </div>
     ) : null;
 
-  return (
-    <div
-      className={cn(
-        sidebar && 'flex min-h-0 flex-col',
-        sidebar && embeddedInNerdRail && 'h-full min-h-0 flex-1',
-        sidebar && !embeddedInNerdRail && 'min-h-0 flex-1',
-        sidebar &&
-          !nerdEmbed &&
-          'max-lg:rounded-2xl max-lg:border max-lg:border-nativz-border/50 max-lg:bg-surface/70 max-lg:p-4 max-lg:shadow-[var(--shadow-card)] lg:bg-transparent',
-      )}
-    >
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 10 },
+    }),
+  );
+
+  const [activeDragTitle, setActiveDragTitle] = useState<string | null>(null);
+  const [folderRefreshKey, setFolderRefreshKey] = useState(0);
+  const [lastDropFolderId, setLastDropFolderId] = useState<string | null>(null);
+
+  const handleFolderDragStart = useCallback((event: DragStartEvent) => {
+    const title = (event.active.data.current as { title?: string })?.title;
+    setActiveDragTitle(title ?? 'Search');
+  }, []);
+
+  const handleFolderDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      setActiveDragTitle(null);
+      const { active, over } = event;
+      if (!over) return;
+      const aid = String(active.id);
+      const oid = String(over.id);
+      if (aid.startsWith('search-') && oid.startsWith('folder-')) {
+        const searchId = aid.slice('search-'.length);
+        const folderId = oid.slice('folder-'.length);
+        void (async () => {
+          try {
+            await addTopicToFolder(folderId, searchId);
+            toast.success('Added to folder');
+            setLastDropFolderId(folderId);
+            setFolderRefreshKey((k) => k + 1);
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Could not add to folder');
+          }
+        })();
+      }
+    },
+    [addTopicToFolder],
+  );
+
+  /** Folders + drag-drop whenever sidebar shows folders (desktop rail and mobile). */
+  const useFolderDnd = Boolean(sidebar && enableFolders);
+  const dndId = useId();
+
+  const content = (
+    <>
       {/* Header + search */}
       {sidebar ? (
-        nerdEmbed ? (
+        nerdEmbed || enableFolders ? (
           <>
             <div className="shrink-0 border-b border-nativz-border/50 px-3 py-2">{searchInput}</div>
-            {strategyLabHintBar}
+            {enableFolders ? (
+              <TopicSearchHistoryFolders
+                folders={topicSearchFolders}
+                onCreateFolder={createTopicFolder}
+                onRemoveFromFolder={removeTopicFromFolder}
+                menuSurfaceClass={ctxMenuSurface}
+                menuItemClass={ctxMenuItem}
+                droppableFolders={useFolderDnd}
+                refreshKey={folderRefreshKey}
+                autoExpandFolderId={lastDropFolderId}
+              />
+            ) : null}
+            {strategyLabSelectionPanel}
+            {enableFolders ? (
+              <div className="shrink-0 border-t border-nativz-border/30 px-3 pb-0.5 pt-2">
+                <p className={researchHistorySidebarSectionTitleClass}>Your searches</p>
+              </div>
+            ) : null}
           </>
         ) : (
           <>
             <div className="shrink-0 border-b border-nativz-border/50 px-3 py-3">
-              <h2 className="flex items-center gap-2 text-xs font-semibold text-text-primary">
-                <Clock size={14} className="shrink-0 text-accent-text" aria-hidden />
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-text-primary">
+                <Clock size={15} className="shrink-0 text-accent-text" aria-hidden />
                 Recent history
               </h2>
             </div>
             <div className="shrink-0 border-b border-nativz-border/50 px-3 py-2">{searchInput}</div>
-            {strategyLabHintBar}
+            {strategyLabSelectionPanel}
           </>
         )
       ) : (
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="flex shrink-0 items-center gap-2 text-lg font-semibold text-text-primary">
-            <Clock size={18} className="shrink-0 text-accent-text" />
-            Recent history
-          </h2>
-          {searchInput}
-        </div>
+        <>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="flex shrink-0 items-center gap-2 text-lg font-semibold text-text-primary">
+              <Clock size={18} className="shrink-0 text-accent-text" />
+              Recent history
+            </h2>
+            {searchInput}
+          </div>
+          {strategyLabSelectionPanel}
+        </>
       )}
 
       {/* Items */}
@@ -959,16 +1372,55 @@ export function HistoryFeed({
         </div>
       ) : sidebar ? (
         <>
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-1.5 pb-2 scrollbar-thin">
+          <div
+            ref={listScrollRef}
+            className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-1.5 pb-2 scrollbar-thin"
+          >
             {filtered.map((item, index) => renderHistoryRow(item, index))}
+            {showLoadMore && filtered.length > 0 ? (
+              <>
+                <div ref={loadMoreSentinelRef} className="h-2 w-full shrink-0" aria-hidden />
+                {loadingMore ? (
+                  <p className="py-2 text-center text-xs text-text-muted">Loading…</p>
+                ) : null}
+              </>
+            ) : null}
           </div>
-          {showLoadMore && filtered.length > 0 ? loadMoreFooter : null}
         </>
       ) : (
         <div className="space-y-2">
           {filtered.map((item, index) => renderHistoryRow(item, index))}
-          {showLoadMore && filtered.length > 0 ? loadMoreFooter : null}
+          {showLoadMore && filtered.length > 0 ? (
+            <>
+              <div ref={loadMoreSentinelRef} className="h-2 w-full shrink-0" aria-hidden />
+              {loadingMore ? (
+                <p className="py-2 text-center text-sm text-text-muted">Loading…</p>
+              ) : null}
+            </>
+          ) : null}
         </div>
+      )}
+    </>
+  );
+
+  return (
+    <div
+      className={cn(
+        sidebar && 'flex min-h-0 flex-col',
+        sidebar && embeddedInNerdRail && 'h-full min-h-0 flex-1',
+        sidebar && !embeddedInNerdRail && 'min-h-0 flex-1',
+        sidebar &&
+          !nerdEmbed &&
+          'max-lg:rounded-2xl max-lg:border max-lg:border-nativz-border/50 max-lg:bg-surface/70 max-lg:p-4 max-lg:shadow-[var(--shadow-card)] lg:bg-transparent',
+      )}
+    >
+      {useFolderDnd ? (
+        <DndContext id={dndId} sensors={sensors} onDragStart={handleFolderDragStart} onDragEnd={handleFolderDragEnd}>
+          {content}
+          {activeDragTitle ? <DragOverlayCard title={activeDragTitle} /> : null}
+        </DndContext>
+      ) : (
+        content
       )}
     </div>
   );

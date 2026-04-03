@@ -14,8 +14,8 @@ function formatInline(text: string, variant: MarkdownVariant = 'default'): React
     : 'text-accent-text hover:underline';
   const strongClass = isPresent ? 'font-semibold text-white' : 'font-semibold text-text-primary';
   const codeClass = isPresent
-    ? 'rounded bg-white/[0.12] px-1.5 py-0.5 text-[13px] font-mono text-cyan-100'
-    : 'rounded bg-white/[0.06] px-1.5 py-0.5 text-[13px] font-mono text-accent-text';
+    ? 'rounded bg-white/[0.12] px-1.5 py-0.5 text-xs font-mono text-cyan-100'
+    : 'rounded bg-white/[0.06] px-1.5 py-0.5 text-xs font-mono text-accent-text';
   const emClass = isPresent ? 'italic text-zinc-200' : 'italic';
 
   // Match links, bold, italic, inline code
@@ -67,10 +67,10 @@ export function Markdown({
       ? 'mt-5 mb-2 text-lg font-bold text-text-primary'
       : 'mt-5 mb-2 text-base font-bold text-text-primary';
   const h3Cls = present
-    ? 'mt-5 mb-1.5 text-[15px] font-semibold text-white'
+    ? 'mt-5 mb-1.5 text-sm font-semibold text-white'
     : large
-      ? 'mt-5 mb-1.5 text-[17px] font-semibold text-text-primary'
-      : 'mt-5 mb-1.5 text-[15px] font-semibold text-text-primary';
+      ? 'mt-5 mb-1.5 text-base font-semibold text-text-primary'
+      : 'mt-5 mb-1.5 text-sm font-semibold text-text-primary';
   const h4Cls = present
     ? 'mt-4 mb-1.5 text-sm font-semibold text-white'
     : large
@@ -82,7 +82,7 @@ export function Markdown({
       ? 'mt-4 mb-1 text-base font-semibold text-text-primary'
       : 'mt-4 mb-1 text-sm font-semibold text-text-primary';
   const pCls = present
-    ? 'text-[15px] leading-relaxed text-zinc-200/95'
+    ? 'text-sm leading-relaxed text-zinc-200/95'
     : large
       ? 'text-base leading-relaxed text-text-primary'
       : 'text-sm leading-relaxed';
@@ -92,11 +92,11 @@ export function Markdown({
       ? 'mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-text-muted/60'
       : 'mt-1.5 h-1 w-1 shrink-0 rounded-full bg-text-muted/60';
   const bulletTextCls = present
-    ? 'text-[15px] leading-relaxed text-zinc-200/95'
+    ? 'text-sm leading-relaxed text-zinc-200/95'
     : large
       ? 'text-base leading-relaxed text-text-primary'
       : 'text-sm leading-relaxed';
-  const codeMetaCls = present ? 'text-[11px] font-medium text-zinc-400' : 'text-[11px] font-medium text-text-muted';
+  const codeMetaCls = present ? 'text-xs font-medium text-zinc-400' : 'text-xs font-medium text-text-muted';
 
   const lines = content.split('\n');
   const elements: React.ReactNode[] = [];
@@ -130,8 +130,8 @@ export function Markdown({
               <pre
                 className={
                   present
-                    ? 'overflow-x-auto bg-black/50 p-3 text-[13px] leading-relaxed font-mono text-zinc-200'
-                    : 'overflow-x-auto bg-black/30 p-3 text-[13px] leading-relaxed font-mono text-gray-300'
+                    ? 'overflow-x-auto bg-black/50 p-3 text-xs leading-relaxed font-mono text-zinc-200'
+                    : 'overflow-x-auto bg-black/30 p-3 text-xs leading-relaxed font-mono text-gray-300'
                 }
               >
                 {codeBody}
@@ -240,8 +240,8 @@ export function Markdown({
           key="code-final"
           className={
             present
-              ? 'my-3 overflow-x-auto rounded-lg border border-white/[0.1] bg-black/50 p-3 text-[13px] font-mono text-zinc-200'
-              : 'my-3 overflow-x-auto rounded-lg border border-white/[0.06] bg-black/30 p-3 text-[13px] font-mono text-gray-300'
+              ? 'my-3 overflow-x-auto rounded-lg border border-white/[0.1] bg-black/50 p-3 text-xs font-mono text-zinc-200'
+              : 'my-3 overflow-x-auto rounded-lg border border-white/[0.06] bg-black/30 p-3 text-xs font-mono text-gray-300'
           }
         >
           {codeBody}

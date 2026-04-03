@@ -76,7 +76,7 @@ export const SharedVideoNode = memo(function SharedVideoNode({ data }: NodeProps
         </div>
 
         {(item.author_name || item.author_handle) && (
-          <p className="text-[11px] text-text-muted truncate pl-5">
+          <p className="text-xs text-text-muted truncate pl-5">
             {item.author_name}{item.author_handle ? ` @${item.author_handle.replace(/^@/, '')}` : ''}
           </p>
         )}

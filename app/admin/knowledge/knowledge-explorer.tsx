@@ -458,7 +458,7 @@ export function KnowledgeExplorer() {
                             <button
                               key={node.id}
                               onClick={() => handleSelectNode(node.id)}
-                              className={`cursor-pointer w-full text-left pl-8 pr-3 py-1 text-[11px] transition-colors truncate ${
+                              className={`cursor-pointer w-full text-left pl-8 pr-3 py-1 text-xs transition-colors truncate ${
                                 selectedNodeId === node.id
                                   ? 'bg-accent-surface text-accent-text'
                                   : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary'

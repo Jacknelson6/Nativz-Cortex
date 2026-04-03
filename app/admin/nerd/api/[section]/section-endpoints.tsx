@@ -54,7 +54,7 @@ export default function SectionEndpoints({ endpoints }: SectionEndpointsProps) {
                 }`}
               >
                 <span
-                  className={`inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[11px] font-bold font-mono w-16 shrink-0 ${
+                  className={`inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-bold font-mono w-16 shrink-0 ${
                     METHOD_COLORS[ep.method] ?? ''
                   }`}
                 >

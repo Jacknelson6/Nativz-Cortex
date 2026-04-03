@@ -160,7 +160,7 @@ export function PortalStrategyCard({ clientId, clientName }: PortalStrategyCardP
               <div className="space-y-1">
                 {(strategy.next_steps ?? []).filter(s => s.priority === 'high').map((s, i) => (
                   <div key={i} className="flex items-start gap-2 text-xs">
-                    <Badge variant="warning" className="mt-0.5 shrink-0 text-[9px]">high</Badge>
+                    <Badge variant="warning" className="mt-0.5 shrink-0 text-[10px]">high</Badge>
                     <span className="text-text-secondary">{s.action}</span>
                   </div>
                 ))}

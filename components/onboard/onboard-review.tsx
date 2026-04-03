@@ -317,7 +317,7 @@ export function OnboardReview({ clientId, clientName }: OnboardReviewProps) {
                   <Video size={12} className="text-accent" />
                   <h4 className="text-xs font-semibold text-text-primary truncate">{v.title}</h4>
                 </div>
-                <p className="text-[11px] text-accent mb-1">&ldquo;{v.hook}&rdquo;</p>
+                <p className="text-xs text-accent mb-1">&ldquo;{v.hook}&rdquo;</p>
                 <p className="text-[10px] text-text-muted">
                   {v.format} • {v.platform} • {v.estimated_virality}
                 </p>

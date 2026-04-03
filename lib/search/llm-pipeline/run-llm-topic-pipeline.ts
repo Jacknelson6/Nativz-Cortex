@@ -699,7 +699,7 @@ Return ONLY valid JSON matching:
   "brand_alignment_notes": "optional string — only if client_strategy: bridge topic insights to the client brand (2-4 sentences).",
   "overall_sentiment": number -1 to 1,
   "conversation_intensity": "low"|"moderate"|"high"|"very_high",
-  "emotions": [{"emotion": string, "percentage": number, "color": string}],
+  "emotions": [{"emotion": string, "percentage": number, "color": string, "subtext": string}],
   "content_breakdown": {
     "intentions": [{"name": string, "percentage": number, "engagement_rate": number, "your_engagement_rate": number (omit if no Attached client)}],
     "categories": [{"name": string, "percentage": number, "engagement_rate": number, "your_engagement_rate": number (omit if no Attached client)}],
@@ -726,7 +726,7 @@ Rules:
 - Generate **15** distinct trending topics when the evidence supports that many angles; each must be distinct and grounded in the research above. If fewer than 15 substantiated angles exist, include every strong angle you can — do not pad with duplicates or generic filler.
 - source_urls must be from the evidence URLs only.
 - If search_mode is general, omit brand_alignment_notes or use null.
-- emotions: 5-8 emotions that sum to ~100%. Analyze the actual tone and sentiment of the evidence text. Colors from: #5ba3e6 blue, #a855f7 purple, #22c55e green, #f59e0b amber, #ef4444 red, #ec4899 pink, #14b8a6 teal, #6366f1 indigo.
+- emotions: 5-8 emotions that sum to ~100%. Analyze the actual tone and sentiment of the evidence text. Colors from: #5ba3e6 blue, #a855f7 purple, #22c55e green, #f59e0b amber, #ef4444 red, #ec4899 pink, #14b8a6 teal, #6366f1 indigo. Each emotion MUST include a "subtext" — one sentence explaining why THIS emotion appears for THIS specific topic based on the evidence (not a generic description of the emotion).
 - content_breakdown: intentions (3-5 viewer motivations like Educational, Entertainment, Debate), categories (3-5 content types), formats (3-5 like Short video, Article, Thread). For **every** item include: **percentage** (share of posts in that bucket, 0–100). **engagement_rate**: typical engagement rate for that bucket **in this topic’s evidence**, expressed as **percentage points** where **0.7 means 0.7%** (not 70%, not a 0–1 fraction). Ground it in likes/views/comments patterns from the evidence; do not invent precision — one decimal is enough. **your_engagement_rate** (optional): only when an "Attached client" line appears above. For **each** intentions/categories/formats row, estimate the same metric **for that client** if they published this type of content in this topic: adjust typical ER up or down from topic–business fit, brand voice match, and how well the format fits their strategy. Same units as engagement_rate. If there is **no** Attached client block, **omit** your_engagement_rate on every row (do not send null).
 - For content_breakdown.categories: each "name" must be a **short, plain-language label** (ideally 2–6 words). Good: "How-to & checklists", "Explainers", "Walkthroughs", "News & commentary". Bad: long titles with parenthetical glossaries like "Explainers (definitions, structures, examples)" — keep names scannable; the merger evidence already carries nuance.
 - platform_breakdown: which platforms appeared most in the SERP results. Estimate post_count, comment_count, avg_sentiment from evidence.

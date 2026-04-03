@@ -27,7 +27,7 @@ function HookCard({ hook }: { hook: TopicSearchHookRow }) {
             &ldquo;{hook.pattern}&rdquo;
           </p>
 
-          <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-text-muted">
+          <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-text-muted">
             <span className="flex items-center gap-1">
               <Zap size={11} className="text-accent2-text" />
               {hook.video_count} videos
@@ -52,7 +52,7 @@ function HookCard({ hook }: { hook: TopicSearchHookRow }) {
 
       {expanded && hook.example_video_ids && hook.example_video_ids.length > 0 ? (
         <div className="mt-3 pt-3 border-t border-nativz-border/50">
-          <p className="text-[11px] text-text-muted">
+          <p className="text-xs text-text-muted">
             Example videos: {hook.example_video_ids.length} clips use this pattern
           </p>
         </div>

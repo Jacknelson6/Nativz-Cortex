@@ -133,7 +133,7 @@ export default async function PortalAnalyzePage() {
                     {board.description && (
                       <p className="text-xs text-text-muted line-clamp-1">{board.description}</p>
                     )}
-                    <div className="flex items-center gap-1 text-[11px] text-text-muted">
+                    <div className="flex items-center gap-1 text-xs text-text-muted">
                       <Clock size={10} />
                       {formatRelativeTime(board.updated_at)}
                     </div>

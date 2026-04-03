@@ -150,7 +150,7 @@ export function AiTakeaways({
                       <Flame size={16} className="text-accent-text" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-base font-semibold leading-snug text-text-primary line-clamp-2 sm:text-[17px]">
+                      <p className="text-base font-semibold leading-snug text-text-primary line-clamp-2">
                         {driver.title}
                       </p>
                       {driver.titleDetail ? (
@@ -204,7 +204,7 @@ export function AiTakeaways({
                       <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-text-muted">
                         Hook you could try{clientName ? ` (${clientName})` : ''}
                       </p>
-                      <p className="text-sm leading-snug text-text-secondary italic sm:text-[15px]">
+                      <p className="text-sm leading-snug text-text-secondary italic">
                         &ldquo;{displayHook}&rdquo;
                       </p>
                     </div>

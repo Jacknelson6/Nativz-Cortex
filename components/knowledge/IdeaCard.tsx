@@ -105,7 +105,7 @@ export function IdeaCard({ idea, clientId }: IdeaCardProps) {
       {/* Content pillar */}
       <div className="flex items-center gap-1.5 mt-auto pt-1">
         <Tag size={10} className="text-text-muted" />
-        <span className="text-[11px] text-text-muted">{idea.content_pillar}</span>
+        <span className="text-xs text-text-muted">{idea.content_pillar}</span>
       </div>
     </div>
   );

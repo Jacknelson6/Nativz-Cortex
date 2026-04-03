@@ -1,7 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
 
-const DEFAULT_PLANNER = 'openai/gpt-5.4-mini';
-const DEFAULT_RESEARCH = 'openai/gpt-5.4-mini';
+const DEFAULT_PLANNER = DEFAULT_OPENROUTER_MODEL;
+const DEFAULT_RESEARCH = DEFAULT_OPENROUTER_MODEL;
 
 let cached: {
   planner: string;

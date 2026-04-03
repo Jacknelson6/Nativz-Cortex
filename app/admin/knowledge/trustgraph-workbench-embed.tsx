@@ -23,11 +23,11 @@ export function TrustGraphWorkbenchSetup() {
           The Workbench (graph visualizer, relationships, vector search) runs as its own app. Point Cortex at it with a public env var, then restart{' '}
           <code className="text-[10px] px-1 py-0.5 rounded bg-background">npm run dev</code>.
         </p>
-        <p className="text-[11px] font-medium text-text-secondary mb-2">Add to <code className="text-[10px] text-text-muted">.env.local</code>:</p>
-        <pre className="text-left text-[11px] font-mono text-text-primary bg-background border border-nativz-border rounded-lg p-3 mb-4 overflow-x-auto">
+        <p className="text-xs font-medium text-text-secondary mb-2">Add to <code className="text-[10px] text-text-muted">.env.local</code>:</p>
+        <pre className="text-left text-xs font-mono text-text-primary bg-background border border-nativz-border rounded-lg p-3 mb-4 overflow-x-auto">
           {`NEXT_PUBLIC_TRUSTGRAPH_WORKBENCH_URL=http://localhost:8081`}
         </pre>
-        <p className="text-[11px] text-text-muted mb-4">
+        <p className="text-xs text-text-muted mb-4">
           Use the host and port where <strong className="text-text-secondary">Workbench</strong> is listening (here <strong className="text-text-secondary">8081</strong> on your Mac mini; upstream quickstarts often use <strong className="text-text-secondary">8888</strong>). The API gateway may be a different port (e.g. <strong className="text-text-secondary">8080</strong>). See{' '}
           <a
             href="https://github.com/trustgraph-ai/trustgraph#quickstart"

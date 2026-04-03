@@ -339,7 +339,7 @@ export function AiChatPanel({ boardId, items, notes, onClose }: AiChatPanelProps
               </div>
               <div>
                 <h2 className="text-sm font-semibold text-white">Cortex AI</h2>
-                <p className="text-[11px] text-text-muted">Creative strategist</p>
+                <p className="text-xs text-text-muted">Creative strategist</p>
               </div>
             </div>
             <Button variant="ghost" size="sm" onClick={onClose} className="h-7 w-7 p-0">
@@ -349,7 +349,7 @@ export function AiChatPanel({ boardId, items, notes, onClose }: AiChatPanelProps
 
           {/* Content indicator */}
           {contentLabel && (
-            <div className="flex items-center gap-1.5 text-[11px] text-text-muted">
+            <div className="flex items-center gap-1.5 text-xs text-text-muted">
               <Link2 size={12} />
               <span>Chatting with {contentLabel}</span>
             </div>
@@ -370,13 +370,13 @@ export function AiChatPanel({ boardId, items, notes, onClose }: AiChatPanelProps
                   <span className="block mt-1.5 text-text-muted/60">Using {contentLabel} from the board.</span>
                 )}
               </p>
-              <p className="text-[11px] text-text-muted/50 mt-2">Type <span className="text-accent-text">@clientname</span> to include client context</p>
+              <p className="text-xs text-text-muted/50 mt-2">Type <span className="text-accent-text">@clientname</span> to include client context</p>
               <div className="mt-4 flex flex-wrap gap-2 justify-center">
                 {['Analyze the hooks', 'Compare these videos', 'Suggest a rescript', 'What makes this viral?'].map(suggestion => (
                   <button
                     key={suggestion}
                     onClick={() => { setInput(suggestion); inputRef.current?.focus(); }}
-                    className="text-[11px] px-3 py-1.5 rounded-full border border-nativz-border text-text-muted hover:text-text-secondary hover:border-blue-500/30 transition-colors"
+                    className="text-xs px-3 py-1.5 rounded-full border border-nativz-border text-text-muted hover:text-text-secondary hover:border-blue-500/30 transition-colors"
                   >
                     {suggestion}
                   </button>
@@ -425,7 +425,7 @@ export function AiChatPanel({ boardId, items, notes, onClose }: AiChatPanelProps
                     i === mentionIndex ? 'bg-accent/20 text-accent-text' : 'text-text-secondary hover:bg-white/5'
                   }`}
                 >
-                  <span className="w-5 h-5 rounded bg-surface-hover border border-nativz-border flex items-center justify-center text-[9px] font-bold text-text-muted shrink-0">
+                  <span className="w-5 h-5 rounded bg-surface-hover border border-nativz-border flex items-center justify-center text-[10px] font-bold text-text-muted shrink-0">
                     {client.name[0]}
                   </span>
                   <span className="truncate">{client.name}</span>

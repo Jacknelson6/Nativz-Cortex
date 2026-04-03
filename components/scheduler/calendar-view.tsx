@@ -198,7 +198,7 @@ function PostChip({ post, onClick }: { post: CalendarPost; onClick: () => void }
         <div className="w-5 h-5 rounded bg-surface-hover flex-shrink-0" />
       )}
       <span className="text-[10px] text-text-secondary truncate">{time}</span>
-      <Badge variant={config.variant} className="text-[8px] px-1 py-0 ml-auto flex-shrink-0">
+      <Badge variant={config.variant} className="text-[10px] px-1 py-0 ml-auto flex-shrink-0">
         {config.label}
       </Badge>
     </button>

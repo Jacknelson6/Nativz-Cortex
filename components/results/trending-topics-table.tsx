@@ -5,10 +5,10 @@ import { ChevronDown, ChevronRight, ChevronUp, Bookmark, Check, Copy } from 'luc
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { TooltipCard } from '@/components/ui/tooltip-card';
-import { getSentimentLabel } from '@/lib/utils/sentiment';
 import { TOOLTIPS } from '@/lib/tooltips';
-import { formatCompactCount } from '@/lib/utils/format';
 import { TopicRowExpanded } from './topic-row-expanded';
+import { SentimentSplitBar } from './sentiment-split-bar';
+import { formatTopicReach, getTopicReachValue, RESONANCE_LABEL } from '@/lib/search/topic-metrics';
 import type { TrendingTopic, LegacyTrendingTopic } from '@/lib/types/search';
 
 interface TrendingTopicsTableProps {
@@ -24,13 +24,6 @@ const RESONANCE_ORDER: Record<string, number> = {
   viral: 3,
 };
 
-const RESONANCE_LABEL: Record<string, string> = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  viral: 'Viral',
-};
-
 const TOPIC_FALLBACK_EMOJI = ['🔍', '🤖', '📣', '💡', '🎯', '✨', '📊', '🎬', '🎨', '📈'];
 
 type SortKey = 'resonance' | 'sentiment' | 'reach';
@@ -39,39 +32,6 @@ type SortDir = 'asc' | 'desc';
 /** Shared grid keeps Views / Resonance / Sentiment / actions aligned on header and rows. */
 const METRICS_GRID =
   'grid shrink-0 grid-cols-[minmax(5rem,7.5rem)_minmax(4.75rem,6rem)_minmax(152px,172px)_minmax(4.75rem,5.5rem)] gap-x-4 gap-y-1 items-center sm:gap-x-6 lg:gap-x-8';
-
-function getTopicReachValue(topic: TrendingTopic | LegacyTrendingTopic): number {
-  if ('total_engagement' in topic && typeof (topic as TrendingTopic).total_engagement === 'number') {
-    return Math.max(0, (topic as TrendingTopic).total_engagement ?? 0);
-  }
-  if ('estimated_views' in topic && typeof topic.estimated_views === 'number') {
-    return Math.max(0, topic.estimated_views);
-  }
-  return 0;
-}
-
-function formatTopicReach(topic: TrendingTopic | LegacyTrendingTopic): string {
-  const v = getTopicReachValue(topic);
-  if (v <= 0) return '—';
-  return formatCompactCount(v);
-}
-
-function SentimentSplitBar({ sentiment }: { sentiment: number }) {
-  const pos = Math.max(0, Math.min(1, (sentiment + 1) / 2));
-  const neg = 1 - pos;
-  const posPercent = Math.round(pos * 100);
-  const negPercent = Math.round(neg * 100);
-  return (
-    <div className="flex items-center gap-2 shrink-0" title={getSentimentLabel(sentiment)}>
-      <span className="text-xs tabular-nums text-emerald-400/90 w-8 text-right">{posPercent}%</span>
-      <div className="flex h-2.5 w-[76px] sm:w-[84px] gap-0.5 overflow-hidden rounded-full">
-        <div className="h-full min-w-[3px] rounded-l-full bg-emerald-500/85" style={{ width: `${pos * 100}%` }} />
-        <div className="h-full min-w-[3px] rounded-r-full bg-red-500/85" style={{ width: `${neg * 100}%` }} />
-      </div>
-      <span className="text-xs tabular-nums text-red-400/90 w-8">{negPercent}%</span>
-    </div>
-  );
-}
 
 function TopicTitleCell({ name, index }: { name: string; index: number }) {
   const leading = name.match(/^(\p{Extended_Pictographic})\s*/u);
@@ -84,7 +44,7 @@ function TopicTitleCell({ name, index }: { name: string; index: number }) {
       <span className="text-xl leading-none shrink-0 sm:text-2xl" aria-hidden>
         {displayEmoji}
       </span>
-      <span className="min-w-0 text-base font-semibold leading-snug text-text-primary break-words whitespace-normal sm:text-[17px]">
+      <span className="min-w-0 text-base font-semibold leading-snug text-text-primary break-words whitespace-normal">
         {label}
       </span>
     </span>
@@ -219,7 +179,7 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
     <Card padding="none" elevated className="overflow-hidden">
       <div className="border-b border-nativz-border px-4 py-3.5 sm:px-6 sm:py-4">
         <div className="flex min-w-0 items-end justify-between gap-4 sm:gap-6">
-          <span className="min-w-0 text-[11px] font-semibold uppercase tracking-wide text-text-muted sm:text-xs">
+          <span className="min-w-0 text-xs font-semibold uppercase tracking-wide text-text-muted">
             Trending topics
           </span>
           <div className={METRICS_GRID}>
@@ -283,10 +243,10 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
                 </div>
 
                 <div className={METRICS_GRID}>
-                  <span className="min-w-0 text-right text-base font-semibold tabular-nums text-text-primary sm:text-[17px]">
+                  <span className="min-w-0 text-right text-base font-semibold tabular-nums text-text-primary">
                     {formatTopicReach(topic)}
                   </span>
-                  <span className="min-w-0 text-center text-base font-medium text-text-secondary sm:text-[17px]">
+                  <span className="min-w-0 text-center text-base font-medium text-text-secondary">
                     {RESONANCE_LABEL[topic.resonance] ?? topic.resonance}
                   </span>
                   <div className="min-w-0 flex justify-end">

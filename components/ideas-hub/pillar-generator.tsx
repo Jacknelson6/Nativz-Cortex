@@ -164,7 +164,7 @@ export function PillarGenerator({ clientId, pillars, onPillarsChange, onNext }: 
         <div className="flex flex-col items-center justify-center py-12">
           <Loader2 size={28} className="animate-spin text-accent2-text mb-3" />
           <p className="text-sm text-text-muted">{pollMessage ?? 'Generating pillars...'}</p>
-          <p className="text-[11px] text-text-muted/60 mt-1">This usually takes 15-30 seconds</p>
+          <p className="text-xs text-text-muted/60 mt-1">This usually takes 15-30 seconds</p>
         </div>
       )}
 

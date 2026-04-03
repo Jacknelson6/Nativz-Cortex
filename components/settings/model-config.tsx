@@ -263,7 +263,7 @@ export function ModelSelector({
           </div>
 
           {/* Column headers */}
-          <div className="grid grid-cols-[minmax(180px,1fr)_56px_32px_32px_32px_32px_68px_68px] gap-1 px-3 py-1.5 border-b border-nativz-border text-[11px] font-medium text-text-muted uppercase tracking-wider">
+          <div className="grid grid-cols-[minmax(180px,1fr)_56px_32px_32px_32px_32px_68px_68px] gap-1 px-3 py-1.5 border-b border-nativz-border text-xs font-medium text-text-muted uppercase tracking-wider">
             <button onClick={() => toggleSort('name')} className="text-left hover:text-text-primary transition-colors flex items-center gap-1">
               Model {sortIcon('name')}
             </button>

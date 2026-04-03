@@ -151,7 +151,7 @@ export function IdeaGeneratorWithClientSelector({ clients }: IdeaGeneratorWithCl
         <div className="flex flex-col items-center justify-center py-16">
           <Loader2 size={28} className="animate-spin text-accent-text mb-3" />
           <p className="text-sm text-text-muted">Generating ideas for {selectedClient?.name}…</p>
-          <p className="text-[11px] text-text-muted/60 mt-1">This usually takes 10–20 seconds</p>
+          <p className="text-xs text-text-muted/60 mt-1">This usually takes 10–20 seconds</p>
         </div>
       )}
 

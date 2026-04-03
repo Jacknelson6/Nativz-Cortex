@@ -25,6 +25,7 @@
     "kandy:upload": "tsx scripts/upload-kandy-templates.ts",
     "kandy:clear": "tsx scripts/clear-kandy-templates.ts",
     "kandy:analyze": "tsx scripts/analyze-kandy-templates.ts",
+    "demo:home-furniture": "tsx scripts/seed-demo-home-furniture-topic-search.ts",
     "nano-banana:previews": "tsx scripts/generate-nano-banana-preview-placeholders.ts",
     "scrapling:fetch-server": "python3 scripts/scrapling-fetch-server.py",
     "export:rankprompt-digital-pack": "tsx scripts/export-digital-products-rankprompt-json.ts",

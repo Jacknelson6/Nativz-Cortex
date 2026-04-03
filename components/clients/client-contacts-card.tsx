@@ -195,7 +195,7 @@ export function ClientContactsCard({ clientId, clientName, vaultContacts = [], p
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-text-primary truncate">{contact.name}</p>
                     {contact.is_primary && (
-                      <Badge variant="emerald" className="text-[9px] px-1.5 py-0">Primary</Badge>
+                      <Badge variant="emerald" className="text-[10px] px-1.5 py-0">Primary</Badge>
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
@@ -203,7 +203,7 @@ export function ClientContactsCard({ clientId, clientName, vaultContacts = [], p
                       <p className="text-xs text-text-muted">{contact.role}</p>
                     )}
                     {contact.project_role && (
-                      <Badge variant="default" className="text-[9px] px-1.5 py-0">{contact.project_role}</Badge>
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0">{contact.project_role}</Badge>
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1">
@@ -263,7 +263,7 @@ export function ClientContactsCard({ clientId, clientName, vaultContacts = [], p
                     {contact.email}
                   </p>
                 </div>
-                <Badge variant="default" className="text-[9px] px-1 py-0">Vault</Badge>
+                <Badge variant="default" className="text-[10px] px-1 py-0">Vault</Badge>
               </div>
             ))}
 
@@ -283,7 +283,7 @@ export function ClientContactsCard({ clientId, clientName, vaultContacts = [], p
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-text-primary truncate">{contact.full_name}</p>
                   <div className="flex items-center gap-2">
-                    <Badge variant="info" className="text-[9px] px-1 py-0">Portal</Badge>
+                    <Badge variant="info" className="text-[10px] px-1 py-0">Portal</Badge>
                     {contact.job_title && <p className="text-xs text-text-muted truncate">{contact.job_title}</p>}
                   </div>
                 </div>

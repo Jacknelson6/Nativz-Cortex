@@ -142,7 +142,7 @@ function ClientSection({
         <div className="flex items-center gap-3">
           <Building2 size={16} className="text-text-muted" />
           <span className="text-sm font-semibold text-text-primary">{client.name}</span>
-          <span className="text-[11px] text-text-muted rounded-full bg-background border border-nativz-border px-2 py-0.5">
+          <span className="text-xs text-text-muted rounded-full bg-background border border-nativz-border px-2 py-0.5">
             {ideas.length} {ideas.length === 1 ? 'idea' : 'ideas'}
           </span>
         </div>
@@ -178,12 +178,12 @@ function ClientSection({
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-text-primary truncate">{idea.title}</p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[11px] text-text-muted flex items-center gap-1">
+                        <span className="text-xs text-text-muted flex items-center gap-1">
                           <Clock size={10} />
                           {formatRelativeTime(idea.created_at)}
                         </span>
                         {meta?.content_pillar && (
-                          <span className="text-[11px] text-text-muted flex items-center gap-1">
+                          <span className="text-xs text-text-muted flex items-center gap-1">
                             <Tag size={10} />
                             {meta.content_pillar}
                           </span>

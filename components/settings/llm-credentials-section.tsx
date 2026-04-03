@@ -161,13 +161,13 @@ export function LlmCredentialsSection() {
             <button
               type="button"
               onClick={() => void clearBucket(provider, row.bucket)}
-              className="text-[11px] text-text-muted hover:text-amber-400/90"
+              className="text-xs text-text-muted hover:text-amber-400/90"
             >
               Remove key
             </button>
           )}
         </div>
-        <p className="mb-3 text-[11px] text-text-muted">{row.hint}</p>
+        <p className="mb-3 text-xs text-text-muted">{row.hint}</p>
         {block[row.bucket].configured && (
           <p className="mb-2 font-mono text-xs text-text-secondary">
             Saved: {block[row.bucket].masked ?? '••••'}

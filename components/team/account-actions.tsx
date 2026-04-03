@@ -157,7 +157,7 @@ export function AccountActions({ memberId, memberEmail, linkedUserId, linkedUser
           </div>
           {showDeleteConfirm && (
             <div className="rounded-lg border border-red-500/20 bg-red-500/[0.04] p-2.5 space-y-2">
-              <p className="text-[11px] text-red-400">
+              <p className="text-xs text-red-400">
                 Delete this user&apos;s Cortex account? They will lose access and need a new invite.
               </p>
               <div className="flex gap-2">
@@ -185,7 +185,7 @@ export function AccountActions({ memberId, memberEmail, linkedUserId, linkedUser
             <div className="flex gap-2">
               <button
                 onClick={() => { setShowLinkDropdown(true); fetchLinkableUsers(); }}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-nativz-border/60 px-2.5 py-1.5 text-[11px] text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer"
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-nativz-border/60 px-2.5 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer"
               >
                 <LinkIcon size={11} />
                 Link existing
@@ -193,7 +193,7 @@ export function AccountActions({ memberId, memberEmail, linkedUserId, linkedUser
               <button
                 onClick={handleInvite}
                 disabled={inviting || !memberEmail}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-nativz-border/60 px-2.5 py-1.5 text-[11px] text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer disabled:opacity-40"
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-nativz-border/60 px-2.5 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer disabled:opacity-40"
               >
                 <Send size={11} />
                 {inviting ? 'Creating...' : 'Invite'}
@@ -242,12 +242,12 @@ export function AccountActions({ memberId, memberEmail, linkedUserId, linkedUser
                   {copied ? <Check size={11} /> : <Copy size={11} />}
                 </Button>
               </div>
-              <p className="text-[9px] text-text-muted/40">Expires in 7 days</p>
+              <p className="text-[10px] text-text-muted/40">Expires in 7 days</p>
             </div>
           )}
 
           {!memberEmail && !showLinkDropdown && (
-            <p className="text-[9px] text-amber-400/60">Add an email to send invites</p>
+            <p className="text-[10px] text-amber-400/60">Add an email to send invites</p>
           )}
         </div>
       )}

@@ -47,6 +47,8 @@ export const mergerEmotionSchema = z.object({
   emotion: z.string(),
   percentage: z.number(),
   color: z.string(),
+  /** One-sentence content strategy insight specific to why this emotion appears for this topic. */
+  subtext: z.string().optional(),
 });
 
 export const mergerContentBreakdownItemSchema = z.object({

@@ -22,7 +22,10 @@ export type NotificationType =
   | 'post_published'
   | 'post_failed'
   | 'post_trending'
-  | 'account_disconnected';
+  | 'account_disconnected'
+  | 'search_completed'
+  | 'topic_search_failed'
+  | 'topic_search_stuck';
 
 /** Load merged notification preferences for a user */
 export async function getUserNotificationPreferences(userId: string): Promise<NotificationPreferences> {

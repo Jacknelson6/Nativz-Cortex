@@ -118,7 +118,7 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
               >
                 <div className="absolute inset-0" style={{ backgroundColor: c.hex }} />
                 <div className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 backdrop-blur-[1px]">
-                  <p className="truncate text-center text-[9px] font-semibold capitalize leading-tight text-white">
+                  <p className="truncate text-center text-[10px] font-semibold capitalize leading-tight text-white">
                     {c.role ?? 'Color'}
                   </p>
                 </div>
@@ -187,7 +187,7 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
                 ) : (
                   <div className="h-6 w-6 rounded bg-white/[0.04] shrink-0" />
                 )}
-                <span className="text-[11px] text-text-secondary truncate">{p.name}</span>
+                <span className="text-xs text-text-secondary truncate">{p.name}</span>
               </div>
             ))}
             {products.length > 3 && (
@@ -212,7 +212,7 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
             {messagingPillars.slice(0, 4).map((p, i) => (
               <div key={i} className="flex items-center gap-1.5">
                 <ChevronRight size={10} className="text-accent-text shrink-0" />
-                <span className="text-[11px] text-text-secondary">{p}</span>
+                <span className="text-xs text-text-secondary">{p}</span>
               </div>
             ))}
           </div>
@@ -281,7 +281,7 @@ function BentoCard({
       <div className="mt-auto flex shrink-0 items-center justify-between border-t border-white/[0.04] pt-2">
         <div className="flex items-center gap-1.5">
           <span className="text-text-muted">{icon}</span>
-          <span className="text-[11px] font-medium text-text-muted">{title}</span>
+          <span className="text-xs font-medium text-text-muted">{title}</span>
         </div>
         <div className="flex items-center gap-1">
           {verified ? (

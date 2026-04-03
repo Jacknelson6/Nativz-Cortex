@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getTopicSearchPipelineFromEnv } from '@/lib/config/topic-search-pipeline';
+import { assertViewerCanCreateSearchForClient } from '@/lib/api/topic-search-access';
 
 const searchSchema = z.object({
   query: z.string().min(1, 'Search query is required').max(500),
@@ -57,6 +58,14 @@ export async function POST(request: NextRequest) {
     const topicPipeline = getTopicSearchPipelineFromEnv();
 
     const adminClient = createAdminClient();
+
+    const clientCheck = await assertViewerCanCreateSearchForClient(adminClient, user.id, client_id);
+    if (!clientCheck.ok) {
+      return NextResponse.json(
+        { error: clientCheck.error },
+        { status: clientCheck.status },
+      );
+    }
 
     const searchVersion = topicPipeline === 'llm_v1' ? 3 : isV2 ? 2 : 1;
     const initialStatus = topicPipeline === 'llm_v1' ? 'pending_subtopics' : 'processing';

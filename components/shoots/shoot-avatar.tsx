@@ -5,7 +5,7 @@ import { getAbbr } from './helpers';
 
 export function ShootAvatar({ item, size = 'md', dimmed }: { item: ShootItem; size?: 'sm' | 'md' | 'lg'; dimmed?: boolean }) {
   const sizeClass = size === 'sm' ? 'h-6 w-6' : size === 'lg' ? 'h-10 w-10' : 'h-8 w-8';
-  const textSize = size === 'sm' ? 'text-[8px]' : size === 'lg' ? 'text-xs' : 'text-[10px]';
+  const textSize = size === 'sm' ? 'text-[10px]' : size === 'lg' ? 'text-xs' : 'text-[10px]';
 
   if (item.clientLogoUrl) {
     return (

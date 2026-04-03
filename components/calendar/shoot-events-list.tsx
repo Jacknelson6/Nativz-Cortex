@@ -196,7 +196,7 @@ export function ShootEventsList() {
                     {event.title}
                   </h3>
                   {isUrgent && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 font-medium whitespace-nowrap">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 font-medium whitespace-nowrap">
                       {daysUntil === 0 ? 'TODAY' : daysUntil === 1 ? 'TOMORROW' : `${daysUntil}d`}
                     </span>
                   )}
@@ -256,7 +256,7 @@ export function ShootEventsList() {
                         <button
                           type="button"
                           onClick={() => setOpenDropdownId(openDropdownId === event.id ? null : event.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-amber-500/40 px-2.5 py-1 text-[11px] text-amber-400 hover:border-amber-400 hover:bg-amber-500/5 transition-colors"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-amber-500/40 px-2.5 py-1 text-xs text-amber-400 hover:border-amber-400 hover:bg-amber-500/5 transition-colors"
                         >
                           <Building2 size={10} />
                           Assign client

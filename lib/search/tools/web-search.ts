@@ -4,6 +4,7 @@
  * - **OpenRouter** (`searchWebOpenRouter`) — OpenRouter chat + web plugin (optional; uses OpenRouter key, not OpenAI).
  */
 import { searxngSearch } from '@/lib/serp/client';
+import { getSearxngWebEngines } from '@/lib/config/searxng-web-engines';
 import { createCompletion } from '@/lib/ai/client';
 import { extractUrlsFromPlainText } from '@/lib/ai/openrouter-citations';
 import { dedupeUrls, normalizeUrlForMatch } from '@/lib/search/tools/urls';
@@ -34,6 +35,7 @@ export async function searchWebSearxng(query: string, options: WebSearchOptions 
     timeRange: options.timeRange,
     language: options.language && options.language !== 'all' ? options.language : undefined,
     categories: 'general',
+    engines: getSearxngWebEngines(),
   });
 
   const hits: WebSearchHit[] = [];

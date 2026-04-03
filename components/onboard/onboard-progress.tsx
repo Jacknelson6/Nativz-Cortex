@@ -50,7 +50,7 @@ export function OnboardProgress({ currentStep, completedSteps }: OnboardProgress
               </div>
               <span
                 className={`
-                  mt-2 text-[11px] font-medium whitespace-nowrap transition-colors duration-300
+                  mt-2 text-xs font-medium whitespace-nowrap transition-colors duration-300
                   ${isCurrent ? 'text-accent' : isPast || isComplete ? 'text-text-secondary' : 'text-text-muted'}
                 `}
               >

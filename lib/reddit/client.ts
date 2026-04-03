@@ -5,6 +5,7 @@
 // This avoids Reddit API registration entirely.
 
 import { searxngSearch } from '@/lib/serp/client';
+import { getSearxngWebEngines } from '@/lib/config/searxng-web-engines';
 
 export interface RedditPost {
   id: string;
@@ -51,18 +52,19 @@ async function findRedditThreadsViaSearxng(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const results: (any | null)[] = [];
 
+  const webEngines = getSearxngWebEngines();
   const searches: { q: string; opts: Record<string, string> }[] = [
     // Direct reddit engine search
     { q: query, opts: { categories: 'general', engines: 'reddit' } },
-    // Broader web search scoped to reddit
-    { q: `reddit ${query} discussion`, opts: { categories: 'general' } },
+    // Broader web search scoped to reddit (DuckDuckGo-backed general web by default)
+    { q: `reddit ${query} discussion`, opts: { categories: 'general', engines: webEngines } },
   ];
 
   // For larger counts, add extra query variants for more coverage
   if (count > 40) {
     searches.push(
-      { q: `site:reddit.com ${query}`, opts: { categories: 'general' } },
-      { q: `reddit ${query} advice tips`, opts: { categories: 'general' } },
+      { q: `site:reddit.com ${query}`, opts: { categories: 'general', engines: webEngines } },
+      { q: `reddit ${query} advice tips`, opts: { categories: 'general', engines: webEngines } },
     );
   }
 
@@ -243,18 +245,73 @@ export async function fetchTopComments(
 }
 
 /**
+ * If Apify returned posts but no comment rows, fill comments via Reddit's .json API (same as legacy).
+ */
+async function enrichApifyPostsWithComments(
+  posts: (RedditPost & { top_comments: RedditComment[] })[],
+  maxThreads: number,
+): Promise<(RedditPost & { top_comments: RedditComment[] })[]> {
+  const need = posts.filter((p) => p.top_comments.length === 0 && p.num_comments > 0).slice(0, maxThreads);
+  if (need.length === 0) return posts;
+
+  const byId = new Map(posts.map((p) => [p.id, { ...p }]));
+  const batchSize = 4;
+
+  for (let i = 0; i < need.length; i += batchSize) {
+    const batch = need.slice(i, i + batchSize);
+    const settled = await Promise.allSettled(
+      batch.map(async (post) => {
+        const { comments } = await scrapeRedditThread(post.url);
+        return { id: post.id, comments };
+      }),
+    );
+    for (const r of settled) {
+      if (r.status === 'fulfilled' && r.value.comments.length > 0) {
+        const cur = byId.get(r.value.id);
+        if (cur) cur.top_comments = r.value.comments;
+      }
+    }
+    if (i + batchSize < need.length) await new Promise((res) => setTimeout(res, 500));
+  }
+
+  return posts.map((p) => byId.get(p.id) ?? p);
+}
+
+/**
  * Search Reddit and fetch top comments for the most engaging posts.
  * Main entry point for the platform router.
  *
- * Strategy:
- * 1. SearXNG finds Reddit threads (self-hosted, no rate limits)
- * 2. Scrape top threads for full content + comments (batched, with delays)
+ * When APIFY_API_KEY is set (and APIFY_REDDIT_USE is not "0"), prefers
+ * macrocosmos/reddit-scraper: discover subreddits via SearXNG, then Apify (~$0.50/1k results).
+ * Falls back to SearXNG + per-thread .json scraping on failure.
  */
 export async function gatherRedditData(
   query: string,
   timeRange: string,
   volume: string = 'medium',
 ): Promise<RedditSearchResult & { postsWithComments: (RedditPost & { top_comments: RedditComment[] })[] }> {
+  const apiKey = process.env.APIFY_API_KEY?.trim();
+  const redditApifyOff = process.env.APIFY_REDDIT_USE === '0';
+
+  if (apiKey && !redditApifyOff) {
+    try {
+      const { gatherRedditViaMacrocosmosApify } = await import('@/lib/reddit/apify-macrocosmos');
+      const apify = await gatherRedditViaMacrocosmosApify(query, timeRange, volume, apiKey);
+      if (apify && apify.postsWithComments.length > 0) {
+        const maxEnrich = volume === 'deep' ? 20 : volume === 'medium' ? 15 : 10;
+        const postsWithComments = await enrichApifyPostsWithComments(apify.postsWithComments, maxEnrich);
+        return {
+          posts: postsWithComments.map(({ top_comments: _tc, ...p }) => p),
+          topSubreddits: apify.topSubreddits,
+          totalPosts: postsWithComments.length,
+          postsWithComments,
+        };
+      }
+    } catch (err) {
+      console.error('[reddit] Apify (macrocosmos) failed, using legacy path:', err);
+    }
+  }
+
   const limit = volume === 'deep' ? 100 : volume === 'medium' ? 60 : 20;
   const result = await searchReddit(query, timeRange, limit);
 

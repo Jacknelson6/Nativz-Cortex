@@ -136,7 +136,7 @@ export function IdeaResultCard({
       </ul>
 
       <div className="flex items-center gap-2">
-        <span className="text-[11px] text-text-muted">{idea.content_pillar}</span>
+        <span className="text-xs text-text-muted">{idea.content_pillar}</span>
       </div>
 
       {/* Script display */}

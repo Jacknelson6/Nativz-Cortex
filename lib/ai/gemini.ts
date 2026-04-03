@@ -1,6 +1,7 @@
 import { createOpenRouterRichCompletion } from './openrouter-rich';
+import { DEFAULT_OPENROUTER_MODEL } from './openrouter-default-model';
 
-const HEALER_MODEL = 'openrouter/healer-alpha';
+const HEALER_MODEL = DEFAULT_OPENROUTER_MODEL;
 
 export interface VideoElement {
   element: string;

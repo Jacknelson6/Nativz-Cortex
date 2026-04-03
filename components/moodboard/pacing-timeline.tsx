@@ -66,15 +66,15 @@ export function PacingTimeline({ pacing, videoDurationMs }: PacingTimelineProps)
         <div className="flex items-center gap-3 mt-1.5">
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-red-400/80" />
-            <span className="text-[9px] text-text-muted">&lt;2s</span>
+            <span className="text-[10px] text-text-muted">&lt;2s</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-amber-400/80" />
-            <span className="text-[9px] text-text-muted">2-5s</span>
+            <span className="text-[10px] text-text-muted">2-5s</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-blue-400/80" />
-            <span className="text-[9px] text-text-muted">&gt;5s</span>
+            <span className="text-[10px] text-text-muted">&gt;5s</span>
           </div>
         </div>
       </div>

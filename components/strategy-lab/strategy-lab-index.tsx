@@ -96,7 +96,7 @@ export function StrategyLabIndex({
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Search clients by name or slug…"
                 autoComplete="off"
-                className="w-full min-h-[3.25rem] border-0 bg-transparent py-3 pl-11 pr-4 text-[15px] font-normal leading-relaxed text-foreground placeholder:text-text-muted/80 focus:outline-none md:min-h-[3.5rem] md:pl-12 md:pr-5 md:text-base"
+                className="w-full min-h-[3.25rem] border-0 bg-transparent py-3 pl-11 pr-4 text-sm font-normal leading-relaxed text-foreground placeholder:text-text-muted/80 focus:outline-none md:min-h-[3.5rem] md:pl-12 md:pr-5 md:text-base"
               />
             </div>
           </div>

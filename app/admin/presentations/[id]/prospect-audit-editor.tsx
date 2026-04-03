@@ -289,7 +289,7 @@ export function ProspectAuditEditor({
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">{pillar.name}</p>
-                          <p className="text-[11px] text-text-muted truncate">{pillar.description}</p>
+                          <p className="text-xs text-text-muted truncate">{pillar.description}</p>
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-xs font-bold text-foreground">{pillar.post_count} posts</p>
@@ -364,7 +364,7 @@ export function ProspectAuditEditor({
                       <p className="text-xs font-medium text-text-muted mb-1.5">Best days</p>
                       <div className="flex flex-wrap gap-1.5">
                         {audit.posting_cadence.best_days.map((day) => (
-                          <span key={day} className="rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-[11px] font-medium text-amber-400">
+                          <span key={day} className="rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400">
                             {day}
                           </span>
                         ))}
@@ -376,7 +376,7 @@ export function ProspectAuditEditor({
                       <p className="text-xs font-medium text-text-muted mb-1.5">Best times</p>
                       <div className="flex flex-wrap gap-1.5">
                         {audit.posting_cadence.best_times.map((time) => (
-                          <span key={time} className="rounded-full bg-surface-hover border border-nativz-border px-2.5 py-0.5 text-[11px] text-text-secondary">
+                          <span key={time} className="rounded-full bg-surface-hover border border-nativz-border px-2.5 py-0.5 text-xs text-text-secondary">
                             <Clock size={10} className="inline mr-1" />{time}
                           </span>
                         ))}

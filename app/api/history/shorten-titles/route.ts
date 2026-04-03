@@ -83,25 +83,32 @@ Include one object per input id. Do not omit ids.
 Input:
 ${JSON.stringify(payload)}`;
 
-    const ai = await createCompletion({
-      messages: [{ role: 'user', content: prompt }],
-      maxTokens: 1400,
-      feature: 'history_title_shortening',
-      userId: user.id,
-      userEmail: user.email ?? undefined,
-    });
-
     let items: { id: string; short: string }[] = [];
     try {
-      const raw = parseAIResponseJSON<unknown>(ai.text);
-      const validated = responseSchema.safeParse(raw);
-      if (validated.success) {
-        items = validated.data.items;
-      } else {
-        console.warn('[shorten-titles] schema mismatch', raw);
+      const ai = await createCompletion({
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 1400,
+        feature: 'history_title_shortening',
+        userId: user.id,
+        userEmail: user.email ?? undefined,
+      });
+      try {
+        const raw = parseAIResponseJSON<unknown>(ai.text);
+        const validated = responseSchema.safeParse(raw);
+        if (validated.success) {
+          items = validated.data.items;
+        } else {
+          console.warn('[shorten-titles] schema mismatch', raw);
+        }
+      } catch (e) {
+        console.warn('[shorten-titles] parse failed', e);
       }
     } catch (e) {
-      console.warn('[shorten-titles] parse failed', e);
+      // OpenRouter 402/429, empty fallbacks, or timeouts — non-fatal; UI still works with truncation.
+      console.warn(
+        '[shorten-titles] LLM unavailable; using mechanical truncation only:',
+        e instanceof Error ? e.message : e,
+      );
     }
 
     const shorts: Record<string, string> = {};

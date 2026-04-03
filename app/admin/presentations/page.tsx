@@ -397,7 +397,7 @@ export default function PresentationsPage() {
                     <h3 className="text-base font-semibold text-text-primary truncate group-hover:text-accent-text transition-colors">
                       {p.title}
                     </h3>
-                    <div className="flex items-center gap-3 text-[11px] text-text-muted">
+                    <div className="flex items-center gap-3 text-xs text-text-muted">
                       {p.client_name && (
                         <span className="rounded-full bg-accent2-surface px-2 py-0.5 text-accent2-text font-medium">
                           {p.client_name}
@@ -432,7 +432,7 @@ export default function PresentationsPage() {
                   className="cursor-pointer w-full text-left p-4 space-y-2 opacity-60 hover:opacity-80 transition-opacity"
                 >
                   <h3 className="text-sm font-semibold text-text-primary truncate">{p.title}</h3>
-                  <div className="flex items-center gap-2 text-[11px] text-text-muted">
+                  <div className="flex items-center gap-2 text-xs text-text-muted">
                     <span className="uppercase font-bold">{typeConfig[p.type]?.label ?? 'Slides'}</span>
                     <span>{formatDate(p.updated_at)}</span>
                   </div>

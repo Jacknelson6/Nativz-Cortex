@@ -118,6 +118,11 @@ export function SourceBrowser({
         defaultClientId={defaultClientId}
         clients={clients}
         linkedIdeas={linkedIdeas}
+        onSourcePatched={(updated) =>
+          setDetail((d) =>
+            d && d.source.id === updated.id && d.source.platform === updated.platform ? { ...d, source: updated } : d,
+          )
+        }
       />
     </section>
   );

@@ -220,7 +220,7 @@ export function SearchForm({ redirectPrefix = '', fixedClientId, hideClientSelec
               <button
                 type="button"
                 onClick={() => setVolume(opt.value)}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                   volume === opt.value ? 'bg-surface text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
                 }`}
               >

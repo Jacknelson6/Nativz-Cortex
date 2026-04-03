@@ -509,14 +509,14 @@ export function IdeasResultsClient({
         {selectedCount > 0 ? (
           <button
             onClick={deselectAll}
-            className="text-[11px] text-accent2-text hover:text-accent2-text cursor-pointer"
+            className="text-xs text-accent2-text hover:text-accent2-text cursor-pointer"
           >
             Deselect
           </button>
         ) : (
           <button
             onClick={selectAll}
-            className="text-[11px] text-accent2-text hover:text-accent2-text cursor-pointer"
+            className="text-xs text-accent2-text hover:text-accent2-text cursor-pointer"
           >
             Select all
           </button>
@@ -609,7 +609,7 @@ export function IdeasResultsClient({
                 <div className="flex items-center gap-2 mb-3 pb-2 border-b border-accent2/20">
                   {pillar.emoji && <span className="text-base">{pillar.emoji}</span>}
                   <h3 className="text-sm font-semibold text-accent2-text">{pillar.name}</h3>
-                  <span className="text-[11px] text-text-muted">{pillarIdeas.length} ideas</span>
+                  <span className="text-xs text-text-muted">{pillarIdeas.length} ideas</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <AnimatePresence mode="popLayout">
@@ -640,7 +640,7 @@ export function IdeasResultsClient({
               <div>
                 <div className="flex items-center gap-2 mb-3 pb-2 border-b border-nativz-border">
                   <h3 className="text-sm font-semibold text-text-secondary">Other ideas</h3>
-                  <span className="text-[11px] text-text-muted">{ungrouped.length} ideas</span>
+                  <span className="text-xs text-text-muted">{ungrouped.length} ideas</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <AnimatePresence mode="popLayout">
@@ -721,7 +721,7 @@ export function IdeasResultsClient({
                 <label className="text-xs text-text-muted">Select a call-to-action</label>
                 <div className="group relative">
                   <HelpCircle size={12} className="text-text-muted/50 hover:text-text-muted cursor-help" />
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-3 py-2 rounded-lg bg-background border border-nativz-border text-[11px] text-text-secondary w-52 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity shadow-xl z-10">
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-3 py-2 rounded-lg bg-background border border-nativz-border text-xs text-text-secondary w-52 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity shadow-xl z-10">
                     A call-to-action tells viewers what to do after watching — like calling, clicking a link, or leaving a comment.
                   </div>
                 </div>
@@ -819,7 +819,7 @@ export function IdeasResultsClient({
                   {customVideoLength && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-accent2-text/60 pointer-events-none">s</span>}
                 </div>
               </div>
-              <p className="text-[11px] text-text-muted mb-5">
+              <p className="text-xs text-text-muted mb-5">
                 ~{Math.round((videoLength / 60) * 130)} words at ~130 wpm
               </p>
 

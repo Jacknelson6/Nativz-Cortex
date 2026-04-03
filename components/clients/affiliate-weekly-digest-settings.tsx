@@ -252,13 +252,13 @@ export function AffiliateWeeklyDigestSettings({
               onChange={setTimeValue}
               disabled={!digestEnabled}
             />
-            <p className="text-[11px] text-text-muted leading-relaxed">
+            <p className="text-xs text-text-muted leading-relaxed">
               Scroll columns pick hour, quarter-hour, and AM/PM. Matches the 15-minute platform cron. Defaults: Wednesday
               14:00 UTC.
             </p>
           </div>
           {affiliateDigestLastSentWeekKey ? (
-            <p className="text-[11px] text-text-muted">
+            <p className="text-xs text-text-muted">
               Last automated send (week id):{' '}
               <span className="font-mono text-text-secondary">{affiliateDigestLastSentWeekKey}</span>
             </p>

@@ -346,7 +346,7 @@ export function TeamMemberModal({
                 <div className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-surface-hover transition-colors">
                   <Mail size={10} className="text-accent-text/60 shrink-0" />
                   <span className="text-xs text-text-secondary truncate flex-1">{member.email}</span>
-                  <span className="text-[9px] text-accent-text/60 bg-accent-surface rounded-full px-1.5 py-0.5 shrink-0">Primary</span>
+                  <span className="text-[10px] text-accent-text/60 bg-accent-surface rounded-full px-1.5 py-0.5 shrink-0">Primary</span>
                 </div>
               )}
 
@@ -369,7 +369,7 @@ export function TeamMemberModal({
               ))}
 
               {!member.email && aliasEmails.length === 0 && (
-                <p className="text-[11px] text-text-muted/40 py-2 text-center">No emails</p>
+                <p className="text-xs text-text-muted/40 py-2 text-center">No emails</p>
               )}
             </div>
 
@@ -378,7 +378,7 @@ export function TeamMemberModal({
               <button
                 onClick={handleSendInvite}
                 disabled={sendingInvite}
-                className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-accent/30 bg-accent-surface/20 px-3 py-2 text-[11px] text-accent-text hover:bg-accent-surface/40 transition-colors cursor-pointer disabled:opacity-50"
+                className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-accent/30 bg-accent-surface/20 px-3 py-2 text-xs text-accent-text hover:bg-accent-surface/40 transition-colors cursor-pointer disabled:opacity-50"
               >
                 {sendingInvite ? (
                   <><Loader2 size={11} className="animate-spin" /> Sending invite...</>
@@ -408,7 +408,7 @@ export function TeamMemberModal({
                     {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                   </button>
                 </div>
-                <p className="text-[9px] text-text-muted/40">Expires in 7 days</p>
+                <p className="text-[10px] text-text-muted/40">Expires in 7 days</p>
               </div>
             )}
           </div>
@@ -451,7 +451,7 @@ export function TeamMemberModal({
               <Loader2 size={14} className="animate-spin text-text-muted/40" />
             </div>
           ) : tasks.length === 0 ? (
-            <p className="text-[11px] text-text-muted/40 py-2 text-center">No open tasks</p>
+            <p className="text-xs text-text-muted/40 py-2 text-center">No open tasks</p>
           ) : (
             <div className="space-y-0.5 max-h-40 overflow-y-auto">
               {tasks.map((task) => (
@@ -462,7 +462,7 @@ export function TeamMemberModal({
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityColors[task.priority] ?? 'bg-gray-400'}`} />
                   <span className="text-xs text-text-secondary truncate flex-1">{task.title}</span>
                   {task.due_date && (
-                    <span className="text-[9px] text-text-muted/50 shrink-0">
+                    <span className="text-[10px] text-text-muted/50 shrink-0">
                       {new Date(task.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                   )}

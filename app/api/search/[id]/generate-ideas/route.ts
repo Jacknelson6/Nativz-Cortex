@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import type { VideoIdea, TopicSearchAIResponse, TrendingTopic } from '@/lib/types/search';
@@ -104,17 +105,19 @@ export async function POST(
 
     const { topic_name, existing_ideas } = parsed.data;
 
-    // Fetch the search to get context
     const adminClient = createAdminClient();
-    const { data: search } = await adminClient
-      .from('topic_searches')
-      .select('query, client_id, raw_ai_response')
-      .eq('id', id)
-      .single();
-
-    if (!search) {
-      return NextResponse.json({ error: 'Search not found' }, { status: 404 });
+    const access = await assertUserCanAccessTopicSearch(adminClient, user.id, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
     }
+    const search = access.search as {
+      query: string;
+      client_id: string | null;
+      raw_ai_response: unknown;
+    };
 
     const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
     const topics = aiResponse?.trending_topics ?? [];

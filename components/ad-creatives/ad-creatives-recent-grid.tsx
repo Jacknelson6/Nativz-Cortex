@@ -72,7 +72,7 @@ export function AdCreativesRecentGrid({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-text-primary">{rc.name}</p>
                   {countLabel ? (
-                    <p className="truncate text-[11px] text-text-muted">{countLabel}</p>
+                    <p className="truncate text-xs text-text-muted">{countLabel}</p>
                   ) : null}
                   {sub ? (
                     <p

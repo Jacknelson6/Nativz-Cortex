@@ -11,12 +11,21 @@ import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
 import { normalizeSyntheticAudiences } from '@/lib/search/synthetic-audiences';
-import type { TopicSearchAIResponse, SearchPlatform, TrendingTopic, TopicSource } from '@/lib/types/search';
+import type {
+  TopicSearch,
+  TopicSearchAIResponse,
+  SearchPlatform,
+  TrendingTopic,
+  TopicSource,
+} from '@/lib/types/search';
 import type { SerpData } from '@/lib/serp/types';
 import type { ClientPreferences } from '@/lib/types/database';
 import { syncSearchToVault } from '@/lib/vault/sync';
 import { createNotification } from '@/lib/notifications/create';
+import { notifyTopicSearchFailedOnce } from '@/lib/topic-search/ops-notify';
 import { runLlmTopicPipeline } from '@/lib/search/llm-pipeline/run-llm-topic-pipeline';
+import { cloneJsonForPostgres } from '@/lib/utils/json-for-postgres';
+import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
 
 /** Vercel Pro / Fluid can use 800s — heavy multi-platform runs often exceed 5 minutes. */
 export const maxDuration = 800;
@@ -77,35 +86,14 @@ export async function POST(
 
     const adminClient = createAdminClient();
 
-    // Fetch the search record
-    const { data: search, error: fetchError } = await adminClient
-      .from('topic_searches')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !search) {
-      return NextResponse.json({ error: 'Search not found' }, { status: 404 });
+    const access = await assertUserCanAccessTopicSearch(adminClient, user.id, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
     }
-
-    // Org scope check: portal users can only process their own org's client searches
-    if (search.client_id) {
-      const { data: userData } = await adminClient
-        .from('users')
-        .select('role, organization_id')
-        .eq('id', user.id)
-        .single();
-      if (userData?.role === 'viewer') {
-        const { data: client } = await adminClient
-          .from('clients')
-          .select('organization_id')
-          .eq('id', search.client_id)
-          .single();
-        if (client && client.organization_id !== userData.organization_id) {
-          return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-        }
-      }
-    }
+    const search = access.search as unknown as TopicSearch;
 
     if (search.status === 'completed') {
       return NextResponse.json({ status: 'completed' });
@@ -190,7 +178,9 @@ export async function POST(
             time_range: search.time_range,
             country: search.country,
             language: search.language,
-            search_mode: search.search_mode as 'general' | 'client_strategy',
+            search_mode: ((search as { search_mode?: string }).search_mode ?? 'general') as
+              | 'general'
+              | 'client_strategy',
             client_id: search.client_id,
             subtopics: (search as { subtopics?: unknown }).subtopics,
           },
@@ -218,19 +208,21 @@ export async function POST(
             status: 'completed',
             processing_started_at: null,
             summary: result.aiResponse.summary || 'No summary generated.',
-            metrics: safeJson(result.metrics, {}),
-            emotions: safeJson(result.aiResponse.emotions, {}),
-            content_breakdown: safeJson(result.aiResponse.content_breakdown, {}),
-            trending_topics: safeJson(result.aiResponse.trending_topics, []),
-            serp_data: safeJson(result.serpData, { webResults: [], discussions: [], videos: [] }),
-            raw_ai_response: safeJson(result.aiResponse, {}),
-            research_sources: safeJson(result.researchSources, []),
-            pipeline_state: safeJson(result.pipelineState, {}),
-            platform_data: {
+            metrics: cloneJsonForPostgres(safeJson(result.metrics, {})),
+            emotions: cloneJsonForPostgres(safeJson(result.aiResponse.emotions, {})),
+            content_breakdown: cloneJsonForPostgres(safeJson(result.aiResponse.content_breakdown, {})),
+            trending_topics: cloneJsonForPostgres(safeJson(result.aiResponse.trending_topics, [])),
+            serp_data: cloneJsonForPostgres(
+              safeJson(result.serpData, { webResults: [], discussions: [], videos: [] }),
+            ),
+            raw_ai_response: cloneJsonForPostgres(safeJson(result.aiResponse, {})),
+            research_sources: cloneJsonForPostgres(safeJson(result.researchSources, [])),
+            pipeline_state: cloneJsonForPostgres(safeJson(result.pipelineState, {})),
+            platform_data: cloneJsonForPostgres({
               stats: [],
               sourceCount: result.platformSources?.length ?? 0,
               sources: result.platformSources ?? [],
-            },
+            }),
             tokens_used: result.totalTokens ?? 0,
             estimated_cost: result.estimatedCost ?? 0,
             completed_at: new Date().toISOString(),
@@ -247,6 +239,7 @@ export async function POST(
               summary: `Could not save results: ${llmUpdateErr.message}`,
             })
             .eq('id', id);
+          await notifyTopicSearchFailedOnce(adminClient, id);
           return NextResponse.json(
             { error: 'Failed to save search results', details: llmUpdateErr.message },
             { status: 500 },
@@ -304,7 +297,7 @@ export async function POST(
         await adminClient
           .from('topic_searches')
           .update({
-            platform_data: {
+            platform_data: cloneJsonForPostgres({
               stats: platformResults.platformStats,
               sourceCount: platformResults.sources.length,
               sources: platformResults.sources.map(s => ({
@@ -322,7 +315,7 @@ export async function POST(
                 comments: s.comments.slice(0, 5),
                 transcript: s.transcript?.substring(0, 1000) ?? null,
               })),
-            },
+            }),
           })
           .eq('id', id);
       } else {
@@ -555,12 +548,12 @@ export async function POST(
           status: 'completed',
           processing_started_at: null,
           summary: aiResponse.summary,
-          metrics,
-          emotions: aiResponse.emotions,
-          content_breakdown: aiResponse.content_breakdown,
-          trending_topics: aiResponse.trending_topics,
-          serp_data: serpData,
-          raw_ai_response: aiResponse,
+          metrics: cloneJsonForPostgres(metrics),
+          emotions: cloneJsonForPostgres(aiResponse.emotions),
+          content_breakdown: cloneJsonForPostgres(aiResponse.content_breakdown),
+          trending_topics: cloneJsonForPostgres(aiResponse.trending_topics),
+          serp_data: cloneJsonForPostgres(serpData),
+          raw_ai_response: cloneJsonForPostgres(aiResponse),
           tokens_used: aiResult.usage.totalTokens,
           estimated_cost: aiResult.estimatedCost,
           completed_at: new Date().toISOString(),
@@ -577,6 +570,7 @@ export async function POST(
             summary: `Could not save results: ${updateError.message}`,
           })
           .eq('id', id);
+        await notifyTopicSearchFailedOnce(adminClient, id);
         return NextResponse.json(
           {
             error: 'Failed to save search results',
@@ -628,6 +622,8 @@ export async function POST(
             : 'Search failed due to an unknown error',
         })
         .eq('id', id);
+
+      await notifyTopicSearchFailedOnce(adminClient, id);
 
       return NextResponse.json(
         {

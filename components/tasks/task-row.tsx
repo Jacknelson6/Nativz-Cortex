@@ -159,7 +159,7 @@ export function TaskRow({
         </div>
 
         {task.recurrence && (
-          <span className="flex items-center gap-1 text-[11px] text-green-400/70 shrink-0" title={task.recurrence}>
+          <span className="flex items-center gap-1 text-xs text-green-400/70 shrink-0" title={task.recurrence}>
             <Repeat size={11} />
           </span>
         )}
@@ -184,7 +184,7 @@ export function TaskRow({
         )}
 
         {task.clients && (
-          <span className="flex items-center gap-1 text-[11px] text-text-muted shrink-0">
+          <span className="flex items-center gap-1 text-xs text-text-muted shrink-0">
             {task.clients.name}
           </span>
         )}

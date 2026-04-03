@@ -291,7 +291,7 @@ export function CalendarView({ tasks, onToggleDone, onSelect, onReschedule }: Ca
                         </div>
                       ))}
                       {dayTasks.length > (viewMode === 'week' ? 6 : 3) && (
-                        <span className="text-[9px] text-text-muted px-1">
+                        <span className="text-[10px] text-text-muted px-1">
                           +{dayTasks.length - (viewMode === 'week' ? 6 : 3)} more
                         </span>
                       )}

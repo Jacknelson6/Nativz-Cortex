@@ -56,7 +56,7 @@ function TikTokEmbed({ source }: { source: StoredSource }) {
       </div>
 
       {/* Stats bar */}
-      <div className="px-3 py-2 flex items-center gap-4 text-[11px] text-text-muted border-t border-white/[0.06]">
+      <div className="px-3 py-2 flex items-center gap-4 text-xs text-text-muted border-t border-white/[0.06]">
         {source.engagement.views != null && (
           <span className="flex items-center gap-1"><Eye size={10} /> {formatNumber(source.engagement.views)}</span>
         )}
@@ -80,7 +80,7 @@ function TikTokEmbed({ source }: { source: StoredSource }) {
           <button
             type="button"
             onClick={() => setShowComments(!showComments)}
-            className="w-full flex items-center justify-between px-3 py-2 text-[11px] text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+            className="w-full flex items-center justify-between px-3 py-2 text-xs text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
           >
             <span>{source.comments.length} comments</span>
             {showComments ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -89,7 +89,7 @@ function TikTokEmbed({ source }: { source: StoredSource }) {
         {showComments && (
           <div className="px-3 pb-2 space-y-1.5 max-h-40 overflow-y-auto">
             {source.comments.map((c) => (
-              <div key={c.id} className="text-[11px]">
+              <div key={c.id} className="text-xs">
                 <span className="text-text-muted font-medium">@{c.author}</span>
                 <span className="text-text-secondary ml-1.5">{c.text}</span>
                 {c.likes > 0 && <span className="text-text-muted/50 ml-1.5">({c.likes} likes)</span>}
@@ -103,13 +103,13 @@ function TikTokEmbed({ source }: { source: StoredSource }) {
             <button
               type="button"
               onClick={() => setShowTranscript(!showTranscript)}
-              className="w-full flex items-center justify-between px-3 py-2 text-[11px] text-text-muted hover:text-text-secondary transition-colors cursor-pointer border-t border-white/[0.04]"
+              className="w-full flex items-center justify-between px-3 py-2 text-xs text-text-muted hover:text-text-secondary transition-colors cursor-pointer border-t border-white/[0.04]"
             >
               <span className="flex items-center gap-1"><FileText size={10} /> Transcript</span>
               {showTranscript ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </button>
             {showTranscript && (
-              <div className="px-3 pb-2 text-[11px] text-text-secondary leading-relaxed max-h-32 overflow-y-auto">
+              <div className="px-3 pb-2 text-xs text-text-secondary leading-relaxed max-h-32 overflow-y-auto">
                 {source.transcript}
               </div>
             )}
@@ -209,11 +209,15 @@ export function PlatformSources({ sources }: PlatformSourcesProps) {
 
   if (!sources || sources.length === 0) return null;
 
-  // Sort by views/engagement descending
+  // Sort by views/engagement descending (Reddit: score + comment count)
   const sorted = [...sources].sort((a, b) => {
-    const aEng = (a.engagement.views ?? 0) + (a.engagement.likes ?? 0) * 10;
-    const bEng = (b.engagement.views ?? 0) + (b.engagement.likes ?? 0) * 10;
-    return bEng - aEng;
+    const score = (s: StoredSource) => {
+      if (s.platform === 'reddit') {
+        return (s.engagement.score ?? 0) + (s.engagement.comments ?? 0) * 3;
+      }
+      return (s.engagement.views ?? 0) + (s.engagement.likes ?? 0) * 10;
+    };
+    return score(b) - score(a);
   });
 
   const platforms = Array.from(new Set(sources.map(s => s.platform)));

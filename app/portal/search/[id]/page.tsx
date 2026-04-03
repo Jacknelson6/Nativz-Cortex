@@ -16,6 +16,7 @@ import { SourcesPanel } from '@/components/results/sources-panel';
 import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
+import { ScrollProgress } from '@/components/ui/scroll-progress';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { searchHeaderQueryClassName } from '@/lib/clients/client-abbreviations';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
@@ -131,6 +132,7 @@ export default async function PortalSearchResultsPage({
 
   return (
     <div className="min-h-full">
+      <ScrollProgress />
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-nativz-border bg-surface/80 backdrop-blur-sm">
         <div className="flex flex-col gap-3 px-6 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">

@@ -46,7 +46,7 @@ export function BrandDnaRequiredPanel({
       <div className="space-y-6">
         <section className="rounded-2xl border border-nativz-border bg-surface p-6 sm:p-8">
           <div className="mb-6 text-center sm:text-left">
-            <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-accent-text">
+            <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-accent-text">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Generating
             </div>
@@ -113,7 +113,7 @@ export function BrandDnaRequiredPanel({
         />
         <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[1.15fr_minmax(0,1fr)] lg:items-center lg:gap-12">
           <div className="space-y-5">
-            <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-accent-text">
+            <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-accent-text">
               <Sparkles className="h-3.5 w-3.5" />
               Step before ads
             </div>
@@ -154,7 +154,7 @@ export function BrandDnaRequiredPanel({
                   </span>
                   <div className="min-w-0 pt-0.5">
                     <p className="text-xs font-medium text-text-primary">{label}</p>
-                    <p className="text-[11px] text-text-muted leading-snug">{sub}</p>
+                    <p className="text-xs text-text-muted leading-snug">{sub}</p>
                   </div>
                 </li>
               ))}
@@ -170,7 +170,7 @@ export function BrandDnaRequiredPanel({
                 <RefreshCw size={14} />
                 Refresh status
               </Button>
-              <p className="text-[11px] text-text-muted">
+              <p className="text-xs text-text-muted">
                 After status is <span className="text-text-secondary">draft</span> or{' '}
                 <span className="text-text-secondary">active</span>, this tab shows the full Brand kit and you can run ads
                 from the gallery.

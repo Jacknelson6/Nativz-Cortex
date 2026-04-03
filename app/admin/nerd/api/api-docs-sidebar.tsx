@@ -108,7 +108,7 @@ export default function ApiDocsSidebar() {
       <div className="px-4 py-3 border-t border-nativz-border">
         <Link
           href="/admin/settings"
-          className="flex items-center gap-2 text-[11px] text-text-muted hover:text-accent-text transition-colors"
+          className="flex items-center gap-2 text-xs text-text-muted hover:text-accent-text transition-colors"
         >
           <Key size={12} />
           Manage API keys

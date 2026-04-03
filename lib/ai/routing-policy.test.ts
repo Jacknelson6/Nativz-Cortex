@@ -5,6 +5,7 @@ import {
   getFeatureRoutingPolicy,
   getFeatureRoutingSummaryItems,
 } from '@/lib/ai/routing-policy';
+import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
 
 describe('getFeatureRoutingPolicy', () => {
   it('maps premium features to the premium chain', () => {
@@ -47,16 +48,17 @@ describe('getFeatureRoutingSummaryItems', () => {
 describe('buildOrderedModelChain', () => {
   it('dedupes explicit, policy, and fallback models in order', () => {
     const chain = buildOrderedModelChain({
-      explicitPreference: ['deepseek/deepseek-v3.2', 'openai/gpt-5.4-mini'],
+      explicitPreference: ['openai/gpt-5.4-mini', 'qwen/qwen3-30b-a3b'],
       policyPreference: DEFAULT_CHAIN_BY_TIER.standard,
-      primary: 'openai/gpt-5.4-mini',
-      fallbacks: ['qwen/qwen3-30b-a3b', 'deepseek/deepseek-v3.2'],
+      primary: 'deepseek/deepseek-v3.2',
+      fallbacks: ['qwen/qwen3-30b-a3b', 'openai/gpt-5.4-mini'],
     });
 
     expect(chain).toEqual([
-      'deepseek/deepseek-v3.2',
       'openai/gpt-5.4-mini',
       'qwen/qwen3-30b-a3b',
+      DEFAULT_OPENROUTER_MODEL,
+      'deepseek/deepseek-v3.2',
     ]);
   });
 });

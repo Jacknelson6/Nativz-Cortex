@@ -222,7 +222,7 @@ export function TimeGrid({ dates, events, people, onSlotClick, onEventClick }: T
             {HOURS.map((hour) => (
               <div
                 key={hour}
-                className="absolute right-2 text-[11px] text-text-muted -translate-y-1/2"
+                className="absolute right-2 text-xs text-text-muted -translate-y-1/2"
                 style={{ top: (hour - START_HOUR) * HOUR_HEIGHT }}
               >
                 {hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
@@ -288,7 +288,7 @@ export function TimeGrid({ dates, events, people, onSlotClick, onEventClick }: T
                         backgroundColor: person.color,
                       }}
                     >
-                      <span className="text-[9px] text-white px-1 truncate block mt-0.5">
+                      <span className="text-[10px] text-white px-1 truncate block mt-0.5">
                         {event.title}
                       </span>
                     </div>
@@ -314,7 +314,7 @@ export function TimeGrid({ dates, events, people, onSlotClick, onEventClick }: T
                           zIndex: 10,
                         }}
                       >
-                        <div className="flex items-center gap-1 text-[11px] font-medium truncate">
+                        <div className="flex items-center gap-1 text-xs font-medium truncate">
                           <EventIcon type={e.type} />
                           <span className="truncate">{e.title}</span>
                         </div>
@@ -323,7 +323,7 @@ export function TimeGrid({ dates, events, people, onSlotClick, onEventClick }: T
                             {e.clientName}{e.clientName && e.strategistName ? ' · ' : ''}{e.strategistName}
                           </div>
                         )}
-                        <div className="text-[9px] opacity-60">
+                        <div className="text-[10px] opacity-60">
                           {formatTime(e.start)}
                           {e.end ? ` – ${formatTime(e.end)}` : ''}
                         </div>

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logActivity } from '@/lib/activity';
+import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
 
 const renameSearchBodySchema = z.object({
   query: z.string().trim().min(1, 'Topic name is required').max(500),
@@ -30,17 +31,16 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: search, error: fetchError } = await supabase
-      .from('topic_searches')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !search) {
-      return NextResponse.json({ error: 'Search not found' }, { status: 404 });
+    const adminClient = createAdminClient();
+    const access = await assertUserCanAccessTopicSearch(adminClient, user.id, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
     }
 
-    return NextResponse.json(search);
+    return NextResponse.json(access.search);
   } catch (error) {
     console.error('GET /api/search/[id] error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

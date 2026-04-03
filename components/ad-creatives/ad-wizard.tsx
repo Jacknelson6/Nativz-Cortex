@@ -1058,7 +1058,7 @@ export function AdWizard({
                   />
                   <span>
                     <span className="text-sm font-medium text-text-primary">Use compositor (beta)</span>
-                    <span className="block text-[11px] text-text-muted leading-relaxed mt-1">
+                    <span className="block text-xs text-text-muted leading-relaxed mt-1">
                       Gemini generates background and hero only; headline, subheadline, CTA, and logo are rendered in code
                       for crisp type. Slightly different look than one-shot generation — good for readable copy.
                     </span>
@@ -1080,7 +1080,7 @@ export function AdWizard({
                     <option value="schema_only">Schema only (no template PNG)</option>
                     <option value="schema_plus_wireframe">Schema + zone wireframe</option>
                   </select>
-                  <p className="text-[11px] text-text-muted leading-relaxed">
+                  <p className="text-xs text-text-muted leading-relaxed">
                     {useCompositor
                       ? 'Compositor mode: the template PNG is still a loose layout guide, but Gemini is asked for a clean plate without on-image text; copy and logo are overlaid in code.'
                       : 'Full ad (copy, hero, brand mark) is generated in one Gemini pass. Default uses the template PNG as a loose layout guide plus the assembled prompt. Use schema only if the reference keeps pulling wrong heroes.'}
@@ -1088,7 +1088,7 @@ export function AdWizard({
                 </div>
               )}
               {templateSource === 'nano' && (
-                <p className="text-[11px] text-text-muted leading-relaxed max-w-xl pt-2 border-t border-nativz-border/80">
+                <p className="text-xs text-text-muted leading-relaxed max-w-xl pt-2 border-t border-nativz-border/80">
                   {useCompositor
                     ? 'Compositor mode: Nano prompt asks for a clean visual plate; copy is filled in post-production.'
                     : 'Nano Banana uses global style prompts only — no client template screenshot is sent to the model.'}

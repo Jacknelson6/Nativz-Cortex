@@ -257,7 +257,7 @@ export function TeamGrid({
                         </p>
                       )}
                       {member.email && (
-                        <p className="text-[11px] text-text-muted/60 mt-0.5 flex items-center gap-1 truncate">
+                        <p className="text-xs text-text-muted/60 mt-0.5 flex items-center gap-1 truncate">
                           <Mail size={9} />
                           {member.email}
                         </p>

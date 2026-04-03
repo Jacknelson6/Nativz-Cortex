@@ -471,7 +471,7 @@ export function ContentCalendar() {
                           >
                             <div
                               className={`
-                                flex items-center gap-1 rounded px-1 py-0.5 text-[11px] leading-tight truncate
+                                flex items-center gap-1 rounded px-1 py-0.5 text-xs leading-tight truncate
                                 transition-all duration-150 hover:brightness-125
                                 ${item.status === 'done' || item.status === 'completed'
                                   ? 'opacity-50 line-through'

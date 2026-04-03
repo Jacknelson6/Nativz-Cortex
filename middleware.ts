@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import type { User } from '@supabase/supabase-js';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/supabase/public-env';
+import { PORTAL_HOME_PATH, shouldRedirectPortalToMinimalHome } from '@/lib/portal/client-surface';
 
 type SupabaseFromMiddleware = ReturnType<typeof createServerClient>;
 
@@ -127,7 +128,7 @@ export async function middleware(request: NextRequest) {
       if (pathname === '/admin/login') {
         return NextResponse.redirect(new URL('/admin/dashboard', request.url));
       }
-      return NextResponse.redirect(new URL('/portal/dashboard', request.url));
+      return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));
     }
     return supabaseResponse;
   }
@@ -205,17 +206,16 @@ export async function middleware(request: NextRequest) {
 
   // Admin routes — only admins
   if (pathname.startsWith('/admin') && role !== 'admin') {
-    return NextResponse.redirect(new URL('/portal/dashboard', request.url));
+    return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));
   }
 
-  // Portal routes — viewers, or admins impersonating a client
+  // Portal routes — viewers, or admins (incl. impersonation)
   if (pathname.startsWith('/portal')) {
-    if (role === 'admin' && isImpersonating) {
-      // Admin impersonating — allow portal access
-      return supabaseResponse;
-    }
     if (role !== 'viewer' && role !== 'admin') {
       return NextResponse.redirect(new URL('/admin/login', request.url));
+    }
+    if (shouldRedirectPortalToMinimalHome(pathname)) {
+      return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));
     }
   }
 
@@ -234,6 +234,7 @@ export const config = {
   matcher: [
     '/',
     '/admin/:path*',
+    '/portal',
     '/portal/:path*',
     '/shared/:path*',
     '/login',

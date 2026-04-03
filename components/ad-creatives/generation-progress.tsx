@@ -140,10 +140,10 @@ export function GenerationProgress({ clientId, batchId, onComplete }: Generation
             />
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-text-muted">
+            <span className="text-xs text-text-muted">
               {completed} / {total} completed
             </span>
-            <span className="text-[11px] text-text-muted">
+            <span className="text-xs text-text-muted">
               {Math.round(progress)}%
             </span>
           </div>

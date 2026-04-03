@@ -11,6 +11,7 @@ import { computeMetricsFromSerp } from '@/lib/utils/compute-metrics';
 import type { TopicSearchAIResponse } from '@/lib/types/search';
 import type { SerpData } from '@/lib/serp/types';
 import { createNotification } from '@/lib/notifications/create';
+import { notifyTopicSearchFailedOnce } from '@/lib/topic-search/ops-notify';
 import { crawlWebsite } from '@/lib/cloudflare/crawl';
 import { getClientMemory, formatClientMemoryBlock } from '@/lib/vault/content-memory';
 import type { ClientPreferences } from '@/lib/types/database';
@@ -288,6 +289,8 @@ export async function executeTopicSearch(
         summary: aiError instanceof Error ? `Search failed: ${aiError.message}` : 'Search failed due to an unknown error',
       })
       .eq('id', search.id);
+
+    await notifyTopicSearchFailedOnce(adminClient, search.id);
 
     return { ok: false, reason: 'pipeline', searchId: search.id, message };
   }

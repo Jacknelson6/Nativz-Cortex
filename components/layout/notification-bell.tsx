@@ -36,6 +36,8 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   post_failed: <AlertTriangle size={14} className="text-red-400" />,
   post_trending: <Zap size={14} className="text-yellow-400" />,
   account_disconnected: <WifiOff size={14} className="text-amber-400" />,
+  topic_search_failed: <AlertTriangle size={14} className="text-red-400" />,
+  topic_search_stuck: <Clock size={14} className="text-amber-400" />,
 };
 
 export function NotificationBell() {

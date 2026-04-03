@@ -498,7 +498,7 @@ function MetricCard({
           <span className={`text-[10px] font-bold ${positive ? 'text-emerald-400' : 'text-red-400'}`}>{change}</span>
         )}
       </div>
-      {subtitle && <p className="text-[9px] text-text-muted">{subtitle}</p>}
+      {subtitle && <p className="text-[10px] text-text-muted">{subtitle}</p>}
     </div>
   );
 }

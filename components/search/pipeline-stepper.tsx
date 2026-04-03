@@ -107,7 +107,7 @@ export function PipelineStepper({ searchId, onStatusChange }: PipelineStepperPro
                 {step.label}
               </span>
               {(step.status === 'active' || step.status === 'completed') && step.startedAt && (
-                <span className="ml-2 text-[11px] text-text-muted/60 tabular-nums">
+                <span className="ml-2 text-xs text-text-muted/60 tabular-nums">
                   {formatStepDuration(step.startedAt, step.completedAt)}
                 </span>
               )}

@@ -126,7 +126,7 @@ export function ShootPlanPreview({ shootId }: ShootPlanPreviewProps) {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <h4 className="text-sm font-semibold text-text-primary">{shot.title}</h4>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium border ${colors}`}>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium border ${colors}`}>
                           {shot.priority.replace(/_/g, ' ')}
                         </span>
                       </div>

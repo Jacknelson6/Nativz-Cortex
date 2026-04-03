@@ -617,7 +617,7 @@ export default function AdminShootsPage() {
                               className="cursor-pointer flex flex-col items-center justify-center rounded-lg bg-surface-hover text-text-muted px-2.5 py-1.5 min-w-[48px] hover:bg-surface-hover/80 transition-colors"
                             >
                               <span className="text-base font-bold leading-none">{date.getDate()}</span>
-                              <span className="text-[9px] font-medium uppercase mt-0.5">
+                              <span className="text-[10px] font-medium uppercase mt-0.5">
                                 {date.toLocaleDateString('en-US', { month: 'short' })}
                               </span>
                             </button>

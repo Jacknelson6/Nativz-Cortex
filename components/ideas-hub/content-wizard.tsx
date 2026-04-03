@@ -151,7 +151,7 @@ export function ContentWizard({
               </div>
               {!clientId && (
                 <>
-                  <span className="text-[11px] text-text-muted/50 uppercase tracking-wider">or paste url</span>
+                  <span className="text-xs text-text-muted/50 uppercase tracking-wider">or paste url</span>
                   <div className="w-72">
                     <div className="flex items-center gap-2 rounded-lg border border-nativz-border bg-background px-3 py-2">
                       <Link2 size={14} className="text-text-muted shrink-0" />

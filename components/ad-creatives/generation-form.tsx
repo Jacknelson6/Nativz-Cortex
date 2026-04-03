@@ -355,7 +355,7 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
                       <p className={`text-sm font-medium ${selected ? 'text-text-primary' : 'text-text-secondary'}`}>
                         {ar.label}
                       </p>
-                      <p className="text-[11px] text-text-muted">
+                      <p className="text-xs text-text-muted">
                         {ar.value}
                       </p>
                     </div>
@@ -374,7 +374,7 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
             />
             <span>
               <span className="text-sm font-medium text-text-primary">Use compositor (beta)</span>
-              <span className="block text-[11px] text-text-muted leading-relaxed mt-0.5">
+              <span className="block text-xs text-text-muted leading-relaxed mt-0.5">
                 Crisp type and logo overlaid in code; Gemini draws the background only.
               </span>
             </span>
@@ -397,7 +397,7 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
               }}
               className="block w-24 rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
-            <p className="text-[11px] text-text-muted">Between 1 and 20 variations per batch</p>
+            <p className="text-xs text-text-muted">Between 1 and 20 variations per batch</p>
           </div>
 
           <div className="space-y-2 pt-2 border-t border-nativz-border max-w-xl">
@@ -414,7 +414,7 @@ export function GenerationForm({ clientId, onNavigateToTemplates }: GenerationFo
               <option value="schema_only">Schema only</option>
               <option value="schema_plus_wireframe">Schema + wireframe</option>
             </select>
-            <p className="text-[11px] text-text-muted leading-relaxed">
+            <p className="text-xs text-text-muted leading-relaxed">
               {useCompositor
                 ? 'Compositor mode: Gemini is asked for a clean plate without on-image text; copy and logo are overlaid in code.'
                 : 'One Gemini pass renders type, visuals, and brand mark. Default uses the template PNG as a loose layout guide.'}

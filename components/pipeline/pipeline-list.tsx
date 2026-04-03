@@ -40,22 +40,22 @@ export function PipelineList({ items, teamMembers, onUpdate, onSelect, onDelete 
       <table className="w-full border-collapse">
         <thead>
           <tr className="sticky top-0 bg-background z-10 border-b border-nativz-border">
-            <th className="text-left px-4 py-2 text-[11px] font-medium text-text-muted w-[220px]">
+            <th className="text-left px-4 py-2 text-xs font-medium text-text-muted w-[220px]">
               Client
             </th>
-            <th className="text-left px-3 py-2 text-[11px] font-medium text-text-muted w-[120px]">
+            <th className="text-left px-3 py-2 text-xs font-medium text-text-muted w-[120px]">
               Editor
             </th>
-            <th className="text-left px-3 py-2 text-[11px] font-medium text-text-muted w-[140px]">
+            <th className="text-left px-3 py-2 text-xs font-medium text-text-muted w-[140px]">
               Editing
             </th>
-            <th className="text-left px-3 py-2 text-[11px] font-medium text-text-muted w-[160px]">
+            <th className="text-left px-3 py-2 text-xs font-medium text-text-muted w-[160px]">
               Approval
             </th>
-            <th className="text-left px-3 py-2 text-[11px] font-medium text-text-muted w-[90px]">
+            <th className="text-left px-3 py-2 text-xs font-medium text-text-muted w-[90px]">
               Shoot
             </th>
-            <th className="text-left px-3 py-2 text-[11px] font-medium text-text-muted w-[100px]">
+            <th className="text-left px-3 py-2 text-xs font-medium text-text-muted w-[100px]">
               Links
             </th>
             <th className="w-[40px]" />

@@ -85,7 +85,7 @@ export async function gatherPlatformData(
     promises.push(
       (async () => {
         try {
-          // Run SearXNG + Serper (Google) in parallel for maximum coverage
+          // Run SearXNG (general web via DuckDuckGo engine by default) + Serper (Google) in parallel for maximum coverage
           const [searxngResult, serperResult] = await Promise.allSettled([
             gatherSerpData(query, { timeRange }),
             process.env.SERPER_API_KEY ? gatherSerperData(query, timeRange, volume) : Promise.resolve(null),

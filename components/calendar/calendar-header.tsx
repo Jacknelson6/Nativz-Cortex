@@ -119,7 +119,7 @@ export function CalendarHeader({
               />
               {layer.label}
               {layer.count > 0 && (
-                <span className="text-[9px] opacity-60">{layer.count}</span>
+                <span className="text-[10px] opacity-60">{layer.count}</span>
               )}
             </button>
           ))}

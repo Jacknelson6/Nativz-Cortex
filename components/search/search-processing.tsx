@@ -491,8 +491,8 @@ export function SearchProcessing({
 
         {/* Progress info row */}
         <div className="mt-1.5 flex items-center justify-between">
-          <span className="text-[11px] text-text-muted tabular-nums">{formatElapsed(elapsed)} elapsed</span>
-          <span className="text-[11px] text-text-muted tabular-nums">{Math.round(progress)}%</span>
+          <span className="text-xs text-text-muted tabular-nums">{formatElapsed(elapsed)} elapsed</span>
+          <span className="text-xs text-text-muted tabular-nums">{Math.round(progress)}%</span>
         </div>
 
         {/* Done state */}

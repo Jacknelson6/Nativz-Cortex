@@ -170,7 +170,7 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
         {mediapipeProgress && (
           <div className="absolute bottom-0 left-0 right-0 pointer-events-none" aria-live="polite" aria-label={`MediaPipe analysis: ${stageLabel(mediapipeProgress.stage)} ${Math.round(mediapipeProgress.percent * 100)}%`}>
             <div className="px-2 pb-1.5">
-              <span className="text-[9px] text-white/80 drop-shadow-sm">
+              <span className="text-[10px] text-white/80 drop-shadow-sm">
                 {stageLabel(mediapipeProgress.stage)} {Math.round(mediapipeProgress.percent * 100)}%
               </span>
             </div>

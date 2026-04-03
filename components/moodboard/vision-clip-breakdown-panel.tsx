@@ -38,7 +38,7 @@ export function VisionClipBreakdownPanel({ breakdown, videoDurationSec }: Vision
     <div className="space-y-3 rounded-lg border border-accent/15 bg-accent-surface/20 p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-medium text-accent-text uppercase tracking-wider">AI visual clip breakdown</p>
-        <span className="text-[9px] text-text-muted truncate max-w-[140px]" title={breakdown.modelUsed}>
+        <span className="text-[10px] text-text-muted truncate max-w-[140px]" title={breakdown.modelUsed}>
           {breakdown.modelUsed.replace(/^[^/]+\//, '')}
         </span>
       </div>
@@ -91,7 +91,7 @@ export function VisionClipBreakdownPanel({ breakdown, videoDurationSec }: Vision
         </>
       )}
       {breakdown.clips.length === 0 && !breakdown.overallSummary && (
-        <p className="text-[11px] text-text-muted">No clip segments returned.</p>
+        <p className="text-xs text-text-muted">No clip segments returned.</p>
       )}
     </div>
   );

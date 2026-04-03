@@ -203,7 +203,7 @@ export function TemplateCatalog({ clientId, onShowBulkImport, refreshKey }: Temp
 
         {verticalsPresent.length > 0 && (
           <div className="flex flex-col gap-1 min-w-0">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-text-muted/90">
+            <span className="text-xs font-medium uppercase tracking-wide text-text-muted/90">
               Sort by industry
             </span>
             <div className="relative">
@@ -231,7 +231,7 @@ export function TemplateCatalog({ clientId, onShowBulkImport, refreshKey }: Temp
 
         {categoriesPresent.length > 1 && (
           <div className="flex flex-col gap-1 min-w-0">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-text-muted/90">
+            <span className="text-xs font-medium uppercase tracking-wide text-text-muted/90">
               Template type
             </span>
             <div className="relative">

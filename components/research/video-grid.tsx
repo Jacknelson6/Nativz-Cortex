@@ -88,7 +88,7 @@ function VideoCard({ video, onClick }: { video: TopicSearchVideoRow; onClick?: (
           {video.title ?? video.description?.substring(0, 100) ?? 'Untitled'}
         </p>
 
-        <p className="text-[11px] text-text-muted truncate">
+        <p className="text-xs text-text-muted truncate">
           @{video.author_username ?? 'unknown'}
           {video.author_followers > 0 ? (
             <span className="ml-1 text-text-muted/60">
@@ -97,7 +97,7 @@ function VideoCard({ video, onClick }: { video: TopicSearchVideoRow; onClick?: (
           ) : null}
         </p>
 
-        <div className="flex items-center gap-3 text-[11px] text-text-muted">
+        <div className="flex items-center gap-3 text-xs text-text-muted">
           <span className="flex items-center gap-1 text-emerald-400/90">
             <Eye size={11} className="text-emerald-500/70 shrink-0" /> {formatNumber(video.views)}
           </span>
@@ -167,7 +167,7 @@ export function VideoGrid({ videos }: VideoGridProps) {
                   key={s}
                   type="button"
                   onClick={() => setSort(s)}
-                  className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  className={`px-2.5 py-1 text-xs font-medium transition-colors ${
                     sort === s ? selectedTab : idleTab
                   }`}
                 >
@@ -183,7 +183,7 @@ export function VideoGrid({ videos }: VideoGridProps) {
                   key={p}
                   type="button"
                   onClick={() => setPlatform(p)}
-                  className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  className={`px-2.5 py-1 text-xs font-medium transition-colors ${
                     platform === p ? selectedTab : idleTab
                   }`}
                 >

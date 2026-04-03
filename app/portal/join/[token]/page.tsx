@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { createClient } from '@/lib/supabase/client';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
+import { PORTAL_HOME_PATH } from '@/lib/portal/client-surface';
 
 type InviteStatus = 'loading' | 'valid' | 'invalid' | 'expired' | 'used';
 type FlowMode = 'signup' | 'link-existing';
@@ -211,8 +212,8 @@ export default function PortalJoinPage() {
             <p className="text-sm text-text-muted">
               Your account has been linked to the <span className="font-medium text-text-primary">{clientName}</span> portal.
             </p>
-            <Button className="mt-2 w-full" onClick={() => router.push('/portal/dashboard')}>
-              Go to dashboard
+            <Button className="mt-2 w-full" onClick={() => router.push(PORTAL_HOME_PATH)}>
+              Go to research
             </Button>
           </div>
         )}

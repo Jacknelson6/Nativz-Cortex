@@ -374,7 +374,7 @@ export function MediaLibrary({
 
                   {/* Used indicator */}
                   {item.is_used && (
-                    <Badge variant="info" className="absolute top-1 left-1 text-[9px] px-1 py-0">
+                    <Badge variant="info" className="absolute top-1 left-1 text-[10px] px-1 py-0">
                       Used
                     </Badge>
                   )}
@@ -383,7 +383,7 @@ export function MediaLibrary({
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-1.5 pointer-events-none">
                     <p className="text-[10px] text-white truncate">{item.filename}</p>
                     {item.file_size_bytes && (
-                      <p className="text-[9px] text-white/60">{formatSize(item.file_size_bytes)}</p>
+                      <p className="text-[10px] text-white/60">{formatSize(item.file_size_bytes)}</p>
                     )}
                   </div>
 

@@ -75,12 +75,12 @@ export function MeetingNoteRow({
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="inline-flex items-center gap-1 text-[11px] text-text-muted min-w-0">
+            <span className="inline-flex items-center gap-1 text-xs text-text-muted min-w-0">
               <Building2 size={10} className="shrink-0" />
               <span className="truncate max-w-[min(280px,100%)]">{displayCompany}</span>
             </span>
             {meta?.meeting_date && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
+              <span className="inline-flex items-center gap-1 text-xs text-text-muted">
                 <Calendar size={10} />
                 {new Date(meta.meeting_date + 'T00:00:00').toLocaleDateString('en-US', {
                   month: 'short',
@@ -90,18 +90,18 @@ export function MeetingNoteRow({
               </span>
             )}
             {meta?.attendees && meta.attendees.length > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
+              <span className="inline-flex items-center gap-1 text-xs text-text-muted">
                 <Users size={10} />
                 {meta.attendees.length} attendee{meta.attendees.length !== 1 ? 's' : ''}
               </span>
             )}
             {meta?.action_items && meta.action_items.length > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
+              <span className="inline-flex items-center gap-1 text-xs text-text-muted">
                 <CheckCircle2 size={10} />
                 {meta.action_items.length} action item{meta.action_items.length !== 1 ? 's' : ''}
               </span>
             )}
-            <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
+            <span className="inline-flex items-center gap-1 text-xs text-text-muted">
               <Clock size={10} />
               {formatRelativeTime(note.created_at)}
             </span>
@@ -129,7 +129,7 @@ export function MeetingNoteRow({
                 {meta.attendees.map((a, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center rounded-full bg-surface-hover px-2.5 py-0.5 text-[11px] text-text-secondary"
+                    className="inline-flex items-center rounded-full bg-surface-hover px-2.5 py-0.5 text-xs text-text-secondary"
                   >
                     {a}
                   </span>

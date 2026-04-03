@@ -11,6 +11,7 @@ import {
   OPENAI_CHAT_MODEL_IDS,
   openAiChatOptionGroups,
 } from '@/lib/ai/openai-chat-models';
+import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
 
 function openRouterProviderId(modelId: string): string {
   const i = modelId.indexOf('/');
@@ -210,7 +211,7 @@ export function AiRoutingSection() {
         setSavedTopic(t.modelId);
 
         const nerd = (cred.nerdModel as string) ?? '';
-        const a = hydrateRow(nerd || 'openrouter/hunter-alpha');
+        const a = hydrateRow(nerd || DEFAULT_OPENROUTER_MODEL);
         setAgents(a);
         setSavedAgents(nerd);
 
@@ -336,7 +337,7 @@ export function AiRoutingSection() {
       setSavedTopic(topicId);
 
       const nerd = (cred.nerdModel as string) ?? '';
-      setAgents(hydrateRow(nerd || 'openrouter/hunter-alpha'));
+      setAgents(hydrateRow(nerd || DEFAULT_OPENROUTER_MODEL));
       setSavedAgents(nerd);
 
       const primary = (ai.model as string) ?? '';

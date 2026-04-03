@@ -74,7 +74,7 @@ export function AdWizardProgress({ currentIndex, onStepClick }: AdWizardProgress
   return (
     <div className="w-full space-y-4">
       <div className="md:hidden space-y-2">
-        <div className="flex items-center justify-between gap-2 text-[11px] text-text-muted">
+        <div className="flex items-center justify-between gap-2 text-xs text-text-muted">
           <span>
             Step {currentIndex + 1} of {total}
           </span>
@@ -119,7 +119,7 @@ export function AdWizardProgress({ currentIndex, onStepClick }: AdWizardProgress
               >
                 <span
                   className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded-full border text-[11px] font-semibold transition-all',
+                    'flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-all',
                     active &&
                       'border-accent-border bg-accent-surface text-accent-text shadow-[0_0_0_1px_rgba(59,130,246,0.2)]',
                     done &&

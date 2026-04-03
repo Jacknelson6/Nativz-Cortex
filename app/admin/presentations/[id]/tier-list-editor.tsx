@@ -264,7 +264,7 @@ export function TierListEditor({
                 ))}
               </div>
             </div>
-            <div className="pt-3 border-t border-nativz-border text-[11px] text-text-muted space-y-1">
+            <div className="pt-3 border-t border-nativz-border text-xs text-text-muted space-y-1">
               <div className="flex justify-between"><span>Tiers</span><span className="text-text-secondary">{tiers.length}</span></div>
               <div className="flex justify-between"><span>Items</span><span className="text-text-secondary">{items.length}</span></div>
               <div className="flex justify-between"><span>Ranked</span><span className="text-text-secondary">{items.filter((i) => i.tier_id).length}</span></div>
@@ -315,7 +315,7 @@ function TierItemCard({
           <img src={item.thumbnail_url!} alt="" className="w-full h-full object-cover" draggable={false} />
         ) : isTextOnly ? (
           <div className="w-full h-full flex items-center justify-center px-2">
-            <p className="text-[11px] text-text-primary font-medium text-center leading-snug line-clamp-3">{item.title}</p>
+            <p className="text-xs text-text-primary font-medium text-center leading-snug line-clamp-3">{item.title}</p>
           </div>
         ) : (
           <div className="w-full h-full flex items-center justify-center text-text-muted/30"><Link2 size={16} /></div>

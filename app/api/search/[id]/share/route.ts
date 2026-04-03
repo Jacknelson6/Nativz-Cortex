@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import crypto from 'crypto';
+import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
 
 /**
  * GET /api/search/[id]/share
@@ -25,6 +26,14 @@ export async function GET(
     }
 
     const adminClient = createAdminClient();
+    const access = await assertUserCanAccessTopicSearch(adminClient, user.id, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
+    }
+
     const { data: link } = await adminClient
       .from('search_share_links')
       .select('id, token, expires_at, created_at')
@@ -73,17 +82,14 @@ export async function POST(
     }
 
     const adminClient = createAdminClient();
-
-    // Verify search exists and is completed
-    const { data: search } = await adminClient
-      .from('topic_searches')
-      .select('id, status')
-      .eq('id', id)
-      .single();
-
-    if (!search) {
-      return NextResponse.json({ error: 'Search not found' }, { status: 404 });
+    const access = await assertUserCanAccessTopicSearch(adminClient, user.id, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
     }
+    const search = access.search as { id: string; status: string };
     if (search.status !== 'completed') {
       return NextResponse.json({ error: 'Only completed searches can be shared' }, { status: 400 });
     }
@@ -143,10 +149,15 @@ export async function DELETE(
     }
 
     const adminClient = createAdminClient();
-    await adminClient
-      .from('search_share_links')
-      .delete()
-      .eq('search_id', id);
+    const access = await assertUserCanAccessTopicSearch(adminClient, user.id, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
+    }
+
+    await adminClient.from('search_share_links').delete().eq('search_id', id);
 
     return NextResponse.json({ shared: false });
   } catch (error) {

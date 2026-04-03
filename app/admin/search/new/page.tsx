@@ -15,7 +15,14 @@ type ResearchHubDbClientRow = {
   agency: string | null;
 };
 
-export default async function AdminNewSearchPage() {
+export default async function AdminNewSearchPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ query?: string }>;
+}) {
+  const { query: queryParam } = await searchParams;
+  const prefillQuery = typeof queryParam === 'string' ? queryParam : '';
+
   const supabase = createAdminClient();
 
   // Vault supplies display name when present; agency comes from vault first, else Postgres (admin client profile)
@@ -83,6 +90,7 @@ export default async function AdminNewSearchPage() {
         historyItems={historyItems}
         topicPipelineLlmV1={topicPipelineLlmV1}
         userFirstName={userFirstName}
+        prefillQuery={prefillQuery}
       />
     </Suspense>
   );

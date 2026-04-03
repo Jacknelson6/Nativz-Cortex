@@ -54,7 +54,7 @@ export function PathSelector({ onSelectPath, onFullStrategy, disabled, hasClient
               Create content pillars, then generate ideas organized by pillar
             </p>
           </div>
-          <span className={`text-[11px] font-medium ${pillarDisabled && !disabled ? 'text-text-muted' : 'text-accent2-text'}`}>
+          <span className={`text-xs font-medium ${pillarDisabled && !disabled ? 'text-text-muted' : 'text-accent2-text'}`}>
             {pillarDisabled && !disabled ? 'Requires a client' : 'Recommended'}
           </span>
         </button>
@@ -74,7 +74,7 @@ export function PathSelector({ onSelectPath, onFullStrategy, disabled, hasClient
               Jump straight to AI-powered video ideas without pillar structure
             </p>
           </div>
-          <span className="text-[11px] font-medium text-text-muted">Quick ideation</span>
+          <span className="text-xs font-medium text-text-muted">Quick ideation</span>
         </button>
       </div>
 

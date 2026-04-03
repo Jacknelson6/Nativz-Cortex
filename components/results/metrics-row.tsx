@@ -19,7 +19,7 @@ interface MetricsRowProps {
 function SourcesPlatformFooter({ breakdown }: { breakdown: PlatformBreakdown[] }) {
   return (
     <div>
-      <p className="mb-2 text-[11px] font-medium text-text-muted">Sources gathered</p>
+      <p className="mb-2 text-xs font-medium text-text-muted">Sources gathered</p>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {breakdown.map((pb, i) => (
           <span key={`${pb.platform}-${i}`} className="flex items-center gap-1.5 text-sm">

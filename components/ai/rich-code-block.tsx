@@ -66,7 +66,7 @@ function renderMermaidFallback(container: HTMLDivElement, code: string, detail?:
     'This diagram could not be rendered. The Mermaid syntax may be invalid or unsupported.';
   const pre = document.createElement('pre');
   pre.className =
-    'max-h-40 overflow-auto rounded-md bg-black/40 p-2 text-[11px] leading-relaxed text-text-secondary whitespace-pre-wrap break-words';
+    'max-h-40 overflow-auto rounded-md bg-black/40 p-2 text-xs leading-relaxed text-text-secondary whitespace-pre-wrap break-words';
   pre.textContent = code.trim();
   wrap.appendChild(msg);
   wrap.appendChild(pre);

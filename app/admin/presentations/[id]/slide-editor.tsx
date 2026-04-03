@@ -152,7 +152,7 @@ export function SlideEditor({
             <label className="text-xs text-text-muted font-medium mb-2 block">Description</label>
             <textarea value={presentation.description ?? ''} onChange={(e) => update({ description: e.target.value || null })} className="w-full min-h-[60px] rounded-lg border border-nativz-border bg-surface-hover p-2.5 text-xs text-foreground placeholder:text-foreground/30 focus:border-accent/50 focus:outline-none resize-none transition-colors" placeholder="Brief description..." />
           </div>
-          <div className="pt-3 border-t border-nativz-border text-[11px] text-text-muted space-y-1">
+          <div className="pt-3 border-t border-nativz-border text-xs text-text-muted space-y-1">
             <div className="flex justify-between"><span>Slides</span><span className="text-text-secondary">{presentation.slides.length}</span></div>
           </div>
         </div>

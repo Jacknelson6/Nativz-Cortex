@@ -10,7 +10,6 @@ import {
   Clock,
   Compass,
   Globe,
-  HelpCircle,
   Loader2,
   MessageCircle,
   Music,
@@ -18,13 +17,13 @@ import {
   X,
   Youtube,
 } from 'lucide-react';
-import { AgencyAssignmentLabel } from '@/components/clients/agency-assignment-label';
 import { ClientLogo } from '@/components/clients/client-logo';
 import { ClientPickerModal, type ClientOption } from '@/components/ui/client-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils/cn';
+import { toast } from 'sonner';
 import { mergeTopicSearchSelectionIntoLocalStorage } from '@/lib/strategy-lab/topic-search-selection-storage';
-import { TIME_RANGE_OPTIONS, LANGUAGE_OPTIONS, PLATFORM_OPTIONS } from '@/lib/types/search';
+import { TIME_RANGE_OPTIONS } from '@/lib/types/search';
 import type { SearchPlatform, SearchVolume } from '@/lib/types/search';
 
 export type ContextMode = 'none' | 'client' | 'url';
@@ -127,11 +126,11 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
     const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
     const [clientPickerPortal, setClientPickerPortal] = useState<HTMLElement | null>(null);
     const [platforms, setPlatforms] = useState<Set<SearchPlatform>>(
-      () => new Set(['web', 'reddit', 'youtube', 'tiktok', 'quora'])
+      () => new Set(['web', 'reddit', 'youtube', 'tiktok'])
     );
     const [volume] = useState<SearchVolume>('medium');
     const [timeRange, setTimeRange] = useState('last_3_months');
-    const [language, setLanguage] = useState('all');
+    const [language] = useState('all');
     const [country] = useState('us');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -234,7 +233,7 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
           country,
           client_id: contextMode === 'client' ? clientId : null,
           search_mode: searchMode,
-          platforms: Array.from(platforms),
+          platforms: Array.from(new Set([...platforms, 'web'])).filter((p) => p !== 'quora'),
           volume,
           ...(contextMode === 'url' && url.trim() ? { brand_url: url.trim() } : {}),
         };
@@ -284,20 +283,29 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
     const singleStep = topicPipelineLlmV1;
     const greetingName = greetingDisplayName(userFirstName);
     const timeLabel = TIME_RANGE_OPTIONS.find((o) => o.value === timeRange)?.label ?? 'Last 3 months';
-    const languageLabel = LANGUAGE_OPTIONS.find((o) => o.value === language)?.label ?? 'All languages';
-
-    const platformIcons: Record<SearchPlatform, typeof Globe> = {
+    const platformPopoverIcons: Record<
+      'web' | 'reddit' | 'youtube' | 'tiktok',
+      typeof Globe
+    > = {
       web: Globe,
       reddit: MessageCircle,
       youtube: Youtube,
       tiktok: Music,
-      quora: HelpCircle,
     };
 
+    /** Web first (always on); Quora not offered in UI. */
+    const platformPopoverRows: { value: keyof typeof platformPopoverIcons; label: string }[] = [
+      { value: 'web', label: 'Web' },
+      { value: 'reddit', label: 'Reddit' },
+      { value: 'youtube', label: 'YouTube' },
+      { value: 'tiktok', label: 'TikTok' },
+    ];
+
     function togglePlatform(p: SearchPlatform) {
-      if (p === 'web') return; // web is always on
+      if (p === 'web') return;
       setPlatforms((prev) => {
         const next = new Set(prev);
+        next.add('web');
         if (next.has(p)) next.delete(p);
         else next.add(p);
         return next;
@@ -305,12 +313,15 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
     }
 
     const pillBtn =
-      'inline-flex min-h-[2.25rem] max-w-[min(100%,11rem)] items-center gap-2 rounded-full border border-nativz-border bg-surface-hover/80 px-3 py-1.5 text-left text-xs font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover';
+      'inline-flex shrink-0 h-9 max-w-[min(100%,11rem)] items-center gap-2 rounded-full border border-nativz-border bg-surface-hover/80 px-3 text-left text-xs font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover';
 
     const bulkIds = strategyLabBulkSelection?.ids ?? [];
     const bulkClientId = strategyLabBulkSelection?.clientId ?? null;
-    const bulkReady = bulkIds.length > 0 && bulkClientId != null;
-    const strategyLabHref = bulkReady ? `/admin/strategy-lab/${bulkClientId}` : '/admin/strategy-lab';
+    const bulkHasSelection = bulkIds.length > 0;
+    const bulkReady = bulkHasSelection && bulkClientId != null;
+    const strategyLabHref = bulkReady
+      ? `/admin/strategy-lab/${bulkClientId}`
+      : '/admin/strategy-lab';
 
     return (
       <div className="w-full">
@@ -331,7 +342,7 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
               value={topicQuery}
               onChange={(e) => setTopicQuery(e.target.value)}
               placeholder="Search a topic or brand name"
-              className="w-full min-h-[3.25rem] border-0 bg-transparent px-4 pt-4 pb-2 text-[15px] font-normal leading-relaxed text-foreground placeholder:text-text-muted/80 focus:outline-none md:min-h-[3.5rem] md:px-5 md:pt-5 md:text-base"
+              className="w-full min-h-[3.25rem] border-0 bg-transparent px-4 pt-4 pb-2 text-sm font-normal leading-relaxed text-foreground placeholder:text-text-muted/80 focus:outline-none md:min-h-[3.5rem] md:px-5 md:pt-5 md:text-base"
               autoComplete="off"
               autoFocus={Boolean(initialQuery)}
               onKeyDown={(e) => {
@@ -341,13 +352,17 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
               }}
             />
 
-          <div className="flex flex-col gap-3 border-t border-nativz-border/60 px-3 pb-3 pt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              {/* Brand */}
+          <div className="flex flex-nowrap items-center gap-2 border-t border-nativz-border/60 px-3 pb-3 pt-2">
+            <div
+              className="flex min-h-[2.5rem] min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto py-0.5 [scrollbar-width:thin] [-ms-overflow-style:auto] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-nativz-border/80"
+              role="group"
+              aria-label="Search filters"
+            >
+              {/* Brand — popover lists clients as logos; trigger shows selected client logo when set */}
               <Popover open={brandPopoverOpen} onOpenChange={setBrandPopoverOpen}>
                 <div
                   className={cn(
-                    'inline-flex min-h-[2.25rem] max-w-[min(100%,13rem)] min-w-0 items-stretch rounded-full border border-nativz-border bg-surface-hover/80 text-xs font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover',
+                    'inline-flex h-9 max-w-[min(100%,13rem)] min-w-0 shrink-0 items-stretch rounded-full border border-nativz-border bg-surface-hover/80 text-xs font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover',
                     (contextMode === 'client' || contextMode === 'url') && 'pr-0.5'
                   )}
                 >
@@ -356,7 +371,16 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
                       type="button"
                       className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left text-text-secondary hover:bg-transparent"
                     >
-                      <Building2 size={15} className="shrink-0 text-text-muted" aria-hidden />
+                      {contextMode === 'client' && selectedClient ? (
+                        <ClientLogo
+                          src={selectedClient.logo_url}
+                          name={selectedClient.name}
+                          size="sm"
+                          className="h-7 w-7 shrink-0 !rounded-md"
+                        />
+                      ) : (
+                        <Building2 size={15} className="shrink-0 text-text-muted" aria-hidden />
+                      )}
                       <span className="truncate">{brandPillLabel(contextMode, selectedClient, url)}</span>
                     </button>
                   </PopoverTrigger>
@@ -395,28 +419,39 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
                     </div>
                   </div>
                   <div
-                    className="max-h-48 overflow-y-auto"
+                    className="max-h-56 overflow-y-auto p-2"
                     role="listbox"
                     aria-label="Clients"
                   >
-                    {clientsForDropdown.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        role="option"
-                        aria-selected={clientId === c.id}
-                        onClick={() => pickClient(c.id)}
-                        className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-surface-hover"
-                      >
-                        <ClientLogo src={c.logo_url} name={c.name} size="sm" className="shrink-0 rounded-md" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-text-primary">{c.name}</p>
-                          <div className="mt-0.5">
-                            <AgencyAssignmentLabel agency={c.agency} showWhenUnassigned />
-                          </div>
-                        </div>
-                      </button>
-                    ))}
+                    {clientsForDropdown.length === 0 ? (
+                      <p className="px-2 py-6 text-center text-sm text-text-muted">No matching clients</p>
+                    ) : (
+                      <div className="grid grid-cols-[repeat(auto-fill,minmax(4.75rem,1fr))] gap-2">
+                        {clientsForDropdown.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            role="option"
+                            aria-selected={clientId === c.id}
+                            onClick={() => pickClient(c.id)}
+                            className={cn(
+                              'flex flex-col items-center gap-1.5 rounded-xl border border-transparent p-2 text-center transition-colors hover:bg-surface-hover',
+                              clientId === c.id && 'border-accent/35 bg-accent/10',
+                            )}
+                          >
+                            <ClientLogo
+                              src={c.logo_url}
+                              name={c.name}
+                              size="sm"
+                              className="shrink-0 rounded-lg"
+                            />
+                            <span className="line-clamp-2 w-full text-[10px] font-medium leading-tight text-text-primary">
+                              {c.name}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col gap-2 border-t border-nativz-border p-3">
                     <button
@@ -445,7 +480,7 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
                 </PopoverContent>
               </Popover>
 
-              {/* Time */}
+              {/* Time range */}
               <Popover>
                 <PopoverTrigger asChild>
                   <button type="button" className={pillBtn}>
@@ -475,37 +510,7 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
                 </PopoverContent>
               </Popover>
 
-              {/* Language */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button type="button" className={pillBtn}>
-                    <Globe size={15} className="shrink-0 text-text-muted" aria-hidden />
-                    <span className="truncate">{languageLabel}</span>
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent
-                  align="start"
-                  sideOffset={8}
-                  matchAnchorWidth={false}
-                  className="w-52 border-nativz-border bg-surface p-1 shadow-[var(--shadow-dropdown)]"
-                >
-                  {LANGUAGE_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setLanguage(opt.value)}
-                      className={cn(
-                        'flex w-full rounded-lg px-3 py-2 text-left text-sm text-text-secondary hover:bg-surface-hover',
-                        language === opt.value && 'bg-accent-surface font-medium text-accent-text'
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </PopoverContent>
-              </Popover>
-
-              {/* Platforms */}
+              {/* Platforms — Web always on (toggle disabled); Reddit / YouTube / TikTok optional */}
               <Popover>
                 <PopoverTrigger asChild>
                   <button type="button" className={pillBtn}>
@@ -519,19 +524,22 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
                   matchAnchorWidth={false}
                   className="w-56 border-nativz-border bg-surface p-1 shadow-[var(--shadow-dropdown)]"
                 >
-                  {PLATFORM_OPTIONS.map((opt) => {
-                    const Icon = platformIcons[opt.value];
-                    const active = platforms.has(opt.value);
+                  {platformPopoverRows.map((opt) => {
+                    const Icon = platformPopoverIcons[opt.value];
                     const isWeb = opt.value === 'web';
+                    const active = platforms.has(opt.value);
                     return (
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => togglePlatform(opt.value)}
                         disabled={isWeb}
+                        onClick={() => togglePlatform(opt.value)}
+                        aria-pressed={active}
+                        aria-disabled={isWeb}
+                        title={isWeb ? 'Web search is always included' : undefined}
                         className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-text-secondary hover:bg-surface-hover',
-                          isWeb && 'cursor-default opacity-70'
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-text-secondary',
+                          isWeb ? 'cursor-default opacity-95' : 'hover:bg-surface-hover',
                         )}
                       >
                         <Icon size={15} className="shrink-0 text-text-muted" aria-hidden />
@@ -539,13 +547,14 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
                         <span
                           className={cn(
                             'flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors',
-                            active ? 'bg-accent' : 'bg-surface-hover border border-nativz-border'
+                            active ? 'bg-accent' : 'border border-nativz-border bg-surface-hover',
                           )}
+                          aria-hidden
                         >
                           <span
                             className={cn(
                               'h-3 w-3 rounded-full bg-white shadow-sm transition-transform',
-                              active ? 'translate-x-3' : 'translate-x-0'
+                              active ? 'translate-x-3' : 'translate-x-0',
                             )}
                           />
                         </span>
@@ -561,7 +570,7 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
               onClick={handlePrimaryClick}
               disabled={!step1Valid || loading}
               aria-label={singleStep ? 'Run research' : 'Configure search'}
-              className="flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full border border-accent/40 bg-accent text-white shadow-[0_0_24px_-6px_rgba(91,163,230,0.55)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9 sm:self-center"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/40 bg-accent text-white shadow-[0_0_24px_-6px_rgba(91,163,230,0.55)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9"
             >
               {loading ? (
                 <Loader2 size={18} className="animate-spin" aria-hidden />
@@ -572,23 +581,35 @@ export const ResearchTopicForm = forwardRef<ResearchTopicFormHandle, ResearchTop
           </div>
           </div>
 
-        <div className="mt-3 flex justify-center">
+        <div className="mx-auto mt-4 flex w-full max-w-xl justify-center">
           <Link
             href={strategyLabHref}
             onClick={() => {
               if (bulkReady && bulkClientId) {
                 mergeTopicSearchSelectionIntoLocalStorage(bulkClientId, bulkIds);
+              } else if (bulkHasSelection && !bulkClientId) {
+                toast.message(
+                  'Pick a client in Strategy lab, then pin topic searches from your history.',
+                );
               }
             }}
             title={
               bulkReady
                 ? 'Opens this client’s Strategy lab and adds the selected topic searches to the workspace'
-                : undefined
+                : bulkHasSelection && !bulkClientId
+                  ? 'Unbranded searches — open Strategy lab and pick a client to pin them'
+                  : 'Go to strategy lab'
             }
-            className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border/80 bg-surface-hover/45 px-2.5 py-1.5 text-[11px] font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover hover:text-text-primary"
+            className={cn(
+              'inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+              bulkReady
+                ? 'border-accent/40 bg-accent/15 text-accent-text hover:bg-accent/25'
+                : 'border-nativz-border/70 bg-surface-hover/40 text-text-secondary hover:border-accent/30 hover:bg-surface-hover hover:text-text-primary',
+            )}
           >
-            <Compass size={12} className="shrink-0 text-text-muted" aria-hidden />
-            {bulkReady ? `Open Strategy lab (${bulkIds.length})` : 'Go to Strategy lab'}
+            <Compass size={13} className="shrink-0 opacity-90" aria-hidden />
+            Go to strategy lab
           </Link>
         </div>
 

@@ -39,7 +39,7 @@ export function SharedAnalysisPanel({ item, onClose }: SharedAnalysisPanelProps)
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+            className={`cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
               tab === t.id
                 ? 'bg-accent-surface text-accent-text'
                 : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'

@@ -48,7 +48,7 @@ export function SlashCommandMenu({ query, commands, onSelect }: SlashCommandMenu
                   {cmd.type === 'direct' ? 'instant' : 'AI'}
                 </span>
               </div>
-              <p className="text-[11px] text-text-muted truncate">{cmd.description}</p>
+              <p className="text-xs text-text-muted truncate">{cmd.description}</p>
             </div>
           </button>
         ))}

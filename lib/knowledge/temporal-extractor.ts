@@ -6,6 +6,7 @@
  */
 
 import { createCompletion } from '@/lib/ai/client';
+import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 
 // ---------------------------------------------------------------------------
@@ -86,7 +87,7 @@ export async function extractTemporalMarkers(
       ],
       maxTokens: 1024,
       feature: 'knowledge_temporal_extraction',
-      modelPreference: ['anthropic/claude-haiku', 'anthropic/claude-3-haiku'],
+      modelPreference: [DEFAULT_OPENROUTER_MODEL],
     });
 
     const parsed = parseAIResponseJSON<TemporalExtractionResult>(response.text);

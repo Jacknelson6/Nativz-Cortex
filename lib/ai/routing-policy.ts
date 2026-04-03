@@ -1,3 +1,5 @@
+import { DEFAULT_OPENROUTER_MODEL } from './openrouter-default-model';
+
 export type AiRoutingTier = 'premium' | 'standard' | 'utility';
 
 export type AiRoutingSummaryItem = {
@@ -10,21 +12,9 @@ export type AiRoutingSummaryItem = {
 };
 
 export const DEFAULT_CHAIN_BY_TIER: Record<AiRoutingTier, string[]> = {
-  premium: [
-    'dashscope/qwen3.5-flash',
-    'openai/gpt-5.4-mini',
-    'deepseek/deepseek-v3.2',
-  ],
-  standard: [
-    'dashscope/qwen3.5-flash',
-    'deepseek/deepseek-v3.2',
-    'openai/gpt-5.4-mini',
-  ],
-  utility: [
-    'dashscope/qwen3.5-flash',
-    'qwen/qwen3-30b-a3b',
-    'deepseek/deepseek-v3.2',
-  ],
+  premium: [DEFAULT_OPENROUTER_MODEL],
+  standard: [DEFAULT_OPENROUTER_MODEL],
+  utility: [DEFAULT_OPENROUTER_MODEL],
 };
 
 const FEATURE_GROUPS: AiRoutingSummaryItem[] = [

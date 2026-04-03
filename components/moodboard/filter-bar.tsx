@@ -127,7 +127,7 @@ export function FilterBar({ boardTags, filters, onFiltersChange }: FilterBarProp
           value={searchInput}
           onChange={(e) => handleSearchChange(e.target.value)}
           placeholder="Search items..."
-          className="w-full rounded-lg border border-nativz-border bg-surface pl-7 pr-7 py-1 text-[11px] text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent/30"
+          className="w-full rounded-lg border border-nativz-border bg-surface pl-7 pr-7 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent/30"
         />
         {searchInput && (
           <button

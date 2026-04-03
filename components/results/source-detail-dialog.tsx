@@ -10,6 +10,7 @@ import type { PlatformSource } from '@/lib/types/search';
 import { formatRelativeTime, formatNumber } from '@/lib/utils/format';
 import { formatViewsApprox } from '@/lib/search/source-mention-utils';
 import { toast } from 'sonner';
+import { TopicSourceVideoBreakdown } from '@/components/results/topic-source-video-breakdown';
 
 export interface LinkedIdeaOption {
   id: string;
@@ -26,6 +27,7 @@ interface SourceDetailDialogProps {
   clients: ClientOption[];
   linkedIdeas: LinkedIdeaOption[];
   focusRescript?: boolean;
+  onSourcePatched?: (updated: PlatformSource) => void;
 }
 
 export function SourceDetailDialog({
@@ -37,6 +39,7 @@ export function SourceDetailDialog({
   clients,
   linkedIdeas,
   focusRescript,
+  onSourcePatched,
 }: SourceDetailDialogProps) {
   const rescriptRef = useRef<HTMLDivElement>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
@@ -70,7 +73,8 @@ export function SourceDetailDialog({
     if (!t) {
       setHookAnalysis(null);
       setFrameBreakdown(null);
-      setInsightsError('No transcript — hook and frame analysis unavailable.');
+      setInsightsError(null);
+      setInsightsLoading(false);
       return;
     }
 
@@ -152,11 +156,11 @@ export function SourceDetailDialog({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Rescript failed');
+      if (!res.ok) throw new Error(data.error || 'Analysis failed');
       setRescriptText((data.script as string) ?? '');
-      toast.success('Rescript ready');
+      toast.success('Script ready');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Rescript failed');
+      toast.error(e instanceof Error ? e.message : 'Analysis failed');
     } finally {
       setRescriptLoading(false);
     }
@@ -208,16 +212,35 @@ export function SourceDetailDialog({
           </div>
         </section>
 
-        <section>
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">Original script</h4>
-          {src.transcript?.trim() ? (
-            <pre className="whitespace-pre-wrap rounded-lg border border-nativz-border bg-background/80 p-3 text-xs leading-relaxed max-h-48 overflow-y-auto">
-              {src.transcript}
-            </pre>
-          ) : (
-            <p className="text-text-muted text-sm">No transcript captured for this source.</p>
-          )}
-        </section>
+        {(src.platform === 'tiktok' || src.platform === 'youtube') && (
+          <section>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">
+              Video breakdown
+            </h4>
+            <p className="text-xs text-text-muted mb-3">
+              Transcript, FFmpeg keyframes, and AI visual clip analysis — same pipeline as mood board video analysis.
+              Frame extraction in research is TikTok-only; YouTube gets captions and text timeline.
+            </p>
+            <TopicSourceVideoBreakdown
+              searchId={searchId}
+              source={src}
+              onSourcePatched={onSourcePatched}
+            />
+          </section>
+        )}
+
+        {src.platform !== 'tiktok' && src.platform !== 'youtube' ? (
+          <section>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">Original script</h4>
+            {src.transcript?.trim() ? (
+              <pre className="whitespace-pre-wrap rounded-lg border border-nativz-border bg-background/80 p-3 text-xs leading-relaxed max-h-48 overflow-y-auto">
+                {src.transcript}
+              </pre>
+            ) : (
+              <p className="text-text-muted text-sm">No transcript captured for this source.</p>
+            )}
+          </section>
+        ) : null}
 
         <section>
           <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">Hook analysis</h4>
@@ -248,7 +271,7 @@ export function SourceDetailDialog({
         <section ref={rescriptRef} className="rounded-xl border border-accent/25 bg-accent/5 p-4 space-y-4">
           <div className="flex items-center gap-2 text-text-primary">
             <Sparkles className="size-4 text-accent-text shrink-0" />
-            <h4 className="text-sm font-semibold">Rescript</h4>
+            <h4 className="text-sm font-semibold">Analyze</h4>
           </div>
           <p className="text-xs text-text-muted">
             Uses the attached client when this search is client-scoped; otherwise pick a client. Optionally anchor
@@ -303,11 +326,11 @@ export function SourceDetailDialog({
             onClick={() => void runRescript()}
           >
             {rescriptLoading ? <Loader2 className="animate-spin size-4" /> : <Sparkles className="size-4" />}
-            Generate rescript
+            Analyze
           </Button>
           {rescriptText ? (
             <div>
-              <p className="text-xs font-medium text-text-muted mb-2">Rescripted script</p>
+              <p className="text-xs font-medium text-text-muted mb-2">Generated script</p>
               <pre className="whitespace-pre-wrap rounded-lg border border-nativz-border bg-surface p-3 text-sm leading-relaxed max-h-64 overflow-y-auto">
                 {rescriptText}
               </pre>

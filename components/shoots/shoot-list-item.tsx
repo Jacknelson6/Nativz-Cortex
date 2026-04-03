@@ -38,7 +38,7 @@ export function ShootListItem({
               className="cursor-pointer flex flex-col items-center justify-center rounded-lg bg-accent/10 text-accent px-2.5 py-1.5 min-w-[48px] hover:bg-accent/20 transition-colors"
             >
               <span className="text-base font-bold leading-none">{date.getDate()}</span>
-              <span className="text-[9px] font-medium uppercase mt-0.5">
+              <span className="text-[10px] font-medium uppercase mt-0.5">
                 {date.toLocaleDateString('en-US', { month: 'short' })}
               </span>
             </button>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { z } from 'zod';
@@ -40,17 +41,14 @@ export async function POST(
     }
 
     const adminClient = createAdminClient();
-
-    // Fetch the search record
-    const { data: search, error: fetchError } = await adminClient
-      .from('topic_searches')
-      .select('id, query, status, summary, trending_topics, raw_ai_response')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !search) {
-      return NextResponse.json({ error: 'Search not found' }, { status: 404 });
+    const access = await assertUserCanAccessTopicSearch(adminClient, user.id, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
     }
+    const search = access.search;
 
     if (search.status !== 'completed') {
       return NextResponse.json(

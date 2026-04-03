@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logActivity } from '@/lib/activity';
+import { PORTAL_HOME_PATH } from '@/lib/portal/client-surface';
 
 const impersonateSchema = z.object({
   organization_id: z.string().uuid(),
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
   // Audit log: impersonation started
   await logActivity(user.id, 'impersonation_start', 'impersonation', organization_id, { client_slug });
 
-  return NextResponse.json({ success: true, redirect: '/portal/dashboard' });
+  return NextResponse.json({ success: true, redirect: PORTAL_HOME_PATH });
 }
 
 export async function DELETE() {

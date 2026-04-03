@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateAdImage } from '@/lib/ad-creatives/generate-image';
 import { createCompletion } from '@/lib/ai/client';
+import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
 import type { SocialResultsData, SocialResultsProfile, SocialResultsPost, SocialResultsHighlight } from '@/app/admin/presentations/[id]/types';
 
 export const maxDuration = 120;
@@ -271,7 +272,7 @@ async function generateRevisedBio(
       maxTokens: 200,
       timeoutMs: 30000,
       feature: 'social_results_bio_generation',
-      modelPreference: ['anthropic/claude-sonnet-4-5'],
+      modelPreference: [DEFAULT_OPENROUTER_MODEL],
       userId,
       userEmail,
     });

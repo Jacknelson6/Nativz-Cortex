@@ -136,7 +136,7 @@ export function SlidesPresentView({
                         Step {i + 1}
                       </span>
                       <p
-                        className={`text-[11px] leading-snug mt-1 line-clamp-3 ${
+                        className={`text-xs leading-snug mt-1 line-clamp-3 ${
                           active ? 'text-white font-medium' : 'text-zinc-400'
                         }`}
                       >

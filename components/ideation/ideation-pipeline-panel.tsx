@@ -74,7 +74,7 @@ export function IdeationPipelinePanel({
               </span>
               <span className="text-sm font-semibold uppercase tracking-wide">Topic search</span>
             </div>
-            <p className="mt-3 text-base font-medium leading-snug text-text-primary [overflow-wrap:anywhere] sm:text-[17px]">
+            <p className="mt-3 text-base font-medium leading-snug text-text-primary [overflow-wrap:anywhere]">
               &ldquo;{query}&rdquo;
             </p>
             <Link

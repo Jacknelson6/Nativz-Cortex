@@ -49,7 +49,7 @@ function OutlierCard({ video, rank }: { video: TopicSearchVideoRow; rank: number
           {video.title ?? video.description?.substring(0, 80) ?? 'Untitled'}
         </p>
 
-        <div className="flex items-center gap-2 text-[11px]">
+        <div className="flex items-center gap-2 text-xs">
           {video.author_avatar ? (
             <img
               src={video.author_avatar}
@@ -67,7 +67,7 @@ function OutlierCard({ video, rank }: { video: TopicSearchVideoRow; rank: number
           ) : null}
         </div>
 
-        <div className="flex items-center gap-3 text-[11px]">
+        <div className="flex items-center gap-3 text-xs">
           <span className="flex items-center gap-1 text-text-muted">
             <Eye size={11} />
             {formatNumber(video.views)}

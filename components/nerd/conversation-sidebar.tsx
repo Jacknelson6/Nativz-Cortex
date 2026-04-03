@@ -116,7 +116,7 @@ export function ConversationSidebar({ open, onClose, onOpen, activeId, onSelect,
           <Plus size={15} />
         </button>
         <div className="flex-1" />
-        <span className="text-[9px] text-text-muted/30 [writing-mode:vertical-lr] rotate-180 select-none">
+        <span className="text-[10px] text-text-muted/30 [writing-mode:vertical-lr] rotate-180 select-none">
           History
         </span>
       </div>
@@ -184,7 +184,7 @@ export function ConversationSidebar({ open, onClose, onOpen, activeId, onSelect,
                         onChange={(e) => setEditTitle(e.target.value)}
                         onBlur={() => handleRename(convo.id)}
                         onKeyDown={(e) => { if (e.key === 'Escape') setEditingId(null); }}
-                        className="flex-1 bg-transparent text-[11px] text-text-primary outline-none border-b border-accent"
+                        className="flex-1 bg-transparent text-xs text-text-primary outline-none border-b border-accent"
                       />
                       <button type="submit" className="text-accent-text cursor-pointer">
                         <Check size={11} />
@@ -196,12 +196,12 @@ export function ConversationSidebar({ open, onClose, onOpen, activeId, onSelect,
                         onClick={() => onSelect(convo.id)}
                         className="flex-1 min-w-0 text-left cursor-pointer"
                       >
-                        <p className={`text-[11px] truncate leading-snug ${
+                        <p className={`text-xs truncate leading-snug ${
                           activeId === convo.id ? 'text-text-primary font-medium' : 'text-text-secondary'
                         }`}>
                           {convo.title}
                         </p>
-                        <p className="text-[9px] text-text-muted/40 flex items-center gap-0.5 mt-0.5">
+                        <p className="text-[10px] text-text-muted/40 flex items-center gap-0.5 mt-0.5">
                           <Clock size={7} />
                           {formatRelativeTime(convo.updated_at)}
                         </p>

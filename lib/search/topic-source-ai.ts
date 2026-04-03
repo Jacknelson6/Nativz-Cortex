@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createCompletion } from '@/lib/ai/client';
+import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import type { PlatformSource, SearchPlatform } from '@/lib/types/search';
 
@@ -58,7 +59,7 @@ Return ONLY valid JSON with this exact shape (no markdown):
       ],
       maxTokens: 1200,
       feature: 'topic_source_insights',
-      modelPreference: ['openrouter/hunter-alpha'],
+      modelPreference: [DEFAULT_OPENROUTER_MODEL],
       userId: user.id,
       userEmail: user.email ?? undefined,
     });
@@ -154,7 +155,7 @@ Return JSON only:
       ],
       maxTokens: 2000,
       feature: 'topic_source_rescript',
-      modelPreference: ['openrouter/hunter-alpha'],
+      modelPreference: [DEFAULT_OPENROUTER_MODEL],
       userId: user.id,
       userEmail: user.email ?? undefined,
     });
@@ -181,7 +182,7 @@ Return JSON only:
 
     return { ok: true, script, rescript: rescriptData };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Rescript failed';
+    const msg = e instanceof Error ? e.message : 'Analysis failed';
     return { ok: false, error: msg, status: 500 };
   }
 }

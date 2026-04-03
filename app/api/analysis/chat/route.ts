@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createOpenRouterTextStream } from '@/lib/ai/openrouter-rich';
+import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
 
 const chatSchema = z.object({
   board_id: z.string(),
@@ -112,7 +113,7 @@ function buildItemContext(item: Record<string, unknown>): string {
  * @body messages - Conversation history [{role, content}] — at least 1 message (required)
  * @body note_contents - Sticky note text strings to include as context (optional)
  * @body client_slugs - Client slugs to inject brand context via @ mentions (optional)
- * @body model - OpenRouter model override (optional, default 'anthropic/claude-sonnet-4')
+ * @body model - OpenRouter model override (optional; default platform OpenRouter model)
  * @returns {ReadableStream<string>} Streamed AI text response
  */
 export async function POST(req: NextRequest) {
@@ -233,7 +234,7 @@ export async function POST(req: NextRequest) {
 
     const { response: openRouterRes } = await createOpenRouterTextStream({
       feature: 'analysis_chat',
-      modelPreference: model ? [model] : ['openrouter/hunter-alpha'],
+      modelPreference: model ? [model] : [DEFAULT_OPENROUTER_MODEL],
       messages: apiMessages,
       maxTokens: 4096,
       extraHeaders: {

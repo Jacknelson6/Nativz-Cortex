@@ -42,7 +42,7 @@ interface PipelineDetailPanelProps {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[11px] font-semibold uppercase tracking-widest text-text-muted mb-3">
+    <p className="text-xs font-semibold uppercase tracking-widest text-text-muted mb-3">
       {children}
     </p>
   );
@@ -79,7 +79,7 @@ function LinkField({ icon, label, value, field, itemId, onUpdate }: LinkFieldPro
   if (editing) {
     return (
       <div className="py-1.5">
-        <p className="text-[11px] text-text-muted mb-1">{label}</p>
+        <p className="text-xs text-text-muted mb-1">{label}</p>
         <div className="flex gap-2">
           <input
             autoFocus
@@ -238,8 +238,8 @@ export function PipelineDetailPanel({
               {/* Progress bar */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-text-muted">Overall progress</span>
-                  <span className="text-[11px] font-medium text-text-secondary">{progress}%</span>
+                  <span className="text-xs text-text-muted">Overall progress</span>
+                  <span className="text-xs font-medium text-text-secondary">{progress}%</span>
                 </div>
                 <div className="h-1.5 bg-surface-hover rounded-full overflow-hidden">
                   <motion.div

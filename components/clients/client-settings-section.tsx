@@ -284,7 +284,7 @@ function PortalUsersSection({ clientId }: { clientId: string }) {
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm text-text-primary truncate">{u.full_name}</p>
-                    <p className="text-[11px] text-text-muted truncate">{u.email}</p>
+                    <p className="text-xs text-text-muted truncate">{u.email}</p>
                   </div>
                 </div>
               </div>

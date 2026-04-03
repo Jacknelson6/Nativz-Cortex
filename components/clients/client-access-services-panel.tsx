@@ -178,7 +178,7 @@ export function ClientAccessServicesPanel({ slug }: { slug: string }) {
             available to your team.
           </p>
 
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted pt-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted pt-2">
             Nativz team — admin workspace
           </p>
           <div className="space-y-4">
@@ -197,7 +197,7 @@ export function ClientAccessServicesPanel({ slug }: { slug: string }) {
           </div>
 
           <div className="border-t border-white/[0.06] pt-6 mt-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-3">
               Client portal
             </p>
             <div className="space-y-4">

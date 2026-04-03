@@ -170,7 +170,7 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
               <div className="min-w-0">
                 <h2 className="text-sm font-semibold text-text-primary truncate">{item.title || 'Video analysis'}</h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${platformClass}`}>
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${platformClass}`}>
                     {platform}
                   </span>
                   {item.duration && (
@@ -450,7 +450,7 @@ function HookView({ item, isAnalyzed, analyzing, onAnalyze }: {
           <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1.5">Themes</p>
           <div className="flex flex-wrap gap-1.5">
             {item.content_themes.map((tag, i) => (
-              <span key={i} className="text-[11px] bg-surface-hover rounded-full px-2.5 py-0.5 text-text-secondary">
+              <span key={i} className="text-xs bg-surface-hover rounded-full px-2.5 py-0.5 text-text-secondary">
                 {formatTag(tag)}
               </span>
             ))}
@@ -580,7 +580,7 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied, 
               <div key={i} className="relative rounded-md overflow-hidden border border-nativz-border">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={frame.url} alt={frame.label} className="w-full aspect-[9/16] object-cover" />
-                <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-mono text-center py-0.5">
+                <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[10px] font-mono text-center py-0.5">
                   {frame.label}
                 </div>
               </div>
@@ -603,7 +603,7 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied, 
         <div className="relative shrink-0 w-[72px] rounded-md overflow-hidden border border-nativz-border">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={frame.url} alt={frame.label} className="w-full aspect-[9/16] object-cover" />
-          <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-mono text-center py-0.5">
+          <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[10px] font-mono text-center py-0.5">
             {frame.label}
           </div>
         </div>
@@ -681,14 +681,14 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied, 
       {!hasFrames && !extractingFrames && hasSegments && (
         <div className="flex items-center gap-2 rounded-lg border border-dashed border-nativz-border bg-surface-hover/10 px-3 py-2">
           <ImageIcon size={12} className="text-text-muted shrink-0" />
-          <p className="text-[11px] text-text-muted flex-1">Extract frames to see visual timeline alongside transcript</p>
+          <p className="text-xs text-text-muted flex-1">Extract frames to see visual timeline alongside transcript</p>
         </div>
       )}
 
       {extractingFrames && (
         <div className="flex items-center gap-2 rounded-lg border border-accent/20 bg-accent-surface/30 px-3 py-2">
           <Loader2 size={12} className="animate-spin text-accent-text shrink-0" />
-          <p className="text-[11px] text-text-muted">Extracting frames...</p>
+          <p className="text-xs text-text-muted">Extracting frames...</p>
         </div>
       )}
 
@@ -705,7 +705,7 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied, 
                   <div className="relative shrink-0 w-[72px] rounded-md overflow-hidden border border-nativz-border">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={frame.url} alt={frame.label} className="w-full aspect-[9/16] object-cover" />
-                    <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-mono text-center py-0.5">
+                    <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[10px] font-mono text-center py-0.5">
                       {frame.label}
                     </div>
                   </div>
@@ -831,7 +831,7 @@ function FramesSection({ item, extracting, onExtract }: {
                 alt={frame.label}
                 className="w-full aspect-[9/16] object-cover"
               />
-              <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-mono text-center py-0.5">
+              <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[10px] font-mono text-center py-0.5">
                 {frame.label}
               </div>
             </div>

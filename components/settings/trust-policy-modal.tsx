@@ -254,7 +254,7 @@ export function TrustPolicyModal() {
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center gap-4 mt-2.5 text-[11px] text-text-muted">
+            <div className="flex items-center gap-4 mt-2.5 text-xs text-text-muted">
               <span className="inline-flex items-center gap-1"><CheckCircle2 size={10} className="text-emerald-400" /> Implemented</span>
               <span className="inline-flex items-center gap-1"><Minus size={10} className="text-amber-400" /> Partial / varies</span>
               <span className="inline-flex items-center gap-1"><XIcon size={10} className="text-red-400/70" /> Not available</span>
@@ -299,7 +299,7 @@ export function TrustPolicyModal() {
             </p>
           </div>
 
-          <p className="text-[11px] text-text-muted text-center pb-1">
+          <p className="text-xs text-text-muted text-center pb-1">
             Last updated March 2026
           </p>
         </div>

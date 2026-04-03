@@ -46,6 +46,47 @@ async function loadVideo(videoUrl: string): Promise<HTMLVideoElement> {
   return video;
 }
 
+const SEEK_TIMEOUT_MS = 15_000;
+
+/**
+ * Seek video to a time (seconds) and wait for `seeked`, or reject with Error on error/timeout.
+ * Prevents hanging promises when decode fails (some runtimes surface Event-like rejections upstream).
+ */
+function seekVideo(video: HTMLVideoElement, tSeconds: number): Promise<void> {
+  if (Number.isFinite(tSeconds) && Math.abs(video.currentTime - tSeconds) < 0.001) {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve, reject) => {
+    const onSeeked = () => {
+      cleanup();
+      resolve();
+    };
+    const onErr = () => {
+      cleanup();
+      const me = video.error;
+      const detail =
+        me != null
+          ? `code=${me.code} message=${me.message ?? ''}`
+          : 'unknown media error during seek';
+      reject(new Error(`Video seek failed (${detail})`));
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('Video seek timeout'));
+    }, SEEK_TIMEOUT_MS);
+
+    function cleanup() {
+      clearTimeout(timer);
+      video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('error', onErr);
+    }
+
+    video.addEventListener('seeked', onSeeked, { once: true });
+    video.addEventListener('error', onErr, { once: true });
+    video.currentTime = tSeconds;
+  });
+}
+
 /**
  * Extract frames from a video URL at the given FPS using a hidden
  * `<video>` + `<canvas>`. Returns ImageData objects for each frame.
@@ -80,11 +121,7 @@ export async function extractFrames(
     t < durationMs && frames.length < maxFrames;
     t += intervalMs
   ) {
-    video.currentTime = t / 1000;
-
-    await new Promise<void>((resolve) => {
-      video.onseeked = () => resolve();
-    });
+    await seekVideo(video, t / 1000);
 
     ctx.drawImage(video, 0, 0, w, h);
     let imageData: ImageData;
@@ -143,11 +180,7 @@ export async function extractFramesRange(
     t < endMs && frames.length < maxFrames;
     t += intervalMs
   ) {
-    video.currentTime = t / 1000;
-
-    await new Promise<void>((resolve) => {
-      video.onseeked = () => resolve();
-    });
+    await seekVideo(video, t / 1000);
 
     ctx.drawImage(video, 0, 0, w, h);
     let imageData: ImageData;

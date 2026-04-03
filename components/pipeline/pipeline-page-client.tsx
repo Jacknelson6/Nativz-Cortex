@@ -371,7 +371,7 @@ export default function PipelinePageClient({
             <span className="text-sm font-medium text-text-primary min-w-[140px] text-center">
               {monthLabel}
               {items.length > 0 && (
-                <span className="ml-1.5 text-[11px] font-normal text-text-muted">({items.length} clients)</span>
+                <span className="ml-1.5 text-xs font-normal text-text-muted">({items.length} clients)</span>
               )}
             </span>
             <button onClick={() => navigateMonth(1)} className="p-1 rounded-lg hover:bg-surface-hover text-text-muted cursor-pointer">
@@ -473,18 +473,18 @@ export default function PipelinePageClient({
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b border-nativz-border bg-background sticky top-0 z-10">
-                <th className="text-left text-[11px] font-medium text-text-muted px-4 py-2.5 whitespace-nowrap">Client</th>
-                <th className="text-left text-[11px] font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Assignment</th>
-                <th className="text-left text-[11px] font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">RAWs</th>
-                <th className="text-left text-[11px] font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Editing</th>
-                <th className="text-left text-[11px] font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Approval</th>
-                <th className="text-left text-[11px] font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Boosting</th>
-                <th className="text-left text-[11px] font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Strategist</th>
-                <th className="text-left text-[11px] font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Videographer</th>
-                <th className="text-left text-[11px] font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Editor</th>
-                <th className="text-left text-[11px] font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">SMM</th>
-                <th className="text-left text-[11px] font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Shoot date</th>
-                <th className="text-left text-[11px] font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Links</th>
+                <th className="text-left text-xs font-medium text-text-muted px-4 py-2.5 whitespace-nowrap">Client</th>
+                <th className="text-left text-xs font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Assignment</th>
+                <th className="text-left text-xs font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">RAWs</th>
+                <th className="text-left text-xs font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Editing</th>
+                <th className="text-left text-xs font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Approval</th>
+                <th className="text-left text-xs font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Boosting</th>
+                <th className="text-left text-xs font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Strategist</th>
+                <th className="text-left text-xs font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Videographer</th>
+                <th className="text-left text-xs font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Editor</th>
+                <th className="text-left text-xs font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">SMM</th>
+                <th className="text-left text-xs font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Shoot date</th>
+                <th className="text-left text-xs font-medium text-text-muted px-3 py-2.5 whitespace-nowrap">Links</th>
                 <th className="px-2 py-2.5 w-8" />
               </tr>
             </thead>
@@ -500,7 +500,7 @@ export default function PipelinePageClient({
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-text-primary">{item.client_name}</span>
                       {item.agency && (
-                        <Badge variant={item.agency === 'Nativz' ? 'info' : 'success'} className="text-[9px] px-1 py-0">
+                        <Badge variant={item.agency === 'Nativz' ? 'info' : 'success'} className="text-[10px] px-1 py-0">
                           {item.agency}
                         </Badge>
                       )}

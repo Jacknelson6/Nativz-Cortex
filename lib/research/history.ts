@@ -122,3 +122,53 @@ export async function fetchHistory({
   items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   return items.slice(0, limit);
 }
+
+type TopicSearchRow = {
+  id: string;
+  query: string;
+  search_mode: string;
+  status: string;
+  created_at: string;
+  client_id: string | null;
+  clients: { name: string } | { name: string }[] | null;
+};
+
+/** Map a `topic_searches` row to `HistoryItem` (topic / brand_intel). */
+export function topicSearchRowToHistoryItem(s: TopicSearchRow): HistoryItem {
+  const client = Array.isArray(s.clients) ? s.clients[0] : s.clients;
+  return {
+    id: s.id,
+    type: s.search_mode === 'client_strategy' ? 'brand_intel' : 'topic',
+    title: s.query,
+    status: s.status,
+    clientName: (client as { name: string } | null)?.name ?? null,
+    clientId: s.client_id,
+    createdAt: s.created_at,
+    href:
+      s.status === 'pending_subtopics'
+        ? `/admin/search/${s.id}/subtopics`
+        : s.status === 'processing' || s.status === 'pending'
+          ? `/admin/search/${s.id}/processing`
+          : `/admin/search/${s.id}`,
+  };
+}
+
+/** Load topic-search `HistoryItem`s by id (order preserved). Used for folder contents. */
+export async function fetchTopicSearchHistoryItemsByIds(ids: string[]): Promise<HistoryItem[]> {
+  if (ids.length === 0) return [];
+  const supabase = createAdminClient();
+  const { data: searches } = await supabase
+    .from('topic_searches')
+    .select('id, query, search_mode, status, created_at, client_id, clients(name)')
+    .in('id', ids);
+  const byId = new Map<string, TopicSearchRow>();
+  for (const s of searches ?? []) {
+    byId.set(s.id, s as TopicSearchRow);
+  }
+  const out: HistoryItem[] = [];
+  for (const id of ids) {
+    const row = byId.get(id);
+    if (row) out.push(topicSearchRowToHistoryItem(row));
+  }
+  return out;
+}

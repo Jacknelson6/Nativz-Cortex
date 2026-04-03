@@ -48,6 +48,9 @@ export const PORTAL_PROTECTED_ROUTES: string[] = [
   '/portal/nerd',
 ];
 
+/** Logged-in portal crawl — minimal client surface (research + settings only). */
+export const PORTAL_E2E_MINIMAL_STATIC_ROUTES: string[] = ['/portal/search/new', '/portal/settings'];
+
 /**
  * Every static admin `page.tsx` (no `[param]`) — post-login E2E crawl.
  * Omits `/admin/analytics` — that route only `redirect()`s to `/admin/analytics/social`;
@@ -59,4 +62,4 @@ export const ADMIN_E2E_FULL_STATIC_ROUTES: string[] = [
 ];
 
 /** Full portal static shells for post-login crawl. */
-export const PORTAL_E2E_FULL_STATIC_ROUTES: string[] = [...PORTAL_PROTECTED_ROUTES];
+export const PORTAL_E2E_FULL_STATIC_ROUTES: string[] = [...PORTAL_E2E_MINIMAL_STATIC_ROUTES];

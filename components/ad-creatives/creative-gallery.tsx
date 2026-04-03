@@ -560,7 +560,7 @@ export function CreativeGallery({
               aria-hidden
             />
             <div className="relative space-y-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Gallery</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Gallery</p>
               <div className="mx-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-2xl border border-accent/20 bg-gradient-to-br from-accent/20 to-accent/[0.06] shadow-[0_0_40px_-12px_rgba(59,130,246,0.45)]">
                 <Images size={30} className="text-accent-text" strokeWidth={1.5} />
               </div>
@@ -685,7 +685,7 @@ export function CreativeGallery({
                 ? 'Tap creatives to select'
                 : `${selectedIds.size} selected`}
             </span>
-            <span className="text-[11px] text-text-muted">Max {BULK_MAX} at once</span>
+            <span className="text-xs text-text-muted">Max {BULK_MAX} at once</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -775,7 +775,7 @@ export function CreativeGallery({
                 <div className="flex items-center gap-3 pt-2">
                   <div className="flex-1 h-px bg-nativz-border/60" />
                   {firstCreated && (
-                    <span className="text-[11px] text-text-muted shrink-0">
+                    <span className="text-xs text-text-muted shrink-0">
                       {formatBatchDate(firstCreated)}
                     </span>
                   )}
@@ -847,17 +847,17 @@ export function CreativeGallery({
                 </p>
               )}
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                <span className="text-[11px] text-text-muted rounded-full bg-background border border-nativz-border px-2 py-0.5">
+                <span className="text-xs text-text-muted rounded-full bg-background border border-nativz-border px-2 py-0.5">
                   {selectedCreative.aspect_ratio}
                 </span>
-                <span className="text-[11px] text-text-muted rounded-full bg-background border border-nativz-border px-2 py-0.5 max-w-[min(100%,280px)] truncate">
+                <span className="text-xs text-text-muted rounded-full bg-background border border-nativz-border px-2 py-0.5 max-w-[min(100%,280px)] truncate">
                   {selectedCreative.product_service}
                 </span>
               </div>
 
               <div className="space-y-2 pt-2 border-t border-nativz-border/60">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Image prompt</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Image prompt</p>
                   <Button
                     type="button"
                     variant="ghost"
@@ -880,7 +880,7 @@ export function CreativeGallery({
                   </Button>
                 </div>
                 <div className="rounded-xl border border-nativz-border bg-background/40 px-3 py-2 max-h-40 overflow-y-auto">
-                  <pre className="text-[11px] leading-relaxed text-text-secondary whitespace-pre-wrap font-sans">
+                  <pre className="text-xs leading-relaxed text-text-secondary whitespace-pre-wrap font-sans">
                     {selectedCreative.prompt_used?.trim() || 'No prompt was stored for this creative.'}
                   </pre>
                 </div>

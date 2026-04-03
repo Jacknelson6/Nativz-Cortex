@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { DEFAULT_OPENROUTER_MODEL } from './openrouter-default-model';
 
 /** Buckets stored under llm_provider_keys.openrouter / .openai (ideas hub uses `default`). */
 export type LlmProviderKeyBucket = 'default' | 'topic_search' | 'nerd';
@@ -14,7 +15,7 @@ export type LlmProviderKeysStored = {
 /** @deprecated use LlmProviderKeyBucket */
 export type OpenRouterKeyBucket = LlmProviderKeyBucket;
 
-const DEFAULT_NERD_MODEL = 'openai/gpt-5.4-mini';
+const DEFAULT_NERD_MODEL = DEFAULT_OPENROUTER_MODEL;
 
 /** Legacy JSON used `ideas`; treat as `default` when resolving keys. */
 function keyForBucket(

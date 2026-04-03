@@ -39,7 +39,7 @@ interface GenerateAdCopyParams {
 }
 
 /**
- * Resolve model preference: explicit param wins, then env `AD_COPY_OPENROUTER_MODEL`, then Nemotron 3 free.
+ * Resolve model preference: explicit param wins, then env `AD_COPY_OPENROUTER_MODEL`, then platform default OpenRouter model.
  */
 export function resolveAdCopyOpenRouterPreference(explicit?: string[] | null): string[] {
   if (explicit && explicit.length > 0) return explicit;

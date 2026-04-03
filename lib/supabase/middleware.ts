@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabasePublishableKey, getSupabaseUrl } from './public-env';
+import { PORTAL_HOME_PATH, shouldRedirectPortalToMinimalHome } from '@/lib/portal/client-surface';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -44,7 +45,7 @@ export async function updateSession(request: NextRequest) {
       if (pathname === '/admin/login') {
         return NextResponse.redirect(new URL('/admin/dashboard', request.url));
       }
-      return NextResponse.redirect(new URL('/portal/dashboard', request.url));
+      return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));
     }
     return supabaseResponse;
   }
@@ -70,12 +71,16 @@ export async function updateSession(request: NextRequest) {
 
   // Admin routes — only admins
   if (pathname.startsWith('/admin') && role !== 'admin') {
-    return NextResponse.redirect(new URL('/portal/dashboard', request.url));
+    return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));
   }
 
   // Portal routes — viewers (and admins can also access portal for testing)
   if (pathname.startsWith('/portal') && role !== 'viewer' && role !== 'admin') {
     return NextResponse.redirect(new URL('/admin/login', request.url));
+  }
+
+  if (pathname.startsWith('/portal') && shouldRedirectPortalToMinimalHome(pathname)) {
+    return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));
   }
 
   return supabaseResponse;

@@ -163,7 +163,7 @@ export function ClientAdminShell({
               {clientName}
             </h1>
           </div>
-          <p className="text-[11px] text-text-muted mb-4">Client workspace</p>
+          <p className="text-xs text-text-muted mb-4">Client workspace</p>
           <SidebarNav slug={slug} modules={adminWorkspaceModules} />
         </nav>
         <div

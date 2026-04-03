@@ -3,6 +3,7 @@
 import { Building2, Clock, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
+import { ScrollProgress } from '@/components/ui/scroll-progress';
 import { ExecutiveSummary } from '@/components/reports/executive-summary';
 import { BrandApplication } from '@/components/reports/brand-application';
 import { EmotionsBreakdown } from '@/components/results/emotions-breakdown';
@@ -43,6 +44,7 @@ export function SharedSearchClient({
 
   return (
     <div className="min-h-screen bg-background">
+      <ScrollProgress />
       {/* Header */}
       <div className="border-b border-nativz-border bg-surface/80 backdrop-blur-sm">
         <div className="flex w-full flex-col gap-3 px-6 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">

@@ -146,7 +146,7 @@ export function ClientTasksCard({
               </div>
               {task.team_members && (
                 <div
-                  className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-[9px] font-bold text-text-secondary"
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold text-text-secondary"
                   title={task.team_members.full_name}
                 >
                   {task.team_members.full_name

@@ -6,6 +6,7 @@ import { buildAnalysisHtml } from '@/lib/pdf/analysis-html';
 import { NATIVZ_LOGO_ON_LIGHT_PNG } from '@/lib/brand-logo';
 import type { MoodboardItem } from '@/lib/types/moodboard';
 import { createCompletion } from '@/lib/ai/client';
+import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
 
 // ─── AI title generation ────────────────────────────────────────────────────────
 
@@ -30,7 +31,7 @@ async function generateTitle(item: MoodboardItem, userId?: string, userEmail?: s
       maxTokens: 60,
       timeoutMs: 30000,
       feature: 'analysis_pdf_title',
-      modelPreference: ['openrouter/hunter-alpha'],
+      modelPreference: [DEFAULT_OPENROUTER_MODEL],
       userId,
       userEmail,
     });

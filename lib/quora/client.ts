@@ -5,6 +5,7 @@
 // This gives us questions, answers, and engagement signals without scraping.
 
 import { searxngSearch } from '@/lib/serp/client';
+import { getSearxngWebEngines } from '@/lib/config/searxng-web-engines';
 
 export interface QuoraThread {
   id: string;
@@ -28,6 +29,7 @@ async function searchSearxngQuora(query: string, timeRange: string, count: numbe
     const res = await searxngSearch(`${query} quora answers`, {
       timeRange,
       categories: 'general',
+      engines: getSearxngWebEngines(),
     });
 
     const threads: QuoraThread[] = [];

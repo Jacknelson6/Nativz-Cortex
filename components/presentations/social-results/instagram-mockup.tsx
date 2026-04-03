@@ -28,7 +28,7 @@ export function InstagramMockup({ profile, label, colorScheme = 'dark' }: Instag
     <div className={`${bg} rounded-2xl overflow-hidden border ${border} max-w-sm w-full shadow-2xl select-none font-sans`}>
       {/* Top bar — handle + icons */}
       <div className={`flex items-center justify-between px-4 py-3 border-b ${border}`}>
-        <span className={`text-[15px] font-semibold ${textPrimary}`}>{profile.handle}</span>
+        <span className={`text-sm font-semibold ${textPrimary}`}>{profile.handle}</span>
         <div className="flex items-center gap-3">
           {/* Instagram icon */}
           <svg viewBox="0 0 24 24" className={`w-6 h-6 ${isDark ? 'fill-white' : 'fill-gray-900'}`}>
@@ -68,7 +68,7 @@ export function InstagramMockup({ profile, label, colorScheme = 'dark' }: Instag
               { value: profile.following, label: 'following' },
             ].map(({ value, label }) => (
               <div key={label} className="text-center">
-                <div className={`text-[15px] font-semibold ${textPrimary}`}>{formatNumber(value)}</div>
+                <div className={`text-sm font-semibold ${textPrimary}`}>{formatNumber(value)}</div>
                 <div className={`text-xs ${textMuted}`}>{label}</div>
               </div>
             ))}
@@ -79,7 +79,7 @@ export function InstagramMockup({ profile, label, colorScheme = 'dark' }: Instag
         <div className="mb-3">
           <p className={`text-[14px] font-semibold ${textPrimary} leading-tight`}>{profile.display_name}</p>
           {profile.bio && (
-            <p className={`text-[13px] ${textSecondary} mt-0.5 leading-snug whitespace-pre-wrap`}>{profile.bio}</p>
+            <p className={`text-xs ${textSecondary} mt-0.5 leading-snug whitespace-pre-wrap`}>{profile.bio}</p>
           )}
         </div>
 
@@ -88,7 +88,7 @@ export function InstagramMockup({ profile, label, colorScheme = 'dark' }: Instag
           {['Follow', 'Message'].map((label) => (
             <button
               key={label}
-              className={`flex-1 ${btnBg} rounded-lg py-[7px] text-[13px] font-semibold ${textPrimary} transition-colors`}
+              className={`flex-1 ${btnBg} rounded-lg py-[7px] text-xs font-semibold ${textPrimary} transition-colors`}
             >
               {label}
             </button>
@@ -117,7 +117,7 @@ export function InstagramMockup({ profile, label, colorScheme = 'dark' }: Instag
                     </div>
                   )}
                 </div>
-                <span className={`text-[11px] ${textMuted} truncate w-14 text-center`}>{hl.title}</span>
+                <span className={`text-xs ${textMuted} truncate w-14 text-center`}>{hl.title}</span>
               </div>
             ))}
           </div>
@@ -146,7 +146,7 @@ export function InstagramMockup({ profile, label, colorScheme = 'dark' }: Instag
       {/* Label */}
       {label && (
         <div className={`px-4 py-2.5 ${isDark ? 'bg-gray-900/50' : 'bg-gray-50'} border-t ${border} text-center`}>
-          <span className={`text-[11px] font-semibold ${textMuted} uppercase tracking-widest`}>{label}</span>
+          <span className={`text-xs font-semibold ${textMuted} uppercase tracking-widest`}>{label}</span>
         </div>
       )}
     </div>

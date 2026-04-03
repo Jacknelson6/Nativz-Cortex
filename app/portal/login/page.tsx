@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
+import { PORTAL_HOME_PATH } from '@/lib/portal/client-surface';
 
 export default function PortalLoginPage() {
   const [email, setEmail] = useState('');
@@ -37,7 +38,7 @@ export default function PortalLoginPage() {
       return;
     }
 
-    router.push('/portal/dashboard');
+    router.push(PORTAL_HOME_PATH);
     router.refresh();
   }
 

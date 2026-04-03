@@ -8,6 +8,7 @@ import { ArrowLeft, Building2, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
+import { ScrollProgress } from '@/components/ui/scroll-progress';
 import { ExecutiveSummary } from '@/components/reports/executive-summary';
 import { BrandApplication } from '@/components/reports/brand-application';
 import { EmotionsBreakdown } from '@/components/results/emotions-breakdown';
@@ -142,6 +143,7 @@ export function AdminResultsClient({
 
   return (
     <div className="min-h-full">
+      <ScrollProgress />
       {/* Header */}
       <div className="border-b border-nativz-border bg-surface">
         <div className="flex flex-col gap-3 px-6 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">

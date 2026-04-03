@@ -125,7 +125,7 @@ export function PipelineBoard({
                       {item.agency && (
                         <Badge
                           variant={item.agency === 'Nativz' ? 'info' : 'success'}
-                          className="text-[9px] px-1 py-0 shrink-0"
+                          className="text-[10px] px-1 py-0 shrink-0"
                         >
                           {item.agency}
                         </Badge>

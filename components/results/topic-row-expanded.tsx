@@ -21,6 +21,10 @@ import { hasSources } from '@/lib/types/search';
 import type { TrendingTopic, LegacyTrendingTopic, TopicSource, VideoIdea, SearchPlatform } from '@/lib/types/search';
 import { displayIdeaFormat, displayIdeaVirality, effectiveVirality } from '@/lib/search/video-idea-display';
 import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
+import { formatTopicReach, RESONANCE_LABEL } from '@/lib/search/topic-metrics';
+import { getResearchAlignmentHint } from '@/lib/search/topic-research-alignment';
+import { getSentimentLabel } from '@/lib/utils/sentiment';
+import { SentimentSplitBar } from '@/components/results/sentiment-split-bar';
 
 interface TopicRowExpandedProps {
   topic: TrendingTopic | LegacyTrendingTopic;
@@ -40,19 +44,21 @@ function getPlatformBadge(platform: string): { label: string; className: string 
   return { label: cfg.label, className: `${cfg.bg} ${cfg.color} border border-current/20` };
 }
 
-const VIRALITY_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple'> = {
-  low: 'default',
-  medium: 'info',
-  high: 'success',
-  viral_potential: 'purple',
-};
-
-function formatIdeaAsText(idea: VideoIdea, index: number): string {
+function formatIdeaAsText(
+  idea: VideoIdea,
+  index: number,
+  topic?: TrendingTopic | LegacyTrendingTopic,
+): string {
   const lines: string[] = [];
   lines.push(`${index}. ${idea.title}`);
   lines.push(`   Hook: "${idea.hook}"`);
   lines.push(`   Format: ${displayIdeaFormat(idea.format)}`);
   lines.push(`   Virality: ${displayIdeaVirality(idea.virality)}`);
+  if (topic) {
+    lines.push(
+      `   Grounded in topic data: reach ${formatTopicReach(topic)} · resonance ${RESONANCE_LABEL[topic.resonance] ?? topic.resonance} · ${getSentimentLabel(topic.sentiment)}`,
+    );
+  }
   if (idea.script_outline?.length) {
     lines.push('   Script outline:');
     idea.script_outline.forEach((point) => {
@@ -66,7 +72,11 @@ function formatIdeaAsText(idea: VideoIdea, index: number): string {
   return lines.join('\n');
 }
 
-function formatAllIdeasAsText(topicName: string, ideas: VideoIdea[]): string {
+function formatAllIdeasAsText(
+  topicName: string,
+  ideas: VideoIdea[],
+  topic?: TrendingTopic | LegacyTrendingTopic,
+): string {
   const lines = [
     `SHORT-FORM VIDEO IDEAS`,
     `Topic: ${topicName}`,
@@ -75,15 +85,26 @@ function formatAllIdeasAsText(topicName: string, ideas: VideoIdea[]): string {
     '─'.repeat(50),
     '',
   ];
+  if (topic) {
+    lines.push(
+      `Topic metrics: reach ${formatTopicReach(topic)} · resonance ${RESONANCE_LABEL[topic.resonance] ?? topic.resonance} · ${getSentimentLabel(topic.sentiment)}`,
+    );
+    lines.push(`Research note: ${getResearchAlignmentHint(topic)}`);
+    lines.push('');
+  }
   ideas.forEach((idea, i) => {
-    lines.push(formatIdeaAsText(idea, i + 1));
+    lines.push(formatIdeaAsText(idea, i + 1, topic));
     lines.push('');
   });
   return lines.join('\n');
 }
 
-function downloadAsTextFile(topicName: string, ideas: VideoIdea[]) {
-  const text = formatAllIdeasAsText(topicName, ideas);
+function downloadAsTextFile(
+  topicName: string,
+  ideas: VideoIdea[],
+  topic?: TrendingTopic | LegacyTrendingTopic,
+) {
+  const text = formatAllIdeasAsText(topicName, ideas, topic);
   const blob = new Blob([text], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -112,7 +133,7 @@ function SourceLink({ source }: { source: TopicSource }) {
           {source.platform && source.platform !== 'web' && (() => {
             const badge = getPlatformBadge(source.platform);
             return badge ? (
-              <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-medium ${badge.className}`}>
+              <span className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
                 {badge.label}
               </span>
             ) : null;
@@ -127,16 +148,69 @@ function SourceLink({ source }: { source: TopicSource }) {
   );
 }
 
+function TopicMetricsSnapshot({ topic }: { topic: TrendingTopic | LegacyTrendingTopic }) {
+  const reach = formatTopicReach(topic);
+  const resonance = RESONANCE_LABEL[topic.resonance] ?? topic.resonance;
+  const hint = getResearchAlignmentHint(topic);
+
+  return (
+    <div className="mb-5 rounded-xl border border-accent/15 bg-accent/[0.06] p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-accent-text">Topic metrics (same as row above)</p>
+      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-3">
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-wide text-text-muted">Blended reach</p>
+          <p className="mt-0.5 text-lg font-semibold tabular-nums text-text-primary">{reach}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-wide text-text-muted">Resonance</p>
+          <p className="mt-0.5 text-lg font-medium text-text-primary">{resonance}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-wide text-text-muted">Sentiment split</p>
+          <div className="mt-1">
+            <SentimentSplitBar sentiment={topic.sentiment} />
+          </div>
+        </div>
+      </div>
+      <p className="mt-3 text-sm leading-relaxed text-text-secondary">{hint}</p>
+    </div>
+  );
+}
+
+function IdeaValidationChips({ topic }: { topic: TrendingTopic | LegacyTrendingTopic }) {
+  return (
+    <div className="mt-3 flex flex-wrap gap-2 border-t border-nativz-border/60 pt-3">
+      <span className="inline-flex items-center rounded-lg border border-nativz-border/80 bg-background/80 px-2.5 py-1 text-xs text-text-secondary">
+        <span className="font-medium text-text-muted">Reach</span>
+        <span className="ml-1.5 tabular-nums text-text-primary">{formatTopicReach(topic)}</span>
+      </span>
+      <span className="inline-flex items-center rounded-lg border border-nativz-border/80 bg-background/80 px-2.5 py-1 text-xs text-text-secondary">
+        <span className="font-medium text-text-muted">Resonance</span>
+        <span className="ml-1.5 text-text-primary">{RESONANCE_LABEL[topic.resonance] ?? topic.resonance}</span>
+      </span>
+      <span
+        className="inline-flex items-center rounded-lg border border-nativz-border/80 bg-background/80 px-2.5 py-1 text-xs text-text-secondary"
+        title={getSentimentLabel(topic.sentiment)}
+      >
+        <span className="font-medium text-text-muted">Audience mood</span>
+        <span className="ml-1.5 text-text-primary">{getSentimentLabel(topic.sentiment)}</span>
+      </span>
+    </div>
+  );
+}
+
 function VideoIdeaListItem({
   idea,
   index,
   topicName,
+  topic,
   clientId,
   searchId,
 }: {
   idea: VideoIdea;
   index: number;
   topicName: string;
+  topic: TrendingTopic | LegacyTrendingTopic;
   clientId?: string | null;
   searchId?: string;
 }) {
@@ -148,7 +222,7 @@ function VideoIdeaListItem({
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(formatIdeaAsText(idea, index));
+      await navigator.clipboard.writeText(formatIdeaAsText(idea, index, topic));
       setCopied(true);
       toast.success('Idea copied');
       setTimeout(() => setCopied(false), 2000);
@@ -190,15 +264,13 @@ function VideoIdeaListItem({
   }
 
   return (
-    <div className="group border-b border-nativz-border/50 last:border-b-0 py-3 first:pt-0">
+    <div className="group border-b border-nativz-border/50 last:border-b-0 py-4 first:pt-0">
       {/* Main row: number + title + badges + actions */}
       <div className="flex items-start gap-3">
-        <span className="text-xs font-mono text-text-muted mt-0.5 w-5 shrink-0 text-right">
-          {index}
-        </span>
-        <div className="flex-1 min-w-0">
+        <span className="mt-0.5 w-6 shrink-0 text-right font-mono text-sm text-text-muted">{index}</span>
+        <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <h5 className="text-sm font-medium text-text-primary leading-snug">{idea.title}</h5>
+            <h5 className="text-base font-semibold leading-snug text-text-primary">{idea.title}</h5>
             <div className="flex items-center gap-1 shrink-0">
               <button
                 onClick={handleCopy}
@@ -223,19 +295,19 @@ function VideoIdeaListItem({
           </div>
 
           {/* Hook */}
-          <p className="text-xs text-text-secondary mt-1">
-            &ldquo;{idea.hook}&rdquo;
-          </p>
+          <p className="mt-1.5 text-sm leading-relaxed text-text-secondary">&ldquo;{idea.hook}&rdquo;</p>
 
           {/* Why it works */}
-          <p className="text-xs text-text-muted leading-relaxed mt-1.5">{idea.why_it_works}</p>
+          <p className="mt-2 text-sm leading-relaxed text-text-secondary">{idea.why_it_works}</p>
+
+          <IdeaValidationChips topic={topic} />
 
           {/* Inline meta: format + virality — tucked at bottom */}
-          <div className="flex items-center gap-2 mt-2">
-            <span className="inline-flex items-center rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-text-muted font-medium">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-md bg-white/[0.04] px-2 py-0.5 text-xs font-medium text-text-muted">
               {displayIdeaFormat(idea.format)}
             </span>
-            <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${
+            <span className={`inline-flex items-center gap-1 text-xs font-medium ${
               virality === 'viral_potential' ? 'text-accent2-text' :
               virality === 'high' ? 'text-emerald-400' :
               virality === 'medium' ? 'text-blue-400' :
@@ -253,19 +325,19 @@ function VideoIdeaListItem({
 
           {/* Script outline (expandable) */}
           {idea.script_outline && idea.script_outline.length > 0 && (
-            <div className="mt-2">
+            <div className="mt-3">
               <button
                 type="button"
                 onClick={() => setExpanded(!expanded)}
-                className="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-colors"
+                className="flex items-center gap-1 text-sm text-text-muted transition-colors hover:text-text-secondary"
               >
                 {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 Script outline ({idea.script_outline.length} points)
               </button>
               {expanded && (
-                <ol className="mt-1.5 ml-4 space-y-1">
+                <ol className="ml-4 mt-2 space-y-1.5">
                   {idea.script_outline.map((point, j) => (
-                    <li key={j} className="text-xs text-text-secondary flex items-start gap-2">
+                    <li key={j} className="flex items-start gap-2 text-sm text-text-secondary">
                       <span className="text-text-muted font-mono shrink-0">{j + 1}.</span>
                       {point}
                     </li>
@@ -277,8 +349,8 @@ function VideoIdeaListItem({
 
           {/* CTA */}
           {idea.cta && (
-            <p className="text-xs text-text-muted mt-1.5">
-              <span className="text-text-secondary font-medium">CTA:</span> {idea.cta}
+            <p className="mt-2 text-sm text-text-muted">
+              <span className="font-medium text-text-secondary">CTA:</span> {idea.cta}
             </p>
           )}
         </div>
@@ -297,7 +369,7 @@ export function TopicRowExpanded({ topic, clientId, searchId }: TopicRowExpanded
 
   async function handleCopyAll() {
     try {
-      await navigator.clipboard.writeText(formatAllIdeasAsText(topic.name, ideas));
+      await navigator.clipboard.writeText(formatAllIdeasAsText(topic.name, ideas, topic));
       setCopiedAll(true);
       toast.success('All ideas copied to clipboard');
       setTimeout(() => setCopiedAll(false), 2000);
@@ -307,7 +379,7 @@ export function TopicRowExpanded({ topic, clientId, searchId }: TopicRowExpanded
   }
 
   function handleDownload() {
-    downloadAsTextFile(topic.name, ideas);
+    downloadAsTextFile(topic.name, ideas, topic);
     toast.success('Downloaded as text file');
   }
 
@@ -348,28 +420,28 @@ export function TopicRowExpanded({ topic, clientId, searchId }: TopicRowExpanded
   return (
     <div className="animate-expand-in border-b border-nativz-border bg-background px-6 py-5">
       {/* Overview cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mb-5">
+      <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="rounded-lg border border-nativz-border bg-surface p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <FileText size={14} className="text-accent-text" />
-            <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wide">Posts overview</h4>
+          <div className="mb-2 flex items-center gap-2">
+            <FileText size={15} className="text-accent-text" />
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-text-primary">Posts overview</h4>
           </div>
-          <p className="text-sm text-text-secondary leading-relaxed">{topic.posts_overview}</p>
+          <p className="text-sm leading-relaxed text-text-secondary">{topic.posts_overview}</p>
         </div>
 
         <div className="rounded-lg border border-nativz-border bg-surface p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <MessageSquare size={14} className="text-emerald-400" />
-            <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wide">Comments overview</h4>
+          <div className="mb-2 flex items-center gap-2">
+            <MessageSquare size={15} className="text-emerald-400" />
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-text-primary">Comments overview</h4>
           </div>
-          <p className="text-sm text-text-secondary leading-relaxed">{topic.comments_overview}</p>
+          <p className="text-sm leading-relaxed text-text-secondary">{topic.comments_overview}</p>
         </div>
       </div>
 
       {/* Source links (new shape only) */}
       {topicHasSources && topic.sources.length > 0 && (
         <div className="mb-5">
-          <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3">
+          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
             Sources ({topic.sources.length})
           </h4>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -383,22 +455,24 @@ export function TopicRowExpanded({ topic, clientId, searchId }: TopicRowExpanded
       {/* Video ideas — list format */}
       {ideas.length > 0 && (
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide">
+          <TopicMetricsSnapshot topic={topic} />
+
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-text-primary">
               Video ideas ({ideas.length})
             </h4>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               <button
                 onClick={handleGenerateMore}
                 disabled={generating || !searchId}
-                className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 disabled:pointer-events-none"
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
               >
                 <RefreshCw size={12} className={generating ? 'animate-spin' : ''} />
                 {generating ? 'Generating...' : 'Generate more'}
               </button>
               <button
                 onClick={handleCopyAll}
-                className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
               >
                 {copiedAll ? (
                   <>
@@ -414,7 +488,7 @@ export function TopicRowExpanded({ topic, clientId, searchId }: TopicRowExpanded
               </button>
               <button
                 onClick={handleDownload}
-                className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
               >
                 <Download size={12} />
                 Download
@@ -423,13 +497,14 @@ export function TopicRowExpanded({ topic, clientId, searchId }: TopicRowExpanded
           </div>
 
           {/* Numbered list */}
-          <div className="rounded-lg border border-nativz-border bg-surface px-4 py-3">
+          <div className="rounded-xl border border-nativz-border bg-surface px-4 py-2 sm:px-5">
             {ideas.map((idea, i) => (
               <VideoIdeaListItem
                 key={i}
                 idea={idea}
                 index={i + 1}
                 topicName={topic.name}
+                topic={topic}
                 clientId={clientId}
                 searchId={searchId}
               />

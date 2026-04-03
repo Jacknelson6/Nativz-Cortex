@@ -34,7 +34,7 @@ function StatusBadge({ status }: { status: string }) {
     inactive: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
   };
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${colors[status] ?? colors.inactive}`}>
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${colors[status] ?? colors.inactive}`}>
       {status}
     </span>
   );

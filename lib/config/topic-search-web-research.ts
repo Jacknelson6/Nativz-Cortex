@@ -2,7 +2,7 @@ export type TopicSearchWebResearchMode = 'searxng' | 'openrouter' | 'llm_only';
 
 /**
  * How llm_v1 gathers material for each subtopic:
- * - `searxng` — SearXNG SERP + URL fetch (self-hosted, needs `SEARXNG_URL` or defaults to localhost:8888)
+ * - `searxng` — SearXNG SERP + URL fetch (self-hosted, needs `SEARXNG_URL` or defaults to localhost:8888). General web uses the DuckDuckGo engine by default (`SEARXNG_WEB_ENGINES`, default `duckduckgo`).
  * - `openrouter` — OpenRouter web plugin on `TOPIC_SEARCH_OPENROUTER_WEB_MODEL` (default `google/gemini-2.0-flash-001`) + URL fetch
  * - `llm_only` — no live SERP; **sources list is empty** (no fabricated URLs)
  *

@@ -21,6 +21,10 @@ interface TopicSearchHistoryRailProps {
   includeIdeas?: boolean;
   enableStrategyLabBulkSelect?: boolean;
   onStrategyLabSelectionChange?: (payload: { ids: string[]; clientId: string | null }) => void;
+  /** Hide client line in rows; show under ⋯ instead (research hub). */
+  hideClientInSidebar?: boolean;
+  /** User folders + ChatGPT-style rail sections. */
+  enableFolders?: boolean;
 }
 
 export function TopicSearchHistoryRail({
@@ -34,6 +38,8 @@ export function TopicSearchHistoryRail({
   includeIdeas = false,
   enableStrategyLabBulkSelect = false,
   onStrategyLabSelectionChange,
+  hideClientInSidebar = false,
+  enableFolders = false,
 }: TopicSearchHistoryRailProps) {
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col lg:h-full lg:min-h-0">
@@ -48,16 +54,18 @@ export function TopicSearchHistoryRail({
           clients={clients}
           enableStrategyLabBulkSelect={enableStrategyLabBulkSelect}
           onStrategyLabSelectionChange={onStrategyLabSelectionChange}
+          hideClientInSidebar={hideClientInSidebar}
+          enableFolders={enableFolders}
         />
       </div>
 
       {/* Desktop: Nerd-style collapsible rail — single flex child so height chain works */}
       <div
         className={cn(
-          'hidden min-h-0 flex-1 flex-col border-nativz-border lg:flex lg:h-full',
+          'hidden min-h-0 w-full flex-1 flex-col overflow-hidden border-nativz-border lg:flex lg:h-full',
           open
-            ? 'w-[260px] border-r bg-surface/50'
-            : 'w-10 border-r border-nativz-border/50 bg-surface/30',
+            ? 'border-r bg-surface/50'
+            : 'border-r border-nativz-border/50 bg-surface/30',
         )}
       >
         {!open ? (
@@ -71,14 +79,14 @@ export function TopicSearchHistoryRail({
               <PanelLeftOpen size={15} />
             </button>
             <div className="min-h-0 flex-1" />
-            <span className="select-none text-[9px] text-text-muted/30 [writing-mode:vertical-lr] rotate-180">
+            <span className="select-none text-[10px] text-text-muted/30 [writing-mode:vertical-lr] rotate-180">
               History
             </span>
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="flex shrink-0 items-center justify-between border-b border-nativz-border/50 px-3 py-3">
-              <span className="text-xs font-semibold text-text-primary">History</span>
+              <span className="text-sm font-semibold text-text-primary">History</span>
               <button
                 type="button"
                 onClick={onClose}
@@ -98,6 +106,8 @@ export function TopicSearchHistoryRail({
               clients={clients}
               enableStrategyLabBulkSelect={enableStrategyLabBulkSelect}
               onStrategyLabSelectionChange={onStrategyLabSelectionChange}
+              hideClientInSidebar={hideClientInSidebar}
+              enableFolders={enableFolders}
             />
           </div>
         )}

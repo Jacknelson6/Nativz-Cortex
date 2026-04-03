@@ -686,7 +686,7 @@ function ProductsForm({
                 <select
                   value={selectValueForOfferingType(product.offeringType)}
                   onChange={(e) => update(i, 'offeringType', e.target.value)}
-                  className="w-full rounded bg-background text-[11px] text-text-muted border border-nativz-border px-1.5 py-1 outline-none focus:border-accent/50"
+                  className="w-full rounded bg-background text-xs text-text-muted border border-nativz-border px-1.5 py-1 outline-none focus:border-accent/50"
                 >
                   {OFFERING_TYPE_OPTIONS.map((o) => (
                     <option key={o.value || 'placeholder'} value={o.value}>
@@ -699,7 +699,7 @@ function ProductsForm({
                   value={product.imageUrl ?? ''}
                   onChange={(e) => update(i, 'imageUrl', e.target.value)}
                   placeholder="Image URL (optional)"
-                  className="w-full rounded bg-transparent text-[11px] text-text-muted border-b border-nativz-border/50 outline-none focus:border-accent/50 px-1 py-0.5"
+                  className="w-full rounded bg-transparent text-xs text-text-muted border-b border-nativz-border/50 outline-none focus:border-accent/50 px-1 py-0.5"
                 />
                 <input
                   type="text"
@@ -707,7 +707,7 @@ function ProductsForm({
                   onChange={(e) => update(i, 'cta', e.target.value)}
                   placeholder="CTA on ad (optional, e.g. Shop now)"
                   maxLength={100}
-                  className="w-full rounded bg-transparent text-[11px] text-text-muted border-b border-nativz-border/50 outline-none focus:border-accent/50 px-1 py-0.5"
+                  className="w-full rounded bg-transparent text-xs text-text-muted border-b border-nativz-border/50 outline-none focus:border-accent/50 px-1 py-0.5"
                 />
                 <input
                   type="text"
@@ -715,7 +715,7 @@ function ProductsForm({
                   onChange={(e) => update(i, 'offer', e.target.value)}
                   placeholder="Offer for this product (optional, e.g. 20% off today)"
                   maxLength={300}
-                  className="w-full rounded bg-transparent text-[11px] text-text-muted border-b border-nativz-border/50 outline-none focus:border-accent/50 px-1 py-0.5"
+                  className="w-full rounded bg-transparent text-xs text-text-muted border-b border-nativz-border/50 outline-none focus:border-accent/50 px-1 py-0.5"
                 />
               </div>
               <button

@@ -45,6 +45,10 @@
     {
       "path": "/api/cron/weekly-affiliate-report",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/topic-search-notify",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

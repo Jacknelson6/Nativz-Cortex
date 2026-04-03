@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PORTAL_HOME_PATH } from '@/lib/portal/client-surface';
 
 export default function PortalError({
   error,
@@ -26,8 +27,8 @@ export default function PortalError({
           An unexpected error occurred. Please try again.
         </p>
         <div className="mt-6 flex items-center justify-center gap-3">
-          <Button variant="outline" onClick={() => window.location.href = '/portal/dashboard'}>
-            Go to dashboard
+          <Button variant="outline" onClick={() => (window.location.href = PORTAL_HOME_PATH)}>
+            Go to research
           </Button>
           <Button onClick={reset}>Try again</Button>
         </div>

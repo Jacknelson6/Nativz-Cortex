@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
 
 export async function POST(
   request: NextRequest,
@@ -27,8 +28,14 @@ export async function POST(
     }
 
     const adminClient = createAdminClient();
+    const access = await assertUserCanAccessTopicSearch(adminClient, user.id, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
+    }
 
-    // Ensure created_by is set so the process route can send an email
     await adminClient
       .from('topic_searches')
       .update({ created_by: user.id })

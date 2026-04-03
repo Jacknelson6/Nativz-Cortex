@@ -79,7 +79,7 @@ export function UpcomingShoots({ initialShoots }: { initialShoots?: Shoot[] }) {
                   <span className="text-sm font-bold text-accent2-text leading-none">
                     {shootDate.getDate()}
                   </span>
-                  <span className="text-[8px] font-medium text-accent2-text/60 uppercase">
+                  <span className="text-[10px] font-medium text-accent2-text/60 uppercase">
                     {shootDate.toLocaleDateString('en-US', { month: 'short' })}
                   </span>
                 </div>

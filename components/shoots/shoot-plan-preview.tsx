@@ -110,7 +110,7 @@ export function ShootPlanPreview({ plan, clientName }: { plan: ShootPlanData; cl
                   className="cursor-pointer w-full flex items-center justify-between gap-3 p-2.5 text-left"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent2-surface text-[9px] font-bold text-accent2-text">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent2-surface text-[10px] font-bold text-accent2-text">
                       {i + 1}
                     </span>
                     <div className="min-w-0">
@@ -133,14 +133,14 @@ export function ShootPlanPreview({ plan, clientName }: { plan: ShootPlanData; cl
 
                     {idea.hook && (
                       <div>
-                        <p className="text-[9px] font-medium text-text-muted uppercase tracking-wide mb-0.5">Hook</p>
+                        <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-0.5">Hook</p>
                         <p className="text-xs text-text-primary italic">&ldquo;{idea.hook}&rdquo;</p>
                       </div>
                     )}
 
                     {idea.talkingPoints?.length > 0 && (
                       <div>
-                        <p className="text-[9px] font-medium text-text-muted uppercase tracking-wide mb-1 flex items-center gap-1">
+                        <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1 flex items-center gap-1">
                           <Lightbulb size={9} /> Talking points
                         </p>
                         <ul className="space-y-0.5">
@@ -156,7 +156,7 @@ export function ShootPlanPreview({ plan, clientName }: { plan: ShootPlanData; cl
 
                     {idea.shotList?.length > 0 && (
                       <div>
-                        <p className="text-[9px] font-medium text-text-muted uppercase tracking-wide mb-1 flex items-center gap-1">
+                        <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1 flex items-center gap-1">
                           <Camera size={9} /> Shot list
                         </p>
                         <ul className="space-y-0.5">
@@ -172,10 +172,10 @@ export function ShootPlanPreview({ plan, clientName }: { plan: ShootPlanData; cl
 
                     {idea.whyItWorks && (
                       <div className="rounded-md bg-accent/5 border border-accent/10 px-2.5 py-1.5">
-                        <p className="text-[9px] font-medium text-text-muted uppercase tracking-wide mb-0.5 flex items-center gap-1">
+                        <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-0.5 flex items-center gap-1">
                           <Target size={9} /> Why it works
                         </p>
-                        <p className="text-[11px] text-text-secondary">{idea.whyItWorks}</p>
+                        <p className="text-xs text-text-secondary">{idea.whyItWorks}</p>
                       </div>
                     )}
                   </div>

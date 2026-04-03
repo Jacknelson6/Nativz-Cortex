@@ -140,7 +140,7 @@ export function OutlierCreatorsTable({ videos }: OutlierCreatorsTableProps) {
                 <p className="text-sm font-medium text-white truncate">
                   {creator.displayName ?? creator.username}
                 </p>
-                <p className="text-[11px] text-text-muted truncate">
+                <p className="text-xs text-text-muted truncate">
                   @{creator.username}
                 </p>
               </div>
@@ -150,7 +150,7 @@ export function OutlierCreatorsTable({ videos }: OutlierCreatorsTableProps) {
                 <p className="text-xs text-text-muted">
                   {creator.followers > 0 ? `${formatNumber(creator.followers)} followers` : '—'}
                 </p>
-                <p className="text-[11px] text-text-muted/60">
+                <p className="text-xs text-text-muted/60">
                   {formatNumber(creator.avgViews)} avg views
                 </p>
               </div>
@@ -167,7 +167,7 @@ export function OutlierCreatorsTable({ videos }: OutlierCreatorsTableProps) {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-1">
-          <p className="text-[11px] text-text-muted">
+          <p className="text-xs text-text-muted">
             Showing {start + 1}–{Math.min(start + PER_PAGE, creators.length)} of {creators.length}
           </p>
           <div className="flex items-center gap-1">

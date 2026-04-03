@@ -6,6 +6,7 @@
  */
 
 import { createCompletion } from '@/lib/ai/client';
+import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { searchKnowledge } from './search';
 
@@ -91,7 +92,7 @@ export async function detectSupersessions(
             ],
             maxTokens: 256,
             feature: 'knowledge_supersession_detection',
-            modelPreference: ['anthropic/claude-haiku', 'anthropic/claude-3-haiku'],
+            modelPreference: [DEFAULT_OPENROUTER_MODEL],
           });
 
           const parsed = parseAIResponseJSON<{

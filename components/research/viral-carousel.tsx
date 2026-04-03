@@ -74,7 +74,7 @@ function ViralCard({ video }: { video: TopicSearchVideoRow }) {
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] text-text-primary truncate font-medium">
+          <p className="text-xs text-text-primary truncate font-medium">
             @{video.author_username ?? 'unknown'}
           </p>
           <p className="text-[10px] text-text-muted truncate">

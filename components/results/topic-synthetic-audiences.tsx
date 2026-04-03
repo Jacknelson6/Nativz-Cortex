@@ -121,7 +121,7 @@ export function TopicSyntheticAudiences({ data }: TopicSyntheticAudiencesProps) 
                     {tags.map((tag) => (
                       <span
                         key={tag}
-                        className="rounded-full border border-nativz-border/80 bg-surface/60 px-2.5 py-0.5 text-[11px] text-text-muted"
+                        className="rounded-full border border-nativz-border/80 bg-surface/60 px-2.5 py-0.5 text-xs text-text-muted"
                       >
                         {tag}
                       </span>

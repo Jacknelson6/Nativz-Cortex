@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Search, FileText, Settings, Lightbulb, PanelLeftClose, Bell, Telescope, Calendar, Microscope, Brain, Sliders, BotMessageSquare } from 'lucide-react';
+import { Search, Settings, PanelLeftClose, Telescope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
@@ -20,18 +20,11 @@ import {
   useSidebar,
 } from './sidebar';
 import type { FeatureFlags } from '@/lib/portal/get-portal-client';
+import { PORTAL_HOME_PATH } from '@/lib/portal/client-surface';
 
-const ALL_NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; flag: string | null }[] = [
-  { href: '/portal/dashboard', label: 'Dashboard', icon: LayoutDashboard, flag: null },
-  { href: '/portal/notifications', label: 'Notifications', icon: Bell, flag: 'can_view_notifications' },
+/** Client portal: research + settings only (other routes redirect in middleware). */
+const NAV_ITEMS: { href: string; label: string; icon: typeof Telescope; flag: string | null }[] = [
   { href: '/portal/search/new', label: 'Research', icon: Telescope, flag: 'can_search' },
-  { href: '/portal/ideas', label: 'Ideas', icon: Lightbulb, flag: 'can_submit_ideas' },
-  { href: '/portal/calendar', label: 'Calendar', icon: Calendar, flag: 'can_view_calendar' },
-  { href: '/portal/analyze', label: 'Analyze', icon: Microscope, flag: 'can_view_analyze' },
-  { href: '/portal/knowledge', label: 'Knowledge', icon: Brain, flag: 'can_view_knowledge' },
-  { href: '/portal/nerd', label: 'The Nerd', icon: BotMessageSquare, flag: 'can_use_nerd' },
-  { href: '/portal/reports', label: 'Reports', icon: FileText, flag: 'can_view_reports' },
-  { href: '/portal/preferences', label: 'Preferences', icon: Sliders, flag: 'can_edit_preferences' },
   { href: '/portal/settings', label: 'Settings', icon: Settings, flag: null },
 ];
 
@@ -57,7 +50,7 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
   const { open, toggleSidebar } = useSidebar();
 
   const flags = featureFlags as Record<string, boolean> | undefined;
-  const navItems = ALL_NAV_ITEMS.filter((item) => {
+  const navItems = NAV_ITEMS.filter((item) => {
     if (!item.flag) return true;
     return flags?.[item.flag] !== false;
   });
@@ -68,7 +61,7 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
     <Sidebar>
       <SidebarHeader className="border-b border-nativz-border">
         <Link
-          href="/portal/dashboard"
+          href={PORTAL_HOME_PATH}
           className={`flex items-center hover:opacity-90 transition-opacity duration-150 mb-3 ${
             open ? 'flex-col -space-y-0.5' : 'justify-center'
           }`}
@@ -124,7 +117,10 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
         <SidebarGroup>
           <SidebarMenu className="gap-1.5">
             {navItems.map((item) => {
-              const active = pathname === item.href || pathname.startsWith(item.href + '/');
+              const active =
+                item.href === '/portal/search/new'
+                  ? pathname.startsWith('/portal/search')
+                  : pathname === item.href || pathname.startsWith(item.href + '/');
               return (
                 <SidebarMenuItem key={item.href}>
                   <Link href={item.href} className="block w-full">

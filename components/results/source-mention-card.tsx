@@ -35,8 +35,8 @@ export function SourceMentionCard({ source, onOpenDetail }: SourceMentionCardPro
   return (
     <article
       className={cn(
-        'flex h-auto w-full flex-col self-start overflow-hidden rounded-2xl bg-surface-hover/25 transition-colors hover:bg-surface-hover/45',
-        'ring-1 ring-transparent hover:ring-accent/20',
+        'group flex h-auto w-full flex-col self-start overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-[var(--shadow-card)] transition-all duration-200',
+        'hover:-translate-y-0.5 hover:border-accent/35 hover:shadow-[var(--shadow-card-hover)]',
       )}
     >
       <div className="flex gap-2.5 px-4 pt-3 pb-3">
@@ -45,11 +45,11 @@ export function SourceMentionCard({ source, onOpenDetail }: SourceMentionCardPro
         </div>
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="line-clamp-2 min-w-0 flex-1 text-base font-semibold leading-snug text-text-primary sm:text-[17px]">
+            <h3 className="line-clamp-2 min-w-0 flex-1 text-base font-semibold leading-snug text-text-primary">
               {source.title || 'Untitled'}
             </h3>
             <time
-              className="shrink-0 pt-0.5 text-[11px] tabular-nums text-text-muted sm:text-xs"
+              className="shrink-0 pt-0.5 text-xs tabular-nums text-text-muted"
               dateTime={source.createdAt}
             >
               {formatRelativeTime(source.createdAt)}
@@ -136,7 +136,7 @@ export function SourceMentionCard({ source, onOpenDetail }: SourceMentionCardPro
                 onOpenDetail({ focusRescript: true });
               }}
             >
-              Rescript
+              Analyze
             </button>
           </div>
         </div>
@@ -144,7 +144,7 @@ export function SourceMentionCard({ source, onOpenDetail }: SourceMentionCardPro
         <button
           type="button"
           onClick={() => onOpenDetail()}
-          className="mx-4 mb-2 flex min-h-[88px] shrink-0 items-center justify-center self-stretch rounded-xl border border-dashed border-nativz-border/50 bg-surface-hover/30 px-3 text-center text-sm text-text-muted transition-colors hover:bg-surface-hover/50 cursor-pointer"
+          className="mx-4 mb-2 flex min-h-[88px] shrink-0 items-center justify-center self-stretch rounded-xl border border-dashed border-nativz-border/60 bg-background/40 px-3 text-center text-sm text-text-muted transition-colors hover:border-nativz-border hover:bg-surface-hover/40 cursor-pointer"
         >
           Open details
         </button>

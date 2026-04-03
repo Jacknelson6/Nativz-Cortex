@@ -30,7 +30,7 @@ export function TestingHeatmap() {
         <div className="grid gap-1" style={{ gridTemplateColumns: '180px repeat(5, 1fr)' }}>
           <div className="py-2 px-2" />
           {SPEND_TIERS.map((tier) => (
-            <div key={tier} className="py-2 px-1 text-center text-[11px] text-text-muted font-medium leading-tight">
+            <div key={tier} className="py-2 px-1 text-center text-xs text-text-muted font-medium leading-tight">
               {tier}
             </div>
           ))}

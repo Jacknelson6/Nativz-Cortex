@@ -1,6 +1,7 @@
 // Types for the topic search / ideation MVP flow
 
 import type { SerpData } from '@/lib/serp/types';
+import type { TranscriptSegment, VideoFrame } from '@/lib/types/moodboard';
 
 export type SearchMode = 'general' | 'client_strategy';
 
@@ -39,6 +40,14 @@ export interface PlatformSource {
   createdAt: string;
   comments: PlatformComment[];
   transcript?: string | null;
+  /** Timestamped segments (after transcribe) — same shape as mood board analysis */
+  transcript_segments?: TranscriptSegment[] | null;
+  /** FFmpeg keyframes + storage URLs (after extract frames) */
+  frames?: VideoFrame[] | null;
+  /** Video duration in seconds when known (e.g. ffprobe) */
+  duration_sec?: number | null;
+  /** e.g. vision_clip_breakdown from Gemini */
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface PlatformComment {
@@ -259,6 +268,8 @@ export interface EmotionBreakdown {
   emotion: string;
   percentage: number;
   color: string;
+  /** AI-generated context-specific explanation for this emotion in this search. */
+  subtext?: string;
 }
 
 export interface ContentBreakdown {

@@ -212,7 +212,7 @@ export function SidebarGroupLabel({ children, className = '' }: { children: Reac
   if (!open) return null;
 
   return (
-    <div className={`px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted ${className}`}>
+    <div className={`px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-text-muted ${className}`}>
       {children}
     </div>
   );

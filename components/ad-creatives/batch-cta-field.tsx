@@ -79,7 +79,7 @@ export function BatchCtaField({ id = 'batch-cta', value, onChange, className }: 
           placeholder={DEFAULT_BATCH_CTA}
           className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted/45 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/25"
         />
-        <p className="text-[11px] text-text-muted tabular-nums">
+        <p className="text-xs text-text-muted tabular-nums">
           {v.trim().length}/{BATCH_CTA_MAX_LEN}
         </p>
       </div>

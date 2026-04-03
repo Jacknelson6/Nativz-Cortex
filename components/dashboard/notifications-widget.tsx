@@ -59,6 +59,8 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   post_failed: <AlertTriangle size={14} className="text-red-400" />,
   post_trending: <Zap size={14} className="text-yellow-400" />,
   account_disconnected: <WifiOff size={14} className="text-amber-400" />,
+  topic_search_failed: <AlertTriangle size={14} className="text-red-400" />,
+  topic_search_stuck: <Clock size={14} className="text-amber-400" />,
 };
 
 export function NotificationsWidget() {
@@ -183,7 +185,7 @@ export function NotificationsWidget() {
           <Bell size={16} className="text-accent-text" />
           Notifications
           {unreadCount > 0 && (
-            <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold text-white">
+            <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-bold text-white">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
@@ -275,11 +277,11 @@ export function NotificationsWidget() {
                       {notif.title}
                     </p>
                     {notif.body && !/^https?:\/\//i.test(notif.body) && (
-                      <p className="mt-1 text-[11px] text-text-muted line-clamp-5 break-words">
+                      <p className="mt-1 text-xs text-text-muted line-clamp-5 break-words">
                         {notif.body}
                       </p>
                     )}
-                    <p className="mt-0.5 text-[11px] text-text-muted/60">
+                    <p className="mt-0.5 text-xs text-text-muted/60">
                       {formatRelativeTime(notif.created_at)}
                     </p>
                   </div>

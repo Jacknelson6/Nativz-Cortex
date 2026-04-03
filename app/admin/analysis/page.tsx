@@ -317,7 +317,7 @@ export default function MoodboardPage() {
 
                     <div className="px-4 py-3 space-y-1">
                       <h3 className="text-sm font-semibold text-text-primary truncate group-hover:text-accent-text transition-colors">{board.name}</h3>
-                      <div className="flex items-center gap-3 text-[11px] text-text-muted">
+                      <div className="flex items-center gap-3 text-xs text-text-muted">
                         <span className="flex items-center gap-1">
                           <Clock size={10} />
                           {formatDate(board.updated_at)}

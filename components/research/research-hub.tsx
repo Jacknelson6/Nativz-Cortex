@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { ResearchTopicForm, type ResearchTopicSnapshot } from './research-topic-form';
 import { ResearchWizard } from './research-wizard';
 import {
@@ -19,6 +19,8 @@ interface ResearchHubProps {
   topicPipelineLlmV1?: boolean;
   /** Greeting name on the search card */
   userFirstName?: string | null;
+  /** URL `?query=` from the server — avoids useSearchParams() here so Radix IDs match SSR (hydration). */
+  prefillQuery?: string;
 }
 
 export function ResearchHub({
@@ -26,10 +28,9 @@ export function ResearchHub({
   historyItems,
   topicPipelineLlmV1 = false,
   userFirstName = null,
+  prefillQuery = '',
 }: ResearchHubProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const prefillQuery = searchParams.get('query') ?? '';
 
   const [legacyModalOpen, setLegacyModalOpen] = useState(false);
   const [legacySnapshot, setLegacySnapshot] = useState<ResearchTopicSnapshot | null>(null);
@@ -151,8 +152,9 @@ export function ResearchHub({
           className={cn(
             'flex min-h-0 flex-1 flex-col gap-8 lg:grid lg:items-stretch lg:gap-10',
             'lg:overflow-hidden',
+            'lg:transition-[grid-template-columns] lg:duration-300 lg:ease-[cubic-bezier(0.32,0.72,0,1)]',
             historyRailOpen
-              ? 'lg:grid-cols-[260px_minmax(0,1fr)]'
+              ? 'lg:grid-cols-[300px_minmax(0,1fr)]'
               : 'lg:grid-cols-[2.5rem_minmax(0,1fr)]',
           )}
         >
@@ -196,6 +198,8 @@ export function ResearchHub({
               clients={clients.map((c) => ({ id: c.id, name: c.name }))}
               enableStrategyLabBulkSelect
               onStrategyLabSelectionChange={handleStrategyLabSelectionChange}
+              hideClientInSidebar
+              enableFolders
             />
           </aside>
         </div>

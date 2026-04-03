@@ -2,6 +2,7 @@ import type {
   SerpSearchOptions,
   SerpData,
 } from './types';
+import { getSearxngWebEngines } from '@/lib/config/searxng-web-engines';
 
 const SEARXNG_BASE = () => process.env.SEARXNG_URL?.replace(/\/+$/, '') || 'http://localhost:8888';
 
@@ -88,6 +89,7 @@ export async function gatherSerpData(
       timeRange: options.timeRange,
       language: options.language,
       categories: 'general',
+      engines: getSearxngWebEngines(),
     }),
     // 2. Discussions (Reddit, forums)
     searxngSearch(`${query} site:reddit.com OR forum OR discussion`, {

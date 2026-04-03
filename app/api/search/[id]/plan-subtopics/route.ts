@@ -6,6 +6,8 @@ import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { plannerOutputSchema } from '@/lib/search/llm-pipeline/schemas';
 import { getTopicSearchModelsFromDb } from '@/lib/ai/topic-search-models';
 import { getTimeRangeOptionLabel } from '@/lib/types/search';
+import { notifyTopicSearchFailedOnce } from '@/lib/topic-search/ops-notify';
+import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
 
 export const maxDuration = 120;
 
@@ -26,15 +28,14 @@ export async function POST(
     }
 
     const admin = createAdminClient();
-    const { data: search, error: fetchErr } = await admin
-      .from('topic_searches')
-      .select('id, query, topic_pipeline, status, time_range')
-      .eq('id', id)
-      .single();
-
-    if (fetchErr || !search) {
-      return NextResponse.json({ error: 'Search not found' }, { status: 404 });
+    const access = await assertUserCanAccessTopicSearch(admin, user.id, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
     }
+    const search = access.search;
 
     if ((search as { topic_pipeline?: string }).topic_pipeline !== 'llm_v1') {
       return NextResponse.json({ error: 'Subtopic planning is only for llm_v1 pipeline' }, { status: 400 });
@@ -90,6 +91,7 @@ Rules:
         .update({ status: 'failed' })
         .eq('id', id)
         .eq('status', 'pending_subtopics');
+      await notifyTopicSearchFailedOnce(admin, id);
     } catch (markErr) {
       console.error('POST /plan-subtopics: could not mark search failed:', markErr);
     }

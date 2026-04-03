@@ -365,7 +365,7 @@ function TemplateCard({
         )}
       </div>
       <div className="flex items-center justify-center gap-1 px-1.5 py-1 bg-surface/95 border-t border-nativz-border/60">
-        <span className="text-[9px] font-medium tabular-nums text-text-muted/90 uppercase tracking-wide">
+        <span className="text-[10px] font-medium tabular-nums text-text-muted/90 uppercase tracking-wide">
           {template.format || template.aspect_ratio}
         </span>
       </div>

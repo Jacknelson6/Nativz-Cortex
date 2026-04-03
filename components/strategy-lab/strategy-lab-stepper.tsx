@@ -82,7 +82,7 @@ export function StrategyLabStepper(props: StrategyLabStepperProps) {
                 )}
                 <span className="text-xs font-semibold leading-tight text-text-primary">{step.label}</span>
               </div>
-              <span className="pl-8 text-[11px] leading-snug text-text-muted">{step.sub}</span>
+              <span className="pl-8 text-xs leading-snug text-text-muted">{step.sub}</span>
             </li>
           );
         })}

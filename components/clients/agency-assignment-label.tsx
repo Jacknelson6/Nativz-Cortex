@@ -25,7 +25,7 @@ export function AgencyAssignmentLabel({
   if (!raw) {
     if (!showWhenUnassigned) return null;
     return (
-      <p className={cn('text-[9px] font-bold uppercase tracking-wider text-text-muted', className)}>
+      <p className={cn('text-[10px] font-bold uppercase tracking-wider text-text-muted', className)}>
         Unassigned
       </p>
     );
@@ -35,7 +35,7 @@ export function AgencyAssignmentLabel({
 
   if (lower.includes('anderson') || lower === 'ac') {
     return (
-      <p className={cn('text-[9px] font-bold uppercase tracking-wider text-emerald-400', className)}>
+      <p className={cn('text-[10px] font-bold uppercase tracking-wider text-emerald-400', className)}>
         Anderson Collaborative
       </p>
     );
@@ -43,7 +43,7 @@ export function AgencyAssignmentLabel({
 
   if (lower.includes('nativz')) {
     return (
-      <p className={cn('text-[9px] font-bold uppercase tracking-wider text-blue-400', className)}>
+      <p className={cn('text-[10px] font-bold uppercase tracking-wider text-blue-400', className)}>
         Nativz
       </p>
     );
@@ -51,14 +51,14 @@ export function AgencyAssignmentLabel({
 
   if (lower === 'internal') {
     return (
-      <p className={cn('text-[9px] font-bold uppercase tracking-wider text-accent2-text', className)}>
+      <p className={cn('text-[10px] font-bold uppercase tracking-wider text-accent2-text', className)}>
         Internal
       </p>
     );
   }
 
   return (
-    <p className={cn('text-[9px] font-bold uppercase tracking-wider text-text-muted', className)}>
+    <p className={cn('text-[10px] font-bold uppercase tracking-wider text-text-muted', className)}>
       {raw}
     </p>
   );

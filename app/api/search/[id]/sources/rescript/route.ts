@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
 import {
   findPlatformSourceInSearch,
   runTopicSourceRescript,
@@ -51,15 +52,14 @@ export async function POST(
     const { platform, source_id, idea_generation_id, ...rest } = parsed.data;
     const admin = createAdminClient();
 
-    const { data: search, error: fetchError } = await supabase
-      .from('topic_searches')
-      .select('id, platform_data, client_id')
-      .eq('id', searchId)
-      .single();
-
-    if (fetchError || !search) {
-      return NextResponse.json({ error: 'Search not found' }, { status: 404 });
+    const access = await assertUserCanAccessTopicSearch(admin, user.id, searchId);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
     }
+    const search = access.search as { id: string; platform_data: unknown; client_id: string | null };
 
     const source = findPlatformSourceInSearch(
       search.platform_data,
@@ -73,7 +73,7 @@ export async function POST(
     const effectiveClientId = rest.client_id ?? search.client_id ?? undefined;
     if (!effectiveClientId && !rest.brand_voice?.trim()) {
       return NextResponse.json(
-        { error: 'Select a client or provide brand voice context for rescript.' },
+        { error: 'Select a client or provide brand voice context for analysis.' },
         { status: 400 },
       );
     }

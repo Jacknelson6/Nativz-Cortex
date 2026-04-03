@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createCompletion } from '@/lib/ai/client';
+import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
 
 export type RescriptResult =
   | { ok: true; script: string; rescript: Record<string, unknown> }
@@ -76,7 +77,7 @@ Return a JSON object with exactly this structure (no markdown, just raw JSON):
     ],
     maxTokens: 2000,
     feature: 'analysis_item_rescript',
-    modelPreference: ['openrouter/hunter-alpha'],
+    modelPreference: [DEFAULT_OPENROUTER_MODEL],
     userId: user.id,
     userEmail: user.email ?? undefined,
   });

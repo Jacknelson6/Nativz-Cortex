@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
 import {
   findPlatformSourceInSearch,
   runTopicSourceInsights,
@@ -42,15 +44,15 @@ export async function POST(
 
     const { platform, source_id } = parsed.data;
 
-    const { data: search, error: fetchError } = await supabase
-      .from('topic_searches')
-      .select('id, platform_data')
-      .eq('id', searchId)
-      .single();
-
-    if (fetchError || !search) {
-      return NextResponse.json({ error: 'Search not found' }, { status: 404 });
+    const admin = createAdminClient();
+    const access = await assertUserCanAccessTopicSearch(admin, user.id, searchId);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
     }
+    const search = access.search as { id: string; platform_data: unknown };
 
     const source = findPlatformSourceInSearch(
       search.platform_data,

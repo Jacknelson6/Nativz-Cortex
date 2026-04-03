@@ -28,7 +28,7 @@ function ProductThumb({ src, alt }: { src: string; alt: string }) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center gap-1 bg-background text-text-muted/40">
         <Package size={22} />
-        <span className="text-[9px] px-1 text-center leading-tight">Image blocked or missing</span>
+        <span className="text-[10px] px-1 text-center leading-tight">Image blocked or missing</span>
       </div>
     );
   }
@@ -234,7 +234,7 @@ export function ProductGrid({
                           Upload image
                         </Button>
                       ) : (
-                        <span className="text-center text-[9px] leading-tight text-text-muted/70">
+                        <span className="text-center text-[10px] leading-tight text-text-muted/70">
                           No image from scrape
                         </span>
                       )}
@@ -276,14 +276,14 @@ export function ProductGrid({
                         placeholder="CTA (e.g. Shop now)"
                         value={product.cta ?? ''}
                         maxLength={100}
-                        className="h-8 text-[11px]"
+                        className="h-8 text-xs"
                         onChange={(e) => onUpdateProduct(i, { cta: e.target.value || null })}
                       />
                       <Input
                         placeholder="Offer (e.g. Free shipping this week)"
                         value={product.offer ?? ''}
                         maxLength={300}
-                        className="h-8 text-[11px]"
+                        className="h-8 text-xs"
                         onChange={(e) => onUpdateProduct(i, { offer: e.target.value || null })}
                       />
                     </div>
@@ -323,7 +323,7 @@ export function ProductGrid({
             onChange={(e) => setAddImageUrl(e.target.value)}
           />
           {canUploadImages ? (
-            <p className="text-[11px] leading-relaxed text-text-muted">
+            <p className="text-xs leading-relaxed text-text-muted">
               For scraped products without a photo, use <span className="text-text-secondary">Upload image</span> on the
               card.
             </p>

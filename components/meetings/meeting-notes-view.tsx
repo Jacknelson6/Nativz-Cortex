@@ -284,7 +284,7 @@ export function MeetingNotesView({
       {!prospectBucketClientId && (
         <p className="text-xs text-amber-200/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
           Add an active client with slug{' '}
-          <code className="text-[11px] bg-background/50 px-1 rounded">fyxer-prospects</code> to capture
+          <code className="text-xs bg-background/50 px-1 rounded">fyxer-prospects</code> to capture
           Fyxer meetings that do not match a named client.
         </p>
       )}

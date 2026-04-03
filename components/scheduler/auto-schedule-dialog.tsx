@@ -293,7 +293,7 @@ export function AutoScheduleDialog({
 
                 {highVolume && (
                   <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2.5">
-                    <p className="text-[11px] text-amber-400">
+                    <p className="text-xs text-amber-400">
                       High volume — more than 2 posts/day. Consider extending the date range.
                     </p>
                   </div>

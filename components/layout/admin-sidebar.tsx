@@ -202,7 +202,7 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
         {NAV_SECTIONS.map((section, idx) => (
           <SidebarGroup key={section.label}>
             {open && (
-              <span className="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+              <span className="px-2.5 pb-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
                 {section.label}
               </span>
             )}

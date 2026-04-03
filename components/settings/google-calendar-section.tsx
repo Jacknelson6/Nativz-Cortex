@@ -50,7 +50,7 @@ export function GoogleCalendarSection({
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-text-primary">Google Calendar</h3>
             {connected && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-400">
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-400">
                 <Check size={10} />
                 Connected
               </span>

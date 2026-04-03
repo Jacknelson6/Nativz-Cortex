@@ -177,7 +177,7 @@ export function ApiKeysSection() {
                       </span>
                     ))}
                   </div>
-                  <p className="text-[11px] text-text-muted/60 mt-1">
+                  <p className="text-xs text-text-muted/60 mt-1">
                     Created {new Date(key.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     {key.last_used_at && (
                       <> · Last used {new Date(key.last_used_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>

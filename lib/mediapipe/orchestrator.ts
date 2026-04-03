@@ -27,6 +27,24 @@ function describeUnknownError(err: unknown): string {
   }
 }
 
+/**
+ * MediaPipe / WASM / DOM sometimes reject or throw non-Error values (e.g. Event-like
+ * objects that only stringify as `{"isTrusted":true}`). Always surface as Error.
+ */
+function toError(err: unknown): Error {
+  if (err instanceof Error) return err;
+  if (typeof err === 'object' && err !== null && 'isTrusted' in err) {
+    const e = err as Event & { type?: string; message?: string };
+    const type = e.type ?? 'event';
+    const msg =
+      typeof e.message === 'string' && e.message
+        ? e.message
+        : `DOM ${type} (non-Error rejection — often video decode/CORS/WASM)`;
+    return new Error(msg);
+  }
+  return new Error(describeUnknownError(err));
+}
+
 export interface AnalysisResult {
   pacing: PacingAnalysis;
   hook: HookVisualAnalysis;
@@ -176,12 +194,11 @@ export async function runAndPersistAnalysis(
 
     return true;
   } catch (err) {
-    console.error(
-      'MediaPipe: analysis failed for item',
-      itemId,
-      describeUnknownError(err),
-      err instanceof Error ? err.stack : err
-    );
+    const e = toError(err);
+    console.warn('MediaPipe: analysis failed for item', itemId, e.message);
+    if (process.env.NODE_ENV === 'development' && e.stack) {
+      console.warn(e.stack);
+    }
     return false;
   }
 }

@@ -23,7 +23,7 @@ export function StatusPill({ value, statuses, field, itemId, onUpdate }: StatusP
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium border cursor-pointer transition-colors whitespace-nowrap ${config.color}`}
+        className={`rounded-full px-2.5 py-0.5 text-xs font-medium border cursor-pointer transition-colors whitespace-nowrap ${config.color}`}
       >
         {config.label}
       </button>

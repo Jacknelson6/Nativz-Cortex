@@ -183,7 +183,7 @@ export function AiRoutingSummarySection() {
                         <h4 className="text-sm font-medium text-text-primary">{group.title}</h4>
                         <p className="mt-1 text-xs text-text-muted">{group.description}</p>
                       </div>
-                      <span className="rounded-full border border-nativz-border px-2 py-1 text-[11px] uppercase tracking-wider text-text-secondary">
+                      <span className="rounded-full border border-nativz-border px-2 py-1 text-xs uppercase tracking-wider text-text-secondary">
                         {TIER_LABELS[group.tier]}
                       </span>
                     </div>

@@ -28,7 +28,7 @@ test.describe('Portal full journey', () => {
     await page.getByLabel(/^email$/i).fill(email);
     await page.getByLabel(/^password$/i).fill(password);
     await page.getByRole('button', { name: /^sign in$/i }).click();
-    await expect(page).toHaveURL(/\/portal\/dashboard/, { timeout: 60_000 });
+    await expect(page).toHaveURL(/\/portal\/search\/new/, { timeout: 60_000 });
 
     const visited = new Set<string>();
     for (const path of [...new Set(PORTAL_E2E_FULL_STATIC_ROUTES)]) {

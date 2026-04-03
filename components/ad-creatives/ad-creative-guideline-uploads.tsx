@@ -113,7 +113,7 @@ export function AdCreativeGuidelineUploads({ clientId, variant = 'default' }: Ad
   if (variant === 'compact') {
     return (
       <div className={`${BRAND_DNA_BENTO_SURFACE} p-3`}>
-        <p className="text-[11px] font-medium text-text-primary mb-2">Reference uploads</p>
+        <p className="text-xs font-medium text-text-primary mb-2">Reference uploads</p>
         <p className="text-[10px] text-text-muted leading-snug mb-2">
           PDFs, images, .md — fed into static ad generation.
         </p>
@@ -129,7 +129,7 @@ export function AdCreativeGuidelineUploads({ clientId, variant = 'default' }: Ad
           type="button"
           variant="outline"
           size="sm"
-          className="w-full border-white/10 text-[11px]"
+          className="w-full border-white/10 text-xs"
           disabled={uploading}
           onClick={() => inputRef.current?.click()}
         >
@@ -178,8 +178,8 @@ export function AdCreativeGuidelineUploads({ clientId, variant = 'default' }: Ad
 
       {queue.length > 0 && (
         <div className="mt-3 space-y-2">
-          <p className="text-[11px] font-medium text-text-muted">Queued ({queue.length})</p>
-          <ul className="max-h-32 space-y-1 overflow-y-auto text-[11px] text-text-secondary [scrollbar-width:thin]">
+          <p className="text-xs font-medium text-text-muted">Queued ({queue.length})</p>
+          <ul className="max-h-32 space-y-1 overflow-y-auto text-xs text-text-secondary [scrollbar-width:thin]">
             {queue.map((f, i) => (
               <li key={`${f.name}-${i}`} className="flex items-center justify-between gap-2 rounded-lg bg-white/[0.03] px-2 py-1">
                 <span className="truncate">{f.name}</span>

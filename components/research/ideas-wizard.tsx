@@ -288,7 +288,7 @@ export function IdeasWizard({ open, onClose, clients, onStarted }: IdeasWizardPr
 
         {/* URL mode note */}
         {sourceMode === 'url' && (
-          <p className="text-[11px] text-accent2-text/70 mb-4">
+          <p className="text-xs text-accent2-text/70 mb-4">
             Scraping may take a few seconds — we&apos;ll analyze the site before generating ideas
           </p>
         )}
