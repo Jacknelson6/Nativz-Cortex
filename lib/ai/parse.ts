@@ -1,6 +1,53 @@
 /**
+ * Strip markdown bold/italic/code formatting from inside JSON string values.
+ * The AI sometimes returns **bold** or *italic* text inside JSON strings.
+ */
+function stripMarkdownFromJsonStrings(text: string): string {
+  let result = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escaped) {
+      result += ch;
+      escaped = false;
+      continue;
+    }
+
+    if (ch === '\\' && inString) {
+      result += ch;
+      escaped = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+
+    if (inString) {
+      if (text.slice(i, i + 2) === '**') {
+        i += 1;
+        continue;
+      }
+      if (ch === '*' || ch === '`') {
+        continue;
+      }
+    }
+
+    result += ch;
+  }
+
+  return result;
+}
+
+/**
  * Parse JSON from an AI response, stripping markdown code fences if present.
- * Includes repair logic for common LLM JSON issues (unescaped quotes, trailing commas).
+ * Includes repair logic for common LLM JSON issues (markdown in strings,
+ * unescaped quotes, trailing commas, smart quotes).
  */
 export function parseAIResponseJSON<T>(rawText: string): T {
   if (!rawText || !rawText.trim()) {
@@ -14,21 +61,25 @@ export function parseAIResponseJSON<T>(rawText: string): T {
     jsonText = jsonMatch[1].trim();
   }
 
-  // First attempt: direct parse
+  // Attempt 1: direct parse
   try {
     return JSON.parse(jsonText) as T;
   } catch {
     // Fall through to repair
   }
 
-  // Repair attempt: fix common LLM JSON issues
-  let repaired = jsonText;
+  // Attempt 2: strip markdown formatting inside strings (** * `)
+  try {
+    return JSON.parse(stripMarkdownFromJsonStrings(jsonText)) as T;
+  } catch {
+    // Fall through
+  }
+
+  // Attempt 3: fix common LLM JSON issues
+  let repaired = stripMarkdownFromJsonStrings(jsonText);
 
   // Remove trailing commas before } or ]
   repaired = repaired.replace(/,\s*([}\]])/g, '$1');
-
-  // Fix unescaped newlines inside strings
-  repaired = repaired.replace(/(?<=":[ ]*"[^"]*)\n(?=[^"]*")/g, '\\n');
 
   // Fix smart quotes
   repaired = repaired.replace(/[\u201C\u201D]/g, '"');
@@ -46,20 +97,15 @@ export function parseAIResponseJSON<T>(rawText: string): T {
     // Fall through to aggressive repair
   }
 
-  // Aggressive repair: try to extract the JSON object even if malformed
-  // Find the first { and last } to isolate the JSON
+  // Attempt 4: extract JSON object bounds + re-escape inner quotes
   const firstBrace = repaired.indexOf('{');
   const lastBrace = repaired.lastIndexOf('}');
   if (firstBrace !== -1 && lastBrace > firstBrace) {
     const extracted = repaired.slice(firstBrace, lastBrace + 1);
 
-    // Fix unescaped double quotes inside string values by looking for
-    // patterns like: "key": "value with "problematic" quotes"
-    // Strategy: re-escape quotes that appear inside values
     const reEscaped = extracted.replace(
       /:\s*"((?:[^"\\]|\\.)*)"/g,
       (_match, content: string) => {
-        // The content between quotes — escape any unescaped inner quotes
         const fixed = content.replace(/(?<!\\)"/g, '\\"');
         return `:"${fixed}"`;
       },
@@ -71,7 +117,6 @@ export function parseAIResponseJSON<T>(rawText: string): T {
       // Fall through
     }
 
-    // Last resort: try the extracted substring as-is
     try {
       return JSON.parse(extracted) as T;
     } catch {
@@ -79,7 +124,6 @@ export function parseAIResponseJSON<T>(rawText: string): T {
     }
   }
 
-  // All repair attempts failed
   const preview = jsonText.substring(0, 200);
   throw new Error(
     `Failed to parse AI response as JSON. Response starts with: "${preview}..." ` +
