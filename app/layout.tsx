@@ -22,9 +22,7 @@ export async function generateMetadata(): Promise<Metadata> {
     ? 'Anderson Collaborative content intelligence platform'
     : 'Nativz content intelligence platform';
 
-  // AC favicon: use the anderson-collaborative-logo.svg directly (modern browsers support SVG favicons)
-  // Nativz: use the PNG favicon
-  const favicon = isAC ? '/anderson-collaborative-logo.svg' : '/favicon.png';
+  const favicon = isAC ? '/favicon-ac.png' : '/favicon.png';
 
   return {
     title,
