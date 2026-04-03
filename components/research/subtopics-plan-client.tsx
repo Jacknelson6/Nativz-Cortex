@@ -2,42 +2,46 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Check, Loader2, Plus, RefreshCw, Info } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
+import { TIME_RANGE_OPTIONS } from '@/lib/types/search';
 
 interface SubtopicsPlanClientProps {
   searchId: string;
   query: string;
   /** User-selected recency window (e.g. "Last 3 months") — keywords must fit this period. */
   timeRangeLabel: string;
+  initialTimeRange?: string;
+  initialSource?: string;
 }
 
 const MAX = 15;
 
-const VIEW_THRESHOLDS = [
-  { label: '0', value: 0 },
-  { label: '10K', value: 10_000 },
-  { label: '25K', value: 25_000 },
-  { label: '50K', value: 50_000 },
-  { label: '100K', value: 100_000 },
+const PLATFORM_OPTIONS = [
+  { label: 'All', value: 'all' },
+  { label: 'TikTok', value: 'tiktok' },
+  { label: 'Instagram', value: 'instagram' },
+  { label: 'YouTube', value: 'youtube' },
+  { label: 'Reddit', value: 'reddit' },
+  { label: 'X', value: 'twitter' },
 ] as const;
 
-function formatViewLabel(v: number): string {
-  if (v === 0) return '0+';
-  if (v >= 1_000) return `${v / 1_000}K+`;
-  return `${v}+`;
-}
-
-export function SubtopicsPlanClient({ searchId, query, timeRangeLabel }: SubtopicsPlanClientProps) {
+export function SubtopicsPlanClient({
+  searchId,
+  query,
+  timeRangeLabel,
+  initialTimeRange = 'last_3_months',
+  initialSource = 'all',
+}: SubtopicsPlanClientProps) {
   const [keywords, setKeywords] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [customInput, setCustomInput] = useState('');
-  const [minViews, setMinViews] = useState(0);
-  // Time range is set in step 1 and passed as timeRangeLabel prop
+  const [timeRange, setTimeRange] = useState(initialTimeRange);
+  const [source, setSource] = useState(initialSource);
 
   const loadPlan = useCallback(async () => {
     setLoading(true);
@@ -116,7 +120,7 @@ export function SubtopicsPlanClient({ searchId, query, timeRangeLabel }: Subtopi
       const res = await fetch(`/api/search/${searchId}/subtopics`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subtopics: cleaned, start_processing: true, minViews }),
+        body: JSON.stringify({ subtopics: cleaned, start_processing: true, timeRange }),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
@@ -134,6 +138,11 @@ export function SubtopicsPlanClient({ searchId, query, timeRangeLabel }: Subtopi
 
   const selectedCount = selected.size;
   const totalCount = keywords.length;
+
+  const selectedTimeRangeLabel =
+    TIME_RANGE_OPTIONS.find((o) => o.value === timeRange)?.label ?? timeRangeLabel;
+  const selectedPlatformLabel =
+    PLATFORM_OPTIONS.find((o) => o.value === source)?.label ?? 'All';
 
   return (
     <div className="cortex-page-gutter max-w-2xl mx-auto space-y-6 py-8">
@@ -253,40 +262,53 @@ export function SubtopicsPlanClient({ searchId, query, timeRangeLabel }: Subtopi
           <p className="text-xs text-text-muted/70 leading-relaxed">
             Two to three word phrases like &ldquo;cooking hacks&rdquo; or &ldquo;indie game dev&rdquo; find much more relevant content than single generic words.
           </p>
-        </div>
-      )}
 
-      {/* Popularity & time range filters */}
-      {!loading && (
-        <div className="space-y-5">
-          {/* Popularity threshold */}
+          {/* Date range */}
           <div className="space-y-2">
-            <p className="text-sm font-medium text-text-primary">How popular should the videos be?</p>
+            <p className="text-sm font-medium text-text-primary">Date range</p>
             <div className="flex flex-wrap gap-2">
-              {VIEW_THRESHOLDS.map((t) => (
+              {TIME_RANGE_OPTIONS.map((o) => (
                 <button
-                  key={t.value}
+                  key={o.value}
                   type="button"
-                  onClick={() => setMinViews(t.value)}
+                  onClick={() => setTimeRange(o.value)}
                   className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 ${
-                    minViews === t.value
-                      ? 'bg-pink-600 text-white'
+                    timeRange === o.value
+                      ? 'bg-accent/20 text-accent-text border border-accent/40'
                       : 'bg-surface border border-nativz-border text-text-muted hover:border-text-muted'
                   }`}
                 >
-                  {t.label}
+                  {o.label}
                 </button>
               ))}
             </div>
-            <p className="text-xs text-text-muted/70">Lower = more results, higher = viral only</p>
           </div>
 
-          {/* Time range — already set in step 1, shown in header as timeRangeLabel */}
+          {/* Platforms */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-text-primary">Platforms</p>
+            <div className="flex flex-wrap gap-2">
+              {PLATFORM_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => setSource(o.value)}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 ${
+                    source === o.value
+                      ? 'bg-accent/20 text-accent-text border border-accent/40'
+                      : 'bg-surface border border-nativz-border text-text-muted hover:border-text-muted'
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Summary line */}
           <p className="flex items-center gap-1.5 text-sm text-text-secondary">
             <Check size={14} className="shrink-0 text-emerald-400" />
-            {formatViewLabel(minViews)} views · {timeRangeLabel}
+            {selectedTimeRangeLabel} · {selectedPlatformLabel}
           </p>
         </div>
       )}

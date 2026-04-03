@@ -17,7 +17,7 @@ export default async function AdminSearchSubtopicsPage({
 
   const { data: search, error } = await supabase
     .from('topic_searches')
-    .select('id, query, status, topic_pipeline, time_range')
+    .select('id, query, status, topic_pipeline, time_range, source')
     .eq('id', id)
     .single();
 
@@ -48,6 +48,8 @@ export default async function AdminSearchSubtopicsPage({
       searchId={search.id}
       query={search.query}
       timeRangeLabel={timeRangeLabel}
+      initialTimeRange={(search as { time_range?: string | null }).time_range ?? 'last_3_months'}
+      initialSource={(search as any).source ?? 'all'}
     />
   );
 }
