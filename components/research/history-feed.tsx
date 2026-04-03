@@ -261,11 +261,6 @@ function HistoryRowMenuBody({
         <Link2 size={14} aria-hidden />
         Copy link to search
       </Item>
-      {clientMenuLabel ? (
-        <div className="pointer-events-none select-none px-2 py-1.5 text-xs text-text-muted">
-          Client: {clientMenuLabel}
-        </div>
-      ) : null}
       {isTopicLike ? (
         <Item className={menuItemClass} onSelect={onOpenStrategyLab}>
           <Compass size={14} aria-hidden />
@@ -279,10 +274,10 @@ function HistoryRowMenuBody({
           onSelect={onToggleStrategyLab}
         >
           <Check size={14} aria-hidden />
-          {checked ? 'Deselect for Strategy lab' : 'Select for Strategy lab'}
+          {checked ? 'Deselect' : 'Select'}
         </Item>
       ) : null}
-      {isTopicLike && ((folders && folders.length > 0 && onAddToFolder) || onCreateFolder) ? (
+      {false && isTopicLike && ((folders && folders.length > 0 && onAddToFolder) || onCreateFolder) ? (
         <>
           <Separator className="bg-nativz-border" />
           {folders && folders.length > 0 && onAddToFolder ? (
@@ -400,7 +395,7 @@ export function HistoryFeed({
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [selectedTopicSearchIds, setSelectedTopicSearchIds] = useState<Set<string>>(new Set());
-  /** Checkboxes and bulk actions only after user chooses “Select for Strategy lab” from the row menu. */
+  /** Checkboxes and bulk actions only after user chooses “Select” from the row menu. */
   const [selectionModeActive, setSelectionModeActive] = useState(false);
 
   const {
@@ -846,7 +841,7 @@ export function HistoryFeed({
             aria-label={
               checked
                 ? `Deselect for Strategy lab: ${displayTitle(item)}`
-                : `Select for Strategy lab: ${displayTitle(item)}`
+                : `Select: ${displayTitle(item)}`
             }
             aria-pressed={checked}
           >
@@ -1154,7 +1149,7 @@ export function HistoryFeed({
                 ? `${selectedTopicSearchIds.size} selected${
                     firstSelectedInOrder?.clientName ? ` · ${firstSelectedInOrder.clientName}` : ''
                   }`
-                : 'Right-click a topic search → “Select for Strategy lab” to show checkboxes, then tick rows here.'}
+                : 'Right-click a topic search → “Select” to show checkboxes, then tick rows here.'}
             </p>
           </div>
           <button
