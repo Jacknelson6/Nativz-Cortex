@@ -177,7 +177,7 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
             type="button"
             onClick={() => {
               setShowHiTooltip(true);
-              setTimeout(() => setShowHiTooltip(false), 2000);
+              setTimeout(() => setShowHiTooltip(false), 2200); // matches hiTooltip animation duration
             }}
             aria-label="Hi there!"
             className="flex w-full items-center justify-center hover:opacity-80 transition-all duration-200 cursor-pointer"
@@ -200,9 +200,12 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
             )}
           </button>
 
-          {/* 'Hi there!' tooltip — fixed position to escape sidebar overflow:hidden */}
+          {/* 'Hi there!' tooltip — fixed position, pop-in + fade-out animation */}
           {showHiTooltip && (
-            <div className="fixed top-16 left-4 z-[9999] animate-[popIn_150ms_cubic-bezier(0.16,1,0.3,1)_forwards]">
+            <div
+              className="fixed top-16 left-4 z-[9999]"
+              style={{ animation: 'hiTooltip 2.2s cubic-bezier(0.16,1,0.3,1) forwards' }}
+            >
               <div className="rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm font-medium text-text-primary shadow-elevated whitespace-nowrap">
                 Hi there! 👋
               </div>
