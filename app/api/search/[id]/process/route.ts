@@ -99,8 +99,16 @@ export async function POST(
       return NextResponse.json({ status: 'completed' });
     }
 
-    if (search.status !== 'processing') {
+    if (search.status !== 'processing' && search.status !== 'failed') {
       return NextResponse.json({ error: 'Search is not in processing state' }, { status: 400 });
+    }
+
+    // If retrying a failed search, reset to processing first
+    if (search.status === 'failed') {
+      await adminClient
+        .from('topic_searches')
+        .update({ status: 'processing', processing_started_at: null, summary: null })
+        .eq('id', id);
     }
 
     // Single-flight: one active pipeline per search (extra POSTs from refresh/tabs get 202 + poll).
@@ -109,9 +117,9 @@ export async function POST(
 
     const { data: claimedFresh } = await adminClient
       .from('topic_searches')
-      .update({ processing_started_at: leaseNow })
+      .update({ processing_started_at: leaseNow, status: 'processing' })
       .eq('id', id)
-      .eq('status', 'processing')
+      .in('status', ['processing', 'failed'])
       .is('processing_started_at', null)
       .select('id');
 
