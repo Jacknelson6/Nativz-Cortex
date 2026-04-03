@@ -269,12 +269,36 @@ export function TikTokEmbedCarousel({
               </div>
             </section>
 
-            {/* Transcript preview */}
+            {/* Transcript */}
             {hasTranscript && (
               <section>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted mb-2">Transcript</p>
-                <div className="max-h-32 overflow-y-auto rounded-lg border border-nativz-border bg-background/40 p-3 text-xs leading-relaxed text-text-secondary">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">Transcript</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(source.transcript ?? '');
+                      // toast would need import — just rely on clipboard
+                    }}
+                    className="text-[10px] font-medium text-text-muted hover:text-text-secondary"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-nativz-border bg-background/40 p-3 text-xs leading-relaxed text-text-secondary">
                   {source.transcript}
+                </div>
+              </section>
+            )}
+
+            {/* Hook analysis */}
+            {source.metadata?.hook_analysis && (
+              <section>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted mb-2">Hook analysis</p>
+                <div className="rounded-lg border border-accent/20 bg-accent-surface/30 p-3">
+                  <p className="text-xs leading-relaxed text-text-secondary">
+                    {String(source.metadata.hook_analysis)}
+                  </p>
                 </div>
               </section>
             )}
@@ -291,7 +315,7 @@ export function TikTokEmbedCarousel({
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent-surface px-4 py-2.5 text-sm font-medium text-accent-text transition hover:bg-accent-surface/80"
                 >
                   <Sparkles size={14} />
-                  View analysis
+                  Full analysis
                 </button>
               )}
               <a

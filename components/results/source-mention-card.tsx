@@ -118,30 +118,18 @@ export function SourceMentionCard({ source, onOpenDetail, onAnalyze }: SourceMen
               }
             }}
           />
-          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/55 opacity-0 transition-opacity group-hover/thumb:pointer-events-auto group-hover/thumb:opacity-100">
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/55 opacity-0 transition-opacity group-hover/thumb:pointer-events-auto group-hover/thumb:opacity-100">
             <button
               data-source-action
               type="button"
-              className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-md hover:bg-white/95"
+              className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-md hover:bg-white/95"
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenDetail();
               }}
             >
               <Play size={16} className="shrink-0 fill-current" aria-hidden />
-              Play
-            </button>
-            <button
-              data-source-action
-              type="button"
-              className="pointer-events-auto cursor-pointer rounded-full border border-white/30 bg-white/10 px-3 py-2 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/20"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (canInlineAnalyze && onAnalyze) onAnalyze();
-                else onOpenDetail({ focusRescript: true });
-              }}
-            >
-              View analysis
+              View
             </button>
           </div>
         </div>
