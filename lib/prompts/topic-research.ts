@@ -265,7 +265,7 @@ Respond ONLY in valid JSON matching this exact schema. No text outside the JSON 
 - All video ideas are for SHORT-FORM VIDEO ONLY (TikTok, Instagram Reels, YouTube Shorts, Facebook Reels). No long-form video, no blog posts, no articles, no written content.
 - Each video idea MUST include "script_outline" (3-5 bullet talking points) and "cta" (call-to-action)
 - All video ideas should be specific and actionable — ready to produce on set
-- engagement_rate: typical engagement for that bucket as **percentage points** (0.7 means 0.7%, not 70% and not a 0–1 fraction)${config.brandPreferences ? `
-- CRITICAL: No markdown formatting inside JSON strings. Do NOT use **bold**, *italic*, or `code` markers anywhere in the JSON values. Plain text only.
+- engagement_rate: typical engagement for that bucket as **percentage points** (0.7 means 0.7%, not 70% and not a 0–1 fraction)${hasPreferences(config.brandPreferences) ? `
+- CRITICAL: No markdown formatting inside JSON strings. Do NOT use **bold**, *italic*, or 'code' markers anywhere in the JSON values. Plain text only.
 - BRAND PREFERENCES ARE HARD CONSTRAINTS: If <brand_context> is present above, you MUST follow it. Topics listed under "avoid" must NOT appear in any trending topic or video idea. Topics listed under "lean into" should be prioritized. Tone keywords must influence the style of all video titles and hooks. Seasonal priorities should be weighted if relevant to the current date.` : ''}`;
 }

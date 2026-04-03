@@ -18,6 +18,9 @@ export default async function PortalSearchProcessingPage({
 
   if (!result) return null;
 
+  // BUG 11: Require at least one of can_search or can_view_reports
+  if (!result.client.feature_flags?.can_search && !result.client.feature_flags?.can_view_reports) notFound();
+
   const adminClient = createAdminClient();
 
   const { data: search, error } = await adminClient

@@ -34,6 +34,9 @@ export default async function PortalSearchResultsPage({
 
   if (!result) return null;
 
+  // BUG 5: Enforce can_view_reports feature flag
+  if (!result.client.feature_flags?.can_view_reports) notFound();
+
   const adminClient = createAdminClient();
 
   const { data: search, error } = await adminClient
@@ -46,19 +49,19 @@ export default async function PortalSearchResultsPage({
     notFound();
   }
 
-  // Verify org scoping: search's client must belong to user's org
-  if (search.client_id) {
-    const { data: clientData } = await adminClient
-      .from('clients')
-      .select('id, organization_id')
-      .eq('id', search.client_id)
-      .single();
+  // BUG 3: Verify client ownership — search must belong to the user's specific client
+  if (!search.client_id || search.client_id !== result.client.id) {
+    notFound();
+  }
 
-    if (!clientData || clientData.organization_id !== result.organizationId) {
-      notFound();
-    }
-  } else {
-    // No client attached — portal users shouldn't see unattached searches
+  // Verify org scoping: search's client must belong to user's org
+  const { data: clientData } = await adminClient
+    .from('clients')
+    .select('id, organization_id')
+    .eq('id', search.client_id)
+    .single();
+
+  if (!clientData || clientData.organization_id !== result.organizationId) {
     notFound();
   }
 

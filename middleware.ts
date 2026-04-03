@@ -85,6 +85,8 @@ export async function middleware(request: NextRequest) {
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({ request });
+          // BUG 9: preserve x-pathname after cookie-triggered response recreation
+          supabaseResponse.headers.set('x-pathname', pathname);
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
@@ -118,6 +120,8 @@ export async function middleware(request: NextRequest) {
       setCorsHeaders(supabaseResponse, requestOrigin);
       setRateLimitHeaders(supabaseResponse);
     }
+    // BUG 9: expose pathname so portal layout can detect auth pages
+    supabaseResponse.headers.set('x-pathname', pathname);
     return supabaseResponse;
   }
 
@@ -130,6 +134,8 @@ export async function middleware(request: NextRequest) {
       }
       return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));
     }
+    // BUG 9: expose pathname so portal layout can detect auth pages
+    supabaseResponse.headers.set('x-pathname', pathname);
     return supabaseResponse;
   }
 
@@ -201,6 +207,7 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/admin') && isImpersonating && role === 'admin') {
     supabaseResponse.cookies.delete('x-impersonate-org');
     supabaseResponse.cookies.delete('x-impersonate-slug');
+    supabaseResponse.headers.set('x-pathname', pathname);
     return supabaseResponse;
   }
 
@@ -212,7 +219,8 @@ export async function middleware(request: NextRequest) {
   // Portal routes — viewers, or admins (incl. impersonation)
   if (pathname.startsWith('/portal')) {
     if (role !== 'viewer' && role !== 'admin') {
-      return NextResponse.redirect(new URL('/admin/login', request.url));
+      // BUG 10: unknown role on portal path should redirect to portal login, not admin login
+      return NextResponse.redirect(new URL('/portal/login', request.url));
     }
     if (shouldRedirectPortalToMinimalHome(pathname)) {
       return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));
@@ -226,6 +234,9 @@ export async function middleware(request: NextRequest) {
     setCorsHeaders(supabaseResponse, requestOrigin);
     setRateLimitHeaders(supabaseResponse);
   }
+
+  // BUG 9: expose pathname so portal layout can detect auth pages
+  supabaseResponse.headers.set('x-pathname', pathname);
 
   return supabaseResponse;
 }

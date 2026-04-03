@@ -31,13 +31,8 @@ export default async function PortalReportsPage() {
 
   const adminClient = createAdminClient();
 
-  const { data: clients } = await adminClient
-    .from('clients')
-    .select('id')
-    .eq('organization_id', result.organizationId)
-    .eq('is_active', true);
-
-  const clientIds = (clients || []).map((c) => c.id);
+  // BUG 6: Scope to user's assigned client only — do not show other org clients' data
+  const clientIds = [result.client.id];
 
   // Fetch approved searches
   const { data: searches } = clientIds.length > 0

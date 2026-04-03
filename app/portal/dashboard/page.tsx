@@ -38,15 +38,9 @@ export default async function PortalDashboardPage() {
     const canSearch = client.feature_flags.can_search;
     const canViewReports = client.feature_flags.can_view_reports;
 
-    // Get all org clients for queries
-    const { data: clients } = await adminClient
-      .from('clients')
-      .select('id, name')
-      .eq('organization_id', organizationId)
-      .eq('is_active', true);
-
-    const clientIds = (clients || []).map((c) => c.id);
-    const clientName = clients?.[0]?.name || 'your company';
+    // BUG 6: Scope to user's assigned client only — do not show other org clients' data
+    const clientIds = [client.id];
+    const clientName = client.name || 'your company';
 
     // Fetch stats
     const [reportsResult, recentResult] = await Promise.all([

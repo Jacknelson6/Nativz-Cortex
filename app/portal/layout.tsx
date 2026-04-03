@@ -62,7 +62,7 @@ const getCachedPortalUser = unstable_cache(
     };
   },
   ['portal-layout-user'],
-  { revalidate: 300 },
+  { revalidate: 60 },
 );
 
 /**

@@ -62,6 +62,7 @@ export default function PortalJoinPage() {
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    if (!fullName.trim()) { setError('Please enter your full name.'); return; }
     setSubmitting(true);
 
     try {
