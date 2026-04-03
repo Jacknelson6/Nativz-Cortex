@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Loader2,
   Copy,
+  Sparkles,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -83,6 +84,8 @@ export function TikTokEmbedCarousel({
   const [index, setIndex] = useState(initialIndex);
   const [analysisItem, setAnalysisItem] = useState<MoodboardItem | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [rescriptLoading, setRescriptLoading] = useState(false);
+  const [rescriptText, setRescriptText] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) setIndex(initialIndex);
@@ -106,6 +109,8 @@ export function TikTokEmbedCarousel({
     let cancelled = false;
     setAnalysisItem(null);
     setAnalysisLoading(true);
+    setRescriptText(null);
+    setRescriptLoading(false);
 
     async function loadAnalysis() {
       try {
@@ -415,20 +420,67 @@ export function TikTokEmbedCarousel({
               return (
                 <section>
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">Transcript</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(transcript);
-                        toast.success('Transcript copied');
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
-                    >
-                      <Copy size={13} /> Copy
-                    </button>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+                      {rescriptText ? 'Rescript' : 'Transcript'}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      {analysisItem?.id && !rescriptText && (
+                        <button
+                          type="button"
+                          disabled={rescriptLoading}
+                          onClick={async () => {
+                            if (!analysisItem?.id) return;
+                            setRescriptLoading(true);
+                            try {
+                              const res = await fetch(`/api/analysis/items/${analysisItem.id}/rescript`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({}),
+                              });
+                              if (res.ok) {
+                                const data = await res.json();
+                                const script = data?.rescript?.adapted_script;
+                                if (script) {
+                                  setRescriptText(script);
+                                  toast.success('Rescript ready');
+                                }
+                              } else {
+                                toast.error('Rescript failed');
+                              }
+                            } catch {
+                              toast.error('Rescript failed');
+                            } finally {
+                              setRescriptLoading(false);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-accent-text hover:bg-accent-surface transition-colors disabled:opacity-50"
+                        >
+                          <Sparkles size={13} /> {rescriptLoading ? 'Rescripting...' : 'Rescript'}
+                        </button>
+                      )}
+                      {rescriptText && (
+                        <button
+                          type="button"
+                          onClick={() => setRescriptText(null)}
+                          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-text-muted hover:bg-surface-hover transition-colors"
+                        >
+                          Show original
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(rescriptText ?? transcript);
+                          toast.success(rescriptText ? 'Rescript copied' : 'Transcript copied');
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
+                      >
+                        <Copy size={13} /> Copy
+                      </button>
+                    </div>
                   </div>
                   <div className="max-h-36 overflow-y-auto rounded-lg border border-nativz-border bg-background/40 p-3 text-sm leading-relaxed text-text-secondary">
-                    {transcript}
+                    {rescriptText ?? transcript}
                   </div>
                 </section>
               );
