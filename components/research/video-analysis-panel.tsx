@@ -536,7 +536,7 @@ export function VideoAnalysisPanel({
                 )}
                 Rescript for {clientName || 'client'}
               </Button>
-              {(rescriptOpen || rescriptData || item?.rescript) && (
+              {(rescriptOpen || rescriptLoading || rescriptData || item?.rescript) && (
                 <div className="rounded-lg border border-nativz-border bg-background/40 p-3 text-sm space-y-2">
                   {(rescriptData ?? item?.rescript) && (
                     <>
