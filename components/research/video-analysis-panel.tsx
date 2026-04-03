@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Circle,
   AlertCircle,
+  Copy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -412,16 +413,16 @@ export function VideoAnalysisPanel({
                   />
                 </div>
               ) : mp4Url ? (
-                <video src={mp4Url} controls className="max-h-[320px] w-full" playsInline />
+                <video src={mp4Url} controls className="max-h-[420px] w-full" playsInline />
               ) : item?.thumbnail_url ? (
-                <div className="relative aspect-video w-full">
+                <div className="relative mx-auto w-full max-w-[280px] aspect-[9/16]">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={item.thumbnail_url} alt="" className="h-full w-full object-cover" />
+                  <img src={item.thumbnail_url} alt="" className="h-full w-full rounded-lg object-cover" />
                   <a
                     href={sourceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-90 transition hover:bg-black/55"
+                    className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/45 opacity-90 transition hover:bg-black/55"
                   >
                     <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-900">
                       <Play size={16} className="fill-current" />
@@ -430,8 +431,15 @@ export function VideoAnalysisPanel({
                   </a>
                 </div>
               ) : (
-                <div className="flex aspect-video items-center justify-center text-sm text-text-muted">
-                  No preview
+                <div className="flex aspect-[9/16] mx-auto max-w-[280px] items-center justify-center text-sm text-text-muted">
+                  {createStep === 'running' || createStep === 'idle' ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 size={20} className="animate-spin text-accent-text" />
+                      <span>Loading…</span>
+                    </div>
+                  ) : (
+                    'No preview'
+                  )}
                 </div>
               )}
             </div>
@@ -468,9 +476,27 @@ export function VideoAnalysisPanel({
             </section>
           )}
 
-          {/* Transcript — plain text, no timestamps */}
+          {/* Transcript — plain text, no timestamps, with copy button */}
           <section className="space-y-2">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">Transcript</p>
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">Transcript</p>
+              {(item?.transcript?.trim() || (item?.transcript_segments?.length ?? 0) > 0) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = item?.transcript?.trim()
+                      || item?.transcript_segments?.map((s) => s.text).join(' ')
+                      || '';
+                    void navigator.clipboard.writeText(text);
+                    toast.success('Transcript copied');
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
+                >
+                  <Copy size={10} />
+                  Copy
+                </button>
+              )}
+            </div>
             <div className="max-h-48 overflow-y-auto rounded-lg border border-nativz-border bg-background/40 p-3 text-sm leading-relaxed text-text-secondary">
               {item?.transcript?.trim() ? (
                 <p className="whitespace-pre-wrap">{item.transcript}</p>
@@ -601,7 +627,7 @@ export function VideoAnalysisPanel({
                 type="button"
                 size="sm"
                 variant="secondary"
-                disabled={rescriptLoading || !item?.id || analyzeStep !== 'done'}
+                disabled={rescriptLoading || !item?.id || (analyzeStep !== 'done' && !item?.hook_analysis)}
                 onClick={() => {
                   setRescriptOpen(true);
                   void runRescript();
