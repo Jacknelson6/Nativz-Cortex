@@ -12,7 +12,7 @@ export async function exportElementToPdf(element: HTMLElement, filename: string)
     useCORS: true,
     logging: false,
     backgroundColor: '#0d0d14',
-  });
+  } as any);
 
   const imgData = canvas.toDataURL('image/png');
   const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
