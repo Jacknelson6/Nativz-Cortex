@@ -6,6 +6,23 @@
 
 ---
 
+## Next Session
+
+### PDF Export Theming
+- [ ] Match PDF export to current brand theme (AC vs Nativz — colors, logo, fonts)
+- [ ] Update PDF content to match results page layout (trending topics breakdown, content pillars, emotions)
+- [ ] Remove extra info that doesn't match the UI (keep it clean)
+- [ ] Don't include all videos/sources — just the analysis sections
+
+### Remaining from April 3 Session
+- [ ] Frame extraction debugging — ffmpeg-static works locally but carousel returns 0 frames. Need server-side logging.
+- [ ] Rescript in carousel — needs clientId passed through for brand context
+- [ ] Toast notification when search completes in background (user navigated away)
+- [ ] AC invite emails — use Resend instead of Supabase Auth to control sender/branding per agency
+- [ ] Video reference library in Strategy Lab Knowledge Base tab
+
+---
+
 ## Active Work
 
 ### Strategy Lab “brain” + Nerd context (see `docs/prd-strategy-lab-brain.md`)
