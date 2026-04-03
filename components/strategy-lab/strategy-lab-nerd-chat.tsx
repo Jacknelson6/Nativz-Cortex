@@ -181,7 +181,7 @@ export function StrategyLabNerdChat({
   }));
 
   return (
-    <div className="flex min-h-[520px] flex-col overflow-hidden rounded-xl border border-nativz-border/60 bg-background/40">
+    <div className="flex h-full min-h-[520px] flex-1 flex-col overflow-hidden rounded-xl border border-nativz-border/60 bg-background/40">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-nativz-border/50 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <BotMessageSquare className="h-4 w-4 shrink-0 text-accent-text" aria-hidden />

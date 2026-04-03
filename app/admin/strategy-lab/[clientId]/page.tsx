@@ -121,21 +121,8 @@ export default async function StrategyLabClientPage({
   ]);
 
   return (
-    <div className="cortex-page-gutter pb-12">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-8 pt-2 sm:pt-4">
-          <Link
-            href="/admin/strategy-lab"
-            className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-text-muted transition hover:text-accent-text"
-          >
-            <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
-            Strategy lab
-          </Link>
-          <h1 className="text-xl font-semibold tracking-tight text-text-primary md:text-2xl">{client.name}</h1>
-          <p className="mt-1 text-sm text-text-muted">{client.slug}</p>
-        </div>
-
-        <StrategyLabWorkspace
+    <div className="h-[calc(100vh-3.5rem)] overflow-hidden">
+      <StrategyLabWorkspace
         clientId={client.id}
         clientSlug={client.slug ?? ''}
         clientName={client.name ?? ''}
@@ -149,7 +136,6 @@ export default async function StrategyLabClientPage({
         vaultEntries={vaultEntries}
         vaultGraphData={vaultGraphData}
       />
-      </div>
     </div>
   );
 }
