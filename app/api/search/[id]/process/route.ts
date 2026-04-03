@@ -264,13 +264,22 @@ export async function POST(
             platform_data: cloneJsonForPostgres({
               stats: [],
               sourceCount: result.platformSources?.length ?? 0,
-              // Truncate transcripts in stored sources to keep payload under Supabase limits.
-              // Full transcripts are available on-demand via the analysis panel.
-              sources: (result.platformSources ?? []).map((s) => ({
-                ...s,
-                transcript: s.transcript ? s.transcript.slice(0, 500) : null,
-                transcript_segments: undefined, // stored on moodboard_items, not here
-                frames: undefined, // stored on moodboard_items, not here
+              // Store only essential fields per source — comments, transcripts, frames, metadata
+              // are stripped to keep payload well under Supabase's 1MB PostgREST limit.
+              // Full data is available on-demand via the analysis panel.
+              sources: (result.platformSources ?? []).slice(0, 200).map((s) => ({
+                platform: s.platform,
+                id: s.id,
+                url: s.url,
+                title: (s.title ?? '').slice(0, 300),
+                content: (s.content ?? '').slice(0, 300),
+                author: s.author,
+                thumbnailUrl: s.thumbnailUrl ?? null,
+                videoFormat: s.videoFormat ?? null,
+                engagement: s.engagement,
+                createdAt: s.createdAt,
+                transcript: s.transcript ? s.transcript.slice(0, 300) : null,
+                comments: [], // stripped — available via analysis panel
               })),
             }),
             tokens_used: result.totalTokens ?? 0,
