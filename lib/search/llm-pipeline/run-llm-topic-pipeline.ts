@@ -34,6 +34,9 @@ import {
   type SearchMode,
 } from '@/lib/types/search';
 import { gatherPlatformData, formatPlatformContext, type PlatformResults } from '@/lib/search/platform-router';
+import { transcribeAllVideos, analyzeTopVideos, buildVideoSummariesForClustering } from '@/lib/search/llm-pipeline/analyze-videos';
+import { clusterVideosToPillars, pillarsToMergerCategories, type PillarCluster } from '@/lib/search/llm-pipeline/cluster-pillars';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 function logLlmV1(event: Record<string, unknown>) {
   console.log(`[topic_search_llm_v1] ${JSON.stringify(event)}`);
@@ -675,6 +678,96 @@ Rules: 2–4 words each, specific to the topic, no numbering, no full sentences.
   // Wait for both to complete
   const [, platformResults] = await Promise.all([subtopicResearchPromise, platformScraperPromise]);
 
+  // ── Video Analysis Pipeline (grounded content pillars) ──────────────────
+  // Phase A: Transcribe all TikTok videos (captions are free)
+  // Phase B: FFmpeg frames + vision analysis on top 50
+  // Phase C: Cluster videos into content pillars
+  let groundedPillars: PillarCluster[] = [];
+  if (platformResults && platformResults.sources.length > 0) {
+    const tiktokSources = platformResults.sources.filter((s) => s.platform === 'tiktok');
+    if (tiktokSources.length > 0) {
+      // Phase A: Transcribe all TikTok videos
+      const transcribeT0 = Date.now();
+      const transcribeResult = await transcribeAllVideos(platformResults.sources);
+      logLlmV1({
+        search_id: args.searchId,
+        phase: 'transcribe_all',
+        duration_ms: Date.now() - transcribeT0,
+        transcribed: transcribeResult.transcribed,
+        failed: transcribeResult.failed,
+        total_tiktok: tiktokSources.length,
+      });
+      stageRows.push({
+        phase: 'transcribe_all',
+        duration_ms: Date.now() - transcribeT0,
+        ...transcribeResult,
+      });
+
+      // Phase B: Analyze top 50 (frames + vision)
+      const analyzeT0 = Date.now();
+      const admin = createAdminClient();
+      const analyzeResult = await analyzeTopVideos(platformResults.sources, {
+        admin,
+        searchId: args.searchId ?? '',
+        userId: args.userId,
+        userEmail: args.userEmail,
+        count: 50,
+      });
+      logLlmV1({
+        search_id: args.searchId,
+        phase: 'analyze_top_videos',
+        duration_ms: Date.now() - analyzeT0,
+        ...analyzeResult,
+      });
+      stageRows.push({
+        phase: 'analyze_top_videos',
+        duration_ms: Date.now() - analyzeT0,
+        ...analyzeResult,
+      });
+
+      // Phase C: Cluster videos into content pillars
+      const clusterT0 = Date.now();
+      const videoSummaries = buildVideoSummariesForClustering(platformResults.sources);
+      if (videoSummaries.length >= 5) {
+        try {
+          const clusterResult = await clusterVideosToPillars({
+            query: args.search.query,
+            videos: videoSummaries,
+            userId: args.userId,
+            userEmail: args.userEmail,
+            clientContext: args.clientContext
+              ? { name: args.clientContext.name, industry: args.clientContext.industry }
+              : null,
+          });
+          groundedPillars = clusterResult.pillars;
+          totalTokens += clusterResult.tokens;
+          totalCost += clusterResult.cost;
+          logLlmV1({
+            search_id: args.searchId,
+            phase: 'cluster_pillars',
+            duration_ms: Date.now() - clusterT0,
+            tokens: clusterResult.tokens,
+            pillar_count: clusterResult.pillars.length,
+            pillar_names: clusterResult.pillars.map((p) => p.name),
+          });
+          stageRows.push({
+            phase: 'cluster_pillars',
+            duration_ms: Date.now() - clusterT0,
+            tokens: clusterResult.tokens,
+            pillar_count: clusterResult.pillars.length,
+          });
+        } catch (e) {
+          logLlmV1({
+            search_id: args.searchId,
+            phase: 'cluster_pillars',
+            duration_ms: Date.now() - clusterT0,
+            error: e instanceof Error ? e.message.slice(0, 200) : String(e),
+          });
+        }
+      }
+    }
+  }
+
   for (const r of subReports) {
     for (const s of r.sources ?? []) {
       if (s.url) allAllowed.push(normalizeUrlForMatch(s.url));
@@ -702,13 +795,20 @@ Rules: 2–4 words each, specific to the topic, no numbering, no full sentences.
     ? `Attached client — ${args.clientContext.name}. Industry: ${args.clientContext.industry ?? 'n/a'}. Brand voice: ${args.clientContext.brandVoice ?? 'n/a'}.`
     : '';
 
+  // Build grounded pillar context for the merger if available
+  let groundedPillarBlock = '';
+  if (groundedPillars.length > 0) {
+    const pillarJson = JSON.stringify(pillarsToMergerCategories(groundedPillars));
+    groundedPillarBlock = `\n---\n\nGROUNDED CONTENT PILLARS (derived from analysis of ${platformResults?.sources.filter((s) => s.platform === 'tiktok').length ?? 0} TikTok videos):\nUse these EXACTLY as the content_breakdown.categories — do NOT invent new categories. These are real clusters from actual video data with real engagement rates.\n${pillarJson}\nYou may still estimate your_engagement_rate for the attached client if applicable, but keep name, percentage, and engagement_rate from the data above.\n`;
+  }
+
   const todayDate = new Date().toISOString().slice(0, 10);
   const mergerPrompt = `You merge research-angle findings into one JSON report for "${args.search.query}".
 Today's date: ${todayDate}
 Time scope: The user chose **${timeRangeLabel}**. Emphasize themes, debates, and video ideas that fit audience and creator activity in that window (not generic evergreen filler unless the evidence supports it).
 ${clientContextBlock ? `${clientContextBlock}\n\n` : ''}Research-angle findings:
 ${subtopicBlock}
-${platformContextBlock ? `\n---\n\nPlatform-specific data (Reddit threads, TikTok videos, YouTube content, Quora discussions):\n${platformContextBlock}` : ''}
+${platformContextBlock ? `\n---\n\nPlatform-specific data (Reddit threads, TikTok videos, YouTube content, Quora discussions):\n${platformContextBlock}` : ''}${groundedPillarBlock}
 
 Return ONLY valid JSON matching:
 {
@@ -920,6 +1020,9 @@ Rules:
     platform_scrapers_ran: hasNonWebPlatforms,
     limits,
     stages: stageRows,
+    grounded_pillars: groundedPillars.length > 0
+      ? groundedPillars.map((p) => ({ name: p.name, pct: p.pct_of_content, er: p.avg_engagement_rate, videos: p.video_count }))
+      : null,
     totals: {
       tokens: totalTokens,
       estimated_cost: totalCost,
