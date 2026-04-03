@@ -52,7 +52,8 @@ export default async function RootLayout({
 }>) {
   const headersList = await headers();
   const agency = headersList.get('x-agency') as 'anderson' | 'nativz' | null;
-  const forcedMode = agency === 'anderson' ? 'anderson' as const : undefined;
+  // Force brand mode on BOTH domains — prevents localStorage from loading wrong theme
+  const forcedMode = agency === 'anderson' ? 'anderson' as const : 'nativz' as const;
 
   // Set data-brand-mode directly on <html> so CSS vars apply on first paint
   // before the BrandModeProvider client component hydrates — prevents flash of Nativz theme on AC domain.

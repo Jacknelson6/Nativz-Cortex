@@ -175,15 +175,11 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
         <div className="relative flex w-full items-center justify-center mb-3">
           <button
             type="button"
-            onClick={(e) => {
-              if (isForced) {
-                setShowHiTooltip(true);
-                setTimeout(() => setShowHiTooltip(false), 2000);
-              } else {
-                toggleMode(e);
-              }
+            onClick={() => {
+              setShowHiTooltip(true);
+              setTimeout(() => setShowHiTooltip(false), 2000);
             }}
-            aria-label={isForced ? 'Hi there!' : `Switch to ${mode === 'nativz' ? 'Anderson Collaborative' : 'Nativz'} mode`}
+            aria-label="Hi there!"
             className="flex w-full items-center justify-center hover:opacity-80 transition-all duration-200 cursor-pointer"
           >
             {mode === 'nativz' ? (
