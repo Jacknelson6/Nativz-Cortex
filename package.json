@@ -115,7 +115,7 @@
     "@tailwindcss/postcss": "^4",
     "@types/dompurify": "^3.0.5",
     "@types/html2canvas": "^0.5.35",
-    "@types/node": "^20",
+    "@types/node": "^25",
     "@types/pg": "^8.15.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
