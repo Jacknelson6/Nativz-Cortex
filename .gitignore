@@ -73,6 +73,11 @@ supabase/.temp/
 *.png
 # Nano Banana template previews (catalog: lib/ad-creatives/nano-banana/catalog-data.ts)
 !public/nano-banana-previews/*.png
+# Favicons
+!public/favicon.png
+!public/favicon-ac.png
+!app/apple-icon.png
+!app/icon.png
 vectors.db
 vectors.db-shm
 vectors.db-wal
