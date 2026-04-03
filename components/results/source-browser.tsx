@@ -133,7 +133,7 @@ export function SourceBrowser({
         initialIndex={carouselIndex ?? 0}
         open={carouselIndex != null}
         onClose={() => setCarouselIndex(null)}
-        onAnalyze={(source) => setAnalysisSource(source)}
+        topicSearchId={searchId}
       />
 
       {/* Video analysis panel */}

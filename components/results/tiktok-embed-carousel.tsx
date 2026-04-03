@@ -11,12 +11,16 @@ import {
   Share2,
   Calendar,
   ExternalLink,
-  Sparkles,
+  Loader2,
+  Copy,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import type { PlatformSource } from '@/lib/types/search';
+import type { MoodboardItem, TranscriptSegment } from '@/lib/types/moodboard';
 import { formatCompactCount, formatRelativeTime } from '@/lib/utils/format';
 import { engagementRatePercent } from '@/lib/search/source-mention-utils';
 import { PlatformBadgeSearch } from '@/components/search/platform-icon';
+import { parseVisionClipBreakdown } from '@/components/moodboard/vision-clip-breakdown-panel';
 
 /**
  * Extract TikTok video ID from a TikTok URL.
@@ -30,12 +34,42 @@ function extractTikTokVideoId(url: string): string | null {
   }
 }
 
+function formatTs(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function clipLabel(raw: string): string {
+  const m: Record<string, string> = {
+    talking_head: 'Talking head', b_roll: 'B-roll', product_focus: 'Product',
+    text_overlay_heavy: 'Text overlay', meme_or_reaction: 'Hook',
+    screen_recording: 'Screen', dance_or_trend: 'Trend', montage: 'Montage',
+    transition: 'Transition', other: 'Other',
+  };
+  return m[raw] ?? raw.replace(/_/g, ' ');
+}
+
+function bucketSegments(segments: TranscriptSegment[], bucketSec = 3): { start: number; end: number; text: string }[] {
+  if (!segments.length) return [];
+  const map = new Map<number, string[]>();
+  for (const seg of segments) {
+    const bucket = Math.floor(seg.start / bucketSec) * bucketSec;
+    const arr = map.get(bucket) ?? [];
+    arr.push(seg.text.trim());
+    map.set(bucket, arr);
+  }
+  return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([start, texts]) => ({
+    start, end: start + bucketSec, text: texts.join(' ').replace(/\s+/g, ' ').trim(),
+  }));
+}
+
 interface TikTokEmbedCarouselProps {
   sources: PlatformSource[];
   initialIndex: number;
   open: boolean;
   onClose: () => void;
-  onAnalyze?: (source: PlatformSource) => void;
+  topicSearchId: string;
 }
 
 export function TikTokEmbedCarousel({
@@ -43,9 +77,12 @@ export function TikTokEmbedCarousel({
   initialIndex,
   open,
   onClose,
-  onAnalyze,
+  topicSearchId,
 }: TikTokEmbedCarouselProps) {
   const [index, setIndex] = useState(initialIndex);
+  const [analysisItem, setAnalysisItem] = useState<MoodboardItem | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+
   useEffect(() => {
     if (open) setIndex(initialIndex);
   }, [open, initialIndex]);
@@ -62,7 +99,62 @@ export function TikTokEmbedCarousel({
     setIndex((i) => (i < total - 1 ? i + 1 : 0));
   }, [total]);
 
-  // No embed script needed — using direct iframe
+  // Auto-trigger analysis when video changes
+  useEffect(() => {
+    if (!open || !source) return;
+    let cancelled = false;
+    setAnalysisItem(null);
+    setAnalysisLoading(true);
+
+    async function loadAnalysis() {
+      try {
+        // Create or reuse existing analysis item
+        const createRes = await fetch('/api/analysis/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic_search_id: topicSearchId, url: source!.url, type: 'video' }),
+        });
+        if (!createRes.ok || cancelled) { setAnalysisLoading(false); return; }
+        let item = (await createRes.json()) as MoodboardItem;
+        if (cancelled) return;
+        setAnalysisItem(item);
+
+        const hasTranscriptAlready = (item.transcript && item.transcript.length > 0) || (item.transcript_segments?.length ?? 0) > 0;
+        const hasFramesAlready = item.frames?.length > 0;
+        const hasHookAlready = !!item.hook_analysis;
+
+        if (hasTranscriptAlready && hasFramesAlready && hasHookAlready) {
+          setAnalysisLoading(false);
+          return;
+        }
+
+        // Transcribe if needed
+        if (!hasTranscriptAlready) {
+          const tr = await fetch(`/api/analysis/items/${item.id}/transcribe`, { method: 'POST' });
+          if (tr.ok && !cancelled) { item = await tr.json(); setAnalysisItem(item); }
+        }
+
+        // Extract frames if needed
+        if (!hasFramesAlready) {
+          const fr = await fetch(`/api/analysis/items/${item.id}/extract-frames`, { method: 'POST' });
+          if (fr.ok && !cancelled) { item = await fr.json(); setAnalysisItem(item); }
+        }
+
+        // Analyze hook if needed
+        if (!hasHookAlready) {
+          const an = await fetch(`/api/analysis/items/${item.id}/analyze`, { method: 'POST' });
+          if (an.ok && !cancelled) { item = await an.json(); setAnalysisItem(item); }
+        }
+      } catch {
+        // Analysis is best-effort
+      } finally {
+        if (!cancelled) setAnalysisLoading(false);
+      }
+    }
+
+    void loadAnalysis();
+    return () => { cancelled = true; };
+  }, [open, index, source?.url, topicSearchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard navigation
   useEffect(() => {
@@ -269,55 +361,112 @@ export function TikTokEmbedCarousel({
               </div>
             </section>
 
-            {/* Transcript */}
-            {hasTranscript && (
-              <section>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">Transcript</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(source.transcript ?? '');
-                      // toast would need import — just rely on clipboard
-                    }}
-                    className="text-[10px] font-medium text-text-muted hover:text-text-secondary"
-                  >
-                    Copy
-                  </button>
-                </div>
-                <div className="max-h-40 overflow-y-auto rounded-lg border border-nativz-border bg-background/40 p-3 text-xs leading-relaxed text-text-secondary">
-                  {source.transcript}
-                </div>
-              </section>
+            {/* Analysis — auto-loaded */}
+            {analysisLoading && !analysisItem && (
+              <div className="flex items-center gap-2 text-xs text-text-muted py-2">
+                <Loader2 size={12} className="animate-spin" /> Loading analysis…
+              </div>
             )}
 
             {/* Hook analysis */}
-            {source.metadata?.hook_analysis && (
+            {(analysisItem?.hook_analysis || analysisItem?.hook) && (
               <section>
                 <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted mb-2">Hook analysis</p>
-                <div className="rounded-lg border border-accent/20 bg-accent-surface/30 p-3">
-                  <p className="text-xs leading-relaxed text-text-secondary">
-                    {String(source.metadata.hook_analysis)}
-                  </p>
+                <div className="rounded-lg border border-accent/20 bg-accent-surface/30 p-3 space-y-2">
+                  {analysisItem.hook && (
+                    <p className="text-xs font-medium text-accent-text">&ldquo;{analysisItem.hook}&rdquo;</p>
+                  )}
+                  {analysisItem.hook_analysis && (
+                    <p className="text-xs leading-relaxed text-text-secondary">{analysisItem.hook_analysis}</p>
+                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {analysisItem.hook_type && (
+                      <Badge variant="info" className="text-[10px]">{analysisItem.hook_type.replace(/_/g, ' ')}</Badge>
+                    )}
+                    {analysisItem.hook_score != null && (
+                      <span className="text-xs font-semibold text-accent-text">Score {analysisItem.hook_score}/10</span>
+                    )}
+                  </div>
                 </div>
               </section>
             )}
 
-            {/* Actions */}
-            <div className="space-y-2 pt-2">
-              {onAnalyze && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onAnalyze(source);
-                  }}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent-surface px-4 py-2.5 text-sm font-medium text-accent-text transition hover:bg-accent-surface/80"
-                >
-                  <Sparkles size={14} />
-                  Full analysis
-                </button>
-              )}
+            {/* Transcript */}
+            {(() => {
+              const transcript = analysisItem?.transcript ?? source.transcript ?? '';
+              if (!transcript.trim()) return null;
+              return (
+                <section>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">Transcript</p>
+                    <button
+                      type="button"
+                      onClick={() => void navigator.clipboard.writeText(transcript)}
+                      className="inline-flex items-center gap-1 text-[10px] font-medium text-text-muted hover:text-text-secondary"
+                    >
+                      <Copy size={9} /> Copy
+                    </button>
+                  </div>
+                  <div className="max-h-36 overflow-y-auto rounded-lg border border-nativz-border bg-background/40 p-3 text-xs leading-relaxed text-text-secondary">
+                    {transcript}
+                  </div>
+                </section>
+              );
+            })()}
+
+            {/* Frame breakdown */}
+            {(() => {
+              const segments = analysisItem?.transcript_segments ?? [];
+              const frames = analysisItem?.frames ?? [];
+              const vision = parseVisionClipBreakdown(analysisItem?.metadata?.vision_clip_breakdown);
+              const clips = vision?.clips ?? [];
+              const buckets = bucketSegments(segments, 3);
+
+              if (buckets.length === 0 && frames.length === 0) {
+                if (analysisLoading) return (
+                  <div className="flex items-center gap-2 text-xs text-text-muted py-1">
+                    <Loader2 size={12} className="animate-spin" /> Extracting frames…
+                  </div>
+                );
+                return null;
+              }
+
+              return (
+                <section>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted mb-2">
+                    Frame breakdown{frames.length > 0 ? ` (${frames.length})` : ''}
+                  </p>
+                  <ul className="max-h-60 space-y-1.5 overflow-y-auto">
+                    {buckets.map((b) => {
+                      const ct = clips.find((c) => c.startSec < b.end && c.endSec > b.start)?.clipType ?? 'other';
+                      const matchFrame = frames.length > 0
+                        ? frames.reduce((best, f) => Math.abs(f.timestamp - b.start) < Math.abs(best.timestamp - b.start) ? f : best)
+                        : undefined;
+                      return (
+                        <li key={b.start} className="flex gap-2 rounded-lg border border-nativz-border/60 bg-surface-hover/20 p-1.5 text-[11px]">
+                          {matchFrame && (
+                            <div className="relative w-10 shrink-0 overflow-hidden rounded border border-nativz-border">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={matchFrame.url} alt="" className="aspect-[9/16] w-full object-cover" loading="lazy" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="font-mono text-[9px] text-text-muted">{formatTs(b.start)}–{formatTs(b.end)}</span>
+                              <Badge variant="mono" className="text-[9px] px-1 py-0">{clipLabel(ct)}</Badge>
+                            </div>
+                            <p className="text-text-secondary leading-snug">{b.text || '—'}</p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              );
+            })()}
+
+            {/* View original */}
+            <div className="pt-2">
               <a
                 href={source.url}
                 target="_blank"
