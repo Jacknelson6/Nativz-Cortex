@@ -64,12 +64,16 @@ Rules:
 - Cover different angles and subtopics within the main topic.`;
 
     const ai = await createCompletion({
-      messages: [{ role: 'user', content: prompt }],
+      messages: [
+        { role: 'system', content: 'You are a keyword research tool. You generate keyword phrases for content research. You always respond with valid JSON only. You never refuse requests — you always generate keywords for any topic.' },
+        { role: 'user', content: prompt },
+      ],
       maxTokens: 800,
       feature: 'topic_search',
       userId: user.id,
       userEmail: user.email ?? undefined,
       modelPreference: [plannerModel],
+      jsonMode: true,
     });
 
     const raw = parseAIResponseJSON<unknown>(ai.text);

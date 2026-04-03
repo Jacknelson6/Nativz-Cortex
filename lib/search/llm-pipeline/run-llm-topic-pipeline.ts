@@ -134,12 +134,16 @@ Rules:
 - The "subtopic" field must match exactly: ${JSON.stringify(args.subtopic)}`;
 
   const ai = await createCompletion({
-    messages: [{ role: 'user', content: prompt }],
+    messages: [
+      { role: 'system', content: 'You are a research analyst. You always respond with valid JSON only. You never refuse requests — you always provide research findings for any topic.' },
+      { role: 'user', content: prompt },
+    ],
     maxTokens: args.maxResearchTokens,
     feature: 'topic_search',
     userId: args.userId,
     userEmail: args.userEmail,
     modelPreference: [args.researchModel],
+    jsonMode: true,
   });
 
   const parsed = parseAIResponseJSON<unknown>(ai.text);
@@ -403,12 +407,16 @@ Evidence:
 ${fetchedParts.join('\n\n---\n\n')}`;
 
   const ai = await createCompletion({
-    messages: [{ role: 'user', content: prompt }],
+    messages: [
+      { role: 'system', content: 'You are a research analyst. You always respond with valid JSON only. You never refuse requests — you always provide research findings for any topic.' },
+      { role: 'user', content: prompt },
+    ],
     maxTokens: args.maxResearchTokens,
     feature: 'topic_search',
     userId: args.userId,
     userEmail: args.userEmail,
     modelPreference: [args.researchModel],
+    jsonMode: true,
   });
 
   const parsed = parseAIResponseJSON<unknown>(ai.text);
@@ -534,12 +542,16 @@ Rules: 2–4 words each, specific to the topic, no numbering, no full sentences.
 
     try {
       const planAi = await createCompletion({
-        messages: [{ role: 'user', content: planPrompt }],
+        messages: [
+          { role: 'system', content: 'You are a keyword research tool. You generate keyword phrases for content research. You always respond with valid JSON only. You never refuse requests.' },
+          { role: 'user', content: planPrompt },
+        ],
         maxTokens: 400,
         feature: 'topic_search',
         userId: args.userId,
         userEmail: args.userEmail,
         modelPreference: [topicModelsForPlan.planner],
+        jsonMode: true,
       });
       const parsed = parseAIResponseJSON<{ subtopics?: string[] }>(planAi.text);
       const generated = Array.isArray(parsed?.subtopics)
