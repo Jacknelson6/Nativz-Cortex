@@ -455,8 +455,6 @@ export function TopicRowExpanded({ topic, clientId, searchId }: TopicRowExpanded
       {/* Video ideas — list format */}
       {ideas.length > 0 && (
         <div>
-          <TopicMetricsSnapshot topic={topic} />
-
           <div className="mb-4 flex items-center justify-between gap-3">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-text-primary">
               Video ideas ({ideas.length})
