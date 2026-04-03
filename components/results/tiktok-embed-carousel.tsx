@@ -72,6 +72,7 @@ interface TikTokEmbedCarouselProps {
   open: boolean;
   onClose: () => void;
   topicSearchId: string;
+  clientId?: string | null;
 }
 
 export function TikTokEmbedCarousel({
@@ -80,6 +81,7 @@ export function TikTokEmbedCarousel({
   open,
   onClose,
   topicSearchId,
+  clientId,
 }: TikTokEmbedCarouselProps) {
   const [index, setIndex] = useState(initialIndex);
   const [analysisItem, setAnalysisItem] = useState<MoodboardItem | null>(null);

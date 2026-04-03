@@ -3,8 +3,8 @@ import { cookies } from 'next/headers';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { unstable_cache } from 'next/cache';
-import { PortalSidebar } from '@/components/layout/portal-sidebar';
-import { PortalHeader } from '@/components/layout/portal-header';
+import { AdminSidebar } from '@/components/layout/admin-sidebar';
+import { AdminHeader } from '@/components/layout/admin-header';
 import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
 import { ImpersonationBanner } from '@/components/portal/impersonation-banner';
 import { BrandModeProvider } from '@/components/layout/brand-mode-provider';
@@ -181,15 +181,16 @@ export default async function PortalLayout({
     <BrandModeProvider forcedMode={forcedBrandMode}>
       <ImpersonationBanner />
       <SidebarProvider>
-        <PortalSidebar
+        <AdminSidebar
           userName={userName}
           avatarUrl={avatarUrl}
-          featureFlags={featureFlags}
-          brands={brandData.brands}
-          activeBrandId={brandData.activeBrandId}
+          role="viewer"
+          routePrefix="/portal"
+          logoutPath="/portal/login"
+          settingsPath="/portal/settings"
         />
         <SidebarInset>
-          <PortalHeader />
+          <AdminHeader />
           {children}
         </SidebarInset>
       </SidebarProvider>

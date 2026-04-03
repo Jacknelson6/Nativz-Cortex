@@ -111,8 +111,10 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 function isActivePath(pathname: string, href: string, searchParams?: URLSearchParams) {
-  if (href === '/admin/search/new') {
-    return pathname.startsWith('/admin/search');
+  // Research — match both /admin/search and /portal/search
+  if (href.endsWith('/search/new')) {
+    const prefix = href.replace('/search/new', '/search');
+    return pathname.startsWith(prefix);
   }
 
   // Pipeline root "All stages" shares /admin/pipeline with ?stage=… filtered views
@@ -121,9 +123,10 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
   }
 
   // Knowledge: graph and meetings are one area (single sidebar item)
-  if (href === '/admin/knowledge') {
-    if (pathname === '/admin/meetings' || pathname.startsWith('/admin/meetings/')) return true;
-    return pathname === '/admin/knowledge' || pathname.startsWith('/admin/knowledge/');
+  if (href.endsWith('/knowledge')) {
+    const prefix = href.replace('/knowledge', '');
+    if (pathname === `${prefix}/meetings` || pathname.startsWith(`${prefix}/meetings/`)) return true;
+    return pathname === href || pathname.startsWith(href + '/');
   }
 
   // Handle hrefs with query params (e.g. /admin/pipeline?stage=editing)
@@ -145,12 +148,64 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
 // AdminSidebar
 // ---------------------------------------------------------------------------
 
+/** Items hidden from portal (viewer) users */
+const ADMIN_ONLY_HREFS = new Set([
+  '/admin/dashboard',
+  '/admin/tasks',
+  '/admin/pipeline',
+  '/admin/scheduler',
+  '/admin/ad-creatives',
+  '/admin/clients',
+  '/admin/team',
+  '/admin/presentations',
+  '/admin/shoots',
+]);
+
+function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSection[] {
+  if (role === 'admin') return NAV_SECTIONS;
+
+  // Portal viewers get a filtered flat list
+  const viewerItems: NavItem[] = [];
+  for (const section of NAV_SECTIONS) {
+    for (const item of section.items) {
+      if (ADMIN_ONLY_HREFS.has(item.href)) continue;
+      // Remap /admin/ → portal prefix
+      const remapped: NavItem = {
+        ...item,
+        href: item.href.replace('/admin/', `${prefix}/`),
+        children: item.children?.filter(c => !ADMIN_ONLY_HREFS.has(c.href)).map(c => ({
+          ...c,
+          href: c.href.replace('/admin/', `${prefix}/`),
+        })),
+      };
+      viewerItems.push(remapped);
+    }
+  }
+
+  return [{ label: '', items: viewerItems }];
+}
+
 interface AdminSidebarProps {
   userName?: string;
   avatarUrl?: string | null;
+  /** 'admin' shows all nav items, 'viewer' hides admin-only items */
+  role?: 'admin' | 'viewer';
+  /** Route prefix for links — '/admin' or '/portal' */
+  routePrefix?: string;
+  /** Login page to redirect to on logout */
+  logoutPath?: string;
+  /** Settings page path */
+  settingsPath?: string;
 }
 
-export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
+export function AdminSidebar({
+  userName,
+  avatarUrl,
+  role = 'admin',
+  routePrefix = '/admin',
+  logoutPath = '/admin/login',
+  settingsPath = '/admin/settings',
+}: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -220,7 +275,7 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
 
       {/* Navigation */}
       <SidebarContent>
-        {NAV_SECTIONS.map((section, idx) => (
+        {getNavSectionsForRole(role, routePrefix).map((section, idx) => (
           <SidebarGroup key={section.label}>
             {open && (
               <span className="px-2.5 pb-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
@@ -306,7 +361,7 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
         {/* The Nerd — AI chat agent (StarBorder pattern) */}
         <div className="px-1 pb-2">
           <Link
-            href="/admin/nerd"
+            href={`${routePrefix}/nerd`}
             className={`group/nerd relative block overflow-hidden rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200 ${open ? '' : 'rounded-lg'}`}
             style={{ padding: '1px 0' }}
           >
@@ -353,8 +408,8 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
         <SidebarAccount
           userName={userName}
           avatarUrl={avatarUrl}
-          settingsHref="/admin/settings"
-          logoutRedirect="/admin/login"
+          settingsHref={settingsPath}
+          logoutRedirect={logoutPath}
           collapsed={!open}
         />
 
