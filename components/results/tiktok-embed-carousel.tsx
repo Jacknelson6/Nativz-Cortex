@@ -187,32 +187,32 @@ export function TikTokEmbedCarousel({
         {/* Left section: arrows + video — stop propagation so clicking here doesn't close */}
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
         <div
-          className="flex flex-1 items-center justify-center pr-[340px]"
+          className="flex flex-1 items-center justify-center pr-[420px]"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Left arrow */}
-          <button
-            type="button"
-            onClick={goPrev}
-            className="absolute left-8 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
-            aria-label="Previous video"
-          >
-            <ChevronLeft size={20} />
-          </button>
+          {/* Arrow + Video + Arrow — inline flex so arrows stay next to video */}
+          <div className="flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={goPrev}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
+              aria-label="Previous video"
+            >
+              <ChevronLeft size={20} />
+            </button>
 
-          {/* TikTok embed — direct iframe, no sandbox */}
-          <div className="relative z-10 flex items-center justify-center">
+            {/* TikTok embed */}
             {videoId ? (
               <iframe
                 key={videoId}
                 src={`https://www.tiktok.com/player/v1/${videoId}?&music_info=1&description=1`}
                 className="rounded-2xl border-0"
-                style={{ width: '325px', height: '580px' }}
+                style={{ width: '380px', height: '675px' }}
                 allow="encrypted-media; fullscreen"
                 allowFullScreen
               />
             ) : (
-              <div className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm text-white/50" style={{ width: '325px', height: '580px' }}>
+              <div className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm text-white/50" style={{ width: '380px', height: '675px' }}>
                 <div className="text-center px-4">
                   <p>Embed unavailable</p>
                   <a
@@ -226,22 +226,21 @@ export function TikTokEmbedCarousel({
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Right arrow */}
-          <button
-            type="button"
-            onClick={goNext}
-            className="absolute right-[360px] z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
-            aria-label="Next video"
-          >
-            <ChevronRight size={20} />
-          </button>
+            <button
+              type="button"
+              onClick={goNext}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
+              aria-label="Next video"
+            >
+              <ChevronRight size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Right sidebar — stop propagation so clicking here doesn't close */}
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-        <div className="absolute right-0 top-0 z-10 flex h-full w-[340px] flex-col border-l border-white/10 bg-surface/95 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute right-0 top-0 z-10 flex h-full w-[420px] flex-col border-l border-white/10 bg-surface/95 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between border-b border-nativz-border/60 px-5 py-4">
             <h3 className="text-sm font-semibold text-text-primary">Video details</h3>
             <button

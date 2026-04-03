@@ -220,11 +220,6 @@ export function AdminResultsClient({
           </div>
         ) : null}
 
-        <IdeationPipelinePanel
-          searchId={search.id}
-          clientId={clientInfo?.id ?? null}
-        />
-
         {/* Scraped videos — outlier board, video grid, hook patterns */}
         <ScrapedVideosSection
           searchId={search.id}
@@ -290,6 +285,11 @@ export function AdminResultsClient({
         {Boolean(aiResponse?.big_movers?.length) ? (
           <BigMovers movers={aiResponse!.big_movers!} />
         ) : null}
+
+        <IdeationPipelinePanel
+          searchId={search.id}
+          clientId={clientInfo?.id ?? null}
+        />
 
         {/* Source browser — browse posts by platform */}
         {Boolean(

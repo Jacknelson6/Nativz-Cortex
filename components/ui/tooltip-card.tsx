@@ -19,7 +19,7 @@ export function TooltipCard({ title, description, children, iconTrigger = false 
 
   const show = useCallback((e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const tooltipWidth = 256;
+    const tooltipWidth = 300;
     const x = rect.left + rect.width / 2 - tooltipWidth / 2;
     const clampedX = Math.max(8, Math.min(x, window.innerWidth - tooltipWidth - 8));
     const y = rect.top - 8;
@@ -48,14 +48,14 @@ export function TooltipCard({ title, description, children, iconTrigger = false 
       </span>
       {visible && typeof document !== 'undefined' && createPortal(
         <div
-          className="animate-tooltip-in pointer-events-none fixed z-50 w-64 rounded-lg border border-nativz-border bg-surface p-3 shadow-elevated"
+          className="animate-tooltip-in pointer-events-none fixed z-50 w-[300px] rounded-lg border border-nativz-border bg-surface p-3.5 shadow-elevated"
           style={{
             left: position.x,
             bottom: window.innerHeight - position.y,
           }}
         >
-          <p className="text-xs font-semibold text-text-primary mb-1">{title}</p>
-          <p className="text-xs text-text-muted leading-relaxed">{description}</p>
+          <p className="text-sm font-semibold text-text-primary mb-1">{title}</p>
+          <p className="text-sm text-text-muted leading-relaxed">{description}</p>
         </div>,
         document.body
       )}

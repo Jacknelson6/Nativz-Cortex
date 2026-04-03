@@ -38,9 +38,13 @@ export function SourceMentionCard({ source, onOpenDetail, onAnalyze }: SourceMen
   return (
     <article
       className={cn(
-        'group flex h-auto w-full flex-col self-start overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-[var(--shadow-card)] transition-all duration-200',
+        'group flex h-auto w-full cursor-pointer flex-col self-start overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-[var(--shadow-card)] transition-all duration-200',
         'hover:-translate-y-0.5 hover:border-accent/35 hover:shadow-[var(--shadow-card-hover)]',
       )}
+      onClick={() => onOpenDetail()}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenDetail(); } }}
     >
       <div className="flex gap-2.5 px-4 pt-3 pb-3">
         <div className="shrink-0 pt-0.5">
