@@ -11,6 +11,8 @@ import { formatCompactCount, formatRelativeTime } from '@/lib/utils/format';
 export interface SourceMentionCardProps {
   source: PlatformSource;
   onOpenDetail: (opts?: { focusRescript?: boolean }) => void;
+  /** Inline video analysis (YouTube / TikTok / Instagram). */
+  onAnalyze?: () => void;
 }
 
 function formatCreatorLine(source: PlatformSource): string {
@@ -20,7 +22,7 @@ function formatCreatorLine(source: PlatformSource): string {
   return a;
 }
 
-export function SourceMentionCard({ source, onOpenDetail }: SourceMentionCardProps) {
+export function SourceMentionCard({ source, onOpenDetail, onAnalyze }: SourceMentionCardProps) {
   const thumbRaw = resolveSourceThumbnailUrl(source);
   const showThumb = source.platform !== 'web' && Boolean(thumbRaw);
   const thumb = showThumb ? thumbRaw : null;
@@ -31,6 +33,7 @@ export function SourceMentionCard({ source, onOpenDetail }: SourceMentionCardPro
   const likes = source.engagement.likes ?? 0;
   const comments = source.engagement.comments ?? 0;
   const er = engagementRatePercent(source);
+  const canInlineAnalyze = source.platform === 'youtube' || source.platform === 'tiktok';
 
   return (
     <article
@@ -133,7 +136,8 @@ export function SourceMentionCard({ source, onOpenDetail }: SourceMentionCardPro
               className="pointer-events-auto cursor-pointer rounded-full border border-white/30 bg-white/10 px-3 py-2 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/20"
               onClick={(e) => {
                 e.stopPropagation();
-                onOpenDetail({ focusRescript: true });
+                if (canInlineAnalyze && onAnalyze) onAnalyze();
+                else onOpenDetail({ focusRescript: true });
               }}
             >
               Analyze

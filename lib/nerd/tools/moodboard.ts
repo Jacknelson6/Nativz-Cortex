@@ -122,7 +122,7 @@ export const moodboardTools: ToolDefinition[] = [
           success: true,
           data: items ?? [],
           cardType: 'moodboard' as const,
-          link: { href: `/admin/analysis/${board_id}`, label: 'View analysis' },
+          link: { href: `/admin/moodboard/${board_id}`, label: 'View analysis' },
         };
       } catch (err) {
         return {
@@ -253,7 +253,7 @@ export const moodboardTools: ToolDefinition[] = [
             needsAnalysisCount: rows.length - analyzed.length,
           },
           cardType: 'moodboard' as const,
-          link: { href: `/admin/analysis/${board_id}`, label: 'View analysis board' },
+          link: { href: `/admin/moodboard/${board_id}`, label: 'View analysis board' },
         };
       } catch (err) {
         return {
@@ -296,7 +296,7 @@ export const moodboardTools: ToolDefinition[] = [
             success: false,
             error: 'This video has not been analyzed yet. Open the analysis board and run analysis first.',
             cardType: 'moodboard' as const,
-            link: { href: `/admin/analysis/${item.board_id}`, label: 'Open analysis board' },
+            link: { href: `/admin/moodboard/${item.board_id}`, label: 'Open analysis board' },
           };
         }
 
@@ -322,7 +322,7 @@ export const moodboardTools: ToolDefinition[] = [
             url: item.url,
           },
           cardType: 'moodboard' as const,
-          link: { href: `/admin/analysis/${item.board_id}`, label: 'Open analysis board' },
+          link: { href: `/admin/moodboard/${item.board_id}`, label: 'Open analysis board' },
         };
       } catch (err) {
         return {
@@ -368,7 +368,7 @@ export const moodboardTools: ToolDefinition[] = [
             transcriptError: result.transcriptError ?? null,
           },
           cardType: 'moodboard' as const,
-          link: { href: `/admin/analysis/video/${result.itemId}`, label: 'Open video analysis' },
+          link: { href: `/admin/moodboard/${result.boardId}`, label: 'Open analysis board' },
         };
       } catch (err) {
         return {
@@ -399,11 +399,19 @@ export const moodboardTools: ToolDefinition[] = [
         if (!r.ok) {
           return { success: false, error: r.error, cardType: 'moodboard' as const };
         }
+        const { data: itemRow } = await admin
+          .from('moodboard_items')
+          .select('board_id')
+          .eq('id', params.item_id as string)
+          .maybeSingle();
+        const boardHref = itemRow?.board_id
+          ? `/admin/moodboard/${itemRow.board_id}`
+          : '/admin/search/new';
         return {
           success: true,
           data: { itemId: params.item_id, hasTranscript: !!(r.item.transcript as string)?.length },
           cardType: 'moodboard' as const,
-          link: { href: `/admin/analysis/video/${params.item_id}`, label: 'Open video analysis' },
+          link: { href: boardHref, label: 'Open analysis board' },
         };
       } catch (err) {
         return {
@@ -435,6 +443,14 @@ export const moodboardTools: ToolDefinition[] = [
           return { success: false, error: r.error, cardType: 'moodboard' as const };
         }
         const row = r.item;
+        const { data: itemRow } = await admin
+          .from('moodboard_items')
+          .select('board_id')
+          .eq('id', params.item_id as string)
+          .maybeSingle();
+        const boardHref = itemRow?.board_id
+          ? `/admin/moodboard/${itemRow.board_id}`
+          : '/admin/search/new';
         return {
           success: true,
           data: {
@@ -444,7 +460,7 @@ export const moodboardTools: ToolDefinition[] = [
             conceptSummary: row.concept_summary,
           },
           cardType: 'moodboard' as const,
-          link: { href: `/admin/analysis/video/${params.item_id}`, label: 'Open video analysis' },
+          link: { href: boardHref, label: 'Open analysis board' },
         };
       } catch (err) {
         return {
@@ -483,11 +499,19 @@ export const moodboardTools: ToolDefinition[] = [
         if (!r.ok) {
           return { success: false, error: r.error, cardType: 'moodboard' as const };
         }
+        const { data: itemRow } = await admin
+          .from('moodboard_items')
+          .select('board_id')
+          .eq('id', params.item_id as string)
+          .maybeSingle();
+        const boardHref = itemRow?.board_id
+          ? `/admin/moodboard/${itemRow.board_id}`
+          : '/admin/search/new';
         return {
           success: true,
           data: { scriptPreview: truncate(r.script, 400) },
           cardType: 'moodboard' as const,
-          link: { href: `/admin/analysis/video/${params.item_id}`, label: 'Open video analysis' },
+          link: { href: boardHref, label: 'Open analysis board' },
         };
       } catch (err) {
         return {

@@ -101,7 +101,7 @@ export function MoodboardCanvas({
       router.push(`/admin/clients/${clientSlug}`);
       return;
     }
-    router.push('/admin/analysis');
+    router.push('/admin/search/new');
   }
 
   if (mb.loading) {
@@ -193,7 +193,7 @@ export function MoodboardCanvas({
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 sm:gap-1.5">
           {isClientWorkspace ? (
             <Link
-              href={`/admin/analysis/${boardId}`}
+              href={`/admin/moodboard/${boardId}`}
               className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
             >
               <ExternalLink size={14} />

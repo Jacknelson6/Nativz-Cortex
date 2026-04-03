@@ -12,6 +12,7 @@ import {
   Sparkles,
   Calendar,
   TrendingUp,
+  Film,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
@@ -51,9 +52,17 @@ interface VideoDetailPanelProps {
   videos: TopicSearchVideoRow[];
   initialIndex: number;
   onClose: () => void;
+  showAnalyzeVideo?: boolean;
+  onOpenVideoAnalysis?: (url: string) => void;
 }
 
-export function VideoDetailPanel({ videos, initialIndex, onClose }: VideoDetailPanelProps) {
+export function VideoDetailPanel({
+  videos,
+  initialIndex,
+  onClose,
+  showAnalyzeVideo = true,
+  onOpenVideoAnalysis,
+}: VideoDetailPanelProps) {
   const [index, setIndex] = useState(initialIndex);
   const [visible, setVisible] = useState(false);
 
@@ -276,6 +285,17 @@ export function VideoDetailPanel({ videos, initialIndex, onClose }: VideoDetailP
             <ExternalLink size={14} />
             View original
           </a>
+
+          {showAnalyzeVideo && onOpenVideoAnalysis ? (
+            <button
+              type="button"
+              onClick={() => onOpenVideoAnalysis(video.url)}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-accent/30 bg-accent-surface/40 px-4 py-2.5 text-sm font-medium text-accent-text hover:bg-accent-surface/60 transition-colors"
+            >
+              <Film size={14} />
+              Analyze video
+            </button>
+          ) : null}
 
           {/* Pagination */}
           <div className="flex items-center justify-between border-t border-nativz-border pt-4">

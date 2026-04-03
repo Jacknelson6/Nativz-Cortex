@@ -49,8 +49,8 @@ test.describe('Ideation pipeline', () => {
     await expect(page.getByText('Ideation pipeline')).toBeVisible({ timeout: 30_000 });
   });
 
-  test('moodboard list loads', async ({ page }) => {
-    await page.goto('/admin/analysis', { waitUntil: 'domcontentloaded' });
+  test('strategy lab loads', async ({ page }) => {
+    await page.goto('/admin/strategy-lab', { waitUntil: 'domcontentloaded' });
     expect(page.url()).not.toMatch(/\/admin\/login(\?|$)/);
     await expect(page.locator('body')).toBeVisible();
   });

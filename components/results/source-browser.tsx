@@ -11,6 +11,7 @@ import {
 import type { PlatformSource } from '@/lib/types/search';
 import type { ClientOption } from '@/components/ui/client-picker';
 import { sortSources } from '@/lib/search/source-sources-sort';
+import { VideoAnalysisPanel } from '@/components/research/video-analysis-panel';
 
 function sourceKey(source: PlatformSource): string {
   return `${source.platform}:${source.id}`;
@@ -28,6 +29,8 @@ interface SourceBrowserProps {
   defaultClientId: string | null;
   clients: ClientOption[];
   linkedIdeas: LinkedIdeaOption[];
+  /** Admin-only: inline analysis uses POST /api/analysis/items (requires admin). Default true. */
+  enableInlineVideoAnalysis?: boolean;
 }
 
 export function SourceBrowser({
@@ -38,10 +41,15 @@ export function SourceBrowser({
   defaultClientId,
   clients,
   linkedIdeas,
+  enableInlineVideoAnalysis = true,
 }: SourceBrowserProps) {
   const [showAll, setShowAll] = useState(false);
   const [detail, setDetail] = useState<{
     source: PlatformSource;
+    focusRescript?: boolean;
+  } | null>(null);
+  const [videoAnalysis, setVideoAnalysis] = useState<{
+    url: string;
     focusRescript?: boolean;
   } | null>(null);
 
@@ -85,6 +93,15 @@ export function SourceBrowser({
                 <SourceMentionCard
                   source={source}
                   onOpenDetail={(opts) => setDetail({ source, ...opts })}
+                  onAnalyze={
+                    enableInlineVideoAnalysis
+                      ? () =>
+                          setVideoAnalysis({
+                            url: source.url,
+                            focusRescript: false,
+                          })
+                      : undefined
+                  }
                 />
               </div>
             );
@@ -124,6 +141,18 @@ export function SourceBrowser({
           )
         }
       />
+
+      {enableInlineVideoAnalysis && (
+        <VideoAnalysisPanel
+          open={videoAnalysis != null}
+          onClose={() => setVideoAnalysis(null)}
+          sourceUrl={videoAnalysis?.url ?? ''}
+          topicSearchId={searchId}
+          clientId={defaultClientId}
+          clientName={clientContext?.name ?? null}
+          focusRescript={videoAnalysis?.focusRescript}
+        />
+      )}
     </section>
   );
 }

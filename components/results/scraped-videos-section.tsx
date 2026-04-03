@@ -27,9 +27,22 @@ interface ScrapedVideosSectionProps {
   shareToken?: string;
   /** Web context data from pipeline_state */
   webContext?: WebContextData | null;
+  /** Topic search client (for inline video analysis rescript) */
+  defaultClientId?: string | null;
+  clientName?: string | null;
+  /** Admin-only: inline analysis uses POST /api/analysis/items. Default true. */
+  enableInlineVideoAnalysis?: boolean;
 }
 
-export function ScrapedVideosSection({ searchId, scrapedVideoCount, shareToken, webContext }: ScrapedVideosSectionProps) {
+export function ScrapedVideosSection({
+  searchId,
+  scrapedVideoCount,
+  shareToken,
+  webContext,
+  defaultClientId,
+  clientName,
+  enableInlineVideoAnalysis = true,
+}: ScrapedVideosSectionProps) {
   const [videos, setVideos] = useState<TopicSearchVideoRow[]>([]);
   const [hooks, setHooks] = useState<TopicSearchHookRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -83,7 +96,13 @@ export function ScrapedVideosSection({ searchId, scrapedVideoCount, shareToken, 
       <div className="rounded-xl border border-nativz-border bg-surface p-5">
         <ViralCarousel videos={videos} />
       </div>
-      <VideoGrid videos={videos} />
+      <VideoGrid
+        videos={videos}
+        searchId={searchId}
+        defaultClientId={defaultClientId ?? null}
+        clientName={clientName ?? null}
+        enableInlineVideoAnalysis={enableInlineVideoAnalysis}
+      />
       <OutlierCreatorsTable videos={videos} />
       <HookPatterns hooks={hooks} />
       <HashtagCloud videos={videos} />

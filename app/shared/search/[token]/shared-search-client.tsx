@@ -125,6 +125,7 @@ export function SharedSearchClient({
           scrapedVideoCount={scrapedVideoCount}
           shareToken={shareToken}
           webContext={((search as { pipeline_state?: { web_context?: unknown } }).pipeline_state?.web_context ?? null) as never}
+          enableInlineVideoAnalysis={false}
         />
 
         {(aiResponse?.content_pillars || aiResponse?.niche_performance_insights) && (

@@ -214,6 +214,9 @@ export default async function PortalSearchResultsPage({
           searchId={s.id}
           scrapedVideoCount={scrapedVideoCount ?? 0}
           webContext={((s as { pipeline_state?: { web_context?: unknown } }).pipeline_state?.web_context ?? null) as never}
+          defaultClientId={s.client_id}
+          clientName={portalClientName}
+          enableInlineVideoAnalysis={false}
         />
 
         {/* Sources panel — only for new searches with SERP data */}

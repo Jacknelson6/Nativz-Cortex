@@ -249,7 +249,7 @@ export function StrategyLabWorkspace({
             ) : (
               <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {moodBoards.map((b) => {
-                  const boardHref = `/admin/analysis/${b.id}`;
+                  const boardHref = `/admin/moodboard/${b.id}`;
                   const nerdBoardHref = `/admin/nerd?strategySource=strategy-lab&strategyClient=${encodeURIComponent(clientId)}&strategyBoardId=${encodeURIComponent(b.id)}&strategyBoardName=${encodeURIComponent(b.name)}`;
                   return (
                     <li key={b.id}>

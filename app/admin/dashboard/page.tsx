@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import {
   Search,
-  Microscope,
   Calendar,
   Sparkles,
   BotMessageSquare,
   ArrowUpRight,
+  Workflow,
 } from 'lucide-react';
 import { PageError } from '@/components/shared/page-error';
 import { TodoWidget } from '@/components/dashboard/todo-widget';
@@ -66,10 +66,10 @@ export default async function AdminDashboardPage() {
         {/* Quick actions */}
         <div className="grid grid-cols-[1fr_1fr_1fr_1fr_minmax(200px,1.2fr)] gap-3 auto-rows-[140px]">
           <BentoTile
-            href="/admin/analysis"
-            icon={<Microscope size={20} className="text-accent-text" />}
-            label="Analyze video"
-            description="AI-powered video breakdown"
+            href="/admin/pipeline"
+            icon={<Workflow size={20} className="text-accent-text" />}
+            label="Monthly pipeline"
+            description="Stages, shoots, and delivery"
           />
           <BentoTile
             href="/admin/scheduler"

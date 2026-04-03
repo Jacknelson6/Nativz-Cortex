@@ -6,6 +6,7 @@ import { Card, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { VideoDetailPanel } from '@/components/research/video-detail-panel';
+import { VideoAnalysisPanel } from '@/components/research/video-analysis-panel';
 import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -117,13 +118,24 @@ function VideoCard({ video, onClick }: { video: TopicSearchVideoRow; onClick?: (
 
 interface VideoGridProps {
   videos: TopicSearchVideoRow[];
+  searchId: string;
+  defaultClientId: string | null;
+  clientName?: string | null;
+  enableInlineVideoAnalysis?: boolean;
 }
 
-export function VideoGrid({ videos }: VideoGridProps) {
+export function VideoGrid({
+  videos,
+  searchId,
+  defaultClientId,
+  clientName,
+  enableInlineVideoAnalysis = true,
+}: VideoGridProps) {
   const [sort, setSort] = useState<SortOption>('outlier_score');
   const [platform, setPlatform] = useState<PlatformFilter>('all');
   const [showAll, setShowAll] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
+  const [videoAnalysisUrl, setVideoAnalysisUrl] = useState<string | null>(null);
 
   if (videos.length === 0) return null;
 
@@ -222,6 +234,26 @@ export function VideoGrid({ videos }: VideoGridProps) {
           videos={displayed}
           initialIndex={detailIndex}
           onClose={() => setDetailIndex(null)}
+          showAnalyzeVideo={enableInlineVideoAnalysis}
+          onOpenVideoAnalysis={
+            enableInlineVideoAnalysis
+              ? (url) => {
+                  setVideoAnalysisUrl(url);
+                  setDetailIndex(null);
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {enableInlineVideoAnalysis && videoAnalysisUrl && (
+        <VideoAnalysisPanel
+          open
+          onClose={() => setVideoAnalysisUrl(null)}
+          sourceUrl={videoAnalysisUrl}
+          topicSearchId={searchId}
+          clientId={defaultClientId}
+          clientName={clientName ?? null}
         />
       )}
     </div>

@@ -72,7 +72,7 @@ export async function GET() {
       // Activity: recent moodboard items
       supabase
         .from('moodboard_items')
-        .select('id, title, created_at, moodboard_id')
+        .select('id, title, created_at, board_id')
         .order('created_at', { ascending: false })
         .limit(5),
       // Activity: recent topic searches
@@ -121,12 +121,13 @@ export async function GET() {
       });
     }
     for (const m of recentMoodboardItems.data || []) {
+      const row = m as { id: string; title: string | null; created_at: string; board_id: string | null };
       activity.push({
         type: 'moodboard',
-        id: m.id,
-        description: `Moodboard item added: "${m.title || 'Untitled'}"`,
-        created_at: m.created_at,
-        link: `/admin/analysis`,
+        id: row.id,
+        description: `Moodboard item added: "${row.title || 'Untitled'}"`,
+        created_at: row.created_at,
+        link: row.board_id ? `/admin/moodboard/${row.board_id}` : '/admin/search/new',
       });
     }
     for (const c of recentClients.data || []) {

@@ -3,19 +3,29 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { gatherQuickMetadataForItemUrl } from '@/lib/analysis/gather-quick-item-metadata';
+import { ensureAnalysisBoardForTopicSearch } from '@/lib/analysis/ensure-topic-search-analysis-board';
 
 export const maxDuration = 30;
 
-const createItemSchema = z.object({
-  board_id: z.string().uuid('Invalid board ID'),
-  url: z.string().url('Invalid URL'),
-  type: z.enum(['video', 'image', 'website']),
-  title: z.string().max(500).optional().nullable(),
-  position_x: z.number().optional().default(0),
-  position_y: z.number().optional().default(0),
-  width: z.number().optional(),
-  height: z.number().optional(),
-});
+const createItemSchema = z
+  .object({
+    /** Legacy: add to an existing moodboard. */
+    board_id: z.string().uuid('Invalid board ID').optional(),
+    /** Inline analysis from topic search results — creates or reuses a board per search. */
+    topic_search_id: z.string().uuid().optional(),
+    url: z.string().url('Invalid URL'),
+    type: z.enum(['video', 'image', 'website']),
+    title: z.string().max(500).optional().nullable(),
+    position_x: z.number().optional().default(0),
+    position_y: z.number().optional().default(0),
+    width: z.number().optional(),
+    height: z.number().optional(),
+  })
+  .refine(
+    (d) =>
+      (Boolean(d.board_id) && !d.topic_search_id) || (!d.board_id && Boolean(d.topic_search_id)),
+    { message: 'Provide exactly one of board_id or topic_search_id', path: ['board_id'] },
+  );
 
 /**
  * POST /api/analysis/items
@@ -26,7 +36,8 @@ const createItemSchema = z.object({
  * transcription for videos, insights extraction for websites.
  *
  * @auth Required (admin)
- * @body board_id - Board UUID to add the item to (required)
+ * @body board_id - Board UUID (optional if topic_search_id is set)
+ * @body topic_search_id - Topic search UUID — ensures a per-search analysis board (optional if board_id is set)
  * @body url - Source URL (required)
  * @body type - 'video' | 'image' | 'website' (required)
  * @body title - Optional title override
@@ -68,10 +79,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let resolvedBoardId = parsed.data.board_id ?? null;
+    if (parsed.data.topic_search_id) {
+      const ensured = await ensureAnalysisBoardForTopicSearch(
+        adminClient,
+        user.id,
+        parsed.data.topic_search_id,
+      );
+      if (!ensured.ok) {
+        return NextResponse.json({ error: ensured.error }, { status: ensured.status });
+      }
+      resolvedBoardId = ensured.boardId;
+    }
+
     const { data: board, error: boardError } = await adminClient
       .from('moodboard_boards')
       .select('id')
-      .eq('id', parsed.data.board_id)
+      .eq('id', resolvedBoardId as string)
       .single();
 
     if (boardError || !board) {
@@ -106,7 +130,7 @@ export async function POST(request: NextRequest) {
     }
 
     const insertData: Record<string, unknown> = {
-      board_id: parsed.data.board_id,
+      board_id: resolvedBoardId,
       url: parsed.data.url,
       type: parsed.data.type,
       title:
@@ -147,7 +171,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create item', details: insertError.message }, { status: 500 });
     }
 
-    await adminClient.from('moodboard_boards').update({ updated_at: new Date().toISOString() }).eq('id', parsed.data.board_id);
+    await adminClient
+      .from('moodboard_boards')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', resolvedBoardId as string);
 
     if (item) {
       const processType = parsed.data.type === 'website' ? 'insights' : 'transcribe';
