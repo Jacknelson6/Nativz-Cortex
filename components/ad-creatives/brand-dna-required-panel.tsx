@@ -77,7 +77,6 @@ export function BrandDnaRequiredPanel({
             <BrandDNAProgress
               clientId={clientId}
               onComplete={() => router.refresh()}
-              navigateAwayHint="Safe to switch browser tabs — come back here and use refresh when the job completes."
             />
           </div>
 

@@ -294,7 +294,6 @@ export function StrategyLabContentStackCard({
             <BrandDNAProgress
               clientId={clientId}
               onComplete={() => router.refresh()}
-              navigateAwayHint="You can open other admin pages — generation keeps running. Refresh this page when it finishes."
             />
           </div>
         ) : brandGuideline ? (

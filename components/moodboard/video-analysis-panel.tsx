@@ -768,8 +768,10 @@ function getTranscriptAtTimestamp(segments: TranscriptSegment[], timestamp: numb
   const matching = segments.filter(s => s.start < endTs && s.end > timestamp);
   if (matching.length > 0) return matching.map(s => s.text).join(' ');
   // Fallback: find nearest segment
-  const nearest = segments.reduce((prev, curr) =>
-    Math.abs(curr.start - timestamp) < Math.abs(prev.start - timestamp) ? curr : prev
+  const nearest = segments.reduce(
+    (prev, curr) =>
+      Math.abs(curr.start - timestamp) < Math.abs(prev.start - timestamp) ? curr : prev,
+    segments[0],
   );
   return nearest.text;
 }

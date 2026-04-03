@@ -19,15 +19,12 @@ interface BrandDNAProgressProps {
   onComplete: () => void;
   /** Modal only: close UI while the server keeps generating */
   onContinueInBackground?: () => void;
-  /** Extra line under the title (e.g. “You can use other pages…”) */
-  navigateAwayHint?: string;
 }
 
 export function BrandDNAProgress({
   clientId,
   onComplete,
   onContinueInBackground,
-  navigateAwayHint,
 }: BrandDNAProgressProps) {
   const router = useRouter();
   const [progress, setProgress] = useState(0);
@@ -84,23 +81,9 @@ export function BrandDNAProgress({
     return false;
   });
 
-  const awayCopy =
-    navigateAwayHint ??
-    (onContinueInBackground
-      ? 'This runs on the server — you can use other admin pages and come back when it’s done.'
-      : null);
-
   return (
     <div className="text-center">
-      <h2 className="text-lg font-semibold text-text-primary mb-1">Building Brand DNA</h2>
-      <p className="text-sm text-text-muted mb-1">
-        This usually takes a few minutes; large sites or slow models can take longer.
-      </p>
-      {awayCopy ? (
-        <p className="text-xs text-text-muted/90 mb-4 max-w-sm mx-auto leading-relaxed">{awayCopy}</p>
-      ) : (
-        <div className="mb-5" aria-hidden />
-      )}
+      <h2 className="text-lg font-semibold text-text-primary mb-4">Building Brand DNA</h2>
       {onContinueInBackground && (
         <div className="mb-5">
           <Button
@@ -116,7 +99,7 @@ export function BrandDNAProgress({
       )}
 
       {/* Progress bar */}
-      <div className="h-1.5 rounded-full bg-surface/60 overflow-hidden mb-2">
+      <div className="h-1.5 rounded-full bg-surface/60 overflow-hidden mb-3">
         <div
           className="h-full rounded-full transition-all duration-500 ease-out"
           style={{
@@ -125,14 +108,14 @@ export function BrandDNAProgress({
           }}
         />
       </div>
-      <p className="text-xs text-text-muted text-right tabular-nums mb-1">{Math.round(progress)}%</p>
-      {stepLabel ? (
-        <p className="text-xs text-text-muted/90 text-center mb-5 max-w-sm mx-auto leading-snug">
-          {stepLabel}
-        </p>
-      ) : (
-        <div className="mb-5" aria-hidden />
-      )}
+      <div className="mb-5 flex flex-col items-center gap-1">
+        <p className="text-xs text-text-muted tabular-nums">{Math.round(progress)}%</p>
+        {stepLabel ? (
+          <p className="text-xs text-text-secondary font-medium text-center max-w-sm leading-snug">
+            {stepLabel}
+          </p>
+        ) : null}
+      </div>
 
       {isStale && (
         <div className="mb-5 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-left">
@@ -187,7 +170,7 @@ export function BrandDNAProgress({
       )}
 
       {/* Stage steps */}
-      <div className="space-y-2.5 text-left">
+      <div className="space-y-2.5 flex flex-col items-center">
         {STAGES.map((stage, i) => {
           const isComplete = i < currentStageIdx || status === 'completed';
           const isCurrent = i === currentStageIdx && status !== 'completed' && !error;
@@ -197,7 +180,10 @@ export function BrandDNAProgress({
 
           const Icon = stage.icon;
           return (
-            <div key={stage.key} className="flex items-center gap-2.5 animate-fade-slide-in">
+            <div
+              key={stage.key}
+              className="flex w-full max-w-md items-center justify-center gap-2.5 animate-fade-slide-in"
+            >
               {isComplete ? (
                 <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent/15">
                   <Check size={12} className="text-accent" />
@@ -216,7 +202,7 @@ export function BrandDNAProgress({
         })}
 
         {status === 'completed' && (
-          <div className="flex items-center gap-2.5 animate-fade-slide-in">
+          <div className="flex w-full max-w-md items-center justify-center gap-2.5 animate-fade-slide-in">
             <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/15">
               <Check size={12} className="text-emerald-400" />
             </div>

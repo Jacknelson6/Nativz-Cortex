@@ -278,7 +278,6 @@ export async function gatherTikTokData(
     if (baseVideos.length === 0) return { videos: [], topHashtags: [], totalResults: 0 };
 
     const commentBatchSize = volume === 'deep' ? 20 : volume === 'medium' ? 15 : 5;
-    const transcriptBatchSize = volume === 'deep' ? 30 : volume === 'medium' ? 15 : 3;
 
     const sorted = [...baseVideos].sort(
       (a, b) => b.stats.playCount + b.stats.diggCount - (a.stats.playCount + a.stats.diggCount),
@@ -301,14 +300,32 @@ export async function gatherTikTokData(
       if (i + commentBatchSize < topForComments.length) await new Promise((r) => setTimeout(r, 300));
     }
 
+    // Transcripts: prefer embedded captions / tikwm (no marginal $). Groq Whisper only when captions missing.
+    const transcriptCap =
+      volume === 'deep' ? 200 : volume === 'medium' ? 100 : 15;
     const transcriptMap = new Map<string, string>();
-    const topForTranscripts = sorted.slice(0, transcriptBatchSize);
-    await Promise.allSettled(
-      topForTranscripts.map(async (v) => {
-        const transcript = await fetchTikTokTranscript(v.videoUrl ?? '', v.tiktokUrl);
-        if (transcript) transcriptMap.set(v.id, transcript);
-      }),
+    const transcriptTargets = sorted.slice(
+      0,
+      Math.min(sorted.length, maxResults, transcriptCap),
     );
+    const transcriptChunk = 8;
+    for (let i = 0; i < transcriptTargets.length; i += transcriptChunk) {
+      const batch = transcriptTargets.slice(i, i + transcriptChunk);
+      const results = await Promise.allSettled(
+        batch.map(async (v) => {
+          const transcript = await fetchTikTokTranscript(v.videoUrl ?? '', v.tiktokUrl);
+          return { id: v.id, transcript };
+        }),
+      );
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value.transcript) {
+          transcriptMap.set(r.value.id, r.value.transcript);
+        }
+      }
+      if (i + transcriptChunk < transcriptTargets.length) {
+        await new Promise((res) => setTimeout(res, 150));
+      }
+    }
 
     const videos: TikTokSearchVideo[] = baseVideos.map((v) => ({
       ...v,

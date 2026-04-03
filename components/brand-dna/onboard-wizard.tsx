@@ -461,11 +461,6 @@ export function OnboardWizard({
           clientId={clientId}
           onComplete={handleGenerationComplete}
           onContinueInBackground={continueInBackground}
-          navigateAwayHint={
-            layout === 'inline'
-              ? 'When this finishes, review and activate below — your full Brand kit stays on this tab. The same profile is always available from the client Brand DNA page.'
-              : undefined
-          }
         />
       </div>
 

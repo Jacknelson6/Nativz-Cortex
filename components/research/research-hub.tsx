@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ResearchTopicForm, type ResearchTopicSnapshot } from './research-topic-form';
-import { ResearchWizard } from './research-wizard';
+import { ResearchTopicForm } from './research-topic-form';
 import {
   TopicSearchHistoryRail,
   useTopicSearchHistoryRailOpen,
@@ -15,8 +14,6 @@ import { cn } from '@/lib/utils/cn';
 interface ResearchHubProps {
   clients: ClientOption[];
   historyItems: HistoryItem[];
-  /** When true, new searches use llm_v1 and go to subtopics planning first */
-  topicPipelineLlmV1?: boolean;
   /** Greeting name on the search card */
   userFirstName?: string | null;
   /** URL `?query=` from the server — avoids useSearchParams() here so Radix IDs match SSR (hydration). */
@@ -26,14 +23,10 @@ interface ResearchHubProps {
 export function ResearchHub({
   clients,
   historyItems,
-  topicPipelineLlmV1 = false,
   userFirstName = null,
   prefillQuery = '',
 }: ResearchHubProps) {
   const router = useRouter();
-
-  const [legacyModalOpen, setLegacyModalOpen] = useState(false);
-  const [legacySnapshot, setLegacySnapshot] = useState<ResearchTopicSnapshot | null>(null);
 
   const [optimisticItems, setOptimisticItems] = useState<HistoryItem[]>([]);
   const [historyRailOpen, setHistoryRailOpen] = useTopicSearchHistoryRailOpen();
@@ -169,14 +162,9 @@ export function ResearchHub({
               <ResearchTopicForm
                 clients={clients}
                 initialQuery={prefillQuery}
-                topicPipelineLlmV1={topicPipelineLlmV1}
                 userFirstName={userFirstName}
                 strategyLabBulkSelection={strategyLabBulkSelection}
                 onStarted={handleResearchStarted}
-                onLegacyContinue={(snap) => {
-                  setLegacySnapshot(snap);
-                  setLegacyModalOpen(true);
-                }}
               />
             </div>
           </div>
@@ -205,19 +193,6 @@ export function ResearchHub({
         </div>
       </section>
 
-      {!topicPipelineLlmV1 && (
-        <ResearchWizard
-          open={legacyModalOpen}
-          onClose={() => {
-            setLegacyModalOpen(false);
-            setLegacySnapshot(null);
-          }}
-          clients={clients}
-          step1Snapshot={legacySnapshot}
-          topicPipelineLlmV1={topicPipelineLlmV1}
-          onStarted={handleResearchStarted}
-        />
-      )}
     </div>
   );
 }

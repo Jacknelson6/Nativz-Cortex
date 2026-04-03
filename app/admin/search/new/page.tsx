@@ -5,7 +5,6 @@ import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibili
 import { getVaultClients } from '@/lib/vault/reader';
 import { ResearchHub } from '@/components/research/research-hub';
 import { fetchHistory, TOPIC_SEARCH_HUB_HISTORY_LIMIT } from '@/lib/research/history';
-import { getTopicSearchPipelineFromEnv } from '@/lib/config/topic-search-pipeline';
 
 type ResearchHubDbClientRow = {
   id: string;
@@ -55,8 +54,6 @@ export default async function AdminNewSearchPage({
     limit: TOPIC_SEARCH_HUB_HISTORY_LIMIT,
     includeIdeas: false,
   });
-  const topicPipelineLlmV1 = getTopicSearchPipelineFromEnv() === 'llm_v1';
-
   const serverSupabase = await createServerSupabaseClient();
   const {
     data: { user: authUser },
@@ -88,7 +85,6 @@ export default async function AdminNewSearchPage({
       <ResearchHub
         clients={clients}
         historyItems={historyItems}
-        topicPipelineLlmV1={topicPipelineLlmV1}
         userFirstName={userFirstName}
         prefillQuery={prefillQuery}
       />

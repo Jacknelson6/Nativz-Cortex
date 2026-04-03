@@ -53,13 +53,16 @@ export async function pickThumbnail(
     const faceResult = faceDetector.detect(frame.imageData);
     const faces = faceResult.detections ?? [];
     if (faces.length > 0) {
-      const best = faces.reduce((a, b) => {
-        const aArea =
-          (a.boundingBox?.width ?? 0) * (a.boundingBox?.height ?? 0);
-        const bArea =
-          (b.boundingBox?.width ?? 0) * (b.boundingBox?.height ?? 0);
-        return bArea > aArea ? b : a;
-      });
+      const best = faces.reduce(
+        (a, b) => {
+          const aArea =
+            (a.boundingBox?.width ?? 0) * (a.boundingBox?.height ?? 0);
+          const bArea =
+            (b.boundingBox?.width ?? 0) * (b.boundingBox?.height ?? 0);
+          return bArea > aArea ? b : a;
+        },
+        faces[0],
+      );
 
       const bb = best.boundingBox;
       if (bb) {

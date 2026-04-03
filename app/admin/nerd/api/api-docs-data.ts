@@ -244,15 +244,6 @@ const RAW_ENDPOINTS: RawEndpoint[] = [
     response: '{ ideas: VideoIdea[] }',
   },
   {
-    method: 'POST',
-    path: '/api/search',
-    description: 'Run a synchronous topic search (legacy). Prefer the async start/process pattern instead.',
-    auth: 'Required (user)',
-    section: 'Search & Research',
-    body: 'Same as /api/search/start',
-    response: 'Full search result',
-  },
-  {
     method: 'GET',
     path: '/api/research/history',
     description: 'Fetch research history with optional filtering and cursor-based pagination.',
