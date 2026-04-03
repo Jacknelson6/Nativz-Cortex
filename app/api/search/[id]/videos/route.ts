@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
 
 export const maxDuration = 30;
 
@@ -33,41 +34,19 @@ export async function GET(
       return NextResponse.json({ error: 'Share link expired' }, { status: 403 });
     }
   } else {
-    // Authenticated access
+    // Authenticated access — same org / role rules as GET /api/search/[id]
     const supabase = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify user has access to this search
-    const { data: search } = await adminClient
-      .from('topic_searches')
-      .select('id, client_id')
-      .eq('id', id)
-      .single();
-
-    if (!search) {
-      return NextResponse.json({ error: 'Search not found' }, { status: 404 });
-    }
-
-    // Org scope check: portal users can only view their org's client searches
-    if (search.client_id) {
-      const { data: userData } = await adminClient
-        .from('users')
-        .select('role, organization_id')
-        .eq('id', user.id)
-        .single();
-      if (userData?.role === 'viewer') {
-        const { data: client } = await adminClient
-          .from('clients')
-          .select('organization_id')
-          .eq('id', search.client_id)
-          .single();
-        if (client && client.organization_id !== userData.organization_id) {
-          return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-        }
-      }
+    const access = await assertUserCanAccessTopicSearch(adminClient, user.id, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
     }
   }
 

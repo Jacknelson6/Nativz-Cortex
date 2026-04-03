@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
 
 /**
  * GET /api/search/[id]/steps
@@ -21,34 +22,20 @@ export async function GET(
 
     const adminClient = createAdminClient();
 
-    const { data: search, error: fetchError } = await adminClient
-      .from('topic_searches')
-      .select('id, status, client_id, pipeline_state')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !search) {
-      return NextResponse.json({ error: 'Search not found' }, { status: 404 });
+    const access = await assertUserCanAccessTopicSearch(adminClient, user.id, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
     }
 
-    // Org scope check: portal users can only view their org's client searches
-    if (search.client_id) {
-      const { data: userData } = await adminClient
-        .from('users')
-        .select('role, organization_id')
-        .eq('id', user.id)
-        .single();
-      if (userData?.role === 'viewer') {
-        const { data: client } = await adminClient
-          .from('clients')
-          .select('organization_id')
-          .eq('id', search.client_id)
-          .single();
-        if (client && client.organization_id !== userData.organization_id) {
-          return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-        }
-      }
-    }
+    const search = access.search as {
+      id: string;
+      status: string;
+      client_id: string | null;
+      pipeline_state: unknown;
+    };
 
     const pipelineState = search.pipeline_state as Record<string, unknown> | null;
     const uiSteps = (pipelineState?.ui_steps ?? pipelineState) as {

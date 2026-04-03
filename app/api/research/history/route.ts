@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchHistory, type HistoryItemType } from '@/lib/research/history';
 
 /**
@@ -32,7 +33,25 @@ export async function GET(request: NextRequest) {
     const includeIdeasRaw = searchParams.get('include_ideas');
     const includeIdeas = includeIdeasRaw === null ? true : includeIdeasRaw !== 'false';
 
-    const items = await fetchHistory({ limit, type, clientId, cursor, includeIdeas });
+    const adminClient = createAdminClient();
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role, organization_id, is_super_admin')
+      .eq('id', user.id)
+      .single();
+
+    const isAdmin =
+      userData?.is_super_admin === true ||
+      userData?.role === 'admin' ||
+      userData?.role === 'super_admin';
+
+    const organizationId = isAdmin ? null : (userData?.organization_id as string | null) ?? null;
+
+    if (!isAdmin && !organizationId) {
+      return NextResponse.json({ items: [] });
+    }
+
+    const items = await fetchHistory({ limit, type, clientId, cursor, includeIdeas, organizationId });
 
     return NextResponse.json({ items });
   } catch {

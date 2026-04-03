@@ -1,4 +1,5 @@
 // lib/research/history.ts
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 /** Initial batch size for topic search hub history (`/admin/search/new`). */
@@ -17,13 +18,47 @@ export interface HistoryItem {
   href: string;
 }
 
-interface FetchHistoryOptions {
+export interface FetchHistoryOptions {
   limit?: number;
   type?: HistoryItemType | null;
   clientId?: string | null;
   cursor?: string | null;
   /** When `type` is omitted, set false to return only topic searches (no idea generations). Ignored when `type` is set. */
   includeIdeas?: boolean;
+  /**
+   * When set, only searches / ideas whose `client_id` belongs to this org are returned.
+   * Omit or pass `null` for admin-wide history (internal dashboards).
+   */
+  organizationId?: string | null;
+}
+
+/**
+ * Resolve client_id filters for topic_searches and idea_generations when scoping by org.
+ */
+async function resolveClientIdsForHistoryScope(
+  supabase: SupabaseClient,
+  organizationId: string | null | undefined,
+  clientId: string | null,
+): Promise<{ clientIds: string[] | null; empty: boolean }> {
+  if (!organizationId) {
+    if (clientId) return { clientIds: [clientId], empty: false };
+    return { clientIds: null, empty: false };
+  }
+
+  const { data: orgClients } = await supabase
+    .from('clients')
+    .select('id')
+    .eq('organization_id', organizationId);
+
+  let ids = (orgClients ?? []).map((c) => c.id as string);
+
+  if (clientId) {
+    if (!ids.includes(clientId)) return { clientIds: null, empty: true };
+    return { clientIds: [clientId], empty: false };
+  }
+
+  if (ids.length === 0) return { clientIds: null, empty: true };
+  return { clientIds: ids, empty: false };
 }
 
 export async function fetchHistory({
@@ -32,9 +67,13 @@ export async function fetchHistory({
   clientId = null,
   cursor = null,
   includeIdeas = true,
+  organizationId = null,
 }: FetchHistoryOptions = {}): Promise<HistoryItem[]> {
   const supabase = createAdminClient();
   const items: HistoryItem[] = [];
+
+  const scope = await resolveClientIdsForHistoryScope(supabase, organizationId, clientId);
+  if (scope.empty) return [];
 
   if (!type || type === 'brand_intel' || type === 'topic') {
     let query = supabase
@@ -44,7 +83,7 @@ export async function fetchHistory({
       .limit(limit);
 
     if (cursor) query = query.lt('created_at', cursor);
-    if (clientId) query = query.eq('client_id', clientId);
+    if (scope.clientIds) query = query.in('client_id', scope.clientIds);
     if (type === 'brand_intel') query = query.eq('search_mode', 'client_strategy');
     if (type === 'topic') query = query.eq('search_mode', 'general');
 
@@ -81,7 +120,7 @@ export async function fetchHistory({
       .limit(limit);
 
     if (cursor) query = query.lt('created_at', cursor);
-    if (clientId) query = query.eq('client_id', clientId);
+    if (scope.clientIds) query = query.in('client_id', scope.clientIds);
 
     const { data: generations } = await query;
 

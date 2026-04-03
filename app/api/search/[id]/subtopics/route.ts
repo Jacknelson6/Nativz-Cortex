@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
 
 const patchSchema = z.object({
   subtopics: z.array(z.string().min(1).max(200)).min(1).max(15),
@@ -39,36 +40,18 @@ export async function PATCH(
     }
 
     const admin = createAdminClient();
-    const { data: search, error: fetchErr } = await admin
-      .from('topic_searches')
-      .select('id, topic_pipeline, status, client_id')
-      .eq('id', id)
-      .single();
-
-    if (fetchErr || !search) {
-      return NextResponse.json({ error: 'Search not found' }, { status: 404 });
+    const access = await assertUserCanAccessTopicSearch(admin, user.id, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status === 404 ? 404 : 403 },
+      );
     }
 
-    if ((search as { topic_pipeline?: string }).topic_pipeline !== 'llm_v1') {
+    const search = access.search as { id: string; topic_pipeline?: string; status: string };
+
+    if (search.topic_pipeline !== 'llm_v1') {
       return NextResponse.json({ error: 'Not an llm_v1 search' }, { status: 400 });
-    }
-
-    if (search.client_id) {
-      const { data: userData } = await admin
-        .from('users')
-        .select('role, organization_id')
-        .eq('id', user.id)
-        .single();
-      if (userData?.role === 'viewer') {
-        const { data: client } = await admin
-          .from('clients')
-          .select('organization_id')
-          .eq('id', search.client_id)
-          .single();
-        if (client && client.organization_id !== userData.organization_id) {
-          return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-        }
-      }
     }
 
     const nextStatus = parsed.data.start_processing ? 'processing' : 'pending_subtopics';

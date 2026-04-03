@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { buildPortalFeatureFlags } from '@/lib/portal/feature-flags';
+import { PasswordChangeForm } from '@/components/portal/password-change-form';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,14 @@ export default async function PortalSettingsPage() {
             <p className="text-sm font-medium text-text-primary">{userData?.email || user.email}</p>
           </div>
         </div>
+      </Card>
+
+      <Card>
+        <h2 className="text-base font-semibold text-text-primary mb-4">Password</h2>
+        <p className="text-sm text-text-muted mb-4">
+          Choose a strong password you don&apos;t use elsewhere.
+        </p>
+        <PasswordChangeForm />
       </Card>
 
       {/* Brand info */}
