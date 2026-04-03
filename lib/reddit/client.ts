@@ -308,12 +308,19 @@ export async function gatherRedditData(
         };
       }
     } catch (err) {
-      console.error('[reddit] Apify (macrocosmos) failed, using legacy path:', err);
+      console.error('[reddit] Apify (macrocosmos) failed, trying legacy path:', err);
     }
   }
 
-  const limit = volume === 'deep' ? 100 : volume === 'medium' ? 60 : 20;
-  const result = await searchReddit(query, timeRange, limit);
+  // Legacy fallback: SearXNG-based search (may fail if SearXNG is unavailable)
+  let result: RedditSearchResult;
+  try {
+    const limit = volume === 'deep' ? 100 : volume === 'medium' ? 60 : 20;
+    result = await searchReddit(query, timeRange, limit);
+  } catch {
+    console.warn('[reddit] Legacy SearXNG path also failed — returning empty');
+    return { posts: [], topSubreddits: [], totalPosts: 0, postsWithComments: [] };
+  }
 
   // Scrape top threads for full content + comments.
   // deep=50, medium=30, light=10

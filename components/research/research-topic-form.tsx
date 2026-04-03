@@ -456,14 +456,21 @@ export function ResearchTopicForm({
 
               {/* Platforms — Web always on (toggle disabled); Reddit / YouTube / TikTok optional */}
               {/* Static platform badges — all always on */}
-              <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-nativz-border bg-surface-hover/80 px-3 py-2">
+              <div className="inline-flex shrink-0 items-center gap-2.5 rounded-full border border-nativz-border bg-surface-hover/80 px-3.5 py-2">
                 {(['web', 'reddit', 'youtube', 'tiktok'] as const).map((p) => {
                   const cfg = PLATFORM_CONFIG[p];
                   if (!cfg) return null;
                   const Icon = cfg.icon;
                   return (
-                    <span key={p} title={cfg.label} className="text-text-secondary">
-                      <Icon size={14} />
+                    <span
+                      key={p}
+                      title={cfg.label}
+                      className={cn(
+                        'flex h-5 w-5 items-center justify-center rounded-full',
+                        cfg.bg,
+                      )}
+                    >
+                      <Icon size={11} className={cfg.color} />
                     </span>
                   );
                 })}
