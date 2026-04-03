@@ -54,10 +54,15 @@ export default async function RootLayout({
   const agency = headersList.get('x-agency') as 'anderson' | 'nativz' | null;
   const forcedMode = agency === 'anderson' ? 'anderson' as const : undefined;
 
+  // Set data-brand-mode directly on <html> so CSS vars apply on first paint
+  // before the BrandModeProvider client component hydrates — prevents flash of Nativz theme on AC domain.
+  const brandMode = agency === 'anderson' ? 'anderson' : 'nativz';
+  const themeColor = agency === 'anderson' ? '#F4F6F8' : '#0f1117';
+
   return (
-    <html lang="en">
+    <html lang="en" data-brand-mode={brandMode}>
       <head>
-        <meta name="theme-color" content="#0f1117" />
+        <meta name="theme-color" content={themeColor} />
       </head>
       <body className={`${jakarta.variable} font-sans antialiased`}>
         <BrandModeProvider forcedMode={forcedMode}>
