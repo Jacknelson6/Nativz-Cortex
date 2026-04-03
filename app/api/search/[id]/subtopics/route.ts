@@ -10,8 +10,8 @@ const patchSchema = z.object({
   start_processing: z.boolean().optional(),
   /** Minimum view count filter for video scraping */
   minViews: z.number().int().min(0).optional(),
-  /** Time range filter: today, week, month, year */
-  timeRange: z.enum(['today', 'week', 'month', 'year']).optional(),
+  /** Time range filter — accepts both platform-native (today, week, month, year) and app-level (last_7_days, etc.) values */
+  timeRange: z.string().max(50).optional(),
 });
 
 /**
