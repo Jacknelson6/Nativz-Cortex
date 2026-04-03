@@ -507,8 +507,8 @@ export function SearchProcessing({
           </div>
         )}
 
-        {/* Action buttons */}
-        {!done && !error && elapsed > 10 && (
+        {/* Action buttons — visible from the start */}
+        {!done && !error && (
           <div className="mt-6 flex items-center justify-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => router.push(`${redirectPrefix}/search/new`)}>
               <ArrowLeft size={12} />
