@@ -8,7 +8,7 @@ import type { BrandColor, BrandFont, BrandLogo, ProductItem } from '@/lib/knowle
 import { BrandDnaGoogleFontLink } from './brand-dna-google-font-link';
 
 /** Surface, radius, and hairline border shared by bento cards and full-guideline blocks */
-export const BRAND_DNA_BENTO_SURFACE = 'rounded-xl border border-white/[0.06] bg-white/[0.02]';
+export const BRAND_DNA_BENTO_SURFACE = 'rounded-xl border border-nativz-border bg-surface/20';
 
 interface BrandDNACardsProps {
   metadata: Record<string, unknown>;
@@ -45,7 +45,7 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
         onEdit={() => onEditSection?.('Logo')}
       >
         {logos.length > 0 ? (
-          <div className="flex h-[7.5rem] max-h-[7.5rem] items-center justify-center rounded-lg bg-white/[0.03]">
+          <div className="flex h-[7.5rem] max-h-[7.5rem] items-center justify-center rounded-lg bg-surface/30">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={logos[0].url}
@@ -54,8 +54,8 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
             />
           </div>
         ) : (
-          <div className="flex h-[7.5rem] max-h-[7.5rem] items-center justify-center rounded-lg bg-white/[0.03]">
-            <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-white/[0.04]">
+          <div className="flex h-[7.5rem] max-h-[7.5rem] items-center justify-center rounded-lg bg-surface/30">
+            <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-surface/40">
               <Image size={24} className="text-text-muted/40" />
             </div>
           </div>
@@ -144,7 +144,7 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
             {voiceAttributes.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {voiceAttributes.slice(0, 3).map((attr, i) => (
-                  <span key={i} className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-text-muted">
+                  <span key={i} className="rounded-full bg-surface/60 px-2 py-0.5 text-[10px] text-text-muted">
                     {attr}
                   </span>
                 ))}
@@ -185,7 +185,7 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img src={p.imageUrl} alt={p.name} className="h-6 w-6 rounded object-cover shrink-0" />
                 ) : (
-                  <div className="h-6 w-6 rounded bg-white/[0.04] shrink-0" />
+                  <div className="h-6 w-6 rounded bg-surface/40 shrink-0" />
                 )}
                 <span className="text-xs text-text-secondary truncate">{p.name}</span>
               </div>
@@ -278,7 +278,7 @@ function BentoCard({
   const body = (
     <>
       <div className="mb-2 min-h-0 flex-1">{children}</div>
-      <div className="mt-auto flex shrink-0 items-center justify-between border-t border-white/[0.04] pt-2">
+      <div className="mt-auto flex shrink-0 items-center justify-between border-t border-nativz-border/40 pt-2">
         <div className="flex items-center gap-1.5">
           <span className="text-text-muted">{icon}</span>
           <span className="text-xs font-medium text-text-muted">{title}</span>
@@ -305,7 +305,7 @@ function BentoCard({
     return (
       <button
         type="button"
-        className={`${surface} cursor-pointer transition-[background-color,box-shadow] hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
+        className={`${surface} cursor-pointer transition-[background-color,box-shadow] hover:bg-surface/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
         onClick={onEdit}
         aria-label={`Edit ${title}`}
       >

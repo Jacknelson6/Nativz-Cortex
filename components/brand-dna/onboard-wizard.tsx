@@ -18,6 +18,7 @@ import {
   readBrandDnaPending,
   setBrandDnaPending,
 } from '@/lib/utils/brand-dna-pending';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 function slugify(name: string): string {
   const s = name
@@ -88,6 +89,8 @@ export function OnboardWizard({
   onAfterActivate,
 }: OnboardWizardProps) {
   const router = useRouter();
+  const { mode: brandMode } = useBrandMode();
+  const isAC = brandMode === 'anderson';
   const [step, setStep] = useState(1);
   const [clientName, setClientName] = useState(existingClientName ?? '');
   const [websiteUrl, setWebsiteUrl] = useState('');
@@ -378,7 +381,7 @@ export function OnboardWizard({
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
               placeholder="Stealth Health Containers"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 px-4 text-sm text-white placeholder-white/40 focus:border-accent focus:outline-none"
+              className="w-full rounded-xl border border-nativz-border bg-surface/40 py-3 px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
             />
           </div>
         )}
@@ -398,7 +401,7 @@ export function OnboardWizard({
                 if (n && n !== websiteUrl.trim()) setWebsiteUrl(n);
               }}
               placeholder="example.com or https://example.com"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:border-accent focus:outline-none"
+              className="w-full rounded-xl border border-nativz-border bg-surface/40 py-3 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
             />
           </div>
         </div>
@@ -408,7 +411,7 @@ export function OnboardWizard({
           <label className="block text-xs font-medium text-text-muted mb-1.5">
             Upload files <span className="text-text-muted/60">(optional — logos, brand guides, docs)</span>
           </label>
-          <label className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-3 text-xs text-text-muted hover:border-accent/40 hover:text-text-secondary transition-colors cursor-pointer">
+          <label className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-nativz-border bg-surface/20 px-4 py-3 text-xs text-text-muted hover:border-accent/40 hover:text-text-secondary transition-colors cursor-pointer">
             <Upload size={14} />
             Drop files or click to upload
             <input
@@ -427,7 +430,7 @@ export function OnboardWizard({
           {uploadedFiles.length > 0 && (
             <div className="mt-2 space-y-1">
               {uploadedFiles.map((file, i) => (
-                <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] px-3 py-1.5">
+                <div key={i} className="flex items-center gap-2 rounded-lg bg-surface/30 px-3 py-1.5">
                   <FileText size={12} className="text-text-muted shrink-0" />
                   <span className="text-xs text-text-secondary truncate flex-1">{file.name}</span>
                   <button onClick={() => removeFile(i)} className="text-text-muted hover:text-red-400 cursor-pointer">
@@ -490,7 +493,7 @@ export function OnboardWizard({
         (brandDNA as { content: string }).content.trim().length > 0 ? (
           <div className={`mt-6 ${BRAND_DNA_BENTO_SURFACE} p-3 sm:p-4`}>
             <h3 className="mb-3 text-sm font-semibold text-text-primary">Full brand guideline</h3>
-            <div className="prose prose-invert prose-sm max-h-[min(45vh,420px)] max-w-none overflow-y-auto overscroll-contain pr-1 text-text-secondary [scrollbar-width:thin]">
+            <div className={`prose ${isAC ? '' : 'prose-invert'} prose-sm max-h-[min(45vh,420px)] max-w-none overflow-y-auto overscroll-contain pr-1 text-text-secondary [scrollbar-width:thin]`}>
               <Markdown content={(brandDNA as { content: string }).content} />
             </div>
           </div>

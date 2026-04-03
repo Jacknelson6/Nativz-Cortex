@@ -11,16 +11,39 @@ const jakarta = Plus_Jakarta_Sans({
   display: 'swap',
 });
 
-export const metadata: Metadata = {
-  title: 'Nativz Cortex',
-  description: 'Social media intelligence platform',
-  // Favicon + Apple touch: `app/icon.png` and `app/apple-icon.png` (Nativz marketing favicon).
-  openGraph: {
-    title: 'Nativz Cortex',
-    description: 'Social media intelligence platform',
-    type: 'website',
-  },
-};
+// Dynamic metadata — title and favicon switch based on domain
+export async function generateMetadata(): Promise<Metadata> {
+  const headersList = await headers();
+  const agency = headersList.get('x-agency') as 'anderson' | 'nativz' | null;
+  const isAC = agency === 'anderson';
+
+  const title = 'Cortex';
+  const description = isAC
+    ? 'Anderson Collaborative content intelligence platform'
+    : 'Nativz content intelligence platform';
+
+  // AC favicon: use anderson-logo when available; fall back to Nativz favicon until AC icon is added.
+  // To add an AC favicon: place /public/favicon-ac.png and update the ac path below.
+  const favicon = isAC ? '/favicon-ac.png' : '/favicon.png';
+
+  return {
+    title,
+    description,
+    icons: {
+      icon: favicon,
+      apple: '/apple-icon.png',
+    },
+    openGraph: {
+      title,
+      description,
+      type: 'website',
+    },
+    twitter: {
+      title,
+      description,
+    },
+  };
+}
 
 export default async function RootLayout({
   children,

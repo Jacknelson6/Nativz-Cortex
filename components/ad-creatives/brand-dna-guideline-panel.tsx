@@ -16,7 +16,7 @@ export function BrandDnaGuidelinePanel({ clientSlug }: BrandDnaGuidelinePanelPro
     <div className={`${BRAND_DNA_BENTO_SURFACE} p-4 sm:p-5`}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-background/40">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-nativz-border bg-background/40">
             <FileText size={18} className="text-text-muted" strokeWidth={1.75} />
           </div>
           <div className="min-w-0 space-y-1">

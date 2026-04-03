@@ -201,7 +201,7 @@ function ColorsForm({
             <div className="flex items-center gap-3 md:contents">
               <div className="relative shrink-0 justify-self-start">
                 <div
-                  className="h-10 w-10 rounded-lg border border-white/15 shadow-inner cursor-pointer md:h-9 md:w-9"
+                  className="h-10 w-10 rounded-lg border border-nativz-border shadow-inner cursor-pointer md:h-9 md:w-9"
                   style={{ backgroundColor: color.hex }}
                 />
                 <input
@@ -838,7 +838,7 @@ function TagListEditor({
         {tags.map((tag, i) => (
           <span
             key={i}
-            className="flex items-center gap-1 rounded-full bg-white/[0.06] px-2.5 py-0.5 text-xs text-text-secondary"
+            className="flex items-center gap-1 rounded-full bg-surface/60 px-2.5 py-0.5 text-xs text-text-secondary"
           >
             {tag}
             <button

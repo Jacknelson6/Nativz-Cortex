@@ -14,6 +14,7 @@ import { Markdown } from '@/components/ai/markdown';
 import { formatRelativeTime } from '@/lib/utils/format';
 import type { BrandGuidelineMetadata } from '@/lib/knowledge/types';
 import { useClientAdminShell } from '@/components/clients/client-admin-shell-context';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 interface BrandDNAViewProps {
   clientId: string;
@@ -40,6 +41,8 @@ export function BrandDNAView({
 }: BrandDNAViewProps) {
   const shell = useClientAdminShell();
   const router = useRouter();
+  const { mode: brandMode } = useBrandMode();
+  const isAC = brandMode === 'anderson';
   const [generateOpen, setGenerateOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [editingSection, setEditingSection] = useState<string | null>(null);
@@ -133,7 +136,7 @@ export function BrandDNAView({
           {/* Full guideline document */}
           <div className={`${BRAND_DNA_BENTO_SURFACE} p-3 sm:p-4`}>
             <h3 className="mb-3 text-sm font-semibold text-text-primary">Full brand guideline</h3>
-            <div className="prose prose-invert prose-sm max-w-none text-text-secondary">
+            <div className={`prose ${isAC ? '' : 'prose-invert'} prose-sm max-w-none text-text-secondary`}>
               <Markdown content={guideline.content} />
             </div>
           </div>

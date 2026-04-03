@@ -116,7 +116,7 @@ export function BrandDNAProgress({
       )}
 
       {/* Progress bar */}
-      <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden mb-2">
+      <div className="h-1.5 rounded-full bg-surface/60 overflow-hidden mb-2">
         <div
           className="h-full rounded-full transition-all duration-500 ease-out"
           style={{
