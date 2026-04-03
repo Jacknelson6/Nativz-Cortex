@@ -67,11 +67,13 @@ export async function transcribeAllVideos(
     try {
       const result = await extractTikTokTranscript(source.url, null);
       if (result.text.trim()) {
-        source.transcript = result.text;
+        // Sanitize transcript text — remove control chars that break JSONB
+        const safeText = result.text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+        source.transcript = safeText;
         source.transcript_segments = result.segments.map((s) => ({
           start: s.start,
           end: s.end,
-          text: s.text,
+          text: s.text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ''),
         }));
         transcribed++;
       } else {

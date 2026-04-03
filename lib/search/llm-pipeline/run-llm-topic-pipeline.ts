@@ -703,27 +703,10 @@ Rules: 2–4 words each, specific to the topic, no numbering, no full sentences.
         ...transcribeResult,
       });
 
-      // Phase B: Analyze top 50 (frames + vision)
-      const analyzeT0 = Date.now();
-      const admin = createAdminClient();
-      const analyzeResult = await analyzeTopVideos(platformResults.sources, {
-        admin,
-        searchId: args.searchId ?? '',
-        userId: args.userId,
-        userEmail: args.userEmail,
-        count: 50,
-      });
-      logLlmV1({
-        search_id: args.searchId,
-        phase: 'analyze_top_videos',
-        duration_ms: Date.now() - analyzeT0,
-        ...analyzeResult,
-      });
-      stageRows.push({
-        phase: 'analyze_top_videos',
-        duration_ms: Date.now() - analyzeT0,
-        ...analyzeResult,
-      });
+      // Phase B: Skip frame extraction in pipeline — done on-demand in carousel sidebar.
+      // analyzeTopVideos requires FFmpeg + writes to DB before platform_data is saved,
+      // which causes failures on Vercel serverless. Frames are extracted per-video when
+      // the user opens a video in the carousel.
 
       // Phase C: Cluster videos into content pillars
       const clusterT0 = Date.now();

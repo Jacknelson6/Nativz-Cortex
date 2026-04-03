@@ -264,7 +264,14 @@ export async function POST(
             platform_data: cloneJsonForPostgres({
               stats: [],
               sourceCount: result.platformSources?.length ?? 0,
-              sources: result.platformSources ?? [],
+              // Truncate transcripts in stored sources to keep payload under Supabase limits.
+              // Full transcripts are available on-demand via the analysis panel.
+              sources: (result.platformSources ?? []).map((s) => ({
+                ...s,
+                transcript: s.transcript ? s.transcript.slice(0, 500) : null,
+                transcript_segments: undefined, // stored on moodboard_items, not here
+                frames: undefined, // stored on moodboard_items, not here
+              })),
             }),
             tokens_used: result.totalTokens ?? 0,
             estimated_cost: result.estimatedCost ?? 0,
