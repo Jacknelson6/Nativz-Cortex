@@ -85,7 +85,7 @@ export function SourceMentionCard({ source, onOpenDetail, onAnalyze }: SourceMen
       {thumb ? (
         <div
           className={cn(
-            'relative w-full shrink-0 overflow-hidden bg-black/30 outline-none group/thumb',
+            'relative w-full shrink-0 overflow-hidden bg-black/30 outline-none cursor-pointer group/thumb',
             // Shared max height for vertical + landscape so one Short doesn’t balloon the whole grid row.
             isVerticalThumb
               ? 'aspect-[9/16] min-h-0 w-full max-h-[min(15rem,45vw)] sm:max-h-[min(16rem,24vw)] lg:max-h-[min(17rem,20vw)]'
