@@ -22,9 +22,9 @@ export async function generateMetadata(): Promise<Metadata> {
     ? 'Anderson Collaborative content intelligence platform'
     : 'Nativz content intelligence platform';
 
-  // AC favicon: use anderson-logo when available; fall back to Nativz favicon until AC icon is added.
-  // To add an AC favicon: place /public/favicon-ac.png and update the ac path below.
-  const favicon = isAC ? '/favicon-ac.png' : '/favicon.png';
+  // AC favicon: use the anderson-collaborative-logo.svg directly (modern browsers support SVG favicons)
+  // Nativz: use the PNG favicon
+  const favicon = isAC ? '/anderson-collaborative-logo.svg' : '/favicon.png';
 
   return {
     title,
