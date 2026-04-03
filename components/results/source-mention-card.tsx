@@ -140,7 +140,7 @@ export function SourceMentionCard({ source, onOpenDetail, onAnalyze }: SourceMen
                 else onOpenDetail({ focusRescript: true });
               }}
             >
-              Analyze
+              View analysis
             </button>
           </div>
         </div>
