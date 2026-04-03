@@ -6,6 +6,11 @@ import { Building2, Search, Sparkles, TrendingUp } from 'lucide-react';
 import { GlassButton } from '@/components/ui/glass-button';
 import { ClientPickerModal, type ClientOption } from '@/components/ui/client-picker';
 import { createClient } from '@/lib/supabase/client';
+import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
+import type { SearchPlatform } from '@/lib/types/search';
+
+/** Fixed platforms for every search — no user selection. */
+const FIXED_PLATFORMS: SearchPlatform[] = ['web', 'reddit', 'tiktok', 'youtube'];
 
 interface SearchModeSelectorProps {
   redirectPrefix: string;
@@ -73,6 +78,8 @@ export function SearchModeSelector({
           country: 'us',
           client_id: brandClientId,
           search_mode: 'client_strategy',
+          platforms: [...FIXED_PLATFORMS],
+          volume: 'medium',
         }),
       });
 
@@ -118,6 +125,8 @@ export function SearchModeSelector({
           country: 'us',
           client_id: clientForTopic,
           search_mode: 'general',
+          platforms: [...FIXED_PLATFORMS],
+          volume: 'medium',
         }),
       });
 
@@ -183,6 +192,9 @@ export function SearchModeSelector({
                   placeholder="Select a client"
                 />
             )}
+
+            {/* Static platform display */}
+            <PlatformBadges />
 
             {/* Spacer pushes button to bottom */}
             <div className="flex-1" />
@@ -261,6 +273,9 @@ export function SearchModeSelector({
               />
             )}
 
+            {/* Static platform display */}
+            <PlatformBadges />
+
             {/* Submit */}
             <GlassButton
               className="w-full"
@@ -280,6 +295,29 @@ export function SearchModeSelector({
         <p className="mt-4 text-center text-sm text-red-400">{error}</p>
       )}
 
+    </div>
+  );
+}
+
+// ─── Static platform badges (read-only) ─────────────────────────────────────
+
+function PlatformBadges() {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {FIXED_PLATFORMS.map((p) => {
+        const config = PLATFORM_CONFIG[p];
+        if (!config) return null;
+        const Icon = config.icon;
+        return (
+          <span
+            key={p}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-surface-hover px-2.5 py-1 text-xs font-medium text-text-secondary"
+          >
+            <Icon size={12} />
+            {config.label}
+          </span>
+        );
+      })}
     </div>
   );
 }

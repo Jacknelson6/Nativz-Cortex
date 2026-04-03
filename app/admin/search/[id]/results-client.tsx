@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Building2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Building2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
@@ -24,8 +24,7 @@ import { CompetitiveAnalysis } from '@/components/results/competitive-analysis';
 import { ExportPdfButton } from '@/components/results/export-pdf-button';
 import { ShareButton } from '@/components/results/share-button';
 import { SearchProgress } from '@/components/search/search-progress';
-import { SearchIdeasWizard } from '@/components/research/search-ideas-wizard';
-import type { ClientOption } from '@/components/ui/client-picker';
+// ClientOption no longer needed — SourceBrowser uses VideoAnalysisPanel which manages its own client context
 import { hasSerp } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
 import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
@@ -33,18 +32,6 @@ import { AiTakeaways } from '@/components/results/ai-takeaways';
 import { IdeationPipelinePanel } from '@/components/ideation/ideation-pipeline-panel';
 import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
 import { getClientAbbreviationLabel } from '@/lib/clients/client-abbreviations';
-
-interface LinkedIdea {
-  id: string;
-  concept: string | null;
-  count: number;
-  createdAt: string;
-}
-
-interface LinkedBoardRow {
-  id: string;
-  name: string;
-}
 
 interface AdminResultsClientProps {
   search: TopicSearch;
@@ -55,24 +42,15 @@ interface AdminResultsClientProps {
     industry?: string;
     topic_keywords?: string[] | null;
   } | null;
-  clients: ClientOption[];
-  linkedIdeas?: LinkedIdea[];
-  linkedBoards?: LinkedBoardRow[];
-  videoCandidateCount?: number;
   scrapedVideoCount?: number;
 }
 
 export function AdminResultsClient({
   search,
   clientInfo,
-  clients,
-  linkedIdeas = [],
-  linkedBoards = [],
-  videoCandidateCount = 0,
   scrapedVideoCount = 0,
 }: AdminResultsClientProps) {
   const router = useRouter();
-  const [showIdeasWizard, setShowIdeasWizard] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(search.query);
   const [savingTitle, setSavingTitle] = useState(false);
@@ -242,55 +220,10 @@ export function AdminResultsClient({
           </div>
         ) : null}
 
-        {(aiResponse || search.summary) ? (
-          <div className="rounded-xl border border-nativz-border bg-surface p-5 sm:p-6">
-            <AiTakeaways
-              aiResponse={aiResponse}
-              summary={search.summary}
-              clientName={clientInfo?.name}
-              hasAttachedClient={!!clientInfo}
-            />
-          </div>
-        ) : null}
-
         <IdeationPipelinePanel
           searchId={search.id}
-          query={search.query}
-          videoCandidateCount={videoCandidateCount}
-          linkedBoards={linkedBoards}
-          linkedIdeas={linkedIdeas.map((g) => ({
-            id: g.id,
-            count: g.count,
-            concept: g.concept,
-          }))}
-          onOpenIdeasWizard={() => setShowIdeasWizard(true)}
+          clientId={clientInfo?.id ?? null}
         />
-
-        {/* Linked ideas banner */}
-        {linkedIdeas.length > 0 ? (
-          <div className="rounded-xl border border-accent2/20 bg-accent2/5 p-4 sm:p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent2-surface shrink-0">
-                <Sparkles size={18} className="text-accent2-text" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-base font-medium text-text-primary">
-                  {linkedIdeas.length === 1 ? 'Video ideas generated from this research' : `${linkedIdeas.length} idea sets generated from this research`}
-                </p>
-                <p className="text-sm text-text-muted mt-1 leading-relaxed">
-                  {linkedIdeas.map((g) => `${g.count} ideas${g.concept ? ` — "${g.concept}"` : ''}`).join(' · ')}
-                </p>
-              </div>
-              <Link
-                href={`/admin/ideas/${linkedIdeas[0].id}`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-accent2-surface px-3 py-2 text-sm font-medium text-accent2-text hover:bg-accent2-surface transition-colors shrink-0"
-              >
-                <Sparkles size={14} />
-                View ideas
-              </Link>
-            </div>
-          </div>
-        ) : null}
 
         {/* Scraped videos — outlier board, video grid, hook patterns */}
         <ScrapedVideosSection
@@ -319,6 +252,18 @@ export function AdminResultsClient({
             ) : null}
           </div>
         ) : null}
+        {/* Recommended content pillars — just above trending topics */}
+        {(aiResponse || search.summary) ? (
+          <div className="rounded-xl border border-nativz-border bg-surface p-5 sm:p-6">
+            <AiTakeaways
+              aiResponse={aiResponse}
+              summary={search.summary}
+              clientName={clientInfo?.name}
+              hasAttachedClient={!!clientInfo}
+            />
+          </div>
+        ) : null}
+
         {/* Render trending topics */}
         {trendingTopics.length > 0 ? (
           <TrendingTopicsTable topics={trendingTopics} clientId={clientInfo?.id ?? undefined} searchId={search.id} />
@@ -364,8 +309,6 @@ export function AdminResultsClient({
                 : null
             }
             defaultClientId={search.client_id}
-            clients={clients}
-            linkedIdeas={linkedIdeas.map((g) => ({ id: g.id, concept: g.concept, count: g.count }))}
           />
         ) : null}
 
@@ -375,15 +318,6 @@ export function AdminResultsClient({
       </div>
 
       <ScrollToTop />
-
-      {/* Ideas wizard modal */}
-      <SearchIdeasWizard
-        open={showIdeasWizard}
-        onClose={() => setShowIdeasWizard(false)}
-        searchId={search.id}
-        clientId={search.client_id ?? null}
-        clients={clients}
-      />
     </div>
   );
 }

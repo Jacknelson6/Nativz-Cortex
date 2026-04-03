@@ -26,6 +26,7 @@ import {
   type PlatformSource,
   type ResearchSourceRecord,
   type SearchPlatform,
+  type SearchVolume,
   type TopicSearchAIResponse,
   type TopicSource,
   type TrendingTopic,
@@ -42,6 +43,14 @@ function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
+}
+
+/** Map DB volume (incl. legacy `quick`) to platform-router tier for Apify + scrapers. */
+function volumeForPlatformScrapers(raw: string | undefined): SearchVolume {
+  const v = (raw ?? 'medium').toLowerCase();
+  if (v === 'quick') return 'medium';
+  if (v === 'light' || v === 'medium' || v === 'deep') return v;
+  return 'medium';
 }
 
 function buildTopicSources(urls: string[], titleByUrl: Map<string, string>): TopicSource[] {
@@ -104,11 +113,13 @@ async function researchOneSubtopicLlmOnly(args: {
   fetchCalls: number;
 }> {
   const t0 = Date.now();
+  const todayDate = new Date().toISOString().slice(0, 10);
   const prompt = `Live web search is disabled for this run. You are a research analyst. Using general knowledge of how audiences discuss this theme online (short video, forums, news, search behavior), produce ONE JSON object for content research planning.
 
+Today's date: ${todayDate}
 Main topic: ${JSON.stringify(args.parentQuery)}
 Research angle (exact string for the "subtopic" field): ${JSON.stringify(args.subtopic)}
-Time window: Frame findings and themes as what has mattered **${args.timeRangeLabel}** (recency for this run—not timeless background).
+Time window: Frame findings and themes as what has mattered **${args.timeRangeLabel}** (recency for this run—not timeless background). All date references must be accurate relative to today's date.
 
 Return ONLY valid JSON with this shape:
 {"subtopic":string,"findings":string[] (3-6 bullets),"themes":string[] (optional),"sources":[],"open_questions":string[] (optional)}
@@ -375,9 +386,11 @@ async function researchOneSubtopicWithLiveSerp(args: {
     });
   }
 
+  const todayDateForResearch = new Date().toISOString().slice(0, 10);
   const prompt = `You are a research analyst. Based ONLY on the evidence below (web search snippets and page excerpts), produce a JSON object with this exact shape:
 {"subtopic":string,"findings":string[] (3-6 bullets),"themes":string[] (optional),"sources":[{"url":string,"title":string,"note":string}],"open_questions":string[] (optional)}
 Rules:
+- Today's date: ${todayDateForResearch}. All date references must be accurate relative to today.
 - Every finding must be grounded in the evidence. Do not invent statistics.
 - Time scope: This search targets **${args.timeRangeLabel}**. Prefer findings that reflect what has been active, debated, or trending in that window (as shown in the evidence).
 - sources[].url MUST be chosen from URLs that appear in the evidence block.
@@ -506,8 +519,10 @@ export async function runLlmTopicPipeline(args: {
   if (subtopics.length === 0) {
     const topicModelsForPlan = await getTopicSearchModelsFromDb();
     const timeLabel = getTimeRangeOptionLabel(args.search.time_range);
+    const todayDate = new Date().toISOString().slice(0, 10);
     const planPrompt = `You are a keyword research assistant. Given a topic, generate specific, searchable keyword phrases.
 
+Today's date: ${todayDate}
 Main topic: ${JSON.stringify(args.search.query)}
 Time window: **${timeLabel}**.
 
@@ -612,12 +627,12 @@ Rules: 2–4 words each, specific to the topic, no numbering, no full sentences.
     ? (async () => {
         const t0 = Date.now();
         try {
-          // Use "light" volume — SearXNG already covers web research
+          const scraperVolume = volumeForPlatformScrapers(args.volume);
           const result = await gatherPlatformData(
             args.search.query,
             platforms as SearchPlatform[],
             args.search.time_range,
-            'light',
+            scraperVolume,
           );
           const durationMs = Date.now() - t0;
           logLlmV1({
@@ -687,7 +702,9 @@ Rules: 2–4 words each, specific to the topic, no numbering, no full sentences.
     ? `Attached client — ${args.clientContext.name}. Industry: ${args.clientContext.industry ?? 'n/a'}. Brand voice: ${args.clientContext.brandVoice ?? 'n/a'}.`
     : '';
 
+  const todayDate = new Date().toISOString().slice(0, 10);
   const mergerPrompt = `You merge research-angle findings into one JSON report for "${args.search.query}".
+Today's date: ${todayDate}
 Time scope: The user chose **${timeRangeLabel}**. Emphasize themes, debates, and video ideas that fit audience and creator activity in that window (not generic evergreen filler unless the evidence supports it).
 ${clientContextBlock ? `${clientContextBlock}\n\n` : ''}Research-angle findings:
 ${subtopicBlock}
@@ -695,7 +712,7 @@ ${platformContextBlock ? `\n---\n\nPlatform-specific data (Reddit threads, TikTo
 
 Return ONLY valid JSON matching:
 {
-  "summary": "Executive summary of the TOPIC (not a single brand pitch unless client_strategy — then add brand_alignment_notes). 4-6 sentences, Markdown **bold** on key phrases.",
+  "summary": "Executive summary of the TOPIC (not a single brand pitch unless client_strategy — then add brand_alignment_notes). 4-6 sentences, Markdown **bold** on key phrases. MUST open with an explicit date range header derived from today's date (${todayDate}) and the selected time window (${timeRangeLabel}), e.g. 'Over the past three months (January–March 2026)…'. All date references must be accurate relative to today — never reference dates from your training data.",
   "brand_alignment_notes": "optional string — only if client_strategy: bridge topic insights to the client brand (2-4 sentences).",
   "overall_sentiment": number -1 to 1,
   "conversation_intensity": "low"|"moderate"|"high"|"very_high",
@@ -728,7 +745,7 @@ Rules:
 - If search_mode is general, omit brand_alignment_notes or use null.
 - emotions: 5-8 emotions that sum to ~100%. Analyze the actual tone and sentiment of the evidence text. Colors from: #5ba3e6 blue, #a855f7 purple, #22c55e green, #f59e0b amber, #ef4444 red, #ec4899 pink, #14b8a6 teal, #6366f1 indigo. Each emotion MUST include a "subtext" — one sentence explaining why THIS emotion appears for THIS specific topic based on the evidence (not a generic description of the emotion).
 - content_breakdown: intentions (3-5 viewer motivations like Educational, Entertainment, Debate), categories (3-5 content types), formats (3-5 like Short video, Article, Thread). For **every** item include: **percentage** (share of posts in that bucket, 0–100). **engagement_rate**: typical engagement rate for that bucket **in this topic’s evidence**, expressed as **percentage points** where **0.7 means 0.7%** (not 70%, not a 0–1 fraction). Ground it in likes/views/comments patterns from the evidence; do not invent precision — one decimal is enough. **your_engagement_rate** (optional): only when an "Attached client" line appears above. For **each** intentions/categories/formats row, estimate the same metric **for that client** if they published this type of content in this topic: adjust typical ER up or down from topic–business fit, brand voice match, and how well the format fits their strategy. Same units as engagement_rate. If there is **no** Attached client block, **omit** your_engagement_rate on every row (do not send null).
-- For content_breakdown.categories: each "name" must be a **short, plain-language label** (ideally 2–6 words). Good: "How-to & checklists", "Explainers", "Walkthroughs", "News & commentary". Bad: long titles with parenthetical glossaries like "Explainers (definitions, structures, examples)" — keep names scannable; the merger evidence already carries nuance.
+- For content_breakdown.categories: each "name" must be a **single descriptive label (3–8 words)** that clearly communicates WHAT type of short-form video content to produce. Good: "How-to tutorials & walkthroughs", "Behind-the-scenes production", "Product unboxing & first looks", "Quick tips & life hacks", "Day-in-the-life vlogs". Bad: "Community engagement", "Niche commentary", "Cultural relevance" — these describe abstract themes, not filmable content types a videographer can act on. No parenthetical glossaries.
 - platform_breakdown: which platforms appeared most in the SERP results. Estimate post_count, comment_count, avg_sentiment from evidence.
 - Per-topic resonance: based on evidence volume and engagement signals for that specific topic (not array position).
 - Per-topic sentiment: specific to THIS topic's evidence tone, not just copying overall_sentiment.

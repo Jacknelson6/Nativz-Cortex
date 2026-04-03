@@ -2,7 +2,6 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { notFound, redirect } from 'next/navigation';
 import type { TopicSearch } from '@/lib/types/search';
-import { extractVideoCandidatesFromSearch } from '@/lib/ideation/extract-video-candidates';
 import { AdminResultsClient } from './results-client';
 
 export default async function AdminSearchResultsPage({
@@ -50,57 +49,17 @@ export default async function AdminSearchResultsPage({
     clientInfo = data || null;
   }
 
-  // Fetch all active clients for the ideas wizard picker
-  const { data: allClients } = await adminClient
-    .from('clients')
-    .select('id, name, logo_url, agency')
-    .eq('is_active', true)
-    .order('name');
-
-  // Fetch idea generations linked to this search
-  const { data: linkedGenerations } = await adminClient
-    .from('idea_generations')
-    .select('id, concept, count, status, created_at')
-    .eq('search_id', id)
-    .eq('status', 'completed')
-    .order('created_at', { ascending: false })
-    .limit(5);
-
-  const videoCandidates = extractVideoCandidatesFromSearch(search as TopicSearch);
-
-  // Fetch scraped video count + platform breakdown
+  // Fetch scraped video count
   const { count: scrapedVideoCount } = await adminClient
     .from('topic_search_videos')
     .select('id', { count: 'exact', head: true })
     .eq('search_id', id);
-
-  const { data: linkedBoardsRaw, error: linkedBoardsError } = await adminClient
-    .from('moodboard_boards')
-    .select('id, name, updated_at')
-    .eq('source_topic_search_id', id)
-    .is('archived_at', null)
-    .order('updated_at', { ascending: false })
-    .limit(5);
-
-  if (linkedBoardsError) {
-    console.warn('Linked moodboards query (run migration 066 if column missing):', linkedBoardsError.message);
-  }
-  const linkedBoards = linkedBoardsError ? [] : (linkedBoardsRaw ?? []);
 
   return (
     <>
       <AdminResultsClient
         search={search as TopicSearch}
         clientInfo={clientInfo}
-        clients={(allClients ?? []).map((c) => ({ id: c.id, name: c.name, logo_url: c.logo_url, agency: c.agency }))}
-        linkedIdeas={(linkedGenerations ?? []).map((g) => ({
-          id: g.id,
-          concept: g.concept,
-          count: g.count,
-          createdAt: g.created_at,
-        }))}
-        linkedBoards={linkedBoards.map((b) => ({ id: b.id, name: b.name ?? 'Board' }))}
-        videoCandidateCount={videoCandidates.length}
         scrapedVideoCount={scrapedVideoCount ?? 0}
       />
     </>

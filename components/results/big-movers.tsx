@@ -100,7 +100,7 @@ export function BigMovers({ movers }: { movers: BigMover[] }) {
                   <span className="text-sm font-semibold text-text-primary">{mover.name}</span>
                 )}
 
-                <span className={`text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded ${TYPE_COLOR[mover.type] || TYPE_COLOR.brand}`}>
+                <span className={`text-xs font-medium uppercase tracking-wider px-1.5 py-0.5 rounded ${TYPE_COLOR[mover.type] || TYPE_COLOR.brand}`}>
                   {mover.type}
                 </span>
               </div>

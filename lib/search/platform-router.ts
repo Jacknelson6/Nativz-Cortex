@@ -17,7 +17,7 @@ export const VOLUME_CONFIG = {
   medium: {
     reddit: { posts: 100, commentPosts: 20 },
     youtube: { videos: 100, commentVideos: 30, transcriptVideos: 20 },
-    tiktok: { videos: 100, commentVideos: 30, transcriptVideos: 15 },
+    tiktok: { videos: 500, commentVideos: 50, transcriptVideos: 500 },
     web: { results: 30 },
   },
   deep: {

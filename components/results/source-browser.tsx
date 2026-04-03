@@ -4,12 +4,7 @@ import { useMemo, useState } from 'react';
 
 import { cn } from '@/lib/utils';
 import { SourceMentionCard } from '@/components/results/source-mention-card';
-import {
-  SourceDetailDialog,
-  type LinkedIdeaOption,
-} from '@/components/results/source-detail-dialog';
 import type { PlatformSource } from '@/lib/types/search';
-import type { ClientOption } from '@/components/ui/client-picker';
 import { sortSources } from '@/lib/search/source-sources-sort';
 import { VideoAnalysisPanel } from '@/components/research/video-analysis-panel';
 
@@ -27,10 +22,6 @@ interface SourceBrowserProps {
     topicKeywords?: string[];
   } | null;
   defaultClientId: string | null;
-  clients: ClientOption[];
-  linkedIdeas: LinkedIdeaOption[];
-  /** Admin-only: inline analysis uses POST /api/analysis/items (requires admin). Default true. */
-  enableInlineVideoAnalysis?: boolean;
 }
 
 export function SourceBrowser({
@@ -39,19 +30,9 @@ export function SourceBrowser({
   searchQuery,
   clientContext,
   defaultClientId,
-  clients,
-  linkedIdeas,
-  enableInlineVideoAnalysis = true,
 }: SourceBrowserProps) {
   const [showAll, setShowAll] = useState(false);
-  const [detail, setDetail] = useState<{
-    source: PlatformSource;
-    focusRescript?: boolean;
-  } | null>(null);
-  const [videoAnalysis, setVideoAnalysis] = useState<{
-    url: string;
-    focusRescript?: boolean;
-  } | null>(null);
+  const [analysisSource, setAnalysisSource] = useState<PlatformSource | null>(null);
 
   const listSources = sources ?? [];
 
@@ -88,20 +69,20 @@ export function SourceBrowser({
         >
           {displayed.map((source) => {
             const key = sourceKey(source);
+            const isVideo = source.platform === 'tiktok' || source.platform === 'youtube';
             return (
               <div key={key} className="min-w-0 self-start">
                 <SourceMentionCard
                   source={source}
-                  onOpenDetail={(opts) => setDetail({ source, ...opts })}
-                  onAnalyze={
-                    enableInlineVideoAnalysis
-                      ? () =>
-                          setVideoAnalysis({
-                            url: source.url,
-                            focusRescript: false,
-                          })
-                      : undefined
-                  }
+                  onOpenDetail={() => {
+                    if (isVideo) {
+                      setAnalysisSource(source);
+                    } else {
+                      // Non-video sources open the URL directly
+                      window.open(source.url, '_blank', 'noopener,noreferrer');
+                    }
+                  }}
+                  onAnalyze={isVideo ? () => setAnalysisSource(source) : undefined}
                 />
               </div>
             );
@@ -125,34 +106,14 @@ export function SourceBrowser({
         </button>
       )}
 
-      <SourceDetailDialog
-        key={detail?.source ? sourceKey(detail.source) : 'closed'}
-        open={detail != null}
-        onClose={() => setDetail(null)}
-        source={detail?.source ?? null}
-        focusRescript={detail?.focusRescript}
-        searchId={searchId}
-        defaultClientId={defaultClientId}
-        clients={clients}
-        linkedIdeas={linkedIdeas}
-        onSourcePatched={(updated) =>
-          setDetail((d) =>
-            d && d.source.id === updated.id && d.source.platform === updated.platform ? { ...d, source: updated } : d,
-          )
-        }
+      <VideoAnalysisPanel
+        open={analysisSource != null}
+        onClose={() => setAnalysisSource(null)}
+        sourceUrl={analysisSource?.url ?? ''}
+        topicSearchId={searchId}
+        clientId={defaultClientId}
+        clientName={clientContext?.name ?? null}
       />
-
-      {enableInlineVideoAnalysis && (
-        <VideoAnalysisPanel
-          open={videoAnalysis != null}
-          onClose={() => setVideoAnalysis(null)}
-          sourceUrl={videoAnalysis?.url ?? ''}
-          topicSearchId={searchId}
-          clientId={defaultClientId}
-          clientName={clientContext?.name ?? null}
-          focusRescript={videoAnalysis?.focusRescript}
-        />
-      )}
     </section>
   );
 }

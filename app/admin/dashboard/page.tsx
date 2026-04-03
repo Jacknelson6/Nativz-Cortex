@@ -78,12 +78,6 @@ export default async function AdminDashboardPage() {
             description="Plan and publish content"
           />
           <BentoTile
-            href="/admin/ideas"
-            icon={<Sparkles size={20} className="text-accent-text" />}
-            label="Generate strategy"
-            description="Content ideas and scripts"
-          />
-          <BentoTile
             href="/admin/search/new"
             icon={<Search size={20} className="text-accent-text" />}
             label="Research topic"

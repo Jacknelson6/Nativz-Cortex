@@ -112,7 +112,7 @@ const NAV_SECTIONS: NavSection[] = [
 
 function isActivePath(pathname: string, href: string, searchParams?: URLSearchParams) {
   if (href === '/admin/search/new') {
-    return pathname.startsWith('/admin/search') || pathname.startsWith('/admin/ideas');
+    return pathname.startsWith('/admin/search');
   }
 
   // Pipeline root "All stages" shares /admin/pipeline with ?stage=… filtered views
