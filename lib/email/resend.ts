@@ -15,6 +15,11 @@ function getFromAddress(agency: AgencyBrand): string {
   return 'Nativz Cortex <notifications@nativz.io>';
 }
 
+function getReplyTo(agency: AgencyBrand): string {
+  if (agency === 'anderson') return 'jack@andersoncollaborative.com';
+  return 'jack@nativz.io';
+}
+
 // ── Shared layout ────────────────────────────────────────────────────────────
 
 function layout(content: string, agency: AgencyBrand = 'nativz') {
@@ -147,6 +152,7 @@ export async function sendTeamInviteEmail(opts: {
   const agency = opts.agency ?? 'nativz';
   const result = await getResend().emails.send({
     from: getFromAddress(agency),
+      replyTo: getReplyTo(agency),
     to: opts.to,
     subject: `You're invited to join Nativz Cortex`,
     html: layout(`
@@ -200,6 +206,7 @@ export async function sendClientInviteEmail(opts: {
   const agency = opts.agency ?? 'nativz';
   const result = await getResend().emails.send({
     from: getFromAddress(agency),
+      replyTo: getReplyTo(agency),
     to: opts.to,
     subject: `${opts.clientName} — Your content portal is ready`,
     html: layout(`
@@ -254,6 +261,7 @@ export async function sendWelcomeEmail(opts: {
   const isTeam = opts.role === 'admin';
   const result = await getResend().emails.send({
     from: getFromAddress(agency),
+      replyTo: getReplyTo(agency),
     to: opts.to,
     subject: `Welcome to Nativz Cortex`,
     html: layout(`
@@ -329,6 +337,7 @@ export async function sendAffiliateWeeklyReportEmail(opts: {
 
   const result = await getResend().emails.send({
     from: getFromAddress(agency),
+      replyTo: getReplyTo(agency),
     to: opts.to,
     subject,
     html: layout(cardHtml, agency),
@@ -364,6 +373,7 @@ export async function sendSearchCompletedEmail(opts: {
 
   const result = await getResend().emails.send({
     from: getFromAddress(agency),
+      replyTo: getReplyTo(agency),
     to: opts.to,
     subject: 'Your topic search is ready',
     html: layout(`
