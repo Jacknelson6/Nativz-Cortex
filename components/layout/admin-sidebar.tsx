@@ -200,11 +200,15 @@ export function AdminSidebar({ userName, avatarUrl }: AdminSidebarProps) {
             )}
           </button>
 
-          {/* 'Hi there!' tooltip — fixed position, pop-in + fade-out animation */}
+          {/* 'Hi there!' tooltip — centered under the logo */}
           {showHiTooltip && (
             <div
-              className="fixed top-16 left-4 z-[9999]"
-              style={{ animation: 'hiTooltip 2.2s cubic-bezier(0.16,1,0.3,1) forwards' }}
+              className="fixed top-16 z-[9999]"
+              style={{
+                animation: 'hiTooltip 2.2s cubic-bezier(0.16,1,0.3,1) forwards',
+                left: open ? '7rem' : '28px',
+                transform: 'translateX(-50%)',
+              }}
             >
               <div className="rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm font-medium text-text-primary shadow-elevated whitespace-nowrap">
                 Hi there! 👋
