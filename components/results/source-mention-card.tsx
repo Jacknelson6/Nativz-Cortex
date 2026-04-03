@@ -122,7 +122,7 @@ export function SourceMentionCard({ source, onOpenDetail, onAnalyze }: SourceMen
             <button
               data-source-action
               type="button"
-              className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-md hover:bg-white/95"
+              className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-md transition-all duration-200 hover:scale-105 hover:shadow-lg hover:bg-accent hover:text-white active:scale-95 cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenDetail();
