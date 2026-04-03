@@ -860,6 +860,7 @@ Rules:
     userId: args.userId,
     userEmail: args.userEmail,
     modelPreference: mergerModelPref ? [mergerModelPref] : undefined,
+    jsonMode: true,
   });
 
   totalTokens += mergerAi.usage.totalTokens;

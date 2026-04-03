@@ -102,6 +102,7 @@ Rules:
     userId: args.userId,
     userEmail: args.userEmail,
     modelPreference: [models.merger],
+    jsonMode: true,
   });
 
   const parsed = parseAIResponseJSON<{ pillars?: PillarCluster[] }>(ai.text);

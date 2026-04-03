@@ -49,6 +49,8 @@ interface CompletionOptions {
   userEmail?: string;
   /** OpenRouter ids to try first, before agency primary + fallbacks (deduped). */
   modelPreference?: string[];
+  /** Force JSON output mode — adds response_format: { type: "json_object" } to the API call */
+  jsonMode?: boolean;
 }
 
 // ── Model cache (5-minute TTL) ──────────────────────────────────────────────
@@ -116,6 +118,10 @@ async function callOpenRouter(
       id: 'web',
       max_results: options.webSearchMaxResults ?? 10,
     }];
+  }
+
+  if (options.jsonMode) {
+    body.response_format = { type: 'json_object' };
   }
 
   const timeoutMs = options.timeoutMs ?? 0;

@@ -171,7 +171,13 @@ export async function POST(
     try {
       const topicPipeline = (search as { topic_pipeline?: string }).topic_pipeline ?? 'legacy';
       if (topicPipeline === 'llm_v1') {
-        const result = await runLlmTopicPipeline({
+        const MAX_RETRIES = 3;
+        let lastError: Error | null = null;
+        let result: Awaited<ReturnType<typeof runLlmTopicPipeline>> | null = null;
+
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            result = await runLlmTopicPipeline({
           searchId: id,
           search: {
             query: search.query,
@@ -196,6 +202,35 @@ export async function POST(
           platforms: platforms as import('@/lib/types/search').SearchPlatform[],
           volume,
         });
+            // Success — break out of retry loop
+            lastError = null;
+            break;
+          } catch (retryErr) {
+            lastError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
+            console.error(`[process] LLM pipeline attempt ${attempt}/${MAX_RETRIES} failed:`, lastError.message);
+            if (attempt < MAX_RETRIES) {
+              // Wait 2s before retrying
+              await new Promise((r) => setTimeout(r, 2000));
+            }
+          }
+        }
+
+        if (!result || lastError) {
+          const msg = lastError?.message ?? 'Pipeline failed after retries';
+          await adminClient
+            .from('topic_searches')
+            .update({
+              status: 'failed',
+              processing_started_at: null,
+              summary: `Search failed after ${MAX_RETRIES} attempts: ${msg}`,
+            })
+            .eq('id', id);
+          await notifyTopicSearchFailedOnce(adminClient, id);
+          return NextResponse.json(
+            { error: 'Search failed', details: msg },
+            { status: 500 },
+          );
+        }
 
         // Ensure all jsonb fields are valid (Supabase rejects null/undefined in jsonb columns)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
