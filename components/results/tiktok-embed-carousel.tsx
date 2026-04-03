@@ -15,6 +15,7 @@ import {
   Copy,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import type { PlatformSource } from '@/lib/types/search';
 import type { MoodboardItem, TranscriptSegment } from '@/lib/types/moodboard';
 import { formatCompactCount, formatRelativeTime } from '@/lib/utils/format';
@@ -155,6 +156,17 @@ export function TikTokEmbedCarousel({
           const an = await fetch(`/api/analysis/items/${item.id}/analyze`, { method: 'POST' });
           if (an.ok && !cancelled) { item = await an.json(); setAnalysisItem(item); }
         }
+
+        // Final re-fetch to ensure we have the latest data (frames may have been written by extract-frames)
+        if (!cancelled) {
+          try {
+            const finalRes = await fetch(`/api/analysis/items/${item.id}`);
+            if (finalRes.ok) {
+              const finalItem = await finalRes.json();
+              setAnalysisItem(finalItem as MoodboardItem);
+            }
+          } catch { /* best effort */ }
+        }
       } catch {
         // Analysis is best-effort
       } finally {
@@ -195,7 +207,7 @@ export function TikTokEmbedCarousel({
       {/* Main layout */}
       <div className="relative flex h-full w-full" onClick={onClose}>
         {/* Left section: video area — clicking blank space here DOES close */}
-        <div className="flex flex-1 items-center justify-center pr-[420px]">
+        <div className="flex flex-1 items-center justify-center pr-[480px]">
           {/* Arrow + Video + Arrow — inline flex so arrows stay next to video */}
           <div className="flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
             <button
@@ -246,7 +258,7 @@ export function TikTokEmbedCarousel({
 
         {/* Right sidebar — stop propagation so clicking here doesn't close */}
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-        <div className="absolute right-0 top-0 z-10 flex h-full w-[420px] flex-col border-l border-white/10 bg-surface/95 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute right-0 top-0 z-10 flex h-full w-[480px] flex-col border-l border-white/10 bg-surface/95 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between border-b border-nativz-border/60 px-5 py-4">
             <h3 className="text-sm font-semibold text-text-primary">Video details</h3>
             <button
@@ -261,7 +273,7 @@ export function TikTokEmbedCarousel({
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-5">
             {/* Creator */}
             <section>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted mb-2">Creator</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">Creator</p>
               <div className="flex items-center gap-3">
                 {source.thumbnailUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -288,7 +300,7 @@ export function TikTokEmbedCarousel({
 
             {/* Description */}
             <section>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted mb-2">Description</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">Description</p>
               <p className="text-sm leading-relaxed text-text-secondary">
                 {source.content || source.title || 'No description'}
               </p>
@@ -296,7 +308,7 @@ export function TikTokEmbedCarousel({
 
             {/* Performance */}
             <section>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted mb-3">Performance</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">Performance</p>
               <div className="space-y-2.5">
                 {source.engagement.views != null && (
                   <div className="flex items-center justify-between">
@@ -349,7 +361,7 @@ export function TikTokEmbedCarousel({
 
             {/* Details */}
             <section>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted mb-3">Details</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">Details</p>
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-2 text-sm text-text-secondary">
@@ -376,13 +388,13 @@ export function TikTokEmbedCarousel({
             {/* Hook analysis */}
             {(analysisItem?.hook_analysis || analysisItem?.hook) && (
               <section>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted mb-2">Hook analysis</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">Hook analysis</p>
                 <div className="rounded-lg border border-accent/20 bg-accent-surface/30 p-3 space-y-2">
                   {analysisItem.hook && (
                     <p className="text-xs font-medium text-accent-text">&ldquo;{analysisItem.hook}&rdquo;</p>
                   )}
                   {analysisItem.hook_analysis && (
-                    <p className="text-xs leading-relaxed text-text-secondary">{analysisItem.hook_analysis}</p>
+                    <p className="text-sm leading-relaxed text-text-secondary">{analysisItem.hook_analysis}</p>
                   )}
                   <div className="flex flex-wrap gap-1.5">
                     {analysisItem.hook_type && (
@@ -403,16 +415,19 @@ export function TikTokEmbedCarousel({
               return (
                 <section>
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted">Transcript</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">Transcript</p>
                     <button
                       type="button"
-                      onClick={() => void navigator.clipboard.writeText(transcript)}
-                      className="inline-flex items-center gap-1 text-[10px] font-medium text-text-muted hover:text-text-secondary"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(transcript);
+                        toast.success('Transcript copied');
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
                     >
-                      <Copy size={9} /> Copy
+                      <Copy size={13} /> Copy
                     </button>
                   </div>
-                  <div className="max-h-36 overflow-y-auto rounded-lg border border-nativz-border bg-background/40 p-3 text-xs leading-relaxed text-text-secondary">
+                  <div className="max-h-36 overflow-y-auto rounded-lg border border-nativz-border bg-background/40 p-3 text-sm leading-relaxed text-text-secondary">
                     {transcript}
                   </div>
                 </section>
@@ -438,7 +453,7 @@ export function TikTokEmbedCarousel({
 
               return (
                 <section>
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-text-muted mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">
                     Frame breakdown{frames.length > 0 ? ` (${frames.length})` : ''}
                   </p>
                   <ul className="max-h-60 space-y-1.5 overflow-y-auto">
@@ -448,7 +463,7 @@ export function TikTokEmbedCarousel({
                         ? frames.reduce((best, f) => Math.abs(f.timestamp - b.start) < Math.abs(best.timestamp - b.start) ? f : best)
                         : undefined;
                       return (
-                        <li key={b.start} className="flex gap-2 rounded-lg border border-nativz-border/60 bg-surface-hover/20 p-1.5 text-[11px]">
+                        <li key={b.start} className="flex gap-2 rounded-lg border border-nativz-border/60 bg-surface-hover/20 p-1.5 text-sm">
                           {matchFrame && (
                             <div className="relative w-10 shrink-0 overflow-hidden rounded border border-nativz-border">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -457,8 +472,8 @@ export function TikTokEmbedCarousel({
                           )}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 mb-0.5">
-                              <span className="font-mono text-[9px] text-text-muted">{formatTs(b.start)}–{formatTs(b.end)}</span>
-                              <Badge variant="mono" className="text-[9px] px-1 py-0">{clipLabel(ct)}</Badge>
+                              <span className="font-mono text-xs text-text-muted">{formatTs(b.start)}–{formatTs(b.end)}</span>
+                              <Badge variant="mono" className="text-xs px-1 py-0">{clipLabel(ct)}</Badge>
                             </div>
                             <p className="text-text-secondary leading-snug">{b.text || '—'}</p>
                           </div>

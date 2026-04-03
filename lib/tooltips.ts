@@ -110,13 +110,13 @@ export const TOOLTIPS: Record<string, TooltipDef> = {
       'Share of posts in this topic that fall into this format or pillar (volume mix, not a quality score).',
   },
   pillar_er_typical: {
-    title: 'ER',
+    title: "Engagement rate",
     description:
-      'Typical engagement rate for this content type within this topic’s evidence — likes, comments, and views relative to reach, expressed as a percentage (e.g. 0.7% means seven-tenths of a percent).',
+      "Typical engagement rate for this content type within this topic’s evidence - likes, comments, and views relative to reach, expressed as a percentage (e.g. 0.7% means seven-tenths of a percent).",
   },
   pillar_er_your: {
-    title: 'Your ER',
+    title: "Your engagement rate",
     description:
-      'Estimated engagement if your attached client published this format for this topic — based on how well the angle fits their business, brand voice, and content strategy versus the typical rate above. Shown when a client is linked to the search.',
+      "Estimated engagement if your attached client published this format for this topic - based on how well the angle fits their business, brand voice, and content strategy versus the typical rate above. Shown when a client is linked to the search.",
   },
 };
