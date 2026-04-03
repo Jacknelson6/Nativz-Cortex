@@ -75,6 +75,15 @@ export function parseAIResponseJSON<T>(rawText: string): T {
     // Fall through
   }
 
+  // Attempt 2b: fix unescaped literal newlines inside JSON strings
+  // The AI sometimes puts raw newlines inside string values which breaks JSON.parse
+  try {
+    const fixedNewlines = jsonText.replace(/(?<!\\)\n/g, '\\n').replace(/(?<!\\)\r/g, '\\r');
+    return JSON.parse(fixedNewlines) as T;
+  } catch {
+    // Fall through
+  }
+
   // Attempt 3: fix common LLM JSON issues
   let repaired = stripMarkdownFromJsonStrings(jsonText);
 
@@ -85,9 +94,11 @@ export function parseAIResponseJSON<T>(rawText: string): T {
   repaired = repaired.replace(/[\u201C\u201D]/g, '"');
   repaired = repaired.replace(/[\u2018\u2019]/g, "'");
 
-  // Fix unescaped control characters inside strings
+  // Fix unescaped control characters inside strings — escape instead of strip
   repaired = repaired.replace(/[\x00-\x1F\x7F]/g, (ch) => {
-    if (ch === '\n' || ch === '\r' || ch === '\t') return ch;
+    if (ch === '\n') return '\\n';
+    if (ch === '\r') return '\\r';
+    if (ch === '\t') return '\\t';
     return '';
   });
 
