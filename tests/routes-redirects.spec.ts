@@ -17,7 +17,8 @@ test.describe('Portal routes → login', () => {
   for (const path of PORTAL_PROTECTED_ROUTES) {
     test(`redirect ${path}`, async ({ page }) => {
       await page.goto(path, { waitUntil: 'domcontentloaded' });
-      await expect(page).toHaveURL(/\/portal\/login(\?|$)/);
+      // Unified login: portal routes redirect to /admin/login
+      await expect(page).toHaveURL(/\/admin\/login(\?|$)/);
     });
   }
 });
@@ -32,11 +33,14 @@ test.describe('Login pages stay put', () => {
     });
   });
 
-  test('/portal/login does not redirect away when logged out', async ({ page }) => {
+  test('/portal/login redirects to unified login', async ({ page }) => {
     await page.context().clearCookies();
     await page.goto('/portal/login', { waitUntil: 'load' });
-    await expect(page).toHaveURL(/\/portal\/login/);
-    await expect(page.getByText(/client portal sign in/i)).toBeVisible({ timeout: 15_000 });
+    // Portal login now redirects to unified /admin/login
+    await expect(page).toHaveURL(/\/admin\/login/);
+    await expect(page.getByRole('heading', { name: /sign in to cortex/i })).toBeVisible({
+      timeout: 15_000,
+    });
   });
 });
 

@@ -31,6 +31,7 @@ async function getAuthUserResilient(supabase: SupabaseFromMiddleware): Promise<U
 // ---------------------------------------------------------------------------
 const ALLOWED_ORIGINS = new Set([
   'https://cortex.nativz.io',
+  'https://cortex.andersoncollaborative.com',
   'http://localhost:3000',
   'http://localhost:3001',
 ]);

@@ -150,13 +150,24 @@ export async function POST(req: NextRequest) {
   const agency = await resolveAgencyFromHookPayload({ ...body, data });
   const { subject, html } = buildEmailHtml(type as EmailType, data, agency);
 
-  await getResend().emails.send({
-    from: getFromAddress(agency),
-    to: email,
-    subject,
-    html,
-  });
+  try {
+    const { error: sendError } = await getResend().emails.send({
+      from: getFromAddress(agency),
+      to: email,
+      subject,
+      html,
+    });
 
+    if (sendError) {
+      console.error(`[auth/send-email] Resend error for ${type} to ${email}:`, sendError);
+      return new NextResponse(null, { status: 500 });
+    }
+  } catch (err) {
+    console.error(`[auth/send-email] Failed to send ${type} email to ${email}:`, err);
+    return new NextResponse(null, { status: 500 });
+  }
+
+  console.log(`[auth/send-email] Sent ${type} email to ${email} (agency=${agency})`);
   // Supabase requires a 200 with empty body on success
   return new NextResponse(null, { status: 200 });
 }

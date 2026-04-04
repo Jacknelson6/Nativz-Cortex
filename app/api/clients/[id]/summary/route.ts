@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessClient } from '@/lib/api/client-access';
 
 /**
  * GET /api/clients/[id]/summary
@@ -30,6 +31,11 @@ export async function GET(
     }
 
     const admin = createAdminClient();
+
+    const access = await assertUserCanAccessClient(admin, user.id, id);
+    if (!access.allowed) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
+    }
 
     // Fetch everything in parallel
     const now = new Date();

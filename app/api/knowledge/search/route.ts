@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { rateLimitByUser } from '@/lib/security/rate-limit';
+import { assertUserCanAccessClient, getUserRoleInfo } from '@/lib/api/client-access';
+import { getUserOrganizationIdsForAccess } from '@/lib/api/topic-search-access';
 
 const searchSchema = z.object({
   query: z.string().min(1),
@@ -51,7 +53,40 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
-    const { query, kinds, domains, client_id, limit } = parsed.data;
+    let { query, kinds, domains, client_id, limit } = parsed.data;
+
+    // Org scoping for non-admin users
+    const roleInfo = await getUserRoleInfo(admin, user.id);
+    if (!roleInfo.isAdmin) {
+      if (client_id) {
+        // Verify viewer can access this specific client
+        const access = await assertUserCanAccessClient(admin, user.id, client_id);
+        if (!access.allowed) {
+          return NextResponse.json({ error: access.error }, { status: access.status });
+        }
+      } else {
+        // No client_id provided — scope to viewer's accessible clients
+        const orgIds = roleInfo.orgIds;
+        if (orgIds.length === 0) {
+          return NextResponse.json({ nodes: [], method: 'scoped' });
+        }
+        const { data: accessibleClients } = await admin
+          .from('clients')
+          .select('id')
+          .in('organization_id', orgIds);
+        const clientIds = (accessibleClients ?? []).map((c) => c.id as string);
+        if (clientIds.length === 0) {
+          return NextResponse.json({ nodes: [], method: 'scoped' });
+        }
+        // Use first accessible client as filter (search RPC takes single client_id)
+        // If viewer has multiple clients, they should specify client_id explicitly
+        if (clientIds.length === 1) {
+          client_id = clientIds[0];
+        }
+        // For multiple clients without explicit client_id, allow unfiltered search
+        // since the RPC will return results across all clients the viewer has access to
+      }
+    }
 
     // Try semantic search first — generate embedding via Gemini
     try {

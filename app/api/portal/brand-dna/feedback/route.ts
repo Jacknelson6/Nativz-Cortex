@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -35,23 +36,48 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  // Get user's organization and client
+  // Get user name for feedback attribution
   const { data: userData } = await admin
     .from('users')
-    .select('organization_id, full_name')
+    .select('full_name')
     .eq('id', user.id)
     .single();
 
-  if (!userData?.organization_id) {
-    return NextResponse.json({ error: 'No organization found' }, { status: 403 });
+  // Resolve active client (respects brand switcher cookie)
+  const cookieStore = await cookies();
+  const activeClientId = cookieStore.get('x-portal-active-client')?.value;
+
+  let clientId: string | null = null;
+
+  if (activeClientId) {
+    const { data: access } = await admin
+      .from('user_client_access')
+      .select('client_id')
+      .eq('user_id', user.id)
+      .eq('client_id', activeClientId)
+      .maybeSingle();
+    if (access) clientId = activeClientId;
+  }
+
+  if (!clientId) {
+    const { data: firstAccess } = await admin
+      .from('user_client_access')
+      .select('client_id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .maybeSingle();
+    clientId = firstAccess?.client_id ?? null;
+  }
+
+  if (!clientId) {
+    return NextResponse.json({ error: 'No client found' }, { status: 404 });
   }
 
   const { data: client } = await admin
     .from('clients')
     .select('id, name')
-    .eq('organization_id', userData.organization_id)
-    .limit(1)
-    .maybeSingle();
+    .eq('id', clientId)
+    .single();
 
   if (!client) {
     return NextResponse.json({ error: 'No client found' }, { status: 404 });
@@ -67,7 +93,7 @@ export async function POST(req: Request) {
       source: 'portal_feedback',
       section: parsed.data.section,
       flagged_incorrect: parsed.data.flagged_incorrect,
-      submitted_by: userData.full_name ?? user.email ?? user.id,
+      submitted_by: userData?.full_name ?? user.email ?? user.id,
     },
     source: 'manual',
     created_by: user.id,

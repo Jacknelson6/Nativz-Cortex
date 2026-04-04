@@ -2,6 +2,7 @@ import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessClient } from '@/lib/api/client-access';
 import { createCompletion } from '@/lib/ai/client';
 import { getIdeasModelFromDb } from '@/lib/ai/provider-keys';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
@@ -65,6 +66,14 @@ export async function POST(req: Request) {
 
   const { client_id, url, concept, count, reference_video_ids, search_id, pillar_ids, ideas_per_pillar } = parsed.data;
   const admin = createAdminClient();
+
+  // Org-scope check when client_id is provided
+  if (client_id) {
+    const access = await assertUserCanAccessClient(admin, user.id, client_id);
+    if (!access.allowed) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
+    }
+  }
 
   // ── Create generation record ──
   const { data: generation, error: createError } = await admin

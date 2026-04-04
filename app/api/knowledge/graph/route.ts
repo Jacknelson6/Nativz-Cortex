@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessClient, getUserRoleInfo } from '@/lib/api/client-access';
 
 /**
  * GET /api/knowledge/graph
@@ -30,6 +31,20 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') ?? '2000', 10), 5000);
 
     const admin = createAdminClient();
+
+    // Org scoping for viewers
+    if (clientIdParam && clientIdParam !== 'agency') {
+      const access = await assertUserCanAccessClient(admin, user.id, clientIdParam);
+      if (!access.allowed) {
+        return NextResponse.json({ error: access.error }, { status: access.status });
+      }
+    } else {
+      // No specific client — viewers must not see all data
+      const roleInfo = await getUserRoleInfo(admin, user.id);
+      if (!roleInfo.isAdmin) {
+        return NextResponse.json({ error: 'client_id is required' }, { status: 400 });
+      }
+    }
 
     // ── Fetch knowledge_nodes ──────────────────────────────────────────────
 

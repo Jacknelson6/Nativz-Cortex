@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { writeNodeToGitHub } from '@/lib/knowledge/github-sync';
+import { assertUserCanAccessClient, getUserRoleInfo } from '@/lib/api/client-access';
 
 const updateSchema = z.object({
   title: z.string().min(1).optional(),
@@ -42,6 +43,20 @@ export async function GET(
 
     if (error || !data) {
       return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+    }
+
+    // Org scoping: if the node belongs to a client, verify viewer access
+    if (data.client_id) {
+      const access = await assertUserCanAccessClient(admin, user.id, data.client_id as string);
+      if (!access.allowed) {
+        return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+      }
+    } else {
+      // Node has no client_id (agency-level) — only admins can view
+      const roleInfo = await getUserRoleInfo(admin, user.id);
+      if (!roleInfo.isAdmin) {
+        return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+      }
     }
 
     return NextResponse.json({ node: data });

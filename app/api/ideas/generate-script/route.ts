@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessClient } from '@/lib/api/client-access';
 import { generateSpokenScript } from '@/lib/ideas/spoken-script';
 
 const scriptSchema = z.object({
@@ -51,6 +52,12 @@ export async function POST(req: Request) {
 
   const { client_id, title, why_it_works, content_pillar, reference_video_ids, idea_entry_id, cta, video_length_seconds, target_word_count, hook_strategies } = parsed.data;
   const admin = createAdminClient();
+
+  // Org-scope check
+  const access = await assertUserCanAccessClient(admin, user.id, client_id);
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
 
   try {
     const { scriptText, usage, estimatedCost } = await generateSpokenScript({

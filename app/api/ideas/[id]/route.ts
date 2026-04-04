@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessClient } from '@/lib/api/client-access';
 
 /**
  * GET /api/ideas/[id]
@@ -26,12 +27,20 @@ export async function GET(
   const admin = createAdminClient();
   const { data, error } = await admin
     .from('idea_generations')
-    .select('id, status, ideas, error_message, completed_at')
+    .select('id, client_id, status, ideas, error_message, completed_at')
     .eq('id', id)
     .single();
 
   if (error || !data) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  // Org-scope check for non-admin users
+  if (data.client_id) {
+    const access = await assertUserCanAccessClient(admin, user.id, data.client_id);
+    if (!access.allowed) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
+    }
   }
 
   return NextResponse.json(data);

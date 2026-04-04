@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getKnowledgeEntries, createKnowledgeEntry } from '@/lib/knowledge/queries';
+import { assertUserCanAccessClient } from '@/lib/api/client-access';
 import { KNOWLEDGE_ENTRY_TYPES, type KnowledgeEntryType } from '@/lib/knowledge/types';
 
 const knowledgeTypeEnum = z.enum(KNOWLEDGE_ENTRY_TYPES as unknown as [string, ...string[]]);
@@ -37,6 +38,12 @@ export async function GET(
     }
 
     const { id: clientId } = await params;
+
+    const adminClient = createAdminClient();
+    const access = await assertUserCanAccessClient(adminClient, user.id, clientId);
+    if (!access.allowed) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
+    }
 
     const typeParam = request.nextUrl.searchParams.get('type');
     const type = typeParam as KnowledgeEntryType | undefined;

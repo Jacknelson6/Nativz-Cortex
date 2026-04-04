@@ -135,7 +135,11 @@ export default async function PortalLayout({
   // Detect auth pages (login, join) — skip sidebar for unauthenticated pages
   const headersList = await headers();
   const pathname = headersList.get('x-pathname') || headersList.get('x-invoke-path') || '';
-  const isAuthPage = pathname.includes('/portal/login') || pathname.includes('/portal/join');
+  const isAuthPage =
+    pathname.includes('/portal/login') ||
+    pathname.includes('/portal/join') ||
+    pathname.includes('/portal/forgot-password') ||
+    pathname.includes('/portal/reset-password');
 
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { assertUserCanAccessClient } from '@/lib/api/client-access';
 
 const rejectSchema = z.object({
   client_id: z.string().uuid(),
@@ -39,6 +40,13 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient();
+
+  // Org-scope check
+  const access = await assertUserCanAccessClient(admin, user.id, parsed.data.client_id);
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
+
   await admin.from('rejected_ideas').insert({
     client_id: parsed.data.client_id,
     title: parsed.data.title,

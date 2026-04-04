@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { writeNodeToGitHub } from '@/lib/knowledge/github-sync';
+import { assertUserCanAccessClient, getUserRoleInfo } from '@/lib/api/client-access';
 import { ALLOWED_NODE_KINDS, slugifyNodeId } from '@/lib/knowledge/graph-queries';
 
 const createSchema = z.object({
@@ -47,6 +48,28 @@ export async function GET(request: NextRequest) {
 
     const admin = createAdminClient();
 
+    // Org scoping for viewers
+    let viewerClientIds: string[] | null = null; // null = no restriction (admin)
+    const roleInfo = await getUserRoleInfo(admin, user.id);
+    if (!roleInfo.isAdmin) {
+      if (clientIdParam && clientIdParam !== 'agency') {
+        const access = await assertUserCanAccessClient(admin, user.id, clientIdParam);
+        if (!access.allowed) {
+          return NextResponse.json({ error: access.error }, { status: access.status });
+        }
+      } else {
+        // Viewer without client_id — find their accessible clients
+        const { data: accessibleClients } = await admin
+          .from('clients')
+          .select('id')
+          .in('organization_id', roleInfo.orgIds);
+        viewerClientIds = (accessibleClients ?? []).map((c) => c.id as string);
+        if (viewerClientIds.length === 0) {
+          return NextResponse.json({ nodes: [] });
+        }
+      }
+    }
+
     // If full-text search query is provided, use the RPC
     if (qParam && qParam.trim().length > 0) {
       const { data, error } = await admin.rpc('search_knowledge_nodes_fts', {
@@ -85,6 +108,9 @@ export async function GET(request: NextRequest) {
       query = query.is('client_id', null);
     } else if (clientIdParam) {
       query = query.or(`client_id.eq.${clientIdParam},client_id.is.null`);
+    } else if (viewerClientIds) {
+      // Viewer without explicit client_id — scope to their accessible clients
+      query = query.in('client_id', viewerClientIds);
     }
 
     const { data, error } = await query;

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { invalidateBrandContext } from '@/lib/knowledge/brand-context';
+import { assertUserCanAccessClient, getUserRoleInfo } from '@/lib/api/client-access';
 import {
   mergeProductAppendix,
   buildCanonicalProductCatalogMarkdown,
@@ -27,6 +28,11 @@ export async function GET(
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
+  const access = await assertUserCanAccessClient(admin, user.id, clientId);
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
+
   const { data: guideline } = await admin
     .from('client_knowledge_entries')
     .select('id, content, metadata, created_at, updated_at')
@@ -79,13 +85,17 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const admin = createAdminClient();
+  const roleInfo = await getUserRoleInfo(admin, user.id);
+  if (!roleInfo.isAdmin) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+  }
+
   const body = await req.json();
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 });
   }
-
-  const admin = createAdminClient();
 
   // Find active guideline
   const { data: guideline } = await admin
