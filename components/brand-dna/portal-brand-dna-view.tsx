@@ -60,7 +60,7 @@ export function PortalBrandDNAView({ clientName, guideline }: PortalBrandDNAView
         </div>
         <h2 className="text-lg font-semibold text-text-primary mb-2">Brand DNA coming soon</h2>
         <p className="text-sm text-text-muted max-w-md">
-          Your Nativz team is building your brand guideline. You&apos;ll be able to review it here once it&apos;s ready.
+          Your team is building your brand guideline. You&apos;ll be able to review it here once it&apos;s ready.
         </p>
       </div>
     );

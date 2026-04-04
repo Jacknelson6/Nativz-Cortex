@@ -34,7 +34,7 @@ export async function GET() {
     const allowed = await viewerMayUseRestApi(user.id);
     if (!allowed) {
       return NextResponse.json(
-        { error: 'API access is disabled for your organization. Contact your Nativz team.' },
+        { error: 'API access is disabled for your organization. Contact your team.' },
         { status: 403 },
       );
     }
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     const allowed = await viewerMayUseRestApi(user.id);
     if (!allowed) {
       return NextResponse.json(
-        { error: 'API access is disabled for your organization. Contact your Nativz team.' },
+        { error: 'API access is disabled for your organization. Contact your team.' },
         { status: 403 },
       );
     }
