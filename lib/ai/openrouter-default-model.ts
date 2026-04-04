@@ -2,4 +2,4 @@
  * Default OpenRouter model when `OPENROUTER_MODEL` is unset and `agency_settings.ai_model` is empty.
  * Should match the DB setting in agency_settings.ai_model for consistency.
  */
-export const DEFAULT_OPENROUTER_MODEL = 'x-ai/grok-4.20';
+export const DEFAULT_OPENROUTER_MODEL = 'qwen/qwen3.5-27b';

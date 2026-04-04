@@ -23,6 +23,7 @@ const PRICING: Record<string, { input: number; output: number }> = {
   // OpenRouter — low-cost smart defaults
   'deepseek/deepseek-v3.2': { input: 0.26 / 1_000_000, output: 0.38 / 1_000_000 },
   'qwen/qwen3-30b-a3b': { input: 0.08 / 1_000_000, output: 0.28 / 1_000_000 },
+  'qwen/qwen3.5-27b': { input: 0.2 / 1_000_000, output: 0.6 / 1_000_000 },
   // Dashscope (Alibaba/Qwen) direct
   'dashscope/qwen3.5-flash': { input: 0.07 / 1_000_000, output: 0.26 / 1_000_000 },
   'dashscope/qwen3.5-omni-flash': { input: 0.2 / 1_000_000, output: 0.6 / 1_000_000 },
