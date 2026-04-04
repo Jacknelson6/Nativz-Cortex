@@ -84,7 +84,7 @@ export function PortalResearchHub({
             'lg:min-h-0 lg:flex-1 lg:flex-col lg:items-center lg:justify-center lg:overflow-hidden',
           )}
         >
-          <div className="w-full max-w-xl px-4 lg:-mt-12">
+          <div className="w-full max-w-xl px-4 pt-8 lg:pt-0">
             <ResearchTopicForm
               clients={[client]}
               portalMode
