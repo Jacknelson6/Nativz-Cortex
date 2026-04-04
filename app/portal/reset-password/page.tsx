@@ -56,7 +56,7 @@ export default function PortalResetPasswordPage() {
       return;
     }
 
-    router.push('/portal/dashboard');
+    router.push('/portal/search/new');
   }
 
   return (

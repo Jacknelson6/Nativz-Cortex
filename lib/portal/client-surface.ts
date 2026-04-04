@@ -1,20 +1,12 @@
 /**
- * Client portal surface: **Research** + **Settings** only.
- * Other portal routes redirect here (middleware) and are omitted from the sidebar.
+ * Client portal surface home path.
+ * The bare `/portal` and `/portal/dashboard` redirect here.
  */
 export const PORTAL_HOME_PATH = '/portal/search/new' as const;
 
+/** Paths that redirect to the portal home. Only the root + dashboard. */
 const REDIRECT_HOME_PREFIXES: readonly string[] = [
   '/portal/dashboard',
-  '/portal/notifications',
-  '/portal/ideas',
-  '/portal/calendar',
-  '/portal/analyze',
-  '/portal/knowledge',
-  '/portal/nerd',
-  '/portal/reports',
-  '/portal/preferences',
-  '/portal/brand',
 ];
 
 export function shouldRedirectPortalToMinimalHome(pathname: string): boolean {
