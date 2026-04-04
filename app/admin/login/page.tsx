@@ -227,7 +227,7 @@ State of the art<br />content intelligence.
               </div>
 
               {error && (
-                <p className="text-sm text-red-500">{error}</p>
+                <p className="text-sm text-red-500 text-center">{error}</p>
               )}
 
               <button
