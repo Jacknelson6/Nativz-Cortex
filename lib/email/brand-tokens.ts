@@ -58,9 +58,10 @@ export function getEmailBrand(agency: AgencyBrand): EmailBrand {
 const NATIVZ_MARKETING_LOGO_DEFAULT =
   'https://nativz.io/wp-content/uploads/2022/12/nativz-logo-square-scaled.jpg';
 
-/** Anderson Collaborative logo URL — override via EMAIL_AC_LOGO_URL env var. */
+/** Anderson Collaborative logo URL — override via EMAIL_AC_LOGO_URL env var.
+ *  Uses the dark SVG logo (teal text on transparent) — correct for light-background emails. */
 const AC_MARKETING_LOGO_DEFAULT =
-  'https://andersoncollaborative.com/wp-content/uploads/ac-logo.png';
+  'https://cortex.andersoncollaborative.com/anderson-logo-dark.svg';
 
 export function nativzEmailLogoUrl(): string {
   const custom = process.env.EMAIL_NATIVZ_LOGO_URL?.trim();
