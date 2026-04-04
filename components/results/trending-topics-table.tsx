@@ -223,23 +223,21 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
         <div className="min-w-0">
           {sortedTopics.map((topic, i) => (
             <div key={topic.name} className="animate-stagger-in" style={{ animationDelay: `${i * 40}ms` }}>
-              <div
-                className="flex min-w-0 items-center justify-between gap-4 border-b border-nativz-border/80 px-4 py-4 last:border-b-0 sm:gap-6 sm:px-6 sm:py-4 transition-colors hover:bg-surface-hover/60"
+              <button
+                type="button"
+                onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
+                aria-expanded={expandedIndex === i}
+                className="flex w-full min-w-0 items-center justify-between gap-4 border-b border-nativz-border/80 px-4 py-4 last:border-b-0 sm:gap-6 sm:px-6 sm:py-4 transition-colors hover:bg-surface-hover/60 text-left cursor-pointer"
               >
                 <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                    aria-expanded={expandedIndex === i}
-                  >
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
                     {expandedIndex === i ? (
                       <ChevronDown size={18} className="shrink-0 text-text-muted" />
                     ) : (
                       <ChevronRight size={18} className="shrink-0 text-text-muted" />
                     )}
                     <TopicTitleCell name={topic.name} index={i} />
-                  </button>
+                  </div>
                 </div>
 
                 <div className={METRICS_GRID}>
@@ -305,7 +303,7 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
                     )}
                   </div>
                 </div>
-              </div>
+              </button>
 
               {expandedIndex === i && (
                 <TopicRowExpanded topic={topic} clientId={clientId} searchId={searchId} />

@@ -60,7 +60,15 @@ export function ScrapedVideosSection({
       .then(res => res.json())
       .then((data: { videos?: TopicSearchVideoRow[]; hooks?: TopicSearchHookRow[] }) => {
         if (cancelled) return;
-        setVideos(data.videos ?? []);
+        // Filter out non-English videos (titles with >40% non-Latin characters)
+        const allVideos = data.videos ?? [];
+        const englishVideos = allVideos.filter((v) => {
+          const text = (v.title || v.description || '').replace(/[#@\s\d.,!?;:'"()\-_/\\|+=&%$]/g, '');
+          if (!text) return true; // keep videos with no text
+          const latinChars = (text.match(/[a-zA-Z]/g) || []).length;
+          return latinChars / text.length > 0.4;
+        });
+        setVideos(englishVideos);
         setHooks(data.hooks ?? []);
       })
       .catch(() => {
