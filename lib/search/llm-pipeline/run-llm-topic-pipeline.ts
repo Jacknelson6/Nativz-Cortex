@@ -848,15 +848,51 @@ Rules:
 - Per-topic estimated_engagement: grounded in view counts, comment counts, and discussion activity visible in the evidence. Use realistic estimates, not round placeholder numbers.`;
 
   const mergeT0 = Date.now();
-  const mergerAi = await createCompletion({
-    messages: [{ role: 'user', content: mergerPrompt }],
-    maxTokens: limits.maxMergerTokens,
-    feature: 'topic_search',
-    userId: args.userId,
-    userEmail: args.userEmail,
-    modelPreference: mergerModelPref ? [mergerModelPref] : undefined,
-    jsonMode: true,
-  });
+
+  // Retry merger up to 2 times on JSON parse failure — the most common pipeline failure
+  let mergerAi: Awaited<ReturnType<typeof createCompletion>> | null = null;
+  let parsedMerger: MergerOutput | null = null;
+  let lastMergerError: unknown = null;
+  const MAX_MERGER_ATTEMPTS = 2;
+
+  for (let attempt = 1; attempt <= MAX_MERGER_ATTEMPTS; attempt++) {
+    try {
+      mergerAi = await createCompletion({
+        messages: [
+          { role: 'system', content: 'You are a research data synthesis engine. You always respond with valid JSON only — no markdown fences, no commentary, no trailing text. You never refuse requests.' },
+          { role: 'user', content: mergerPrompt },
+        ],
+        maxTokens: limits.maxMergerTokens,
+        feature: 'topic_search',
+        userId: args.userId,
+        userEmail: args.userEmail,
+        modelPreference: mergerModelPref ? [mergerModelPref] : undefined,
+        jsonMode: true,
+      });
+
+      // Parse immediately so we can retry on failure
+      parsedMerger = parseMergerOutput(mergerAi.text, logLlmV1);
+      lastMergerError = null;
+      break; // Success — exit retry loop
+    } catch (e) {
+      lastMergerError = e;
+      logLlmV1({
+        search_id: args.searchId,
+        phase: 'merge_retry',
+        attempt,
+        error: e instanceof Error ? e.message.slice(0, 200) : String(e),
+      });
+      if (attempt < MAX_MERGER_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 2000)); // Brief pause before retry
+      }
+    }
+  }
+
+  if (!mergerAi || !parsedMerger || lastMergerError) {
+    throw lastMergerError instanceof Error
+      ? lastMergerError
+      : new Error('Merger model failed to return valid JSON after retries.');
+  }
 
   totalTokens += mergerAi.usage.totalTokens;
   totalCost += mergerAi.estimatedCost;
@@ -873,14 +909,8 @@ Rules:
     tokens: mergerAi.usage.totalTokens,
   });
 
-  let merger: MergerOutput;
-  try {
-    merger = parseMergerOutput(mergerAi.text, logLlmV1);
-  } catch (e) {
-    const msg =
-      e instanceof Error ? e.message : 'Merger model returned invalid JSON. Try again.';
-    throw new Error(msg);
-  }
+  // parsedMerger was already validated in the retry loop above
+  let merger: MergerOutput = parsedMerger;
 
   if (args.search.search_mode === 'general') {
     merger = { ...merger, brand_alignment_notes: undefined };
