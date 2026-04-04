@@ -11,6 +11,7 @@ import {
   resolveOpenAiApiKeyForFeature,
   resolveOpenRouterApiKeyForFeature,
 } from '@/lib/ai/provider-keys';
+import { buildMarketingSkillsContext } from '@/lib/nerd/marketing-skills';
 
 // Register tools on module load
 registerAllTools();
@@ -535,8 +536,11 @@ export async function POST(req: NextRequest) {
       : 'https://openrouter.ai/api/v1/chat/completions';
     const requestModel = useOpenAi ? openAiModelId! : nerdModel;
 
-    // Choose system prompt based on portal vs admin
-    const systemPrompt = isPortalUser ? buildPortalSystemPrompt(portalClientName) : SYSTEM_PROMPT;
+    // Choose system prompt based on portal vs admin, with marketing skills injection
+    const basePrompt = isPortalUser ? buildPortalSystemPrompt(portalClientName) : SYSTEM_PROMPT;
+    const lastUserMsg = messages.filter((m) => m.role === 'user').pop()?.content ?? '';
+    const skillsContext = buildMarketingSkillsContext(lastUserMsg);
+    const systemPrompt = basePrompt + skillsContext;
 
     const apiMessages: Array<{ role: string; content: string; tool_call_id?: string; tool_calls?: unknown[] }> = [
       { role: 'system', content: systemPrompt },
