@@ -61,15 +61,27 @@ export async function GET(
 
     const clientId = dbClient.id;
 
+    // Fetch portal contacts for THIS specific client (not the whole org)
     const [contactsResult, { data: strategyData }] = await Promise.all([
-      dbClient.organization_id
-        ? adminClient
-            .from('users')
-            .select('id, full_name, email, avatar_url, job_title, last_login')
-            .eq('organization_id', dbClient.organization_id)
-            .eq('role', 'viewer')
-            .order('full_name')
-        : Promise.resolve({ data: [] as Array<{ id: string; full_name: string; email: string; avatar_url: string | null; job_title: string | null; last_login: string | null }> }),
+      (async () => {
+        // Get user IDs with explicit access to this client
+        const { data: accessRows } = await adminClient
+          .from('user_client_access')
+          .select('user_id')
+          .eq('client_id', clientId);
+
+        const userIds = (accessRows ?? []).map((r) => r.user_id);
+        if (userIds.length === 0) {
+          return { data: [] as Array<{ id: string; full_name: string; email: string; avatar_url: string | null; job_title: string | null; last_login: string | null }> };
+        }
+
+        return adminClient
+          .from('users')
+          .select('id, full_name, email, avatar_url, job_title, last_login')
+          .in('id', userIds)
+          .eq('role', 'viewer')
+          .order('full_name');
+      })(),
       adminClient
         .from('client_strategies')
         .select('*')
