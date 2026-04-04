@@ -116,7 +116,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/team/invite/accept') ||
     pathname.startsWith('/api/invites/validate') ||
     pathname.startsWith('/api/invites/accept') ||
-    pathname.startsWith('/api/invites/link')
+    pathname.startsWith('/api/invites/link') ||
+    pathname.startsWith('/api/auth/send-email')
   ) {
     if (pathname.startsWith('/api/')) {
       setCorsHeaders(supabaseResponse, requestOrigin);
