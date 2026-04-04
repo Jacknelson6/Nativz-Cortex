@@ -13,7 +13,7 @@ export default async function PortalNerdPage() {
 
     const { client } = result;
 
-    if ((client.feature_flags as unknown as Record<string, boolean>).can_use_nerd === false) {
+    if (!client.feature_flags.can_use_nerd) {
       return (
         <div className="cortex-page-gutter">
           <EmptyState

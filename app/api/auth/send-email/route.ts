@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { resolveAgencyFromHookPayload } from '@/lib/email/resolve-agency';
-import { layout, getFromAddress } from '@/lib/email/resend';
+import { layout, getFromAddress, getReplyTo } from '@/lib/email/resend';
 import type { AgencyBrand } from '@/lib/agency/detect';
 
 let _resend: Resend | null = null;
@@ -153,6 +153,7 @@ export async function POST(req: NextRequest) {
   try {
     const { error: sendError } = await getResend().emails.send({
       from: getFromAddress(agency),
+      replyTo: getReplyTo(agency),
       to: email,
       subject,
       html,

@@ -3,6 +3,7 @@ import { SearchX } from 'lucide-react';
 import { EmptyState } from '@/components/shared/empty-state';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchHistory, TOPIC_SEARCH_HUB_HISTORY_LIMIT } from '@/lib/research/history';
 import { PortalResearchHub } from './portal-research-hub';
 
@@ -23,6 +24,14 @@ export default async function PortalNewSearchPage() {
       </div>
     );
   }
+
+  // Fetch logo_url and agency for the client
+  const adminClient = createAdminClient();
+  const { data: clientExtra } = await adminClient
+    .from('clients')
+    .select('logo_url, agency')
+    .eq('id', result.client.id)
+    .single();
 
   // Fetch user name for greeting
   const supabase = await createServerSupabaseClient();
@@ -59,7 +68,7 @@ export default async function PortalNewSearchPage() {
       }
     >
       <PortalResearchHub
-        client={{ id: result.client.id, name: result.client.name, logo_url: null, agency: null }}
+        client={{ id: result.client.id, name: result.client.name, logo_url: (clientExtra?.logo_url as string | null) ?? null, agency: (clientExtra?.agency as string | null) ?? null }}
         historyItems={historyItems}
         userFirstName={userFirstName}
       />

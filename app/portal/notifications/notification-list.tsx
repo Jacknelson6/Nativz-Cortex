@@ -81,10 +81,13 @@ export function PortalNotificationList({ clientName, notifications: initialNotif
       } catch { /* ignore */ }
     }
     if (notif.link_path) {
-      if (notif.link_path.startsWith('http')) {
-        window.open(notif.link_path, '_blank', 'noopener');
+      const href = notif.link_path.startsWith('/admin/')
+        ? notif.link_path.replace('/admin/', '/portal/')
+        : notif.link_path;
+      if (href.startsWith('http')) {
+        window.open(href, '_blank', 'noopener');
       } else {
-        router.push(notif.link_path);
+        router.push(href);
       }
     }
   }

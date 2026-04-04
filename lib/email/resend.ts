@@ -15,7 +15,7 @@ export function getFromAddress(agency: AgencyBrand): string {
   return 'Nativz Cortex <notifications@nativz.io>';
 }
 
-function getReplyTo(agency: AgencyBrand): string {
+export function getReplyTo(agency: AgencyBrand): string {
   if (agency === 'anderson') return 'jack@andersoncollaborative.com';
   return 'jack@nativz.io';
 }
@@ -59,7 +59,6 @@ export function layout(content: string, agency: AgencyBrand = 'nativz') {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!--suppress CheckEmptyScriptTag -->
-  <link rel="stylesheet" href="https://use.typekit.net/your-kit-id.css" />
   <style>
     body { margin: 0; padding: 0; background: ${BRAND.bgDark}; font-family: ${BRAND.fontStack}; -webkit-font-smoothing: antialiased; }
     /* Card */

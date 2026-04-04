@@ -43,7 +43,7 @@ export default async function PortalCalendarPage() {
 
     const { client } = result;
 
-    if ((client.feature_flags as unknown as Record<string, boolean>).can_view_calendar === false) {
+    if (!client.feature_flags.can_view_calendar) {
       return (
         <div className="cortex-page-gutter">
           <EmptyState

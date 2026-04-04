@@ -167,22 +167,15 @@ export default async function PortalLayout({
   const userName = cached?.fullName || user.email || '';
   const avatarUrl = cached?.avatarUrl || null;
 
-  // Feature flags: prefer active brand's flags (multi-brand), fall back to cached user flags
-  let featureFlags: FeatureFlags = buildPortalFeatureFlags(null);
-
-  if (brandData.activeFeatureFlags) {
-    featureFlags = brandData.activeFeatureFlags;
-  } else if (cached?.featureFlags) {
-    featureFlags = buildPortalFeatureFlags(cached.featureFlags);
-  }
-
   // Lock brand mode: domain wins, then fall back to client's agency field
   const domainAgency = headersList.get('x-agency') as 'anderson' | 'nativz' | null;
   const activeAgency = brandData.activeAgency ?? cached?.agency ?? null;
+  const agencyLower = (activeAgency ?? '').toLowerCase();
+  const isAcAgency = agencyLower.includes('anderson') || agencyLower === 'ac';
   const forcedBrandMode: 'anderson' | 'nativz' =
     domainAgency === 'anderson'
       ? 'anderson'
-      : activeAgency === 'Anderson Collaborative'
+      : isAcAgency
       ? 'anderson'
       : 'nativz';
 
