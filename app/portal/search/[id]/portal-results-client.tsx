@@ -48,7 +48,7 @@ export function PortalResultsClient({
         <div className="flex flex-col gap-3 px-6 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <Link
-              href="/portal/reports"
+              href="/portal/search/history"
               className="mt-0.5 shrink-0 text-text-muted hover:text-text-secondary transition-colors"
             >
               <ArrowLeft size={20} />
@@ -172,7 +172,7 @@ export function PortalResultsPending({ query }: { query: string }) {
         <div className="flex flex-col gap-3 px-6 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <Link
-              href="/portal/reports"
+              href="/portal/search/history"
               className="mt-0.5 shrink-0 text-text-muted hover:text-text-secondary transition-colors"
             >
               <ArrowLeft size={20} />
@@ -196,7 +196,7 @@ export function PortalResultsPending({ query }: { query: string }) {
           </div>
           <h2 className="text-base font-semibold text-text-primary">Report coming soon</h2>
           <p className="mt-2 text-sm text-text-muted">
-            Your Nativz team is preparing this report. You&apos;ll be able to view it once it&apos;s ready.
+            Your team is preparing this report. You&apos;ll be able to view it once it&apos;s ready.
           </p>
           <div className="mt-6">
             <Link href="/portal/reports">

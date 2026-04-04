@@ -112,7 +112,7 @@ export default async function PortalDashboardPage() {
             </div>
             {recentReports.length === 0 ? (
               <p className="text-sm text-text-muted py-4 text-center">
-                No reports yet. Your Nativz team will share them here when ready.
+                No reports yet. Completed searches will appear here.
               </p>
             ) : (
               <div className="space-y-2">

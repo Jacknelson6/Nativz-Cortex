@@ -49,7 +49,7 @@ export default async function PortalCalendarPage() {
           <EmptyState
             icon={<Lock size={24} />}
             title="Calendar not enabled"
-            description="Contact your Nativz team to enable the content calendar."
+            description="Contact your team to enable the content calendar."
           />
         </div>
       );
@@ -73,6 +73,7 @@ export default async function PortalCalendarPage() {
             <CalendarDays size={20} className="text-accent-text" />
             Content calendar
           </h1>
+          <p className="text-sm text-text-muted mt-1">{client.name}</p>
           <p className="mt-1 text-sm text-text-muted">
             Upcoming and published content for your brand.
           </p>
@@ -82,7 +83,7 @@ export default async function PortalCalendarPage() {
           <EmptyState
             icon={<Calendar size={24} />}
             title="No content scheduled yet"
-            description="Your Nativz team will share scheduled posts here when they're ready."
+            description="Scheduled posts will appear here when they're ready."
           />
         ) : (
           <div className="space-y-6">

@@ -20,7 +20,7 @@ export default async function PortalPreferencesPage() {
           <EmptyState
             icon={<Lock size={24} />}
             title="Preferences not enabled"
-            description="Contact your Nativz team to enable brand preference editing."
+            description="Contact your team to enable brand preference editing."
           />
         </div>
       );
@@ -41,6 +41,7 @@ export default async function PortalPreferencesPage() {
             <Palette size={20} className="text-accent-text" />
             <h1 className="ui-page-title">Brand preferences</h1>
           </div>
+          <p className="text-sm text-text-muted mt-1">{client.name}</p>
           <p className="mt-1 text-sm text-text-muted">
             Shape how your content ideas are generated. Update these anytime — they feed directly into your ideation pipeline.
           </p>

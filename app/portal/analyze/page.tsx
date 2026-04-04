@@ -22,7 +22,7 @@ export default async function PortalAnalyzePage() {
           <EmptyState
             icon={<Lock size={24} />}
             title="Analyze not enabled"
-            description="Contact your Nativz team to enable content analysis."
+            description="Contact your team to enable content analysis."
           />
         </div>
       );
@@ -88,6 +88,7 @@ export default async function PortalAnalyzePage() {
             <Microscope size={20} className="text-accent-text" />
             Analyze
           </h1>
+          <p className="text-sm text-text-muted mt-1">{client.name}</p>
           <p className="mt-1 text-sm text-text-muted">
             Content analysis boards shared with your brand.
           </p>
@@ -97,7 +98,7 @@ export default async function PortalAnalyzePage() {
           <EmptyState
             icon={<Layers size={24} />}
             title="No analysis boards yet"
-            description="Your Nativz team will share content analysis boards here when they're ready."
+            description="Content analysis boards will appear here when they're ready."
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

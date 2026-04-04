@@ -19,7 +19,7 @@ export default async function PortalNerdPage() {
           <EmptyState
             icon={<Lock size={24} />}
             title="The Nerd is not enabled"
-            description="Contact your Nativz team to enable AI chat."
+            description="Contact your team to enable AI chat."
           />
         </div>
       );

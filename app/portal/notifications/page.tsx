@@ -21,7 +21,7 @@ export default async function PortalNotificationsPage() {
           <EmptyState
             icon={<Lock size={24} />}
             title="Notifications not enabled"
-            description="Contact your Nativz team to enable notifications."
+            description="Contact your team to enable notifications."
           />
         </div>
       );
@@ -49,7 +49,7 @@ export default async function PortalNotificationsPage() {
 
     return (
       <div className="cortex-page-gutter max-w-3xl mx-auto">
-        <PortalNotificationList notifications={notifications ?? []} />
+        <PortalNotificationList clientName={client.name} notifications={notifications ?? []} />
       </div>
     );
   } catch (error) {

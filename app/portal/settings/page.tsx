@@ -1,42 +1,41 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { buildPortalFeatureFlags } from '@/lib/portal/feature-flags';
 import { PasswordChangeForm } from '@/components/portal/password-change-form';
+import { getPortalClient } from '@/lib/portal/get-portal-client';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
 export default async function PortalSettingsPage() {
+  const result = await getPortalClient();
+  if (!result) return null;
+
+  const { client } = result;
+
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-
   if (!user) return null;
 
   const adminClient = createAdminClient();
-
   const { data: userData } = await adminClient
     .from('users')
-    .select('full_name, email, organization_id')
+    .select('full_name, email')
     .eq('id', user.id)
     .single();
 
-  const { data: clients } = await adminClient
+  // Get full client details for brand profile section
+  const { data: clientDetails } = await adminClient
     .from('clients')
-    .select('name, industry, target_audience, brand_voice, topic_keywords, feature_flags')
-    .eq('organization_id', userData?.organization_id)
-    .eq('is_active', true);
+    .select('name, industry, target_audience, brand_voice, topic_keywords, feature_flags, agency')
+    .eq('id', client.id)
+    .single();
 
-  const client = clients?.[0] as {
-    name: string;
-    industry: string;
-    target_audience: string | null;
-    brand_voice: string | null;
-    topic_keywords: string[] | null;
-    feature_flags: unknown;
-  } | undefined;
-
-  const featureAccess = client ? buildPortalFeatureFlags(client.feature_flags) : null;
+  const featureAccess = clientDetails ? buildPortalFeatureFlags(clientDetails.feature_flags) : null;
+  const agencyName = (clientDetails?.agency as string)?.toLowerCase().includes('anderson')
+    ? 'Anderson Collaborative'
+    : 'Nativz';
 
   return (
     <div className="cortex-page-gutter space-y-6 max-w-2xl">
@@ -65,32 +64,32 @@ export default async function PortalSettingsPage() {
         <PasswordChangeForm />
       </Card>
 
-      {/* Brand info */}
-      {client && (
+      {/* Brand info — uses active brand from getPortalClient() */}
+      {clientDetails && (
         <Card>
           <h2 className="text-base font-semibold text-text-primary mb-4">Brand profile</h2>
           <div className="space-y-3">
             <div>
               <p className="text-sm text-text-muted">Company</p>
-              <p className="text-sm font-medium text-text-primary">{client.name}</p>
+              <p className="text-sm font-medium text-text-primary">{clientDetails.name}</p>
             </div>
             <div>
               <p className="text-sm text-text-muted">Industry</p>
-              <p className="text-sm font-medium text-text-primary">{client.industry}</p>
+              <p className="text-sm font-medium text-text-primary">{clientDetails.industry || 'Not set'}</p>
             </div>
             <div>
               <p className="text-sm text-text-muted">Target audience</p>
-              <p className="text-sm font-medium text-text-primary">{client.target_audience || 'Not set'}</p>
+              <p className="text-sm font-medium text-text-primary">{clientDetails.target_audience || 'Not set'}</p>
             </div>
             <div>
               <p className="text-sm text-text-muted">Brand voice</p>
-              <p className="text-sm font-medium text-text-primary">{client.brand_voice || 'Not set'}</p>
+              <p className="text-sm font-medium text-text-primary">{clientDetails.brand_voice || 'Not set'}</p>
             </div>
-            {client.topic_keywords && client.topic_keywords.length > 0 && (
+            {clientDetails.topic_keywords && (clientDetails.topic_keywords as string[]).length > 0 && (
               <div>
                 <p className="text-sm text-text-muted mb-1">Topic keywords</p>
                 <div className="flex flex-wrap gap-1">
-                  {client.topic_keywords.map((kw) => (
+                  {(clientDetails.topic_keywords as string[]).map((kw: string) => (
                     <Badge key={kw}>{kw}</Badge>
                   ))}
                 </div>
@@ -137,7 +136,7 @@ export default async function PortalSettingsPage() {
             </div>
           </div>
           <p className="mt-3 text-xs text-text-muted">
-            Contact your Nativz team to change feature access.
+            Contact your {agencyName} team to change feature access.
           </p>
         </Card>
       )}

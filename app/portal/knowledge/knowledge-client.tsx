@@ -44,10 +44,11 @@ const TYPE_CONFIG: Record<string, { label: string; variant: 'default' | 'info' |
 
 interface KnowledgeClientProps {
   clientId: string;
+  clientName: string;
   entries: KnowledgeEntry[];
 }
 
-export function KnowledgeClient({ clientId, entries: initialEntries }: KnowledgeClientProps) {
+export function KnowledgeClient({ clientId, clientName, entries: initialEntries }: KnowledgeClientProps) {
   const router = useRouter();
   const [entries, setEntries] = useState(initialEntries);
   const [searchQuery, setSearchQuery] = useState('');
@@ -98,6 +99,7 @@ export function KnowledgeClient({ clientId, entries: initialEntries }: Knowledge
             <Brain size={20} className="text-accent-text" />
             Knowledge
           </h1>
+          <p className="text-sm text-text-muted mt-1">{clientName}</p>
           <p className="mt-1 text-sm text-text-muted">
             Brand assets, documents, and notes for your brand.
           </p>

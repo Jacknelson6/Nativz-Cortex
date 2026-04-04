@@ -23,7 +23,7 @@ export default async function PortalReportsPage() {
         <EmptyState
           icon={<FileX size={32} />}
           title="Reports are not enabled"
-          description="Report viewing is not enabled for your account. Contact your Nativz team for access."
+          description="Report viewing is not enabled for your account. Contact your team for access."
         />
       </div>
     );
@@ -65,7 +65,7 @@ export default async function PortalReportsPage() {
         <EmptyState
           icon={<FileText size={32} />}
           title="No reports yet"
-          description="Topic research reports from your Nativz team will appear here."
+          description="Completed topic research reports will appear here."
         />
       ) : (
         <div className="space-y-2">

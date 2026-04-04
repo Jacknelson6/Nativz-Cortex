@@ -1,4 +1,4 @@
-import { Lock } from 'lucide-react';
+import { Lock, Lightbulb } from 'lucide-react';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -21,7 +21,7 @@ export default async function PortalIdeasPage() {
           <EmptyState
             icon={<Lock size={24} />}
             title="Ideas not enabled"
-            description="Contact your Nativz team to enable idea submissions."
+            description="Contact your team to enable idea submissions."
           />
         </div>
       );
@@ -47,6 +47,16 @@ export default async function PortalIdeasPage() {
 
     return (
       <div className="cortex-page-gutter max-w-3xl mx-auto">
+        <div className="mb-6">
+          <h1 className="ui-page-title flex items-center gap-2.5">
+            <Lightbulb size={20} className="text-accent-text" />
+            Ideas
+          </h1>
+          <p className="text-sm text-text-muted mt-1">{client.name}</p>
+          <p className="mt-1 text-sm text-text-muted">
+            Submit and track content ideas for your brand.
+          </p>
+        </div>
         <PortalIdeasTabs
           clientId={client.id}
           submissions={(ideasResult.data || []) as IdeaSubmission[]}

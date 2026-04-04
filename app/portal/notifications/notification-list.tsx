@@ -37,10 +37,11 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
 };
 
 interface PortalNotificationListProps {
+  clientName: string;
   notifications: Notification[];
 }
 
-export function PortalNotificationList({ notifications: initialNotifications }: PortalNotificationListProps) {
+export function PortalNotificationList({ clientName, notifications: initialNotifications }: PortalNotificationListProps) {
   const router = useRouter();
   const [notifications, setNotifications] = useState(initialNotifications);
 
@@ -96,6 +97,7 @@ export function PortalNotificationList({ notifications: initialNotifications }: 
             <Bell size={20} className="text-accent-text" />
             Notifications
           </h1>
+          <p className="text-sm text-text-muted mt-1">{clientName}</p>
           <p className="mt-1 text-sm text-text-muted">
             Stay updated on your content performance and reports.
           </p>

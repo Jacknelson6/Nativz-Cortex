@@ -20,7 +20,7 @@ export default async function PortalKnowledgePage() {
           <EmptyState
             icon={<Lock size={24} />}
             title="Knowledge base not enabled"
-            description="Contact your Nativz team to enable the knowledge base."
+            description="Contact your team to enable the knowledge base."
           />
         </div>
       );
@@ -37,7 +37,7 @@ export default async function PortalKnowledgePage() {
 
     return (
       <div className="cortex-page-gutter max-w-3xl mx-auto">
-        <KnowledgeClient clientId={client.id} entries={entries ?? []} />
+        <KnowledgeClient clientId={client.id} clientName={client.name} entries={entries ?? []} />
       </div>
     );
   } catch (error) {
