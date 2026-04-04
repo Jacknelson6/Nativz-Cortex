@@ -59,16 +59,16 @@ function buildEmailHtml(
     case 'invite': {
       const url = (data.invitation_url ?? data.confirmation_url) as string | undefined;
       return {
-        subject: "You've been invited to Cortex",
+        subject: "You're invited to Cortex",
         html: layout(
           `<div class="card">
-            <h1 class="heading">You&rsquo;ve been invited to Cortex.</h1>
+            <h1 class="heading">You&rsquo;re invited.</h1>
             <p class="subtext">
-              You&rsquo;ve been invited to access Cortex &mdash; the AI-powered content research platform. Click the button below to set up your account.
+              You&rsquo;ve been invited to Cortex. Click below to set up your account.
             </p>
             ${url ? `<div class="button-wrap"><a href="${url}" class="button">Accept invitation &rarr;</a></div>` : ''}
             <hr class="divider" />
-            <p class="small">This link expires in 7 days. If you weren&rsquo;t expecting an invitation, you can safely ignore this email.</p>
+            <p class="small">This link expires in 7 days. If you weren&rsquo;t expecting this, you can safely ignore it.</p>
           </div>`,
           agency,
         ),

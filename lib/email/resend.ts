@@ -145,24 +145,16 @@ export async function sendTeamInviteEmail(opts: {
     from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
     to: opts.to,
-    subject: `You're invited to join ${brandName} Cortex`,
+    subject: `You're invited to ${brandName} Cortex`,
     html: layout(`
       <div class="card">
-        <h1 class="heading">Welcome to the team, ${opts.memberName}.</h1>
+        <h1 class="heading">You're invited, ${opts.memberName}.</h1>
         <p class="subtext">
-          ${opts.invitedBy} has invited you to join <span class="highlight">${brandName} Cortex</span> — the internal command center where the team manages clients, content strategy, and creative production.
+          ${opts.invitedBy} has invited you to <span class="highlight">${brandName} Cortex</span> — your team's content intelligence platform.
         </p>
         <div class="button-wrap">
           <a href="${opts.inviteUrl}" class="button">Create your account &rarr;</a>
         </div>
-        <hr class="divider" />
-        <p class="detail-label">What you'll get access to</p>
-        <ul class="features">
-          <li>Client dashboards &amp; brand profiles</li>
-          <li>Task management &amp; content pipeline</li>
-          <li>AI-powered topic research &amp; strategy</li>
-          <li>Shoot scheduler &amp; content calendar</li>
-        </ul>
         <hr class="divider" />
         <p class="small">
           This link expires in 7 days. If it expires, ask your admin for a new one.
@@ -199,25 +191,16 @@ export async function sendClientInviteEmail(opts: {
     from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
     to: opts.to,
-    subject: `${opts.clientName} — Your content portal is ready`,
+    subject: `${opts.clientName} — Your Cortex portal is ready`,
     html: layout(`
       <div class="card">
-        <h1 class="heading">Your portal is ready.</h1>
+        <h1 class="heading">Your portal is ready, ${opts.contactName}.</h1>
         <p class="subtext">
-          Hi ${opts.contactName},<br /><br />
-          The ${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'} team has set up a dedicated content portal for <span class="highlight">${opts.clientName}</span>. Everything your team needs to stay in sync with creative production — in one place.
+          Your team at <span class="highlight">${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'}</span> has set up a dedicated Cortex portal for <strong>${opts.clientName}</strong>. Set up your account to get started.
         </p>
         <div class="button-wrap">
           <a href="${opts.inviteUrl}" class="button">Set up your account &rarr;</a>
         </div>
-        <hr class="divider" />
-        <p class="detail-label">What's inside</p>
-        <ul class="features">
-          <li>Topic research reports &amp; trend analysis</li>
-          <li>Content ideas &amp; video scripts</li>
-          <li>Brand preferences &amp; tone settings</li>
-          <li>Content calendar &amp; knowledge base</li>
-        </ul>
         <hr class="divider" />
         <p class="small">
           This link expires in 7 days. Contact ${opts.invitedBy} if you need a new one.
@@ -254,32 +237,20 @@ export async function sendWelcomeEmail(opts: {
     from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
     to: opts.to,
-    subject: `Welcome to ${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'} Cortex`,
+    subject: `Welcome to Cortex`,
     html: layout(`
       <div class="card">
         <h1 class="heading">You're all set, ${opts.name}.</h1>
         <p class="subtext">
-          Your account is ready. ${isTeam
-            ? 'You now have full access to Cortex — the internal command center for clients, content, and creative production.'
-            : `You can now access your dedicated client portal to view reports, submit ideas, and collaborate with the ${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'} team.`
-          }
+          Your Cortex account is ready. Sign in to get started.
         </p>
         <div class="button-wrap">
-          <a href="${opts.loginUrl}" class="button">Sign in to Cortex &rarr;</a>
+          <a href="${opts.loginUrl}" class="button">Sign in &rarr;</a>
         </div>
         <hr class="divider" />
-        <table cellpadding="0" cellspacing="0" border="0" width="100%">
-          <tr>
-            <td style="padding-right: 24px;">
-              <p class="detail-label">Email</p>
-              <p class="detail-value">${opts.to}</p>
-            </td>
-            <td>
-              <p class="detail-label">Access level</p>
-              <p class="detail-value"><span class="badge">${isTeam ? 'Team member' : 'Client portal'}</span></p>
-            </td>
-          </tr>
-        </table>
+        <p class="small">
+          Signed up as <strong>${opts.to}</strong>
+        </p>
       </div>
     `, agency),
   });
@@ -366,24 +337,20 @@ export async function sendSearchCompletedEmail(opts: {
     from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
     to: opts.to,
-    subject: 'Your topic search is ready',
+    subject: `Research ready — ${opts.query}`,
     html: layout(`
       <div class="card">
-        <h1 class="heading">Research complete.</h1>
+        <h1 class="heading">Your research is ready.</h1>
         <p class="subtext">
-          Your topic search for <span class="highlight">&ldquo;${opts.query}&rdquo;</span> has finished processing. Here&rsquo;s a quick preview:
+          Results for <span class="highlight">&ldquo;${opts.query}&rdquo;</span> are in.
         </p>
         <p class="small" style="margin-bottom: 24px;">
           ${opts.summaryPreview}${opts.summaryPreview.length >= 200 ? '&hellip;' : ''}
         </p>
         ${clientLine}
         <div class="button-wrap">
-          <a href="${opts.resultsUrl}" class="button">View full report &rarr;</a>
+          <a href="${opts.resultsUrl}" class="button">View report &rarr;</a>
         </div>
-        <hr class="divider" />
-        <p class="small">
-          You received this because you ran a topic search on ${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'} Cortex. You can disable these emails in your profile settings.
-        </p>
       </div>
     `, agency),
   });
