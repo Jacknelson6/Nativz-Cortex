@@ -4,8 +4,9 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
+import { PORTAL_HOME_PATH } from '@/lib/portal/client-surface';
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
@@ -14,9 +15,11 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { mode, toggleMode } = useBrandMode();
 
   const isAC = mode === 'anderson';
+  const isDeactivated = searchParams.get('error') === 'deactivated';
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -24,7 +27,7 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -34,6 +37,22 @@ export default function AdminLoginPage() {
       setError(authError.message || 'Login failed — check browser console');
       setLoading(false);
       return;
+    }
+
+    // Look up user role to redirect appropriately
+    const userId = data.user?.id;
+    if (userId) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+      if (userData?.role === 'viewer') {
+        router.push(PORTAL_HOME_PATH);
+        router.refresh();
+        return;
+      }
     }
 
     router.push('/admin/dashboard');
@@ -135,6 +154,12 @@ State of the art<br />content intelligence.
             <p className={`text-sm text-center mb-8 ${isAC ? 'text-[#617792]' : 'text-white/40'}`}>
               Enter your credentials to continue
             </p>
+
+            {isDeactivated && (
+              <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+                Your account has been deactivated. Contact your administrator.
+              </div>
+            )}
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div>

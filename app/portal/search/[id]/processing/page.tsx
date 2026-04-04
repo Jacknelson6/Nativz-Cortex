@@ -53,6 +53,11 @@ export default async function PortalSearchProcessingPage({
     redirect(`/portal/search/${id}`);
   }
 
+  // If still waiting for subtopic selection, redirect to keyword picker
+  if (search.status === 'pending_subtopics') {
+    redirect(`/portal/search/${id}/subtopics`);
+  }
+
   const topicPipeline = (search.topic_pipeline as 'legacy' | 'llm_v1' | undefined) ?? 'legacy';
   const rawSub = search.subtopics as unknown;
   const subtopicCount = Array.isArray(rawSub) ? rawSub.length : 3;

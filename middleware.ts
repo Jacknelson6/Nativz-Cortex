@@ -177,12 +177,7 @@ export async function middleware(request: NextRequest) {
       setRateLimitHeaders(res);
       return res;
     }
-    if (pathname.startsWith('/admin')) {
-      return NextResponse.redirect(new URL('/admin/login', request.url));
-    }
-    if (pathname.startsWith('/portal')) {
-      return NextResponse.redirect(new URL('/portal/login', request.url));
-    }
+    // Unified login — all unauthenticated users go to /admin/login
     return NextResponse.redirect(new URL('/admin/login', request.url));
   }
 
@@ -203,9 +198,7 @@ export async function middleware(request: NextRequest) {
 
     // Block deactivated portal users
     if (userData?.is_active === false) {
-      if (pathname.startsWith('/portal')) {
-        return NextResponse.redirect(new URL('/portal/login?error=deactivated', request.url));
-      }
+      return NextResponse.redirect(new URL('/admin/login?error=deactivated', request.url));
     }
 
     role = userData?.role || null;
@@ -250,8 +243,7 @@ export async function middleware(request: NextRequest) {
   // Portal routes — viewers, or admins (incl. impersonation)
   if (pathname.startsWith('/portal')) {
     if (role !== 'viewer' && role !== 'admin') {
-      // BUG 10: unknown role on portal path should redirect to portal login, not admin login
-      return NextResponse.redirect(new URL('/portal/login', request.url));
+      return NextResponse.redirect(new URL('/admin/login', request.url));
     }
     if (shouldRedirectPortalToMinimalHome(pathname)) {
       return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));
