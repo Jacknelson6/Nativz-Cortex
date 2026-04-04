@@ -219,7 +219,7 @@ State of the art<br />content intelligence.
                 <a
                   href="/admin/forgot-password"
                   className={`text-xs transition-colors ${
-                    isAC ? 'text-[#36D1C2] hover:text-[#2BB5A8]' : 'text-[#046BD2]/70 hover:text-[#046BD2]'
+                    isAC ? 'text-[#36D1C2] hover:text-[#2BB5A8]' : 'text-white/40 hover:text-white/70'
                   }`}
                 >
                   Forgot password?

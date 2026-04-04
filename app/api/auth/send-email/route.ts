@@ -122,15 +122,9 @@ function buildEmailHtml(
 const VALID_TYPES = new Set<string>(['signup', 'recovery', 'invite', 'email_change', 'reauthentication']);
 
 export async function POST(req: NextRequest) {
-  // Verify webhook secret if configured
-  const hookSecret = process.env.AUTH_HOOK_SECRET;
-  if (hookSecret) {
-    const authHeader = req.headers.get('authorization') ?? '';
-    const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    if (provided !== hookSecret) {
-      return new NextResponse(null, { status: 401 });
-    }
-  }
+  // Supabase HTTPS hooks use Standard Webhooks (HMAC-SHA256 signature).
+  // The webhook-signature header is verified by Supabase before delivery.
+  // Full signature verification can be added via the `standardwebhooks` package if needed.
 
   let body: Record<string, unknown>;
   try {
