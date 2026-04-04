@@ -54,9 +54,9 @@ export function getEmailBrand(agency: AgencyBrand): EmailBrand {
   return agency === 'anderson' ? AC_EMAIL_BRAND : EMAIL_BRAND;
 }
 
-/** Raster logo from www.nativz.io (opaque white canvas — paired with white header panel in layout). */
+/** Nativz logo SVG (white text on transparent) — hosted on production for email rendering. */
 const NATIVZ_MARKETING_LOGO_DEFAULT =
-  'https://nativz.io/wp-content/uploads/2022/12/nativz-logo-square-scaled.jpg';
+  'https://cortex.nativz.io/nativz-logo.svg';
 
 /** Anderson Collaborative logo URL — override via EMAIL_AC_LOGO_URL env var.
  *  Uses the dark SVG logo (teal text on transparent) — correct for light-background emails. */

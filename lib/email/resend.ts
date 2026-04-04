@@ -27,24 +27,15 @@ export function layout(content: string, agency: AgencyBrand = 'nativz') {
   const logoSrc = getEmailLogoUrl(agency);
   const isAC = agency === 'anderson';
 
-  // For AC (light theme) the logo sits directly on the card background.
-  // For Nativz (dark theme) we wrap the logo in a white panel so the
-  // opaque-white-canvas marketing JPG doesn't clash with the dark background.
-  const logoPanel = isAC
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td align="center" style="padding:28px 40px;">
-            <img src="${logoSrc}" width="200" height="80" alt="${isAC ? 'Anderson Collaborative' : 'Nativz'}" style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;max-width:200px;height:auto;width:auto;" />
-          </td>
-        </tr>
-      </table>`
-    : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;border-radius:16px;border:1px solid #e5e7eb;">
-        <tr>
-          <td align="center" style="padding:28px 40px;background-color:#ffffff;border-radius:16px;">
-            <img src="${logoSrc}" width="200" height="80" alt="Nativz" style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;max-width:200px;height:auto;width:auto;" />
-          </td>
-        </tr>
-      </table>`;
+  // Both brands: logo on transparent background, no wrapper panel needed
+  const brandName = isAC ? 'Anderson Collaborative' : 'Nativz';
+  const logoPanel = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td align="center" style="padding:28px 40px;">
+          <img src="${logoSrc}" width="180" height="60" alt="${brandName}" style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;max-width:180px;height:auto;width:auto;" />
+        </td>
+      </tr>
+    </table>`;
 
   const footerCopy = isAC
     ? `<p>&copy; ${new Date().getFullYear()} Anderson Collaborative &middot; <a href="https://cortex.andersoncollaborative.com">cortex.andersoncollaborative.com</a></p>
