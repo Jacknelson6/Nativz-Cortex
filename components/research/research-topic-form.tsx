@@ -226,8 +226,7 @@ export function ResearchTopicForm({
           clientName: portalMode ? fixedClientName : (selectedClient?.name ?? null),
           needsSubtopics,
         });
-        // Portal doesn't have a subtopics page — always go to processing
-        const dest = needsSubtopics && !portalMode
+        const dest = needsSubtopics
           ? `${prefix}/search/${data.id}/subtopics`
           : `${prefix}/search/${data.id}/processing`;
         router.push(dest);

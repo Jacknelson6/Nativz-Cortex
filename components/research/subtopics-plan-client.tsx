@@ -15,6 +15,8 @@ interface SubtopicsPlanClientProps {
   timeRangeLabel: string;
   initialTimeRange?: string;
   initialSource?: string;
+  /** Route prefix for links — '/admin' or '/portal'. Defaults to '/admin'. */
+  redirectPrefix?: string;
 }
 
 const MAX = 15;
@@ -34,6 +36,7 @@ export function SubtopicsPlanClient({
   timeRangeLabel,
   initialTimeRange = 'last_3_months',
   initialSource = 'all',
+  redirectPrefix = '/admin',
 }: SubtopicsPlanClientProps) {
   const [keywords, setKeywords] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -128,7 +131,7 @@ export function SubtopicsPlanClient({
         return;
       }
       // Full navigation so the processing page always loads fresh DB state
-      window.location.assign(`/admin/search/${searchId}/processing`);
+      window.location.assign(`${redirectPrefix}/search/${searchId}/processing`);
     } catch {
       toast.error('Failed to start research');
     } finally {
@@ -149,14 +152,14 @@ export function SubtopicsPlanClient({
       <Breadcrumbs
         className="mb-2"
         items={[
-          { label: 'Search history', href: '/admin/search/new' },
+          { label: 'Search history', href: `${redirectPrefix}/search/new` },
           { label: 'Keyword picker' },
         ]}
       />
 
       <div className="flex items-start gap-3">
         <Link
-          href="/admin/search/new"
+          href={`${redirectPrefix}/search/new`}
           className="mt-1 shrink-0 text-text-muted hover:text-text-secondary transition-colors"
           aria-label="Back"
         >

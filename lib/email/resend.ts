@@ -150,16 +150,17 @@ export async function sendTeamInviteEmail(opts: {
   agency?: AgencyBrand;
 }) {
   const agency = opts.agency ?? 'nativz';
+  const brandName = agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz';
   const result = await getResend().emails.send({
     from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
     to: opts.to,
-    subject: `You're invited to join Nativz Cortex`,
+    subject: `You're invited to join ${brandName} Cortex`,
     html: layout(`
       <div class="card">
         <h1 class="heading">Welcome to the team, ${opts.memberName}.</h1>
         <p class="subtext">
-          ${opts.invitedBy} has invited you to join <span class="highlight">Nativz Cortex</span> — the internal command center where the team manages clients, content strategy, and creative production.
+          ${opts.invitedBy} has invited you to join <span class="highlight">${brandName} Cortex</span> — the internal command center where the team manages clients, content strategy, and creative production.
         </p>
         <div class="button-wrap">
           <a href="${opts.inviteUrl}" class="button">Create your account &rarr;</a>
@@ -214,7 +215,7 @@ export async function sendClientInviteEmail(opts: {
         <h1 class="heading">Your portal is ready.</h1>
         <p class="subtext">
           Hi ${opts.contactName},<br /><br />
-          The Nativz team has set up a dedicated content portal for <span class="highlight">${opts.clientName}</span>. Everything your team needs to stay in sync with creative production — in one place.
+          The ${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'} team has set up a dedicated content portal for <span class="highlight">${opts.clientName}</span>. Everything your team needs to stay in sync with creative production — in one place.
         </p>
         <div class="button-wrap">
           <a href="${opts.inviteUrl}" class="button">Set up your account &rarr;</a>
@@ -263,14 +264,14 @@ export async function sendWelcomeEmail(opts: {
     from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
     to: opts.to,
-    subject: `Welcome to Nativz Cortex`,
+    subject: `Welcome to ${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'} Cortex`,
     html: layout(`
       <div class="card">
         <h1 class="heading">You're all set, ${opts.name}.</h1>
         <p class="subtext">
           Your account is ready. ${isTeam
             ? 'You now have full access to Cortex — the internal command center for clients, content, and creative production.'
-            : 'You can now access your dedicated client portal to view reports, submit ideas, and collaborate with the Nativz team.'
+            : `You can now access your dedicated client portal to view reports, submit ideas, and collaborate with the ${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'} team.`
           }
         </p>
         <div class="button-wrap">
@@ -391,7 +392,7 @@ export async function sendSearchCompletedEmail(opts: {
         </div>
         <hr class="divider" />
         <p class="small">
-          You received this because you ran a topic search on Nativz Cortex. You can disable these emails in your profile settings.
+          You received this because you ran a topic search on ${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'} Cortex. You can disable these emails in your profile settings.
         </p>
       </div>
     `, agency),

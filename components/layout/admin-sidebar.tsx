@@ -25,6 +25,7 @@ import {
   Megaphone,
   Camera,
   Compass,
+  History,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -113,9 +114,15 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 function isActivePath(pathname: string, href: string, searchParams?: URLSearchParams) {
-  // Research — match both /admin/search and /portal/search
+  // Search history — exact match only
+  if (href.endsWith('/search/history')) {
+    return pathname === href || pathname.startsWith(href + '/');
+  }
+
+  // Research — match /search/* except /search/history
   if (href.endsWith('/search/new')) {
     const prefix = href.replace('/search/new', '/search');
+    if (pathname.startsWith(prefix + '/history')) return false;
     return pathname.startsWith(prefix);
   }
 
@@ -190,6 +197,15 @@ function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSec
         })),
       };
       viewerItems.push(remapped);
+
+      // Add portal-only "Search history" after Research
+      if (item.href === '/admin/search/new') {
+        viewerItems.push({
+          href: `${prefix}/search/history`,
+          label: 'Search history',
+          icon: History,
+        });
+      }
     }
   }
 
@@ -352,7 +368,7 @@ export function AdminSidebar({
 
                 if (item.comingSoon) {
                   return (
-                    <SidebarMenuItem key={item.href + '-soon'}>
+                    <SidebarMenuItem key={item.label + '-soon'}>
                       <SidebarMenuButton isActive={false} tooltip="Coming soon" className="opacity-40 pointer-events-none">
                         <item.icon size={18} className="shrink-0" />
                         {open && <span className="truncate">{item.label}</span>}

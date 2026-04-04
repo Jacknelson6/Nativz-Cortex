@@ -18,7 +18,7 @@
 - [ ] Frame extraction debugging — ffmpeg-static works locally but carousel returns 0 frames. Need server-side logging.
 - [ ] Rescript in carousel — needs clientId passed through for brand context
 - [ ] Toast notification when search completes in background (user navigated away)
-- [ ] AC invite emails — use Resend instead of Supabase Auth to control sender/branding per agency
+- [x] AC invite emails — Supabase Auth Hook + Resend multi-brand email system (Option C from PRD)
 - [ ] Video reference library in Strategy Lab Knowledge Base tab
 
 ---

@@ -57,11 +57,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'This invite has expired' }, { status: 400 });
     }
 
-    // Create Supabase auth user
+    // Detect agency brand from request hostname for user metadata
+    const agency = detectAgencyFromHostname(request.headers.get('x-agency') ?? request.nextUrl.hostname);
+
+    // Create Supabase auth user with agency in metadata for branded auth emails
     const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
+      user_metadata: { agency },
     });
 
     if (authError) {
@@ -122,7 +126,6 @@ export async function POST(request: NextRequest) {
 
     // Send welcome email (non-blocking)
     const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io'}/admin/login`;
-    const agency = detectAgencyFromHostname(request.headers.get('x-agency') ?? request.nextUrl.hostname);
     sendWelcomeEmail({ to: email, name: full_name, role: 'admin', loginUrl, agency }).catch((err) =>
       console.error('Welcome email failed:', err),
     );

@@ -95,8 +95,7 @@ export function SearchModeSelector({
         return;
       }
       const id = data.id as string;
-      const subtopicsFirst =
-        data.topic_pipeline === 'llm_v1' && redirectPrefix === '/admin';
+      const subtopicsFirst = data.topic_pipeline === 'llm_v1';
       router.push(
         `${redirectPrefix}/search/${id}/${subtopicsFirst ? 'subtopics' : 'processing'}`,
       );
@@ -142,8 +141,7 @@ export function SearchModeSelector({
         return;
       }
       const id = data.id as string;
-      const subtopicsFirst =
-        data.topic_pipeline === 'llm_v1' && redirectPrefix === '/admin';
+      const subtopicsFirst = data.topic_pipeline === 'llm_v1';
       router.push(
         `${redirectPrefix}/search/${id}/${subtopicsFirst ? 'subtopics' : 'processing'}`,
       );

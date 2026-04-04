@@ -2,6 +2,7 @@ import { SearchX } from 'lucide-react';
 import { ResearchTopicForm } from '@/components/research/research-topic-form';
 import { EmptyState } from '@/components/shared/empty-state';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
+import { PortalRecentSearches } from './portal-recent-searches';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,8 +24,8 @@ export default async function PortalNewSearchPage() {
   }
 
   return (
-    <div className="cortex-page-gutter flex flex-col items-center pt-12 md:pt-16">
-      <div className="w-full max-w-xl">
+    <div className="flex flex-col items-center px-6 sm:px-8" style={{ minHeight: 'calc(100vh - 3.5rem)' }}>
+      <div className="w-full max-w-xl mt-[20vh]">
         <ResearchTopicForm
           clients={[{
             id: result.client.id,
@@ -36,6 +37,11 @@ export default async function PortalNewSearchPage() {
           fixedClientId={result.client.id}
           fixedClientName={result.client.name}
         />
+      </div>
+
+      {/* Recent searches below the form */}
+      <div className="w-full max-w-xl mt-10 pb-12">
+        <PortalRecentSearches clientId={result.client.id} />
       </div>
     </div>
   );

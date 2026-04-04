@@ -185,8 +185,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/admin/login', request.url));
   }
 
-  // Role-based access: use cached role from cookie if available
-  let role: string | null = request.cookies.get('x-user-role')?.value || null;
+  // Role-based access: use cached role from cookie if available.
+  // The cookie also stores the user ID it was set for — if the user changed
+  // (e.g. different account logged in), the cache is invalidated.
+  const cachedRoleCookie = request.cookies.get('x-user-role')?.value || null;
+  const cachedRoleUserId = request.cookies.get('x-user-role-uid')?.value || null;
+  let role: string | null =
+    cachedRoleCookie && cachedRoleUserId === user.id ? cachedRoleCookie : null;
 
   if (!role) {
     const { data: userData } = await supabase
@@ -204,13 +209,21 @@ export async function middleware(request: NextRequest) {
 
     role = userData?.role || null;
 
-    // Cache role in a cookie (expires in 10 minutes) to avoid DB lookups
+    // Cache role + user ID in cookies (10 min) to avoid DB lookups.
+    // The user ID cookie lets us invalidate the cache when a different user logs in.
     if (role) {
       supabaseResponse.cookies.set('x-user-role', role, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 600, // 10 minutes
+        maxAge: 600,
+        path: '/',
+      });
+      supabaseResponse.cookies.set('x-user-role-uid', user.id, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 600,
         path: '/',
       });
     }

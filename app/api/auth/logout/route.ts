@@ -32,7 +32,11 @@ export async function POST() {
 
     await supabase.auth.signOut();
 
-    return NextResponse.json({ redirectTo: redirectPath });
+    const response = NextResponse.json({ redirectTo: redirectPath });
+    // Clear cached role cookies so the next login doesn't inherit a stale role
+    response.cookies.set('x-user-role', '', { maxAge: 0, path: '/' });
+    response.cookies.set('x-user-role-uid', '', { maxAge: 0, path: '/' });
+    return response;
   } catch (error) {
     console.error('Logout error:', error);
     return NextResponse.json(

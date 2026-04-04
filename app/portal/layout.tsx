@@ -1,5 +1,5 @@
-import { headers } from 'next/headers';
-import { cookies } from 'next/headers';
+import { headers, cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { unstable_cache } from 'next/cache';
@@ -141,12 +141,17 @@ export default async function PortalLayout({
   const { data: { user } } = await supabase.auth.getUser();
 
   // Auth pages: render without sidebar
-  if (isAuthPage || !user) {
+  if (isAuthPage) {
     return (
       <div className="min-h-screen bg-background">
         {children}
       </div>
     );
+  }
+
+  // Non-auth pages without a user session — redirect to login
+  if (!user) {
+    redirect('/portal/login');
   }
 
   // Fetch user profile + accessible brands in parallel
