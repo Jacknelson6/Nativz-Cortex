@@ -12,7 +12,7 @@ function getResend() {
 
 export function getFromAddress(agency: AgencyBrand): string {
   if (agency === 'anderson') return 'Cortex <cortex@andersoncollaborative.com>';
-  return 'Nativz Cortex <notifications@nativz.io>';
+  return 'Cortex <cortex@nativz.io>';
 }
 
 export function getReplyTo(agency: AgencyBrand): string {
