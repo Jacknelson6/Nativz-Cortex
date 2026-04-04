@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { Toaster } from 'sonner';
+import { Analytics } from '@vercel/analytics/next';
 import { headers } from 'next/headers';
 import './globals.css';
 import { BrandModeProvider } from '@/components/layout/brand-mode-provider';
@@ -69,6 +70,7 @@ export default async function RootLayout({
           <MobileBlocker />
           {children}
         </BrandModeProvider>
+        <Analytics />
         <Toaster
           position="bottom-right"
           richColors
