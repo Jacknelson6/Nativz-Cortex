@@ -45,13 +45,12 @@ export default async function PortalSearchResultsPage({
     notFound();
   }
 
-  if (search.status === 'processing' || search.status === 'pending') {
-    redirect(`/portal/search/${id}/processing`);
+  if (search.status === 'pending_subtopics') {
+    redirect(`/portal/search/${id}/subtopics`);
   }
 
-  // If not approved, show pending state
-  if (!search.approved_at) {
-    return <PortalResultsPending query={search.query} />;
+  if (search.status === 'processing' || search.status === 'pending') {
+    redirect(`/portal/search/${id}/processing`);
   }
 
   // Fetch scraped video count

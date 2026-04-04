@@ -34,13 +34,13 @@ export default async function PortalReportsPage() {
   // BUG 6: Scope to user's assigned client only — do not show other org clients' data
   const clientIds = [result.client.id];
 
-  // Fetch approved searches
+  // Fetch completed searches (no approval gate — clients see results immediately)
   const { data: searches } = clientIds.length > 0
     ? await adminClient
         .from('topic_searches')
         .select('id, query, source, time_range, status, created_at, approved_at')
         .in('client_id', clientIds)
-        .not('approved_at', 'is', null)
+        .eq('status', 'completed')
         .order('created_at', { ascending: false })
         .limit(50)
     : { data: [] };

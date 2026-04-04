@@ -28,6 +28,7 @@ import {
   History,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
+import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import {
   Sidebar,
@@ -212,6 +213,15 @@ function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSec
   return [{ label: '', items: viewerItems }];
 }
 
+interface PortalBrand {
+  id: string;
+  name: string;
+  slug: string;
+  agency: string | null;
+  logo_url: string | null;
+  organization_id: string;
+}
+
 interface AdminSidebarProps {
   userName?: string;
   avatarUrl?: string | null;
@@ -223,6 +233,10 @@ interface AdminSidebarProps {
   logoutPath?: string;
   /** Settings page path */
   settingsPath?: string;
+  /** Portal multi-brand: list of accessible brands */
+  brands?: PortalBrand[];
+  /** Portal multi-brand: currently active brand ID */
+  activeBrandId?: string | null;
 }
 
 export function AdminSidebar({
@@ -232,6 +246,8 @@ export function AdminSidebar({
   routePrefix = '/admin',
   logoutPath = '/admin/login',
   settingsPath = '/admin/settings',
+  brands,
+  activeBrandId,
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -298,6 +314,13 @@ export function AdminSidebar({
             </div>
           )}
         </div>
+
+        {/* Brand switcher for portal users with multiple clients */}
+        {role === 'viewer' && brands && brands.length > 1 && activeBrandId && (
+          <div className="mb-1">
+            <BrandSwitcher activeBrandId={activeBrandId} brands={brands} collapsed={!open} />
+          </div>
+        )}
       </SidebarHeader>
 
       {/* Navigation */}

@@ -193,6 +193,8 @@ export default async function PortalLayout({
           routePrefix="/portal"
           logoutPath="/admin/login"
           settingsPath="/portal/settings"
+          brands={brandData.brands}
+          activeBrandId={brandData.activeBrandId}
         />
         <SidebarInset>
           <AdminHeader />
