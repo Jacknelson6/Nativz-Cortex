@@ -15,7 +15,7 @@ export type LlmProviderKeysStored = {
 /** @deprecated use LlmProviderKeyBucket */
 export type OpenRouterKeyBucket = LlmProviderKeyBucket;
 
-const DEFAULT_NERD_MODEL = DEFAULT_OPENROUTER_MODEL;
+const DEFAULT_NERD_MODEL = 'x-ai/grok-4.20';
 
 /** Legacy JSON used `ideas`; treat as `default` when resolving keys. */
 function keyForBucket(
@@ -123,7 +123,10 @@ export function resolveDashscopeApiKeyForFeature(_feature?: string): string {
 
 export async function getNerdModelFromDb(): Promise<string> {
   await loadFromDb();
-  return cachedNerdModel || DEFAULT_NERD_MODEL;
+  const model = cachedNerdModel || '';
+  // Filter out known-broken free-tier models
+  if (!model || model.includes(':free')) return DEFAULT_NERD_MODEL;
+  return model;
 }
 
 /** Empty string means “use platform primary + fallbacks” in createCompletion */
