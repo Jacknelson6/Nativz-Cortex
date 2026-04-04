@@ -102,8 +102,8 @@ export function ResearchTopicForm({
 }: ResearchTopicFormProps) {
     const router = useRouter();
     const [topicQuery, setTopicQuery] = useState(initialQuery);
-    const [contextMode, setContextMode] = useState<ContextMode>('none');
-    const [clientId, setClientId] = useState<string | null>(null);
+    const [contextMode, setContextMode] = useState<ContextMode>(portalMode && fixedClientId ? 'client' : 'none');
+    const [clientId, setClientId] = useState<string | null>(portalMode ? fixedClientId : null);
     const [url, setUrl] = useState('');
     const [contextSearch, setContextSearch] = useState('');
     const [clientPickerOpen, setClientPickerOpen] = useState(false);
@@ -308,8 +308,8 @@ export function ResearchTopicForm({
               role="group"
               aria-label="Search filters"
             >
-              {/* Brand — popover lists clients as logos; trigger shows selected client logo when set */}
-              <Popover open={brandPopoverOpen} onOpenChange={setBrandPopoverOpen}>
+              {/* Brand — popover lists clients as logos; hidden in portal mode (client is fixed) */}
+              {portalMode ? null : <Popover open={brandPopoverOpen} onOpenChange={setBrandPopoverOpen}>
                 <div
                   className={cn(
                     'inline-flex h-9 max-w-[min(100%,13rem)] min-w-0 shrink-0 items-stretch rounded-full border border-nativz-border bg-surface-hover/80 text-xs font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover',
@@ -428,7 +428,7 @@ export function ResearchTopicForm({
                     )}
                   </div>
                 </PopoverContent>
-              </Popover>
+              </Popover>}
 
               {/* (Depth removed — always deep) */}
 

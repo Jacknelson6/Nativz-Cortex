@@ -149,9 +149,9 @@ export default async function PortalLayout({
     );
   }
 
-  // Non-auth pages without a user session — redirect to login
+  // Non-auth pages without a user session — redirect to unified login
   if (!user) {
-    redirect('/portal/login');
+    redirect('/admin/login');
   }
 
   // Fetch user profile + accessible brands in parallel
@@ -191,7 +191,7 @@ export default async function PortalLayout({
           avatarUrl={avatarUrl}
           role="viewer"
           routePrefix="/portal"
-          logoutPath="/portal/login"
+          logoutPath="/admin/login"
           settingsPath="/portal/settings"
         />
         <SidebarInset>
