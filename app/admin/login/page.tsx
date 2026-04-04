@@ -215,17 +215,6 @@ State of the art<br />content intelligence.
                 </div>
               </div>
 
-              <div className="text-center">
-                <a
-                  href="/admin/forgot-password"
-                  className={`text-xs transition-colors ${
-                    isAC ? 'text-[#36D1C2] hover:text-[#2BB5A8]' : 'text-white/40 hover:text-white/70'
-                  }`}
-                >
-                  Forgot password?
-                </a>
-              </div>
-
               {error && (
                 <p className="text-sm text-red-500 text-center">{error}</p>
               )}
@@ -242,6 +231,17 @@ State of the art<br />content intelligence.
                 {loading ? 'Signing in...' : 'Sign in'}
               </button>
             </form>
+
+            <div className="text-center mt-4">
+              <a
+                href="/admin/forgot-password"
+                className={`text-xs transition-colors ${
+                  isAC ? 'text-[#617792] hover:text-[#00161F]' : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                Forgot password?
+              </a>
+            </div>
           </div>
         </div>
 
