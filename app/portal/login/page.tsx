@@ -99,6 +99,12 @@ export default function PortalLoginPage() {
             </Button>
           </form>
         </Card>
+
+        <div className="mt-4 text-center">
+          <a href="/portal/forgot-password" className="text-xs text-text-muted hover:text-text-default transition-colors">
+            Forgot password?
+          </a>
+        </div>
       </div>
     </div>
   );

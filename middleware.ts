@@ -128,6 +128,18 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
+  // Password reset pages don't require auth
+  if (
+    pathname === '/admin/forgot-password' ||
+    pathname === '/admin/reset-password' ||
+    pathname === '/portal/forgot-password' ||
+    pathname === '/portal/reset-password'
+  ) {
+    supabaseResponse.headers.set('x-pathname', pathname);
+    supabaseResponse.headers.set('x-agency', detectAgencyFromHostname(request.nextUrl.hostname));
+    return supabaseResponse;
+  }
+
   // Login pages don't require auth
   if (pathname === '/admin/login' || pathname === '/portal/login') {
     const loginUser = await getAuthUserResilient(supabase);
