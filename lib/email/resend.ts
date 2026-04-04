@@ -10,7 +10,7 @@ function getResend() {
   return _resend;
 }
 
-function getFromAddress(agency: AgencyBrand): string {
+export function getFromAddress(agency: AgencyBrand): string {
   if (agency === 'anderson') return 'Cortex <cortex@andersoncollaborative.com>';
   return 'Nativz Cortex <notifications@nativz.io>';
 }
@@ -22,7 +22,7 @@ function getReplyTo(agency: AgencyBrand): string {
 
 // ── Shared layout ────────────────────────────────────────────────────────────
 
-function layout(content: string, agency: AgencyBrand = 'nativz') {
+export function layout(content: string, agency: AgencyBrand = 'nativz') {
   const BRAND = getEmailBrand(agency);
   const logoSrc = getEmailLogoUrl(agency);
   const isAC = agency === 'anderson';
