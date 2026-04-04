@@ -71,6 +71,38 @@ export async function POST(request: NextRequest) {
 
     if (authError) {
       if (authError.message.includes('already been registered')) {
+        // User already exists — find their ID and link them to this client
+        const { data: existingUsers } = await adminClient.auth.admin.listUsers();
+        const existingUser = existingUsers?.users?.find((u) => u.email === email);
+
+        if (existingUser) {
+          // Link to client via user_client_access
+          if (invite.client_id) {
+            await adminClient
+              .from('user_client_access')
+              .upsert({
+                user_id: existingUser.id,
+                client_id: invite.client_id,
+                organization_id: invite.organization_id,
+              }, { onConflict: 'user_id,client_id' });
+          }
+
+          // Ensure users table has viewer role + org
+          await adminClient
+            .from('users')
+            .update({ organization_id: invite.organization_id, role: 'viewer' })
+            .eq('id', existingUser.id)
+            .is('organization_id', null);
+
+          // Mark invite as used
+          await adminClient
+            .from('invite_tokens')
+            .update({ used_at: new Date().toISOString(), used_by: existingUser.id })
+            .eq('id', invite.id);
+
+          return NextResponse.json({ success: true, linked: true });
+        }
+
         return NextResponse.json(
           { error: 'An account with this email already exists. Try logging in instead.' },
           { status: 409 },

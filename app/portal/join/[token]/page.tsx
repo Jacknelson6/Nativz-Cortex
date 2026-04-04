@@ -93,7 +93,30 @@ export default function PortalJoinPage() {
         return;
       }
 
-      setSuccess(true);
+      // Auto-sign in (works for new registrations; for linked accounts, tries the password they entered)
+      const supabase = createClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (signInError) {
+        if (data.linked) {
+          // Account was linked but password didn't match — show link-existing flow
+          setLinkEmail(email.trim());
+          setFlowMode('link-existing');
+          setError('Your account has been linked to this brand. Sign in with your existing password.');
+          setSubmitting(false);
+          return;
+        }
+        // New account created but auto-sign-in failed — show success with manual login
+        setSuccess(true);
+        return;
+      }
+
+      // Signed in — go straight to portal
+      router.push(PORTAL_HOME_PATH);
+      router.refresh();
     } catch {
       setError('Something went wrong. Check your connection and try again.');
       setSubmitting(false);
@@ -197,9 +220,9 @@ export default function PortalJoinPage() {
             <CheckCircle2 size={32} className="mx-auto text-emerald-400" />
             <h2 className="text-lg font-semibold text-text-primary">Account created</h2>
             <p className="text-sm text-text-muted">
-              Your portal account is ready. Sign in to access your dashboard.
+              Your portal account is ready.
             </p>
-            <Button className="mt-2 w-full" onClick={() => router.push('/portal/login')}>
+            <Button className="mt-2 w-full" onClick={() => router.push('/admin/login')}>
               Sign in
             </Button>
           </div>
