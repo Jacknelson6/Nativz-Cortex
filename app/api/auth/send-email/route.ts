@@ -133,15 +133,35 @@ export async function POST(req: NextRequest) {
     return new NextResponse(null, { status: 400 });
   }
 
-  const type = body.type as string | undefined;
-  const email = body.email as string | undefined;
-  const data = (body.data ?? {}) as Record<string, unknown>;
+  console.log('[auth/send-email] Received payload keys:', Object.keys(body));
+
+  // Supabase HTTPS hooks send { user, email_data } format
+  // Normalize to our expected { type, email, data } format
+  let type: string | undefined;
+  let email: string | undefined;
+  let data: Record<string, unknown>;
+
+  if (body.email_data && body.user) {
+    // HTTPS hook format: { user: { email }, email_data: { email_action_type, token, ... } }
+    const user = body.user as Record<string, unknown>;
+    const emailData = body.email_data as Record<string, unknown>;
+    type = emailData.email_action_type as string | undefined;
+    email = (user.email as string) ?? (emailData.email as string);
+    data = emailData;
+    console.log(`[auth/send-email] HTTPS hook format: type=${type} email=${email}`);
+  } else {
+    // Postgres hook / direct format: { type, email, data }
+    type = body.type as string | undefined;
+    email = body.email as string | undefined;
+    data = (body.data ?? {}) as Record<string, unknown>;
+  }
 
   if (!type || !VALID_TYPES.has(type) || !email) {
+    console.error(`[auth/send-email] Invalid: type=${type} email=${email} valid_types=${[...VALID_TYPES].join(',')}`);
     return new NextResponse(null, { status: 400 });
   }
 
-  const agency = await resolveAgencyFromHookPayload({ ...body, data });
+  const agency = await resolveAgencyFromHookPayload({ ...body, user_metadata: (body.user as Record<string, unknown>)?.user_metadata as Record<string, unknown>, data });
   const { subject, html } = buildEmailHtml(type as EmailType, data, agency);
 
   try {
