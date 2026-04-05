@@ -8,6 +8,18 @@
 
 ## Next Session
 
+### Post-Launch QA (client portal)
+- [ ] Test password reset email delivery on production (deploy just pushed — verify `ace@nativz.io` gets branded email)
+- [ ] Test password reset from AC domain — verify AC-branded email arrives from `cortex@andersoncollaborative.com`
+- [ ] Test portal invite flow end-to-end: admin creates invite → user clicks link → registers → auto-signs-in → lands on portal
+- [ ] Test multi-client invite: send second invite to existing user → verify auto-link works
+- [ ] Test brand switcher with a multi-client user (assign test user to 2+ clients)
+- [ ] Verify viewer can't access `/admin/dashboard` on production (should redirect to portal)
+- [ ] Test The Nerd on production — verify Grok 4.20 model works (was broken with qwen3.6:free)
+- [ ] Clean up test `user_client_access` rows — test user may be linked to wrong clients
+- [ ] Client logo upload — admin should be able to upload client logos (brand switcher shows placeholder icons)
+- [ ] Forgot-password page renders with admin sidebar when logged in — should show clean layout instead
+
 ### PDF Export Theming
 - [ ] Match PDF export to current brand theme (AC vs Nativz — colors, logo, fonts)
 - [ ] Update PDF content to match results page layout (trending topics breakdown, content pillars, emotions)
