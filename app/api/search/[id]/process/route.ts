@@ -254,7 +254,7 @@ export async function POST(
             const tiktok = all.filter((s) => s.platform === 'tiktok');
             const youtube = all.filter((s) => s.platform === 'youtube');
             const other = all.filter((s) => s.platform !== 'tiktok' && s.platform !== 'youtube');
-            const prioritized = [...tiktok, ...youtube.slice(0, 50), ...other.slice(0, 50)].slice(0, 300);
+            const prioritized = [...tiktok.slice(0, 30), ...youtube.slice(0, 15), ...other.slice(0, 5)].slice(0, 50);
             return prioritized.map((s) => ({
               platform: s.platform,
               id: s.id,
