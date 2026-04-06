@@ -5,10 +5,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 /**
  * GET /api/notifications
  *
- * List notifications for the authenticated admin user, ordered by most recent.
+ * List notifications for the authenticated user, ordered by most recent.
  * Always returns the total unread count regardless of the unread_only filter.
+ * Scoped by recipient_user_id — each user only sees their own notifications.
  *
- * @auth Required (admin)
+ * @auth Required (any authenticated user)
  * @query unread_only - If 'true', only returns unread notifications
  * @returns {{ notifications: Notification[], unread_count: number }}
  */
@@ -21,15 +22,6 @@ export async function GET(request: NextRequest) {
     }
 
     const adminClient = createAdminClient();
-    const { data: userData } = await adminClient
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!userData || userData.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
 
     const { searchParams } = new URL(request.url);
     const unreadOnly = searchParams.get('unread_only') === 'true';

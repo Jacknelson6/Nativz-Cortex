@@ -25,7 +25,6 @@ import {
   Megaphone,
   Camera,
   Compass,
-  History,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
@@ -115,15 +114,9 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 function isActivePath(pathname: string, href: string, searchParams?: URLSearchParams) {
-  // Search history — exact match only
-  if (href.endsWith('/search/history')) {
-    return pathname === href || pathname.startsWith(href + '/');
-  }
-
-  // Research — match /search/* except /search/history
+  // Research — match /search/*
   if (href.endsWith('/search/new')) {
     const prefix = href.replace('/search/new', '/search');
-    if (pathname.startsWith(prefix + '/history')) return false;
     return pathname.startsWith(prefix);
   }
 
@@ -199,14 +192,7 @@ function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSec
       };
       viewerItems.push(remapped);
 
-      // Add portal-only "Search history" after Research
-      if (item.href === '/admin/search/new') {
-        viewerItems.push({
-          href: `${prefix}/search/history`,
-          label: 'Search history',
-          icon: History,
-        });
-      }
+      // History rail replaces the old "Search history" sidebar item
     }
   }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { ChevronDown, ChevronRight, ChevronUp, Bookmark, Check, Copy } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { TooltipCard } from '@/components/ui/tooltip-card';
@@ -97,9 +97,6 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('resonance');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [savedTopics, setSavedTopics] = useState<Set<string>>(new Set());
-  const [savingTopic, setSavingTopic] = useState<string | null>(null);
-
   function handleSort(key: SortKey) {
     if (sortKey === key) {
       setSortDir(sortDir === 'desc' ? 'asc' : 'desc');
@@ -108,41 +105,6 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
       setSortDir('desc');
     }
     setExpandedIndex(null);
-  }
-
-  async function handleSave(topic: TrendingTopic | LegacyTrendingTopic) {
-    if (savedTopics.has(topic.name)) return;
-    setSavingTopic(topic.name);
-
-    try {
-      const description = [
-        'posts_overview' in topic ? topic.posts_overview : '',
-        'comments_overview' in topic ? topic.comments_overview : '',
-      ].filter(Boolean).join('\n\n');
-
-      const res = await fetch('/api/ideas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: topic.name,
-          description: description || `Trending topic with ${topic.resonance} resonance`,
-          category: 'trending_topic',
-          client_id: clientId || undefined,
-        }),
-      });
-
-      if (res.ok) {
-        setSavedTopics((prev) => new Set(prev).add(topic.name));
-        toast.success('Saved to ideas');
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Failed to save');
-      }
-    } catch {
-      toast.error('Failed to save. Try again.');
-    } finally {
-      setSavingTopic(null);
-    }
   }
 
   async function copyTopicTitle(topic: TrendingTopic | LegacyTrendingTopic) {
@@ -268,39 +230,6 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
                         <Copy size={16} />
                       </button>
                     </TooltipCard>
-                    {savedTopics.has(topic.name) ? (
-                      <TooltipCard
-                        iconTrigger
-                        title={TOOLTIPS.trending_topic_saved.title}
-                        description={TOOLTIPS.trending_topic_saved.description}
-                      >
-                        <span
-                          className="inline-flex rounded-lg p-1.5 text-emerald-400"
-                          aria-label="Saved to ideas"
-                        >
-                          <Check size={18} aria-hidden />
-                        </span>
-                      </TooltipCard>
-                    ) : (
-                      <TooltipCard
-                        iconTrigger
-                        title={TOOLTIPS.trending_topic_save.title}
-                        description={TOOLTIPS.trending_topic_save.description}
-                      >
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleSave(topic);
-                          }}
-                          disabled={savingTopic === topic.name}
-                          className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-accent-surface hover:text-accent-text disabled:pointer-events-none"
-                          aria-label="Save to ideas"
-                        >
-                          <Bookmark size={18} className={savingTopic === topic.name ? 'animate-pulse' : ''} />
-                        </button>
-                      </TooltipCard>
-                    )}
                   </div>
                 </div>
               </button>

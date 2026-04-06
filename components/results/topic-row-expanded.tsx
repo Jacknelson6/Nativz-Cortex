@@ -11,7 +11,6 @@ import {
   Copy,
   Check,
   Download,
-  Bookmark,
   ChevronDown,
   ChevronRight,
   RefreshCw,
@@ -202,10 +201,7 @@ function IdeaValidationChips({ topic }: { topic: TrendingTopic | LegacyTrendingT
 function VideoIdeaListItem({
   idea,
   index,
-  topicName,
   topic,
-  clientId,
-  searchId,
 }: {
   idea: VideoIdea;
   index: number;
@@ -215,8 +211,6 @@ function VideoIdeaListItem({
   searchId?: string;
 }) {
   const [copied, setCopied] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const virality = effectiveVirality(idea.virality);
 
@@ -228,38 +222,6 @@ function VideoIdeaListItem({
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error('Failed to copy');
-    }
-  }
-
-  async function handleSave() {
-    if (saved || saving) return;
-    setSaving(true);
-    try {
-      const res = await fetch('/api/concepts/react', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: idea.title,
-          hook: idea.hook,
-          format: idea.format ?? null,
-          virality: idea.virality ?? null,
-          why_it_works: idea.why_it_works,
-          topic_name: topicName,
-          client_id: clientId || null,
-          search_id: searchId,
-          reaction: 'starred',
-        }),
-      });
-      if (res.ok) {
-        setSaved(true);
-        toast.success('Saved to ideas');
-      } else {
-        toast.error('Failed to save');
-      }
-    } catch {
-      toast.error('Failed to save');
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -278,18 +240,6 @@ function VideoIdeaListItem({
                 title="Copy idea"
               >
                 {copied ? <Check size={12} className="text-accent" /> : <Copy size={12} />}
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saved || saving}
-                className={`flex h-6 w-6 items-center justify-center rounded-md transition-all ${
-                  saved
-                    ? 'text-amber-400'
-                    : 'text-text-muted opacity-0 hover:bg-surface-hover hover:text-text-primary group-hover:opacity-100'
-                } disabled:pointer-events-none`}
-                title={saved ? 'Saved' : 'Save idea'}
-              >
-                {saved ? <Check size={12} /> : <Bookmark size={12} className={saving ? 'animate-pulse' : ''} />}
               </button>
             </div>
           </div>
