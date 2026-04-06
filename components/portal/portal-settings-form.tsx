@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { Pencil, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 interface PortalSettingsFormProps {
@@ -16,20 +18,32 @@ interface PortalSettingsFormProps {
   companyName: string;
 }
 
-function InlineField({
+function ReadonlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-sm text-text-muted">{label}</p>
+      <p className="text-sm font-medium text-text-primary">{value || 'Not set'}</p>
+    </div>
+  );
+}
+
+function EditableField({
   label,
   value,
   onChange,
   multiline,
+  hint,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   multiline?: boolean;
+  hint?: string;
 }) {
   return (
     <div>
       <label className="text-sm text-text-muted">{label}</label>
+      {hint && <p className="text-xs text-text-muted/60 mt-0.5">{hint}</p>}
       {multiline ? (
         <textarea
           value={value}
@@ -49,6 +63,43 @@ function InlineField({
   );
 }
 
+function SectionHeader({
+  title,
+  editing,
+  onEdit,
+  onCancel,
+}: {
+  title: string;
+  editing: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <h2 className="text-base font-semibold text-text-primary">{title}</h2>
+      {editing ? (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-colors"
+        >
+          <X size={14} />
+          Cancel
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="flex items-center gap-1 text-xs text-text-muted hover:text-accent-text transition-colors"
+        >
+          <Pencil size={12} />
+          Edit
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function PortalSettingsForm({
   initialName,
   initialEmail,
@@ -60,15 +111,37 @@ export function PortalSettingsForm({
   companyName,
 }: PortalSettingsFormProps) {
   // Account
+  const [editingAccount, setEditingAccount] = useState(false);
   const [name, setName] = useState(initialName);
+  const [savedName, setSavedName] = useState(initialName);
   const [savingAccount, setSavingAccount] = useState(false);
 
   // Brand profile
+  const [editingBrand, setEditingBrand] = useState(false);
   const [industry, setIndustry] = useState(initialIndustry);
   const [targetAudience, setTargetAudience] = useState(initialTargetAudience);
   const [brandVoice, setBrandVoice] = useState(initialBrandVoice);
   const [keywordsText, setKeywordsText] = useState(initialTopicKeywords.join(', '));
+  const [savedBrand, setSavedBrand] = useState({
+    industry: initialIndustry,
+    targetAudience: initialTargetAudience,
+    brandVoice: initialBrandVoice,
+    keywordsText: initialTopicKeywords.join(', '),
+  });
   const [savingBrand, setSavingBrand] = useState(false);
+
+  function cancelAccount() {
+    setName(savedName);
+    setEditingAccount(false);
+  }
+
+  function cancelBrand() {
+    setIndustry(savedBrand.industry);
+    setTargetAudience(savedBrand.targetAudience);
+    setBrandVoice(savedBrand.brandVoice);
+    setKeywordsText(savedBrand.keywordsText);
+    setEditingBrand(false);
+  }
 
   async function saveAccount() {
     setSavingAccount(true);
@@ -79,6 +152,8 @@ export function PortalSettingsForm({
         body: JSON.stringify({ full_name: name }),
       });
       if (res.ok) {
+        setSavedName(name);
+        setEditingAccount(false);
         toast.success('Account updated');
       } else {
         const data = await res.json();
@@ -110,6 +185,8 @@ export function PortalSettingsForm({
         }),
       });
       if (res.ok) {
+        setSavedBrand({ industry, targetAudience, brandVoice, keywordsText });
+        setEditingBrand(false);
         toast.success('Brand profile updated');
       } else {
         const data = await res.json();
@@ -122,61 +199,96 @@ export function PortalSettingsForm({
     }
   }
 
+  const currentKeywords = keywordsText
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean);
+
   return (
     <>
       {/* Account */}
       <Card>
-        <h2 className="text-base font-semibold text-text-primary mb-4">Account</h2>
-        <div className="space-y-3">
-          <InlineField label="Name" value={name} onChange={setName} />
-          <div>
-            <p className="text-sm text-text-muted">Email</p>
-            <p className="text-sm font-medium text-text-primary mt-1">{initialEmail}</p>
+        <SectionHeader
+          title="Account"
+          editing={editingAccount}
+          onEdit={() => setEditingAccount(true)}
+          onCancel={cancelAccount}
+        />
+        {editingAccount ? (
+          <>
+            <div className="space-y-3">
+              <EditableField label="Name" value={name} onChange={setName} />
+              <ReadonlyField label="Email" value={initialEmail} />
+            </div>
+            <button
+              onClick={saveAccount}
+              disabled={savingAccount || name === savedName}
+              className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingAccount ? 'Saving...' : 'Save'}
+            </button>
+          </>
+        ) : (
+          <div className="space-y-3">
+            <ReadonlyField label="Name" value={savedName} />
+            <ReadonlyField label="Email" value={initialEmail} />
           </div>
-        </div>
-        <button
-          onClick={saveAccount}
-          disabled={savingAccount || name === initialName}
-          className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {savingAccount ? 'Saving...' : 'Save'}
-        </button>
+        )}
       </Card>
 
       {/* Brand profile */}
       <Card>
-        <h2 className="text-base font-semibold text-text-primary mb-4">Brand profile</h2>
-        <div className="space-y-3">
-          <div>
-            <p className="text-sm text-text-muted">Company</p>
-            <p className="text-sm font-medium text-text-primary mt-1">{companyName}</p>
+        <SectionHeader
+          title="Brand profile"
+          editing={editingBrand}
+          onEdit={() => setEditingBrand(true)}
+          onCancel={cancelBrand}
+        />
+        {editingBrand ? (
+          <>
+            <div className="space-y-3">
+              <ReadonlyField label="Company" value={companyName} />
+              <EditableField label="Industry" value={industry} onChange={setIndustry} />
+              <EditableField
+                label="Target audience"
+                value={targetAudience}
+                onChange={setTargetAudience}
+                multiline
+              />
+              <EditableField label="Brand voice" value={brandVoice} onChange={setBrandVoice} />
+              <EditableField
+                label="Topic keywords"
+                value={keywordsText}
+                onChange={setKeywordsText}
+                hint="Separate with commas"
+              />
+            </div>
+            <button
+              onClick={saveBrandProfile}
+              disabled={savingBrand}
+              className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingBrand ? 'Saving...' : 'Save'}
+            </button>
+          </>
+        ) : (
+          <div className="space-y-3">
+            <ReadonlyField label="Company" value={companyName} />
+            <ReadonlyField label="Industry" value={savedBrand.industry} />
+            <ReadonlyField label="Target audience" value={savedBrand.targetAudience} />
+            <ReadonlyField label="Brand voice" value={savedBrand.brandVoice} />
+            {currentKeywords.length > 0 && (
+              <div>
+                <p className="text-sm text-text-muted mb-1">Topic keywords</p>
+                <div className="flex flex-wrap gap-1">
+                  {currentKeywords.map((kw) => (
+                    <Badge key={kw}>{kw}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          <InlineField label="Industry" value={industry} onChange={setIndustry} />
-          <InlineField
-            label="Target audience"
-            value={targetAudience}
-            onChange={setTargetAudience}
-            multiline
-          />
-          <InlineField label="Brand voice" value={brandVoice} onChange={setBrandVoice} />
-          <div>
-            <label className="text-sm text-text-muted">Topic keywords</label>
-            <p className="text-xs text-text-muted/60 mt-0.5">Separate with commas</p>
-            <input
-              type="text"
-              value={keywordsText}
-              onChange={(e) => setKeywordsText(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/30"
-            />
-          </div>
-        </div>
-        <button
-          onClick={saveBrandProfile}
-          disabled={savingBrand}
-          className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {savingBrand ? 'Saving...' : 'Save'}
-        </button>
+        )}
       </Card>
     </>
   );

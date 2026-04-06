@@ -101,7 +101,7 @@ export function PortalResearchHub({
           className={cn(
             'flex min-h-0 w-full flex-col',
             'max-lg:flex-1',
-            'lg:col-start-1 lg:row-start-1 lg:h-full lg:max-h-full lg:shrink-0 lg:self-stretch lg:overflow-hidden',
+            'lg:col-start-1 lg:row-start-1 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:self-start lg:overflow-hidden',
           )}
         >
           <TopicSearchHistoryRail
