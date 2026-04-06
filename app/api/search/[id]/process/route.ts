@@ -263,13 +263,11 @@ export async function POST(
 
         const allPlatformSources = result.platformSources ?? [];
         const tiktokSources = allPlatformSources.filter((s) => s.platform === 'tiktok');
-        const youtubeSources = allPlatformSources.filter((s) => s.platform === 'youtube');
-        const otherSources = allPlatformSources.filter((s) => s.platform !== 'tiktok' && s.platform !== 'youtube');
-        const allPrioritized = [...tiktokSources, ...youtubeSources, ...otherSources];
 
-        // First 10 go in batch 1, remaining 40 in batch 2
-        const batch1Sources = allPrioritized.slice(0, 10).map(mapSource);
-        const batch2Sources = allPrioritized.slice(10, 50).map(mapSource);
+        // Batch 1: 8 TikTok videos + essentials
+        // Batch 2: next 42 TikTok videos (50 total TikTok)
+        const batch1Sources = tiktokSources.slice(0, 8).map(mapSource);
+        const batch2Sources = tiktokSources.slice(8, 50).map(mapSource);
 
         // Save in two batches to avoid PostgREST payload size limits.
         // Batch 1: core results + 10 platform source previews
