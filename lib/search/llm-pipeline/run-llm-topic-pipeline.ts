@@ -769,9 +769,24 @@ Rules: 2–4 words each, specific to the topic, no numbering, no full sentences.
     }
   }
 
+  // Include platform scraper URLs (TikTok, YouTube, Reddit) in the allowlist
+  // so the LLM can cite them and they survive the filter on merge output
+  if (platformResults) {
+    for (const ps of platformResults.sources) {
+      if (ps.url) {
+        allAllowed.push(normalizeUrlForMatch(ps.url));
+      }
+    }
+  }
+
   const allowSet = toAllowlistSet(dedupeUrls(allAllowed));
   const titleByUrl = new Map<string, string>();
   for (const h of allHits) titleByUrl.set(normalizeUrlForMatch(h.url), h.title);
+  if (platformResults) {
+    for (const ps of platformResults.sources) {
+      if (ps.url && ps.title) titleByUrl.set(normalizeUrlForMatch(ps.url), ps.title);
+    }
+  }
 
   const subtopicBlock = subReports
     .map(
@@ -916,10 +931,42 @@ Rules:
     merger = { ...merger, brand_alignment_notes: undefined };
   }
 
+  // Build a lookup of platform sources by keyword matching for fallback injection
+  const platformSourcesByKeyword: PlatformSource[] = platformResults?.sources ?? [];
+
   const trendingTopics: TrendingTopic[] = (merger.topics ?? []).map((t, idx) => {
     const urls = (t.source_urls ?? []).filter((u) => allowSet.has(normalizeUrlForMatch(u)));
     const resonance: TrendingTopic['resonance'] =
       t.resonance ?? (idx === 0 ? 'high' : idx < 3 ? 'medium' : 'low');
+
+    let sources = buildTopicSources(urls, titleByUrl);
+
+    // If the LLM didn't cite platform sources, inject matching TikTok/YouTube results
+    const hasPlatformSource = sources.some(
+      (s) => s.platform === 'tiktok' || s.platform === 'youtube',
+    );
+    if (!hasPlatformSource && platformSourcesByKeyword.length > 0) {
+      const topicWords = t.name.toLowerCase().split(/\s+/);
+      const matched = platformSourcesByKeyword
+        .filter((ps) => {
+          const text = `${ps.title} ${ps.content}`.toLowerCase();
+          return topicWords.some((w) => w.length > 3 && text.includes(w));
+        })
+        .slice(0, 3);
+
+      for (const ps of matched) {
+        if (!sources.some((s) => normalizeUrlForMatch(s.url) === normalizeUrlForMatch(ps.url))) {
+          sources.push({
+            url: ps.url,
+            title: ps.title,
+            type: 'video' as const,
+            relevance: `From ${ps.platform} platform data`,
+            platform: ps.platform as TopicSource['platform'],
+          });
+        }
+      }
+    }
+
     return {
       name: t.name,
       resonance,
@@ -927,7 +974,7 @@ Rules:
       total_engagement: t.estimated_engagement ?? Math.max(100, 500 - idx * 40),
       posts_overview: t.posts_overview,
       comments_overview: t.comments_overview,
-      sources: buildTopicSources(urls, titleByUrl),
+      sources,
       video_ideas: mapVideoIdeas(t.video_ideas),
     };
   });
