@@ -143,8 +143,8 @@ export function ResearchHub({
       >
         <div
           className={cn(
-            'flex min-h-0 flex-1 flex-col gap-8 lg:grid lg:items-stretch lg:gap-10',
-            'lg:overflow-hidden',
+            'flex min-h-0 flex-1 flex-col gap-8 lg:grid lg:items-start lg:gap-10',
+            '',
             'lg:transition-[grid-template-columns] lg:duration-300 lg:ease-[cubic-bezier(0.32,0.72,0,1)]',
             historyRailOpen
               ? 'lg:grid-cols-[300px_minmax(0,1fr)]'
@@ -155,7 +155,7 @@ export function ResearchHub({
           <div
             className={cn(
               'flex min-w-0 w-full shrink-0 justify-center lg:col-start-2 lg:row-start-1 xl:pl-2',
-              'lg:min-h-0 lg:flex-1 lg:flex-col lg:items-center lg:justify-center lg:overflow-hidden',
+              'lg:min-h-dvh lg:flex-col lg:items-center lg:justify-center',
             )}
           >
             <div className="w-full max-w-3xl -translate-y-1.5 lg:-translate-y-2">
@@ -173,7 +173,7 @@ export function ResearchHub({
             className={cn(
               'flex min-h-0 w-full flex-col',
               'max-lg:flex-1',
-              'lg:col-start-1 lg:row-start-1 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:self-start lg:overflow-hidden',
+              'lg:col-start-1 lg:row-start-1 lg:sticky lg:top-0 lg:max-h-dvh lg:shrink-0 lg:self-start lg:overflow-hidden',
             )}
           >
             <TopicSearchHistoryRail
