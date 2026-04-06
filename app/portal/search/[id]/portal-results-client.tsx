@@ -48,7 +48,7 @@ export function PortalResultsClient({
         <div className="flex flex-col gap-3 px-6 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <Link
-              href="/portal/search/history"
+              href="/portal/search/new"
               className="mt-0.5 shrink-0 text-text-muted hover:text-text-secondary transition-colors"
             >
               <ArrowLeft size={20} />
@@ -172,7 +172,7 @@ export function PortalResultsPending({ query }: { query: string }) {
         <div className="flex flex-col gap-3 px-6 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <Link
-              href="/portal/search/history"
+              href="/portal/search/new"
               className="mt-0.5 shrink-0 text-text-muted hover:text-text-secondary transition-colors"
             >
               <ArrowLeft size={20} />
