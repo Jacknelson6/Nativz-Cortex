@@ -240,7 +240,7 @@ export async function gatherTikTokData(
   const sortPref = getTikTokSortPreferenceFromEnv();
 
   // Apify: API Dojo is pay-per-result; volume caps match platform-router expectations.
-  let maxResults = volume === 'deep' ? 500 : volume === 'medium' ? 100 : 15;
+  let maxResults = volume === 'deep' ? 200 : volume === 'medium' ? 200 : 50;
   if (inputMode === 'apidojo') {
     // Actor recommends at least 10 items per keyword for stability.
     maxResults = Math.max(maxResults, 10);

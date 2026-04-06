@@ -264,23 +264,29 @@ export async function POST(
             platform_data: cloneJsonForPostgres({
               stats: [],
               sourceCount: result.platformSources?.length ?? 0,
-              // Store only essential fields per source — comments, transcripts, frames, metadata
-              // are stripped to keep payload well under Supabase's 1MB PostgREST limit.
-              // Full data is available on-demand via the analysis panel.
-              sources: (result.platformSources ?? []).slice(0, 200).map((s) => ({
-                platform: s.platform,
-                id: s.id,
-                url: s.url,
-                title: (s.title ?? '').slice(0, 300),
-                content: (s.content ?? '').slice(0, 300),
-                author: s.author,
-                thumbnailUrl: s.thumbnailUrl ?? null,
-                videoFormat: s.videoFormat ?? null,
-                engagement: s.engagement,
-                createdAt: s.createdAt,
-                transcript: s.transcript ? s.transcript.slice(0, 300) : null,
-                comments: [], // stripped — available via analysis panel
-              })),
+              // Prioritize TikTok, then YouTube, then others — truncate to 300 total
+              // to stay under Supabase's 1MB PostgREST limit for JSONB.
+              sources: (() => {
+                const all = result.platformSources ?? [];
+                const tiktok = all.filter((s) => s.platform === 'tiktok');
+                const youtube = all.filter((s) => s.platform === 'youtube');
+                const other = all.filter((s) => s.platform !== 'tiktok' && s.platform !== 'youtube');
+                const prioritized = [...tiktok, ...youtube.slice(0, 50), ...other.slice(0, 50)].slice(0, 300);
+                return prioritized.map((s) => ({
+                  platform: s.platform,
+                  id: s.id,
+                  url: s.url,
+                  title: (s.title ?? '').slice(0, 300),
+                  content: (s.content ?? '').slice(0, 300),
+                  author: s.author,
+                  thumbnailUrl: s.thumbnailUrl ?? null,
+                  videoFormat: s.videoFormat ?? null,
+                  engagement: s.engagement,
+                  createdAt: s.createdAt,
+                  transcript: s.transcript ? s.transcript.slice(0, 300) : null,
+                  comments: [],
+                }));
+              })(),
             }),
             tokens_used: result.totalTokens ?? 0,
             estimated_cost: result.estimatedCost ?? 0,
@@ -303,6 +309,38 @@ export async function POST(
             { error: 'Failed to save search results', details: llmUpdateErr.message },
             { status: 500 },
           );
+        }
+
+        // Persist platform video sources to topic_search_videos for the Sources grid
+        if (result.platformSources && result.platformSources.length > 0) {
+          const videoRows = result.platformSources
+            .filter((s) => s.platform === 'tiktok' || s.platform === 'youtube')
+            .map((s) => ({
+              search_id: id,
+              platform: s.platform,
+              platform_id: s.id,
+              url: s.url,
+              title: (s.title ?? '').slice(0, 500),
+              author_username: s.author || null,
+              thumbnail_url: s.thumbnailUrl ?? null,
+              views: s.engagement?.views ?? 0,
+              likes: s.engagement?.likes ?? 0,
+              comments: s.engagement?.comments ?? 0,
+              publish_date: s.createdAt || null,
+            }));
+
+          if (videoRows.length > 0) {
+            // Insert in batches to avoid payload limits
+            const BATCH = 100;
+            for (let i = 0; i < videoRows.length; i += BATCH) {
+              await adminClient
+                .from('topic_search_videos')
+                .upsert(videoRows.slice(i, i + BATCH), { onConflict: 'search_id,platform,platform_id' })
+                .then(({ error: vidErr }) => {
+                  if (vidErr) console.error('[process] video persist batch error:', vidErr.message);
+                });
+            }
+          }
         }
 
         syncSearchToVault(

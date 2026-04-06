@@ -260,8 +260,8 @@ export async function gatherYouTubeData(
 
   // Smart split: YouTube gives good trend signals + transcripts are free
   // Quota: deep (~1,100 units), medium (~342 units), light (~70 units) — well within 10K/day free quota
-  const maxResults = volume === 'deep' ? 500 : volume === 'medium' ? 100 : 15;
-  const commentLimit = volume === 'deep' ? 100 : volume === 'medium' ? 30 : 5;
+  const maxResults = volume === 'deep' ? 20 : volume === 'medium' ? 20 : 10;
+  const commentLimit = volume === 'deep' ? 20 : volume === 'medium' ? 10 : 5;
 
   // Step 1: Search for video IDs
   const { videoIds, totalResults } = await searchVideos(query, timeRange, maxResults);
