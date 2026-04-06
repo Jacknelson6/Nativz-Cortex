@@ -63,25 +63,28 @@ export function PortalResearchHub({
   return (
     <div
       className={cn(
+        /* Mobile: normal flow */
         'flex min-h-0 flex-1 flex-col',
-        'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden',
+        /* Desktop: lock to viewport, no page scroll */
+        'lg:h-[calc(100dvh-theme(spacing.0))] lg:max-h-dvh lg:overflow-hidden',
       )}
     >
       <div
         className={cn(
-          'flex min-h-0 flex-1 flex-col gap-8 lg:grid lg:items-start lg:gap-10',
-          '',
+          'flex min-h-0 flex-1 flex-col gap-8',
+          /* Desktop: two-column grid filling the locked container */
+          'lg:grid lg:h-full lg:gap-0 lg:overflow-hidden',
           'lg:transition-[grid-template-columns] lg:duration-300 lg:ease-[cubic-bezier(0.32,0.72,0,1)]',
           historyRailOpen
             ? 'lg:grid-cols-[300px_minmax(0,1fr)]'
             : 'lg:grid-cols-[2.5rem_minmax(0,1fr)]',
         )}
       >
-        {/* Main column: centered search form */}
+        {/* Main column: centered search form — fills grid cell, no scroll */}
         <div
           className={cn(
             'flex min-w-0 w-full shrink-0 justify-center lg:col-start-2 lg:row-start-1 xl:pl-2',
-            'lg:min-h-dvh lg:flex-col lg:items-center lg:justify-center',
+            'lg:h-full lg:flex-col lg:items-center lg:justify-center lg:overflow-hidden',
           )}
         >
           <div className="w-full max-w-xl px-4 pt-8 lg:pt-0">
@@ -96,12 +99,12 @@ export function PortalResearchHub({
           </div>
         </div>
 
-        {/* History rail — left column on desktop, below on mobile */}
+        {/* History rail — fills grid cell, scrolls internally */}
         <div
           className={cn(
             'flex min-h-0 w-full flex-col',
             'max-lg:flex-1',
-            'lg:col-start-1 lg:row-start-1 lg:sticky lg:top-0 lg:max-h-dvh lg:shrink-0 lg:self-start lg:overflow-hidden',
+            'lg:col-start-1 lg:row-start-1 lg:h-full lg:overflow-hidden',
           )}
         >
           <TopicSearchHistoryRail
