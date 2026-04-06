@@ -40,7 +40,7 @@ export default async function PortalSettingsPage() {
       : 'Nativz';
 
     return (
-      <div className="cortex-page-gutter space-y-6 max-w-2xl">
+      <div className="cortex-page-gutter space-y-6 max-w-2xl mx-auto">
         <h1 className="ui-page-title-md">Settings</h1>
 
         {/* Account info */}
