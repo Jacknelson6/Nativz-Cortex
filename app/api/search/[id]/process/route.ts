@@ -245,35 +245,34 @@ export async function POST(
         const safeJson = (v: any, fallback: any): any =>
           v !== null && v !== undefined ? v : fallback;
 
-        // Build platform_data with TikTok prioritized
-        const platformDataPayload = cloneJsonForPostgres({
-          stats: [],
-          sourceCount: result.platformSources?.length ?? 0,
-          sources: (() => {
-            const all = result.platformSources ?? [];
-            const tiktok = all.filter((s) => s.platform === 'tiktok');
-            const youtube = all.filter((s) => s.platform === 'youtube');
-            const other = all.filter((s) => s.platform !== 'tiktok' && s.platform !== 'youtube');
-            const prioritized = [...tiktok.slice(0, 30), ...youtube.slice(0, 15), ...other.slice(0, 5)].slice(0, 50);
-            return prioritized.map((s) => ({
-              platform: s.platform,
-              id: s.id,
-              url: s.url,
-              title: (s.title ?? '').slice(0, 300),
-              content: (s.content ?? '').slice(0, 300),
-              author: s.author,
-              thumbnailUrl: s.thumbnailUrl ?? null,
-              videoFormat: s.videoFormat ?? null,
-              engagement: s.engagement,
-              createdAt: s.createdAt,
-              transcript: s.transcript ? s.transcript.slice(0, 300) : null,
-              comments: [],
-            }));
-          })(),
+        // Build prioritized platform sources (TikTok first)
+        const mapSource = (s: import('@/lib/types/search').PlatformSource) => ({
+          platform: s.platform,
+          id: s.id,
+          url: s.url,
+          title: (s.title ?? '').slice(0, 300),
+          content: (s.content ?? '').slice(0, 300),
+          author: s.author,
+          thumbnailUrl: s.thumbnailUrl ?? null,
+          videoFormat: s.videoFormat ?? null,
+          engagement: s.engagement,
+          createdAt: s.createdAt,
+          transcript: s.transcript ? s.transcript.slice(0, 300) : null,
+          comments: [],
         });
 
+        const allPlatformSources = result.platformSources ?? [];
+        const tiktokSources = allPlatformSources.filter((s) => s.platform === 'tiktok');
+        const youtubeSources = allPlatformSources.filter((s) => s.platform === 'youtube');
+        const otherSources = allPlatformSources.filter((s) => s.platform !== 'tiktok' && s.platform !== 'youtube');
+        const allPrioritized = [...tiktokSources, ...youtubeSources, ...otherSources];
+
+        // First 10 go in batch 1, remaining 40 in batch 2
+        const batch1Sources = allPrioritized.slice(0, 10).map(mapSource);
+        const batch2Sources = allPrioritized.slice(10, 50).map(mapSource);
+
         // Save in two batches to avoid PostgREST payload size limits.
-        // Batch 1: core results (summary, topics, emotions, metrics)
+        // Batch 1: core results + 10 platform source previews
         const { error: batch1Err } = await adminClient
           .from('topic_searches')
           .update({
@@ -285,6 +284,11 @@ export async function POST(
             content_breakdown: cloneJsonForPostgres(safeJson(result.aiResponse.content_breakdown, {})),
             trending_topics: cloneJsonForPostgres(safeJson(result.aiResponse.trending_topics, [])),
             raw_ai_response: cloneJsonForPostgres(safeJson(result.aiResponse, {})),
+            platform_data: cloneJsonForPostgres({
+              stats: [],
+              sourceCount: allPlatformSources.length,
+              sources: batch1Sources,
+            }),
             tokens_used: result.totalTokens ?? 0,
             estimated_cost: result.estimatedCost ?? 0,
             completed_at: new Date().toISOString(),
@@ -307,32 +311,38 @@ export async function POST(
             .eq('id', id);
         }
 
-        // Batch 2: supplementary data (serp, platform sources, research, pipeline state)
-        // Non-critical — failure here doesn't block the user
-        await adminClient
-          .from('topic_searches')
-          .update({
-            serp_data: cloneJsonForPostgres(
-              safeJson(result.serpData, { webResults: [], discussions: [], videos: [] }),
-            ),
-            research_sources: cloneJsonForPostgres(safeJson(result.researchSources, [])),
-            pipeline_state: cloneJsonForPostgres(safeJson(result.pipelineState, {})),
-            platform_data: platformDataPayload,
-          })
-          .eq('id', id)
-          .then(({ error: batch2Err }) => {
-            if (batch2Err) {
-              console.error('[process] llm_v1 batch2 save failed (non-critical):', batch2Err.message);
-              // Try without platform_data if it's too large
-              adminClient
-                .from('topic_searches')
-                .update({
-                  pipeline_state: cloneJsonForPostgres(safeJson(result.pipelineState, {})),
-                })
-                .eq('id', id)
-                .then(() => {});
-            }
-          });
+        // Batch 2: remaining 40 platform sources, serp data, research sources, pipeline state
+        if (batch2Sources.length > 0 || result.serpData || result.researchSources) {
+          await adminClient
+            .from('topic_searches')
+            .update({
+              serp_data: cloneJsonForPostgres(
+                safeJson(result.serpData, { webResults: [], discussions: [], videos: [] }),
+              ),
+              research_sources: cloneJsonForPostgres(safeJson(result.researchSources, [])),
+              pipeline_state: cloneJsonForPostgres(safeJson(result.pipelineState, {})),
+              // Merge remaining sources into platform_data
+              platform_data: cloneJsonForPostgres({
+                stats: [],
+                sourceCount: allPlatformSources.length,
+                sources: [...batch1Sources, ...batch2Sources],
+              }),
+            })
+            .eq('id', id)
+            .then(({ error: batch2Err }) => {
+              if (batch2Err) {
+                console.error('[process] llm_v1 batch2 save failed (non-critical):', batch2Err.message);
+                // Save just pipeline state if platform_data is too large
+                adminClient
+                  .from('topic_searches')
+                  .update({
+                    pipeline_state: cloneJsonForPostgres(safeJson(result.pipelineState, {})),
+                  })
+                  .eq('id', id)
+                  .then(() => {});
+              }
+            });
+        }
 
         // Persist platform video sources to topic_search_videos for the Sources grid
         if (result.platformSources && result.platformSources.length > 0) {
