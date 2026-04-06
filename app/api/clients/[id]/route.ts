@@ -191,16 +191,30 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Only admins can update clients
     const adminClient = createAdminClient();
     const { data: userData } = await adminClient
       .from('users')
-      .select('role')
+      .select('role, organization_id')
       .eq('id', user.id)
       .single();
 
-    if (!userData || userData.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    if (!userData) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const isAdmin = userData.role === 'admin';
+
+    // Portal users: verify org ownership
+    if (!isAdmin) {
+      const { data: clientRow } = await adminClient
+        .from('clients')
+        .select('organization_id')
+        .eq('id', id)
+        .single();
+
+      if (!clientRow || clientRow.organization_id !== userData.organization_id) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
     }
 
     const body = await request.json();
@@ -211,34 +225,40 @@ export async function PATCH(
       existingFeatureFlags = (curRow?.feature_flags as Record<string, unknown>) ?? {};
     }
 
-    // Only allow updating specific fields
-    const allowedFields = [
+    // Portal users can only update brand profile fields
+    const portalAllowedFields = [
       'industry',
       'target_audience',
       'brand_voice',
       'topic_keywords',
-      'feature_flags',
-      'is_active',
-      'description',
-      'category',
-      'logo_url',
-      'website_url',
-      'preferences',
-      'services',
-      'health_score_override',
-      'health_score',
-      'agency',
-      'google_drive_branding_url',
-      'google_drive_calendars_url',
-      'monthly_boosting_budget',
-      'affiliate_digest_email_enabled',
-      'affiliate_digest_recipients',
-      'affiliate_digest_timezone',
-      'affiliate_digest_send_day_of_week',
-      'affiliate_digest_send_hour',
-      'affiliate_digest_send_minute',
-      'admin_workspace_modules',
     ];
+
+    const allowedFields = isAdmin
+      ? [
+          ...portalAllowedFields,
+          'feature_flags',
+          'is_active',
+          'description',
+          'category',
+          'logo_url',
+          'website_url',
+          'preferences',
+          'services',
+          'health_score_override',
+          'health_score',
+          'agency',
+          'google_drive_branding_url',
+          'google_drive_calendars_url',
+          'monthly_boosting_budget',
+          'affiliate_digest_email_enabled',
+          'affiliate_digest_recipients',
+          'affiliate_digest_timezone',
+          'affiliate_digest_send_day_of_week',
+          'affiliate_digest_send_hour',
+          'affiliate_digest_send_minute',
+          'admin_workspace_modules',
+        ]
+      : portalAllowedFields;
 
     const updates: Record<string, unknown> = {};
     for (const field of allowedFields) {
