@@ -245,7 +245,36 @@ export async function POST(
         const safeJson = (v: any, fallback: any): any =>
           v !== null && v !== undefined ? v : fallback;
 
-        const { error: llmUpdateErr } = await adminClient
+        // Build platform_data with TikTok prioritized
+        const platformDataPayload = cloneJsonForPostgres({
+          stats: [],
+          sourceCount: result.platformSources?.length ?? 0,
+          sources: (() => {
+            const all = result.platformSources ?? [];
+            const tiktok = all.filter((s) => s.platform === 'tiktok');
+            const youtube = all.filter((s) => s.platform === 'youtube');
+            const other = all.filter((s) => s.platform !== 'tiktok' && s.platform !== 'youtube');
+            const prioritized = [...tiktok, ...youtube.slice(0, 50), ...other.slice(0, 50)].slice(0, 300);
+            return prioritized.map((s) => ({
+              platform: s.platform,
+              id: s.id,
+              url: s.url,
+              title: (s.title ?? '').slice(0, 300),
+              content: (s.content ?? '').slice(0, 300),
+              author: s.author,
+              thumbnailUrl: s.thumbnailUrl ?? null,
+              videoFormat: s.videoFormat ?? null,
+              engagement: s.engagement,
+              createdAt: s.createdAt,
+              transcript: s.transcript ? s.transcript.slice(0, 300) : null,
+              comments: [],
+            }));
+          })(),
+        });
+
+        // Save in two batches to avoid PostgREST payload size limits.
+        // Batch 1: core results (summary, topics, emotions, metrics)
+        const { error: batch1Err } = await adminClient
           .from('topic_searches')
           .update({
             status: 'completed',
@@ -255,61 +284,55 @@ export async function POST(
             emotions: cloneJsonForPostgres(safeJson(result.aiResponse.emotions, {})),
             content_breakdown: cloneJsonForPostgres(safeJson(result.aiResponse.content_breakdown, {})),
             trending_topics: cloneJsonForPostgres(safeJson(result.aiResponse.trending_topics, [])),
-            serp_data: cloneJsonForPostgres(
-              safeJson(result.serpData, { webResults: [], discussions: [], videos: [] }),
-            ),
             raw_ai_response: cloneJsonForPostgres(safeJson(result.aiResponse, {})),
-            research_sources: cloneJsonForPostgres(safeJson(result.researchSources, [])),
-            pipeline_state: cloneJsonForPostgres(safeJson(result.pipelineState, {})),
-            platform_data: cloneJsonForPostgres({
-              stats: [],
-              sourceCount: result.platformSources?.length ?? 0,
-              // Prioritize TikTok, then YouTube, then others — truncate to 300 total
-              // to stay under Supabase's 1MB PostgREST limit for JSONB.
-              sources: (() => {
-                const all = result.platformSources ?? [];
-                const tiktok = all.filter((s) => s.platform === 'tiktok');
-                const youtube = all.filter((s) => s.platform === 'youtube');
-                const other = all.filter((s) => s.platform !== 'tiktok' && s.platform !== 'youtube');
-                const prioritized = [...tiktok, ...youtube.slice(0, 50), ...other.slice(0, 50)].slice(0, 300);
-                return prioritized.map((s) => ({
-                  platform: s.platform,
-                  id: s.id,
-                  url: s.url,
-                  title: (s.title ?? '').slice(0, 300),
-                  content: (s.content ?? '').slice(0, 300),
-                  author: s.author,
-                  thumbnailUrl: s.thumbnailUrl ?? null,
-                  videoFormat: s.videoFormat ?? null,
-                  engagement: s.engagement,
-                  createdAt: s.createdAt,
-                  transcript: s.transcript ? s.transcript.slice(0, 300) : null,
-                  comments: [],
-                }));
-              })(),
-            }),
             tokens_used: result.totalTokens ?? 0,
             estimated_cost: result.estimatedCost ?? 0,
             completed_at: new Date().toISOString(),
           })
           .eq('id', id);
 
-        if (llmUpdateErr) {
-          console.error('[process] llm_v1 save failed:', llmUpdateErr);
+        if (batch1Err) {
+          console.error('[process] llm_v1 batch1 save failed:', batch1Err);
+          // Try minimal save so user at least sees a completed search
           await adminClient
             .from('topic_searches')
             .update({
-              status: 'failed',
+              status: 'completed',
               processing_started_at: null,
-              summary: `Could not save results: ${llmUpdateErr.message}`,
+              summary: result.aiResponse.summary || 'Results saved with reduced data.',
+              trending_topics: cloneJsonForPostgres(safeJson(result.aiResponse.trending_topics, [])),
+              tokens_used: result.totalTokens ?? 0,
+              completed_at: new Date().toISOString(),
             })
             .eq('id', id);
-          await notifyTopicSearchFailedOnce(adminClient, id);
-          return NextResponse.json(
-            { error: 'Failed to save search results', details: llmUpdateErr.message },
-            { status: 500 },
-          );
         }
+
+        // Batch 2: supplementary data (serp, platform sources, research, pipeline state)
+        // Non-critical — failure here doesn't block the user
+        await adminClient
+          .from('topic_searches')
+          .update({
+            serp_data: cloneJsonForPostgres(
+              safeJson(result.serpData, { webResults: [], discussions: [], videos: [] }),
+            ),
+            research_sources: cloneJsonForPostgres(safeJson(result.researchSources, [])),
+            pipeline_state: cloneJsonForPostgres(safeJson(result.pipelineState, {})),
+            platform_data: platformDataPayload,
+          })
+          .eq('id', id)
+          .then(({ error: batch2Err }) => {
+            if (batch2Err) {
+              console.error('[process] llm_v1 batch2 save failed (non-critical):', batch2Err.message);
+              // Try without platform_data if it's too large
+              adminClient
+                .from('topic_searches')
+                .update({
+                  pipeline_state: cloneJsonForPostgres(safeJson(result.pipelineState, {})),
+                })
+                .eq('id', id)
+                .then(() => {});
+            }
+          });
 
         // Persist platform video sources to topic_search_videos for the Sources grid
         if (result.platformSources && result.platformSources.length > 0) {
