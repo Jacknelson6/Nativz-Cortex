@@ -192,18 +192,25 @@ async function searchKnowledgeNodesFromSupabase(
   const embedding = await generateEmbedding(query);
 
   if (embedding) {
-    const admin = createAdminClient();
-    const { data, error } = await admin.rpc('search_knowledge_nodes', {
-      query_embedding: JSON.stringify(embedding),
-      target_client_id: clientId ?? null,
-      target_kinds: kinds ?? null,
-      target_domains: domains ?? null,
-      match_limit: limit,
-      similarity_threshold: 0.3,
-    });
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin.rpc('search_knowledge_nodes', {
+        query_embedding: JSON.stringify(embedding),
+        target_client_id: clientId ?? null,
+        target_kinds: kinds ?? null,
+        target_domains: domains ?? null,
+        match_limit: limit,
+        similarity_threshold: 0.3,
+      });
 
-    if (!error && data && data.length > 0) {
-      return data as Array<KnowledgeNode & { similarity: number }>;
+      if (error) {
+        console.error('Knowledge nodes semantic search RPC error:', error.message);
+        // Fall through to FTS
+      } else if (data && data.length > 0) {
+        return data as Array<KnowledgeNode & { similarity: number }>;
+      }
+    } catch (e) {
+      console.error('Knowledge nodes semantic search exception:', e instanceof Error ? e.message : e);
     }
   }
 

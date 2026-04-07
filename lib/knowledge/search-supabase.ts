@@ -20,20 +20,27 @@ export async function searchKnowledgeSupabase(
   const embedding = await generateEmbedding(query);
 
   if (embedding) {
-    const admin = createAdminClient();
-    const { data, error } = await admin.rpc('search_knowledge_semantic', {
-      query_embedding: JSON.stringify(embedding),
-      target_client_id: clientId,
-      match_limit: limit,
-      similarity_threshold: threshold,
-    });
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin.rpc('search_knowledge_semantic', {
+        query_embedding: JSON.stringify(embedding),
+        target_client_id: clientId,
+        match_limit: limit,
+        similarity_threshold: threshold,
+      });
 
-    if (!error && data && data.length > 0) {
-      let results = data as KnowledgeSearchResult[];
-      if (types?.length) {
-        results = results.filter((r) => types.includes(r.type));
+      if (error) {
+        console.error('Client knowledge semantic search RPC error:', error.message);
+        // Fall through to FTS
+      } else if (data && data.length > 0) {
+        let results = data as KnowledgeSearchResult[];
+        if (types?.length) {
+          results = results.filter((r) => types.includes(r.type));
+        }
+        return results;
       }
-      return results;
+    } catch (e) {
+      console.error('Client knowledge semantic search exception:', e instanceof Error ? e.message : e);
     }
   }
 

@@ -65,9 +65,11 @@ export const agencyKnowledgeTools: ToolDefinition[] = [
           data: { total: formatted.length, results: formatted },
         };
       } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('search_agency_knowledge tool error:', msg);
         return {
           success: false,
-          error: err instanceof Error ? err.message : 'Failed to search agency knowledge graph',
+          error: `Knowledge graph search failed: ${msg}. This may mean the search RPCs need to be re-created — ask an admin to run migration 082.`,
         };
       }
     },

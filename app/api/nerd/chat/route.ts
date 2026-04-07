@@ -280,7 +280,8 @@ async function buildKnowledgeSummary(clientId: string): Promise<string> {
     }
 
     return parts.join('\n');
-  } catch {
+  } catch (err) {
+    console.error(`buildKnowledgeSummary failed for client ${clientId}:`, err instanceof Error ? err.message : err);
     return '';
   }
 }
@@ -437,14 +438,18 @@ export async function POST(req: NextRequest) {
     const strategyPackByClient = new Map<string, string>();
     if (mentionedClientIds.size > 0) {
       const { buildStrategyLabContextPack } = await import('@/lib/nerd/strategy-lab-context-pack');
-      const packResults = await Promise.all(
+      const packResults = await Promise.allSettled(
         [...mentionedClientIds].map(async (id) => {
           const pack = await buildStrategyLabContextPack(admin, id);
           return { id, pack };
         }),
       );
-      for (const { id, pack } of packResults) {
-        if (pack.trim().length > 0) strategyPackByClient.set(id, pack);
+      for (const result of packResults) {
+        if (result.status === 'fulfilled' && result.value.pack.trim().length > 0) {
+          strategyPackByClient.set(result.value.id, result.value.pack);
+        } else if (result.status === 'rejected') {
+          console.error('Strategy pack build failed:', result.reason);
+        }
       }
     }
 
