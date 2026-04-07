@@ -64,6 +64,7 @@ export interface ChartDataPoint {
 
 export interface SummaryReport {
   combined: {
+    totalFollowers?: number;
     totalViews: number;
     totalViewsChange: number;
     totalFollowerChange: number;

@@ -249,8 +249,12 @@ export async function GET(request: NextRequest) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, d]) => ({ date, views: d.views, engagement: d.engagement, followers: d.followers }));
 
+    // Sum total followers across all platforms (from latest snapshot each)
+    const totalFollowers = platformSummaries.reduce((sum, p) => sum + (p.followers ?? 0), 0);
+
     const report: SummaryReport = {
       combined: {
+        totalFollowers,
         totalViews: combinedViews,
         totalViewsChange: calcChange(combinedViews, combinedPrevViews),
         totalFollowerChange: combinedFollowerChange,

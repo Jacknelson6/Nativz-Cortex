@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, UserPlus, Heart, TrendingUp } from 'lucide-react';
+import { Eye, UserPlus, Heart, TrendingUp, Users } from 'lucide-react';
 import { StatCard } from '@/components/shared/stat-card';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -41,7 +41,12 @@ export function SummaryView({ data, loading }: SummaryViewProps) {
   const { combined } = data;
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+      <StatCard
+        title="Total followers"
+        value={formatNumber(combined.totalFollowers ?? 0)}
+        icon={<Users size={20} />}
+      />
       <StatCard
         title="Total views"
         value={formatNumber(combined.totalViews ?? 0)}
