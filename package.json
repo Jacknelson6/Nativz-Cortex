@@ -72,7 +72,7 @@
     "@react-sigma/core": "^5.0.6",
     "@react-sigma/layout-forceatlas2": "^5.0.6",
     "@resvg/resvg-js": "^2.6.2",
-    "@supabase/ssr": "^0.8.0",
+    "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.96.0",
     "@types/dagre": "^0.7.54",
     "@types/fluent-ffmpeg": "^2.1.28",
