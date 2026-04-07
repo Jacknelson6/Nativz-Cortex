@@ -44,8 +44,9 @@ interface ClientContactsCardProps {
 
 const EMPTY_FORM = { name: '', email: '', phone: '', role: '', project_role: '', is_primary: false };
 
-export function ClientContactsCard({ clientId, clientName, vaultContacts = [], portalContacts = [] }: ClientContactsCardProps) {
+export function ClientContactsCard({ clientId, clientName, vaultContacts = [], portalContacts: initialPortalContacts = [] }: ClientContactsCardProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [portalUsers, setPortalUsers] = useState(initialPortalContacts);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -161,7 +162,19 @@ export function ClientContactsCard({ clientId, clientName, vaultContacts = [], p
     }
   }
 
-  const hasAnyContacts = contacts.length > 0 || vaultContacts.length > 0 || portalContacts.length > 0;
+  async function handleRemovePortalUser(userId: string, userName: string) {
+    if (!confirm(`Remove ${userName} from this client's portal? They will lose access.`)) return;
+    try {
+      const res = await fetch(`/api/clients/${clientId}/portal-users/${userId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      setPortalUsers((prev) => prev.filter((u) => u.id !== userId));
+      toast.success(`${userName} removed from portal`);
+    } catch {
+      toast.error('Failed to remove portal user');
+    }
+  }
+
+  const hasAnyContacts = contacts.length > 0 || vaultContacts.length > 0 || portalUsers.length > 0;
 
   return (
     <>
@@ -267,9 +280,9 @@ export function ClientContactsCard({ clientId, clientName, vaultContacts = [], p
               </div>
             ))}
 
-            {/* Portal users (read-only) */}
-            {portalContacts.map((contact) => (
-              <div key={contact.id} className="flex items-center gap-3 rounded-lg border border-nativz-border bg-surface-hover/30 px-4 py-3">
+            {/* Portal users */}
+            {portalUsers.map((contact) => (
+              <div key={contact.id} className="group flex items-center gap-3 rounded-lg border border-nativz-border bg-surface-hover/30 px-4 py-3">
                 {contact.avatar_url ? (
                   <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -287,6 +300,13 @@ export function ClientContactsCard({ clientId, clientName, vaultContacts = [], p
                     {contact.job_title && <p className="text-xs text-text-muted truncate">{contact.job_title}</p>}
                   </div>
                 </div>
+                <button
+                  onClick={() => handleRemovePortalUser(contact.id, contact.full_name)}
+                  className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                  title="Remove portal access"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
             ))}
           </div>

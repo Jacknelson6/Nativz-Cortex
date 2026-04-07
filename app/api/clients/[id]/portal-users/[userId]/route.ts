@@ -1,13 +1,10 @@
 /**
- * PATCH /api/clients/[id]/portal-users/[userId]
- *
- * Toggle a portal user's active status.
+ * PATCH /api/clients/[id]/portal-users/[userId]  — Toggle active status
+ * DELETE /api/clients/[id]/portal-users/[userId]  — Remove portal access for this client
  *
  * @auth Required (admin)
  * @param id - Client UUID
  * @param userId - User UUID
- * @body is_active - Boolean
- * @returns {{ success: true }}
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -77,6 +74,64 @@ export async function PATCH(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('PATCH /api/clients/[id]/portal-users/[userId] error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string; userId: string }> },
+) {
+  try {
+    const { id: clientId, userId } = await params;
+
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const adminClient = createAdminClient();
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Remove user_client_access row for this client
+    const { error: accessError } = await adminClient
+      .from('user_client_access')
+      .delete()
+      .eq('user_id', userId)
+      .eq('client_id', clientId);
+
+    if (accessError) {
+      console.error('Failed to remove user_client_access:', accessError);
+      return NextResponse.json({ error: 'Failed to remove portal access' }, { status: 500 });
+    }
+
+    // Check if user still has access to any other clients
+    const { data: remainingAccess } = await adminClient
+      .from('user_client_access')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(1);
+
+    // If no remaining access, deactivate the user
+    if (!remainingAccess?.length) {
+      await adminClient
+        .from('users')
+        .update({ is_active: false })
+        .eq('id', userId);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('DELETE /api/clients/[id]/portal-users/[userId] error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
