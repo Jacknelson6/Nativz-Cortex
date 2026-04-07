@@ -9,14 +9,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useReportingData } from './hooks/use-reporting-data';
 import { DateRangePicker } from './date-range-picker';
 import { SummaryView } from './summary-view';
-import { TopPostsView } from './top-posts-view';
+import { GrowthChart } from './growth-chart';
 
 const ReportBuilder = dynamic(() => import('./report-builder').then(m => ({ default: m.ReportBuilder })));
-
-const viewTabs: { value: 'summary' | 'top-posts'; label: string }[] = [
-  { value: 'summary', label: 'Performance summary' },
-  { value: 'top-posts', label: 'Top posts' },
-];
 
 export function AnalyticsDashboard({ initialClientId }: { initialClientId?: string | null } = {}) {
   const {
@@ -29,12 +24,7 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
     customRange,
     setCustomRange,
     dateRange,
-    activeView,
-    setActiveView,
-    topPostsLimit,
-    setTopPostsLimit,
     summary,
-    topPosts,
     loading,
     dataLoading,
     syncing,
@@ -101,52 +91,28 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
         </p>
       ) : (
         <>
-          {/* Controls row */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <DateRangePicker
-                value={datePreset}
-                onChange={setDatePreset}
-                customRange={customRange}
-                onCustomRangeChange={setCustomRange}
-              />
-              {datePreset === 'last_quarter' && dateRange && (
-                <span className="text-sm text-text-muted">
-                  {new Date(dateRange.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  {' – '}
-                  {new Date(dateRange.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </span>
-              )}
-            </div>
-
-            <div className="inline-flex rounded-lg bg-surface-hover/50 p-1">
-              {viewTabs.map((tab) => (
-                <button
-                  key={tab.value}
-                  onClick={() => setActiveView(tab.value)}
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
-                    activeView === tab.value
-                      ? 'bg-accent text-white shadow-sm'
-                      : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+          {/* Date range selector */}
+          <div className="flex items-center gap-3">
+            <DateRangePicker
+              value={datePreset}
+              onChange={setDatePreset}
+              customRange={customRange}
+              onCustomRangeChange={setCustomRange}
+            />
+            {dateRange && (
+              <span className="text-sm text-text-muted">
+                {new Date(dateRange.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                {' – '}
+                {new Date(dateRange.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            )}
           </div>
 
-          {/* Content */}
-          {activeView === 'summary' ? (
-            <SummaryView data={summary} loading={dataLoading} />
-          ) : (
-            <TopPostsView
-              posts={topPosts}
-              loading={dataLoading}
-              limit={topPostsLimit}
-              onLimitChange={setTopPostsLimit}
-            />
-          )}
+          {/* Summary cards + platform table */}
+          <SummaryView data={summary} loading={dataLoading} />
+
+          {/* Growth chart */}
+          <GrowthChart data={summary?.chart ?? []} loading={dataLoading} />
         </>
       )}
 

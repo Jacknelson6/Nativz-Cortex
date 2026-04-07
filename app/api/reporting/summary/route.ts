@@ -234,6 +234,21 @@ export async function GET(request: NextRequest) {
         ? Math.round((combinedPrevEngRate / platformCount) * 100) / 100
         : 0;
 
+    // Build daily time-series for chart (aggregate across all platforms per date)
+    const dailyMap = new Map<string, { views: number; engagement: number; followers: number }>();
+    for (const snap of snapshots) {
+      const d = snap.snapshot_date;
+      const existing = dailyMap.get(d) ?? { views: 0, engagement: 0, followers: 0 };
+      existing.views += snap.views_count ?? 0;
+      existing.engagement += snap.engagement_count ?? 0;
+      existing.followers += snap.followers_change ?? 0;
+      dailyMap.set(d, existing);
+    }
+
+    const chart = [...dailyMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, d]) => ({ date, views: d.views, engagement: d.engagement, followers: d.followers }));
+
     const report: SummaryReport = {
       combined: {
         totalViews: combinedViews,
@@ -256,6 +271,7 @@ export async function GET(request: NextRequest) {
       },
       platforms: platformSummaries,
       dateRange,
+      chart,
     };
 
     return NextResponse.json(report);

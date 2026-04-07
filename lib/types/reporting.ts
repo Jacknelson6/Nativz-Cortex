@@ -55,6 +55,13 @@ export interface PlatformSummary {
   postsCount: number;
 }
 
+export interface ChartDataPoint {
+  date: string;
+  views: number;
+  engagement: number;
+  followers: number;
+}
+
 export interface SummaryReport {
   combined: {
     totalViews: number;
@@ -68,6 +75,7 @@ export interface SummaryReport {
   };
   platforms: PlatformSummary[];
   dateRange: DateRange;
+  chart?: ChartDataPoint[];
 }
 
 export interface TopPostItem {
