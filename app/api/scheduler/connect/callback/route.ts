@@ -5,15 +5,17 @@ import { verifyState } from '@/lib/scheduler/oauth-state';
 /**
  * GET /api/scheduler/connect/callback
  *
- * OAuth callback from the Late API after a social account connection. Verifies the
- * signed state token, upserts the connected social_profile into the DB, and redirects
- * back to the scheduler UI.
+ * OAuth callback from Zernio after a social account connection. Verifies the
+ * signed state token, reads the connected account details from query params
+ * (standard flow: Zernio appends ?connected={platform}&accountId=Y&username=Z),
+ * upserts the social_profile into the DB, and redirects back to the scheduler UI.
  *
  * @auth None (OAuth callback — no session required, but state token is HMAC-verified)
  * @query state - Signed state token containing client_id and platform (required)
- * @query connected - Confirmed platform from Late (optional)
- * @query username - Connected account username from Late (optional)
- * @query profileId - Late account ID (optional)
+ * @query connected - Platform name from Zernio (e.g. instagram, tiktok)
+ * @query accountId - Zernio account ID for the connected account
+ * @query username - Connected account username
+ * @query profileId - Zernio profile ID (echoed back)
  * @returns Redirect to /admin/scheduler
  */
 export async function GET(request: NextRequest) {
@@ -37,23 +39,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/admin/scheduler?error=invalid_state', request.url));
     }
 
+    // Zernio standard flow appends: ?connected={platform}&accountId=Y&username=Z&profileId=X
     const connectedPlatform = searchParams.get('connected');
     const username = searchParams.get('username');
-    const profileId = searchParams.get('profileId');
+    const accountId = searchParams.get('accountId');
+    // Legacy: older Zernio versions may pass profileId instead of accountId
+    const legacyProfileId = searchParams.get('profileId');
 
     const adminClient = createAdminClient();
 
-    // Late passes account info in callback query params
-    if (connectedPlatform && username) {
+    if (connectedPlatform && (username || accountId)) {
+      const zernioAccountId = accountId ?? legacyProfileId ?? null;
+
       await adminClient
         .from('social_profiles')
         .upsert({
           client_id: clientId,
           platform: connectedPlatform,
-          platform_user_id: username,
-          username: username,
+          platform_user_id: username || accountId || '',
+          username: username || '',
           avatar_url: null,
-          late_account_id: profileId ?? null,
+          late_account_id: zernioAccountId,
           is_active: true,
         }, { onConflict: 'client_id,platform,platform_user_id' });
     }

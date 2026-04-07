@@ -435,6 +435,67 @@ export class ZernioPostingService implements PostingService {
     return { authorizationUrl: url };
   }
 
+  /** Exchange OAuth code for connected account (headless mode). POST /v1/connect/{platform} */
+  async exchangeOAuthCode(input: {
+    code: string;
+    state: string;
+    profileId: string;
+    platform: string;
+  }): Promise<{ account: { id: string; platform: string; username: string; displayName?: string } }> {
+    const data = await zernioRequest<Record<string, unknown>>(
+      `/connect/${input.platform}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          code: input.code,
+          state: input.state,
+          profileId: input.profileId,
+        }),
+      },
+    );
+    const account = asRecord(data.account) ?? asRecord(data.data);
+    if (!account) {
+      throw new Error('Zernio OAuth callback: missing account in response');
+    }
+    return {
+      account: {
+        id: pickString(account, 'accountId', 'id', '_id') ?? '',
+        platform: pickString(account, 'platform') ?? input.platform,
+        username: pickString(account, 'username') ?? '',
+        displayName: pickString(account, 'displayName', 'display_name') ?? undefined,
+      },
+    };
+  }
+
+  /** List Facebook pages after OAuth (headless mode). GET /v1/connect/facebook/select-page */
+  async listFacebookPages(profileId: string, tempToken: string): Promise<Array<{ id: string; name: string; username?: string }>> {
+    const params = new URLSearchParams({ profileId, tempToken });
+    const data = await zernioRequest<Record<string, unknown>>(
+      `/connect/facebook/select-page?${params}`,
+    );
+    const pages = Array.isArray(data.pages) ? data.pages : [];
+    return pages.map((item: unknown) => {
+      const p = asRecord(item) ?? {};
+      return {
+        id: pickString(p, 'id', '_id') ?? '',
+        name: pickString(p, 'name') ?? '',
+        username: pickString(p, 'username') ?? undefined,
+      };
+    });
+  }
+
+  /** Select a Facebook page to complete headless connection. POST /v1/connect/facebook/select-page */
+  async selectFacebookPage(input: { profileId: string; pageId: string; tempToken: string }): Promise<void> {
+    await zernioRequest('/connect/facebook/select-page', {
+      method: 'POST',
+      body: JSON.stringify({
+        profileId: input.profileId,
+        pageId: input.pageId,
+        tempToken: input.tempToken,
+      }),
+    });
+  }
+
   async disconnectProfile(profileId: string): Promise<void> {
     await zernioRequest(`/accounts/${profileId}`, { method: 'DELETE' });
   }
@@ -468,7 +529,7 @@ export class ZernioPostingService implements PostingService {
     const fileName = filename ?? `upload_${Date.now()}`;
     return zernioRequest<{ uploadUrl: string; publicUrl: string }>('/media/presign', {
       method: 'POST',
-      body: JSON.stringify({ fileName, fileType }),
+      body: JSON.stringify({ filename: fileName, contentType: fileType }),
     });
   }
 
