@@ -1,6 +1,6 @@
 export type SocialPlatform = 'facebook' | 'instagram' | 'tiktok' | 'youtube';
 
-export type DateRangePreset = '7d' | '30d' | 'mtd' | 'last_month' | 'ytd' | 'custom';
+export type DateRangePreset = '7d' | '30d' | 'mtd' | 'last_month' | 'ytd' | 'custom' | 'last_quarter';
 
 export interface DateRange {
   start: string;

@@ -103,12 +103,21 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
         <>
           {/* Controls row */}
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <DateRangePicker
-              value={datePreset}
-              onChange={setDatePreset}
-              customRange={customRange}
-              onCustomRangeChange={setCustomRange}
-            />
+            <div className="flex items-center gap-3">
+              <DateRangePicker
+                value={datePreset}
+                onChange={setDatePreset}
+                customRange={customRange}
+                onCustomRangeChange={setCustomRange}
+              />
+              {datePreset === 'last_quarter' && dateRange && (
+                <span className="text-sm text-text-muted">
+                  {new Date(dateRange.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {' – '}
+                  {new Date(dateRange.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+              )}
+            </div>
 
             <div className="inline-flex rounded-lg bg-surface-hover/50 p-1">
               {viewTabs.map((tab) => (

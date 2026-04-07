@@ -48,6 +48,20 @@ function getDateRange(preset: DateRangePreset, customRange?: DateRange): DateRan
       const start = new Date(today.getFullYear(), 0, 1);
       return { start: start.toISOString().split('T')[0], end };
     }
+    case 'last_quarter': {
+      // Previous calendar quarter
+      const currentQ = Math.floor(today.getMonth() / 3);
+      const qStart = currentQ === 0
+        ? new Date(today.getFullYear() - 1, 9, 1)  // Q4 of prev year
+        : new Date(today.getFullYear(), (currentQ - 1) * 3, 1);
+      const qEnd = currentQ === 0
+        ? new Date(today.getFullYear() - 1, 11, 31)
+        : new Date(today.getFullYear(), currentQ * 3, 0); // last day of prev quarter
+      return {
+        start: qStart.toISOString().split('T')[0],
+        end: qEnd.toISOString().split('T')[0],
+      };
+    }
     case 'custom': {
       if (customRange) return customRange;
       const start = new Date(today);
@@ -65,7 +79,7 @@ function getDateRange(preset: DateRangePreset, customRange?: DateRange): DateRan
 export function useReportingData(initialClientId?: string | null) {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
-  const [datePreset, setDatePreset] = useState<DateRangePreset>('30d');
+  const [datePreset, setDatePreset] = useState<DateRangePreset>('last_quarter');
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [activeView, setActiveView] = useState<'summary' | 'top-posts'>('summary');
   const [topPostsLimit, setTopPostsLimit] = useState(3);
