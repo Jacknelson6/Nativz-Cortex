@@ -79,7 +79,7 @@ function getDateRange(preset: DateRangePreset, customRange?: DateRange): DateRan
 export function useReportingData(initialClientId?: string | null) {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
-  const [datePreset, setDatePreset] = useState<DateRangePreset>('last_quarter');
+  const [datePreset, setDatePreset] = useState<DateRangePreset>('30d');
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [activeView, setActiveView] = useState<'summary' | 'top-posts'>('summary');
   const [topPostsLimit, setTopPostsLimit] = useState(3);

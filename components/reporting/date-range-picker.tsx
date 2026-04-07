@@ -5,7 +5,10 @@ import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { DateRangePreset, DateRange } from '@/lib/types/reporting';
 
 const presets: { value: DateRangePreset; label: string }[] = [
-  { value: 'last_quarter', label: 'Quarterly report' },
+  { value: '7d', label: '7d' },
+  { value: '30d', label: '30d' },
+  { value: 'last_quarter', label: '90d' },
+  { value: 'ytd', label: 'YTD' },
 ];
 
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
