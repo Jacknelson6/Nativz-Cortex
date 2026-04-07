@@ -24,6 +24,7 @@ import {
 import { hasSerp } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse } from '@/lib/types/search';
 import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
+import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 
 interface SharedSearchClientProps {
   search: TopicSearch;
@@ -40,6 +41,7 @@ export function SharedSearchClient({
   shareToken,
   scrapedVideoCount = 0,
 }: SharedSearchClientProps) {
+  const { brandName } = useAgencyBrand();
   const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
 
   return (
@@ -149,7 +151,7 @@ export function SharedSearchClient({
       {/* Footer */}
       <div className="border-t border-nativz-border py-6 text-center">
         <p className="text-xs text-text-muted">
-          Powered by <span className="font-medium text-text-secondary">Nativz Cortex</span>
+          Powered by <span className="font-medium text-text-secondary">{brandName} Cortex</span>
         </p>
       </div>
     </div>

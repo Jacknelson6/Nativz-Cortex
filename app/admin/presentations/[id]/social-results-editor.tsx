@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { InstagramMockup } from '@/components/presentations/social-results/instagram-mockup';
 import type { PresentationData, SocialResultsData } from './types';
 import type { ClientOption } from '@/components/ui/client-picker';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 interface SocialResultsEditorProps {
   presentation: PresentationData;
@@ -33,6 +34,8 @@ export function SocialResultsEditor({
     generated_at: null,
   };
 
+  const { mode } = useBrandMode();
+  const agencyName = mode === 'anderson' ? 'Anderson Collaborative' : 'Nativz';
   const [handle, setHandle] = useState(data.instagram_handle ?? '');
   const [timelineMonths, setTimelineMonths] = useState(data.timeline_months ?? 3);
   const [generating, setGenerating] = useState(false);
@@ -238,7 +241,7 @@ export function SocialResultsEditor({
                 </div>
                 <div className="text-center space-y-1">
                   <p className="text-sm font-medium text-text-secondary">Enter a handle and click Generate</p>
-                  <p className="text-xs text-text-muted max-w-xs">We&apos;ll scrape the profile and generate AI content showing the transformation after {timelineMonths} months with Nativz</p>
+                  <p className="text-xs text-text-muted max-w-xs">We&apos;ll scrape the profile and generate AI content showing the transformation after {timelineMonths} months with {agencyName}</p>
                 </div>
               </div>
             )}
@@ -249,7 +252,7 @@ export function SocialResultsEditor({
                   <InstagramMockup profile={data.before} label="Current" />
                 )}
                 {view === 'after' && data.after && (
-                  <InstagramMockup profile={data.after} label={`After ${timelineMonths} months with Nativz`} />
+                  <InstagramMockup profile={data.after} label={`After ${timelineMonths} months with {agencyName}`} />
                 )}
                 {view === 'after' && !data.after && generating && (
                   <div className="flex flex-col items-center justify-center gap-3 py-24">

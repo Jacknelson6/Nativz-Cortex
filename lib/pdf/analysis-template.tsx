@@ -1,6 +1,7 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Link, Image as PdfImage } from '@react-pdf/renderer';
 import { NativzLogoPdf } from '@/lib/pdf/nativz-logo-pdf';
+import { AC_LOGO_PNG } from '@/lib/brand-logo';
 import type { MoodboardItem, TranscriptSegment, RescriptData } from '@/lib/types/moodboard';
 
 // ─── Palette ────────────────────────────────────────────────────────────────────
@@ -225,9 +226,12 @@ function SectionHeader({ title, dotColor }: { title: string; dotColor?: string }
 export interface AnalysisPdfProps {
   item: MoodboardItem;
   clientName: string | null;
+  agency?: string | null;
 }
 
-export function AnalysisPdfDocument({ item, clientName }: AnalysisPdfProps) {
+export function AnalysisPdfDocument({ item, clientName, agency }: AnalysisPdfProps) {
+  const isAC = agency?.toLowerCase().includes('anderson') || agency?.toLowerCase() === 'ac';
+  const brandName = isAC ? 'Anderson Collaborative' : 'Nativz';
   const platform = (item.platform ?? 'unknown').charAt(0).toUpperCase() + (item.platform ?? 'unknown').slice(1);
   const segments: TranscriptSegment[] = item.transcript_segments ?? [];
   const rescript: RescriptData | null = item.rescript;
@@ -263,7 +267,7 @@ export function AnalysisPdfDocument({ item, clientName }: AnalysisPdfProps) {
               </View>
               <Link src={item.url} style={s.link}>{item.url}</Link>
             </View>
-            <NativzLogoPdf width={80} />
+            {isAC ? <PdfImage src={AC_LOGO_PNG} style={{ width: 80, height: 20, objectFit: 'contain' as const }} /> : <NativzLogoPdf width={80} />}
           </View>
         </View>
 
@@ -382,7 +386,7 @@ export function AnalysisPdfDocument({ item, clientName }: AnalysisPdfProps) {
         )}
 
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>Prepared by Nativz</Text>
+          <Text style={s.footerText}>Prepared by {brandName}</Text>
           <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>
@@ -409,7 +413,7 @@ export function AnalysisPdfDocument({ item, clientName }: AnalysisPdfProps) {
           </View>
 
           <View style={s.footer} fixed>
-            <Text style={s.footerText}>Prepared by Nativz</Text>
+            <Text style={s.footerText}>Prepared by {brandName}</Text>
             <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
           </View>
         </Page>
@@ -479,7 +483,7 @@ export function AnalysisPdfDocument({ item, clientName }: AnalysisPdfProps) {
           </View>
 
           <View style={s.footer} fixed>
-            <Text style={s.footerText}>Prepared by Nativz</Text>
+            <Text style={s.footerText}>Prepared by {brandName}</Text>
             <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
           </View>
         </Page>

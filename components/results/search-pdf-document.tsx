@@ -222,7 +222,7 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
               <Text style={s.subtitle}>
                 {clientName ? `Prepared for ${clientName}` : 'Research report'}
               </Text>
-              <Text style={s.meta}>{dateStr} · Powered by Nativz Cortex</Text>
+              <Text style={s.meta}>{dateStr} · Powered by {isAC ? 'Anderson Collaborative' : 'Nativz'} Cortex</Text>
             </View>
             <Image src={logo} style={{ width: 80, height: 20 }} />
           </View>

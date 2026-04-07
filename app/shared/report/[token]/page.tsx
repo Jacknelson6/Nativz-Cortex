@@ -284,7 +284,7 @@ export default function SharedReportPage({
         {/* Footer */}
         <div className="border-t border-nativz-border pt-4 mt-8">
           <p className="text-xs text-text-muted text-center">
-            Prepared by Nativz
+            Prepared by {data?.agency?.toLowerCase().includes('anderson') ? 'Anderson Collaborative' : 'Nativz'}
           </p>
         </div>
       </div>

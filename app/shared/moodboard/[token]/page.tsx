@@ -23,6 +23,7 @@ import { SharedVideoNode } from '@/components/moodboard/nodes/shared-video-node'
 import { ImageNode } from '@/components/moodboard/nodes/image-node';
 import { WebsiteNode } from '@/components/moodboard/nodes/website-node';
 import { StickyNode } from '@/components/moodboard/nodes/sticky-node';
+import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 import { LabeledEdge } from '@/components/moodboard/edges/labeled-edge';
 import { SharedAnalysisPanel } from '@/components/moodboard/shared-analysis-panel';
 import type { MoodboardItem, MoodboardNote, MoodboardEdge } from '@/lib/types/moodboard';
@@ -53,6 +54,7 @@ interface BoardData {
 function SharedMoodboardCanvas() {
   const params = useParams();
   const token = params.token as string;
+  const { brandName } = useAgencyBrand();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -198,7 +200,7 @@ function SharedMoodboardCanvas() {
               View Board
             </Button>
           </form>
-          <p className="text-xs text-text-muted">Shared via Nativz Cortex</p>
+          <p className="text-xs text-text-muted">Shared via {brandName} Cortex</p>
         </div>
       </div>
     );
@@ -222,7 +224,7 @@ function SharedMoodboardCanvas() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-nativz-border bg-surface/80 backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-bold text-accent-text">Nativz</span>
+          <span className="text-sm font-bold text-accent-text">{brandName}</span>
           <span className="text-nativz-border">|</span>
           <h1 className="ui-chrome-title">{boardData.board.name}</h1>
           {boardData.board.client_name && (
@@ -231,7 +233,7 @@ function SharedMoodboardCanvas() {
             </span>
           )}
         </div>
-        <span className="text-[10px] text-text-muted">Shared by Nativz · Read-only</span>
+        <span className="text-[10px] text-text-muted">Shared by {brandName} · Read-only</span>
       </div>
 
       {/* Canvas */}

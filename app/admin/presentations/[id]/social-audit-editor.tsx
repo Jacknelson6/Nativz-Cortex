@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import type { AuditData, PresentationData } from './types';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 // ─── Social Audit Editor ─────────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ export function SocialAuditEditor({
   onSave: () => void;
   onBack: () => void;
 }) {
+  const { mode } = useBrandMode();
+  const agencyName = mode === 'anderson' ? 'Anderson Collaborative' : 'Nativz';
   const audit = presentation.audit_data ?? { profiles: [], competitors: [], projections: {}, step: 'wizard' };
   const [handles, setHandles] = useState<Record<string, string>>({});
   const [compHandles, setCompHandles] = useState<Record<string, string>>({});
@@ -295,7 +298,7 @@ export function SocialAuditEditor({
           {/* Header */}
           <div className="text-center space-y-2">
             <h1 className="text-3xl font-bold text-foreground">{audit.business_name || 'Social media'} audit</h1>
-            <p className="text-text-muted">What your social presence looks like today vs. what it could look like in {timelineMonths} months with Nativz</p>
+            <p className="text-text-muted">What your social presence looks like today vs. what it could look like in {timelineMonths} months with {agencyName}</p>
           </div>
 
           {/* Platform cards — before & after */}

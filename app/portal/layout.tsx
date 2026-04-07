@@ -167,17 +167,11 @@ export default async function PortalLayout({
   const userName = cached?.fullName || user.email || '';
   const avatarUrl = cached?.avatarUrl || null;
 
-  // Lock brand mode: domain wins, then fall back to client's agency field
+  // Lock brand mode: domain ALWAYS wins — Nativz domain = Nativz brand, AC domain = AC brand.
+  // Never fall back to the client's agency field; a Nativz-domain user must never see AC branding.
   const domainAgency = headersList.get('x-agency') as 'anderson' | 'nativz' | null;
-  const activeAgency = brandData.activeAgency ?? cached?.agency ?? null;
-  const agencyLower = (activeAgency ?? '').toLowerCase();
-  const isAcAgency = agencyLower.includes('anderson') || agencyLower === 'ac';
   const forcedBrandMode: 'anderson' | 'nativz' =
-    domainAgency === 'anderson'
-      ? 'anderson'
-      : isAcAgency
-      ? 'anderson'
-      : 'nativz';
+    domainAgency === 'anderson' ? 'anderson' : 'nativz';
 
   return (
     <BrandModeProvider forcedMode={forcedBrandMode}>

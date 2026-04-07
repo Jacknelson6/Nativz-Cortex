@@ -5,11 +5,13 @@ import { useParams } from 'next/navigation';
 import { Calendar, CheckCircle2, AlertCircle, Loader2, Shield } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 
 type PageState = 'loading' | 'ready' | 'connecting' | 'success' | 'error' | 'expired';
 
 export default function CalendarConnectPage() {
   const { token } = useParams<{ token: string }>();
+  const { brandName, config: brandConfig } = useAgencyBrand();
   const [state, setState] = useState<PageState>('loading');
   const [contactName, setContactName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -52,8 +54,8 @@ export default function CalendarConnectPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Image
-            src="/nativz-logo.svg"
-            alt="Nativz"
+            src={brandConfig.logoPath}
+            alt={brandName}
             width={100}
             height={38}
             className="h-8 w-auto mx-auto mb-1"
@@ -84,7 +86,7 @@ export default function CalendarConnectPage() {
                   Connect your calendar
                 </h1>
                 <p className="text-sm text-text-muted">
-                  Hi {contactName}, the Nativz team would like to see your availability to help schedule shoots and meetings.
+                  Hi {contactName}, the {brandName} team would like to see your availability to help schedule shoots and meetings.
                 </p>
               </div>
 
@@ -92,7 +94,7 @@ export default function CalendarConnectPage() {
               <div className="flex items-start gap-2.5 rounded-lg bg-background p-3 text-left">
                 <Shield size={16} className="text-emerald-400 mt-0.5 shrink-0" />
                 <p className="text-xs text-text-muted leading-relaxed">
-                  Nativz will only see when you&apos;re <strong className="text-text-secondary">free or busy</strong>.
+                  {brandName} will only see when you&apos;re <strong className="text-text-secondary">free or busy</strong>.
                   Event titles, descriptions, and attendees are never shared.
                 </p>
               </div>
@@ -123,7 +125,7 @@ export default function CalendarConnectPage() {
                   You&apos;re connected!
                 </h2>
                 <p className="text-sm text-text-muted">
-                  The Nativz team can now see your availability. You can close this page.
+                  The {brandName} team can now see your availability. You can close this page.
                 </p>
               </div>
             </div>
@@ -158,7 +160,7 @@ export default function CalendarConnectPage() {
                   Invite expired
                 </h2>
                 <p className="text-sm text-text-muted">
-                  This calendar connect link has expired. Ask the Nativz team for a new one.
+                  This calendar connect link has expired. Ask the {brandName} team for a new one.
                 </p>
               </div>
             </div>
@@ -167,7 +169,7 @@ export default function CalendarConnectPage() {
 
         {/* Footer */}
         <p className="text-center text-[10px] text-text-muted mt-4">
-          Powered by Nativz Cortex
+          Powered by {brandName} Cortex
         </p>
       </div>
     </div>

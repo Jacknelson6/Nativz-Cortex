@@ -83,10 +83,13 @@ interface BriefPDFProps {
   clientName: string | null;
   platform: string;
   generatedAt: string;
+  agency?: string | null;
 }
 
 export function BriefPDFDocument(props: BriefPDFProps) {
-  const { title, url, briefContent, clientName, platform, generatedAt } = props;
+  const { title, url, briefContent, clientName, platform, generatedAt, agency } = props;
+  const isAC = agency?.toLowerCase().includes('anderson') || agency?.toLowerCase() === 'ac';
+  const brandName = isAC ? 'Anderson Collaborative' : 'Nativz';
 
   // Parse markdown sections from the brief
   const sections = parseBriefSections(briefContent);
@@ -96,7 +99,7 @@ export function BriefPDFDocument(props: BriefPDFProps) {
       <Page size="A4" style={styles.page}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.brandName}>Nativz</Text>
+          <Text style={styles.brandName}>{brandName}</Text>
           <Text style={styles.subtitle}>Video Replication Brief</Text>
         </View>
 
@@ -119,7 +122,7 @@ export function BriefPDFDocument(props: BriefPDFProps) {
 
         {/* Footer */}
         <View style={styles.footer} fixed>
-          <Text>Nativz Cortex — Confidential</Text>
+          <Text>{brandName} Cortex — Confidential</Text>
           <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
         </View>
       </Page>
