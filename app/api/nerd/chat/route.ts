@@ -228,6 +228,40 @@ function buildClientSummary(c: ClientRow, profiles: SocialProfileRow[], strategy
   return parts.join('\n');
 }
 
+/** Notify all super_admins when a guardrail fires. Non-blocking. */
+async function notifySuperAdminsGuardrail(
+  adminClient: ReturnType<typeof createAdminClient>,
+  ctx: { userId: string; userEmail: string; message: string; ruleName: string },
+) {
+  try {
+    const { data: superAdmins } = await adminClient
+      .from('users')
+      .select('id')
+      .eq('is_super_admin', true);
+
+    if (!superAdmins || superAdmins.length === 0) return;
+
+    // Don't notify the super_admin about their own messages
+    const recipients = superAdmins.filter((sa) => sa.id !== ctx.userId);
+    if (recipients.length === 0) return;
+
+    const truncatedMsg = ctx.message.length > 120 ? ctx.message.slice(0, 120) + '...' : ctx.message;
+
+    const notifications = recipients.map((sa) => ({
+      recipient_user_id: sa.id,
+      type: 'guardrail_triggered',
+      title: `Guardrail triggered: ${ctx.ruleName}`,
+      body: `${ctx.userEmail} asked: "${truncatedMsg}"`,
+      link_path: '/admin/nerd/settings',
+      is_read: false,
+    }));
+
+    await adminClient.from('notifications').insert(notifications);
+  } catch (err) {
+    console.error('[guardrail-notify] Failed to notify super_admins:', err);
+  }
+}
+
 async function buildKnowledgeSummary(clientId: string): Promise<string> {
   try {
     const { getKnowledgeEntries, getBrandProfile } = await import('@/lib/knowledge/queries');
@@ -626,6 +660,14 @@ export async function POST(req: NextRequest) {
         });
       }
       guardrailResponseBody += JSON.stringify({ type: 'text', content: guardrailResult.response }) + '\n';
+
+      // Notify super_admins about the guardrail trigger (non-blocking)
+      notifySuperAdminsGuardrail(admin, {
+        userId: user.id,
+        userEmail: user.email ?? 'unknown',
+        message: lastUserMsg,
+        ruleName: guardrailResult.ruleName ?? 'unknown',
+      }).catch(() => {});
 
       return new Response(guardrailResponseBody, {
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },

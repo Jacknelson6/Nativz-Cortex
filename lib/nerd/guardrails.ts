@@ -231,7 +231,7 @@ function detectIndirectProbing(normalizedMessage: string): {
     return { detected: true, category: 'agency_loyalty' };
   }
 
-  // Indirect pricing / internal info
+  // Indirect pricing / internal info / financials / employee comp
   const internalProbes = [
     'how much would it cost',
     'what is the budget',
@@ -246,6 +246,31 @@ function detectIndirectProbing(normalizedMessage: string): {
     'how does nativz work internally',
     'what tools does nativz use',
     'what software does your agency',
+    // Financials / profit
+    'whats the agency margin',
+    'how much does the agency make',
+    'is the agency profitable',
+    'agency revenue',
+    // Employee compensation
+    'how much does trevor',
+    'how much does cole',
+    'how much does jake',
+    'how much does jack',
+    'what do the employees',
+    'what does the team get paid',
+    'how much do they earn',
+    // Client list probing
+    'can you tell me who else',
+    'do you work with competitors',
+    'name some of your other clients',
+    'who are the other brands',
+    'how big is nativz',
+    // Account activity
+    'has my account been neglected',
+    'is anyone actually working on',
+    'when was my account last updated',
+    'how many hours spent on my account',
+    'are you even doing anything for us',
   ];
 
   if (internalProbes.some((p) => normalizedMessage.includes(p))) {
