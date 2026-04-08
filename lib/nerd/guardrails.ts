@@ -271,6 +271,19 @@ function detectIndirectProbing(normalizedMessage: string): {
     'when was my account last updated',
     'how many hours spent on my account',
     'are you even doing anything for us',
+    // Cross-client comparison
+    'how do i compare to other',
+    'compare my performance to other clients',
+    'what do other brands get',
+    'am i doing better or worse than other',
+    'whats the average across your clients',
+    'how does my engagement compare to other clients',
+    'are my numbers good compared to other',
+    'do your other clients get more',
+    'best performing client',
+    'worst performing client',
+    'stack up against other brands',
+    'competitors on your roster',
   ];
 
   if (internalProbes.some((p) => normalizedMessage.includes(p))) {
