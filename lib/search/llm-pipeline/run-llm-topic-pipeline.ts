@@ -824,14 +824,14 @@ ${platformContextBlock ? `\n---\n\nPlatform-specific data (Reddit threads, TikTo
 Return ONLY valid JSON matching:
 {
   "summary": "Executive summary of the TOPIC (not a single brand pitch unless client_strategy — then add brand_alignment_notes). 4-6 sentences, Markdown **bold** on key phrases. MUST open with an explicit date range header derived from today's date (${todayDate}) and the selected time window (${timeRangeLabel}), e.g. 'Over the past three months (January–March 2026)…'. All date references must be accurate relative to today — never reference dates from your training data.",
-  "brand_alignment_notes": "optional string — only if client_strategy: bridge topic insights to the client brand (2-4 sentences).",
+  "brand_alignment_notes": "REQUIRED when search_mode is client_strategy (an Attached client line appears above). 3-5 sentences bridging topic insights to the client brand: explain what content the client should create, which formats fit their brand voice, and how to position themselves in this topic. If general search, omit or use null.",
   "overall_sentiment": number -1 to 1,
   "conversation_intensity": "low"|"moderate"|"high"|"very_high",
   "emotions": [{"emotion": string, "percentage": number, "color": string, "subtext": string}],
   "content_breakdown": {
-    "intentions": [{"name": string, "percentage": number, "engagement_rate": number, "your_engagement_rate": number (omit if no Attached client)}],
-    "categories": [{"name": string, "percentage": number, "engagement_rate": number, "your_engagement_rate": number (omit if no Attached client)}],
-    "formats": [{"name": string, "percentage": number, "engagement_rate": number, "your_engagement_rate": number (omit if no Attached client)}]
+    "intentions": [{"name": string, "percentage": number, "engagement_rate": number, "your_engagement_rate": number (REQUIRED when Attached client exists, omit only for general searches)}],
+    "categories": [{"name": string, "percentage": number, "engagement_rate": number, "your_engagement_rate": number (REQUIRED when Attached client exists, omit only for general searches)}],
+    "formats": [{"name": string, "percentage": number, "engagement_rate": number, "your_engagement_rate": number (REQUIRED when Attached client exists, omit only for general searches)}]
   },
   "platform_breakdown": [{"platform": string, "post_count": number, "comment_count": number, "avg_sentiment": number}],
   "topics": [
@@ -842,7 +842,7 @@ Return ONLY valid JSON matching:
       "posts_overview": string,
       "comments_overview": string,
       "source_urls": string[] (each MUST appear in the subtopic research URLs above),
-      "video_ideas": [{ "title", "hook", "why_it_works", "format", "virality" }],
+      "video_ideas": [{ "title", "hook", "why_it_works", "format", "virality" }] (at least 3 per topic),
       "resonance": "low"|"medium"|"high"|"viral",
       "sentiment": number -1 to 1 (specific to THIS topic based on evidence tone),
       "estimated_engagement": number (estimated total engagement/views across sources)
@@ -851,7 +851,7 @@ Return ONLY valid JSON matching:
 }
 
 Rules:
-- Generate **15** distinct trending topics when the evidence supports that many angles; each must be distinct and grounded in the research above. If fewer than 15 substantiated angles exist, include every strong angle you can — do not pad with duplicates or generic filler.
+- Generate **at least 6** distinct trending topics, aiming for up to 15 when the evidence supports that many angles; each must be distinct and grounded in the research above. Even with limited evidence, extrapolate at least 6 viable content angles — combine subtopic findings, audience questions from comments, and adjacent content opportunities. Do not return fewer than 6 topics.
 - source_urls must be from the evidence URLs only.
 - If search_mode is general, omit brand_alignment_notes or use null.
 - emotions: exactly **6** emotions that sum to ~100%. Analyze the actual tone and sentiment of the evidence text. Colors from: #5ba3e6 blue, #a855f7 purple, #22c55e green, #f59e0b amber, #ef4444 red, #ec4899 pink, #14b8a6 teal, #6366f1 indigo. Each emotion MUST include a "subtext" — one sentence explaining why THIS emotion appears for THIS specific topic based on the evidence (not a generic description of the emotion).
