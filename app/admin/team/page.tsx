@@ -16,6 +16,7 @@ type TodoRow = {
 
 type UserIntegration = {
   id: string;
+  email?: string;
   todoist_api_key: string | null;
 };
 
@@ -57,13 +58,13 @@ export default async function TeamPage() {
         .eq('is_completed', false),
       admin
         .from('users')
-        .select('id, todoist_api_key, is_super_admin, avatar_url'),
+        .select('id, email, todoist_api_key, is_super_admin, avatar_url, role'),
     ]);
 
     const members = teamRes.data ?? [];
     const assignments: Assignment[] = assignmentsRes.data ?? [];
     const todos: TodoRow[] = todosRes.data ?? [];
-    const userIntegrations: (UserIntegration & { is_super_admin?: boolean; avatar_url?: string | null })[] = usersRes.data ?? [];
+    const userIntegrations: (UserIntegration & { is_super_admin?: boolean; avatar_url?: string | null; role?: string })[] = usersRes.data ?? [];
 
     // Map user_id → integrations
     const integrationsByUser: Record<string, { todoist: boolean; calendar: boolean }> = {};
@@ -113,6 +114,41 @@ export default async function TeamPage() {
       todoCountByUser[t.user_id] = (todoCountByUser[t.user_id] ?? 0) + 1;
     }
 
+    // Fetch last sign-in from Supabase Auth (admin API)
+    const lastSignInByUser: Record<string, string | null> = {};
+    const authEmailByUser: Record<string, string> = {};
+    try {
+      const { data: authData } = await admin.auth.admin.listUsers({ perPage: 200 });
+      for (const u of authData?.users ?? []) {
+        lastSignInByUser[u.id] = u.last_sign_in_at ?? null;
+        if (u.email) authEmailByUser[u.id] = u.email;
+      }
+    } catch {
+      // Auth admin API may not be available in all environments
+    }
+
+    // Fetch search counts per user (created_by)
+    const searchCountByUser: Record<string, number> = {};
+    try {
+      const { data: searchCounts } = await admin
+        .from('topic_searches')
+        .select('created_by')
+        .not('created_by', 'is', null);
+      for (const s of searchCounts ?? []) {
+        if (s.created_by) {
+          searchCountByUser[s.created_by] = (searchCountByUser[s.created_by] ?? 0) + 1;
+        }
+      }
+    } catch {
+      // Non-critical
+    }
+
+    // Build user role map
+    const userRoleByUser: Record<string, string> = {};
+    for (const u of userIntegrations) {
+      if (u.role) userRoleByUser[u.id] = u.role;
+    }
+
     return (
       <div className="cortex-page-gutter space-y-6">
         <TeamGrid
@@ -122,6 +158,10 @@ export default async function TeamPage() {
           integrationsByUser={integrationsByUser}
           isSuperAdmin={isSuperAdmin}
           superAdminMemberIds={Array.from(superAdminMemberIds)}
+          lastSignInByUser={lastSignInByUser}
+          searchCountByUser={searchCountByUser}
+          authEmailByUser={authEmailByUser}
+          userRoleByUser={userRoleByUser}
         />
       </div>
     );

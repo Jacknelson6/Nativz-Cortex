@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { ArrowLeft } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 export default function AdminForgotPasswordPage() {
@@ -20,13 +19,24 @@ export default function AdminForgotPasswordPage() {
     setError('');
     setLoading(true);
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/admin/reset-password',
-    });
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          redirectTo: window.location.origin + '/admin/reset-password',
+        }),
+      });
 
-    if (authError) {
-      setError(authError.message || 'Failed to send reset email');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'Failed to send reset email' }));
+        setError(data.error || 'Failed to send reset email');
+        setLoading(false);
+        return;
+      }
+    } catch {
+      setError('Failed to send reset email. Please try again.');
       setLoading(false);
       return;
     }

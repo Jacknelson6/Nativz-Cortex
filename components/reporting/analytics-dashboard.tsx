@@ -10,6 +10,7 @@ import { useReportingData } from './hooks/use-reporting-data';
 import { DateRangePicker } from './date-range-picker';
 import { SummaryView } from './summary-view';
 import { GrowthChart } from './growth-chart';
+import { PlatformSection } from './platform-section';
 
 const ReportBuilder = dynamic(() => import('./report-builder').then(m => ({ default: m.ReportBuilder })));
 
@@ -108,11 +109,33 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
             )}
           </div>
 
-          {/* Summary cards + platform table */}
+          {/* Aggregate summary cards */}
           <SummaryView data={summary} loading={dataLoading} />
 
-          {/* Growth chart */}
+          {/* Aggregate growth chart */}
           <GrowthChart data={summary?.chart ?? []} loading={dataLoading} />
+
+          {/* Per-platform sections */}
+          {summary?.platforms && summary.platforms.length > 0 && (
+            <div className="space-y-8 pt-4">
+              <h2 className="text-lg font-semibold text-text-primary border-b border-nativz-border pb-2">
+                Platform breakdown
+              </h2>
+              {(['facebook', 'instagram', 'youtube', 'tiktok'] as const)
+                .filter((p) => summary.platforms.some((ps) => ps.platform === p))
+                .map((platform) => {
+                  const ps = summary.platforms.find((s) => s.platform === platform)!;
+                  const chartData = summary.platformCharts?.[platform] ?? [];
+                  return (
+                    <PlatformSection
+                      key={platform}
+                      summary={ps}
+                      chartData={chartData}
+                    />
+                  );
+                })}
+            </div>
+          )}
         </>
       )}
 

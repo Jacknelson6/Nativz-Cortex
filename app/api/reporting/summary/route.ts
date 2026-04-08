@@ -249,6 +249,29 @@ export async function GET(request: NextRequest) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, d]) => ({ date, views: d.views, engagement: d.engagement, followers: d.followers }));
 
+    // Build per-platform daily time-series
+    const platformDailyMaps = new Map<string, Map<string, { views: number; engagement: number; followers: number }>>();
+    for (const snap of snapshots) {
+      const profile = profileMap.get(snap.social_profile_id);
+      if (!profile) continue;
+      const platform = profile.platform;
+      if (!platformDailyMaps.has(platform)) platformDailyMaps.set(platform, new Map());
+      const dMap = platformDailyMaps.get(platform)!;
+      const d = snap.snapshot_date;
+      const existing = dMap.get(d) ?? { views: 0, engagement: 0, followers: 0 };
+      existing.views += snap.views_count ?? 0;
+      existing.engagement += snap.engagement_count ?? 0;
+      existing.followers += snap.followers_change ?? 0;
+      dMap.set(d, existing);
+    }
+
+    const platformCharts: Record<string, { date: string; views: number; engagement: number; followers: number }[]> = {};
+    for (const [platform, dMap] of platformDailyMaps) {
+      platformCharts[platform] = [...dMap.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, d]) => ({ date, views: d.views, engagement: d.engagement, followers: d.followers }));
+    }
+
     // Sum total followers across all platforms (from latest snapshot each)
     const totalFollowers = platformSummaries.reduce((sum, p) => sum + (p.followers ?? 0), 0);
 
@@ -276,6 +299,7 @@ export async function GET(request: NextRequest) {
       platforms: platformSummaries,
       dateRange,
       chart,
+      platformCharts,
     };
 
     return NextResponse.json(report);

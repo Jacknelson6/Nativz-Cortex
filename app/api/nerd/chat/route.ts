@@ -12,6 +12,8 @@ import {
   resolveOpenRouterApiKeyForFeature,
 } from '@/lib/ai/provider-keys';
 import { buildMarketingSkillsContext } from '@/lib/nerd/marketing-skills';
+import { checkGuardrails } from '@/lib/nerd/guardrails';
+import { buildDbSkillsContext } from '@/lib/nerd/skills-loader';
 
 // Register tools on module load
 registerAllTools();
@@ -49,6 +51,8 @@ const chatSchema = z.object({
   portalMode: z.boolean().optional(),
   /** Optional frontend context for first message (e.g. opened from Strategy Lab) */
   sessionHint: z.string().max(500).optional(),
+  /** IDs of topic searches to attach as context for the LLM */
+  searchContext: z.array(z.string().uuid()).max(5).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -318,7 +322,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Invalid request', details: parsed.error.flatten() }), { status: 400 });
     }
 
-    const { messages, mentions, actionConfirmation, conversationId, portalMode, sessionHint } = parsed.data;
+    const { messages, mentions, actionConfirmation, conversationId, portalMode, sessionHint, searchContext } = parsed.data;
 
     // --- Detect portal user (viewer role) ---
     let isPortalUser = false;
@@ -486,6 +490,68 @@ export async function POST(req: NextRequest) {
       portfolioContext += `\n\n# Session hint\n${sessionHint.trim()}`;
     }
 
+    // --- Attach topic search results as context ---
+    if (searchContext && searchContext.length > 0) {
+      const { data: attachedSearches } = await admin
+        .from('topic_searches')
+        .select('id, query, summary, trending_topics, metrics, content_breakdown, emotions, platforms, volume, search_mode')
+        .in('id', searchContext)
+        .eq('status', 'completed');
+
+      if (attachedSearches && attachedSearches.length > 0) {
+        const searchBlocks = attachedSearches.map((s: {
+          id: string; query: string; summary: string | null;
+          trending_topics: unknown; metrics: unknown; content_breakdown: unknown;
+          emotions: unknown; platforms: string[] | null; volume: string | null;
+          search_mode: string | null;
+        }) => {
+          const lines: string[] = [`## Topic Search: "${s.query}"`];
+          if (s.search_mode) lines.push(`Mode: ${s.search_mode}`);
+          if (s.platforms) lines.push(`Platforms: ${s.platforms.join(', ')}`);
+          if (s.volume) lines.push(`Depth: ${s.volume}`);
+          if (s.summary) lines.push(`\n### Summary\n${s.summary}`);
+
+          const metrics = s.metrics as Record<string, unknown> | null;
+          if (metrics) {
+            lines.push(`\n### Metrics`);
+            if (metrics.topic_score != null) lines.push(`- Topic score: ${metrics.topic_score}/100`);
+            if (metrics.overall_sentiment != null) lines.push(`- Sentiment: ${metrics.overall_sentiment}`);
+            if (metrics.conversation_intensity) lines.push(`- Conversation intensity: ${metrics.conversation_intensity}`);
+            if (metrics.content_opportunities != null) lines.push(`- Content opportunities: ${metrics.content_opportunities}`);
+          }
+
+          const topics = s.trending_topics as Array<{
+            name: string; resonance: string; sentiment: number;
+            posts_overview?: string; video_ideas?: Array<{ title: string; hook: string; why_it_works?: string }>;
+          }> | null;
+          if (topics && topics.length > 0) {
+            lines.push(`\n### Trending Topics (${topics.length})`);
+            for (const t of topics) {
+              lines.push(`\n#### ${t.name} (resonance: ${t.resonance}, sentiment: ${t.sentiment})`);
+              if (t.posts_overview) lines.push(t.posts_overview);
+              if (t.video_ideas && t.video_ideas.length > 0) {
+                lines.push(`\nVideo ideas:`);
+                for (const idea of t.video_ideas.slice(0, 3)) {
+                  lines.push(`- **${idea.title}** — Hook: "${idea.hook}"${idea.why_it_works ? ` — ${idea.why_it_works}` : ''}`);
+                }
+              }
+            }
+          }
+
+          const emotions = s.emotions as Array<{ emotion: string; percentage: number }> | null;
+          if (emotions && emotions.length > 0) {
+            lines.push(`\n### Emotion Breakdown`);
+            for (const e of emotions) {
+              lines.push(`- ${e.emotion}: ${e.percentage}%`);
+            }
+          }
+
+          return lines.join('\n');
+        });
+        portfolioContext += `\n\n# Attached Topic Search Results\nThe user has attached the following completed topic search results for reference. Use this data to inform your responses.\n\n${searchBlocks.join('\n\n---\n\n')}`;
+      }
+    }
+
     // --- Resolve or create conversation for persistence (admin only) ---
     let activeConvoId: string | null = null;
     const latestUserMsg = messages.filter((m) => m.role === 'user').pop();
@@ -541,11 +607,43 @@ export async function POST(req: NextRequest) {
       : 'https://openrouter.ai/api/v1/chat/completions';
     const requestModel = useOpenAi ? openAiModelId! : nerdModel;
 
-    // Choose system prompt based on portal vs admin, with marketing skills injection
-    const basePrompt = isPortalUser ? buildPortalSystemPrompt(portalClientName) : SYSTEM_PROMPT;
+    // --- Guardrails check (before LLM call) ---
     const lastUserMsg = messages.filter((m) => m.role === 'user').pop()?.content ?? '';
+    const guardrailResult = await checkGuardrails(
+      lastUserMsg,
+      messages.map((m) => ({ role: m.role, content: m.content })),
+    );
+
+    if (guardrailResult.matched && guardrailResult.mode === 'short_circuit') {
+      // Return canned response directly, skip LLM
+      let guardrailResponseBody = '';
+      if (activeConvoId) {
+        guardrailResponseBody += JSON.stringify({ type: 'conversation', conversationId: activeConvoId }) + '\n';
+        await admin.from('nerd_messages').insert({
+          conversation_id: activeConvoId,
+          role: 'assistant',
+          content: guardrailResult.response ?? '',
+        });
+      }
+      guardrailResponseBody += JSON.stringify({ type: 'text', content: guardrailResult.response }) + '\n';
+
+      return new Response(guardrailResponseBody, {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    }
+
+    // Choose system prompt based on portal vs admin, with skills injection
+    const basePrompt = isPortalUser ? buildPortalSystemPrompt(portalClientName) : SYSTEM_PROMPT;
     const skillsContext = buildMarketingSkillsContext(lastUserMsg);
-    const systemPrompt = basePrompt + skillsContext;
+    const dbSkillsContext = await buildDbSkillsContext(lastUserMsg);
+
+    // If guardrail matched in inject mode, add instruction to system prompt
+    let guardrailInstruction = '';
+    if (guardrailResult.matched && guardrailResult.mode === 'inject') {
+      guardrailInstruction = `\n\n---\n\nIMPORTANT INSTRUCTION: For this query, you MUST respond with exactly this message (do not deviate, do not add caveats):\n\n${guardrailResult.response}`;
+    }
+
+    const systemPrompt = basePrompt + skillsContext + dbSkillsContext + guardrailInstruction;
 
     const apiMessages: Array<{ role: string; content: string; tool_call_id?: string; tool_calls?: unknown[] }> = [
       { role: 'system', content: systemPrompt },

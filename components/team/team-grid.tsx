@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Users, Briefcase, ListTodo, Mail, Plus, Loader2, CheckSquare, Calendar, Search, Crown, Trash2 } from 'lucide-react';
+import { Users, Briefcase, ListTodo, Mail, Plus, Loader2, Search, Crown, Trash2, Clock, FileSearch, Shield } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { TeamMemberModal } from './team-member-modal';
+import { formatRelativeTime } from '@/lib/utils/format';
 import { toast } from 'sonner';
 
 interface TeamMember {
@@ -32,6 +32,10 @@ interface TeamGridProps {
   integrationsByUser: Record<string, { todoist: boolean; calendar: boolean }>;
   isSuperAdmin?: boolean;
   superAdminMemberIds?: string[];
+  lastSignInByUser?: Record<string, string | null>;
+  searchCountByUser?: Record<string, number>;
+  authEmailByUser?: Record<string, string>;
+  userRoleByUser?: Record<string, string>;
 }
 
 function getInitials(name: string): string {
@@ -50,6 +54,10 @@ export function TeamGrid({
   integrationsByUser,
   isSuperAdmin = false,
   superAdminMemberIds = [],
+  lastSignInByUser = {},
+  searchCountByUser = {},
+  authEmailByUser = {},
+  userRoleByUser = {},
 }: TeamGridProps) {
   const superAdminSet = useMemo(() => new Set(superAdminMemberIds), [superAdminMemberIds]);
   const [members, setMembers] = useState<TeamMember[]>(initialMembers);
@@ -63,6 +71,7 @@ export function TeamGrid({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   // Modal state
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
 
@@ -114,8 +123,7 @@ export function TeamGrid({
   }
 
   async function handleDeleteMember(e: React.MouseEvent, memberId: string) {
-    e.stopPropagation(); // Don't open modal
-    if (!confirm('Delete this team member? This cannot be undone.')) return;
+    e.stopPropagation();
     setDeletingId(memberId);
     try {
       const res = await fetch(`/api/team/${memberId}`, { method: 'DELETE' });
@@ -129,6 +137,7 @@ export function TeamGrid({
       toast.error(err instanceof Error ? err.message : 'Failed to delete');
     } finally {
       setDeletingId(null);
+      setConfirmDeleteId(null);
     }
   }
 
@@ -195,11 +204,14 @@ export function TeamGrid({
           No team members match &ldquo;{searchQuery}&rdquo;
         </p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filteredMembers.map((member) => {
             const clients = assignmentsByMember[member.id] ?? [];
             const openTodos = member.user_id ? (todoCountByUser[member.user_id] ?? 0) : 0;
-            const integrations = member.user_id ? integrationsByUser[member.user_id] : null;
+            const lastSignIn = member.user_id ? lastSignInByUser[member.user_id] : null;
+            const searches = member.user_id ? (searchCountByUser[member.user_id] ?? 0) : 0;
+            const authEmail = member.user_id ? authEmailByUser[member.user_id] : null;
+            const userRole = member.user_id ? userRoleByUser[member.user_id] : null;
 
             return (
               <div
@@ -211,67 +223,126 @@ export function TeamGrid({
                 className="text-left cursor-pointer"
               >
                 <Card className="group relative overflow-hidden transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5 hover:border-accent/30">
+                  {/* Delete button — super_admin only, with confirmation */}
                   {isSuperAdmin && (
-                    <button
-                      onClick={(e) => handleDeleteMember(e, member.id)}
-                      disabled={deletingId === member.id}
-                      className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 rounded-md p-1 text-text-muted/30 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer z-10"
-                      title="Delete team member"
-                    >
-                      {deletingId === member.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                    </button>
+                    <div className="absolute top-3 right-3 z-10">
+                      {confirmDeleteId === member.id ? (
+                        <div className="flex items-center gap-1 bg-red-500/10 border border-red-500/20 rounded-lg px-2 py-1">
+                          <span className="text-[10px] text-red-400 mr-1">Delete?</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDeleteMember(e, member.id); }}
+                            disabled={deletingId === member.id}
+                            className="text-[10px] text-red-400 font-medium hover:text-red-300 cursor-pointer"
+                          >
+                            {deletingId === member.id ? <Loader2 size={10} className="animate-spin" /> : 'Yes'}
+                          </button>
+                          <span className="text-red-500/30">|</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
+                            className="text-[10px] text-text-muted hover:text-text-secondary cursor-pointer"
+                          >
+                            No
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(member.id); }}
+                          className="opacity-0 group-hover:opacity-100 rounded-md p-1 text-text-muted/30 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                          title="Delete team member"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
                   )}
-                  <div className="flex items-start gap-4">
+
+                  {/* Header: avatar + name */}
+                  <div className="flex items-center gap-3 mb-3">
                     {member.avatar_url ? (
                       <img
                         src={member.avatar_url}
                         alt={member.full_name}
-                        className="h-16 w-16 rounded-full object-cover ring-2 ring-nativz-border shrink-0"
+                        className="h-11 w-11 rounded-full object-cover ring-2 ring-nativz-border shrink-0"
                       />
                     ) : (
-                      <div className="h-16 w-16 rounded-full bg-gradient-to-br from-accent/15 to-accent2/15 ring-2 ring-nativz-border flex items-center justify-center shrink-0">
-                        <span className="text-base font-semibold text-text-secondary">
+                      <div className="h-11 w-11 rounded-full bg-gradient-to-br from-accent/15 to-accent2/15 ring-2 ring-nativz-border flex items-center justify-center shrink-0">
+                        <span className="text-sm font-semibold text-text-secondary">
                           {getInitials(member.full_name)}
                         </span>
                       </div>
                     )}
-
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <h3 className="text-sm font-semibold text-text-primary truncate group-hover:text-accent-text transition-colors">
                           {member.full_name}
                         </h3>
                         {superAdminSet.has(member.id) && (
-                          <span title="Super admin"><Crown size={12} className="text-amber-400 shrink-0" /></span>
-                        )}
-                        {member.user_id ? (
-                          <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" title="Has account" />
-                        ) : (
-                          <span className="h-2 w-2 rounded-full bg-amber-400/60 shrink-0" title="No account" />
+                          <span title="Super admin"><Crown size={11} className="text-amber-400 shrink-0" /></span>
                         )}
                       </div>
-                      {member.role && (
-                        <p className="text-xs text-text-muted mt-0.5 flex items-center gap-1">
-                          <Briefcase size={10} />
-                          {member.role}
-                        </p>
-                      )}
-                      {member.email && (
-                        <p className="text-xs text-text-muted/60 mt-0.5 flex items-center gap-1 truncate">
-                          <Mail size={9} />
-                          {member.email}
-                        </p>
-                      )}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {member.role && (
+                          <span className="text-[11px] text-text-muted flex items-center gap-1">
+                            <Briefcase size={9} />
+                            {member.role}
+                          </span>
+                        )}
+                        {userRole && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            userRole === 'admin' ? 'bg-accent/[0.08] text-accent-text' : 'bg-surface-hover text-text-muted'
+                          }`}>
+                            {userRole}
+                          </span>
+                        )}
+                      </div>
                     </div>
+                  </div>
 
-                    {openTodos > 0 && (
-                      <div className="flex items-center gap-1 text-xs text-text-muted shrink-0">
-                        <ListTodo size={12} />
-                        <span>{openTodos}</span>
+                  {/* Info rows */}
+                  <div className="space-y-1.5 text-[11px]">
+                    {/* Email */}
+                    {(authEmail || member.email) && (
+                      <div className="flex items-center gap-2 text-text-muted/70">
+                        <Mail size={10} className="shrink-0" />
+                        <span className="truncate">{authEmail ?? member.email}</span>
+                      </div>
+                    )}
+
+                    {/* Last sign in */}
+                    {member.user_id && (
+                      <div className="flex items-center gap-2 text-text-muted/70">
+                        <Clock size={10} className="shrink-0" />
+                        <span>
+                          {lastSignIn
+                            ? `Last active ${formatRelativeTime(lastSignIn)}`
+                            : 'Never signed in'}
+                        </span>
+                      </div>
+                    )}
+
+                    {!member.user_id && (
+                      <div className="flex items-center gap-2 text-amber-400/70">
+                        <Shield size={10} className="shrink-0" />
+                        <span>No account</span>
                       </div>
                     )}
                   </div>
 
+                  {/* Stats row */}
+                  <div className="flex items-center gap-3 mt-3 pt-2.5 border-t border-nativz-border/50">
+                    <div className="flex items-center gap-1 text-[11px] text-text-muted/60">
+                      <Briefcase size={10} />
+                      <span>{clients.length} client{clients.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] text-text-muted/60">
+                      <ListTodo size={10} />
+                      <span>{openTodos} task{openTodos !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] text-text-muted/60">
+                      <FileSearch size={10} />
+                      <span>{searches} search{searches !== 1 ? 'es' : ''}</span>
+                    </div>
+                  </div>
                 </Card>
               </div>
             );

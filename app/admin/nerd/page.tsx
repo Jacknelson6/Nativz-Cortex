@@ -2,27 +2,17 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { BotMessageSquare, Plus, Building2, User, Sparkles, X, Command, Zap } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Building2, User, Plus, History, Settings } from 'lucide-react';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { PromptInput } from '@/components/ai/prompt-input';
 import { MentionAutocomplete, type MentionOption } from '@/components/ai/mention-autocomplete';
 import { ConversationSidebar } from '@/components/nerd/conversation-sidebar';
+import { TopicSearchContextRail } from '@/components/nerd/topic-search-context-rail';
 import { SlashCommandMenu } from '@/components/nerd/slash-command-menu';
 import { getAllCommands, getCommand, type SlashCommand } from '@/lib/nerd/slash-commands';
-
-// ---------------------------------------------------------------------------
-// Suggestions
-// ---------------------------------------------------------------------------
-
-const SUGGESTIONS = [
-  { label: 'Content strategy', prompt: 'Build a full content strategy for @' },
-  { label: 'Analyze video', prompt: 'Analyze the top performing videos for @' },
-  { label: 'Affiliate performance', prompt: 'Review affiliate performance for @' },
-  { label: 'View tasks', prompt: '/tasks' },
-  { label: 'Hook ideas', prompt: 'Give me 10 scroll-stopping hooks for @' },
-];
 
 // ---------------------------------------------------------------------------
 // Page
@@ -43,7 +33,8 @@ export default function NerdPage() {
   const [conversationId, setConversationId] = useState<string | null>(conversationIdParam);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loadingConvo, setLoadingConvo] = useState(false);
-  const [showCapabilities, setShowCapabilities] = useState(false);
+  const [attachedSearchIds, setAttachedSearchIds] = useState<string[]>([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   // @mention state
   const [mentionOptions, setMentionOptions] = useState<MentionOption[]>([]);
@@ -67,6 +58,17 @@ export default function NerdPage() {
   const mentionsVisible = showMentions && mentionOptions.some((o) =>
     o.name.toLowerCase().includes(mentionQuery.toLowerCase()),
   );
+
+  // Check super_admin status
+  useEffect(() => {
+    (async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from('users').select('is_super_admin').eq('id', user.id).single();
+      setIsSuperAdmin(data?.is_super_admin === true);
+    })();
+  }, []);
 
   // Load mention options
   useEffect(() => {
@@ -288,6 +290,7 @@ export default function NerdPage() {
           mentions: messageMentions.length > 0 ? messageMentions : undefined,
           conversationId: conversationId ?? undefined,
           sessionHint: strategySessionHintRef.current ?? undefined,
+          searchContext: attachedSearchIds.length > 0 ? attachedSearchIds : undefined,
         }),
         signal: controller.signal,
       });
@@ -370,6 +373,7 @@ export default function NerdPage() {
     if (streaming) abortRef.current?.abort();
     setMessages([]);
     setActiveMentions([]);
+    setAttachedSearchIds([]);
     setConversationId(null);
     router.replace('/admin/nerd');
   }
@@ -381,17 +385,26 @@ export default function NerdPage() {
     router.replace(`/admin/nerd?c=${id}`);
   }
 
-  const clientCount = mentionOptions.filter((o) => o.type === 'client').length;
+  // Active client mentions for the badge + rail
+  const activeClientMentions = activeMentions.filter((m) => m.type === 'client');
+  const railClientId = activeClientMentions[0]?.id ?? null;
+  const railClientName = activeClientMentions[0]?.name ?? null;
+
+  function handleToggleSearch(searchId: string) {
+    setAttachedSearchIds((prev) =>
+      prev.includes(searchId) ? prev.filter((id) => id !== searchId) : [...prev, searchId],
+    );
+  }
 
   const inputArea = (
-    <div className="shrink-0 px-4 pb-4 md:px-6 md:pb-6">
+    <div className="shrink-0 px-6 pb-6">
       <div className="mx-auto max-w-3xl">
         <PromptInput
           value={input}
           onChange={setInput}
           onSubmit={() => handleSend()}
           disabled={streaming}
-          placeholder="Ask anything... use / for commands, @ to mention"
+          placeholder="Type your response..."
           blockEnterSubmit={mentionsVisible || showSlashMenu}
         >
           {showSlashMenu && (
@@ -401,14 +414,27 @@ export default function NerdPage() {
             <MentionAutocomplete query={mentionQuery} options={mentionOptions} onSelect={handleMentionSelect} />
           )}
         </PromptInput>
-        <MentionBadges mentions={activeMentions} />
+        {/* Active mention badges below input */}
+        {activeMentions.length > 0 && (
+          <div className="flex items-center gap-1.5 mt-2 px-1">
+            {activeMentions.map((m) => (
+              <span
+                key={`${m.type}-${m.id}`}
+                className="inline-flex items-center gap-1 rounded-full bg-accent/[0.08] px-2 py-0.5 text-[10px] text-accent-text"
+              >
+                {m.type === 'client' ? <Building2 size={10} /> : <User size={10} />}
+                {m.name}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 
   return (
     <div className="flex h-[calc(100vh-4rem)]">
-      {/* Inline sidebar */}
+      {/* Conversation history sidebar — hidden by default, toggled via button */}
       <ConversationSidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -418,266 +444,99 @@ export default function NerdPage() {
         onNewChat={handleReset}
       />
 
-      {/* Main chat area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <Header
-          clientCount={clientCount}
-          onReset={handleReset}
-          showReset={messages.length > 0}
-        />
+      {/* Topic search context rail */}
+      <TopicSearchContextRail
+        clientId={railClientId}
+        clientName={railClientName}
+        attachedSearchIds={attachedSearchIds}
+        onToggleSearch={handleToggleSearch}
+      />
 
-        {loadingConvo && messages.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="animate-pulse text-text-muted text-sm">Loading conversation...</div>
-          </div>
-        ) : messages.length === 0 ? (
-          <>
-            <div className="flex flex-1 flex-col items-center justify-center px-6">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-nativz-border bg-gradient-to-b from-surface to-background shadow-[0_0_24px_rgba(4,107,210,0.1)] mb-5">
-                <BotMessageSquare size={24} className="text-accent-text" />
-              </div>
-
-              <h2 className="text-xl font-semibold text-text-primary mb-1 tracking-tight">Hey, I&apos;m The Nerd</h2>
-              <p className="text-sm text-text-muted text-center max-w-md mb-8 leading-relaxed">
-                Your social media strategy expert. Use <span className="text-accent-text font-medium">@mentions</span> to reference clients and team members.
-              </p>
-
-              <div className="flex flex-wrap justify-center gap-2 max-w-lg mb-10">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s.label}
-                    onClick={() => s.prompt.startsWith('/') ? handleSend(s.prompt) : setInput(s.prompt)}
-                    className="rounded-xl border border-nativz-border px-4 py-2.5 text-sm text-text-secondary hover:text-text-primary hover:border-accent/20 hover:bg-accent/[0.04] transition-all duration-200 cursor-pointer"
-                  >
-                    {s.label}
-                  </button>
-                ))}
+      {/* Main card */}
+      <div className="flex-1 flex flex-col min-w-0 p-3 md:p-4">
+        <div className="flex-1 flex flex-col min-h-0 rounded-2xl border border-nativz-border bg-surface overflow-hidden">
+          {/* Top bar — subtle, only shows contextual info */}
+          <div className="flex items-center justify-between px-4 py-3 shrink-0">
+            <div className="flex items-center gap-2">
+              {!sidebarOpen && (
                 <button
-                  onClick={() => setShowCapabilities(true)}
-                  className="rounded-xl border border-accent2/20 bg-accent2/[0.04] px-4 py-2.5 text-sm text-accent2-text hover:text-accent2-text hover:border-accent2/30 hover:bg-accent2/[0.08] transition-all duration-200 cursor-pointer flex items-center gap-1.5"
+                  onClick={() => setSidebarOpen(true)}
+                  className="flex items-center justify-center h-7 w-7 rounded-lg text-text-muted/40 hover:text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer"
+                  title="Chat history"
                 >
-                  <Sparkles size={14} />
-                  What can I do?
+                  <History size={15} />
                 </button>
-              </div>
-
-              {/* Capabilities modal */}
-              <CapabilitiesModal open={showCapabilities} onClose={() => setShowCapabilities(false)} commands={slashCommands} />
-            </div>
-            {inputArea}
-          </>
-        ) : (
-          <>
-            <Conversation className="px-4 md:px-6">
-              <div className="mx-auto max-w-3xl divide-y divide-nativz-border/50">
-                {messages.map((msg, index) => {
-                  const isLast = index === messages.length - 1;
-                  if (msg.role === 'assistant') {
-                    return (
-                      <AssistantMessage
-                        key={msg.id}
-                        message={msg}
-                        isLast={isLast}
-                        onRetry={() => handleSend('Continue')}
-                      />
-                    );
-                  }
-                  return <UserMessage key={msg.id} message={msg} />;
-                })}
-              </div>
-            </Conversation>
-            {inputArea}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-function Header({
-  clientCount,
-  onReset,
-  showReset,
-}: {
-  clientCount: number;
-  onReset: () => void;
-  showReset: boolean;
-}) {
-  return (
-    <header className="z-10 flex h-12 w-full shrink-0 items-center justify-between gap-2 border-b border-nativz-border px-4 md:px-6">
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-text-primary">The Nerd</span>
-        {clientCount > 0 && (
-          <span className="text-[10px] text-text-muted bg-accent/[0.08] px-1.5 py-0.5 rounded-full">
-            {clientCount} clients
-          </span>
-        )}
-      </div>
-      {showReset && (
-        <button
-          onClick={onReset}
-          className="flex items-center gap-1.5 rounded-lg border border-nativz-border px-2.5 py-1 text-xs text-text-muted hover:text-text-primary hover:border-accent/20 transition-colors cursor-pointer"
-        >
-          <Plus size={12} />
-          New
-        </button>
-      )}
-    </header>
-  );
-}
-
-function CapabilitiesModal({
-  open,
-  onClose,
-  commands,
-}: {
-  open: boolean;
-  onClose: () => void;
-  commands: Array<{ name: string; description: string; type: string; example?: string }>;
-}) {
-  const directCmds = commands.filter((c) => c.type === 'direct');
-  const aiCmds = commands.filter((c) => c.type === 'ai');
-
-  return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-50"
-            onClick={onClose}
-          />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            onClick={onClose}
-          >
-            <div
-              className="w-full max-w-lg bg-surface border border-nativz-border rounded-2xl shadow-elevated overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-nativz-border">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={16} className="text-accent2-text" />
-                  <h2 className="text-sm font-semibold text-text-primary">What The Nerd can do</h2>
-                </div>
-                <button onClick={onClose} className="text-text-muted hover:text-text-secondary transition-colors cursor-pointer">
-                  <X size={16} />
+              )}
+              {messages.length > 0 && (
+                <button
+                  onClick={handleReset}
+                  className="flex items-center justify-center h-7 w-7 rounded-lg text-text-muted/40 hover:text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer"
+                  title="New chat"
+                >
+                  <Plus size={15} />
                 </button>
-              </div>
-
-              <div className="px-5 py-4 max-h-[60vh] overflow-y-auto space-y-5">
-                {/* Natural language */}
-                <div>
-                  <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-2">Ask anything</p>
-                  <p className="text-xs text-text-secondary leading-relaxed">
-                    The Nerd knows all your clients, their strategies, analytics, and content history.
-                    Just ask in natural language — use <span className="text-accent-text">@mentions</span> to reference specific clients or team members.
-                  </p>
-                </div>
-
-                {/* Instant commands */}
-                {directCmds.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <Command size={11} className="text-accent-text" />
-                      <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide">Instant commands</p>
-                    </div>
-                    <div className="space-y-1">
-                      {directCmds.map((cmd) => (
-                        <div key={cmd.name} className="flex items-center gap-3 rounded-lg px-2.5 py-2 bg-surface-hover/50">
-                          <code className="text-xs text-accent-text font-mono">/{cmd.name}</code>
-                          <span className="text-xs text-text-muted">{cmd.description}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* AI-powered commands */}
-                {aiCmds.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <Zap size={11} className="text-accent2-text" />
-                      <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide">AI-powered commands</p>
-                    </div>
-                    <div className="space-y-1">
-                      {aiCmds.map((cmd) => (
-                        <div key={cmd.name} className="flex items-center gap-3 rounded-lg px-2.5 py-2 bg-surface-hover/50">
-                          <code className="text-xs text-accent2-text font-mono">/{cmd.name}</code>
-                          <span className="text-xs text-text-muted flex-1">{cmd.description}</span>
-                          {cmd.example && (
-                            <span className="text-[10px] text-text-muted/40 font-mono hidden sm:block">{cmd.example}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Tools */}
-                <div>
-                  <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-2">Built-in tools</p>
-                  <div className="grid grid-cols-2 gap-1">
-                    {[
-                      'Manage tasks',
-                      'View analytics',
-                      'Schedule shoots',
-                      'Search knowledge base',
-                      'Create notifications',
-                      'Manage clients',
-                      'Import meeting notes',
-                      'Video analysis boards',
-                    ].map((tool) => (
-                      <div key={tool} className="text-xs text-text-muted/70 px-2 py-1">
-                        • {tool}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-5 py-3 border-t border-nativz-border/50">
-                <p className="text-[10px] text-text-muted/40 text-center">
-                  Type <code className="text-text-muted/60">/</code> in the chat to see all commands
-                </p>
-              </div>
+              )}
             </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
-}
 
-function MentionBadges({
-  mentions,
-}: {
-  mentions: Array<{ type: 'client' | 'team_member'; id: string; name: string }>;
-}) {
-  if (mentions.length === 0) return null;
+            <div className="flex items-center gap-2">
+              {/* Client badge — black pill */}
+              {activeClientMentions.map((m) => (
+                <span
+                  key={m.id}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-text-primary text-background px-3 py-1 text-xs font-medium"
+                >
+                  {m.name}
+                </span>
+              ))}
 
-  return (
-    <div className="flex items-center gap-1.5 mt-2 px-1">
-      {mentions.map((m) => (
-        <span
-          key={`${m.type}-${m.id}`}
-          className="inline-flex items-center gap-1 rounded-full bg-accent/[0.08] px-2 py-0.5 text-[10px] text-accent-text"
-        >
-          {m.type === 'client' ? <Building2 size={10} /> : <User size={10} />}
-          {m.name}
-        </span>
-      ))}
+              {/* Settings — super_admin only */}
+              {isSuperAdmin && (
+                <Link
+                  href="/admin/nerd/settings"
+                  className="flex items-center justify-center h-7 w-7 rounded-lg text-text-muted/40 hover:text-text-secondary hover:bg-surface-hover transition-colors"
+                  title="Nerd settings"
+                >
+                  <Settings size={15} />
+                </Link>
+              )}
+            </div>
+          </div>
+
+          {/* Chat content */}
+          {loadingConvo && messages.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="animate-pulse text-text-muted text-sm">Loading conversation...</div>
+            </div>
+          ) : messages.length === 0 ? (
+            <>
+              <div className="flex-1" />
+              {inputArea}
+            </>
+          ) : (
+            <>
+              <Conversation className="px-4 md:px-6">
+                <div className="mx-auto max-w-3xl divide-y divide-nativz-border/50">
+                  {messages.map((msg, index) => {
+                    const isLast = index === messages.length - 1;
+                    if (msg.role === 'assistant') {
+                      return (
+                        <AssistantMessage
+                          key={msg.id}
+                          message={msg}
+                          isLast={isLast}
+                          onRetry={() => handleSend('Continue')}
+                        />
+                      );
+                    }
+                    return <UserMessage key={msg.id} message={msg} />;
+                  })}
+                </div>
+              </Conversation>
+              {inputArea}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

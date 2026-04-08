@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getTopicSearchPipelineFromEnv } from '@/lib/config/topic-search-pipeline';
 import { assertViewerCanCreateSearchForClient } from '@/lib/api/topic-search-access';
 
 const searchSchema = z.object({
@@ -54,9 +53,6 @@ export async function POST(request: NextRequest) {
     }
 
     const { query, source, time_range, language, country, client_id, search_mode, platforms, volume } = parsed.data;
-    const isV2 = platforms.length > 1 || platforms.includes('reddit') || platforms.includes('quora');
-    const topicPipeline = getTopicSearchPipelineFromEnv();
-
     const adminClient = createAdminClient();
 
     const clientCheck = await assertViewerCanCreateSearchForClient(adminClient, user.id, client_id);
@@ -66,9 +62,6 @@ export async function POST(request: NextRequest) {
         { status: clientCheck.status },
       );
     }
-
-    const searchVersion = topicPipeline === 'llm_v1' ? 3 : isV2 ? 2 : 1;
-    const initialStatus = topicPipeline === 'llm_v1' ? 'pending_subtopics' : 'processing';
 
     const { data: search, error: insertError } = await adminClient
       .from('topic_searches')
@@ -82,9 +75,9 @@ export async function POST(request: NextRequest) {
         search_mode,
         platforms,
         volume,
-        search_version: searchVersion,
-        topic_pipeline: topicPipeline,
-        status: initialStatus,
+        search_version: 3,
+        topic_pipeline: 'llm_v1',
+        status: 'pending_subtopics',
         created_by: user.id,
       })
       .select('id')
@@ -98,7 +91,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ id: search.id, topic_pipeline: topicPipeline });
+    return NextResponse.json({ id: search.id, topic_pipeline: 'llm_v1' });
   } catch (error) {
     console.error('POST /api/search/start error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Building2 } from 'lucide-react';
+import { ArrowLeft, Building2, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
+import { ScrollProgress } from '@/components/ui/scroll-progress';
 import { ExecutiveSummary } from '@/components/reports/executive-summary';
 import { BrandApplication } from '@/components/reports/brand-application';
 import { EmotionsBreakdown } from '@/components/results/emotions-breakdown';
@@ -23,7 +24,6 @@ import { CompetitiveAnalysis } from '@/components/results/competitive-analysis';
 import { ExportPdfButton } from '@/components/results/export-pdf-button';
 import { ShareButton } from '@/components/results/share-button';
 import { SearchProgress } from '@/components/search/search-progress';
-// ClientOption no longer needed — SourceBrowser uses VideoAnalysisPanel which manages its own client context
 import { hasSerp } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
 import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
@@ -31,6 +31,7 @@ import { AiTakeaways } from '@/components/results/ai-takeaways';
 import { IdeationPipelinePanel } from '@/components/ideation/ideation-pipeline-panel';
 import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
 import { getClientAbbreviationLabel } from '@/lib/clients/client-abbreviations';
+import { formatRelativeTime } from '@/lib/utils/format';
 
 interface AdminResultsClientProps {
   search: TopicSearch;
@@ -120,9 +121,10 @@ export function AdminResultsClient({
 
   return (
     <div className="min-h-full">
+      <ScrollProgress />
       {/* Header */}
-      <div className="border-b border-nativz-border bg-surface">
-        <div className="flex flex-col gap-3 px-6 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <div className="sticky top-0 z-10 border-b border-nativz-border bg-surface/80 backdrop-blur-sm">
+        <div className="flex flex-col gap-3 px-6 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <Link
               href="/admin/search/new"
@@ -198,6 +200,12 @@ export function AdminResultsClient({
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3 sm:pt-0.5">
+            {search.completed_at && (
+              <span className="hidden sm:flex items-center gap-1 text-xs text-text-muted">
+                <Clock size={12} />
+                {formatRelativeTime(search.completed_at)}
+              </span>
+            )}
             <ExportPdfButton search={search} clientName={clientInfo?.name} />
             <ShareButton searchId={search.id} />
           </div>
@@ -215,6 +223,18 @@ export function AdminResultsClient({
                 clientName={clientInfo?.name}
               />
             </div>
+          </div>
+        ) : null}
+
+        {/* AI takeaways — content pillars + recommendations */}
+        {(aiResponse || search.summary) ? (
+          <div className="rounded-xl border border-nativz-border bg-surface p-5 sm:p-6">
+            <AiTakeaways
+              aiResponse={aiResponse}
+              summary={search.summary}
+              clientName={clientInfo?.name}
+              hasAttachedClient={!!clientInfo}
+            />
           </div>
         ) : null}
 
@@ -243,17 +263,6 @@ export function AdminResultsClient({
             {search.content_breakdown ? (
               <ContentBreakdown data={search.content_breakdown} />
             ) : null}
-          </div>
-        ) : null}
-        {/* Recommended content pillars — just above trending topics */}
-        {(aiResponse || search.summary) ? (
-          <div className="rounded-xl border border-nativz-border bg-surface p-5 sm:p-6">
-            <AiTakeaways
-              aiResponse={aiResponse}
-              summary={search.summary}
-              clientName={clientInfo?.name}
-              hasAttachedClient={!!clientInfo}
-            />
           </div>
         ) : null}
 

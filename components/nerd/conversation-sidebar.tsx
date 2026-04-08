@@ -99,28 +99,7 @@ export function ConversationSidebar({ open, onClose, onOpen, activeId, onSelect,
   const groups = groupByDate(conversations);
 
   if (!open) {
-    return (
-      <div className="w-10 shrink-0 border-r border-nativz-border/50 bg-surface/30 flex flex-col items-center py-3 gap-3 h-full">
-        <button
-          onClick={onOpen}
-          className="flex items-center justify-center h-7 w-7 rounded-md text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
-          title="Open chat history"
-        >
-          <PanelLeftOpen size={15} />
-        </button>
-        <button
-          onClick={onNewChat}
-          className="flex items-center justify-center h-7 w-7 rounded-md text-text-muted hover:text-accent-text hover:bg-accent-surface/20 transition-colors cursor-pointer"
-          title="New chat"
-        >
-          <Plus size={15} />
-        </button>
-        <div className="flex-1" />
-        <span className="text-[10px] text-text-muted/30 [writing-mode:vertical-lr] rotate-180 select-none">
-          History
-        </span>
-      </div>
-    );
+    return null;
   }
 
   return (

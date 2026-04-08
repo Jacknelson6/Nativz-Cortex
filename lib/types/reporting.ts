@@ -77,6 +77,7 @@ export interface SummaryReport {
   platforms: PlatformSummary[];
   dateRange: DateRange;
   chart?: ChartDataPoint[];
+  platformCharts?: Record<SocialPlatform, ChartDataPoint[]>;
 }
 
 export interface TopPostItem {
