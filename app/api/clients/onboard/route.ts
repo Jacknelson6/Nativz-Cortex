@@ -9,6 +9,8 @@ import { createLateProfile } from '@/lib/posting';
 import { crawlClientWebsite } from '@/lib/knowledge/scraper';
 import { generateBrandProfile } from '@/lib/knowledge/brand-profile';
 
+export const maxDuration = 60;
+
 const onboardSchema = z.object({
   name: z.string().min(1, 'Client name is required'),
   website_url: z.string().url('A valid URL is required'),
@@ -252,7 +254,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('POST /api/clients/onboard error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('POST /api/clients/onboard error:', msg, error);
+    return NextResponse.json({
+      error: `Onboard failed: ${msg}`,
+      cortex: { success: false, error: msg },
+      vault: { success: false, error: 'Skipped — earlier step failed' },
+      monday: { success: false, error: 'Skipped — earlier step failed' },
+    }, { status: 500 });
   }
 }

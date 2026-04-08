@@ -42,8 +42,32 @@ export function OnboardProvision({ formData, onNext, onBack }: OnboardProvisionP
       const data = await res.json();
 
       if (!res.ok) {
+        // Still try to show per-system status from the error response
+        if (data.cortex || data.vault || data.monday) {
+          setSystems([
+            {
+              label: 'Creating in Cortex database',
+              icon: <Database size={14} />,
+              status: data.cortex?.success ? 'success' : 'error',
+              error: data.cortex?.error,
+            },
+            {
+              label: 'Syncing to knowledge graph',
+              icon: <BookOpen size={14} />,
+              status: data.vault?.success ? 'success' : 'error',
+              error: data.vault?.error,
+            },
+            {
+              label: 'Adding to Monday.com board',
+              icon: <LayoutGrid size={14} />,
+              status: data.monday?.success ? 'success' : 'error',
+              error: data.monday?.error,
+            },
+          ]);
+        } else {
+          setSystems((prev) => prev.map((s) => ({ ...s, status: 'error' })));
+        }
         setError(data.error || 'Provisioning failed');
-        setSystems((prev) => prev.map((s) => ({ ...s, status: 'error' })));
         return;
       }
 
