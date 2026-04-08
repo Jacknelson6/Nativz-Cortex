@@ -66,6 +66,8 @@ function normalize(text: string): string {
     .replace(/[*_~`#>]/g, '')
     // Remove unicode tricks (zero-width chars, homoglyphs)
     .replace(/[\u200B-\u200F\u2028-\u202F\uFEFF]/g, '')
+    // Remove apostrophes/quotes (don't → dont, let's → lets)
+    .replace(/[''`´]/g, '')
     // Replace common letter substitutions
     .replace(/[0@]/g, (c) => (c === '0' ? 'o' : 'a'))
     .replace(/[1!|]/g, 'i')
@@ -168,12 +170,18 @@ function detectIndirectProbing(normalizedMessage: string): {
     'what technology powers you',
     'what technology are you built on',
     'which ai powers this',
+    'which ai model powers',
+    'what ai model powers',
+    'what model powers',
     'what runs behind',
     'what engine do you use',
     'are you a large language model',
     'are you an llm',
     'which company made you',
     'what company built',
+    'who created this ai',
+    'who made this ai',
+    'who built this ai',
     'powered by openai',
     'powered by anthropic',
     'powered by google',
@@ -196,8 +204,13 @@ function detectIndirectProbing(normalizedMessage: string): {
     'not getting results from my agency',
     'agency isnt performing',
     'agency is not performing',
+    'agency doing a bad job',
+    'agency doing a bad',
+    'agency doing bad',
     'thinking about changing agencies',
+    'thinking about switching agencies',
     'considering other agencies',
+    'considering switching agencies',
     'how do i know if my agency is good',
     'signs of a bad agency',
     'red flags agency',
