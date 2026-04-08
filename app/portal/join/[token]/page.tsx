@@ -171,7 +171,7 @@ export default function PortalJoinPage() {
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex items-center justify-center">
             {isAC ? (
-              <img src="/anderson-logo.svg" alt="Anderson Collaborative" className="h-12 w-auto" />
+              <img src="/anderson-logo-dark.svg" alt="Anderson Collaborative" className="h-12 w-auto" />
             ) : (
               <Image
                 src="/nativz-logo.svg"
