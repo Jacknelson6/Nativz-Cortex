@@ -6,8 +6,6 @@ import { syncClientProfileToVault } from '@/lib/vault/sync';
 import { createMondayItem } from '@/lib/monday/client';
 import { logActivity } from '@/lib/activity';
 import { createLateProfile } from '@/lib/posting';
-import { crawlClientWebsite } from '@/lib/knowledge/scraper';
-import { generateBrandProfile } from '@/lib/knowledge/brand-profile';
 
 export const maxDuration = 60;
 
@@ -234,9 +232,11 @@ export async function POST(request: NextRequest) {
 
       // 5. Build knowledge graph from website (non-blocking background job)
       // Scrapes website → creates knowledge entries → generates brand profile → embeds for semantic search
+      // Dynamic imports to avoid bundling heavy deps (jsdom) into the main route
       if (data.website_url) {
         (async () => {
           try {
+            const { crawlClientWebsite } = await import('@/lib/knowledge/scraper');
             await crawlClientWebsite({
               clientId,
               startUrl: data.website_url,
@@ -244,6 +244,7 @@ export async function POST(request: NextRequest) {
               maxDepth: 2,
               createdBy: user.id,
             });
+            const { generateBrandProfile } = await import('@/lib/knowledge/brand-profile');
             await generateBrandProfile(clientId, user.id);
           } catch (err) {
             console.error('Knowledge graph build failed (non-blocking):', err);
