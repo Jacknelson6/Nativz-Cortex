@@ -164,10 +164,10 @@ export function VideoGrid({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-base font-semibold text-text-primary">
-              Short-form videos
+              Videos
             </CardTitle>
             <p className="text-xs text-text-muted mt-1">
-              Filter by platform and sort order
+              Across all platforms · filter and sort below
             </p>
           </div>
 

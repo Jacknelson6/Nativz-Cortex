@@ -89,10 +89,13 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [submittingSocials, setSubmittingSocials] = useState(false);
   const [completedAudit, setCompletedAudit] = useState<AuditRecord | null>(null);
   const [finishingAnimation, setFinishingAnimation] = useState(false);
+  const [detectedPlatforms, setDetectedPlatforms] = useState<{ platform: string; url: string; username: string }[]>([]);
+  const [detecting, setDetecting] = useState(false);
+  const [websiteInfo, setWebsiteInfo] = useState<{ title: string; industry: string } | null>(null);
 
-  // Auto-start processing for pending audits
+  // Auto-detect socials for pending audits (don't start processing yet)
   useEffect(() => {
-    if (audit.status === 'pending') void startProcessing();
+    if (audit.status === 'pending') void detectSocials();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -174,7 +177,43 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     }
   }, [audit.prospect_data, activePlatformTab]);
 
+  async function detectSocials() {
+    setDetecting(true);
+    try {
+      const res = await fetch(`/api/audit/${audit.id}/detect-socials`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setDetectedPlatforms(data.detectedPlatforms ?? []);
+        setWebsiteInfo(data.websiteContext ? { title: data.websiteContext.title, industry: data.websiteContext.industry } : null);
+        // Pre-fill social inputs with detected URLs
+        const prefilled: Partial<Record<AuditPlatformKey, string>> = {};
+        for (const link of data.detectedPlatforms ?? []) {
+          if (['tiktok', 'instagram', 'facebook', 'youtube'].includes(link.platform)) {
+            prefilled[link.platform as AuditPlatformKey] = link.url;
+          }
+        }
+        setSocialInputs(prefilled);
+        setAudit(prev => ({ ...prev, status: 'confirming_platforms' }));
+      } else {
+        // If detect fails, go straight to processing
+        void startProcessing();
+      }
+    } catch {
+      void startProcessing();
+    } finally {
+      setDetecting(false);
+    }
+  }
+
   async function startProcessing() {
+    // Save any manual social URLs before processing
+    const filled = Object.fromEntries(Object.entries(socialInputs).filter(([, v]) => v?.trim()));
+    if (Object.keys(filled).length > 0) {
+      await fetch(`/api/audit/${audit.id}/resume`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ social_urls: filled }),
+      });
+    }
     setProgress(0); setStageIndex(0); setElapsed(0);
     setAudit(prev => ({ ...prev, status: 'processing' }));
     try {
@@ -209,8 +248,80 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const videos = (audit.videos_data ?? []) as TopicSearchVideoRow[];
   const activePlatform = platforms.find(p => p.platform === activePlatformTab) ?? platforms[0];
 
+  // ── Detecting socials (initial website scrape) ─────────────────────────
+  if (audit.status === 'pending' && detecting) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 animate-fade-slide-in">
+        <div className="w-full max-w-md text-center">
+          <Loader2 size={32} className="animate-spin text-accent-text mx-auto mb-4" />
+          <h2 className="text-lg font-semibold text-text-primary">Scanning website</h2>
+          <p className="mt-1 text-sm text-text-muted">Looking for social media profiles...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Confirming platforms ───────────────────────────────────────────────
+  if (audit.status === 'confirming_platforms' || (audit.status === 'pending' && detectedPlatforms.length >= 0 && !detecting)) {
+    const hasPlatforms = Object.values(socialInputs).some(v => v?.trim());
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4">
+        <div className="w-full max-w-lg space-y-5">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold text-text-primary">Confirm social platforms</h2>
+            <p className="mt-1 text-sm text-text-muted">
+              {websiteInfo ? `${websiteInfo.title} — ${websiteInfo.industry}` : audit.website_url?.replace(/^https?:\/\//, '')}
+            </p>
+            {detectedPlatforms.length > 0 ? (
+              <p className="mt-2 text-xs text-emerald-400">
+                Found {detectedPlatforms.length} social profile{detectedPlatforms.length !== 1 ? 's' : ''} on the website
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-amber-400">
+                No social profiles detected — add them manually below
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-nativz-border bg-surface p-5 space-y-3">
+            {(['tiktok', 'instagram', 'facebook', 'youtube'] as AuditPlatformKey[]).map(platform => {
+              const detected = detectedPlatforms.find(d => d.platform === platform);
+              return (
+                <div key={platform} className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 w-24 shrink-0">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PLATFORM_COLORS[platform] }} />
+                    <span className="text-sm text-text-primary font-medium">{PLATFORM_LABELS[platform]}</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={socialInputs[platform] ?? ''}
+                    onChange={(e) => setSocialInputs(prev => ({ ...prev, [platform]: e.target.value }))}
+                    placeholder={detected ? '' : `${platform}.com/@username`}
+                    className="flex-1 rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40"
+                  />
+                  {detected && (
+                    <span className="shrink-0 text-xs text-emerald-400">Auto-detected</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" size="sm" onClick={() => router.push('/admin/audit')}>
+              <ArrowLeft size={14} /> Back
+            </Button>
+            <Button onClick={() => void startProcessing()} disabled={!hasPlatforms}>
+              {hasPlatforms ? 'Start audit' : 'Add at least one platform'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── Processing state ──────────────────────────────────────────────────
-  if (audit.status === 'processing' || audit.status === 'pending') {
+  if (audit.status === 'processing') {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 animate-fade-slide-in">
         <div className="w-full max-w-md">

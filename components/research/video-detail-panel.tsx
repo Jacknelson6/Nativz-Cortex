@@ -179,29 +179,10 @@ export function VideoDetailPanel({
             </div>
           </div>
 
-          {/* Why this video works */}
-          <div className="rounded-lg border border-nativz-border overflow-hidden">
-            <div className="flex items-center gap-2 bg-pink-600/10 px-4 py-2.5 border-b border-pink-600/20">
-              <Sparkles size={14} className="text-pink-400" />
-              <span className="text-xs font-semibold text-pink-400 uppercase tracking-wide">
-                Why this video works
-              </span>
-            </div>
-            <div className="px-4 py-3">
-              <p className="text-sm text-text-secondary leading-relaxed">
-                {video.description
-                  ? video.description.length > 300
-                    ? `${video.description.slice(0, 300)}…`
-                    : video.description
-                  : 'AI analysis will appear here in a future update.'}
-              </p>
-            </div>
-          </div>
-
-          {/* Description */}
+          {/* Caption */}
           {video.description && (
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Description</p>
+              <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Caption</p>
               <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-line">
                 {video.description}
               </p>

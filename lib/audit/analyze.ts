@@ -169,14 +169,15 @@ ${websiteContext ? `BUSINESS: ${websiteContext.title} — ${websiteContext.indus
 Generate a scorecard. For each item, rate as "good", "warning", or "poor".
 
 Categories:
-1. Posting frequency
-2. Engagement rate
-3. Average views
-4. Hashtag strategy
-5. Content variety
-6. Bio optimization
-7. Follower-to-view ratio
-8. Community engagement
+1. Posting frequency — how consistently they post
+2. Engagement rate — likes+comments+shares relative to followers
+3. Average views — typical view count per video
+4. Hashtag strategy — mix of branded, trending, and niche hashtags
+5. Content variety — range of formats and topics
+6. Bio optimization — clear CTA, links, description
+7. Follower-to-view ratio — are views proportional to follower count
+8. Caption optimization — do captions use hooks, CTAs, and keywords effectively
+9. Content quality — production value, lighting, framing, audio quality based on engagement signals
 
 Return JSON:
 {
