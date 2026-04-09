@@ -101,7 +101,7 @@ export function ResearchHub({
   const allItems = useMemo(() => {
     const combined = [...optimisticItems, ...historyItems];
     if (!selectedClientId) return combined;
-    return combined.filter(item => item.clientId === selectedClientId || !item.clientId);
+    return combined.filter(item => item.clientId === selectedClientId);
   }, [optimisticItems, historyItems, selectedClientId]);
 
   const handleResearchStarted = useCallback((item: {
