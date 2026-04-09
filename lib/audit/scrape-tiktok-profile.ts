@@ -5,7 +5,7 @@
 import { startApifyActorRun, waitForApifyRunSuccess, fetchApifyDatasetItems } from '@/lib/tiktok/apify-run';
 import type { ProspectProfile, ProspectVideo } from './types';
 
-const ACTOR_ID = 'clockworks/free-tiktok-scraper';
+const ACTOR_ID = 'apidojo/tiktok-scraper';
 
 function getApiKey(): string {
   const token = process.env.APIFY_API_KEY;
@@ -73,10 +73,12 @@ export async function scrapeTikTokProfile(profileUrl: string): Promise<TikTokPro
   const runId = await startApifyActorRun(
     ACTOR_ID,
     {
-      profiles: [username],
+      profiles: [`https://www.tiktok.com/@${username}`],
       resultsPerPage: 30,
+      excludePinnedPosts: false,
       shouldDownloadCovers: false,
       shouldDownloadVideos: false,
+      shouldDownloadSlideshowImages: false,
     },
     apiKey,
   );
