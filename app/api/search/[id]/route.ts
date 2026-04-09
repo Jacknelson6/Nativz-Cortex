@@ -189,6 +189,7 @@ const DELETABLE_TOPIC_SEARCH_STATUSES = new Set([
   'pending_subtopics',
   'pending',
   'processing',
+  'completed',
 ]);
 
 /**
