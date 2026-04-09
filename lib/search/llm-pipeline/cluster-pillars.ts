@@ -93,7 +93,8 @@ Rules:
 - Sort pillars by pct_of_content descending (most common first).
 - avg_engagement_rate: calculate from the ER values of videos in that cluster. Express as percentage points (e.g. 2.4 means 2.4%).
 - pct_of_content must sum to 100.
-- video_ids must reference actual video IDs from the input.`;
+- video_ids must reference actual video IDs from the input.
+- IMPORTANT: If any videos feature someone on camera reacting to content, commenting on industry topics, or giving expert takes (talking head / reaction format), group those into a "Talking head & reaction takes" pillar. This format — where an authority figure reacts, critiques, or explains something on camera — is a high-performing top-of-funnel style. Include it when relevant videos exist, even if it's a smaller cluster.`;
 
   const ai = await createCompletion({
     messages: [{ role: 'user', content: prompt }],
