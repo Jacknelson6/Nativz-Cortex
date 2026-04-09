@@ -6,45 +6,17 @@ import {
   ArrowRight,
   Globe,
   Loader2,
-  Clock,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Trash2,
   Plus,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { AuditHistoryRail, type AuditSummary } from '@/components/audit/audit-history-rail';
 import type { AuditPlatform } from '@/lib/audit/types';
-
-interface AuditSummary {
-  id: string;
-  website_url: string | null;
-  tiktok_url: string;
-  status: string;
-  created_at: string;
-  prospect_data: Record<string, unknown> | null;
-  scorecard: Record<string, unknown> | null;
-}
 
 interface AuditHubProps {
   audits: AuditSummary[];
   userFirstName: string | null;
 }
-
-const STATUS_ICON = {
-  pending: Clock,
-  processing: Loader2,
-  completed: CheckCircle,
-  failed: XCircle,
-};
-
-const STATUS_COLOR = {
-  pending: 'text-text-muted',
-  processing: 'text-accent-text',
-  completed: 'text-emerald-400',
-  failed: 'text-red-400',
-};
 
 const PLATFORM_LABELS: Record<string, string> = {
   tiktok: 'TikTok',
@@ -54,8 +26,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   linkedin: 'LinkedIn',
 };
 
-function extractDomain(url: string | null): string {
-  if (!url) return 'Unknown';
+function extractDomain(url: string): string {
   try {
     return new URL(url.startsWith('http') ? url : `https://${url}`).hostname.replace('www.', '');
   } catch {
@@ -71,7 +42,6 @@ export function AuditHub({ audits: initialAudits, userFirstName }: AuditHubProps
   const [showSocials, setShowSocials] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const greetingName = userFirstName
     ? userFirstName.charAt(0).toUpperCase() + userFirstName.slice(1)
@@ -110,72 +80,15 @@ export function AuditHub({ audits: initialAudits, userFirstName }: AuditHubProps
     }
   }
 
-  async function handleDelete(e: React.MouseEvent, auditId: string) {
-    e.stopPropagation();
-    setDeletingId(auditId);
-    try {
-      await fetch(`/api/audit?id=${auditId}`, { method: 'DELETE' });
-      setAudits(prev => prev.filter(a => a.id !== auditId));
-      toast.success('Audit deleted');
-    } catch {
-      toast.error('Failed to delete');
-    } finally {
-      setDeletingId(null);
-    }
-  }
-
   function setSocialUrl(platform: AuditPlatform, value: string) {
     setSocialUrls(prev => ({ ...prev, [platform]: value }));
   }
 
   return (
     <div className="flex h-full">
-      {/* History rail — matches research history rail style */}
-      <div className="w-72 shrink-0 border-r border-nativz-border bg-surface/50 overflow-y-auto">
-        <div className="p-4 border-b border-nativz-border">
-          <h2 className="text-sm font-semibold text-text-primary">Audit history</h2>
-          <p className="text-xs text-text-muted mt-0.5">{audits.length} audit{audits.length !== 1 ? 's' : ''}</p>
-        </div>
-        <div className="divide-y divide-nativz-border">
-          {audits.map((audit) => {
-            const Icon = STATUS_ICON[audit.status as keyof typeof STATUS_ICON] ?? AlertCircle;
-            const color = STATUS_COLOR[audit.status as keyof typeof STATUS_COLOR] ?? 'text-text-muted';
-            const domain = extractDomain(audit.website_url);
-            const score = (audit.scorecard as Record<string, unknown>)?.overallScore;
-
-            return (
-              <div key={audit.id} className="group relative">
-                <button
-                  onClick={() => router.push(`/admin/audit/${audit.id}`)}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover cursor-pointer"
-                >
-                  <Icon size={16} className={`shrink-0 ${color} ${audit.status === 'processing' ? 'animate-spin' : ''}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-text-primary truncate">{domain}</p>
-                    <p className="text-xs text-text-muted">
-                      {new Date(audit.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                      {typeof score === 'number' && ` · Score: ${score}`}
-                    </p>
-                  </div>
-                </button>
-                {/* Delete button */}
-                <button
-                  onClick={(e) => handleDelete(e, audit.id)}
-                  disabled={deletingId === audit.id}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 rounded-md p-1.5 text-text-muted/30 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
-                  title="Delete audit"
-                >
-                  {deletingId === audit.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                </button>
-              </div>
-            );
-          })}
-          {audits.length === 0 && (
-            <div className="px-4 py-8 text-center text-sm text-text-muted">
-              No audits yet
-            </div>
-          )}
-        </div>
+      {/* History rail */}
+      <div className="w-72 shrink-0 border-r border-nativz-border bg-surface/50">
+        <AuditHistoryRail audits={audits} onAuditsChange={(a) => setAudits(a)} />
       </div>
 
       {/* Main area */}
