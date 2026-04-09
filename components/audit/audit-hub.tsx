@@ -184,7 +184,7 @@ export function AuditHub({ audits: initialAudits, userFirstName }: AuditHubProps
           <div className="text-center">
             <p className="text-sm font-medium text-text-muted">Hello, {greetingName}</p>
             <p className="mt-1.5 text-xl font-semibold tracking-tight text-text-primary md:text-2xl">
-              Audit a prospect
+              Audit a brand
             </p>
             <p className="mt-1 text-sm text-text-muted">
               Paste a website URL to analyze their brand and social presence
