@@ -8,17 +8,26 @@
 
 ## Next Session
 
+### Visual QA — April 8 Features (deployed, needs browser check)
+- [ ] Nerd UI — verify clean card layout, client badge, history toggle on production
+- [ ] Nerd topic search rail — @mention a client, verify searches load, click to attach
+- [ ] Nerd guardrails — ask "what model are you", "should I fire my agency", "who are all your clients"
+- [ ] Nerd settings — gear icon → `/admin/nerd/settings` — verify skills + guardrails tabs
+- [ ] Users page — `/admin/users` — verify all users visible, role switcher, reset password
+- [ ] Team page — verify last active, search count, inline delete confirmation
+- [ ] Forgot password — test on production, verify Resend email arrives
+- [ ] Nerd chat — verify chatgpt-5-4-mini model works, check usage shows in `/admin/settings/usage`
+
 ### Post-Launch QA (client portal)
-- [ ] Test password reset email delivery on production (deploy just pushed — verify `ace@nativz.io` gets branded email)
-- [ ] Test password reset from AC domain — verify AC-branded email arrives from `cortex@andersoncollaborative.com`
-- [ ] Test portal invite flow end-to-end: admin creates invite → user clicks link → registers → auto-signs-in → lands on portal
-- [ ] Test multi-client invite: send second invite to existing user → verify auto-link works
-- [ ] Test brand switcher with a multi-client user (assign test user to 2+ clients)
-- [ ] Verify viewer can't access `/admin/dashboard` on production (should redirect to portal)
-- [ ] Test The Nerd on production — verify Grok 4.20 model works (was broken with qwen3.6:free)
+- [ ] Test password reset from AC domain — verify AC-branded email arrives
+- [ ] Test portal invite flow end-to-end
+- [ ] Test multi-client invite: send second invite to existing user
+- [ ] Test brand switcher with a multi-client user
+- [ ] Verify viewer can't access `/admin/dashboard` on production
+- [x] Test The Nerd model — switched from broken qwen3.6:free → chatgpt-5-4-mini
 - [ ] Clean up test `user_client_access` rows — test user may be linked to wrong clients
-- [ ] Client logo upload — admin should be able to upload client logos (brand switcher shows placeholder icons)
-- [ ] Forgot-password page renders with admin sidebar when logged in — should show clean layout instead
+- [ ] Client logo upload — admin should be able to upload client logos
+- [x] Forgot-password fixed — bypassed Supabase email chain, sends via Resend directly
 
 ### PDF Export Theming
 - [ ] Match PDF export to current brand theme (AC vs Nativz — colors, logo, fonts)
