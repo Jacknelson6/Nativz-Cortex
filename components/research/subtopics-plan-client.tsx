@@ -148,7 +148,8 @@ export function SubtopicsPlanClient({
     PLATFORM_OPTIONS.find((o) => o.value === source)?.label ?? 'All';
 
   return (
-    <div className="cortex-page-gutter max-w-2xl mx-auto space-y-6 py-8">
+    <div className="flex flex-col items-center justify-center min-h-[60vh] cortex-page-gutter py-12">
+      <div className="w-full max-w-xl space-y-6">
       <Breadcrumbs
         className="mb-2"
         items={[
@@ -166,8 +167,8 @@ export function SubtopicsPlanClient({
           <ArrowLeft size={20} />
         </Link>
         <div className="min-w-0 flex-1 space-y-1">
-          <h1 className="text-lg font-semibold text-text-primary break-words">Keyword picker</h1>
-          <p className="text-sm text-text-muted">
+          <h1 className="text-xl font-semibold text-text-primary break-words">Keyword picker</h1>
+          <p className="text-base text-text-muted">
             Topic: <span className="text-text-secondary">&ldquo;{query}&rdquo;</span>
             {' · '}
             <span className="text-text-secondary">{timeRangeLabel}</span>
@@ -176,23 +177,23 @@ export function SubtopicsPlanClient({
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-text-muted py-8">
-          <Loader2 className="animate-spin shrink-0" size={18} />
+        <div className="flex items-center gap-2 text-base text-text-muted py-8">
+          <Loader2 className="animate-spin shrink-0" size={20} />
           Generating keywords…
         </div>
       ) : (
         <div className="space-y-4">
           {/* Header row: counter + actions */}
           <div className="flex items-center justify-between">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1 text-xs font-medium text-accent-text">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1.5 text-sm font-medium text-accent-text">
               {selectedCount}/{totalCount} selected
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={selectAll}
                 disabled={selectedCount === totalCount}
-                className="text-xs text-text-muted hover:text-text-secondary transition-colors disabled:opacity-40"
+                className="text-sm text-text-muted hover:text-text-secondary transition-colors disabled:opacity-40"
               >
                 Select all
               </button>
@@ -200,9 +201,9 @@ export function SubtopicsPlanClient({
                 type="button"
                 onClick={() => void loadPlan()}
                 disabled={saving}
-                className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-colors"
+                className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text-secondary transition-colors"
               >
-                <RefreshCw size={12} />
+                <RefreshCw size={14} />
                 Regenerate
               </button>
             </div>
@@ -262,7 +263,7 @@ export function SubtopicsPlanClient({
           </div>
 
           {/* Tip */}
-          <p className="text-xs text-text-muted/70 leading-relaxed">
+          <p className="text-sm text-text-muted/70 leading-relaxed">
             Two to three word phrases like &ldquo;cooking hacks&rdquo; or &ldquo;indie game dev&rdquo; find much more relevant content than single generic words.
           </p>
 
@@ -281,6 +282,7 @@ export function SubtopicsPlanClient({
             'Continue'
           )}
         </Button>
+      </div>
       </div>
     </div>
   );
