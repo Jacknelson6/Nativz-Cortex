@@ -63,6 +63,15 @@ const PROCESSING_STAGES = [
   'Generating audit scorecard',
 ];
 
+type AuditPlatformKey = 'tiktok' | 'instagram' | 'facebook' | 'youtube';
+
+const PLATFORM_LABELS: Record<string, string> = {
+  tiktok: 'TikTok',
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  youtube: 'YouTube',
+};
+
 export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const router = useRouter();
   const [audit, setAudit] = useState(initialAudit);
@@ -70,6 +79,8 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [stageIndex, setStageIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  const [socialInputs, setSocialInputs] = useState<Partial<Record<AuditPlatformKey, string>>>({});
+  const [submittingSocials, setSubmittingSocials] = useState(false);
 
   // Auto-start processing for pending audits
   useEffect(() => {
@@ -136,6 +147,35 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     }
   }
 
+  async function handleSubmitSocials() {
+    const filled = Object.fromEntries(
+      Object.entries(socialInputs).filter(([, v]) => v?.trim())
+    );
+    if (Object.keys(filled).length === 0) {
+      toast.error('Enter at least one social profile URL');
+      return;
+    }
+    setSubmittingSocials(true);
+    try {
+      const res = await fetch(`/api/audit/${audit.id}/resume`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ social_urls: filled }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error ?? 'Failed to submit');
+        return;
+      }
+      // Reset to pending → will auto-start processing
+      setAudit(prev => ({ ...prev, status: 'pending' }));
+    } catch {
+      toast.error('Something went wrong');
+    } finally {
+      setSubmittingSocials(false);
+    }
+  }
+
   function formatElapsed(s: number): string {
     if (s < 60) return `${s}s`;
     return `${Math.floor(s / 60)}m ${s % 60}s`;
@@ -146,6 +186,58 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const competitors = audit.competitors_data ?? [];
   const scorecard = audit.scorecard;
   const videos = (audit.videos_data ?? []) as TopicSearchVideoRow[];
+
+  // Needs social input — website scrape didn't find social profiles
+  if (audit.status === 'needs_social_input') {
+    const detectedContext = audit.prospect_data?.websiteContext;
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4">
+        <div className="w-full max-w-md space-y-5">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold text-text-primary">
+              No social profiles found
+            </h2>
+            <p className="mt-2 text-sm text-text-muted">
+              We scraped {audit.website_url?.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+              {detectedContext ? ` (${detectedContext.industry})` : ''} but couldn&apos;t find any social media links. Add them below to continue the audit.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-nativz-border bg-surface p-4 space-y-3">
+            {(['tiktok', 'instagram', 'facebook', 'youtube'] as AuditPlatformKey[]).map(platform => (
+              <div key={platform} className="flex items-center gap-3">
+                <span className="text-sm text-text-muted w-20 shrink-0">{PLATFORM_LABELS[platform]}</span>
+                <input
+                  type="text"
+                  value={socialInputs[platform] ?? ''}
+                  onChange={(e) => setSocialInputs(prev => ({ ...prev, [platform]: e.target.value }))}
+                  placeholder={`${platform}.com/@username`}
+                  className="flex-1 rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void handleSubmitSocials();
+                  }}
+                />
+              </div>
+            ))}
+
+            <Button
+              onClick={handleSubmitSocials}
+              disabled={submittingSocials || Object.values(socialInputs).every(v => !v?.trim())}
+              className="w-full mt-2"
+            >
+              {submittingSocials ? <Loader2 size={16} className="animate-spin" /> : 'Continue audit'}
+            </Button>
+          </div>
+
+          <div className="text-center">
+            <Button variant="ghost" size="sm" onClick={() => router.push('/admin/audit')}>
+              <ArrowLeft size={14} /> Back to audits
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Processing state — matches research processing page
   if (audit.status === 'processing' || audit.status === 'pending') {

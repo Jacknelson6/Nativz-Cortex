@@ -101,6 +101,25 @@ export async function POST(
         platformsToScrape.push({ platform: 'tiktok', url: audit.tiktok_url });
       }
 
+      // If no social profiles found anywhere, pause and ask user for input
+      if (platformsToScrape.length === 0) {
+        console.log(`[audit:${id}] No social profiles found — requesting manual input`);
+        await adminClient
+          .from('prospect_audits')
+          .update({
+            status: 'needs_social_input',
+            prospect_data: {
+              websiteContext,
+              platforms: [],
+              detectedSocialLinks: detectedLinks,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', id);
+
+        return NextResponse.json({ status: 'needs_social_input' });
+      }
+
       // Step 2: Scrape each platform in parallel
       console.log(`[audit:${id}] Step 2: Scraping ${platformsToScrape.length} platform(s) in parallel...`);
       const platformReports: PlatformReport[] = [];
