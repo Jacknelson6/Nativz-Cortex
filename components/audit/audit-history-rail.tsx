@@ -90,7 +90,6 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (e?.shiftKey && prev.size > 0) {
-        // Shift-click: select range
         const ids = filtered.map(a => a.id);
         const lastSelected = [...prev].pop()!;
         const startIdx = ids.indexOf(lastSelected);
@@ -127,9 +126,7 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
     if (ids.length === 0) return;
     for (const id of ids) {
       setDeletingIds(prev => new Set(prev).add(id));
-      try {
-        await fetch(`/api/audit?id=${id}`, { method: 'DELETE' });
-      } catch { /* continue */ }
+      try { await fetch(`/api/audit?id=${id}`, { method: 'DELETE' }); } catch { /* continue */ }
     }
     onAuditsChange(audits.filter(a => !selectedIds.has(a.id)));
     setSelectedIds(new Set());
@@ -147,33 +144,21 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
       <div className="shrink-0 border-b border-nativz-border p-3">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm font-semibold text-text-primary">History</h2>
           {hasSelection && (
-            <button
-              onClick={handleDeleteSelected}
-              className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors cursor-pointer"
-            >
-              <Trash2 size={12} />
-              Delete {selectedIds.size}
+            <button onClick={handleDeleteSelected} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors cursor-pointer">
+              <Trash2 size={12} /> Delete {selectedIds.size}
             </button>
           )}
         </div>
         <div className="relative">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search..."
-            className="w-full rounded-lg border border-nativz-border bg-background py-1.5 pl-8 pr-3 text-sm text-text-primary placeholder:text-text-muted/60 focus:outline-none focus:border-accent/50"
-          />
+          <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..."
+            className="w-full rounded-lg border border-nativz-border bg-background py-1.5 pl-8 pr-3 text-sm text-text-primary placeholder:text-text-muted/60 focus:outline-none focus:border-accent/50" />
         </div>
       </div>
-
-      {/* List */}
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 && (
           <div className="px-3 py-8 text-center text-sm text-text-muted">
@@ -195,27 +180,16 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
                 <div
                   className={cn(
                     'group flex w-full items-center gap-1.5 rounded-lg border px-2 py-1.5 mx-1 my-0.5 transition-colors cursor-default animate-stagger-in',
-                    isActive
-                      ? 'border-accent/10 bg-accent-surface/20'
-                      : isSelected
-                        ? 'border-accent/20 bg-accent-surface/10'
-                        : 'border-transparent hover:bg-surface-hover',
+                    isActive ? 'border-accent/10 bg-accent-surface/20' : isSelected ? 'border-accent/20 bg-accent-surface/10' : 'border-transparent hover:bg-surface-hover',
                     isDeleting && 'opacity-40',
                   )}
                   style={{ animationDelay: `${index * 30}ms`, width: 'calc(100% - 0.5rem)' }}
                   onClick={(e) => {
-                    if (e.shiftKey || e.metaKey || e.ctrlKey) {
-                      e.preventDefault();
-                      toggleSelect(audit.id, e);
-                    } else {
-                      router.push(`/admin/audit/${audit.id}`);
-                    }
+                    if (e.shiftKey || e.metaKey || e.ctrlKey) { e.preventDefault(); toggleSelect(audit.id, e); }
+                    else router.push(`/admin/audit/${audit.id}`);
                   }}
                 >
-                  {/* Status icon */}
                   <Icon size={14} className={cn('shrink-0', color, audit.status === 'processing' && 'animate-spin')} />
-
-                  {/* Title + date */}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-text-primary truncate leading-tight">{domain}</p>
                     <p className="text-xs text-text-muted/60 leading-tight">
@@ -223,54 +197,29 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
                       {typeof score === 'number' && ` · ${score}/100`}
                     </p>
                   </div>
-
-                  {/* More menu */}
                   <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => e.stopPropagation()}
-                        className="shrink-0 rounded-md p-1 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-hover hover:text-text-primary"
-                      >
+                      <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}
+                        className="shrink-0 rounded-md p-1 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-hover hover:text-text-primary">
                         <MoreHorizontal size={14} />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" sideOffset={4} className={menuSurfaceClass}>
-                      <DropdownMenuItem className={menuItemClass} onSelect={() => router.push(`/admin/audit/${audit.id}`)}>
-                        <ExternalLink size={14} /> Open
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className={menuItemClass} onSelect={() => handleCopyLink(audit.id)}>
-                        <Link2 size={14} /> Copy link
-                      </DropdownMenuItem>
+                      <DropdownMenuItem className={menuItemClass} onSelect={() => router.push(`/admin/audit/${audit.id}`)}><ExternalLink size={14} /> Open</DropdownMenuItem>
+                      <DropdownMenuItem className={menuItemClass} onSelect={() => handleCopyLink(audit.id)}><Link2 size={14} /> Copy link</DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={() => handleDelete(audit.id)}>
-                        <Trash2 size={14} /> Delete
-                      </DropdownMenuItem>
+                      <DropdownMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={() => handleDelete(audit.id)}><Trash2 size={14} /> Delete</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
               </ContextMenuTrigger>
-
-              {/* Right-click context menu */}
               <ContextMenuContent className={menuSurfaceClass}>
-                <ContextMenuItem className={menuItemClass} onSelect={() => router.push(`/admin/audit/${audit.id}`)}>
-                  <ExternalLink size={14} /> Open
-                </ContextMenuItem>
-                <ContextMenuItem className={menuItemClass} onSelect={() => handleCopyLink(audit.id)}>
-                  <Link2 size={14} /> Copy link
-                </ContextMenuItem>
+                <ContextMenuItem className={menuItemClass} onSelect={() => router.push(`/admin/audit/${audit.id}`)}><ExternalLink size={14} /> Open</ContextMenuItem>
+                <ContextMenuItem className={menuItemClass} onSelect={() => handleCopyLink(audit.id)}><Link2 size={14} /> Copy link</ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={() => handleDelete(audit.id)}>
-                  <Trash2 size={14} /> Delete
-                </ContextMenuItem>
+                <ContextMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={() => handleDelete(audit.id)}><Trash2 size={14} /> Delete</ContextMenuItem>
                 {hasSelection && selectedIds.size > 1 && (
-                  <>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={handleDeleteSelected}>
-                      <Trash2 size={14} /> Delete {selectedIds.size} selected
-                    </ContextMenuItem>
-                  </>
+                  <><ContextMenuSeparator /><ContextMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={handleDeleteSelected}><Trash2 size={14} /> Delete {selectedIds.size} selected</ContextMenuItem></>
                 )}
               </ContextMenuContent>
             </ContextMenu>
