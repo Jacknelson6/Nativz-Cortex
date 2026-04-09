@@ -119,6 +119,8 @@ export function ResearchTopicForm({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [showBestPractices, setShowBestPractices] = useState(false);
+    const [suggestions, setSuggestions] = useState<string[]>([]);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
     useEffect(() => {
       setClientPickerPortal(document.body);
@@ -497,7 +499,56 @@ export function ResearchTopicForm({
           </div>
           </div>
 
-        {/* Strategy Lab link removed — accessible from sidebar */}
+        {/* Suggest topics — visible when a client is selected */}
+        {contextMode === 'client' && clientId && (
+          <div className="mx-auto mt-3 w-full max-w-xl">
+            {suggestions.length === 0 ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  setLoadingSuggestions(true);
+                  setSuggestions([]);
+                  try {
+                    const res = await fetch('/api/search/suggest-topics', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ client_id: clientId }),
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      setSuggestions(data.suggestions ?? []);
+                    }
+                  } catch { /* ignore */ }
+                  finally { setLoadingSuggestions(false); }
+                }}
+                disabled={loadingSuggestions}
+                className="mx-auto flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-text-muted transition hover:bg-surface-hover hover:text-text-secondary"
+              >
+                {loadingSuggestions ? (
+                  <><Loader2 size={13} className="animate-spin" aria-hidden /> Generating ideas...</>
+                ) : (
+                  <><Compass size={13} aria-hidden /> Suggest topics for {selectedClient?.name ?? 'this client'}</>
+                )}
+              </button>
+            ) : (
+              <div className="flex flex-wrap justify-center gap-2">
+                {suggestions.map((topic) => (
+                  <button
+                    key={topic}
+                    type="button"
+                    onClick={() => {
+                      setTopicQuery(topic);
+                      setSuggestions([]);
+                    }}
+                    className="rounded-full border border-nativz-border bg-surface-hover/80 px-3 py-1.5 text-xs font-medium text-text-secondary transition hover:border-accent/35 hover:text-accent-text cursor-pointer"
+                  >
+                    {topic}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {portalMode && (
           <div className="mx-auto mt-3 w-full max-w-xl">
