@@ -7,7 +7,6 @@ import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Building2,
-  UsersRound,
   Telescope,
   BarChart3,
   CheckSquare,
@@ -98,7 +97,6 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Manage',
     items: [
       { href: '/admin/clients', label: 'Clients', icon: Building2 },
-      { href: '/admin/team', label: 'Team', icon: UsersRound },
       { href: '/admin/users', label: 'Users', icon: Users },
       { href: '/admin/presentations', label: 'Notes', icon: StickyNote },
       { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
@@ -153,7 +151,6 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/scheduler',
   '/admin/ad-creatives',
   '/admin/clients',
-  '/admin/team',
   '/admin/users',
   '/admin/presentations',
   '/admin/shoots',

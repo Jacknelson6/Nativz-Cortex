@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   Users, Search, Shield, Crown, Trash2, KeyRound, Mail,
   Clock, FileSearch, Building2, Loader2, ChevronDown, ChevronUp,
-  Copy, Check, X,
+  Copy, Check, X, Briefcase, ArrowUpDown,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatRelativeTime } from '@/lib/utils/format';
@@ -24,7 +24,13 @@ interface UserRow {
   auth_created_at: string;
   search_count: number;
   client_access: string[];
+  // Team fields (merged from team_members)
+  team_role: string | null;
+  is_team_member: boolean;
 }
+
+type SortField = 'name' | 'role' | 'team' | 'last_active' | 'searches';
+type SortDir = 'asc' | 'desc';
 
 function getInitials(name: string): string {
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
@@ -36,8 +42,10 @@ export default function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'viewer'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'viewer' | 'team'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   useEffect(() => {
     (async () => {
@@ -55,27 +63,77 @@ export default function UsersPage() {
     const res = await fetch('/api/admin/users');
     if (res.ok) {
       const data = await res.json();
-      setUsers(data.users ?? []);
+      // Merge team member data
+      const teamRes = await fetch('/api/team');
+      let teamMembers: { user_id: string | null; role: string | null }[] = [];
+      if (teamRes.ok) {
+        const teamData = await teamRes.json();
+        teamMembers = Array.isArray(teamData) ? teamData : (teamData.members ?? teamData.data ?? []);
+      }
+
+      // Build user_id → team_role map
+      const teamRoleMap: Record<string, string> = {};
+      for (const tm of teamMembers) {
+        if (tm.user_id && tm.role) teamRoleMap[tm.user_id] = tm.role;
+        else if (tm.user_id) teamRoleMap[tm.user_id] = 'Team member';
+      }
+
+      const enrichedUsers: UserRow[] = (data.users ?? []).map((u: UserRow) => ({
+        ...u,
+        team_role: teamRoleMap[u.id] ?? null,
+        is_team_member: !!teamRoleMap[u.id],
+      }));
+
+      setUsers(enrichedUsers);
     }
     setLoading(false);
   }
 
+  function toggleSort(field: SortField) {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  }
+
   const filtered = useMemo(() => {
     let list = users;
-    if (roleFilter !== 'all') list = list.filter((u) => u.role === roleFilter);
+    if (roleFilter === 'admin') list = list.filter((u) => u.role === 'admin');
+    else if (roleFilter === 'viewer') list = list.filter((u) => u.role === 'viewer');
+    else if (roleFilter === 'team') list = list.filter((u) => u.is_team_member);
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter((u) =>
         u.full_name.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
+        (u.team_role?.toLowerCase().includes(q)) ||
         u.client_access.some((c) => c.toLowerCase().includes(q))
       );
     }
+    // Sort
+    list = [...list].sort((a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      switch (sortField) {
+        case 'name': return a.full_name.localeCompare(b.full_name) * dir;
+        case 'role': return a.role.localeCompare(b.role) * dir;
+        case 'team': return (a.team_role ?? '').localeCompare(b.team_role ?? '') * dir;
+        case 'last_active': {
+          const aTime = a.last_sign_in_at ? new Date(a.last_sign_in_at).getTime() : 0;
+          const bTime = b.last_sign_in_at ? new Date(b.last_sign_in_at).getTime() : 0;
+          return (aTime - bTime) * dir;
+        }
+        case 'searches': return (a.search_count - b.search_count) * dir;
+        default: return 0;
+      }
+    });
     return list;
-  }, [users, roleFilter, searchQuery]);
+  }, [users, roleFilter, searchQuery, sortField, sortDir]);
 
   const adminCount = users.filter((u) => u.role === 'admin').length;
   const viewerCount = users.filter((u) => u.role === 'viewer').length;
+  const teamCount = users.filter((u) => u.is_team_member).length;
 
   if (isSuperAdmin === null) {
     return (
@@ -94,7 +152,7 @@ export default function UsersPage() {
           All users
         </h1>
         <p className="text-sm text-text-muted mt-0.5">
-          {adminCount} admin{adminCount !== 1 ? 's' : ''} · {viewerCount} portal user{viewerCount !== 1 ? 's' : ''} · {users.length} total
+          {adminCount} admin{adminCount !== 1 ? 's' : ''} · {viewerCount} portal user{viewerCount !== 1 ? 's' : ''} · {teamCount} team · {users.length} total
         </p>
       </div>
 
@@ -105,12 +163,12 @@ export default function UsersPage() {
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by name, email, or client..."
+            placeholder="Search by name, email, team role, or client..."
             className="w-full rounded-lg border border-nativz-border bg-transparent pl-9 pr-4 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text transition-colors"
           />
         </div>
         <div className="flex gap-1 rounded-lg border border-nativz-border p-0.5">
-          {(['all', 'admin', 'viewer'] as const).map((r) => (
+          {(['all', 'admin', 'viewer', 'team'] as const).map((r) => (
             <button
               key={r}
               onClick={() => setRoleFilter(r)}
@@ -120,10 +178,30 @@ export default function UsersPage() {
                   : 'text-text-muted hover:text-text-secondary'
               }`}
             >
-              {r === 'all' ? 'All' : r === 'admin' ? 'Admins' : 'Portal'}
+              {r === 'all' ? 'All' : r === 'admin' ? 'Admins' : r === 'viewer' ? 'Portal' : 'Team'}
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Sort controls */}
+      <div className="flex items-center gap-1 text-xs text-text-muted">
+        <ArrowUpDown size={12} className="mr-1" />
+        Sort:
+        {(['name', 'role', 'team', 'last_active', 'searches'] as SortField[]).map(field => (
+          <button
+            key={field}
+            onClick={() => toggleSort(field)}
+            className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+              sortField === field
+                ? 'bg-accent-surface text-accent-text font-medium'
+                : 'hover:bg-surface-hover'
+            }`}
+          >
+            {field === 'last_active' ? 'Last active' : field.charAt(0).toUpperCase() + field.slice(1)}
+            {sortField === field && (sortDir === 'asc' ? ' ↑' : ' ↓')}
+          </button>
+        ))}
       </div>
 
       {/* User list */}
@@ -139,7 +217,7 @@ export default function UsersPage() {
           <p className="text-sm text-text-muted">No users found</p>
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {filtered.map((user) => (
             <UserCard
               key={user.id}
@@ -250,56 +328,60 @@ function UserCard({
 
   return (
     <div className="rounded-xl border border-nativz-border bg-surface transition-colors hover:border-nativz-border/80">
-      {/* Main row */}
+      {/* Main row — FONT SIZES BUMPED to match rest of app */}
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left cursor-pointer"
+        className="w-full flex items-center gap-3 px-4 py-3.5 text-left cursor-pointer"
       >
         {/* Avatar */}
         {u.avatar_url ? (
-          <img src={u.avatar_url} alt={u.full_name} className="h-9 w-9 rounded-full object-cover ring-1 ring-nativz-border shrink-0" />
+          <img src={u.avatar_url} alt={u.full_name} className="h-10 w-10 rounded-full object-cover ring-1 ring-nativz-border shrink-0" />
         ) : (
-          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-accent/15 to-accent2/15 ring-1 ring-nativz-border flex items-center justify-center shrink-0">
-            <span className="text-xs font-semibold text-text-secondary">{getInitials(u.full_name)}</span>
+          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-accent/15 to-accent2/15 ring-1 ring-nativz-border flex items-center justify-center shrink-0">
+            <span className="text-sm font-semibold text-text-secondary">{getInitials(u.full_name)}</span>
           </div>
         )}
 
-        {/* Name + email */}
+        {/* Name + email + team role */}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-text-primary truncate">{u.full_name}</span>
-            {u.is_super_admin && <Crown size={11} className="text-amber-400 shrink-0" />}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${
+            {u.is_super_admin && <Crown size={12} className="text-amber-400 shrink-0" />}
+            <span className={`text-[11px] px-1.5 py-0.5 rounded-full shrink-0 ${
               u.role === 'admin' ? 'bg-accent/[0.08] text-accent-text' : 'bg-surface-hover text-text-muted'
             }`}>
               {u.role}
             </span>
+            {u.team_role && (
+              <span className="text-[11px] px-1.5 py-0.5 rounded-full shrink-0 bg-purple-500/10 text-purple-400 flex items-center gap-1">
+                <Briefcase size={9} />
+                {u.team_role}
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-3 mt-0.5 text-[11px] text-text-muted/60">
-            <span className="truncate">{u.email}</span>
-          </div>
+          <span className="text-xs text-text-muted mt-0.5 block truncate">{u.email}</span>
         </div>
 
-        {/* Stats */}
-        <div className="hidden sm:flex items-center gap-4 shrink-0 text-[11px] text-text-muted/50">
+        {/* Stats — bumped from 11px to xs (12px) */}
+        <div className="hidden sm:flex items-center gap-4 shrink-0 text-xs text-text-muted">
           <span className="flex items-center gap-1" title="Last active">
-            <Clock size={10} />
+            <Clock size={12} />
             {u.last_sign_in_at ? formatRelativeTime(u.last_sign_in_at) : 'Never'}
           </span>
           <span className="flex items-center gap-1" title="Searches">
-            <FileSearch size={10} />
+            <FileSearch size={12} />
             {u.search_count}
           </span>
           {u.client_access.length > 0 && (
             <span className="flex items-center gap-1" title="Client access">
-              <Building2 size={10} />
+              <Building2 size={12} />
               {u.client_access.length}
             </span>
           )}
         </div>
 
         {/* Expand chevron */}
-        {expanded ? <ChevronUp size={14} className="text-text-muted/40 shrink-0" /> : <ChevronDown size={14} className="text-text-muted/40 shrink-0" />}
+        {expanded ? <ChevronUp size={14} className="text-text-muted shrink-0" /> : <ChevronDown size={14} className="text-text-muted shrink-0" />}
       </button>
 
       {/* Expanded details */}
@@ -308,41 +390,52 @@ function UserCard({
           {/* Info grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
             <div>
-              <p className="text-[10px] text-text-muted/50 uppercase tracking-wide">Email</p>
+              <p className="text-[11px] text-text-muted uppercase tracking-wide">Email</p>
               <p className="text-xs text-text-secondary mt-0.5 flex items-center gap-1">
-                <Mail size={10} />
+                <Mail size={11} />
                 {u.email}
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-text-muted/50 uppercase tracking-wide">Last active</p>
+              <p className="text-[11px] text-text-muted uppercase tracking-wide">Last active</p>
               <p className="text-xs text-text-secondary mt-0.5 flex items-center gap-1">
-                <Clock size={10} />
+                <Clock size={11} />
                 {u.last_sign_in_at ? formatRelativeTime(u.last_sign_in_at) : 'Never signed in'}
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-text-muted/50 uppercase tracking-wide">Searches</p>
+              <p className="text-[11px] text-text-muted uppercase tracking-wide">Searches</p>
               <p className="text-xs text-text-secondary mt-0.5 flex items-center gap-1">
-                <FileSearch size={10} />
+                <FileSearch size={11} />
                 {u.search_count} search{u.search_count !== 1 ? 'es' : ''}
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-text-muted/50 uppercase tracking-wide">Created</p>
+              <p className="text-[11px] text-text-muted uppercase tracking-wide">Created</p>
               <p className="text-xs text-text-secondary mt-0.5">
                 {new Date(u.auth_created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               </p>
             </div>
           </div>
 
+          {/* Team role */}
+          {u.team_role && (
+            <div>
+              <p className="text-[11px] text-text-muted uppercase tracking-wide mb-1">Team role</p>
+              <span className="text-xs bg-purple-500/10 text-purple-400 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5">
+                <Briefcase size={11} />
+                {u.team_role}
+              </span>
+            </div>
+          )}
+
           {/* Client access (viewers) */}
           {u.client_access.length > 0 && (
             <div>
-              <p className="text-[10px] text-text-muted/50 uppercase tracking-wide mb-1">Client access</p>
+              <p className="text-[11px] text-text-muted uppercase tracking-wide mb-1">Client access</p>
               <div className="flex flex-wrap gap-1">
                 {u.client_access.map((c) => (
-                  <span key={c} className="text-[10px] bg-surface-hover text-text-secondary px-2 py-0.5 rounded">
+                  <span key={c} className="text-xs bg-surface-hover text-text-secondary px-2 py-0.5 rounded">
                     {c}
                   </span>
                 ))}
@@ -359,7 +452,7 @@ function UserCard({
                   key={r}
                   onClick={() => handleRoleChange(r)}
                   disabled={changingRole || u.role === r}
-                  className={`px-2.5 py-1 text-[11px] rounded-md transition-colors cursor-pointer disabled:cursor-default ${
+                  className={`px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer disabled:cursor-default ${
                     u.role === r
                       ? 'bg-accent text-white'
                       : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
@@ -373,13 +466,13 @@ function UserCard({
             {/* Super admin toggle */}
             <button
               onClick={handleToggleSuperAdmin}
-              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg border transition-colors cursor-pointer ${
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border transition-colors cursor-pointer ${
                 u.is_super_admin
                   ? 'border-amber-400/30 bg-amber-400/10 text-amber-400'
                   : 'border-nativz-border text-text-muted hover:text-text-secondary hover:bg-surface-hover'
               }`}
             >
-              <Crown size={10} />
+              <Crown size={11} />
               {u.is_super_admin ? 'Super admin' : 'Grant super admin'}
             </button>
 
@@ -387,9 +480,9 @@ function UserCard({
             <button
               onClick={handleResetPassword}
               disabled={resetting}
-              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg border border-nativz-border text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-nativz-border text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer disabled:opacity-50"
             >
-              <KeyRound size={10} />
+              <KeyRound size={11} />
               {resetting ? 'Generating...' : 'Reset password'}
             </button>
 
@@ -397,25 +490,25 @@ function UserCard({
             {!confirmDelete ? (
               <button
                 onClick={() => setConfirmDelete(true)}
-                className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg border border-nativz-border text-text-muted hover:text-red-400 hover:border-red-400/30 hover:bg-red-500/5 transition-colors cursor-pointer ml-auto"
+                className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-nativz-border text-text-muted hover:text-red-400 hover:border-red-400/30 hover:bg-red-500/5 transition-colors cursor-pointer ml-auto"
               >
-                <Trash2 size={10} />
+                <Trash2 size={11} />
                 Delete
               </button>
             ) : (
               <div className="flex items-center gap-1.5 ml-auto bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1">
-                <span className="text-[11px] text-red-400">Delete {u.full_name}?</span>
+                <span className="text-xs text-red-400">Delete {u.full_name}?</span>
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
-                  className="text-[11px] text-red-400 font-medium hover:text-red-300 cursor-pointer"
+                  className="text-xs text-red-400 font-medium hover:text-red-300 cursor-pointer"
                 >
-                  {deleting ? <Loader2 size={10} className="animate-spin" /> : 'Yes'}
+                  {deleting ? <Loader2 size={11} className="animate-spin" /> : 'Yes'}
                 </button>
                 <span className="text-red-500/30">|</span>
                 <button
                   onClick={() => setConfirmDelete(false)}
-                  className="text-[11px] text-text-muted hover:text-text-secondary cursor-pointer"
+                  className="text-xs text-text-muted hover:text-text-secondary cursor-pointer"
                 >
                   No
                 </button>
@@ -427,26 +520,26 @@ function UserCard({
           {resetLink && (
             <div className="rounded-lg border border-nativz-border/50 p-2.5 space-y-1.5">
               <div className="flex items-center gap-1">
-                <Check size={10} className="text-emerald-400" />
-                <p className="text-[10px] text-emerald-400 font-medium">Reset link generated</p>
-                <button onClick={() => setResetLink(null)} className="ml-auto text-text-muted/40 hover:text-text-secondary cursor-pointer">
-                  <X size={10} />
+                <Check size={11} className="text-emerald-400" />
+                <p className="text-xs text-emerald-400 font-medium">Reset link generated</p>
+                <button onClick={() => setResetLink(null)} className="ml-auto text-text-muted hover:text-text-secondary cursor-pointer">
+                  <X size={11} />
                 </button>
               </div>
               <div className="flex items-center gap-1.5">
                 <input
                   readOnly
                   value={resetLink}
-                  className="flex-1 rounded-md border border-nativz-border/50 bg-surface-hover/50 px-2 py-1 text-[10px] text-text-primary font-mono truncate"
+                  className="flex-1 rounded-md border border-nativz-border/50 bg-surface-hover/50 px-2 py-1 text-xs text-text-primary font-mono truncate"
                 />
                 <button
                   onClick={handleCopyResetLink}
                   className="shrink-0 rounded-md p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
                 >
-                  {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                  {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                 </button>
               </div>
-              <p className="text-[10px] text-text-muted/40">Share this link with the user to reset their password</p>
+              <p className="text-xs text-text-muted">Share this link with the user to reset their password</p>
             </div>
           )}
         </div>
