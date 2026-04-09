@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { PLATFORM_CONFIG } from './platform-icon';
 import { PipelineStepper } from './pipeline-stepper';
+import { EncryptedText } from '@/components/ui/encrypted-text';
 import { toast } from 'sonner';
 
 interface SearchProcessingProps {
@@ -472,6 +473,18 @@ export function SearchProcessing({
           </h2>
           
         </div>
+
+        {/* Animated stage label — encrypted text reveal */}
+        {!done && !error && stages[stageIndex] && (
+          <div className="text-center mb-2">
+            <EncryptedText
+              key={`stage-${stageIndex}`}
+              text={stages[stageIndex].label}
+              revealDelayMs={40}
+              className="text-sm text-text-muted"
+            />
+          </div>
+        )}
 
         {/* Real-time pipeline stepper (primary view — reads actual DB state) */}
         {!done && !error && (
