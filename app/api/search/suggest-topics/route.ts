@@ -64,7 +64,9 @@ export async function POST(request: NextRequest) {
       .map(e => `- ${e.title}: ${(e.content ?? '').substring(0, 150)}`)
       .join('\n');
 
-    const prompt = `You are a short-form video content strategist. Generate 6 trending topic suggestions for this brand to research.
+    const prompt = `You are a TikTok/Reels content strategist for a marketing agency. Your job is to suggest research topics that will be typed into a trend research tool that searches TikTok, YouTube Shorts, Instagram Reels, Reddit, and the web.
+
+The goal is to find viral short-form video content that this specific brand could recreate or be inspired by. Topics should be BRAND-SPECIFIC content angles — not generic industry terms.
 
 BRAND:
 - Name: ${client.name}
@@ -73,15 +75,18 @@ BRAND:
 - Target audience: ${client.target_audience ?? 'unknown'}
 - Topic keywords: ${(client.topic_keywords ?? []).join(', ') || 'none'}
 
-${knowledgeContext ? `KNOWLEDGE BASE:\n${knowledgeContext}\n` : ''}
-${recentTopics.length > 0 ? `ALREADY RESEARCHED (avoid these):\n${recentTopics.map(t => `- ${t}`).join('\n')}\n` : ''}
+${knowledgeContext ? `BRAND KNOWLEDGE:\n${knowledgeContext}\n` : ''}
+${recentTopics.length > 0 ? `ALREADY RESEARCHED (do NOT repeat):\n${recentTopics.map(t => `- ${t}`).join('\n')}\n` : ''}
 
-Generate 6 topic suggestions that are:
-1. Specific enough to find trending content (2-5 words each)
-2. Relevant to the brand's industry and audience
-3. Likely to have active TikTok/Reels/Shorts content
-4. Different from already-researched topics
-5. Mix of evergreen and trending angles
+Generate 6 topics. Each must be:
+- A specific content angle this brand could film (not a broad category)
+- 2-5 words, written as a search query someone would type
+- Something likely to surface real TikTok/Reels videos when searched
+- Directly tied to what ${client.name} does, sells, or talks about
+- A mix of: behind-the-scenes angles, customer-facing content, trending formats, and educational hooks
+
+BAD examples (too generic): "moving tips", "cleaning hacks", "fitness motivation"
+GOOD examples (brand-specific): "day in the life moving crew", "satisfying junk removal before after", "gym owner morning routine"
 
 Return ONLY a JSON array of strings: ["topic 1", "topic 2", ...]`;
 
