@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Plug, UsersRound } from 'lucide-react';
+import { Loader2, Plug, UsersRound, Bell } from 'lucide-react';
 import { ConnectedAccounts } from '@/components/clients/connected-accounts';
 import { PortalAccessCard, DangerZone } from '@/components/clients/client-settings-section';
 import { SectionLabel } from '@/components/clients/client-profile-fields';
 import { ClientAccessServicesPanel } from '@/components/clients/client-access-services-panel';
+import { RevisionWebhookSettings } from '@/components/clients/revision-webhook-settings';
 
 type ClientPayload = {
   id: string;
@@ -83,6 +84,9 @@ export function ClientSettingsSubpage({ slug }: { slug: string }) {
       <ConnectedAccounts clientId={client.id} hasAffiliateIntegration={client.has_affiliate_integration} />
 
       <ClientAccessServicesPanel slug={slug} />
+
+      <SectionLabel icon={Bell} label="Notifications" />
+      <RevisionWebhookSettings clientId={client.id} />
 
       <SectionLabel icon={UsersRound} label="Portal users" />
       <PortalAccessCard clientId={client.id} />

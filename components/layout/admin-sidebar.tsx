@@ -15,8 +15,6 @@ import {
   Workflow,
   BotMessageSquare,
   ChevronRight,
-  Share2,
-  Handshake,
   ImagePlus,
   StickyNote,
   Brain,
@@ -26,6 +24,7 @@ import {
   Camera,
   Compass,
   Users,
+  ClipboardCheck,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
@@ -92,6 +91,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/search/new', label: 'Research', icon: Telescope },
       { href: '/admin/strategy-lab', label: 'Strategy lab', icon: Compass },
       { href: '/admin/ad-creatives', label: 'Ad creatives', icon: ImagePlus },
+      { href: '/admin/audit', label: 'Sales audit', icon: ClipboardCheck },
     ],
   },
   {
@@ -101,15 +101,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/team', label: 'Team', icon: UsersRound },
       { href: '/admin/users', label: 'Users', icon: Users },
       { href: '/admin/presentations', label: 'Notes', icon: StickyNote },
-      {
-        href: '/admin/analytics',
-        label: 'Analytics',
-        icon: BarChart3,
-        children: [
-          { href: '/admin/analytics/social', label: 'Social media', icon: Share2 },
-          { href: '/admin/analytics/affiliates', label: 'Affiliates', icon: Handshake },
-        ],
-      },
+      { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
       { href: '/admin/knowledge', label: 'Knowledge', icon: Brain },
     ],
   },

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
 import { getPostingService } from '@/lib/posting';
 import type { SocialPlatform } from '@/lib/posting/types';
+import { sendRevisionWebhook } from '@/lib/webhooks/revision-webhook';
 
 const FeedbackSchema = z.object({
   share_token: z.string().min(1),
@@ -104,6 +105,37 @@ export async function POST(request: NextRequest) {
     if (commentError || !comment) {
       console.error('Create comment error:', commentError);
       return NextResponse.json({ error: 'Failed to submit feedback' }, { status: 500 });
+    }
+
+    // Fire revision webhook if configured for this client
+    try {
+      const { data: clientRow } = await adminClient
+        .from('clients')
+        .select('name, revision_webhook_url')
+        .eq('id', shareLink.client_id)
+        .single();
+
+      if (clientRow?.revision_webhook_url) {
+        // Get the post caption for context
+        const { data: postForWebhook } = await adminClient
+          .from('scheduled_posts')
+          .select('caption')
+          .eq('id', parsed.data.post_id)
+          .single();
+
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+        void sendRevisionWebhook(clientRow.revision_webhook_url, {
+          clientName: clientRow.name,
+          postCaption: postForWebhook?.caption ?? 'No caption',
+          reviewerName: parsed.data.author_name,
+          comment: parsed.data.content,
+          status: parsed.data.status,
+          postUrl: `${appUrl}/shared/calendar/${parsed.data.share_token}`,
+        });
+      }
+    } catch (webhookErr) {
+      // Non-blocking — don't fail the feedback submission
+      console.error('[revision-webhook] Error dispatching:', webhookErr);
     }
 
     // When client approves a draft post, promote it to scheduled and sync to Late
