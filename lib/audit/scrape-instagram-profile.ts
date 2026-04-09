@@ -73,8 +73,10 @@ export async function scrapeInstagramProfile(profileUrl: string): Promise<Instag
   const runId = await startApifyActorRun(
     ACTOR_ID,
     {
+      urls: [`https://www.instagram.com/${username}/`],
       usernames: [username],
       resultsLimit: 30,
+      resultsType: 'posts',
     },
     apiKey,
   );
