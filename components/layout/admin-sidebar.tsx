@@ -155,6 +155,7 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/presentations',
   '/admin/shoots',
   '/admin/knowledge',
+  '/admin/audit',
 ]);
 
 /** Items shown but grayed out with "Coming soon" tooltip for viewers */

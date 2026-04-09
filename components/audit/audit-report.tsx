@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -14,19 +14,28 @@ import {
   BarChart3,
   RefreshCw,
   ExternalLink,
+  Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { EncryptedText } from '@/components/ui/encrypted-text';
+import { VideoGrid } from '@/components/research/video-grid';
 import { toast } from 'sonner';
-import type { ProspectData, CompetitorProfile, AuditScorecard, ScorecardItem, ScoreStatus } from '@/lib/audit/types';
+import type { PlatformReport, CompetitorProfile, AuditScorecard, ScorecardItem, ScoreStatus, WebsiteContext } from '@/lib/audit/types';
+import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
 
 interface AuditRecord {
   id: string;
-  tiktok_url: string;
   website_url: string | null;
+  tiktok_url: string;
   status: string;
-  prospect_data: ProspectData | null;
+  prospect_data: {
+    websiteContext?: WebsiteContext | null;
+    platforms?: PlatformReport[];
+    detectedSocialLinks?: { platform: string; url: string; username: string }[];
+  } | null;
   competitors_data: CompetitorProfile[] | null;
   scorecard: AuditScorecard | null;
+  videos_data: TopicSearchVideoRow[] | null;
   error_message: string | null;
   created_at: string;
 }
@@ -43,10 +52,24 @@ const STATUS_ICONS: Record<ScoreStatus, typeof CheckCircle> = {
   poor: XCircle,
 };
 
+const PROCESSING_STAGES = [
+  'Crawling website',
+  'Extracting brand identity',
+  'Finding social media profiles',
+  'Scraping TikTok posts',
+  'Analyzing engagement metrics',
+  'Discovering competitors',
+  'Scraping competitor profiles',
+  'Generating audit scorecard',
+];
+
 export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const router = useRouter();
   const [audit, setAudit] = useState(initialAudit);
   const [processing, setProcessing] = useState(false);
+  const [stageIndex, setStageIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
 
   // Auto-start processing for pending audits
   useEffect(() => {
@@ -56,10 +79,25 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Poll for completion when processing
+  // Poll for completion + animate progress when processing
   useEffect(() => {
     if (audit.status !== 'processing') return;
-    const interval = setInterval(async () => {
+    const startTime = Date.now();
+
+    const progressInterval = setInterval(() => {
+      const elapsedMs = Date.now() - startTime;
+      setElapsed(Math.floor(elapsedMs / 1000));
+
+      // Advance stage every ~15s, cap at second-to-last
+      const stage = Math.min(PROCESSING_STAGES.length - 2, Math.floor(elapsedMs / 15000));
+      setStageIndex(stage);
+
+      // Progress: advance smoothly to 90%, never pass it until done
+      const pct = Math.min(90, (elapsedMs / 180000) * 90);
+      setProgress(pct);
+    }, 500);
+
+    const pollInterval = setInterval(async () => {
       try {
         const res = await fetch(`/api/audit/${audit.id}`);
         if (res.ok) {
@@ -67,15 +105,24 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           if (data.audit.status !== 'processing') {
             setAudit(data.audit);
             setProcessing(false);
+            setProgress(100);
+            setStageIndex(PROCESSING_STAGES.length - 1);
           }
         }
       } catch { /* ignore */ }
     }, 3000);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(progressInterval);
+      clearInterval(pollInterval);
+    };
   }, [audit.id, audit.status]);
 
   async function startProcessing() {
     setProcessing(true);
+    setProgress(0);
+    setStageIndex(0);
+    setElapsed(0);
     setAudit(prev => ({ ...prev, status: 'processing' }));
     try {
       const res = await fetch(`/api/audit/${audit.id}/process`, { method: 'POST' });
@@ -83,36 +130,64 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         const data = await res.json();
         toast.error(data.error ?? 'Processing failed');
       }
-      // Poll will pick up the result
     } catch {
       toast.error('Failed to start processing');
       setProcessing(false);
     }
   }
 
-  const prospect = audit.prospect_data;
+  function formatElapsed(s: number): string {
+    if (s < 60) return `${s}s`;
+    return `${Math.floor(s / 60)}m ${s % 60}s`;
+  }
+
+  const platforms = audit.prospect_data?.platforms ?? [];
+  const websiteContext = audit.prospect_data?.websiteContext ?? null;
   const competitors = audit.competitors_data ?? [];
   const scorecard = audit.scorecard;
+  const videos = (audit.videos_data ?? []) as TopicSearchVideoRow[];
 
-  // Processing state
+  // Processing state — matches research processing page
   if (audit.status === 'processing' || audit.status === 'pending') {
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="text-center max-w-md">
-          <div className="relative mx-auto mb-6 h-16 w-16">
-            <Loader2 size={64} className="animate-spin text-accent-text" />
+      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 animate-fade-slide-in">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <h2 className="text-xl font-semibold text-text-primary">
+              Auditing {audit.website_url ? `"${audit.website_url.replace(/^https?:\/\//, '').replace(/\/$/, '')}"` : 'prospect'}
+            </h2>
           </div>
-          <h2 className="text-lg font-semibold text-text-primary">Analyzing prospect</h2>
-          <p className="mt-2 text-sm text-text-muted">
-            Scraping TikTok profile, identifying competitors, and generating your audit report. This usually takes 1-2 minutes.
-          </p>
-          <div className="mt-6 space-y-2">
-            {['Scraping TikTok profile', 'Crawling website', 'Discovering competitors', 'Analyzing engagement', 'Generating scorecard'].map((step, i) => (
-              <div key={step} className="flex items-center gap-2 text-sm text-text-muted">
-                <div className="h-1.5 w-1.5 rounded-full bg-accent-text/40 animate-pulse" style={{ animationDelay: `${i * 200}ms` }} />
-                {step}
-              </div>
-            ))}
+
+          {/* Encrypted text stage label */}
+          <div className="text-center mb-4">
+            <EncryptedText
+              key={`stage-${stageIndex}`}
+              text={PROCESSING_STAGES[stageIndex]}
+              revealDelayMs={40}
+              className="text-sm text-text-muted"
+            />
+          </div>
+
+          {/* Progress bar */}
+          <div className="h-1.5 rounded-full bg-surface-hover overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-300 ease-out"
+              style={{
+                width: `${progress}%`,
+                background: 'linear-gradient(90deg, var(--accent), var(--accent2))',
+              }}
+            />
+          </div>
+
+          <div className="mt-1.5 flex items-center justify-between">
+            <span className="text-xs text-text-muted tabular-nums">{formatElapsed(elapsed)} elapsed</span>
+            <span className="text-xs text-text-muted tabular-nums">{Math.round(progress)}%</span>
+          </div>
+
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => router.push('/admin/audit')}>
+              <ArrowLeft size={12} /> Go back
+            </Button>
           </div>
         </div>
       </div>
@@ -122,7 +197,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   // Error state
   if (audit.status === 'failed') {
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4">
         <div className="text-center max-w-md">
           <XCircle size={48} className="text-red-400 mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-text-primary">Audit failed</h2>
@@ -141,6 +216,8 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   }
 
   // Completed — show report
+  const primaryPlatform = platforms[0];
+
   return (
     <div className="space-y-6 p-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -150,10 +227,11 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         </Button>
         <div className="flex-1">
           <h1 className="text-xl font-semibold text-text-primary">
-            Prospect audit: {prospect?.profile?.displayName ?? 'Unknown'}
+            Prospect audit{websiteContext ? `: ${websiteContext.title}` : ''}
           </h1>
           <p className="text-sm text-text-muted mt-0.5">
-            @{prospect?.profile?.username} · {new Date(audit.created_at).toLocaleDateString()}
+            {audit.website_url && <span>{audit.website_url.replace(/^https?:\/\//, '')} · </span>}
+            {platforms.length} platform{platforms.length !== 1 ? 's' : ''} analyzed · {new Date(audit.created_at).toLocaleDateString()}
           </p>
         </div>
         {scorecard && (
@@ -169,46 +247,64 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         )}
       </div>
 
-      {/* Prospect overview card */}
-      {prospect && (
+      {/* Website context card */}
+      {websiteContext && (
         <div className="rounded-xl border border-nativz-border bg-surface p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Globe size={16} className="text-text-muted" />
+            <h3 className="text-sm font-semibold text-text-primary">Brand overview</h3>
+          </div>
+          <p className="text-sm text-text-secondary">{websiteContext.description}</p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <span className="text-xs bg-accent-surface/20 text-accent-text px-2.5 py-1 rounded-full">{websiteContext.industry}</span>
+            {websiteContext.keywords.slice(0, 5).map(kw => (
+              <span key={kw} className="text-xs bg-surface-hover text-text-muted px-2.5 py-1 rounded-full">{kw}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Platform reports — one card per platform */}
+      {platforms.map((platform) => (
+        <div key={platform.platform} className="rounded-xl border border-nativz-border bg-surface p-5">
           <div className="flex items-start gap-4">
-            {prospect.profile.avatarUrl && (
+            {platform.profile.avatarUrl && (
               <img
-                src={prospect.profile.avatarUrl}
-                alt={prospect.profile.displayName}
-                className="h-16 w-16 rounded-full object-cover"
+                src={platform.profile.avatarUrl}
+                alt={platform.profile.displayName}
+                className="h-14 w-14 rounded-full object-cover"
               />
             )}
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-text-primary">{prospect.profile.displayName}</h2>
-                {prospect.profile.verified && (
+                <h2 className="text-lg font-semibold text-text-primary">{platform.profile.displayName}</h2>
+                <span className="text-xs bg-pink-500/10 text-pink-400 px-2 py-0.5 rounded-full capitalize">{platform.platform}</span>
+                {platform.profile.verified && (
                   <CheckCircle size={16} className="text-accent-text" />
                 )}
               </div>
               <a
-                href={prospect.profile.profileUrl}
+                href={platform.profile.profileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm text-accent-text hover:underline flex items-center gap-1"
               >
-                @{prospect.profile.username} <ExternalLink size={12} />
+                @{platform.profile.username} <ExternalLink size={12} />
               </a>
-              {prospect.profile.bio && (
-                <p className="mt-2 text-sm text-text-secondary">{prospect.profile.bio}</p>
+              {platform.profile.bio && (
+                <p className="mt-2 text-sm text-text-secondary">{platform.profile.bio}</p>
               )}
             </div>
           </div>
 
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard icon={Users} label="Followers" value={formatNumber(prospect.profile.followers)} />
-            <StatCard icon={Eye} label="Avg views" value={formatNumber(prospect.avgViews)} />
-            <StatCard icon={TrendingUp} label="Engagement" value={`${(prospect.engagementRate * 100).toFixed(2)}%`} />
-            <StatCard icon={BarChart3} label="Frequency" value={prospect.postingFrequency} />
+            <StatCard icon={Users} label="Followers" value={formatNumber(platform.profile.followers)} />
+            <StatCard icon={Eye} label="Avg views" value={formatNumber(platform.avgViews)} />
+            <StatCard icon={TrendingUp} label="Engagement" value={`${(platform.engagementRate * 100).toFixed(2)}%`} />
+            <StatCard icon={BarChart3} label="Frequency" value={platform.postingFrequency} />
           </div>
         </div>
-      )}
+      ))}
 
       {/* Summary */}
       {scorecard?.summary && (
@@ -281,6 +377,19 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           </div>
         </div>
       )}
+
+      {/* Source browser — VideoGrid from research */}
+      {videos.length > 0 && (
+        <div className="rounded-xl border border-nativz-border bg-surface p-5">
+          <h3 className="text-sm font-semibold text-text-primary mb-4">Source content</h3>
+          <VideoGrid
+            videos={videos}
+            searchId={audit.id}
+            defaultClientId={null}
+            enableInlineVideoAnalysis={false}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -296,13 +405,9 @@ function ScorecardRow({ item }: { item: ScorecardItem }) {
           <ProspectIcon size={14} className={prospectStyle.text} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h4 className="text-sm font-medium text-text-primary">{item.label}</h4>
-          </div>
+          <h4 className="text-sm font-medium text-text-primary">{item.label}</h4>
           <p className="text-xs text-text-secondary mt-0.5">{item.prospectValue}</p>
           <p className="text-xs text-text-muted mt-1">{item.description}</p>
-
-          {/* Competitor comparison */}
           {item.competitors.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {item.competitors.map((comp) => {

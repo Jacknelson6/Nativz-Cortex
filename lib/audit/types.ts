@@ -1,6 +1,9 @@
 /** Types for the Sales Audit feature */
 
+export type AuditPlatform = 'tiktok' | 'instagram' | 'facebook' | 'youtube' | 'linkedin';
+
 export interface ProspectProfile {
+  platform: AuditPlatform;
   username: string;
   displayName: string;
   bio: string;
@@ -15,6 +18,7 @@ export interface ProspectProfile {
 
 export interface ProspectVideo {
   id: string;
+  platform: AuditPlatform;
   description: string;
   views: number;
   likes: number;
@@ -25,15 +29,11 @@ export interface ProspectVideo {
   publishDate: string | null;
   hashtags: string[];
   url: string;
-}
-
-export interface ProspectData {
-  profile: ProspectProfile;
-  recentVideos: ProspectVideo[];
-  websiteContext: WebsiteContext | null;
-  engagementRate: number;
-  avgViews: number;
-  postingFrequency: string;
+  thumbnailUrl: string | null;
+  authorUsername: string;
+  authorDisplayName: string | null;
+  authorAvatar: string | null;
+  authorFollowers: number;
 }
 
 export interface WebsiteContext {
@@ -42,11 +42,28 @@ export interface WebsiteContext {
   description: string;
   industry: string;
   keywords: string[];
+  socialLinks: SocialLink[];
+}
+
+export interface SocialLink {
+  platform: AuditPlatform;
+  url: string;
+  username: string;
+}
+
+export interface PlatformReport {
+  platform: AuditPlatform;
+  profile: ProspectProfile;
+  videos: ProspectVideo[];
+  engagementRate: number;
+  avgViews: number;
+  postingFrequency: string;
 }
 
 export interface CompetitorProfile {
   username: string;
   displayName: string;
+  platform: AuditPlatform;
   followers: number;
   avatarUrl: string | null;
   profileUrl: string;
@@ -78,7 +95,8 @@ export interface AuditScorecard {
 }
 
 export interface AuditReport {
-  prospect: ProspectData;
+  websiteContext: WebsiteContext | null;
+  platforms: PlatformReport[];
   competitors: CompetitorProfile[];
   scorecard: AuditScorecard;
 }

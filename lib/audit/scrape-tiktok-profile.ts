@@ -1,23 +1,21 @@
 /**
- * Scrape a TikTok profile using Apify to get profile data + recent videos.
- * Uses the clockworks/free-tiktok-scraper actor.
+ * Scrape a TikTok profile using Apify raw fetch API (no SDK — avoids proxy-agent issue on Vercel).
  */
 
-import { ApifyClient } from 'apify-client';
+import { startApifyActorRun, waitForApifyRunSuccess, fetchApifyDatasetItems } from '@/lib/tiktok/apify-run';
 import type { ProspectProfile, ProspectVideo } from './types';
 
 const ACTOR_ID = 'clockworks/free-tiktok-scraper';
 
-function getApifyClient(): ApifyClient {
+function getApiKey(): string {
   const token = process.env.APIFY_API_KEY;
   if (!token) throw new Error('APIFY_API_KEY is required for TikTok scraping');
-  return new ApifyClient({ token });
+  return token;
 }
 
 /** Extract username from a TikTok URL like tiktok.com/@username */
 export function extractTikTokUsername(url: string): string | null {
   const cleaned = url.trim();
-  // Direct username (no URL)
   if (/^@?[\w.]+$/.test(cleaned)) {
     return cleaned.replace(/^@/, '');
   }
@@ -32,17 +30,6 @@ export function extractTikTokUsername(url: string): string | null {
 
 interface TikTokProfileItem {
   id?: string;
-  uniqueId?: string;
-  nickname?: string;
-  signature?: string;
-  verified?: boolean;
-  avatarThumb?: string;
-  avatarMedium?: string;
-  fans?: number;
-  following?: number;
-  heart?: number;
-  videoCount?: number;
-  // Video fields (when scraping user's videos)
   text?: string;
   desc?: string;
   diggCount?: number;
@@ -79,49 +66,53 @@ export async function scrapeTikTokProfile(profileUrl: string): Promise<TikTokPro
   const username = extractTikTokUsername(profileUrl);
   if (!username) throw new Error(`Could not extract username from: ${profileUrl}`);
 
-  const client = getApifyClient();
+  const apiKey = getApiKey();
 
-  console.log(`[audit] Scraping TikTok profile @${username} via Apify`);
+  console.log(`[audit] Scraping TikTok profile @${username} via Apify (raw fetch)`);
 
-  const run = await client.actor(ACTOR_ID).call(
+  const runId = await startApifyActorRun(
+    ACTOR_ID,
     {
       profiles: [username],
       resultsPerPage: 30,
       shouldDownloadCovers: false,
       shouldDownloadVideos: false,
     },
-    { waitSecs: 120 },
+    apiKey,
   );
 
-  const { items } = await client.dataset(run.defaultDatasetId).listItems();
-  const rawItems = items as TikTokProfileItem[];
+  if (!runId) throw new Error(`Failed to start Apify actor for @${username}`);
 
-  if (rawItems.length === 0) {
+  const success = await waitForApifyRunSuccess(runId, apiKey, 120000, 3000);
+  if (!success) throw new Error(`Apify scrape timed out for @${username}`);
+
+  const items = await fetchApifyDatasetItems(runId, apiKey, 50) as TikTokProfileItem[];
+  if (items.length === 0) {
     throw new Error(`No data returned for @${username}. The profile may be private or not exist.`);
   }
 
-  // Extract profile info from authorMeta of first video, or from profile-level fields
-  const firstItem = rawItems[0];
+  const firstItem = items[0];
   const authorMeta = firstItem.authorMeta;
 
   const profile: ProspectProfile = {
-    username: authorMeta?.name ?? firstItem.uniqueId ?? username,
-    displayName: authorMeta?.nickName ?? firstItem.nickname ?? username,
-    bio: authorMeta?.signature ?? firstItem.signature ?? '',
-    followers: authorMeta?.fans ?? firstItem.fans ?? 0,
-    following: authorMeta?.following ?? firstItem.following ?? 0,
-    likes: authorMeta?.heart ?? firstItem.heart ?? 0,
-    postsCount: authorMeta?.video ?? firstItem.videoCount ?? 0,
-    avatarUrl: authorMeta?.avatar ?? firstItem.avatarMedium ?? firstItem.avatarThumb ?? null,
+    platform: 'tiktok',
+    username: authorMeta?.name ?? username,
+    displayName: authorMeta?.nickName ?? username,
+    bio: authorMeta?.signature ?? '',
+    followers: authorMeta?.fans ?? 0,
+    following: authorMeta?.following ?? 0,
+    likes: authorMeta?.heart ?? 0,
+    postsCount: authorMeta?.video ?? 0,
+    avatarUrl: authorMeta?.avatar ?? null,
     profileUrl: `https://www.tiktok.com/@${authorMeta?.name ?? username}`,
-    verified: authorMeta?.verified ?? firstItem.verified ?? false,
+    verified: authorMeta?.verified ?? false,
   };
 
-  // Map videos
-  const videos: ProspectVideo[] = rawItems
+  const videos: ProspectVideo[] = items
     .filter(item => item.id || item.text || item.desc)
     .map(item => ({
       id: item.id ?? '',
+      platform: 'tiktok' as const,
       description: item.text ?? item.desc ?? '',
       views: item.playCount ?? 0,
       likes: item.diggCount ?? 0,
@@ -132,10 +123,14 @@ export async function scrapeTikTokProfile(profileUrl: string): Promise<TikTokPro
       publishDate: item.createTimeISO ?? (item.createTime ? new Date(item.createTime * 1000).toISOString() : null),
       hashtags: (item.hashtags ?? []).map(h => h.name).filter((n): n is string => !!n),
       url: item.webVideoUrl ?? item.videoUrl ?? `https://www.tiktok.com/@${username}/video/${item.id}`,
+      thumbnailUrl: item.covers?.default ?? item.covers?.origin ?? null,
+      authorUsername: authorMeta?.name ?? username,
+      authorDisplayName: authorMeta?.nickName ?? null,
+      authorAvatar: authorMeta?.avatar ?? null,
+      authorFollowers: authorMeta?.fans ?? 0,
     }))
     .slice(0, 30);
 
   console.log(`[audit] Scraped @${username}: ${profile.followers} followers, ${videos.length} videos`);
-
   return { profile, videos };
 }
