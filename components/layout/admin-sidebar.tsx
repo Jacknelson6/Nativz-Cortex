@@ -90,7 +90,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/search/new', label: 'Research', icon: Telescope },
       { href: '/admin/strategy-lab', label: 'Strategy lab', icon: Compass },
       { href: '/admin/ad-creatives', label: 'Ad creatives', icon: ImagePlus },
-      { href: '/admin/audit', label: 'Sales audit', icon: ClipboardCheck },
+      { href: '/admin/audit', label: 'Audit', icon: ClipboardCheck },
     ],
   },
   {
