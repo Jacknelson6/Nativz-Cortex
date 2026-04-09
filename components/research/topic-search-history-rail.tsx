@@ -23,6 +23,8 @@ interface TopicSearchHistoryRailProps {
   onStrategyLabSelectionChange?: (payload: { ids: string[]; clientId: string | null }) => void;
   /** Hide client line in rows; show under ⋯ instead (research hub). */
   hideClientInSidebar?: boolean;
+  /** Filter to only show items for this client ID. */
+  filterClientId?: string | null;
   /** User folders + ChatGPT-style rail sections. */
   enableFolders?: boolean;
 }
@@ -39,6 +41,7 @@ export function TopicSearchHistoryRail({
   enableStrategyLabBulkSelect = false,
   onStrategyLabSelectionChange,
   hideClientInSidebar = false,
+  filterClientId = null,
   enableFolders = false,
 }: TopicSearchHistoryRailProps) {
   return (
@@ -55,6 +58,7 @@ export function TopicSearchHistoryRail({
           enableStrategyLabBulkSelect={enableStrategyLabBulkSelect}
           onStrategyLabSelectionChange={onStrategyLabSelectionChange}
           hideClientInSidebar={hideClientInSidebar}
+          filterClientId={filterClientId}
           enableFolders={enableFolders}
         />
       </div>
@@ -107,6 +111,7 @@ export function TopicSearchHistoryRail({
               enableStrategyLabBulkSelect={enableStrategyLabBulkSelect}
               onStrategyLabSelectionChange={onStrategyLabSelectionChange}
               hideClientInSidebar={hideClientInSidebar}
+              filterClientId={filterClientId}
               enableFolders={enableFolders}
             />
           </div>

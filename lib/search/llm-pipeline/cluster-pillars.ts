@@ -94,7 +94,7 @@ Rules:
 - avg_engagement_rate: calculate from the ER values of videos in that cluster. Express as percentage points (e.g. 2.4 means 2.4%).
 - pct_of_content must sum to 100.
 - video_ids must reference actual video IDs from the input.
-- IMPORTANT: If any videos feature someone on camera reacting to content, commenting on industry topics, or giving expert takes (talking head / reaction format), group those into a "Talking head & reaction takes" pillar. This format — where an authority figure reacts, critiques, or explains something on camera — is a high-performing top-of-funnel style. Include it when relevant videos exist, even if it's a smaller cluster.`;
+- IMPORTANT: Always consider "Talking head & reaction takes" as a potential pillar. This format — where an authority figure reacts to content, critiques competitors, explains industry topics, or gives expert takes on camera — is a high-performing top-of-funnel format. If ANY videos feature someone speaking to camera, reacting, or giving commentary, cluster them here. Prefer this pillar over generic ones like "promotional content", "brand promos", or "action footage". The talking head format includes: expert reactions, stitch/duet responses, "this is what they're doing wrong", opinion pieces, and educational commentary.`;
 
   const ai = await createCompletion({
     messages: [{ role: 'user', content: prompt }],

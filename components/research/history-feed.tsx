@@ -80,6 +80,8 @@ interface HistoryFeedProps {
   onStrategyLabSelectionChange?: (payload: { ids: string[]; clientId: string | null }) => void;
   /** Research hub rail: hide client line in rows; show client in ⋯ menu instead. */
   hideClientInSidebar?: boolean;
+  /** Filter history to only show items for this client. When set, load-more also filters server-side. */
+  filterClientId?: string | null;
   /** Research hub rail: folders + infinite scroll styling. */
   enableFolders?: boolean;
 }
@@ -381,6 +383,7 @@ export function HistoryFeed({
   enableStrategyLabBulkSelect = false,
   onStrategyLabSelectionChange,
   hideClientInSidebar = false,
+  filterClientId = null,
   enableFolders = false,
 }: HistoryFeedProps) {
   const sidebar = variant === 'sidebar';
@@ -415,7 +418,7 @@ export function HistoryFeed({
       serverHistoryCount >=
       (includeIdeas ? 10 : TOPIC_SEARCH_HUB_HISTORY_LIMIT);
     setHasMore(fullFirstBatch);
-  }, [historyResetKey, serverHistoryCount, includeIdeas]);
+  }, [historyResetKey, serverHistoryCount, includeIdeas, filterClientId]);
 
   useEffect(() => {
     try {
@@ -550,6 +553,7 @@ export function HistoryFeed({
         cursor: oldest,
       });
       if (!includeIdeas) params.set('include_ideas', 'false');
+      if (filterClientId) params.set('client_id', filterClientId);
       const res = await fetch(`/api/research/history?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to load');
       const data = (await res.json()) as { items?: HistoryItem[] };
@@ -567,7 +571,7 @@ export function HistoryFeed({
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMore, includeIdeas, items, loadedMore, loadingMore]);
+  }, [hasMore, includeIdeas, items, loadedMore, loadingMore, filterClientId]);
 
   loadMoreRef.current = loadMore;
 

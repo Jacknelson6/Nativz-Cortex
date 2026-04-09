@@ -190,6 +190,7 @@ export function ResearchHub({
               enableStrategyLabBulkSelect
               onStrategyLabSelectionChange={handleStrategyLabSelectionChange}
               hideClientInSidebar
+              filterClientId={selectedClientId}
             />
           </aside>
         </div>
