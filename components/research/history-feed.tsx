@@ -1000,12 +1000,7 @@ export function HistoryFeed({
           )}
         >
           {isProcessing && (
-            <>
-              <Loader2 size={14} className="animate-spin text-text-muted" />
-              <Badge variant="default" className={cn('px-1.5 py-0', sidebar ? 'text-xs' : 'text-[10px]')}>
-                Processing
-              </Badge>
-            </>
+            <Loader2 size={14} className="animate-spin text-text-muted self-center" />
           )}
           {item.status === 'failed' && <Badge variant="danger">Failed</Badge>}
           <DropdownMenu modal={false}>
