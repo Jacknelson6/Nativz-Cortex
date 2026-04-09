@@ -191,14 +191,14 @@ export function AuditHub({ audits: initialAudits, userFirstName }: AuditHubProps
             </p>
           </div>
 
-          {/* Input form — mirrors research topic form style */}
-          <div className="mx-auto mt-5 w-full overflow-hidden rounded-[1.75rem] border border-nativz-border bg-surface-hover/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_32px_-12px_rgba(0,0,0,0.45)] transition-colors focus-within:border-accent/35 focus-within:bg-surface-hover/50 focus-within:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(91,163,230,0.12),0_12px_40px_-16px_rgba(0,0,0,0.5)]">
+          {/* Input — clean single-line with inline submit button */}
+          <div className="mx-auto mt-6 w-full max-w-lg relative flex items-center rounded-xl border border-nativz-border bg-surface transition-colors focus-within:border-accent/40">
             <input
               type="text"
               value={websiteUrl}
               onChange={(e) => setWebsiteUrl(e.target.value)}
-              placeholder="Paste website URL (e.g. acme.com)"
-              className="w-full min-h-[3.25rem] border-0 bg-transparent px-4 pt-4 pb-2 text-sm font-normal leading-relaxed text-foreground placeholder:text-text-muted/80 focus:outline-none md:min-h-[3.5rem] md:px-5 md:pt-5 md:text-base"
+              placeholder="https://example.com"
+              className="w-full bg-transparent px-4 py-3 pr-12 text-sm text-text-primary placeholder:text-text-muted/60 focus:outline-none md:text-base"
               autoComplete="off"
               autoFocus
               onKeyDown={(e) => {
@@ -209,67 +209,69 @@ export function AuditHub({ audits: initialAudits, userFirstName }: AuditHubProps
                 }
               }}
             />
+            <button
+              type="button"
+              onClick={() => {
+                if (!showSocials && websiteUrl.trim()) setShowSocials(true);
+                else void handleStart();
+              }}
+              disabled={!isValid || loading}
+              className="absolute right-2 flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              {loading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <ArrowRight size={16} strokeWidth={2.5} />
+              )}
+            </button>
+          </div>
 
-            {/* Social URL inputs — expandable */}
-            {showSocials && (
-              <div className="border-t border-nativz-border/60 px-4 py-3 space-y-2 md:px-5">
-                <p className="text-xs text-text-muted mb-2">
-                  Social profiles found on the website will be scraped automatically. Add any missing ones below:
+          {/* Social URL inputs — expandable below the main input */}
+          {showSocials && (
+            <div className="mx-auto mt-3 w-full max-w-lg rounded-xl border border-nativz-border bg-surface p-4 space-y-2">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs text-text-muted">
+                  Add social profiles (optional — we also detect them from the website)
                 </p>
-                {(['tiktok', 'instagram', 'facebook', 'youtube'] as AuditPlatform[]).map(platform => (
-                  <div key={platform} className="flex items-center gap-2">
-                    <span className="text-xs text-text-muted w-20 shrink-0">{PLATFORM_LABELS[platform]}</span>
-                    <input
-                      type="text"
-                      value={socialUrls[platform] ?? ''}
-                      onChange={(e) => setSocialUrl(platform, e.target.value)}
-                      placeholder={`${platform}.com/@ or profile URL`}
-                      className="flex-1 rounded-lg border border-nativz-border/60 bg-transparent px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40"
-                    />
-                  </div>
-                ))}
+                <button onClick={() => setShowSocials(false)} className="text-text-muted hover:text-text-secondary cursor-pointer">
+                  <X size={14} />
+                </button>
               </div>
-            )}
-
-            <div className="flex items-center gap-2 border-t border-nativz-border/60 px-3 pb-3 pt-2">
-              <div className="flex min-w-0 flex-1 items-center gap-2 py-0.5">
-                {!showSocials && websiteUrl.trim() && (
-                  <button
-                    type="button"
-                    onClick={() => setShowSocials(true)}
-                    className="inline-flex shrink-0 h-9 items-center gap-2 rounded-full border border-nativz-border bg-surface-hover/80 px-3 text-xs font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover"
-                  >
-                    <Plus size={15} className="text-text-muted" />
-                    <span>Add social profiles</span>
-                  </button>
-                )}
-                {websiteUrl.trim() && (
-                  <span className="inline-flex shrink-0 h-9 items-center gap-2 rounded-full border border-accent/30 bg-accent-surface/20 px-3 text-xs font-medium text-accent-text">
-                    <Globe size={15} />
-                    <span className="truncate max-w-[10rem]">
-                      {extractDomain(websiteUrl)}
-                    </span>
-                  </span>
-                )}
-              </div>
-
+              {(['tiktok', 'instagram', 'facebook', 'youtube'] as AuditPlatform[]).map(platform => (
+                <div key={platform} className="flex items-center gap-2">
+                  <span className="text-xs text-text-muted w-20 shrink-0">{PLATFORM_LABELS[platform]}</span>
+                  <input
+                    type="text"
+                    value={socialUrls[platform] ?? ''}
+                    onChange={(e) => setSocialUrl(platform, e.target.value)}
+                    placeholder={`${platform}.com/@username`}
+                    className="flex-1 rounded-lg border border-nativz-border/60 bg-transparent px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40"
+                  />
+                </div>
+              ))}
               <button
                 type="button"
-                onClick={() => {
-                  if (!showSocials && websiteUrl.trim()) setShowSocials(true);
-                  else void handleStart();
-                }}
+                onClick={() => void handleStart()}
                 disabled={!isValid || loading}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/40 bg-accent text-white shadow-[0_0_24px_-6px_rgba(91,163,230,0.55)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9"
+                className="mt-2 w-full rounded-lg bg-accent py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:opacity-40"
               >
-                {loading ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <ArrowRight size={18} strokeWidth={2.25} />
-                )}
+                {loading ? 'Starting...' : 'Start audit'}
               </button>
             </div>
-          </div>
+          )}
+
+          {/* Add social profiles link */}
+          {!showSocials && websiteUrl.trim() && (
+            <div className="mt-2 text-center">
+              <button
+                type="button"
+                onClick={() => setShowSocials(true)}
+                className="text-xs text-text-muted hover:text-accent-text transition-colors cursor-pointer"
+              >
+                + Add social profiles manually
+              </button>
+            </div>
+          )}
 
           {error && (
             <p className="mt-4 text-center text-sm text-red-400">{error}</p>
