@@ -34,6 +34,7 @@ export function ResearchHub({
     ids: string[];
     clientId: string | null;
   }>({ ids: [], clientId: null });
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const prevHistoryRef = useRef(historyItems);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -97,10 +98,11 @@ export function ResearchHub({
   }, [optimisticItems, historyItems, router]);
 
   /** Stable array identity when contents unchanged — avoids HistoryFeed strategy-lab sync loops. */
-  const allItems = useMemo(
-    () => [...optimisticItems, ...historyItems],
-    [optimisticItems, historyItems],
-  );
+  const allItems = useMemo(() => {
+    const combined = [...optimisticItems, ...historyItems];
+    if (!selectedClientId) return combined;
+    return combined.filter(item => item.clientId === selectedClientId || !item.clientId);
+  }, [optimisticItems, historyItems, selectedClientId]);
 
   const handleResearchStarted = useCallback((item: {
     id: string;
@@ -165,6 +167,7 @@ export function ResearchHub({
                 userFirstName={userFirstName}
                 strategyLabBulkSelection={strategyLabBulkSelection}
                 onStarted={handleResearchStarted}
+                onClientChange={setSelectedClientId}
               />
             </div>
           </div>
@@ -187,7 +190,6 @@ export function ResearchHub({
               enableStrategyLabBulkSelect
               onStrategyLabSelectionChange={handleStrategyLabSelectionChange}
               hideClientInSidebar
-              enableFolders
             />
           </aside>
         </div>

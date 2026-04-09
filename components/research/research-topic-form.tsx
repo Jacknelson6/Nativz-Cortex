@@ -46,6 +46,8 @@ interface ResearchTopicFormProps {
   }) => void;
   /** Topic searches selected in the History rail to merge into Strategy lab for that client. */
   strategyLabBulkSelection?: { ids: string[]; clientId: string | null };
+  /** Called when the selected client changes (for filtering history rail) */
+  onClientChange?: (clientId: string | null) => void;
   /** Portal mode: lock to a specific client, hide client picker, redirect to /portal */
   portalMode?: boolean;
   fixedClientId?: string | null;
@@ -98,6 +100,7 @@ export function ResearchTopicForm({
   userFirstName,
   onStarted,
   strategyLabBulkSelection,
+  onClientChange,
   portalMode = false,
   fixedClientId = null,
   fixedClientName = null,
@@ -175,6 +178,7 @@ export function ResearchTopicForm({
       setContextMode('client');
       setUrl('');
       setBrandPopoverOpen(false);
+      onClientChange?.(id);
     }
 
     function clearBrand() {
@@ -182,6 +186,7 @@ export function ResearchTopicForm({
       setClientId(null);
       setUrl('');
       setContextSearch('');
+      onClientChange?.(null);
     }
 
     const step1Valid =
