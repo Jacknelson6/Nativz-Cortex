@@ -191,14 +191,16 @@ export function AuditHub({ audits: initialAudits, userFirstName }: AuditHubProps
             </p>
           </div>
 
-          {/* Input — single line with inline submit button */}
-          <div className="mx-auto mt-6 w-full max-w-lg flex items-center gap-2 rounded-xl border border-nativz-border bg-surface px-3 transition-colors focus-within:border-accent/40">
+          {/* Input — single compact row with inline arrow button */}
+          <div
+            className="mx-auto mt-6 w-full max-w-lg flex items-center rounded-xl border border-nativz-border bg-surface pl-4 pr-2 transition-colors focus-within:border-accent/40"
+          >
             <input
               type="text"
               value={websiteUrl}
               onChange={(e) => setWebsiteUrl(e.target.value)}
               placeholder="https://example.com"
-              className="flex-1 bg-transparent py-3 text-sm text-text-primary placeholder:text-text-muted/60 focus:outline-none md:text-base"
+              className="min-w-0 flex-1 bg-transparent py-3 text-sm text-text-primary placeholder:text-text-muted/60 focus:outline-none md:text-base"
               autoComplete="off"
               autoFocus
               onKeyDown={(e) => {
@@ -216,7 +218,7 @@ export function AuditHub({ audits: initialAudits, userFirstName }: AuditHubProps
                 else void handleStart();
               }}
               disabled={!isValid || loading}
-              className="shrink-0 flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-30"
+              className="ml-2 shrink-0 flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-30"
             >
               {loading ? (
                 <Loader2 size={16} className="animate-spin" />
