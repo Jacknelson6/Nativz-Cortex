@@ -64,9 +64,7 @@ export async function POST(request: NextRequest) {
       .map(e => `- ${e.title}: ${(e.content ?? '').substring(0, 150)}`)
       .join('\n');
 
-    const prompt = `You are a TikTok/Reels content strategist for a marketing agency. Your job is to suggest research topics that will be typed into a trend research tool that searches TikTok, YouTube Shorts, Instagram Reels, Reddit, and the web.
-
-The goal is to find viral short-form video content that this specific brand could recreate or be inspired by. Topics should be BRAND-SPECIFIC content angles — not generic industry terms.
+    const prompt = `You are a topic researcher for a marketing agency. Suggest 6 research topics for this brand. These will be typed into a trend research tool that searches TikTok, YouTube, Instagram, Reddit, and the web.
 
 BRAND:
 - Name: ${client.name}
@@ -78,15 +76,15 @@ BRAND:
 ${knowledgeContext ? `BRAND KNOWLEDGE:\n${knowledgeContext}\n` : ''}
 ${recentTopics.length > 0 ? `ALREADY RESEARCHED (do NOT repeat):\n${recentTopics.map(t => `- ${t}`).join('\n')}\n` : ''}
 
-Generate 6 topics. Each must be:
-- A specific content angle this brand could film (not a broad category)
-- 2-5 words, written as a search query someone would type
-- Something likely to surface real TikTok/Reels videos when searched
-- Directly tied to what ${client.name} does, sells, or talks about
-- A mix of: behind-the-scenes angles, customer-facing content, trending formats, and educational hooks
+Each topic should be:
+- A subject or ontology the brand operates in (1-4 words)
+- Specific to what ${client.name} does, but not a content format or filming style
+- Something their audience cares about or searches for
+- Different from already-researched topics
 
-BAD examples (too generic): "moving tips", "cleaning hacks", "fitness motivation"
-GOOD examples (brand-specific): "day in the life moving crew", "satisfying junk removal before after", "gym owner morning routine"
+BAD (too broad): "marketing", "social media", "business tips"
+BAD (too specific/format-oriented): "day in the life moving crew", "satisfying before after cleanout"
+GOOD (topic/ontology level): "junk removal", "home moving", "spendable gold currency", "estate cleanout services", "franchise ownership"
 
 Return ONLY a JSON array of strings: ["topic 1", "topic 2", ...]`;
 
