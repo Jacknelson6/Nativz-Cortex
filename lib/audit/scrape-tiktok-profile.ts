@@ -5,7 +5,7 @@
 import { startApifyActorRun, waitForApifyRunSuccess, fetchApifyDatasetItems } from '@/lib/tiktok/apify-run';
 import type { ProspectProfile, ProspectVideo } from './types';
 
-const ACTOR_ID = 'apidojo/tiktok-scraper';
+const ACTOR_ID = 'apidojo/tiktok-profile-scraper';
 
 function getApiKey(): string {
   const token = process.env.APIFY_API_KEY;
