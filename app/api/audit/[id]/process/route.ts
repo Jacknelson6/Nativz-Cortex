@@ -3,6 +3,9 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { scrapeWebsite } from '@/lib/audit/scrape-website';
 import { scrapeTikTokProfile } from '@/lib/audit/scrape-tiktok-profile';
+import { scrapeInstagramProfile } from '@/lib/audit/scrape-instagram-profile';
+import { scrapeFacebookProfile } from '@/lib/audit/scrape-facebook-profile';
+import { scrapeYouTubeProfile } from '@/lib/audit/scrape-youtube-profile';
 import {
   extractWebsiteContext,
   buildPlatformReport,
@@ -80,12 +83,11 @@ export async function POST(
       const manualPlatforms = (audit.social_urls as Record<string, string> | null) ?? {};
       const platformsToScrape: { platform: AuditPlatform; url: string }[] = [];
 
-      // Add detected social links
+      // Add detected social links for all supported platforms
       for (const link of detectedLinks) {
-        if (link.platform === 'tiktok') {
-          platformsToScrape.push({ platform: 'tiktok', url: link.url });
+        if (['tiktok', 'instagram', 'facebook', 'youtube'].includes(link.platform)) {
+          platformsToScrape.push({ platform: link.platform, url: link.url });
         }
-        // Instagram, Facebook, YouTube — can add scrapers later
       }
 
       // Add manual overrides (take priority)
@@ -126,13 +128,27 @@ export async function POST(
 
       const scrapeResults = await Promise.allSettled(
         platformsToScrape.map(async ({ platform, url }) => {
-          if (platform === 'tiktok') {
-            const result = await scrapeTikTokProfile(url);
-            return buildPlatformReport(result.profile, result.videos);
+          switch (platform) {
+            case 'tiktok': {
+              const result = await scrapeTikTokProfile(url);
+              return buildPlatformReport(result.profile, result.videos);
+            }
+            case 'instagram': {
+              const result = await scrapeInstagramProfile(url);
+              return buildPlatformReport(result.profile, result.videos);
+            }
+            case 'facebook': {
+              const result = await scrapeFacebookProfile(url);
+              return buildPlatformReport(result.profile, result.videos);
+            }
+            case 'youtube': {
+              const result = await scrapeYouTubeProfile(url);
+              return buildPlatformReport(result.profile, result.videos);
+            }
+            default:
+              console.log(`[audit:${id}] Skipping ${platform} (no scraper)`);
+              return null;
           }
-          // Future: add Instagram, Facebook, YouTube scrapers
-          console.log(`[audit:${id}] Skipping ${platform} (scraper not yet implemented)`);
-          return null;
         })
       );
 
