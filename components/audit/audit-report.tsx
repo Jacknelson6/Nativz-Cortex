@@ -87,6 +87,8 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [activePlatformTab, setActivePlatformTab] = useState<string | null>(null);
   const [socialInputs, setSocialInputs] = useState<Partial<Record<AuditPlatformKey, string>>>({});
   const [submittingSocials, setSubmittingSocials] = useState(false);
+  const [completedAudit, setCompletedAudit] = useState<AuditRecord | null>(null);
+  const [finishingAnimation, setFinishingAnimation] = useState(false);
 
   // Auto-start processing for pending audits
   useEffect(() => {
@@ -94,29 +96,73 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Poll + animate when processing
+  // Smooth progress: accelerates over time (eased curve), caps at 92% until done
   useEffect(() => {
     if (audit.status !== 'processing') return;
     const startTime = Date.now();
+    let currentProgress = 0;
+    let currentStage = 0;
+
     const progressInterval = setInterval(() => {
       const ms = Date.now() - startTime;
       setElapsed(Math.floor(ms / 1000));
-      setStageIndex(Math.min(PROCESSING_STAGES.length - 2, Math.floor(ms / 15000)));
-      setProgress(Math.min(90, (ms / 180000) * 90));
-    }, 500);
+
+      // Eased progress: fast at start, slows as it approaches 92%
+      // Uses an ease-out curve so it always feels like it's moving
+      const t = Math.min(1, ms / 120000); // normalize to 0-1 over 2 min
+      const eased = 1 - Math.pow(1 - t, 2.5); // ease-out curve
+      const targetProgress = eased * 92;
+
+      // Smooth toward target (never jump)
+      currentProgress += (targetProgress - currentProgress) * 0.08;
+      setProgress(Math.min(92, currentProgress));
+
+      // Advance stages smoothly based on progress
+      const newStage = Math.min(
+        PROCESSING_STAGES.length - 2,
+        Math.floor((currentProgress / 92) * (PROCESSING_STAGES.length - 1))
+      );
+      if (newStage !== currentStage) {
+        currentStage = newStage;
+        setStageIndex(newStage);
+      }
+    }, 50); // 50ms for buttery smooth animation
+
     const pollInterval = setInterval(async () => {
       try {
         const res = await fetch(`/api/audit/${audit.id}`);
         if (res.ok) {
           const data = await res.json();
           if (data.audit.status !== 'processing') {
-            setAudit(data.audit);
-            setProgress(100);
+            // Don't show report immediately — animate to 100% first
+            clearInterval(progressInterval);
+            clearInterval(pollInterval);
+            setCompletedAudit(data.audit);
+            setFinishingAnimation(true);
             setStageIndex(PROCESSING_STAGES.length - 1);
+
+            // Animate from current to 100% over 2s
+            const startPct = currentProgress;
+            const animStart = Date.now();
+            const finishInterval = setInterval(() => {
+              const elapsed = Date.now() - animStart;
+              const frac = Math.min(1, elapsed / 2000);
+              const easedFrac = 1 - Math.pow(1 - frac, 3);
+              setProgress(startPct + (100 - startPct) * easedFrac);
+              if (frac >= 1) {
+                clearInterval(finishInterval);
+                // Show report after a brief pause at 100%
+                setTimeout(() => {
+                  setAudit(data.audit);
+                  setFinishingAnimation(false);
+                }, 400);
+              }
+            }, 16);
           }
         }
       } catch { /* ignore */ }
-    }, 3000);
+    }, 2500);
+
     return () => { clearInterval(progressInterval); clearInterval(pollInterval); };
   }, [audit.id, audit.status]);
 
