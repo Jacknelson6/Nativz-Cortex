@@ -130,7 +130,7 @@ export function VideoDetailPanel({
 
         {/* Thumbnail — aspect ratio matches platform */}
         <div className={`relative w-full bg-surface-hover overflow-hidden ${
-          video.platform === 'tiktok' || video.platform === 'instagram' ? 'aspect-[9/16] max-h-[480px]' : 'aspect-video'
+          (video.platform === 'tiktok' || video.platform === 'instagram' || (video.platform === 'youtube' && video.duration_seconds != null && video.duration_seconds <= 60)) ? 'aspect-[9/16] max-h-[480px]' : 'aspect-video'
         }`}>
           {video.thumbnail_url ? (
             <img

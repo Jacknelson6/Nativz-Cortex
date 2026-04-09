@@ -684,11 +684,16 @@ function PlatformDetail({ platform, auditId }: { platform: PlatformReport; audit
             {topPosts.map((post, i) => (
               <a key={post.id || i} href={post.url} target="_blank" rel="noopener noreferrer" className="group block rounded-lg border border-nativz-border bg-background overflow-hidden hover:border-accent/40 transition-colors">
                 {post.thumbnailUrl ? (
-                  <div className="aspect-[9/16] bg-surface-hover overflow-hidden">
+                  <div className={`bg-surface-hover overflow-hidden ${
+                    post.platform === 'tiktok' || post.platform === 'instagram' || (post.platform === 'youtube' && post.duration != null && post.duration <= 60)
+                      ? 'aspect-[9/16]' : 'aspect-video'
+                  }`}>
                     <img src={post.thumbnailUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   </div>
                 ) : (
-                  <div className="aspect-[9/16] bg-surface-hover flex items-center justify-center">
+                  <div className={`bg-surface-hover flex items-center justify-center ${
+                    post.platform === 'tiktok' || post.platform === 'instagram' ? 'aspect-[9/16]' : 'aspect-video'
+                  }`}>
                     <Eye size={20} className="text-text-muted/30" />
                   </div>
                 )}

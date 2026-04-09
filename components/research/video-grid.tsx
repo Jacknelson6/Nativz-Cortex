@@ -30,13 +30,18 @@ function formatNumber(n: number): string {
   return String(n);
 }
 
-function isVerticalPlatform(platform: string): boolean {
-  return platform === 'tiktok' || platform === 'instagram';
+function isVerticalVideo(video: TopicSearchVideoRow): boolean {
+  // TikTok and Instagram are always vertical (9:16)
+  if (video.platform === 'tiktok' || video.platform === 'instagram') return true;
+  // YouTube: Shorts (≤60s) are vertical, long-form is horizontal
+  if (video.platform === 'youtube' && video.duration_seconds != null && video.duration_seconds <= 60) return true;
+  // Facebook and other platforms default to horizontal (16:9)
+  return false;
 }
 
 function VideoCard({ video, onClick }: { video: TopicSearchVideoRow; onClick?: () => void }) {
   const outlier = video.outlier_score ?? 0;
-  const vertical = isVerticalPlatform(video.platform);
+  const vertical = isVerticalVideo(video);
   return (
     <button
       type="button"
