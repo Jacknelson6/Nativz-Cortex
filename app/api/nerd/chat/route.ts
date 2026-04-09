@@ -14,6 +14,8 @@ import {
 import { buildMarketingSkillsContext } from '@/lib/nerd/marketing-skills';
 import { checkGuardrails } from '@/lib/nerd/guardrails';
 import { buildDbSkillsContext } from '@/lib/nerd/skills-loader';
+import { logUsage, calculateCost } from '@/lib/ai/usage';
+import { logApiError } from '@/lib/api/error-log';
 
 // Register tools on module load
 registerAllTools();
@@ -731,6 +733,15 @@ export async function POST(req: NextRequest) {
     if (!openRouterRes.ok) {
       const errText = await openRouterRes.text();
       console.error('Chat completions error:', openRouterRes.status, errText);
+      logApiError({
+        route: '/api/nerd/chat',
+        statusCode: openRouterRes.status,
+        errorMessage: `LLM API error: ${openRouterRes.status}`,
+        errorDetail: errText.slice(0, 1000),
+        userId: user.id,
+        userEmail: user.email ?? undefined,
+        meta: { model: requestModel, provider: useOpenAi ? 'openai' : 'openrouter' },
+      }).catch(() => {});
       // Return the actual error details to help debug
       let detail = 'AI service error';
       try {
@@ -971,6 +982,21 @@ export async function POST(req: NextRequest) {
             }
           }
 
+          // Log usage for the Nerd chat
+          const estimatedInputTokens = Math.ceil((systemPrompt.length + portfolioContext.length + lastUserMsg.length) / 4);
+          const estimatedOutputTokens = Math.ceil((fullAssistantText?.length ?? 0) / 4);
+          logUsage({
+            service: useOpenAi ? 'openai' : 'openrouter',
+            model: requestModel,
+            feature: 'nerd_chat',
+            inputTokens: estimatedInputTokens,
+            outputTokens: estimatedOutputTokens,
+            totalTokens: estimatedInputTokens + estimatedOutputTokens,
+            costUsd: calculateCost(requestModel, estimatedInputTokens, estimatedOutputTokens),
+            userId: userIdForStream,
+            userEmail: user.email ?? undefined,
+          }).catch(() => {});
+
           controller.close();
         }
       },
@@ -985,6 +1011,12 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error('Nerd chat error:', err);
+    logApiError({
+      route: '/api/nerd/chat',
+      statusCode: 500,
+      errorMessage: err instanceof Error ? err.message : 'Internal server error',
+      errorDetail: err instanceof Error ? err.stack?.slice(0, 1000) : undefined,
+    }).catch(() => {});
     return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500 });
   }
 }
