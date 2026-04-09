@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* All buttons and clickable elements show pointer cursor */
+button:not(:disabled),
+[role="button"]:not(:disabled),
+a[href],
+summary {
+  cursor: pointer;
+}
+
 :root {
   --background: #0f1117;
   --foreground: #f1f5f9;

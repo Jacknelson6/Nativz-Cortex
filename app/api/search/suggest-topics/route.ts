@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     // Fetch client brand data
     const { data: client } = await adminClient
       .from('clients')
-      .select('name, industry, niche, brand_voice, topic_keywords, target_audience')
+      .select('name, industry, brand_voice, topic_keywords, target_audience')
       .eq('id', parsed.data.client_id)
       .single();
 
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     // Fetch knowledge base entries for richer context
     const { data: knowledgeEntries } = await adminClient
-      .from('knowledge_entries')
+      .from('knowledge_nodes')
       .select('title, content')
       .eq('client_id', parsed.data.client_id)
       .order('created_at', { ascending: false })
@@ -69,7 +69,6 @@ export async function POST(request: NextRequest) {
 BRAND:
 - Name: ${client.name}
 - Industry: ${client.industry ?? 'unknown'}
-- Niche: ${client.niche ?? 'unknown'}
 - Brand voice: ${client.brand_voice ?? 'unknown'}
 - Target audience: ${client.target_audience ?? 'unknown'}
 - Topic keywords: ${(client.topic_keywords ?? []).join(', ') || 'none'}
