@@ -491,28 +491,78 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
 
       {/* Competitors */}
       {competitors.length > 0 && (
-        <div className="rounded-xl border border-nativz-border bg-surface p-5">
-          <h3 className="text-sm font-semibold text-text-primary mb-4">Competitors</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {competitors.map(comp => (
-              <div key={comp.username} className="rounded-lg border border-nativz-border bg-background p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  {comp.avatarUrl && <img src={comp.avatarUrl} alt={comp.displayName} className="h-10 w-10 rounded-full object-cover" />}
-                  <div>
-                    <p className="text-sm font-medium text-text-primary">{comp.displayName}</p>
-                    <a href={comp.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent-text hover:underline flex items-center gap-1">
-                      @{comp.username} <ExternalLink size={10} />
-                    </a>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-nativz-border bg-surface p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Competitors</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {competitors.map(comp => (
+                <div key={comp.username} className="rounded-lg border border-nativz-border bg-background p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    {comp.avatarUrl && <img src={comp.avatarUrl} alt={comp.displayName} className="h-10 w-10 rounded-full object-cover" />}
+                    <div>
+                      <p className="text-sm font-medium text-text-primary">{comp.displayName}</p>
+                      <a href={comp.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent-text hover:underline flex items-center gap-1">
+                        @{comp.username} <ExternalLink size={10} />
+                      </a>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div><span className="text-text-muted">Followers</span><p className="font-medium text-text-primary">{formatNumber(comp.followers)}</p></div>
+                    <div><span className="text-text-muted">Engagement</span><p className="font-medium text-text-primary">{(comp.engagementRate * 100).toFixed(2)}%</p></div>
+                    <div><span className="text-text-muted">Avg views</span><p className="font-medium text-text-primary">{formatNumber(comp.avgViews)}</p></div>
+                    <div><span className="text-text-muted">Frequency</span><p className="font-medium text-text-primary">{comp.postingFrequency}</p></div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div><span className="text-text-muted">Followers</span><p className="font-medium text-text-primary">{formatNumber(comp.followers)}</p></div>
-                  <div><span className="text-text-muted">Engagement</span><p className="font-medium text-text-primary">{(comp.engagementRate * 100).toFixed(2)}%</p></div>
-                  <div><span className="text-text-muted">Avg views</span><p className="font-medium text-text-primary">{formatNumber(comp.avgViews)}</p></div>
-                  <div><span className="text-text-muted">Frequency</span><p className="font-medium text-text-primary">{comp.postingFrequency}</p></div>
-                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Competitor comparison charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Avg views comparison */}
+            <div className="rounded-xl border border-nativz-border bg-surface p-5">
+              <h4 className="text-sm font-semibold text-text-primary mb-4">Average views per post</h4>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={[
+                    ...(activePlatform ? [{ name: `@${activePlatform.profile.username} (You)`, views: activePlatform.avgViews, fill: 'var(--accent)' }] : []),
+                    ...competitors.map((c, i) => ({ name: `@${c.username}`, views: c.avgViews, fill: ['#A78BFA', '#34D399', '#F97316', '#EC4899', '#14B8A6'][i % 5] })),
+                  ]} layout="vertical" margin={{ left: 10, right: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--nativz-border)" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => formatNumber(v)} />
+                    <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} width={120} />
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', border: '1px solid var(--nativz-border)', borderRadius: '8px', fontSize: '12px' }} formatter={(value: number | undefined) => [formatNumber(value ?? 0), 'Avg views']} />
+                    <Bar dataKey="views" radius={[0, 4, 4, 0]} barSize={24}>
+                      {[
+                        ...(activePlatform ? [{ fill: 'var(--accent)' }] : []),
+                        ...competitors.map((_, i) => ({ fill: ['#A78BFA', '#34D399', '#F97316', '#EC4899', '#14B8A6'][i % 5] })),
+                      ].map((entry, idx) => (
+                        <rect key={idx} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            ))}
+            </div>
+
+            {/* Engagement rate comparison */}
+            <div className="rounded-xl border border-nativz-border bg-surface p-5">
+              <h4 className="text-sm font-semibold text-text-primary mb-4">Engagement rate comparison</h4>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={[
+                    ...(activePlatform ? [{ name: `@${activePlatform.profile.username} (You)`, er: parseFloat((activePlatform.engagementRate * 100).toFixed(2)) }] : []),
+                    ...competitors.map(c => ({ name: `@${c.username}`, er: parseFloat((c.engagementRate * 100).toFixed(2)) })),
+                  ]} layout="vertical" margin={{ left: 10, right: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--nativz-border)" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
+                    <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} width={120} />
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', border: '1px solid var(--nativz-border)', borderRadius: '8px', fontSize: '12px' }} formatter={(value: number | undefined) => [`${value ?? 0}%`, 'ER']} />
+                    <Bar dataKey="er" fill="var(--accent2)" radius={[0, 4, 4, 0]} barSize={24} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
         </div>
       )}
