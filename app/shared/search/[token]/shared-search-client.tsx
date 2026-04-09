@@ -15,6 +15,9 @@ import { SourcesPanel } from '@/components/results/sources-panel';
 import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
 import { SentimentBadge } from '@/components/results/sentiment-badge';
 import { ActivityChart } from '@/components/charts/activity-chart';
+import { AiTakeaways } from '@/components/results/ai-takeaways';
+import { SourceBrowser } from '@/components/results/source-browser';
+import type { PlatformSource } from '@/lib/types/search';
 import { formatRelativeTime } from '@/lib/utils/format';
 import {
   getClientAbbreviationLabel,
@@ -85,10 +88,10 @@ export function SharedSearchClient({
         </div>
       </div>
 
-      {/* Content */}
-      <div className="w-full px-6 py-8 space-y-6">
+      {/* Content — matches admin results page (minus Strategy Lab) */}
+      <div className="w-full px-6 py-8 space-y-6 sm:space-y-8">
         {search.summary ? (
-          <div className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5">
+          <div className="rounded-xl border border-nativz-border bg-surface p-5 sm:p-6">
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-10 lg:items-start">
               <ExecutiveSummary summary={search.summary} />
               <BrandApplication
@@ -99,29 +102,19 @@ export function SharedSearchClient({
           </div>
         ) : null}
 
-        {aiResponse?.synthetic_audiences?.segments?.length ? (
-          <TopicSyntheticAudiences data={aiResponse.synthetic_audiences} />
+        {/* AI takeaways — content pillars + recommendations */}
+        {(aiResponse || search.summary) ? (
+          <div className="rounded-xl border border-nativz-border bg-surface p-5 sm:p-6">
+            <AiTakeaways
+              aiResponse={aiResponse}
+              summary={search.summary}
+              clientName={clientName}
+              hasAttachedClient={!!clientName}
+            />
+          </div>
         ) : null}
 
-        {search.activity_data && search.activity_data.length > 0 && (
-          <ActivityChart data={search.activity_data} />
-        )}
-
-        {(search.emotions || search.content_breakdown) && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {search.emotions && search.emotions.length > 0 && (
-              <EmotionsBreakdown emotions={search.emotions} />
-            )}
-            {search.content_breakdown && (
-              <ContentBreakdown data={search.content_breakdown} />
-            )}
-          </div>
-        )}
-
-        {search.trending_topics && search.trending_topics.length > 0 && (
-          <TrendingTopicsTable topics={search.trending_topics} searchId={search.id} />
-        )}
-
+        {/* Scraped videos — outlier board, video grid, hook patterns */}
         <ScrapedVideosSection
           searchId={search.id}
           scrapedVideoCount={scrapedVideoCount}
@@ -130,20 +123,57 @@ export function SharedSearchClient({
           enableInlineVideoAnalysis={false}
         />
 
-        {(aiResponse?.content_pillars || aiResponse?.niche_performance_insights) && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {aiResponse.content_pillars && aiResponse.content_pillars.length > 0 && (
-              <ContentPillars pillars={aiResponse.content_pillars} />
-            )}
-            {aiResponse.niche_performance_insights && (
-              <NicheInsights insights={aiResponse.niche_performance_insights} />
-            )}
-          </div>
-        )}
+        {aiResponse?.synthetic_audiences?.segments?.length ? (
+          <TopicSyntheticAudiences data={aiResponse.synthetic_audiences} />
+        ) : null}
 
-        {hasSerp(search) && search.serp_data && (
+        {search.activity_data && search.activity_data.length > 0 ? (
+          <ActivityChart data={search.activity_data} />
+        ) : null}
+
+        {(Boolean(search.emotions?.length) || Boolean(search.content_breakdown)) ? (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {search.emotions && search.emotions.length > 0 ? (
+              <EmotionsBreakdown emotions={search.emotions} />
+            ) : null}
+            {search.content_breakdown ? (
+              <ContentBreakdown data={search.content_breakdown} />
+            ) : null}
+          </div>
+        ) : null}
+
+        {search.trending_topics && search.trending_topics.length > 0 ? (
+          <TrendingTopicsTable topics={search.trending_topics} searchId={search.id} />
+        ) : null}
+
+        {Boolean(aiResponse) &&
+        ((aiResponse!.content_pillars?.length ?? 0) > 0 || Boolean(aiResponse!.niche_performance_insights)) ? (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {(aiResponse!.content_pillars?.length ?? 0) > 0 && aiResponse!.content_pillars ? (
+              <ContentPillars pillars={aiResponse!.content_pillars} />
+            ) : null}
+            {aiResponse!.niche_performance_insights ? (
+              <NicheInsights insights={aiResponse!.niche_performance_insights} />
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Source browser — browse posts by platform */}
+        {Boolean(
+          search.platform_data && (search.platform_data as Record<string, unknown>).sources,
+        ) ? (
+          <SourceBrowser
+            sources={(search.platform_data as Record<string, unknown>).sources as PlatformSource[]}
+            searchId={search.id}
+            searchQuery={search.query}
+            clientContext={clientName ? { name: clientName } : null}
+            defaultClientId={search.client_id}
+          />
+        ) : null}
+
+        {hasSerp(search) && search.serp_data ? (
           <SourcesPanel serpData={search.serp_data} />
-        )}
+        ) : null}
       </div>
 
       <ScrollToTop />

@@ -19,8 +19,6 @@ import { NicheInsights } from '@/components/results/niche-insights';
 import { SourcesPanel } from '@/components/results/sources-panel';
 import { SourceBrowser } from '@/components/results/source-browser';
 import { ActivityChart } from '@/components/charts/activity-chart';
-import { BigMovers } from '@/components/results/big-movers';
-import { CompetitiveAnalysis } from '@/components/results/competitive-analysis';
 import { ExportPdfButton } from '@/components/results/export-pdf-button';
 import { ShareButton } from '@/components/results/share-button';
 import { SearchProgress } from '@/components/search/search-progress';
@@ -28,6 +26,7 @@ import { hasSerp } from '@/lib/types/search';
 import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
 import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
 import { AiTakeaways } from '@/components/results/ai-takeaways';
+import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 import { IdeationPipelinePanel } from '@/components/ideation/ideation-pipeline-panel';
 import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
 import { getClientAbbreviationLabel } from '@/lib/clients/client-abbreviations';
@@ -51,6 +50,7 @@ export function AdminResultsClient({
   scrapedVideoCount = 0,
 }: AdminResultsClientProps) {
   const router = useRouter();
+  const { brand: agencyBrand } = useAgencyBrand();
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(search.query);
   const [savingTitle, setSavingTitle] = useState(false);
@@ -206,7 +206,7 @@ export function AdminResultsClient({
                 {formatRelativeTime(search.completed_at)}
               </span>
             )}
-            <ExportPdfButton search={search} clientName={clientInfo?.name} />
+            <ExportPdfButton search={search} clientName={clientInfo?.name} agency={agencyBrand} />
             <ShareButton searchId={search.id} />
           </div>
         </div>
@@ -281,16 +281,6 @@ export function AdminResultsClient({
               <NicheInsights insights={aiResponse!.niche_performance_insights} />
             ) : null}
           </div>
-        ) : null}
-
-        {/* Competitive Analysis (brand search) */}
-        {Boolean(aiResponse?.niche_performance_insights && aiResponse?.brand_alignment_notes) ? (
-          <CompetitiveAnalysis nicheInsights={aiResponse!.niche_performance_insights!} />
-        ) : null}
-
-        {/* Big movers — who's making noise in this space */}
-        {Boolean(aiResponse?.big_movers?.length) ? (
-          <BigMovers movers={aiResponse!.big_movers!} />
         ) : null}
 
         <IdeationPipelinePanel

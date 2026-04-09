@@ -46,7 +46,7 @@ export async function GET(
       return NextResponse.json({ shared: false });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    const baseUrl = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io';
     return NextResponse.json({
       shared: true,
       token: link.token,
@@ -115,7 +115,9 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to create share link' }, { status: 500 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    // Use the request origin so the share URL matches the domain it was generated from
+    // (AC domain → AC share URL, Nativz domain → Nativz share URL)
+    const baseUrl = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io';
     return NextResponse.json({
       shared: true,
       token,
