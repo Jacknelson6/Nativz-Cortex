@@ -12,7 +12,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
 import heicConvert from 'heic-convert';
-import type { PlatformReport, ProspectVideo, ProspectProfile } from './types';
+import type { PlatformReport, ProspectVideo, ProspectProfile, CompetitorProfile } from './types';
 
 const BUCKET = 'moodboard-frames';
 const PER_IMAGE_TIMEOUT_MS = 10_000;
@@ -165,6 +165,41 @@ async function persistPlatformReportImages(
 }
 
 /**
+ * Same idea as persistPlatformReportImages but for a CompetitorProfile: one
+ * avatar + one list of recentVideos thumbnails. Mutates in-place.
+ */
+async function persistCompetitorImages(
+  admin: SupabaseClient,
+  auditId: string,
+  competitor: CompetitorProfile,
+): Promise<void> {
+  const prefix = `audit/${auditId}/competitor/${competitor.username}/${competitor.platform}`;
+
+  const jobs: Promise<void>[] = [];
+
+  if (competitor.avatarUrl) {
+    jobs.push(
+      (async () => {
+        const persisted = await persistOne(admin, competitor.avatarUrl, `${prefix}/avatar.jpg`);
+        if (persisted) competitor.avatarUrl = persisted;
+      })(),
+    );
+  }
+
+  competitor.recentVideos.forEach((video, i) => {
+    if (!video.thumbnailUrl) return;
+    jobs.push(
+      (async () => {
+        const persisted = await persistOne(admin, video.thumbnailUrl, `${prefix}/video-${i}.jpg`);
+        if (persisted) (video as ProspectVideo).thumbnailUrl = persisted;
+      })(),
+    );
+  });
+
+  await Promise.all(jobs);
+}
+
+/**
  * Persist every platform report's images. Runs reports in parallel so total
  * wall time is roughly the slowest platform, not the sum.
  */
@@ -174,4 +209,17 @@ export async function persistAllScrapedImages(
   reports: PlatformReport[],
 ): Promise<void> {
   await Promise.all(reports.map((r) => persistPlatformReportImages(admin, auditId, r)));
+}
+
+/**
+ * Persist every competitor's avatar + video thumbnails. Same treatment as the
+ * target — survives TikTok/IG CDN URL expiration so the competitor cards in
+ * the audit report still render 24h later.
+ */
+export async function persistAllCompetitorImages(
+  admin: SupabaseClient,
+  auditId: string,
+  competitors: CompetitorProfile[],
+): Promise<void> {
+  await Promise.all(competitors.map((c) => persistCompetitorImages(admin, auditId, c)));
 }

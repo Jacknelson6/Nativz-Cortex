@@ -9,12 +9,11 @@ import { scrapeYouTubeProfile } from '@/lib/audit/scrape-youtube-profile';
 import {
   extractWebsiteContext,
   buildPlatformReport,
-  discoverCompetitors,
-  buildCompetitorProfile,
   generateScorecard,
 } from '@/lib/audit/analyze';
+import { discoverCompetitorsByWebsite } from '@/lib/audit/discover-competitors';
 import type { PlatformReport, CompetitorProfile, WebsiteContext, SocialLink, AuditPlatform, FailedPlatform } from '@/lib/audit/types';
-import { persistAllScrapedImages } from '@/lib/audit/persist-scraped-images';
+import { persistAllScrapedImages, persistAllCompetitorImages } from '@/lib/audit/persist-scraped-images';
 
 export const maxDuration = 300;
 
@@ -181,20 +180,34 @@ export async function POST(
         }
       }
 
-      // Step 3: AI discovers competitors
-      console.log(`[audit:${id}] Step 3: Discovering competitors...`);
-      const competitorUsernames = await discoverCompetitors(platformReports, websiteContext);
-      console.log(`[audit:${id}] Found ${competitorUsernames.length} competitors: ${competitorUsernames.join(', ')}`);
+      // Step 3+4: Website-grounded competitor discovery. New flow asks the
+      // LLM for real competitor companies, scrapes each candidate's website
+      // for social links, then runs the same platform scrapers the target
+      // used. No more hallucinated TikTok usernames, and the comparison
+      // charts are automatically apples-to-apples because we match the
+      // target's platforms. See lib/audit/discover-competitors.ts.
+      console.log(`[audit:${id}] Steps 3+4: Discovering competitors via website grounding...`);
+      const { competitors, failures: competitorFailures } = await discoverCompetitorsByWebsite(
+        websiteContext,
+        platformReports,
+      );
+      console.log(
+        `[audit:${id}] Competitors: ${competitors.length} kept, ${competitorFailures.length} dropped`,
+      );
+      if (competitorFailures.length > 0) {
+        for (const f of competitorFailures) {
+          console.log(`[audit:${id}]   dropped "${f.name}" (${f.website}): ${f.reason}`);
+        }
+      }
 
-      // Step 4: Scrape competitor profiles
-      console.log(`[audit:${id}] Step 4: Scraping competitor profiles...`);
-      const competitors: CompetitorProfile[] = [];
-      for (const username of competitorUsernames) {
+      // Persist competitor avatars + video thumbnails to Supabase so they
+      // survive CDN URL expiration — same treatment the target platforms get.
+      if (competitors.length > 0) {
+        console.log(`[audit:${id}] Step 4b: Persisting competitor images...`);
         try {
-          const result = await scrapeTikTokProfile(`https://www.tiktok.com/@${username}`);
-          competitors.push(buildCompetitorProfile(result.profile, result.videos));
+          await persistAllCompetitorImages(adminClient, id, competitors);
         } catch (err) {
-          console.error(`[audit:${id}] Failed to scrape competitor @${username}:`, err);
+          console.warn(`[audit:${id}] Competitor image persistence failed (non-blocking):`, err);
         }
       }
 
