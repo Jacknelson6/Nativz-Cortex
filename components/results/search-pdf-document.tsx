@@ -6,6 +6,7 @@ import type {
   EmotionBreakdown,
   ContentBreakdownItem,
   VideoIdea,
+  SyntheticAudienceSegment,
 } from '@/lib/types/search';
 import { NATIVZ_LOGO_ON_LIGHT_PNG, AC_LOGO_PNG } from '@/lib/brand-logo';
 import { isNewMetrics } from '@/lib/types/search';
@@ -39,13 +40,13 @@ const c = {
 const s = StyleSheet.create({
   page: { padding: 36, backgroundColor: c.bg, fontFamily: 'Helvetica', fontSize: 10, color: c.text },
   brandBar: { height: 3, marginBottom: 14 },
-  header: { marginBottom: 20, borderBottomWidth: 1, borderBottomColor: c.border, paddingBottom: 14 },
-  logoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
+  header: { marginBottom: 16, borderBottomWidth: 1, borderBottomColor: c.border, paddingBottom: 12 },
+  logoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
   title: { fontSize: 20, fontFamily: 'Helvetica-Bold', color: c.text, marginBottom: 4 },
   subtitle: { fontSize: 11, color: c.textSecondary, marginBottom: 2 },
   meta: { fontSize: 9, color: c.muted },
 
-  section: { marginTop: 16, marginBottom: 4 },
+  section: { marginTop: 14, marginBottom: 4 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: c.border },
   sectionDot: { width: 6, height: 6, borderRadius: 3 },
   sectionTitle: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: c.text },
@@ -53,10 +54,23 @@ const s = StyleSheet.create({
   card: { backgroundColor: c.surface, borderRadius: 6, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: c.borderLight },
   body: { fontSize: 10, color: c.textSecondary, lineHeight: 1.6 },
 
+  // Two-column layout
+  twoCol: { flexDirection: 'row', gap: 10 },
+  col: { flex: 1 },
+
+  // Metrics
   metricsRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
   metricBox: { flex: 1, backgroundColor: c.surface, borderRadius: 6, padding: 10, alignItems: 'center' as const, borderWidth: 1, borderColor: c.borderLight },
   metricValue: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: c.accent },
   metricLabel: { fontSize: 8, color: c.muted, marginTop: 2 },
+
+  // Recommended Content Pillars (AiTakeaways 4-up cards)
+  pillarGrid: { flexDirection: 'row', flexWrap: 'wrap' as const, gap: 6 },
+  pillarCard4: { width: '48%', backgroundColor: c.surface, borderRadius: 6, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: c.borderLight, borderLeftWidth: 3, borderLeftColor: c.accent },
+  pillarCardTitle: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: c.text, marginBottom: 6 },
+  pillarStatRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
+  pillarStatLabel: { fontSize: 8, color: c.muted },
+  pillarStatValue: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: c.textSecondary },
 
   // Emotions
   emotionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
@@ -100,17 +114,22 @@ const s = StyleSheet.create({
   // Sources
   sourceLink: { fontSize: 9, color: c.accent, marginBottom: 3, textDecoration: 'none' as const },
 
+  // Content pillars (legacy - from content_pillars field)
+  pillarCardLegacy: { backgroundColor: c.surface, borderRadius: 6, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: c.borderLight },
+  pillarTitleLegacy: { fontFamily: 'Helvetica-Bold', fontSize: 10, color: c.text, marginBottom: 2 },
+  pillarMeta: { fontSize: 8, color: c.muted, marginTop: 3 },
+
+  // Synthetic audiences
+  audienceCard: { backgroundColor: c.surface, borderRadius: 6, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: c.borderLight },
+  audienceName: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: c.text, marginBottom: 2 },
+  audienceDesc: { fontSize: 8, color: c.textSecondary, lineHeight: 1.4 },
+
   // Footer
   footer: { position: 'absolute' as const, bottom: 24, left: 36, right: 36, flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: c.border, paddingTop: 6 },
   footerText: { fontSize: 7, color: c.muted },
-
-  // Pillars
-  pillarCard: { backgroundColor: c.surface, borderRadius: 6, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: c.borderLight },
-  pillarTitle: { fontFamily: 'Helvetica-Bold', fontSize: 10, color: c.text, marginBottom: 2 },
-  pillarMeta: { fontSize: 8, color: c.muted, marginTop: 3 },
 });
 
-// ─── Helper components ────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function SentimentBadge({ sentiment }: { sentiment: number }) {
   const isPos = sentiment > 0.15;
@@ -141,23 +160,30 @@ function SectionHeader({ title, dotColor }: { title: string; dotColor?: string }
   );
 }
 
-/** Renders **Markdown bold** in PDF using nested Text (Helvetica-Bold). */
 function PdfTextWithBold({ text, style }: { text: string; style: typeof s.body }) {
   const segments = text.split(/(\*\*.+?\*\*)/g);
   return (
     <Text style={style}>
       {segments.map((seg, i) => {
         const m = seg.match(/^\*\*(.+?)\*\*$/);
-        if (m) {
-          return (
-            <Text key={i} style={{ fontFamily: 'Helvetica-Bold', color: c.text }}>
-              {m[1]}
-            </Text>
-          );
-        }
+        if (m) return <Text key={i} style={{ fontFamily: 'Helvetica-Bold', color: c.text }}>{m[1]}</Text>;
         return <Text key={i}>{seg}</Text>;
       })}
     </Text>
+  );
+}
+
+function formatER(rate: number | undefined): string {
+  if (rate === undefined || rate === null) return '—';
+  return `${rate.toFixed(1)}%`;
+}
+
+function FooterBar({ isAC, dateStr }: { isAC: boolean; dateStr: string }) {
+  return (
+    <View style={s.footer} fixed>
+      <Text style={s.footerText}>{isAC ? 'Anderson Collaborative' : 'Nativz'} Cortex · Research report</Text>
+      <Text style={s.footerText}>{dateStr}</Text>
+    </View>
   );
 }
 
@@ -181,40 +207,28 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
     ? new Date(search.completed_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-  // Extract key findings from summary (strip Markdown bold markers first)
-  const keyFindings = (search.summary ?? '')
-    .replace(/\*\*(.+?)\*\*/g, '$1')
-    .split(/[.!?]+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 20)
-    .slice(0, 4);
+  // Content pillars from content_breakdown.categories (the "Recommended Content Pillars" 4-up cards)
+  const contentPillarCards = (aiResponse?.content_breakdown?.categories ?? search.content_breakdown?.categories ?? [])
+    .slice(0, 4)
+    .map((cat: ContentBreakdownItem) => ({
+      name: cat.name,
+      pctOfContent: `${cat.percentage}%`,
+      erTypical: formatER(cat.engagement_rate),
+      erYour: formatER(cat.your_engagement_rate),
+    }));
 
-  // Build action items
-  const actions: { text: string; priority: 'high' | 'medium' | 'low'; color: string }[] = [];
-  const viralTopics = topics.filter((t) => t.resonance === 'viral' || t.resonance === 'high');
-  if (viralTopics.length > 0) {
-    actions.push({ text: `Create content around "${viralTopics[0].name}" — ${viralTopics[0].resonance} resonance detected`, priority: 'high', color: c.amber });
-  }
-  const allVideoIdeas = topics.flatMap((t) => t.video_ideas ?? []);
-  const viralIdeas = allVideoIdeas.filter((v: VideoIdea) => v.virality === 'viral_potential' || v.virality === 'high');
-  if (viralIdeas.length > 0) {
-    actions.push({ text: `Produce "${viralIdeas[0].title}" (${viralIdeas[0].format}) — high virality potential`, priority: 'high', color: c.purple });
-  }
-  if (aiResponse?.content_pillars && aiResponse.content_pillars.length > 0) {
-    actions.push({ text: `Focus on ${aiResponse.content_pillars.length} content pillars: ${aiResponse.content_pillars.slice(0, 2).map((p) => p.pillar).join(', ')}`, priority: 'medium', color: c.accent });
-  }
-  if (aiResponse?.niche_performance_insights?.competitor_gaps) {
-    actions.push({ text: `Competitor gap: ${aiResponse.niche_performance_insights.competitor_gaps}`, priority: 'medium', color: c.cyan });
-  }
-  if (topics.length > 3) {
-    actions.push({ text: `${topics.length} trending angles found — batch-plan content for the top 3–5 this week`, priority: 'low', color: c.muted });
-  }
+  // Synthetic audiences
+  const audiences = aiResponse?.synthetic_audiences?.segments ?? [];
 
   return (
     <Document>
-      {/* ── Page 1: Summary, Metrics, Findings ─────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* PAGE 1: Header, Executive Summary, Brand Application, Content Pillars */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
       <Page size="A4" style={s.page}>
         <View style={[s.brandBar, { backgroundColor: brandColor }]} />
+
+        {/* Header */}
         <View style={s.header}>
           <View style={s.logoRow}>
             <View>
@@ -228,74 +242,72 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
           </View>
         </View>
 
-        {/* Executive summary — always when present; brand alignment is additional */}
+        {/* Executive Summary + Brand Application — two columns */}
         {search.summary ? (
           <View style={s.section}>
-            <SectionHeader title="Executive summary" dotColor={c.accent} />
-            <View style={s.card}>
-              <PdfTextWithBold text={search.summary} style={s.body} />
-              {aiResponse?.overall_sentiment !== undefined && !hasBrandAlignment ? (
-                <View style={{ marginTop: 8 }}>
-                  <SentimentBadge sentiment={aiResponse.overall_sentiment} />
+            <View style={s.twoCol}>
+              <View style={s.col}>
+                <SectionHeader title="Executive summary" dotColor={c.accent} />
+                <View style={s.card}>
+                  <PdfTextWithBold text={search.summary} style={s.body} />
+                  {aiResponse?.overall_sentiment !== undefined && (
+                    <View style={{ marginTop: 6 }}><SentimentBadge sentiment={aiResponse.overall_sentiment} /></View>
+                  )}
                 </View>
-              ) : null}
-            </View>
-          </View>
-        ) : null}
-        {hasBrandAlignment ? (
-          <View style={s.section}>
-            <SectionHeader title="Brand alignment" dotColor={c.purple} />
-            <View style={s.card}>
-              <PdfTextWithBold text={aiResponse!.brand_alignment_notes ?? ''} style={s.body} />
-              {aiResponse?.overall_sentiment !== undefined ? (
-                <View style={{ marginTop: 8 }}>
-                  <SentimentBadge sentiment={aiResponse.overall_sentiment} />
+              </View>
+              {hasBrandAlignment && (
+                <View style={s.col}>
+                  <SectionHeader title="Brand application" dotColor={c.green} />
+                  <View style={s.card}>
+                    <PdfTextWithBold text={aiResponse!.brand_alignment_notes ?? ''} style={s.body} />
+                  </View>
                 </View>
-              ) : null}
+              )}
             </View>
           </View>
         ) : null}
 
-        {/* Key Findings */}
-        {keyFindings.length > 0 && (
+        {/* Recommended Content Pillars — 2x2 grid */}
+        {contentPillarCards.length > 0 && (
           <View style={s.section}>
-            <SectionHeader title="Key findings" dotColor={c.amber} />
-            {keyFindings.map((finding, i) => (
-              <View key={i} style={s.findingCard}>
-                <Text style={s.findingText}>{finding}.</Text>
-              </View>
-            ))}
+            <SectionHeader title="Recommended content pillars" dotColor={brandColor} />
+            <View style={s.pillarGrid}>
+              {contentPillarCards.map((pillar: { name: string; pctOfContent: string; erTypical: string; erYour: string }, i: number) => (
+                <View key={i} style={[s.pillarCard4, { borderLeftColor: brandColor }]} wrap={false}>
+                  <Text style={s.pillarCardTitle}>{pillar.name}</Text>
+                  <View style={s.pillarStatRow}>
+                    <Text style={s.pillarStatLabel}>% of content</Text>
+                    <Text style={s.pillarStatValue}>{pillar.pctOfContent}</Text>
+                  </View>
+                  <View style={s.pillarStatRow}>
+                    <Text style={s.pillarStatLabel}>Engagement rate</Text>
+                    <Text style={s.pillarStatValue}>{pillar.erTypical}</Text>
+                  </View>
+                  {pillar.erYour !== '—' && (
+                    <View style={s.pillarStatRow}>
+                      <Text style={[s.pillarStatLabel, { color: c.green }]}>Your ER</Text>
+                      <Text style={[s.pillarStatValue, { color: c.green }]}>{pillar.erYour}</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
           </View>
         )}
 
-        {/* Metrics */}
+        {/* Key Metrics */}
         {search.metrics && isNewMetrics(search.metrics) && (
           <View style={s.section}>
             <SectionHeader title="Key metrics" />
             <View style={s.metricsRow}>
-              {hasBrandAlignment ? (
-                <>
-                  <View style={s.metricBox}>
-                    <Text style={[s.metricValue, { color: c.purple }]}>{search.metrics.sources_analyzed}</Text>
-                    <Text style={s.metricLabel}>Brand references</Text>
-                  </View>
-                  <View style={s.metricBox}>
-                    <Text style={s.metricValue}>{search.metrics.sources_analyzed}</Text>
-                    <Text style={s.metricLabel}>Sources analyzed</Text>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <View style={s.metricBox}>
-                    <Text style={s.metricValue}>{search.metrics.topic_score}</Text>
-                    <Text style={s.metricLabel}>Topic score</Text>
-                  </View>
-                  <View style={s.metricBox}>
-                    <Text style={s.metricValue}>{search.metrics.sources_analyzed}</Text>
-                    <Text style={s.metricLabel}>Sources</Text>
-                  </View>
-                </>
-              )}
+              <View style={s.metricBox}>
+                <Text style={s.metricValue}>{search.metrics.topic_score ?? search.metrics.sources_analyzed}</Text>
+                <Text style={s.metricLabel}>{hasBrandAlignment ? 'Brand refs' : 'Topic score'}</Text>
+              </View>
+              <View style={s.metricBox}>
+                <Text style={s.metricValue}>{search.metrics.sources_analyzed}</Text>
+                <Text style={s.metricLabel}>Sources</Text>
+              </View>
               <View style={s.metricBox}>
                 <Text style={[s.metricValue, { color: c.green }]}>{search.metrics.content_opportunities}</Text>
                 <Text style={s.metricLabel}>Video ideas</Text>
@@ -308,70 +320,55 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
           </View>
         )}
 
-        {/* Emotions Breakdown */}
-        {emotions.length > 0 && (
+        {/* Emotions + Content Breakdown — side by side */}
+        {(emotions.length > 0 || search.content_breakdown) && (
           <View style={s.section}>
-            <SectionHeader title="Emotions" dotColor={c.purple} />
-            <View style={s.card}>
-              {emotions.map((e, i) => (
-                <View key={i} style={s.emotionRow}>
-                  <Text style={s.emotionLabel}>{e.emotion}</Text>
-                  <View style={s.emotionBarBg}>
-                    <View style={[s.emotionBarFill, { width: `${e.percentage}%`, backgroundColor: e.color || c.accent }]} />
+            <View style={s.twoCol}>
+              {emotions.length > 0 && (
+                <View style={s.col}>
+                  <SectionHeader title="Emotions" dotColor={c.purple} />
+                  <View style={s.card}>
+                    {emotions.map((e, i) => (
+                      <View key={i} style={s.emotionRow}>
+                        <Text style={s.emotionLabel}>{e.emotion}</Text>
+                        <View style={s.emotionBarBg}>
+                          <View style={[s.emotionBarFill, { width: `${e.percentage}%`, backgroundColor: e.color || c.accent }]} />
+                        </View>
+                        <Text style={s.emotionPct}>{e.percentage}%</Text>
+                      </View>
+                    ))}
                   </View>
-                  <Text style={s.emotionPct}>{e.percentage}%</Text>
                 </View>
-              ))}
+              )}
+              {search.content_breakdown && (
+                <View style={s.col}>
+                  <SectionHeader title="Content breakdown" dotColor={c.cyan} />
+                  {search.content_breakdown.intentions && search.content_breakdown.intentions.length > 0 && (
+                    <View style={s.card}>
+                      <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: c.muted, marginBottom: 4, textTransform: 'uppercase' as const }}>Why people watch</Text>
+                      {search.content_breakdown.intentions.map((item: ContentBreakdownItem, i: number) => (
+                        <View key={i} style={s.breakdownRow}>
+                          <Text style={s.breakdownLabel}>{item.name}</Text>
+                          <View style={s.breakdownBarBg}>
+                            <View style={[s.breakdownBarFill, { width: `${item.percentage}%`, backgroundColor: c.accent }]} />
+                          </View>
+                          <Text style={{ width: 25, textAlign: 'right' as const, fontSize: 8, color: c.muted }}>{item.percentage}%</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
           </View>
         )}
 
-        {/* Content Breakdown */}
-        {search.content_breakdown && (
-          <View style={s.section}>
-            <SectionHeader title="Content breakdown" dotColor={c.cyan} />
-            {search.content_breakdown.intentions && search.content_breakdown.intentions.length > 0 && (
-              <View style={s.card}>
-                <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: c.muted, marginBottom: 6, textTransform: 'uppercase' as const }}>
-                  Intentions
-                </Text>
-                {search.content_breakdown.intentions.map((item: ContentBreakdownItem, i: number) => (
-                  <View key={i} style={s.breakdownRow}>
-                    <Text style={s.breakdownLabel}>{item.name}</Text>
-                    <View style={s.breakdownBarBg}>
-                      <View style={[s.breakdownBarFill, { width: `${item.percentage}%`, backgroundColor: c.accent }]} />
-                    </View>
-                    <Text style={{ width: 30, textAlign: 'right' as const, fontSize: 8, color: c.muted }}>{item.percentage}%</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-            {search.content_breakdown.categories && search.content_breakdown.categories.length > 0 && (
-              <View style={s.card}>
-                <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: c.muted, marginBottom: 6, textTransform: 'uppercase' as const }}>
-                  Categories
-                </Text>
-                {search.content_breakdown.categories.map((item: ContentBreakdownItem, i: number) => (
-                  <View key={i} style={s.breakdownRow}>
-                    <Text style={s.breakdownLabel}>{item.name}</Text>
-                    <View style={s.breakdownBarBg}>
-                      <View style={[s.breakdownBarFill, { width: `${item.percentage}%`, backgroundColor: c.purple }]} />
-                    </View>
-                    <Text style={{ width: 30, textAlign: 'right' as const, fontSize: 8, color: c.muted }}>{item.percentage}%</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
-
-        <View style={s.footer} fixed>
-          <Text style={s.footerText}>{isAC ? 'Anderson Collaborative' : 'Nativz'} Cortex · Research report</Text>
-          <Text style={s.footerText}>{dateStr}</Text>
-        </View>
+        <FooterBar isAC={isAC} dateStr={dateStr} />
       </Page>
 
-      {/* ── Page 2: Trending Topics with Video Ideas ───────────────────────── */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* PAGE 2: Trending Topics with Video Ideas                             */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
       {topics.length > 0 && (
         <Page size="A4" style={s.page}>
           <View style={s.section}>
@@ -385,20 +382,12 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
                     <SentimentBadge sentiment={topic.sentiment} />
                   </View>
                 </View>
-
-                {/* Posts & comments overview */}
                 {(topic.posts_overview || topic.comments_overview) && (
                   <View style={{ paddingLeft: 12, paddingTop: 3, paddingBottom: 2 }}>
-                    {topic.posts_overview && (
-                      <Text style={{ fontSize: 8, color: c.muted, marginBottom: 1 }}>{topic.posts_overview}</Text>
-                    )}
-                    {topic.comments_overview && (
-                      <Text style={{ fontSize: 8, color: c.muted }}>{topic.comments_overview}</Text>
-                    )}
+                    {topic.posts_overview && <Text style={{ fontSize: 8, color: c.muted, marginBottom: 1 }}>{topic.posts_overview}</Text>}
+                    {topic.comments_overview && <Text style={{ fontSize: 8, color: c.muted }}>{topic.comments_overview}</Text>}
                   </View>
                 )}
-
-                {/* Video ideas for this topic */}
                 {topic.video_ideas && topic.video_ideas.length > 0 && (
                   <View style={{ marginTop: 3 }}>
                     {topic.video_ideas.slice(0, 3).map((idea: VideoIdea, j: number) => (
@@ -423,27 +412,36 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
               </View>
             ))}
           </View>
-
-          <View style={s.footer} fixed>
-            <Text style={s.footerText}>{isAC ? 'Anderson Collaborative' : 'Nativz'} Cortex · Research report</Text>
-            <Text style={s.footerText}>{dateStr}</Text>
-          </View>
+          <FooterBar isAC={isAC} dateStr={dateStr} />
         </Page>
       )}
 
-      {/* ── Page 3: Pillars, Niche Insights, Actions, Sources ──────────────── */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* PAGE 3: Audiences, Niche Insights, Actions, Sources                  */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
       <Page size="A4" style={s.page}>
-        {/* Content Pillars */}
+        {/* Synthetic Audiences */}
+        {audiences.length > 0 && (
+          <View style={s.section}>
+            <SectionHeader title="Target audiences" dotColor={c.purple} />
+            {audiences.slice(0, 4).map((seg: SyntheticAudienceSegment, i: number) => (
+              <View key={i} style={s.audienceCard} wrap={false}>
+                <Text style={s.audienceName}>{seg.emoji} {seg.name} ({seg.share_percent}%)</Text>
+                {seg.description && <Text style={s.audienceDesc}>{seg.description}</Text>}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Content Pillars (from content_pillars field — detailed) */}
         {aiResponse?.content_pillars && aiResponse.content_pillars.length > 0 && (
           <View style={s.section}>
-            <SectionHeader title="Content pillars" dotColor={c.accent} />
+            <SectionHeader title="Content strategy pillars" dotColor={c.accent} />
             {aiResponse.content_pillars.map((pillar, i) => (
-              <View key={i} style={s.pillarCard} wrap={false}>
-                <Text style={s.pillarTitle}>{pillar.pillar}</Text>
+              <View key={i} style={s.pillarCardLegacy} wrap={false}>
+                <Text style={s.pillarTitleLegacy}>{pillar.pillar}</Text>
                 <Text style={s.body}>{pillar.description}</Text>
-                <Text style={s.pillarMeta}>
-                  Example: {pillar.example_series} · {pillar.frequency}
-                </Text>
+                <Text style={s.pillarMeta}>Example: {pillar.example_series} · {pillar.frequency}</Text>
               </View>
             ))}
           </View>
@@ -486,58 +484,19 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
           </View>
         )}
 
-        {/* Big Movers */}
-        {aiResponse?.big_movers && aiResponse.big_movers.length > 0 ? (
-          <View style={s.section}>
-            <SectionHeader title="Big movers" dotColor={c.amber} />
-            {aiResponse.big_movers.map((mover: { name: string; type: string; why: string; tactics: string[]; takeaway: string }, i: number) => (
-              <View key={i} style={s.card} wrap={false}>
-                <Text style={{ fontSize: 10, fontWeight: 700, color: c.text, marginBottom: 2 }}>{mover.name} ({mover.type})</Text>
-                <Text style={{ fontSize: 8, color: c.textSecondary, marginBottom: 4 }}>{mover.why}</Text>
-                {mover.tactics.map((t: string, j: number) => (
-                  <Text key={j} style={{ fontSize: 8, color: c.muted, marginBottom: 1, paddingLeft: 8 }}>• {t}</Text>
-                ))}
-                <Text style={{ fontSize: 8, color: c.accent, marginTop: 3 }}>{mover.takeaway}</Text>
-              </View>
-            ))}
-          </View>
-        ) : actions.length > 0 ? (
-          <View style={s.section}>
-            <SectionHeader title="Recommended actions" dotColor={c.green} />
-            {actions.map((action, i) => (
-              <View key={i} style={s.recRow} wrap={false}>
-                <View style={[s.recDot, { backgroundColor: action.color }]} />
-                <Text style={s.recText}>{action.text}</Text>
-                <Text style={[s.recPriority, {
-                  backgroundColor: action.priority === 'high' ? c.amberSoft : action.priority === 'medium' ? c.accentSoft : c.surfaceHover,
-                  color: action.priority === 'high' ? c.amber : action.priority === 'medium' ? c.accent : c.muted,
-                }]}>
-                  {action.priority}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
         {/* Sources */}
         {search.serp_data && (
           <View style={s.section}>
             <SectionHeader title={`Sources (${(search.serp_data.webResults?.length ?? 0) + (search.serp_data.videos?.length ?? 0)})`} dotColor={c.muted} />
             <View style={s.card}>
               {(search.serp_data.webResults ?? []).slice(0, 12).map((r: { url: string; title: string }, i: number) => (
-                <Link key={i} src={r.url} style={s.sourceLink}>
-                  {r.title}
-                </Link>
+                <Link key={i} src={r.url} style={s.sourceLink}>{r.title}</Link>
               ))}
               {(search.serp_data.videos ?? []).length > 0 && (
                 <View style={{ marginTop: 6 }}>
-                  <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: c.muted, marginBottom: 4 }}>
-                    Videos
-                  </Text>
-                  {(search.serp_data.videos ?? []).slice(0, 6).map((v: { url: string; title: string }, i: number) => (
-                    <Link key={i} src={v.url} style={s.sourceLink}>
-                      {v.title}
-                    </Link>
+                  <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: c.muted, marginBottom: 4 }}>Videos</Text>
+                  {(search.serp_data.videos ?? []).slice(0, 8).map((v: { url: string; title: string }, i: number) => (
+                    <Link key={i} src={v.url} style={s.sourceLink}>{v.title}</Link>
                   ))}
                 </View>
               )}
@@ -545,10 +504,7 @@ export function SearchPdfDocument({ search, clientName, agency }: SearchPdfDocum
           </View>
         )}
 
-        <View style={s.footer} fixed>
-          <Text style={s.footerText}>{isAC ? 'Anderson Collaborative' : 'Nativz'} Cortex · Research report</Text>
-          <Text style={s.footerText}>{dateStr}</Text>
-        </View>
+        <FooterBar isAC={isAC} dateStr={dateStr} />
       </Page>
     </Document>
   );
