@@ -99,21 +99,50 @@ export async function scrapeFacebookProfile(profileUrl: string): Promise<Faceboo
   const success = await waitForApifyRunSuccess(runId, apiKey, 120000, 3000);
   if (!success) throw new Error(`Apify scrape timed out for FB page`);
 
-  const items = await fetchApifyDatasetItems(runId, apiKey, 50) as FBPostItem[];
-  if (items.length === 0) {
-    throw new Error(`No data returned for Facebook page.`);
+  const rawItems = await fetchApifyDatasetItems(runId, apiKey, 50) as Array<FBPostItem & { error?: string; errorDescription?: string }>;
+  if (rawItems.length === 0) {
+    throw new Error('Facebook scrape returned no items — Meta may be blocking the actor.');
   }
 
   // Log first item keys for debugging different actor output formats
-  console.log(`[audit] FB actor returned ${items.length} items. First item keys: ${Object.keys(items[0]).slice(0, 15).join(', ')}`);
+  console.log(`[audit] FB actor returned ${rawItems.length} items. First item keys: ${Object.keys(rawItems[0]).slice(0, 15).join(', ')}`);
+
+  // apify/facebook-posts-scraper has been returning `{url, error, errorDescription}`
+  // for most pages lately — Meta is actively blocking the extraction and the
+  // actor surfaces it as per-item errors. Detect that case up front and throw
+  // a descriptive error so the audit's failedPlatforms UI can surface the
+  // real reason instead of silently producing a bogus empty profile.
+  const allErrors = rawItems.every((item) => item.error && !item.postId && !item.name && !item.pageName);
+  if (allErrors) {
+    const firstError = rawItems[0];
+    const desc = firstError.errorDescription?.toString().trim();
+    throw new Error(
+      desc
+        ? `Facebook blocked the scrape: ${desc.slice(0, 200)}`
+        : `Facebook scrape failed — Meta is blocking the actor (${firstError.error ?? 'unknown error'}).`,
+    );
+  }
+
+  // Drop error-only items from the list so we don't accidentally treat them
+  // as real posts downstream.
+  const items = rawItems.filter((item) => !item.error || item.postId || item.name || item.pageName) as FBPostItem[];
+  if (items.length === 0) {
+    throw new Error('Facebook scrape returned only error items — nothing to report.');
+  }
 
   // Extract page-level info — try multiple field name conventions
   const pageItem = items.find(i => i.pageName || i.pageFollowers || i.name || i.followers) ?? items[0];
-  const pageName = pageItem.pageName ?? pageItem.name ?? extractPageSlug(fullUrl);
+  // Prefer actor's page name (original casing) over the lowercased URL slug.
+  const rawPageName = pageItem.pageName ?? pageItem.name ?? null;
+  const pageName = rawPageName ?? extractPageSlug(fullUrl);
+  // Username: use the page's vanity name if available; fall back to URL slug.
+  const username = rawPageName
+    ? extractPageSlug(fullUrl) // URL slug is the true unique identifier
+    : extractPageSlug(fullUrl);
 
   const profile: ProspectProfile = {
     platform: 'facebook',
-    username: extractPageSlug(fullUrl),
+    username,
     displayName: pageName,
     bio: pageItem.pageAbout ?? pageItem.about ?? pageItem.pageCategory ?? pageItem.category ?? '',
     followers: pageItem.pageFollowers ?? pageItem.followers ?? pageItem.pageLikes ?? 0,

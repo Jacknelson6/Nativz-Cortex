@@ -10,10 +10,60 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import sharp from 'sharp';
+import heicConvert from 'heic-convert';
 import type { PlatformReport, ProspectVideo, ProspectProfile } from './types';
 
 const BUCKET = 'moodboard-frames';
 const PER_IMAGE_TIMEOUT_MS = 10_000;
+
+/**
+ * Some platforms (TikTok most notably) serve avatars as HEIC, which most
+ * browsers refuse to render inline. Detect and transcode to JPEG so the
+ * persisted URL renders in the audit report regardless of the source
+ * format.
+ *
+ * Sharp's default build does NOT include HEIC decoding (libheif has
+ * HEVC patent encumbrance), so we decode HEIC via the pure-JS
+ * heic-convert package first, then hand the intermediate JPEG to sharp
+ * for rotation + re-encode + consistent quality. For non-HEIC formats
+ * sharp handles the whole thing.
+ *
+ * Returns the original buffer + content-type if nothing needs transcoding.
+ */
+async function maybeTranscodeToJpeg(
+  buffer: Buffer,
+  contentType: string,
+): Promise<{ buffer: Buffer; contentType: string; extOverride: '.jpg' | null }> {
+  const ct = contentType.toLowerCase();
+  const isHeic = ct.includes('heic') || ct.includes('heif');
+  const needsSharp =
+    isHeic ||
+    ct.includes('avif') ||
+    // Unknown or octet-stream — let sharp try; it'll throw if it can't
+    ct.includes('octet-stream') ||
+    ct === '' ||
+    ct === 'application/json';
+  if (!needsSharp) return { buffer, contentType, extOverride: null };
+
+  try {
+    let intermediate = buffer;
+    if (isHeic) {
+      // heic-convert returns an ArrayBuffer-ish Uint8Array; wrap in Node Buffer.
+      const decoded = await heicConvert({
+        buffer: buffer as unknown as ArrayBufferLike,
+        format: 'JPEG',
+        quality: 0.9,
+      });
+      intermediate = Buffer.from(decoded as ArrayBuffer);
+    }
+    const jpeg = await sharp(intermediate).rotate().jpeg({ quality: 85 }).toBuffer();
+    return { buffer: jpeg, contentType: 'image/jpeg', extOverride: '.jpg' };
+  } catch (err) {
+    console.warn('[audit] HEIC/AVIF transcode failed, using original bytes:', err);
+    return { buffer, contentType, extOverride: null };
+  }
+}
 
 /**
  * Download a single image and upload it under the given path. Returns the
@@ -33,19 +83,28 @@ async function persistOne(
       headers: { 'User-Agent': 'Mozilla/5.0' },
     });
     if (!res.ok) return null;
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.length === 0) return null;
+    const originalBuffer = Buffer.from(await res.arrayBuffer());
+    if (originalBuffer.length === 0) return null;
 
-    const contentType = res.headers.get('content-type') ?? 'image/jpeg';
-    const { error: uploadError } = await admin.storage.from(BUCKET).upload(storagePath, buffer, {
+    const rawContentType = res.headers.get('content-type') ?? 'image/jpeg';
+    // TikTok avatar URLs come back as image/heic which Chrome+Firefox refuse
+    // to render inline. Transcode to JPEG so the persisted URL displays
+    // everywhere.
+    const { buffer, contentType, extOverride } = await maybeTranscodeToJpeg(
+      originalBuffer,
+      rawContentType,
+    );
+    const finalPath = extOverride ? storagePath.replace(/\.[a-z0-9]+$/i, extOverride) : storagePath;
+
+    const { error: uploadError } = await admin.storage.from(BUCKET).upload(finalPath, buffer, {
       contentType,
       upsert: true,
     });
     if (uploadError) {
-      console.warn(`[audit] persist failed for ${storagePath}:`, uploadError.message);
+      console.warn(`[audit] persist failed for ${finalPath}:`, uploadError.message);
       return null;
     }
-    const { data } = admin.storage.from(BUCKET).getPublicUrl(storagePath);
+    const { data } = admin.storage.from(BUCKET).getPublicUrl(finalPath);
     return data.publicUrl;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
