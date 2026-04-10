@@ -1,14 +1,34 @@
 /**
- * Scrape a Facebook page using Apify raw fetch API.
- * Actor: apify/facebook-posts-scraper — scrapes posts with dates and engagement.
+ * Scrape a Facebook page via Apify. Two-actor parallel strategy — same
+ * pattern Instagram uses because Meta blocks single-actor flows that try to
+ * do both profile AND posts in one pass.
+ *
+ *   1. `apify/facebook-pages-scraper` — profile metadata (followers, bio,
+ *      category, verified, avatar, cover photo, website, etc.). Verified
+ *      working against Nike — returns rich data for public pages.
+ *   2. `apify/facebook-reels-scraper` — Reels (short-form video content).
+ *      Audit is explicitly scoped to short-form video, so Reels is the
+ *      content axis we care about; posts-scraper has been unreliable for
+ *      months as Meta fingerprinting catches up.
+ *
+ * Both actors run in parallel. If the pages actor returns `not_available`
+ * (restricted page, region-locked, deleted) we throw with the actor's own
+ * errorDescription so the audit's failedPlatforms UI surfaces the real
+ * reason. If Reels fails but pages succeeds, we still return the profile
+ * with an empty videos array — the profile card renders, the content
+ * section is empty.
  */
 
-import { startApifyActorRun, waitForApifyRunSuccess, fetchApifyDatasetItems } from '@/lib/tiktok/apify-run';
+import {
+  startApifyActorRun,
+  waitForApifyRunSuccess,
+  fetchApifyDatasetItems,
+  getApifyRunFailureReason,
+} from '@/lib/tiktok/apify-run';
 import type { ProspectProfile, ProspectVideo } from './types';
 
-// Configurable actor — set FACEBOOK_SCRAPER_ACTOR to use a cheaper community actor
-// e.g. "netdesignr/facebook-posts-scraper" or "scrapemesh/facebook-page-posts-scraper"
-const ACTOR_ID = process.env.FACEBOOK_SCRAPER_ACTOR ?? 'apify/facebook-posts-scraper';
+const PROFILE_ACTOR_ID = process.env.FACEBOOK_PAGES_SCRAPER_ACTOR ?? 'apify/facebook-pages-scraper';
+const REELS_ACTOR_ID = process.env.FACEBOOK_REELS_SCRAPER_ACTOR ?? 'apify/facebook-reels-scraper';
 
 function getApiKey(): string {
   const token = process.env.APIFY_API_KEY;
@@ -16,7 +36,7 @@ function getApiKey(): string {
   return token;
 }
 
-/** Extract Facebook page URL */
+/** Extract full FB page URL from anything a user might paste. */
 export function extractFacebookPage(url: string): string {
   const cleaned = url.trim();
   if (cleaned.startsWith('http')) return cleaned;
@@ -24,52 +44,108 @@ export function extractFacebookPage(url: string): string {
   return `https://www.facebook.com/${cleaned}`;
 }
 
-interface FBPostItem {
-  // Page-level (varies by actor)
+// ── Pages actor (profile metadata) ──
+
+interface FBPageItem {
+  // Success path (apify/facebook-pages-scraper shape)
+  title?: string;
   pageName?: string;
   pageUrl?: string;
-  pageLikes?: number;
-  pageFollowers?: number;
-  pageCategory?: string;
-  pageProfilePicUrl?: string;
-  pageVerified?: boolean;
-  pageAbout?: string;
-  // Some actors use these
-  name?: string;
-  about?: string;
-  followers?: number;
+  facebookUrl?: string;
+  pageId?: string;
+  facebookId?: string;
+  categories?: string[];
   category?: string;
-  profilePicture?: string;
-  verified?: boolean;
-  // Post-level
-  postId?: string;
-  postUrl?: string;
-  postText?: string;
-  text?: string;
-  message?: string;
-  description?: string;
+  info?: string[];
   likes?: number;
-  comments?: number;
-  shares?: number;
-  reactions?: number;
-  videoViews?: number;
-  time?: string;
-  date?: string;
-  timestamp?: number;
-  createdTime?: string;
-  publishedAt?: string;
-  type?: string;
-  imageUrl?: string;
-  videoUrl?: string;
-  fullPicture?: string;
-  url?: string;
-  link?: string;
-  // Alternative field names
-  likesCount?: number;
-  commentsCount?: number;
-  sharesCount?: number;
-  reactionsCount?: number;
+  followers?: number;
+  followings?: number;
+  profilePictureUrl?: string;
+  coverPhotoUrl?: string;
+  websites?: string[];
+  website?: string;
+  phone?: string;
+  creation_date?: string;
+  ad_status?: string;
+  confirmed_owner?: string;
+  // Error path
+  error?: string;
+  errorDescription?: string;
 }
+
+async function fetchPageProfile(pageUrl: string, apiKey: string): Promise<FBPageItem | null> {
+  console.log(`[audit] FB pages actor → ${pageUrl}`);
+  const runId = await startApifyActorRun(
+    PROFILE_ACTOR_ID,
+    { startUrls: [{ url: pageUrl }] },
+    apiKey,
+  );
+  if (!runId) return null;
+  const ok = await waitForApifyRunSuccess(runId, apiKey, 180_000, 3_000);
+  if (!ok) {
+    const reason = await getApifyRunFailureReason(runId, apiKey);
+    console.warn(`[audit] FB pages actor failed: ${reason}`);
+    return null;
+  }
+  const items = (await fetchApifyDatasetItems(runId, apiKey, 5)) as FBPageItem[];
+  return items[0] ?? null;
+}
+
+// ── Reels actor (video content) ──
+
+interface FBReelMedia {
+  id?: string;
+  playable_duration_in_ms?: number;
+  first_frame_thumbnail?: string;
+}
+
+interface FBReelItem {
+  id?: string;
+  topLevelReelUrl?: string;
+  inputUrl?: string;
+  text?: string;
+  time?: string;
+  playCount?: number;
+  playCountRounded?: number;
+  viewCount?: number;
+  likes?: number;
+  likesCount?: number;
+  reactionCount?: number;
+  comments?: number;
+  commentsCount?: number;
+  commentCount?: number;
+  shares?: number;
+  sharesCount?: number;
+  shareCount?: number;
+  video?: FBReelMedia;
+  attachments?: Array<{ media?: FBReelMedia }>;
+  error?: string;
+}
+
+async function fetchPageReels(pageUrl: string, apiKey: string): Promise<FBReelItem[]> {
+  console.log(`[audit] FB reels actor → ${pageUrl}`);
+  const runId = await startApifyActorRun(
+    REELS_ACTOR_ID,
+    {
+      startUrls: [{ url: pageUrl }],
+      resultsLimit: 25,
+    },
+    apiKey,
+  );
+  if (!runId) return [];
+  const ok = await waitForApifyRunSuccess(runId, apiKey, 180_000, 3_000);
+  if (!ok) {
+    const reason = await getApifyRunFailureReason(runId, apiKey);
+    console.warn(`[audit] FB reels actor failed: ${reason}`);
+    return [];
+  }
+  const items = (await fetchApifyDatasetItems(runId, apiKey, 50)) as FBReelItem[];
+  // Drop error-only items (reels scraper uses the same {url, error, errorDescription}
+  // failure shape as the posts scraper).
+  return items.filter((i) => !i.error && (i.topLevelReelUrl || i.id || i.text));
+}
+
+// ── Public API ──
 
 export interface FacebookProfileResult {
   profile: ProspectProfile;
@@ -80,113 +156,93 @@ export async function scrapeFacebookProfile(profileUrl: string): Promise<Faceboo
   const fullUrl = extractFacebookPage(profileUrl);
   const apiKey = getApiKey();
 
-  console.log(`[audit] Scraping Facebook page ${fullUrl} via Apify actor: ${ACTOR_ID}`);
+  // Fan out to both actors in parallel.
+  const [pageItem, reelItems] = await Promise.all([
+    fetchPageProfile(fullUrl, apiKey),
+    fetchPageReels(fullUrl, apiKey),
+  ]);
 
-  // Build input — most actors accept startUrls, some accept urls
-  const runId = await startApifyActorRun(
-    ACTOR_ID,
-    {
-      startUrls: [{ url: fullUrl }],
-      urls: [fullUrl],
-      resultsLimit: 25,
-      maxPosts: 25,
-    },
-    apiKey,
-  );
-
-  if (!runId) throw new Error(`Failed to start Apify actor for FB ${fullUrl}`);
-
-  const success = await waitForApifyRunSuccess(runId, apiKey, 120000, 3000);
-  if (!success) throw new Error(`Apify scrape timed out for FB page`);
-
-  const rawItems = await fetchApifyDatasetItems(runId, apiKey, 50) as Array<FBPostItem & { error?: string; errorDescription?: string }>;
-  if (rawItems.length === 0) {
-    throw new Error('Facebook scrape returned no items — Meta may be blocking the actor.');
+  // Pages actor came back with a meta-blocked error payload → surface it so
+  // the failedPlatforms UI renders a descriptive message.
+  if (pageItem?.error) {
+    const desc = pageItem.errorDescription?.slice(0, 200) ?? pageItem.error;
+    throw new Error(`Facebook blocked the scrape: ${desc}`);
   }
 
-  // Log first item keys for debugging different actor output formats
-  console.log(`[audit] FB actor returned ${rawItems.length} items. First item keys: ${Object.keys(rawItems[0]).slice(0, 15).join(', ')}`);
-
-  // apify/facebook-posts-scraper has been returning `{url, error, errorDescription}`
-  // for most pages lately — Meta is actively blocking the extraction and the
-  // actor surfaces it as per-item errors. Detect that case up front and throw
-  // a descriptive error so the audit's failedPlatforms UI can surface the
-  // real reason instead of silently producing a bogus empty profile.
-  const allErrors = rawItems.every((item) => item.error && !item.postId && !item.name && !item.pageName);
-  if (allErrors) {
-    const firstError = rawItems[0];
-    const desc = firstError.errorDescription?.toString().trim();
-    throw new Error(
-      desc
-        ? `Facebook blocked the scrape: ${desc.slice(0, 200)}`
-        : `Facebook scrape failed — Meta is blocking the actor (${firstError.error ?? 'unknown error'}).`,
-    );
+  if (!pageItem && reelItems.length === 0) {
+    throw new Error('Facebook scrape returned no data — both actors failed. Meta may be blocking the page.');
   }
 
-  // Drop error-only items from the list so we don't accidentally treat them
-  // as real posts downstream.
-  const items = rawItems.filter((item) => !item.error || item.postId || item.name || item.pageName) as FBPostItem[];
-  if (items.length === 0) {
-    throw new Error('Facebook scrape returned only error items — nothing to report.');
-  }
+  // Prefer the page's vanity name over the URL slug so capitalisation is
+  // preserved ("Toastique" not "toastiquedc").
+  const displayName = pageItem?.title ?? extractPageSlug(fullUrl);
+  const username = pageItem?.pageName ?? extractPageSlug(fullUrl);
 
-  // Extract page-level info — try multiple field name conventions
-  const pageItem = items.find(i => i.pageName || i.pageFollowers || i.name || i.followers) ?? items[0];
-  // Prefer actor's page name (original casing) over the lowercased URL slug.
-  const rawPageName = pageItem.pageName ?? pageItem.name ?? null;
-  const pageName = rawPageName ?? extractPageSlug(fullUrl);
-  // Username: use the page's vanity name if available; fall back to URL slug.
-  const username = rawPageName
-    ? extractPageSlug(fullUrl) // URL slug is the true unique identifier
-    : extractPageSlug(fullUrl);
+  // Bio: the pages actor's `info` array holds lines like "Nike. 39,638,452 likes",
+  // which is too noisy for a bio. Prefer the category label instead, falling
+  // back to the first info line if there's no category.
+  const bio =
+    (pageItem?.categories && pageItem.categories.join(' · ')) ||
+    pageItem?.category ||
+    (pageItem?.info?.[0] ?? '');
 
   const profile: ProspectProfile = {
     platform: 'facebook',
     username,
-    displayName: pageName,
-    bio: pageItem.pageAbout ?? pageItem.about ?? pageItem.pageCategory ?? pageItem.category ?? '',
-    followers: pageItem.pageFollowers ?? pageItem.followers ?? pageItem.pageLikes ?? 0,
-    following: 0,
-    likes: pageItem.pageLikes ?? 0,
-    postsCount: items.length,
-    avatarUrl: pageItem.pageProfilePicUrl ?? pageItem.profilePicture ?? null,
-    profileUrl: fullUrl,
-    verified: pageItem.pageVerified ?? pageItem.verified ?? false,
+    displayName,
+    bio,
+    followers: pageItem?.followers ?? pageItem?.likes ?? 0,
+    following: pageItem?.followings ?? 0,
+    likes: pageItem?.likes ?? 0,
+    postsCount: reelItems.length,
+    avatarUrl: pageItem?.profilePictureUrl ?? null,
+    profileUrl: pageItem?.facebookUrl ?? pageItem?.pageUrl ?? fullUrl,
+    verified: Boolean(pageItem?.confirmed_owner), // best proxy — pages-scraper doesn't return a verified flag
   };
 
-  // Map posts — handle multiple field name conventions across actors
-  const videos: ProspectVideo[] = items
-    .filter(item => item.postId || item.postUrl || item.postText || item.text || item.message || item.url)
-    .map(item => {
-      const postDate = item.time ?? item.date ?? item.createdTime ?? item.publishedAt
-        ?? (item.timestamp ? new Date(item.timestamp * 1000).toISOString() : null);
-      const text = item.postText ?? item.text ?? item.message ?? item.description ?? '';
+  const videos: ProspectVideo[] = reelItems.slice(0, 25).map((item) => {
+    // The reels actor nests the video under `video` OR inside `attachments[].media`.
+    const media: FBReelMedia =
+      item.video ??
+      (Array.isArray(item.attachments) ? item.attachments[0]?.media : undefined) ??
+      {};
 
-      return {
-        id: item.postId ?? '',
-        platform: 'facebook' as const,
-        description: text,
-        views: item.videoViews ?? 0,
-        likes: item.likes ?? item.likesCount ?? item.reactions ?? item.reactionsCount ?? 0,
-        comments: item.comments ?? item.commentsCount ?? 0,
-        shares: item.shares ?? item.sharesCount ?? 0,
-        bookmarks: 0,
-        duration: null,
-        publishDate: postDate,
-        hashtags: extractHashtags(text),
-        url: item.postUrl ?? item.url ?? item.link ?? fullUrl,
-        thumbnailUrl: item.fullPicture ?? item.imageUrl ?? null,
-        authorUsername: extractPageSlug(fullUrl),
-        authorDisplayName: pageName,
-        authorAvatar: profile.avatarUrl,
-        authorFollowers: profile.followers,
-      };
-    })
-    .slice(0, 25);
+    const caption = item.text ?? '';
+    const id = media.id ?? item.id ?? '';
+    const views = item.playCountRounded ?? item.playCount ?? item.viewCount ?? 0;
+    const likes = item.likesCount ?? item.likes ?? item.reactionCount ?? 0;
+    const comments = item.commentsCount ?? item.commentCount ?? item.comments ?? 0;
+    const shares = item.sharesCount ?? item.shareCount ?? item.shares ?? 0;
+    const duration = media.playable_duration_in_ms
+      ? Math.round(media.playable_duration_in_ms / 1000)
+      : null;
 
-  console.log(`[audit] Scraped FB ${pageName}: ${profile.followers} followers, ${videos.length} posts`);
+    return {
+      id,
+      platform: 'facebook' as const,
+      description: caption,
+      views,
+      likes,
+      comments,
+      shares,
+      bookmarks: 0,
+      duration,
+      publishDate: item.time ?? null,
+      hashtags: extractHashtags(caption),
+      url: item.topLevelReelUrl ?? fullUrl,
+      thumbnailUrl: media.first_frame_thumbnail ?? null,
+      authorUsername: username,
+      authorDisplayName: displayName,
+      authorAvatar: profile.avatarUrl,
+      authorFollowers: profile.followers,
+    };
+  });
+
+  console.log(`[audit] Scraped FB ${displayName}: ${profile.followers} followers, ${videos.length} reels`);
   return { profile, videos };
 }
+
+// ── Helpers ──
 
 function extractPageSlug(url: string): string {
   try {
@@ -198,5 +254,5 @@ function extractPageSlug(url: string): string {
 
 function extractHashtags(text?: string | null): string[] {
   if (!text) return [];
-  return [...text.matchAll(/#(\w+)/g)].map(m => m[1].toLowerCase());
+  return [...text.matchAll(/#(\w+)/g)].map((m) => m[1].toLowerCase());
 }

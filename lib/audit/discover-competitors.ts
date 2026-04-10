@@ -107,13 +107,25 @@ async function scrapeSocialForCompetitor(
  */
 async function askLlmForCompetitors(
   websiteContext: WebsiteContext,
-  targetPlatformSignals: { platform: AuditPlatform; topHashtags: string[] }[],
+  targetPlatformSignals: { platform: AuditPlatform; topHashtags: string[]; followers: number }[],
 ): Promise<LlmCandidate[]> {
   const topSignals = targetPlatformSignals
-    .map((p) => `${p.platform}: ${p.topHashtags.slice(0, 8).join(', ') || '(no hashtags)'}`)
+    .map(
+      (p) =>
+        `${p.platform}: ${p.followers.toLocaleString()} followers · hashtags: ${p.topHashtags.slice(0, 8).join(', ') || '(none)'}`,
+    )
     .join('\n');
 
-  const prompt = `You are a competitive intelligence analyst for social media strategy. Identify ${MAX_CANDIDATES_REQUESTED} direct competitors for this brand — real companies operating in the same sub-niche, not industry giants unless this brand actually competes with them.
+  // Pick the primary platform for size-matching — highest follower count wins,
+  // since that's usually the brand's focus platform. Gives the LLM an explicit
+  // "match competitors near this scale" anchor instead of just vibes.
+  const sortedByFollowers = [...targetPlatformSignals].sort((a, b) => b.followers - a.followers);
+  const primary = sortedByFollowers[0];
+  const sizeAnchor = primary
+    ? `The target's largest platform is ${primary.platform} with ${primary.followers.toLocaleString()} followers. Pick competitors whose follower counts sit roughly between ${Math.max(500, Math.floor(primary.followers * 0.25)).toLocaleString()} and ${Math.floor(primary.followers * 5).toLocaleString()} — same scale or one tier up, NOT mega-brands 100× their size and NOT dead pages with a few hundred followers.`
+    : 'Pick competitors at roughly the same scale as this brand — not mega-brands 100× their size.';
+
+  const prompt = `You are a competitive intelligence analyst for social media strategy. Identify ${MAX_CANDIDATES_REQUESTED} direct competitors for this brand — real companies operating in the same sub-niche.
 
 TARGET BRAND
 - Name: ${websiteContext.title}
@@ -122,14 +134,18 @@ TARGET BRAND
 - Keywords: ${websiteContext.keywords.slice(0, 10).join(', ')}
 ${topSignals ? `\nTARGET SOCIAL SIGNALS\n${topSignals}` : ''}
 
-For each competitor, return their brand name and their official website domain (NOT their social media URLs — we'll scrape the website to find socials). Prefer smaller / direct competitors over mega-brands. Never invent a website — only return a domain you're confident is the official one. If you're not sure of the exact domain, make your best guess but clearly.
+SCALE MATCHING (non-negotiable)
+${sizeAnchor}
+Competitors at a wildly different scale make the head-to-head comparison useless. If you're not sure whether a candidate is at a similar scale, SKIP them and pick someone else.
+
+For each competitor, return their brand name and their official website domain (NOT their social media URLs — we'll scrape the website to find socials). Never invent a website — only return a domain you're confident is the official one.
 
 Return ONLY a JSON array — no markdown fences, no prose. Shape:
 [
   { "name": "Brand Name", "website": "example.com", "why": "one-sentence reason they compete" }
 ]
 
-Exactly ${MAX_CANDIDATES_REQUESTED} entries, ordered most-direct first.`;
+Exactly ${MAX_CANDIDATES_REQUESTED} entries, ordered most-similar-scale first.`;
 
   const result = await createCompletion({
     messages: [{ role: 'user', content: prompt }],
@@ -199,6 +215,7 @@ export async function discoverCompetitorsByWebsite(
   const targetSignals = targetPlatforms.map((p) => ({
     platform: p.platform,
     topHashtags: getTopHashtags(p.videos, 10),
+    followers: p.profile.followers,
   }));
 
   const candidates = await askLlmForCompetitors(websiteContext, targetSignals);
