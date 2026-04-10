@@ -6,7 +6,9 @@
 import { startApifyActorRun, waitForApifyRunSuccess, fetchApifyDatasetItems } from '@/lib/tiktok/apify-run';
 import type { ProspectProfile, ProspectVideo } from './types';
 
-const ACTOR_ID = 'apify/facebook-posts-scraper';
+// Configurable actor — set FACEBOOK_SCRAPER_ACTOR to use a cheaper community actor
+// e.g. "netdesignr/facebook-posts-scraper" or "scrapemesh/facebook-page-posts-scraper"
+const ACTOR_ID = process.env.FACEBOOK_SCRAPER_ACTOR ?? 'apify/facebook-posts-scraper';
 
 function getApiKey(): string {
   const token = process.env.APIFY_API_KEY;
@@ -23,7 +25,7 @@ export function extractFacebookPage(url: string): string {
 }
 
 interface FBPostItem {
-  // Page-level
+  // Page-level (varies by actor)
   pageName?: string;
   pageUrl?: string;
   pageLikes?: number;
@@ -32,11 +34,20 @@ interface FBPostItem {
   pageProfilePicUrl?: string;
   pageVerified?: boolean;
   pageAbout?: string;
+  // Some actors use these
+  name?: string;
+  about?: string;
+  followers?: number;
+  category?: string;
+  profilePicture?: string;
+  verified?: boolean;
   // Post-level
   postId?: string;
   postUrl?: string;
   postText?: string;
   text?: string;
+  message?: string;
+  description?: string;
   likes?: number;
   comments?: number;
   shares?: number;
@@ -45,14 +56,19 @@ interface FBPostItem {
   time?: string;
   date?: string;
   timestamp?: number;
+  createdTime?: string;
+  publishedAt?: string;
   type?: string;
   imageUrl?: string;
   videoUrl?: string;
   fullPicture?: string;
+  url?: string;
+  link?: string;
   // Alternative field names
   likesCount?: number;
   commentsCount?: number;
   sharesCount?: number;
+  reactionsCount?: number;
 }
 
 export interface FacebookProfileResult {
@@ -64,13 +80,16 @@ export async function scrapeFacebookProfile(profileUrl: string): Promise<Faceboo
   const fullUrl = extractFacebookPage(profileUrl);
   const apiKey = getApiKey();
 
-  console.log(`[audit] Scraping Facebook page ${fullUrl} via Apify`);
+  console.log(`[audit] Scraping Facebook page ${fullUrl} via Apify actor: ${ACTOR_ID}`);
 
+  // Build input — most actors accept startUrls, some accept urls
   const runId = await startApifyActorRun(
     ACTOR_ID,
     {
       startUrls: [{ url: fullUrl }],
-      resultsLimit: 30,
+      urls: [fullUrl],
+      resultsLimit: 25,
+      maxPosts: 25,
     },
     apiKey,
   );
@@ -85,55 +104,67 @@ export async function scrapeFacebookProfile(profileUrl: string): Promise<Faceboo
     throw new Error(`No data returned for Facebook page.`);
   }
 
-  // Extract page-level info from first item that has it
-  const pageItem = items.find(i => i.pageName || i.pageFollowers) ?? items[0];
-  const pageName = pageItem.pageName ?? new URL(fullUrl).pathname.replace(/^\//, '').replace(/\/$/, '');
+  // Log first item keys for debugging different actor output formats
+  console.log(`[audit] FB actor returned ${items.length} items. First item keys: ${Object.keys(items[0]).slice(0, 15).join(', ')}`);
+
+  // Extract page-level info — try multiple field name conventions
+  const pageItem = items.find(i => i.pageName || i.pageFollowers || i.name || i.followers) ?? items[0];
+  const pageName = pageItem.pageName ?? pageItem.name ?? extractPageSlug(fullUrl);
 
   const profile: ProspectProfile = {
     platform: 'facebook',
-    username: pageName,
-    displayName: pageItem.pageName ?? pageName,
-    bio: pageItem.pageAbout ?? pageItem.pageCategory ?? '',
-    followers: pageItem.pageFollowers ?? pageItem.pageLikes ?? 0,
+    username: extractPageSlug(fullUrl),
+    displayName: pageName,
+    bio: pageItem.pageAbout ?? pageItem.about ?? pageItem.pageCategory ?? pageItem.category ?? '',
+    followers: pageItem.pageFollowers ?? pageItem.followers ?? pageItem.pageLikes ?? 0,
     following: 0,
     likes: pageItem.pageLikes ?? 0,
     postsCount: items.length,
-    avatarUrl: pageItem.pageProfilePicUrl ?? null,
+    avatarUrl: pageItem.pageProfilePicUrl ?? pageItem.profilePicture ?? null,
     profileUrl: fullUrl,
-    verified: pageItem.pageVerified ?? false,
+    verified: pageItem.pageVerified ?? pageItem.verified ?? false,
   };
 
-  // Map posts
+  // Map posts — handle multiple field name conventions across actors
   const videos: ProspectVideo[] = items
-    .filter(item => item.postId || item.postUrl || item.postText || item.text)
+    .filter(item => item.postId || item.postUrl || item.postText || item.text || item.message || item.url)
     .map(item => {
-      const postDate = item.time ?? item.date ?? (item.timestamp ? new Date(item.timestamp * 1000).toISOString() : null);
-      const text = item.postText ?? item.text ?? '';
+      const postDate = item.time ?? item.date ?? item.createdTime ?? item.publishedAt
+        ?? (item.timestamp ? new Date(item.timestamp * 1000).toISOString() : null);
+      const text = item.postText ?? item.text ?? item.message ?? item.description ?? '';
 
       return {
         id: item.postId ?? '',
         platform: 'facebook' as const,
         description: text,
         views: item.videoViews ?? 0,
-        likes: item.likes ?? item.likesCount ?? item.reactions ?? 0,
+        likes: item.likes ?? item.likesCount ?? item.reactions ?? item.reactionsCount ?? 0,
         comments: item.comments ?? item.commentsCount ?? 0,
         shares: item.shares ?? item.sharesCount ?? 0,
         bookmarks: 0,
         duration: null,
         publishDate: postDate,
         hashtags: extractHashtags(text),
-        url: item.postUrl ?? fullUrl,
+        url: item.postUrl ?? item.url ?? item.link ?? fullUrl,
         thumbnailUrl: item.fullPicture ?? item.imageUrl ?? null,
-        authorUsername: pageName,
-        authorDisplayName: pageItem.pageName ?? null,
-        authorAvatar: pageItem.pageProfilePicUrl ?? null,
+        authorUsername: extractPageSlug(fullUrl),
+        authorDisplayName: pageName,
+        authorAvatar: profile.avatarUrl,
         authorFollowers: profile.followers,
       };
     })
-    .slice(0, 30);
+    .slice(0, 25);
 
   console.log(`[audit] Scraped FB ${pageName}: ${profile.followers} followers, ${videos.length} posts`);
   return { profile, videos };
+}
+
+function extractPageSlug(url: string): string {
+  try {
+    return new URL(url).pathname.replace(/^\//, '').replace(/\/$/, '');
+  } catch {
+    return url;
+  }
 }
 
 function extractHashtags(text?: string | null): string[] {

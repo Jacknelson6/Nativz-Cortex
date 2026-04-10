@@ -13,16 +13,18 @@ const PLATFORM_COLORS: Record<string, string> = {
   tiktok: 'bg-pink-500/10 text-pink-400',
   youtube: 'bg-red-500/10 text-red-400',
   instagram: 'bg-purple-500/10 text-purple-400',
+  facebook: 'bg-blue-500/10 text-blue-400',
 };
 
 const PLATFORM_LABELS: Record<string, string> = {
   tiktok: 'TikTok',
   youtube: 'YouTube',
   instagram: 'Instagram',
+  facebook: 'Facebook',
 };
 
 type SortOption = 'views' | 'outlier_score' | 'recent';
-type PlatformFilter = 'all' | 'tiktok' | 'youtube' | 'instagram';
+type PlatformFilter = 'all' | 'tiktok' | 'youtube' | 'instagram' | 'facebook';
 
 function formatNumber(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -33,9 +35,17 @@ function formatNumber(n: number): string {
 function isVerticalVideo(video: TopicSearchVideoRow): boolean {
   // TikTok and Instagram are always vertical (9:16)
   if (video.platform === 'tiktok' || video.platform === 'instagram') return true;
-  // YouTube: Shorts (≤60s) are vertical, long-form is horizontal
-  if (video.platform === 'youtube' && video.duration_seconds != null && video.duration_seconds <= 60) return true;
-  // Facebook and other platforms default to horizontal (16:9)
+  // YouTube: Shorts (≤180s or URL contains /shorts/) are vertical
+  if (video.platform === 'youtube') {
+    if (video.url?.includes('/shorts/')) return true;
+    if (video.duration_seconds != null && video.duration_seconds <= 180) return true;
+    return false;
+  }
+  // Facebook: posts without video are horizontal, short videos are vertical
+  if (video.platform === 'facebook') {
+    if (video.duration_seconds != null && video.duration_seconds <= 180) return true;
+    return false;
+  }
   return false;
 }
 
@@ -193,9 +203,11 @@ export function VideoGrid({
               ))}
             </div>
 
-            {/* Platform filter */}
+            {/* Platform filter — only show platforms that have videos */}
             <div className="flex rounded-lg border border-nativz-border overflow-hidden">
-              {(['all', 'tiktok', 'youtube', 'instagram'] as PlatformFilter[]).map(p => (
+              {(['all', 'tiktok', 'youtube', 'instagram', 'facebook'] as PlatformFilter[])
+                .filter(p => p === 'all' || videos.some(v => v.platform === p))
+                .map(p => (
                 <button
                   key={p}
                   type="button"

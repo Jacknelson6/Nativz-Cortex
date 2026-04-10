@@ -15,27 +15,27 @@ export interface WebsiteScrapeResult {
 const SOCIAL_PATTERNS: { platform: AuditPlatform; regex: RegExp; extractUsername: (url: string) => string }[] = [
   {
     platform: 'tiktok',
-    regex: /https?:\/\/(?:www\.)?tiktok\.com\/@([\w.]+)/gi,
+    regex: /(?:https?:)?\/\/(?:www\.)?tiktok\.com\/@([\w.]+)/gi,
     extractUsername: (url) => url.match(/@([\w.]+)/)?.[1] ?? '',
   },
   {
     platform: 'instagram',
-    regex: /https?:\/\/(?:www\.)?instagram\.com\/([\w.]+)\/?/gi,
+    regex: /(?:https?:)?\/\/(?:www\.)?instagram\.com\/([\w.]+)\/?(?:[?#]|$)/gi,
     extractUsername: (url) => url.match(/instagram\.com\/([\w.]+)/)?.[1] ?? '',
   },
   {
     platform: 'facebook',
-    regex: /https?:\/\/(?:www\.)?facebook\.com\/([\w.]+)\/?/gi,
-    extractUsername: (url) => url.match(/facebook\.com\/([\w.]+)/)?.[1] ?? '',
+    regex: /(?:https?:)?\/\/(?:(?:www|m|business)\.)?(?:facebook|fb)\.com\/([\w.]+)\/?(?:[?#]|$)/gi,
+    extractUsername: (url) => url.match(/(?:facebook|fb)\.com\/([\w.]+)/)?.[1] ?? '',
   },
   {
     platform: 'youtube',
-    regex: /https?:\/\/(?:www\.)?youtube\.com\/(@[\w]+|channel\/[\w-]+|c\/[\w-]+)\/?/gi,
+    regex: /(?:https?:)?\/\/(?:www\.)?youtube\.com\/(@[\w-]+|channel\/[\w-]+|c\/[\w-]+)\/?/gi,
     extractUsername: (url) => url.match(/youtube\.com\/(@?[\w-]+|channel\/[\w-]+|c\/[\w-]+)/)?.[1] ?? '',
   },
   {
     platform: 'linkedin',
-    regex: /https?:\/\/(?:www\.)?linkedin\.com\/(company|in)\/([\w-]+)\/?/gi,
+    regex: /(?:https?:)?\/\/(?:www\.)?linkedin\.com\/(company|in)\/([\w-]+)\/?/gi,
     extractUsername: (url) => url.match(/linkedin\.com\/(?:company|in)\/([\w-]+)/)?.[1] ?? '',
   },
 ];
@@ -44,6 +44,9 @@ const SOCIAL_PATTERNS: { platform: AuditPlatform; regex: RegExp; extractUsername
 const EXCLUDED_USERNAMES = new Set([
   'share', 'sharer', 'intent', 'hashtag', 'explore', 'p', 'reel',
   'watch', 'shorts', 'feed', 'stories', 'about', 'login', 'signup',
+  'help', 'settings', 'direct', 'accounts', 'directory', 'groups',
+  'pages', 'marketplace', 'gaming', 'events', 'bookmarks', 'saved',
+  'tr', 'ar', 'privacy', 'policy', 'terms', 'legal', 'jobs',
 ]);
 
 export async function scrapeWebsite(url: string): Promise<WebsiteScrapeResult> {
@@ -102,22 +105,35 @@ function extractSocialLinks(html: string): SocialLink[] {
   const found: SocialLink[] = [];
   const seen = new Set<string>();
 
+  function addLink(platform: AuditPlatform, fullUrl: string, username: string) {
+    if (!username || EXCLUDED_USERNAMES.has(username.toLowerCase())) return;
+    const key = `${platform}:${username.toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    found.push({ platform, url: fullUrl, username });
+  }
+
+  // Pass 1: Regex scan across entire HTML text
   for (const pattern of SOCIAL_PATTERNS) {
     const matches = html.matchAll(pattern.regex);
     for (const match of matches) {
-      const fullUrl = match[0];
-      const username = pattern.extractUsername(fullUrl);
-      if (!username || EXCLUDED_USERNAMES.has(username.toLowerCase())) continue;
+      addLink(pattern.platform, match[0], pattern.extractUsername(match[0]));
+    }
+  }
 
-      const key = `${pattern.platform}:${username.toLowerCase()}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-
-      found.push({
-        platform: pattern.platform,
-        url: fullUrl,
-        username,
-      });
+  // Pass 2: Extract href values from <a> tags and re-check
+  // This catches URL-encoded links, links built with entities, and links
+  // the global regex missed because of surrounding HTML attributes.
+  const hrefRegex = /href=["']((?:https?:)?\/\/[^"']+)["']/gi;
+  for (const hm of html.matchAll(hrefRegex)) {
+    const href = decodeHtmlEntities(hm[1]);
+    for (const pattern of SOCIAL_PATTERNS) {
+      // Reset lastIndex since we're reusing the regex on a different string
+      pattern.regex.lastIndex = 0;
+      if (pattern.regex.test(href)) {
+        pattern.regex.lastIndex = 0;
+        addLink(pattern.platform, href, pattern.extractUsername(href));
+      }
     }
   }
 

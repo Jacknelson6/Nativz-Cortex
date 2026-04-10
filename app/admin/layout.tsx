@@ -10,6 +10,7 @@ import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
 import { EasterEgg } from '@/components/easter-egg';
 import { CommandPalette } from '@/components/shared/command-palette';
 import { PageTransition } from '@/components/shared/page-transition';
+import { BackgroundSearchProvider } from '@/components/search/background-search-tracker';
 
 const getCachedUser = unstable_cache(
   async (userId: string) => {
@@ -51,15 +52,17 @@ export default async function AdminLayout({
     }
 
     return (
-      <SidebarProvider>
-        <EasterEgg />
-        <CommandPalette />
-        <AdminSidebar userName={userName} avatarUrl={avatarUrl} />
-        <SidebarInset>
-          <AdminHeader />
-          <PageTransition>{children}</PageTransition>
-        </SidebarInset>
-      </SidebarProvider>
+      <BackgroundSearchProvider>
+        <SidebarProvider>
+          <EasterEgg />
+          <CommandPalette />
+          <AdminSidebar userName={userName} avatarUrl={avatarUrl} />
+          <SidebarInset>
+            <AdminHeader />
+            <PageTransition>{children}</PageTransition>
+          </SidebarInset>
+        </SidebarProvider>
+      </BackgroundSearchProvider>
     );
   } catch (err) {
     console.error('AdminLayout bootstrap failed:', err);

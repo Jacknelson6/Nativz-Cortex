@@ -437,7 +437,9 @@ export function TikTokEmbedCarousel({
                               const res = await fetch(`/api/analysis/items/${analysisItem.id}/rescript`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({}),
+                                body: JSON.stringify({
+                                  client_id: clientId || undefined,
+                                }),
                               });
                               if (res.ok) {
                                 const data = await res.json();

@@ -11,6 +11,7 @@ import { PLATFORM_CONFIG } from './platform-icon';
 import { PipelineStepper } from './pipeline-stepper';
 import { EncryptedText } from '@/components/ui/encrypted-text';
 import { toast } from 'sonner';
+import { useBackgroundSearch } from './background-search-tracker';
 
 interface SearchProcessingProps {
   searchId: string;
@@ -170,6 +171,7 @@ export function SearchProcessing({
   webResearchMode = 'llm_only',
 }: SearchProcessingProps) {
   const router = useRouter();
+  const { track: trackInBackground } = useBackgroundSearch();
   const [progress, setProgress] = useState(0);
   const [stageIndex, setStageIndex] = useState(0);
   const [done, setDone] = useState(false);
@@ -182,6 +184,13 @@ export function SearchProcessing({
   const intervalsRef = useRef<{ progress: ReturnType<typeof setInterval> | null; timer: ReturnType<typeof setInterval> | null }>({ progress: null, timer: null });
   const pollStatusRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const redirectOnceRef = useRef(false);
+
+  /** Navigate away and track search for background toast notification */
+  function goBackAndTrack() {
+    trackInBackground({ id: searchId, query, redirectPrefix });
+    toast.info('Research running in background — you\'ll be notified when it completes');
+    router.push(`${redirectPrefix}/search/new`);
+  }
 
   // Keep ref in sync so the interval closure can read it
   useEffect(() => {
@@ -523,7 +532,7 @@ export function SearchProcessing({
         {/* Action buttons — visible from the start */}
         {!done && !error && (
           <div className="mt-6 flex items-center justify-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => router.push(`${redirectPrefix}/search/new`)}>
+            <Button variant="ghost" size="sm" onClick={goBackAndTrack}>
               <ArrowLeft size={12} />
               Go back
             </Button>

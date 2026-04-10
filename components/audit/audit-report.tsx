@@ -24,6 +24,8 @@ import { Button } from '@/components/ui/button';
 import { EncryptedText } from '@/components/ui/encrypted-text';
 import { VideoGrid } from '@/components/research/video-grid';
 import { toast } from 'sonner';
+import { AuditExportPdfButton } from '@/components/audit/audit-export-pdf-button';
+import { AuditShareButton } from '@/components/audit/audit-share-button';
 import type { PlatformReport, CompetitorProfile, AuditScorecard, ScorecardItem, ScoreStatus, WebsiteContext, ProspectVideo } from '@/lib/audit/types';
 import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
 
@@ -410,14 +412,23 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             {platforms.length} platform{platforms.length !== 1 ? 's' : ''} · {new Date(audit.created_at).toLocaleDateString()}
           </p>
         </div>
-        {scorecard && (
-          <div className="flex items-center gap-2">
-            <div className={`text-3xl font-bold ${scorecard.overallScore >= 70 ? 'text-emerald-400' : scorecard.overallScore >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
-              {scorecard.overallScore}
+        <div className="flex items-center gap-2">
+          <AuditExportPdfButton
+            websiteContext={websiteContext}
+            platforms={platforms}
+            competitors={competitors}
+            scorecard={scorecard}
+          />
+          <AuditShareButton auditId={audit.id} />
+          {scorecard && (
+            <div className="flex items-center gap-1 ml-2">
+              <div className={`text-3xl font-bold ${scorecard.overallScore >= 70 ? 'text-emerald-400' : scorecard.overallScore >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
+                {scorecard.overallScore}
+              </div>
+              <span className="text-xs text-text-muted">/100</span>
             </div>
-            <span className="text-xs text-text-muted">/100</span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Website context */}

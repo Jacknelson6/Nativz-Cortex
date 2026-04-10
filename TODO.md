@@ -8,15 +8,9 @@
 
 ## Next Session
 
-### Audit — QA & Refinement
+### Audit — Live QA (scrapers built, need live test)
 - [ ] QA all 4 Apify scrapers live (TikTok, Instagram, Facebook, YouTube) — run a real audit and verify data returns
-- [ ] Fix Facebook scraper — find cheaper apidojo alternative, verify posts + dates + engagement come through
-- [ ] Fix Instagram scraper input format — verify `apidojo/instagram-scraper-api` accepts the URL/username format we send
-- [ ] Fix TikTok scraper — verify `apidojo/tiktok-profile-scraper` input format matches what we send
-- [ ] Website scraper — improve social link detection (missed Instagram on andersoncollaborative.com)
-- [ ] Source browser in audit — Facebook not showing data, YouTube showing horizontal videos labeled as short-form
-- [ ] Audit PDF export — create a PDF export for audit reports (similar to research PDF)
-- [ ] Audit share links — add share functionality for audit reports
+- [ ] Test new Facebook scraper env override (`FACEBOOK_SCRAPER_ACTOR`) with cheaper community actors
 
 ### Analytics — QA
 - [ ] Verify analytics client portfolio selector loads with real client data
@@ -29,25 +23,45 @@
 - [ ] Verify webhook fires on shared calendar feedback (approved/changes_requested/comment)
 - [ ] Verify webhook URL save/clear in client settings
 
-### Research — Improvements
+### Research — QA
 - [ ] Suggest topics — QA that brand-specific ontology topics generate correctly for different clients
 - [ ] History rail — verify client filter works correctly with load-more (no unrelated searches leaking)
 - [ ] PDF export — QA the overhauled PDF matches the results page (all 3 pages)
 - [ ] Share links — QA that AC domain generates AC share URLs and Nativz generates Nativz URLs
-
-### PDF Export Theming (DONE — needs QA)
-- [x] Match PDF export to current brand theme (AC vs Nativz — colors, logo, fonts)
-- [x] Update PDF content to match results page layout (pillars, emotions, content breakdown, audiences)
-- [x] Executive Summary + Brand Application side by side
-- [x] Recommended Content Pillars 2x2 grid
-- [x] Synthetic Audiences section added
 - [ ] QA: verify PDF renders correctly for both AC and Nativz branded searches
 
 ### Remaining from April 3 Session
 - [ ] Frame extraction debugging — ffmpeg-static works locally but carousel returns 0 frames
-- [ ] Rescript in carousel — needs clientId passed through for brand context
-- [ ] Toast notification when search completes in background (user navigated away)
 - [ ] Video reference library in Strategy Lab Knowledge Base tab
+
+---
+
+## Completed — April 9 Session (Part 2)
+
+### Audit — Scraper & Source Browser Fixes
+- [x] Website scraper — improved social link detection: two-pass extraction (regex + href parsing), added `m.facebook.com`, `fb.com`, protocol-relative URL support, expanded exclusion list
+- [x] Instagram scraper — verified input format (passes both `urls` and `usernames`, already correct)
+- [x] TikTok scraper — verified input format (`profiles` array with full URLs, correct)
+- [x] Facebook scraper — made actor configurable via `FACEBOOK_SCRAPER_ACTOR` env var, added flexible field extraction for different actor output formats, reduced results limit for cost savings
+- [x] Source browser — added Facebook platform support (colors, labels, filter button), dynamic platform filter (only shows platforms with data)
+- [x] Source browser — fixed YouTube aspect ratios: Shorts (≤180s or `/shorts/` URL) now correctly show as 9:16 vertical
+
+### Audit — PDF Export & Share Links (NEW)
+- [x] Audit PDF export — 3-page dark-themed PDF via @react-pdf/renderer (overview + scorecard + platforms/competitors)
+- [x] Export PDF button in audit report header
+- [x] Audit share links — full CRUD API at `/api/audit/[id]/share` (GET/POST/DELETE)
+- [x] DB migration `095_audit_share_links.sql` — `audit_share_links` table with RLS
+- [x] Share button in audit report header
+- [x] Shared audit page at `/shared/audit/[token]` — read-only public view with full report
+
+### Research — Background Notifications
+- [x] Background search tracker — React context provider with polling
+- [x] Toast notification when search completes in background (user navigated away)
+- [x] "Go back" button on processing page registers search for background tracking
+- [x] Toast includes "View results" action button
+
+### Research — Rescript Fix
+- [x] Carousel rescript — now passes `clientId` for brand context to `/api/analysis/items/[id]/rescript`
 
 ---
 
