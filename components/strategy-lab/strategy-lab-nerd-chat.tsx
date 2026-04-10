@@ -659,13 +659,37 @@ export function StrategyLabNerdChat({
               {messages.map((msg, index) => {
                 const isLast = index === messages.length - 1;
                 if (msg.role === 'assistant') {
+                  // Inline "export this reply" button — only renders when the
+                  // assistant message has finished streaming (non-empty
+                  // content, not currently the streaming target). Uses the
+                  // same export pipeline as the header button but in compact
+                  // icon mode, and ships only this one message to the PDF.
+                  const hasContent = msg.content.trim().length > 0;
+                  const isStreamingTarget = isLast && streaming;
                   return (
-                    <AssistantMessage
-                      key={msg.id}
-                      message={msg}
-                      isLast={isLast}
-                      onRetry={() => handleSend('Continue')}
-                    />
+                    <div key={msg.id}>
+                      <AssistantMessage
+                        message={msg}
+                        isLast={isLast}
+                        onRetry={() => handleSend('Continue')}
+                      />
+                      {hasContent && !isStreamingTarget && (
+                        <div className="flex justify-end pt-1 pb-2 pr-2">
+                          <StrategyLabConversationExportButton
+                            clientId={clientId}
+                            clientName={clientName}
+                            conversationTitle={`${clientName} — strategy note`}
+                            messages={[msg]}
+                            attachedSearches={attachedSearches.map((s) => ({
+                              query: s.query,
+                              created_at: s.created_at,
+                            }))}
+                            compact
+                            ariaLabel="Export this reply as PDF"
+                          />
+                        </div>
+                      )}
+                    </div>
                   );
                 }
                 return <UserMessage key={msg.id} message={msg} />;

@@ -14,6 +14,14 @@ interface StrategyLabConversationExportButtonProps {
   messages: ChatMessage[];
   attachedSearches: PdfAttachedSearch[];
   disabled?: boolean;
+  /**
+   * Compact variant — icon-only, smaller padding — intended for the inline
+   * "export this reply" button rendered next to each assistant message. The
+   * default rendering is the header button used at the top of the chat.
+   */
+  compact?: boolean;
+  /** Aria label override — used in compact mode where there's no text label. */
+  ariaLabel?: string;
 }
 
 /**
@@ -56,6 +64,8 @@ export function StrategyLabConversationExportButton({
   messages,
   attachedSearches,
   disabled,
+  compact,
+  ariaLabel,
 }: StrategyLabConversationExportButtonProps) {
   const [exporting, setExporting] = useState(false);
   const { brand } = useAgencyBrand();
@@ -115,6 +125,25 @@ export function StrategyLabConversationExportButton({
     } finally {
       setExporting(false);
     }
+  }
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={handleExport}
+        disabled={disabled || exporting}
+        aria-label={ariaLabel ?? 'Export this reply as PDF'}
+        title={ariaLabel ?? 'Export this reply as PDF'}
+        className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-text-muted/70 transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {exporting ? (
+          <Loader2 size={11} className="animate-spin" aria-hidden />
+        ) : (
+          <FileDown size={11} aria-hidden />
+        )}
+      </button>
+    );
   }
 
   return (
