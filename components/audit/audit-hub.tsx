@@ -29,7 +29,7 @@ export function AuditHub({ audits: initialAudits, userFirstName }: AuditHubProps
     setError('');
     setLoading(true);
     try {
-      const res = await fetch('/api/audit', {
+      const res = await fetch('/api/analyze-social', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ website_url: websiteUrl.trim() }),
@@ -37,12 +37,12 @@ export function AuditHub({ audits: initialAudits, userFirstName }: AuditHubProps
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? 'Failed to start audit');
+        setError(data.error ?? 'Failed to start analysis');
         return;
       }
 
-      toast.success('Audit started');
-      router.push(`/admin/audit/${data.id}`);
+      toast.success('Analysis started');
+      router.push(`/admin/analyze-social/${data.id}`);
     } catch {
       setError('Something went wrong. Try again.');
     } finally {
@@ -93,7 +93,7 @@ export function AuditHub({ audits: initialAudits, userFirstName }: AuditHubProps
                 type="button"
                 onClick={() => void handleStart()}
                 disabled={!isValid || loading}
-                aria-label="Start audit"
+                aria-label="Start analysis"
                 className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full border border-accent/40 bg-accent text-white shadow-[0_0_24px_-6px_rgba(91,163,230,0.55)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9"
               >
                 {loading ? (

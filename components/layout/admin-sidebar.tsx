@@ -90,7 +90,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/search/new', label: 'Research', icon: Telescope },
       { href: '/admin/strategy-lab', label: 'Strategy lab', icon: Compass },
       { href: '/admin/ad-creatives', label: 'Ad creatives', icon: ImagePlus },
-      { href: '/admin/audit', label: 'Audit', icon: ClipboardCheck },
+      { href: '/admin/analyze-social', label: 'Audit', icon: ClipboardCheck },
     ],
   },
   {
@@ -155,7 +155,7 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/presentations',
   '/admin/shoots',
   '/admin/knowledge',
-  '/admin/audit',
+  '/admin/analyze-social',
 ]);
 
 /** Items shown but grayed out with "Coming soon" tooltip for viewers */

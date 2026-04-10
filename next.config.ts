@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
     return [
       // Browsers still request /favicon.ico; Cortex uses file-based `app/icon.png`.
       { source: '/favicon.ico', destination: '/icon.png', permanent: false },
+      // Legacy "audit" → renamed to "analyze-social". Keep bookmarks and any
+      // previously-generated share links working.
+      { source: '/admin/audit', destination: '/admin/analyze-social', permanent: false },
+      { source: '/admin/audit/:path*', destination: '/admin/analyze-social/:path*', permanent: false },
+      { source: '/shared/audit/:path*', destination: '/shared/analyze-social/:path*', permanent: false },
     ];
   },
   compiler: {

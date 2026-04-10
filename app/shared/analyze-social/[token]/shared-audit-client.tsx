@@ -110,10 +110,10 @@ export function SharedAuditClient({ audit }: { audit: AuditRecord }) {
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
               <span className="font-semibold text-text-primary truncate">
                 {websiteContext?.title
-                  ? `Audit: ${websiteContext.title}`
+                  ? websiteContext.title
                   : audit.website_url
-                    ? `Audit: ${audit.website_url.replace(/^https?:\/\//, '').replace(/\/$/, '')}`
-                    : 'Social media audit'}
+                    ? audit.website_url.replace(/^https?:\/\//, '').replace(/\/$/, '')
+                    : 'Social media analysis'}
               </span>
               {platforms.length > 0 && (
                 <>
@@ -170,7 +170,7 @@ export function SharedAuditClient({ audit }: { audit: AuditRecord }) {
           <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
             <div className="px-5 py-4 border-b border-nativz-border flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-text-primary">Audit scorecard</h3>
+                <h3 className="text-sm font-semibold text-text-primary">Analysis scorecard</h3>
                 <div className="flex items-center gap-4 mt-1">
                   {(['good', 'warning', 'poor'] as ScoreStatus[]).map(s => (
                     <span key={s} className="flex items-center gap-1.5 text-xs text-text-muted">

@@ -10,7 +10,7 @@ const ResumeSchema = z.object({
 });
 
 /**
- * POST /api/audit/[id]/resume — Submit social URLs and resume processing
+ * POST /api/analyze-social/[id]/resume — Submit social URLs and resume processing
  * Used when the website scrape didn't find social profiles.
  */
 export async function POST(
@@ -55,7 +55,7 @@ export async function POST(
 
     return NextResponse.json({ status: 'pending' });
   } catch (error) {
-    console.error('POST /api/audit/[id]/resume error:', error);
+    console.error('POST /api/analyze-social/[id]/resume error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

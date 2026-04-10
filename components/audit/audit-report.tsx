@@ -75,7 +75,7 @@ const PROCESSING_STAGES = [
   'Analyzing engagement metrics',
   'Discovering competitors',
   'Scraping competitor profiles',
-  'Generating audit scorecard',
+  'Generating analysis scorecard',
 ];
 
 type AuditPlatformKey = 'tiktok' | 'instagram' | 'facebook' | 'youtube';
@@ -135,7 +135,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
 
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/audit/${audit.id}`);
+        const res = await fetch(`/api/analyze-social/${audit.id}`);
         if (res.ok) {
           const data = await res.json();
           if (data.audit.status !== 'processing') {
@@ -182,7 +182,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   async function detectSocials() {
     setDetecting(true);
     try {
-      const res = await fetch(`/api/audit/${audit.id}/detect-socials`, { method: 'POST' });
+      const res = await fetch(`/api/analyze-social/${audit.id}/detect-socials`, { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
         setDetectedPlatforms(data.detectedPlatforms ?? []);
@@ -211,7 +211,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     // Save any manual social URLs before processing
     const filled = Object.fromEntries(Object.entries(socialInputs).filter(([, v]) => v?.trim()));
     if (Object.keys(filled).length > 0) {
-      await fetch(`/api/audit/${audit.id}/resume`, {
+      await fetch(`/api/analyze-social/${audit.id}/resume`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ social_urls: filled }),
       });
@@ -219,7 +219,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     setProgress(0); setStageIndex(0); setElapsed(0);
     setAudit(prev => ({ ...prev, status: 'processing' }));
     try {
-      const res = await fetch(`/api/audit/${audit.id}/process`, { method: 'POST' });
+      const res = await fetch(`/api/analyze-social/${audit.id}/process`, { method: 'POST' });
       if (!res.ok) { const data = await res.json(); toast.error(data.error ?? 'Processing failed'); }
     } catch { toast.error('Failed to start processing'); }
   }
@@ -229,7 +229,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     if (Object.keys(filled).length === 0) { toast.error('Enter at least one social profile URL'); return; }
     setSubmittingSocials(true);
     try {
-      const res = await fetch(`/api/audit/${audit.id}/resume`, {
+      const res = await fetch(`/api/analyze-social/${audit.id}/resume`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ social_urls: filled }),
       });
@@ -310,7 +310,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           </div>
 
           <div className="flex items-center justify-between">
-            <Button variant="ghost" size="sm" onClick={() => router.push('/admin/audit')}>
+            <Button variant="ghost" size="sm" onClick={() => router.push('/admin/analyze-social')}>
               <ArrowLeft size={14} /> Back
             </Button>
             <Button onClick={() => void startProcessing()} disabled={!hasPlatforms}>
@@ -357,7 +357,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             <span className="text-xs text-text-muted tabular-nums">{Math.round(progress)}%</span>
           </div>
           <div className="mt-6 flex items-center justify-center">
-            <Button variant="ghost" size="sm" onClick={() => router.push('/admin/audit')}><ArrowLeft size={12} /> Go back</Button>
+            <Button variant="ghost" size="sm" onClick={() => router.push('/admin/analyze-social')}><ArrowLeft size={12} /> Go back</Button>
           </div>
         </div>
       </div>
@@ -388,7 +388,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
               {submittingSocials ? <Loader2 size={16} className="animate-spin" /> : 'Continue audit'}
             </Button>
           </div>
-          <div className="text-center"><Button variant="ghost" size="sm" onClick={() => router.push('/admin/audit')}><ArrowLeft size={14} /> Back</Button></div>
+          <div className="text-center"><Button variant="ghost" size="sm" onClick={() => router.push('/admin/analyze-social')}><ArrowLeft size={14} /> Back</Button></div>
         </div>
       </div>
     );
@@ -400,10 +400,10 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
       <div className="flex min-h-[60vh] flex-col items-center justify-center px-4">
         <div className="text-center max-w-md">
           <XCircle size={48} className="text-red-400 mx-auto mb-4" />
-          <h2 className="text-lg font-semibold text-text-primary">Audit failed</h2>
+          <h2 className="text-lg font-semibold text-text-primary">Analysis failed</h2>
           <p className="mt-2 text-sm text-text-muted">{audit.error_message ?? 'An unknown error occurred.'}</p>
           <div className="mt-4 flex items-center justify-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => router.push('/admin/audit')}><ArrowLeft size={14} /> Back</Button>
+            <Button variant="outline" size="sm" onClick={() => router.push('/admin/analyze-social')}><ArrowLeft size={14} /> Back</Button>
             <Button size="sm" onClick={startProcessing}><RefreshCw size={14} /> Retry</Button>
           </div>
         </div>
@@ -433,7 +433,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         const faviconUrl = faviconDomain ? `https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=64` : null;
         return (
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => router.push('/admin/audit')}><ArrowLeft size={14} /> Back</Button>
+            <Button variant="ghost" size="sm" onClick={() => router.push('/admin/analyze-social')}><ArrowLeft size={14} /> Back</Button>
             {faviconUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -490,7 +490,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
           <div className="px-5 py-4 border-b border-nativz-border flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-semibold text-text-primary">Audit scorecard</h3>
+              <h3 className="text-sm font-semibold text-text-primary">Analysis scorecard</h3>
               <div className="flex items-center gap-4 mt-1">
                 {(['good', 'warning', 'poor'] as ScoreStatus[]).map(s => (
                   <span key={s} className="flex items-center gap-1.5 text-xs text-text-muted">

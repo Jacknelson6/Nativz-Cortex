@@ -7,7 +7,7 @@ import { extractWebsiteContext } from '@/lib/audit/analyze';
 export const maxDuration = 30;
 
 /**
- * POST /api/audit/[id]/detect-socials
+ * POST /api/analyze-social/[id]/detect-socials
  *
  * Phase 1: Scrape the website, extract social links + business context.
  * Returns detected platforms so the user can confirm/add before full processing.
@@ -65,7 +65,7 @@ export async function POST(
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('POST /api/audit/[id]/detect-socials error:', msg);
+    console.error('POST /api/analyze-social/[id]/detect-socials error:', msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

@@ -109,7 +109,7 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
   async function handleDelete(id: string) {
     setDeletingIds(prev => new Set(prev).add(id));
     try {
-      await fetch(`/api/audit?id=${id}`, { method: 'DELETE' });
+      await fetch(`/api/analyze-social?id=${id}`, { method: 'DELETE' });
       onAuditsChange(audits.filter(a => a.id !== id));
       selectedIds.delete(id);
       setSelectedIds(new Set(selectedIds));
@@ -126,7 +126,7 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
     if (ids.length === 0) return;
     for (const id of ids) {
       setDeletingIds(prev => new Set(prev).add(id));
-      try { await fetch(`/api/audit?id=${id}`, { method: 'DELETE' }); } catch { /* continue */ }
+      try { await fetch(`/api/analyze-social?id=${id}`, { method: 'DELETE' }); } catch { /* continue */ }
     }
     onAuditsChange(audits.filter(a => !selectedIds.has(a.id)));
     setSelectedIds(new Set());
@@ -135,7 +135,7 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
   }
 
   function handleCopyLink(id: string) {
-    const url = `${window.location.origin}/admin/audit/${id}`;
+    const url = `${window.location.origin}/admin/analyze-social/${id}`;
     navigator.clipboard.writeText(url);
     toast.success('Link copied');
   }
@@ -186,7 +186,7 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
                   style={{ animationDelay: `${index * 30}ms`, width: 'calc(100% - 0.5rem)' }}
                   onClick={(e) => {
                     if (e.shiftKey || e.metaKey || e.ctrlKey) { e.preventDefault(); toggleSelect(audit.id, e); }
-                    else router.push(`/admin/audit/${audit.id}`);
+                    else router.push(`/admin/analyze-social/${audit.id}`);
                   }}
                 >
                   <Icon size={14} className={cn('shrink-0', color, audit.status === 'processing' && 'animate-spin')} />
@@ -205,7 +205,7 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" sideOffset={4} className={menuSurfaceClass}>
-                      <DropdownMenuItem className={menuItemClass} onSelect={() => router.push(`/admin/audit/${audit.id}`)}><ExternalLink size={14} /> Open</DropdownMenuItem>
+                      <DropdownMenuItem className={menuItemClass} onSelect={() => router.push(`/admin/analyze-social/${audit.id}`)}><ExternalLink size={14} /> Open</DropdownMenuItem>
                       <DropdownMenuItem className={menuItemClass} onSelect={() => handleCopyLink(audit.id)}><Link2 size={14} /> Copy link</DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={() => handleDelete(audit.id)}><Trash2 size={14} /> Delete</DropdownMenuItem>
@@ -214,7 +214,7 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent className={menuSurfaceClass}>
-                <ContextMenuItem className={menuItemClass} onSelect={() => router.push(`/admin/audit/${audit.id}`)}><ExternalLink size={14} /> Open</ContextMenuItem>
+                <ContextMenuItem className={menuItemClass} onSelect={() => router.push(`/admin/analyze-social/${audit.id}`)}><ExternalLink size={14} /> Open</ContextMenuItem>
                 <ContextMenuItem className={menuItemClass} onSelect={() => handleCopyLink(audit.id)}><Link2 size={14} /> Copy link</ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={() => handleDelete(audit.id)}><Trash2 size={14} /> Delete</ContextMenuItem>

@@ -128,7 +128,7 @@ function SectionHeader({ title, dotColor }: { title: string; dotColor?: string }
 function FooterBar({ isAC, dateStr }: { isAC: boolean; dateStr: string }) {
   return (
     <View style={s.footer} fixed>
-      <Text style={s.footerText}>{isAC ? 'Anderson Collaborative' : 'Nativz'} Cortex · Social media audit</Text>
+      <Text style={s.footerText}>{isAC ? 'Anderson Collaborative' : 'Nativz'} Cortex · Social media analysis</Text>
       <Text style={s.footerText}>{dateStr}</Text>
     </View>
   );
@@ -164,9 +164,9 @@ export function AuditPdfDocument({ websiteContext, platforms, competitors, score
         <View style={s.header}>
           <View style={s.logoRow}>
             <View>
-              <Text style={s.title}>Social media audit</Text>
+              <Text style={s.title}>Social media analysis</Text>
               <Text style={s.subtitle}>
-                {websiteContext?.title ?? websiteContext?.url ?? 'Prospect audit'}
+                {websiteContext?.title ?? websiteContext?.url ?? 'Prospect analysis'}
               </Text>
               {websiteContext?.url && (
                 <Text style={s.meta}>{websiteContext.url}</Text>

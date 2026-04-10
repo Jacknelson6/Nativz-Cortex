@@ -12,7 +12,7 @@ const StartAuditSchema = z.object({
 });
 
 /**
- * POST /api/audit — Start a new prospect audit
+ * POST /api/analyze-social — Start a new prospect audit
  */
 export async function POST(request: NextRequest) {
   try {
@@ -60,13 +60,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ id: audit.id });
   } catch (error) {
-    console.error('POST /api/audit error:', error);
+    console.error('POST /api/analyze-social error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 /**
- * GET /api/audit — List all audits
+ * GET /api/analyze-social — List all audits
  */
 export async function GET() {
   try {
@@ -85,13 +85,13 @@ export async function GET() {
 
     return NextResponse.json({ audits: audits ?? [] });
   } catch (error) {
-    console.error('GET /api/audit error:', error);
+    console.error('GET /api/analyze-social error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 /**
- * DELETE /api/audit — Delete an audit
+ * DELETE /api/analyze-social — Delete an audit
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -111,7 +111,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('DELETE /api/audit error:', error);
+    console.error('DELETE /api/analyze-social error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

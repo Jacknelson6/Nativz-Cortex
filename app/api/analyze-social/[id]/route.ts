@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export const maxDuration = 60;
 
 /**
- * GET /api/audit/[id] — Get audit details and results
+ * GET /api/analyze-social/[id] — Get audit details and results
  */
 export async function GET(
   _request: NextRequest,
@@ -33,7 +33,7 @@ export async function GET(
 
     return NextResponse.json({ audit });
   } catch (error) {
-    console.error('GET /api/audit/[id] error:', error);
+    console.error('GET /api/analyze-social/[id] error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

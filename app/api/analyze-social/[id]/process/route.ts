@@ -18,7 +18,7 @@ import type { PlatformReport, CompetitorProfile, WebsiteContext, SocialLink, Aud
 export const maxDuration = 300;
 
 /**
- * POST /api/audit/[id]/process — Run the full audit pipeline
+ * POST /api/analyze-social/[id]/process — Run the full audit pipeline
  *
  * Flow:
  * 1. Scrape the prospect's website → extract business context + social links
@@ -243,7 +243,7 @@ export async function POST(
       return NextResponse.json({ error: msg }, { status: 500 });
     }
   } catch (error) {
-    console.error('POST /api/audit/[id]/process error:', error);
+    console.error('POST /api/analyze-social/[id]/process error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -16,7 +16,7 @@ export function AuditShareButton({ auditId }: AuditShareButtonProps) {
   async function handleShare() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/audit/${auditId}/share`, { method: 'POST' });
+      const res = await fetch(`/api/analyze-social/${auditId}/share`, { method: 'POST' });
       const data = await res.json();
 
       if (!res.ok) {

@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import crypto from 'crypto';
 
 /**
- * GET /api/audit/[id]/share
+ * GET /api/analyze-social/[id]/share
  *
  * Check if an audit has an active share link and return its details.
  *
@@ -53,17 +53,17 @@ export async function GET(
     return NextResponse.json({
       shared: true,
       token: link.token,
-      url: `${baseUrl}/shared/audit/${link.token}`,
+      url: `${baseUrl}/shared/analyze-social/${link.token}`,
       expires_at: link.expires_at,
     });
   } catch (error) {
-    console.error('GET /api/audit/[id]/share error:', error);
+    console.error('GET /api/analyze-social/[id]/share error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 /**
- * POST /api/audit/[id]/share
+ * POST /api/analyze-social/[id]/share
  *
  * Create a new public share link for a completed audit. Deletes any existing links
  * before generating a fresh 48-char hex token.
@@ -126,16 +126,16 @@ export async function POST(
     return NextResponse.json({
       shared: true,
       token,
-      url: `${baseUrl}/shared/audit/${token}`,
+      url: `${baseUrl}/shared/analyze-social/${token}`,
     });
   } catch (error) {
-    console.error('POST /api/audit/[id]/share error:', error);
+    console.error('POST /api/analyze-social/[id]/share error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 /**
- * DELETE /api/audit/[id]/share
+ * DELETE /api/analyze-social/[id]/share
  *
  * Revoke the public share link for an audit by deleting all share records.
  *
@@ -172,7 +172,7 @@ export async function DELETE(
 
     return NextResponse.json({ shared: false });
   } catch (error) {
-    console.error('DELETE /api/audit/[id]/share error:', error);
+    console.error('DELETE /api/analyze-social/[id]/share error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
