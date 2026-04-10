@@ -20,7 +20,7 @@ export function AuditHub({ audits: initialAudits, userFirstName }: AuditHubProps
 
   const greetingName = userFirstName
     ? userFirstName.charAt(0).toUpperCase() + userFirstName.slice(1)
-    : 'there';
+    : null;
 
   const isValid = websiteUrl.trim().length > 0;
 
@@ -61,7 +61,9 @@ export function AuditHub({ audits: initialAudits, userFirstName }: AuditHubProps
       <div className="flex-1 flex items-center justify-center p-8 overflow-hidden">
         <div className="w-full max-w-xl">
           <div className="text-center">
-            <p className="text-sm font-medium text-text-muted">Hello, {greetingName}</p>
+            <p className="text-sm font-medium text-text-muted">
+              {greetingName ? `Hello ${greetingName}` : 'Hello'}
+            </p>
             <p className="mt-1.5 text-xl font-semibold tracking-tight text-text-primary md:text-2xl">
               Analyze your socials
             </p>

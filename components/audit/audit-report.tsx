@@ -329,7 +329,21 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <h2 className="text-xl font-semibold text-text-primary">
-              Auditing {audit.website_url ? `"${audit.website_url.replace(/^https?:\/\//, '').replace(/\/$/, '')}"` : 'prospect'}
+              {(() => {
+                if (!audit.website_url) return 'Analyzing prospect socials';
+                // Derive a human brand label from the URL: toastique.com → Toastique, www.foo-bar.com → Foo-bar
+                let brand: string;
+                try {
+                  const u = new URL(audit.website_url.startsWith('http') ? audit.website_url : `https://${audit.website_url}`);
+                  const firstLabel = u.hostname.replace(/^www\./, '').split('.')[0];
+                  brand = firstLabel.charAt(0).toUpperCase() + firstLabel.slice(1);
+                } catch {
+                  brand = 'this brand';
+                }
+                // Possessive: Toastique → Toastique's, James → James'
+                const possessive = brand.endsWith('s') ? `${brand}'` : `${brand}'s`;
+                return `Analyzing ${possessive} socials`;
+              })()}
             </h2>
           </div>
           <div className="text-center mb-4">
