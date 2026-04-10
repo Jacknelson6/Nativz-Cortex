@@ -749,6 +749,22 @@ export async function POST(req: NextRequest) {
       ? getToolsForAPI().filter((t) => PORTAL_ALLOWED_TOOLS.has(t.function.name))
       : getToolsForAPI();
 
+    /**
+     * OpenAI's newer frontier models (gpt-5.x, o1/o3 reasoning series) require
+     * `max_completion_tokens` instead of the legacy `max_tokens`. Older
+     * gpt-3.5 and some third-party APIs via OpenRouter still want `max_tokens`.
+     * Build the right body-shape per-provider-per-model so we don't break one
+     * while fixing the other.
+     */
+    const modelPrefersCompletionTokens =
+      useOpenAi &&
+      (/^o\d/.test(requestModel) ||
+        /^gpt-5/.test(requestModel) ||
+        /^gpt-4\.1/.test(requestModel));
+    const tokenLimitField: Record<string, number> = modelPrefersCompletionTokens
+      ? { max_completion_tokens: 8192 }
+      : { max_tokens: 8192 };
+
     // --- Initial API call with tool definitions ---
     const initialHeaders: Record<string, string> = {
       Authorization: `Bearer ${apiKey}`,
@@ -766,7 +782,7 @@ export async function POST(req: NextRequest) {
         model: requestModel,
         messages: apiMessages,
         stream: true,
-        max_tokens: 8192,
+        ...tokenLimitField,
         tools: tools.length > 0 ? tools : undefined,
       }),
     });
@@ -978,7 +994,7 @@ export async function POST(req: NextRequest) {
                 model: requestModel,
                 messages: currentMessages,
                 stream: true,
-                max_tokens: 8192,
+                ...tokenLimitField,
                 tools: tools.length > 0 ? tools : undefined,
               }),
             });
