@@ -1,12 +1,17 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { BotMessageSquare, Plus, X, Check, Search as SearchIcon, FileText, Clock } from 'lucide-react';
+import { BotMessageSquare, Plus, X, Check, Search as SearchIcon, FileText, Clock, Loader2 } from 'lucide-react';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { PromptInput } from '@/components/ai/prompt-input';
 import { cn } from '@/lib/utils/cn';
 import { formatRelativeTime } from '@/lib/utils/format';
+import {
+  readStrategyLabNerdConversationId,
+  writeStrategyLabNerdConversationId,
+  clearStrategyLabNerdConversationId,
+} from '@/lib/strategy-lab/nerd-conversation-storage';
 
 const SUGGESTIONS = [
   { label: 'Summarize research', prompt: 'Summarize our topic search findings and what to do next for ' },
@@ -56,6 +61,12 @@ export function StrategyLabNerdChat({
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
 
+  // Persistent conversation: one "current" strategy chat per client. Loaded
+  // from localStorage on mount, written back when the server assigns an ID
+  // on the first streamed chunk.
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [loadingConversation, setLoadingConversation] = useState(false);
+
   // Topic search attachment — initial set from pinned, mutable from the picker.
   const [attachedSearchIds, setAttachedSearchIds] = useState<string[]>(pinnedTopicSearchIds);
   const [clientSearches, setClientSearches] = useState<TopicSearchItem[]>([]);
@@ -87,6 +98,54 @@ export function StrategyLabNerdChat({
       .finally(() => {
         if (!cancelled) setSearchesLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId]);
+
+  // Resume the persisted conversation for this client. localStorage holds
+  // one conversation-id-per-client; if it's set we hydrate prior messages
+  // via the same endpoint /admin/nerd uses.
+  useEffect(() => {
+    if (!clientId) return;
+    const storedId = readStrategyLabNerdConversationId(clientId);
+    if (!storedId) return;
+
+    let cancelled = false;
+    setLoadingConversation(true);
+    fetch(`/api/nerd/conversations/${storedId}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          // Conversation was deleted or doesn't belong to this user — drop the stale pointer.
+          clearStrategyLabNerdConversationId(clientId);
+          return null;
+        }
+        return res.json() as Promise<{
+          id: string;
+          messages: Array<{ id: string; role: string; content: string; tool_results: unknown }>;
+        }>;
+      })
+      .then((data) => {
+        if (!data || cancelled) return;
+        const loaded: ChatMessage[] = (data.messages ?? []).map((m) => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          toolResults: (m.tool_results as ChatMessage['toolResults']) ?? undefined,
+        }));
+        setMessages(loaded);
+        setConversationId(data.id);
+        // Resumed conversation — don't re-send the session hint on the first
+        // new user turn, since the model already has the history.
+        sessionHintRef.current = null;
+      })
+      .catch(() => {
+        /* stale pointer — leave as-is, new chat starts clean */
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingConversation(false);
+      });
+
     return () => {
       cancelled = true;
     };
@@ -171,6 +230,7 @@ export function StrategyLabNerdChat({
             // and injects the formatted content into the system prompt. Same path
             // the admin Nerd uses at /admin/nerd.
             searchContext: attachedSearchIds.length > 0 ? attachedSearchIds : undefined,
+            conversationId: conversationId ?? undefined,
           }),
           signal: controller.signal,
         });
@@ -223,6 +283,11 @@ export function StrategyLabNerdChat({
                       : m,
                   ),
                 );
+              } else if (chunk.type === 'conversation' && typeof chunk.conversationId === 'string') {
+                // First chunk of a brand-new conversation — server assigned the id.
+                // Persist it so we resume next time the lab reopens for this client.
+                setConversationId(chunk.conversationId);
+                writeStrategyLabNerdConversationId(clientId, chunk.conversationId);
               }
             } catch {
               accText += line;
@@ -243,12 +308,14 @@ export function StrategyLabNerdChat({
         abortRef.current = null;
       }
     },
-    [input, streaming, messages, clientId, clientName, clientSlug, attachedSearchIds],
+    [input, streaming, messages, clientId, clientName, clientSlug, attachedSearchIds, conversationId],
   );
 
   function handleReset() {
     if (streaming) abortRef.current?.abort();
     setMessages([]);
+    setConversationId(null);
+    clearStrategyLabNerdConversationId(clientId);
     sessionHintRef.current =
       'User is in Strategy Lab with this client pinned. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Prefer topic search, pillar, knowledge, and content tools. Be concise and actionable.';
   }
@@ -422,7 +489,15 @@ export function StrategyLabNerdChat({
         </div>
       </div>
 
-      {messages.length === 0 ? (
+      {loadingConversation && messages.length === 0 ? (
+        <>
+          <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
+            <Loader2 size={24} className="animate-spin text-accent-text" />
+            <p className="mt-3 text-xs text-text-muted">Resuming your strategy chat…</p>
+          </div>
+          {inputArea}
+        </>
+      ) : messages.length === 0 ? (
         <>
           <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
             <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-nativz-border bg-gradient-to-b from-surface to-background shadow-[0_0_24px_rgba(4,107,210,0.1)]">
