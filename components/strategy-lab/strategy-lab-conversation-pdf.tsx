@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { NATIVZ_LOGO_ON_LIGHT_PNG, AC_LOGO_PNG } from '@/lib/brand-logo';
 import type { AgencyBrand } from '@/lib/agency/detect';
+import { renderMarkdownToPdfBlocks } from './pdf-markdown';
 
 // ─── Palette — light, client-facing ─────────────────────────────────────────
 
@@ -195,29 +196,6 @@ function clientInitialsFor(name: string): string {
   return words.map((w) => w[0]?.toUpperCase() ?? '').join('');
 }
 
-/**
- * Strip the most obvious markdown syntax so plain text rendering is readable.
- * Keeps the content of bold/italic/links/headings, drops the decorators.
- * Good enough for v1 client-facing PDFs; a real markdown → PDF tree renderer
- * can replace this later if the design demands bullets/headings.
- */
-function stripMarkdownToPlainText(md: string): string {
-  return md
-    .replace(/```[\s\S]*?```/g, (block) => block.replace(/```[\w-]*\n?/g, '').replace(/```/g, '')) // fenced code
-    .replace(/`([^`]+)`/g, '$1') // inline code
-    .replace(/\*\*([^*]+)\*\*/g, '$1') // **bold**
-    .replace(/__([^_]+)__/g, '$1') // __bold__
-    .replace(/\*([^*]+)\*/g, '$1') // *italic*
-    .replace(/_([^_]+)_/g, '$1') // _italic_
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1') // ![alt](url)
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [text](url)
-    .replace(/^#{1,6}\s+/gm, '') // # headings
-    .replace(/^\s*>\s?/gm, '') // > blockquotes
-    .replace(/^\s*[-*+]\s+/gm, '• ') // - bullet → •
-    .replace(/^\s*\d+\.\s+/gm, (match) => match) // leave numbered lists as-is
-    .trim();
-}
-
 function agencyConfig(brand: AgencyBrand) {
   if (brand === 'anderson') {
     return {
@@ -322,13 +300,22 @@ export function StrategyLabConversationPdf({
             <Text style={s.messageText}>(No messages in this conversation yet.)</Text>
           </View>
         ) : (
-          messages.map((m) => (
-            <View key={m.id} style={s.message} wrap>
+          messages.map((msg) => (
+            <View key={msg.id} style={s.message} wrap>
               <Text style={s.messageRole}>
-                {m.role === 'user' ? clientName + ' / You' : 'Cortex — The Nerd'}
+                {msg.role === 'user' ? clientName + ' / You' : 'Cortex — The Nerd'}
               </Text>
-              <View style={m.role === 'user' ? s.messageUser : s.messageAssistant}>
-                <Text style={s.messageText}>{stripMarkdownToPlainText(m.content)}</Text>
+              <View style={msg.role === 'user' ? s.messageUser : s.messageAssistant}>
+                {msg.role === 'user' ? (
+                  // User messages are almost always plain text — render them
+                  // as a single Text node so whitespace is preserved literally.
+                  <Text style={s.messageText}>{msg.content}</Text>
+                ) : (
+                  // Assistant output is markdown — run it through the real
+                  // tree renderer so headings, bold runs, bullets, and code
+                  // blocks come through instead of a flat string.
+                  renderMarkdownToPdfBlocks(msg.content)
+                )}
               </View>
             </View>
           ))
