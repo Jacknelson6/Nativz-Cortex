@@ -576,25 +576,29 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
       {/* Competitors */}
       {competitors.length > 0 && (
         <div className="space-y-4">
-          <div className="rounded-xl border border-nativz-border bg-surface p-5">
-            <h3 className="text-sm font-semibold text-text-primary mb-4">Competitors</h3>
+          <div className="rounded-xl border border-nativz-border bg-surface p-6">
+            <h3 className="text-base font-semibold text-text-primary mb-4">Competitors</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {competitors.map(comp => (
                 <div key={comp.username} className="rounded-lg border border-nativz-border bg-background p-4">
                   <div className="flex items-center gap-3 mb-3">
-                    {comp.avatarUrl && <img src={comp.avatarUrl} alt={comp.displayName} className="h-10 w-10 rounded-full object-cover" />}
-                    <div>
-                      <p className="text-sm font-medium text-text-primary">{comp.displayName}</p>
-                      <a href={comp.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent-text hover:underline flex items-center gap-1">
-                        @{comp.username} <ExternalLink size={10} />
+                    <AvatarWithFallback
+                      src={comp.avatarUrl}
+                      name={comp.displayName}
+                      className="h-11 w-11 text-sm"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-text-primary truncate">{comp.displayName}</p>
+                      <a href={comp.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent-text hover:underline flex items-center gap-1 truncate">
+                        @{String(comp.username).replace(/^@+/, '')} <ExternalLink size={10} className="shrink-0" />
                       </a>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div><span className="text-text-muted">Followers</span><p className="font-medium text-text-primary">{formatNumber(comp.followers)}</p></div>
-                    <div><span className="text-text-muted">Engagement</span><p className="font-medium text-text-primary">{(comp.engagementRate * 100).toFixed(2)}%</p></div>
-                    <div><span className="text-text-muted">Avg views</span><p className="font-medium text-text-primary">{formatNumber(comp.avgViews)}</p></div>
-                    <div><span className="text-text-muted">Frequency</span><p className="font-medium text-text-primary">{comp.postingFrequency}</p></div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div><span className="text-xs text-text-muted">Followers</span><p className="font-semibold text-text-primary">{formatNumber(comp.followers)}</p></div>
+                    <div><span className="text-xs text-text-muted">Engagement</span><p className="font-semibold text-text-primary">{(comp.engagementRate * 100).toFixed(2)}%</p></div>
+                    <div><span className="text-xs text-text-muted">Avg views</span><p className="font-semibold text-text-primary">{formatNumber(comp.avgViews)}</p></div>
+                    <div><span className="text-xs text-text-muted">Frequency</span><p className="font-semibold text-text-primary">{comp.postingFrequency}</p></div>
                   </div>
                 </div>
               ))}
@@ -693,24 +697,26 @@ function PlatformDetail({ platform, auditId }: { platform: PlatformReport; audit
   return (
     <div className="space-y-4">
       {/* Profile card */}
-      <div className="rounded-xl border border-nativz-border bg-surface p-5">
+      <div className="rounded-xl border border-nativz-border bg-surface p-6">
         <div className="flex items-start gap-4">
-          {platform.profile.avatarUrl && (
-            <img src={platform.profile.avatarUrl} alt={platform.profile.displayName} className="h-14 w-14 rounded-full object-cover" />
-          )}
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-text-primary">{platform.profile.displayName}</h2>
+          <AvatarWithFallback
+            src={platform.profile.avatarUrl}
+            name={platform.profile.displayName}
+            className="h-16 w-16 text-lg"
+          />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xl font-semibold text-text-primary">{platform.profile.displayName}</h2>
               <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ backgroundColor: `${color}20`, color }}>{platform.platform}</span>
               {platform.profile.verified && <CheckCircle size={16} className="text-accent-text" />}
             </div>
-            <a href={platform.profile.profileUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-accent-text hover:underline flex items-center gap-1">
-              @{platform.profile.username} <ExternalLink size={12} />
+            <a href={platform.profile.profileUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-accent-text hover:underline flex items-center gap-1 mt-1">
+              @{String(platform.profile.username).replace(/^@+/, '')} <ExternalLink size={12} />
             </a>
-            {platform.profile.bio && <p className="mt-2 text-sm text-text-secondary line-clamp-2">{platform.profile.bio}</p>}
+            {platform.profile.bio && <p className="mt-2 text-sm text-text-secondary leading-relaxed line-clamp-3">{platform.profile.bio}</p>}
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard icon={Users} label="Followers" value={formatNumber(platform.profile.followers)} />
           <StatCard icon={Eye} label="Avg views" value={formatNumber(platform.avgViews)} />
           <StatCard icon={TrendingUp} label="Engagement" value={`${(platform.engagementRate * 100).toFixed(2)}%`} />
@@ -767,23 +773,14 @@ function PlatformDetail({ platform, auditId }: { platform: PlatformReport; audit
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
             {topPosts.map((post, i) => (
               <a key={post.id || i} href={post.url} target="_blank" rel="noopener noreferrer" className="group block rounded-lg border border-nativz-border bg-background overflow-hidden hover:border-accent/40 transition-colors">
-                {post.thumbnailUrl ? (
-                  <div className={`bg-surface-hover overflow-hidden ${
-                    post.platform === 'tiktok' || post.platform === 'instagram' || (post.platform === 'youtube' && post.duration != null && post.duration <= 60)
-                      ? 'aspect-[9/16]' : 'aspect-video'
-                  }`}>
-                    <img src={post.thumbnailUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                  </div>
-                ) : (
-                  <div className={`bg-surface-hover flex items-center justify-center ${
-                    post.platform === 'tiktok' || post.platform === 'instagram' ? 'aspect-[9/16]' : 'aspect-video'
-                  }`}>
-                    <Eye size={20} className="text-text-muted/30" />
-                  </div>
-                )}
-                <div className="p-2">
-                  <p className="text-[10px] text-text-muted">{formatNumber(post.views)} views</p>
-                  <p className="text-[10px] text-text-muted">{formatNumber(post.likes)} likes · {formatNumber(post.comments)} comments</p>
+                <PostThumbnail
+                  src={post.thumbnailUrl}
+                  platform={post.platform}
+                  duration={post.duration}
+                />
+                <div className="p-2.5">
+                  <p className="text-xs font-medium text-text-primary">{formatNumber(post.views)} views</p>
+                  <p className="text-[11px] text-text-muted mt-0.5">{formatNumber(post.likes)} likes · {formatNumber(post.comments)} comments</p>
                 </div>
               </a>
             ))}
@@ -824,12 +821,100 @@ function ScorecardCard({ item }: { item: ScorecardItem }) {
 
 function StatCard({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-nativz-border bg-background px-3 py-2.5">
+    <div className="rounded-lg border border-nativz-border bg-background px-4 py-3">
       <div className="flex items-center gap-1.5 text-text-muted mb-1">
-        <Icon size={12} />
-        <span className="text-[10px] font-medium uppercase tracking-wide">{label}</span>
+        <Icon size={13} />
+        <span className="text-[11px] font-medium uppercase tracking-wide">{label}</span>
       </div>
-      <p className="text-sm font-semibold text-text-primary">{value}</p>
+      <p className="text-base font-semibold text-text-primary">{value}</p>
+    </div>
+  );
+}
+
+/**
+ * Avatar with automatic initials fallback.
+ *
+ * Handles the two failure modes we see in audit data:
+ * 1. `src` is null (old records, platform didn't return one)
+ * 2. `src` is a TikTok/Instagram signed CDN URL that 403s after ~24-48h
+ *
+ * An onError handler on the img swaps the display to the initials pill
+ * without a flash of broken image, and we cache the "failed" state per
+ * render cycle via React state.
+ */
+function AvatarWithFallback({
+  src,
+  name,
+  className,
+}: {
+  src: string | null | undefined;
+  name: string;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const initials = (() => {
+    const parts = (name || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    if (parts.length === 0) return '?';
+    return parts.map((p) => p[0]?.toUpperCase() ?? '').join('');
+  })();
+
+  if (!src || failed) {
+    return (
+      <div
+        className={`flex shrink-0 items-center justify-center rounded-full bg-surface-hover font-semibold text-text-primary ${className ?? 'h-11 w-11 text-sm'}`}
+      >
+        {initials}
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={name}
+      onError={() => setFailed(true)}
+      className={`shrink-0 rounded-full object-cover ${className ?? 'h-11 w-11'}`}
+    />
+  );
+}
+
+/**
+ * Post thumbnail with graceful fallback for 403'd CDN URLs.
+ * Same story as AvatarWithFallback — TikTok/IG signed URLs expire.
+ */
+function PostThumbnail({
+  src,
+  platform,
+  duration,
+}: {
+  src: string | null | undefined;
+  platform: string;
+  duration: number | null;
+}) {
+  const [failed, setFailed] = useState(false);
+  const isVertical =
+    platform === 'tiktok' ||
+    platform === 'instagram' ||
+    (platform === 'youtube' && duration != null && duration <= 60);
+  const aspectClass = isVertical ? 'aspect-[9/16]' : 'aspect-video';
+
+  if (!src || failed) {
+    return (
+      <div className={`bg-surface-hover flex items-center justify-center ${aspectClass}`}>
+        <Eye size={20} className="text-text-muted/30" />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`bg-surface-hover overflow-hidden ${aspectClass}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        onError={() => setFailed(true)}
+        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+      />
     </div>
   );
 }

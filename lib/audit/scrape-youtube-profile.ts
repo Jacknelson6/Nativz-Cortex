@@ -78,9 +78,15 @@ export async function scrapeYouTubeProfile(profileUrl: string): Promise<YouTubeP
   const channel = chanData.items?.[0];
   if (!channel) throw new Error(`YouTube channel not found: ${channelInfo.value}`);
 
+  // YouTube returns customUrl and handle values with the '@' already prefixed
+  // ('@toastique'). Strip it at storage time so the UI's own '@' prefix doesn't
+  // produce '@@toastique'. Every other scraper normalises the same way.
+  const rawUsername = channel.snippet.customUrl ?? channelInfo.value;
+  const username = rawUsername.replace(/^@/, '');
+
   const profile: ProspectProfile = {
     platform: 'youtube',
-    username: channel.snippet.customUrl ?? channelInfo.value,
+    username,
     displayName: channel.snippet.title,
     bio: channel.snippet.description.substring(0, 300),
     followers: parseInt(channel.statistics.subscriberCount ?? '0', 10),
@@ -88,7 +94,7 @@ export async function scrapeYouTubeProfile(profileUrl: string): Promise<YouTubeP
     likes: 0,
     postsCount: parseInt(channel.statistics.videoCount ?? '0', 10),
     avatarUrl: channel.snippet.thumbnails.high?.url ?? channel.snippet.thumbnails.default?.url ?? null,
-    profileUrl: `https://www.youtube.com/${channel.snippet.customUrl ?? `channel/${channel.id}`}`,
+    profileUrl: `https://www.youtube.com/@${username}`,
     verified: false,
   };
 
@@ -147,7 +153,7 @@ export async function scrapeYouTubeProfile(profileUrl: string): Promise<YouTubeP
         hashtags: extractHashtags(item.snippet?.title),
         url: `https://www.youtube.com/shorts/${videoId}`,
         thumbnailUrl: item.snippet?.thumbnails?.high?.url ?? null,
-        authorUsername: channel.snippet.customUrl ?? channel.id,
+        authorUsername: username,
         authorDisplayName: channel.snippet.title,
         authorAvatar: channel.snippet.thumbnails.default?.url ?? null,
         authorFollowers: profile.followers,
