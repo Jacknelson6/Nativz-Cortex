@@ -85,3 +85,28 @@ export async function fetchApifyDatasetItems(
   const items = await datasetRes.json();
   return Array.isArray(items) ? items : [];
 }
+
+/**
+ * Fetch the human-readable reason a run failed. Returns the actor's statusMessage
+ * (usually a one-liner explaining why the actor threw), so callers can throw a
+ * descriptive error instead of the useless "Apify scrape timed out" wrapper.
+ */
+export async function getApifyRunFailureReason(
+  runId: string,
+  apiKey: string,
+): Promise<string> {
+  try {
+    const res = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${apiKey}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return `Apify API returned ${res.status}`;
+    const data = await res.json();
+    const status = data?.data?.status as string | undefined;
+    const statusMessage = data?.data?.statusMessage as string | undefined;
+    if (status && statusMessage) return `${status}: ${statusMessage}`;
+    if (status) return status;
+    return 'Unknown failure';
+  } catch {
+    return 'Unknown failure (could not fetch run details)';
+  }
+}
