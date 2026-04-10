@@ -6,6 +6,7 @@ import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { PromptInput } from '@/components/ai/prompt-input';
 import { SlashCommandMenu } from '@/components/nerd/slash-command-menu';
+import { StrategyLabConversationExportButton } from './strategy-lab-conversation-export-button';
 import { cn } from '@/lib/utils/cn';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { getAllCommands, getCommand } from '@/lib/nerd/slash-commands';
@@ -420,14 +421,27 @@ export function StrategyLabNerdChat({
           </span>
         </div>
         {messages.length > 0 ? (
-          <button
-            type="button"
-            onClick={handleReset}
-            className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-nativz-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:border-accent/20 hover:text-text-primary"
-          >
-            <Plus size={12} aria-hidden />
-            New chat
-          </button>
+          <div className="flex items-center gap-1.5">
+            <StrategyLabConversationExportButton
+              clientId={clientId}
+              clientName={clientName}
+              conversationTitle={null}
+              messages={messages}
+              attachedSearches={attachedSearches.map((s) => ({
+                query: s.query,
+                created_at: s.created_at,
+              }))}
+              disabled={streaming}
+            />
+            <button
+              type="button"
+              onClick={handleReset}
+              className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-nativz-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:border-accent/20 hover:text-text-primary"
+            >
+              <Plus size={12} aria-hidden />
+              New chat
+            </button>
+          </div>
         ) : null}
       </header>
 
