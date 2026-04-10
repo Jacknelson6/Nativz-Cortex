@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ToolDefinition } from './types';
 
 // Tool registry - tools are registered by domain modules
@@ -24,7 +25,20 @@ export function getAllTools(): ToolDefinition[] {
   return Array.from(tools.values());
 }
 
-/** Convert tool definitions to OpenAI-compatible function format for API calls */
+/**
+ * Convert tool definitions to OpenAI-compatible function format for API calls.
+ *
+ * Uses Zod v4's built-in `z.toJSONSchema` — the previous homegrown converter
+ * read `_def.typeName` (a Zod v3 field) which is undefined in v4, so every
+ * tool schema fell through to `{ type: 'string' }` and OpenRouter rejected
+ * the first tool in the list with:
+ *   "Invalid schema for function 'list_tasks': schema must be a JSON Schema
+ *    of 'type: \"object\"', got 'type: \"string\"'"
+ *
+ * The built-in converter handles ZodObject, ZodOptional, ZodEnum, ZodUnion,
+ * ZodArray, ZodRecord, format hints (z.string().uuid(), z.email(), ...) and
+ * emits the `additionalProperties: false` that OpenAI strict mode requires.
+ */
 export function getToolsForAPI(): Array<{
   type: 'function';
   function: {
@@ -33,62 +47,19 @@ export function getToolsForAPI(): Array<{
     parameters: Record<string, unknown>;
   };
 }> {
-  return getAllTools().map((tool) => ({
-    type: 'function' as const,
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: zodToJsonSchema(tool.parameters),
-    },
-  }));
-}
-
-/** Simple Zod to JSON Schema converter for common types */
-function zodToJsonSchema(schema: unknown): Record<string, unknown> {
-  // Use zod's built-in shape inspection
-  const zodSchema = schema as { _def?: { typeName?: string; shape?: () => Record<string, unknown>; innerType?: unknown; options?: unknown[]; values?: string[]; checks?: Array<{ kind: string }> } };
-  const def = zodSchema?._def;
-
-  if (!def) return { type: 'object' };
-
-  switch (def.typeName) {
-    case 'ZodObject': {
-      const shape = def.shape?.() ?? {};
-      const properties: Record<string, unknown> = {};
-      const required: string[] = [];
-
-      for (const [key, value] of Object.entries(shape)) {
-        const fieldDef = (value as { _def?: { typeName?: string } })?._def;
-        properties[key] = zodToJsonSchema(value);
-        // If the field is not optional, it's required
-        if (fieldDef?.typeName !== 'ZodOptional' && fieldDef?.typeName !== 'ZodDefault') {
-          required.push(key);
-        }
-      }
-
-      return { type: 'object', properties, ...(required.length > 0 ? { required } : {}) };
-    }
-    case 'ZodString':
-      return { type: 'string' };
-    case 'ZodNumber':
-      return { type: 'number' };
-    case 'ZodBoolean':
-      return { type: 'boolean' };
-    case 'ZodArray':
-      return { type: 'array', items: zodToJsonSchema(def.innerType) };
-    case 'ZodEnum':
-      return { type: 'string', enum: def.values };
-    case 'ZodOptional':
-      return zodToJsonSchema(def.innerType);
-    case 'ZodDefault':
-      return zodToJsonSchema(def.innerType);
-    case 'ZodNullable':
-      return { ...zodToJsonSchema(def.innerType), nullable: true };
-    case 'ZodUnion': {
-      const options = (def.options as unknown[]) ?? [];
-      return { oneOf: options.map((o) => zodToJsonSchema(o)) };
-    }
-    default:
-      return { type: 'string' };
-  }
+  return getAllTools().map((tool) => {
+    const raw = z.toJSONSchema(tool.parameters as z.ZodType) as Record<string, unknown>;
+    // Drop the $schema meta field — OpenAI's function-call schema doesn't
+    // need it and some strict validators trip on it.
+    const { $schema: _ignored, ...parameters } = raw;
+    void _ignored;
+    return {
+      type: 'function' as const,
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters,
+      },
+    };
+  });
 }
