@@ -97,6 +97,9 @@ export function StrategyLabNerdChat({
   const abortRef = useRef<AbortController | null>(null);
 
   // Load this client's topic searches so the picker + chip labels work.
+  // Also auto-attach the most recent completed search on first load if nothing
+  // was pinned from Strategy Lab — keeps the chat from cold-starting with no
+  // research context when the user just opens the lab and types a question.
   useEffect(() => {
     if (!clientId) {
       setClientSearches([]);
@@ -107,7 +110,16 @@ export function StrategyLabNerdChat({
     fetch(`/api/nerd/searches?clientId=${clientId}`)
       .then((r) => r.json())
       .then((data) => {
-        if (!cancelled) setClientSearches(data.searches ?? []);
+        if (cancelled) return;
+        const fetched = (data.searches ?? []) as TopicSearchItem[];
+        setClientSearches(fetched);
+        // Auto-attach latest completed search, only if the user hasn't already
+        // attached anything (nothing from pinned, nothing the picker has set).
+        setAttachedSearchIds((prev) => {
+          if (prev.length > 0) return prev;
+          const latestCompleted = fetched.find((s) => s.status === 'completed');
+          return latestCompleted ? [latestCompleted.id] : prev;
+        });
       })
       .catch(() => {
         if (!cancelled) setClientSearches([]);

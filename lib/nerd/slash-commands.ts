@@ -240,7 +240,7 @@ registerCommand({
   example: '/ideas',
   expandPrompt: () => `Generate 10 short-form video ideas for this client using ONLY signals from the topic searches I have attached in this chat plus the client's Brand DNA. No generic best practices — every idea must trace back to a specific trending topic, video idea, or sentiment from the attached research.
 
-Before drafting, call search_agency_knowledge with a query like "short form video hooks" or "hook composition patterns" if you have not already loaded those frameworks in this session.
+Scripting frameworks are preloaded in your Strategy Lab system context (see "AGENCY SCRIPTING FRAMEWORKS"). Use them as scaffolding for every hook. For additional client-specific context — past winning hooks, brand voice notes, meeting takeaways — call \`search_knowledge_base\` before drafting.
 
 Output each idea in this exact format:
 
@@ -265,7 +265,7 @@ registerCommand({
   example: '/script <paste an idea or describe it>',
   expandPrompt: (args) => `Write a full spoken-word script for this video idea${args?.trim() ? `:\n\n${args.trim()}` : ' (paste or describe the idea in your next message if needed)'}
 
-Before drafting, call search_agency_knowledge with a query like "video script skill" or "short form video creative methodology" if you have not already loaded Nativz's scripting frameworks in this session.
+Scripting frameworks are preloaded in your Strategy Lab system context. For client-specific reference scripts or past winners, call \`search_knowledge_base\`. Prefer calling the \`script_video_idea\` tool if the user wants a persisted, database-backed script rather than an inline draft.
 
 Output rules:
 - Numbered beats, one sentence per beat, written the way a person would actually say it on camera
@@ -285,7 +285,7 @@ registerCommand({
   example: '/pillars',
   expandPrompt: () => `Draft a set of 3-5 content pillars for this client, grounded in the attached topic searches and the client's Brand DNA. Do NOT fall back to generic pillar frameworks — every pillar must be traceable to either (a) trending topics surfacing in the attached research or (b) the client's own messaging pillars / positioning from the Brand DNA.
 
-Call search_agency_knowledge for "content pillar framework" or "content strategy playbook" before drafting if you have not already loaded those in this session.
+Call \`search_knowledge_base\` for "content pillar framework" or "content strategy playbook" before drafting if you haven't already loaded those in this session.
 
 For each pillar:
 - **Name** (2-3 words, punchy)

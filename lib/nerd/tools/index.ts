@@ -6,6 +6,7 @@ import { shootTools } from './shoots';
 import { searchTools } from './search';
 import { teamTools } from './team';
 import { moodboardTools } from './moodboard';
+import { scriptTools } from './scripts';
 import { notificationTools } from './notifications';
 import { analyticsTools } from './analytics';
 import { affiliateTools } from './affiliates';
@@ -24,6 +25,7 @@ export function registerAllTools() {
   registerTools(searchTools);
   registerTools(teamTools);
   registerTools(moodboardTools);
+  registerTools(scriptTools);
   registerTools(notificationTools);
   registerTools(analyticsTools);
   registerTools(affiliateTools);
