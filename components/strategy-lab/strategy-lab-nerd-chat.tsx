@@ -68,6 +68,8 @@ export function StrategyLabNerdChat({
   // from localStorage on mount, written back when the server assigns an ID
   // on the first streamed chunk.
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationTitle, setConversationTitle] = useState<string | null>(null);
+  const [conversationMessageCount, setConversationMessageCount] = useState<number>(0);
   const [loadingConversation, setLoadingConversation] = useState(false);
 
   // Topic search attachment — initial set from pinned, mutable from the picker.
@@ -157,6 +159,7 @@ export function StrategyLabNerdChat({
         }
         return res.json() as Promise<{
           id: string;
+          title: string | null;
           messages: Array<{ id: string; role: string; content: string; tool_results: unknown }>;
         }>;
       })
@@ -170,6 +173,8 @@ export function StrategyLabNerdChat({
         }));
         setMessages(loaded);
         setConversationId(data.id);
+        setConversationTitle(data.title?.trim() ? data.title : null);
+        setConversationMessageCount(loaded.length);
         // Resumed conversation — don't re-send the session hint on the first
         // new user turn, since the model already has the history.
         sessionHintRef.current = null;
@@ -418,6 +423,8 @@ export function StrategyLabNerdChat({
     if (streaming) abortRef.current?.abort();
     setMessages([]);
     setConversationId(null);
+    setConversationTitle(null);
+    setConversationMessageCount(0);
     clearStrategyLabNerdConversationId(clientId);
     sessionHintRef.current =
       'User is in Strategy Lab with this client pinned. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Prefer topic search, pillar, knowledge, and content tools. Be concise and actionable.';
@@ -618,9 +625,19 @@ export function StrategyLabNerdChat({
 
       {loadingConversation && messages.length === 0 ? (
         <>
-          <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
+          <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
             <Loader2 size={24} className="animate-spin text-accent-text" />
-            <p className="mt-3 text-xs text-text-muted">Resuming your strategy chat…</p>
+            <p className="mt-3 text-sm font-medium text-text-primary">
+              {conversationTitle && conversationTitle !== 'New conversation'
+                ? `Resuming: ${conversationTitle}`
+                : 'Resuming your strategy chat'}
+            </p>
+            {conversationMessageCount > 0 && (
+              <p className="mt-1 text-[11px] text-text-muted">
+                Loading {conversationMessageCount} message
+                {conversationMessageCount === 1 ? '' : 's'}…
+              </p>
+            )}
           </div>
           {inputArea}
         </>
