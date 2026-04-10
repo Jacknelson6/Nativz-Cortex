@@ -5,8 +5,10 @@ import { BotMessageSquare, Plus, X, Check, Search as SearchIcon, FileText, Clock
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { PromptInput } from '@/components/ai/prompt-input';
+import { SlashCommandMenu } from '@/components/nerd/slash-command-menu';
 import { cn } from '@/lib/utils/cn';
 import { formatRelativeTime } from '@/lib/utils/format';
+import { getAllCommands, getCommand } from '@/lib/nerd/slash-commands';
 import {
   readStrategyLabNerdConversationId,
   writeStrategyLabNerdConversationId,
@@ -73,6 +75,21 @@ export function StrategyLabNerdChat({
   const [searchesLoading, setSearchesLoading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement | null>(null);
+
+  // Slash command menu — same /ideas, /script, /pillars, /hooks, /strategy etc.
+  // commands the admin Nerd registers centrally.
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashQuery, setSlashQuery] = useState('');
+  const slashCommands = useMemo(
+    () =>
+      getAllCommands().map((c) => ({
+        name: c.name,
+        description: c.description,
+        type: c.type,
+        example: c.example,
+      })),
+    [],
+  );
 
   const sessionHintRef = useRef<string | null>(
     'User is in Strategy Lab with this client pinned. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Prefer topic search, pillar, knowledge, and content tools. Be concise and actionable.',
@@ -150,6 +167,35 @@ export function StrategyLabNerdChat({
       cancelled = true;
     };
   }, [clientId]);
+
+  // Detect / at the start of the input (and before any space) and open the
+  // slash command menu. Matches the admin Nerd's detection logic.
+  useEffect(() => {
+    if (input.startsWith('/') && !input.includes(' ')) {
+      setSlashQuery(input.slice(1));
+      setShowSlashMenu(true);
+    } else {
+      setShowSlashMenu(false);
+    }
+  }, [input]);
+
+  const handleSlashSelect = useCallback(
+    (cmd: { name: string; type: string }) => {
+      const command = getCommand(cmd.name);
+      if (!command) return;
+      if (command.type === 'ai' && command.expandPrompt) {
+        // Fill the input with the expanded prompt — user presses Enter to send.
+        setInput(command.expandPrompt(''));
+        setShowSlashMenu(false);
+      } else if (command.type === 'direct') {
+        // Direct commands are executed via /api/nerd/command on the admin
+        // Nerd; Strategy Lab currently doesn't expose direct commands so
+        // fall back to expandPrompt treatment if one ever lands here.
+        setShowSlashMenu(false);
+      }
+    },
+    [],
+  );
 
   // Close the picker when the user clicks outside or presses Escape.
   useEffect(() => {
@@ -331,8 +377,17 @@ export function StrategyLabNerdChat({
           onChange={setInput}
           onSubmit={() => handleSend()}
           disabled={streaming}
-          placeholder={`Ask Cortex about ${clientName.trim() || 'this client'}…`}
-        />
+          placeholder={`Ask Cortex about ${clientName.trim() || 'this client'}… (try /ideas or /script)`}
+          blockEnterSubmit={showSlashMenu}
+        >
+          {showSlashMenu && (
+            <SlashCommandMenu
+              query={slashQuery}
+              commands={slashCommands}
+              onSelect={handleSlashSelect}
+            />
+          )}
+        </PromptInput>
       </div>
     </div>
   );

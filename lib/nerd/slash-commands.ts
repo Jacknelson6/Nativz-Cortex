@@ -230,3 +230,69 @@ registerCommand({
   example: '/schedule @ClientName next week',
   expandPrompt: (args) => `Help me schedule a shoot for ${args || 'a client'}. Check availability and suggest time slots.`,
 });
+
+// ── Strategy Lab commands (research-grounded scripting workbench) ──
+
+registerCommand({
+  name: 'ideas',
+  description: 'Generate research-grounded video ideas',
+  type: 'ai',
+  example: '/ideas',
+  expandPrompt: () => `Generate 10 short-form video ideas for this client using ONLY signals from the topic searches I have attached in this chat plus the client's Brand DNA. No generic best practices — every idea must trace back to a specific trending topic, video idea, or sentiment from the attached research.
+
+Before drafting, call search_agency_knowledge with a query like "short form video hooks" or "hook composition patterns" if you have not already loaded those frameworks in this session.
+
+Output each idea in this exact format:
+
+**#N — [Title]**
+- **Hook**: [the exact first 3 seconds — opening words or visual beat, said verbatim the way the creator would say it]
+- **Angle**: [specific trending topic or sentiment from the attached research]
+- **Concept**: [one-sentence video description]
+- **Why it works**: [reference the research signal AND the brand positioning]
+
+Rules:
+- Mix hook types across the 10 — negative, curiosity gap, hot take, story, pattern interrupt. Do not lean on one type.
+- Specific beats generic. "My 7-year-old outsold my sales team" beats "sales tip that changed my life".
+- Respect the brand voice — do NOT drift into generic social media patter.
+- First three words of each hook should earn the fourth. No "Hey guys" / "So today" / "Here's the thing".
+- No hashtags, no stage directions, no camera notes.`,
+});
+
+registerCommand({
+  name: 'script',
+  description: 'Turn an idea into a full spoken-word script',
+  type: 'ai',
+  example: '/script <paste an idea or describe it>',
+  expandPrompt: (args) => `Write a full spoken-word script for this video idea${args?.trim() ? `:\n\n${args.trim()}` : ' (paste or describe the idea in your next message if needed)'}
+
+Before drafting, call search_agency_knowledge with a query like "video script skill" or "short form video creative methodology" if you have not already loaded Nativz's scripting frameworks in this session.
+
+Output rules:
+- Numbered beats, one sentence per beat, written the way a person would actually say it on camera
+- Start with the hook VERBATIM as beat #1 — no narrator voice, no "in this video I will"
+- Include a pattern interrupt around 30-50% of the way through (new camera angle, cut to a prop, a line that contradicts what came before — call it out inline as *[pattern interrupt]*)
+- End with a CTA that fits this specific brand voice. Never "follow for more". Reference a specific piece of brand value instead.
+- Respect the client's Brand DNA: tone, vocabulary patterns, avoidance patterns, messaging pillars
+- Ground the angle in whichever attached topic search result inspired this idea — mention which one you drew from in a trailing "Research signal:" line
+- Do NOT include shot descriptions, camera directions, music cues, or hashtags unless I explicitly ask
+- Target length: 25-45 seconds of spoken content (roughly 8-14 beats)`,
+});
+
+registerCommand({
+  name: 'pillars',
+  description: 'Draft content pillars from attached research',
+  type: 'ai',
+  example: '/pillars',
+  expandPrompt: () => `Draft a set of 3-5 content pillars for this client, grounded in the attached topic searches and the client's Brand DNA. Do NOT fall back to generic pillar frameworks — every pillar must be traceable to either (a) trending topics surfacing in the attached research or (b) the client's own messaging pillars / positioning from the Brand DNA.
+
+Call search_agency_knowledge for "content pillar framework" or "content strategy playbook" before drafting if you have not already loaded those in this session.
+
+For each pillar:
+- **Name** (2-3 words, punchy)
+- **What** (one-sentence description of the pillar's purpose)
+- **Why this pillar for this brand** (reference the research signal or brand positioning that justifies it)
+- **Posting cadence** (how often per week, with reasoning)
+- **Example video concept** (one idea that would live under this pillar, with a hook)
+
+Close with a one-paragraph "How these pillars work together" summary that explains the portfolio effect.`,
+});
