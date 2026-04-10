@@ -16,6 +16,9 @@ import {
   RefreshCw,
   ExternalLink,
   Globe,
+  Heart,
+  MessageCircle,
+  Share2,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -505,27 +508,35 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
 
       {/* Website context */}
       {websiteContext && (
-        <div className="rounded-xl border border-nativz-border bg-surface p-5">
-          <div className="flex items-center gap-2 mb-2"><Globe size={16} className="text-text-muted" /><h3 className="text-sm font-semibold text-text-primary">Brand overview</h3></div>
-          <p className="text-sm text-text-secondary">{websiteContext.description}</p>
-          <div className="flex flex-wrap gap-2 mt-3">
-            <span className="text-xs bg-accent-surface/20 text-accent-text px-2.5 py-1 rounded-full">{websiteContext.industry}</span>
+        <div className="rounded-xl border border-nativz-border bg-surface p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Globe size={18} className="text-text-muted" />
+            <h3 className="text-base font-semibold text-text-primary">Brand overview</h3>
+          </div>
+          <p className="text-base font-light leading-relaxed text-text-secondary">{websiteContext.description}</p>
+          <div className="flex flex-wrap gap-2 mt-4">
+            <span className="text-sm bg-accent-surface/30 text-white px-3 py-1 rounded-full">{websiteContext.industry}</span>
             {websiteContext.keywords.slice(0, 5).map(kw => (
-              <span key={kw} className="text-xs bg-surface-hover text-text-muted px-2.5 py-1 rounded-full">{kw}</span>
+              <span key={kw} className="text-sm bg-surface-hover text-white px-3 py-1 rounded-full">{kw}</span>
             ))}
           </div>
         </div>
       )}
 
+      {/* Competitor preview — rendered early so when the scorecard below
+          shows green/red per-competitor dots, the reader already knows
+          who those competitors are. */}
+      {competitors.length > 0 && <CompetitorPreview competitors={competitors} />}
+
       {/* Scorecard with dots */}
       {scorecard && scorecard.items.length > 0 && (
         <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
-          <div className="px-5 py-4 border-b border-nativz-border flex items-center justify-between">
+          <div className="px-6 py-5 border-b border-nativz-border flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-semibold text-text-primary">Analysis scorecard</h3>
-              <div className="flex items-center gap-4 mt-1">
+              <h3 className="text-base font-semibold text-text-primary">Analysis scorecard</h3>
+              <div className="flex items-center gap-4 mt-2">
                 {(['good', 'warning', 'poor'] as ScoreStatus[]).map(s => (
-                  <span key={s} className="flex items-center gap-1.5 text-xs text-text-muted">
+                  <span key={s} className="flex items-center gap-1.5 text-sm text-text-muted">
                     <span className={`h-2.5 w-2.5 rounded-full ${STATUS_COLORS[s].dot}`} />
                     {STATUS_COLORS[s].label}
                   </span>
@@ -543,9 +554,9 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
 
       {/* Summary */}
       {scorecard?.summary && (
-        <div className="rounded-xl border border-nativz-border bg-surface p-5">
-          <h3 className="text-sm font-semibold text-text-primary mb-2">Executive summary</h3>
-          <p className="text-sm text-text-secondary leading-relaxed">{scorecard.summary}</p>
+        <div className="rounded-xl border border-nativz-border bg-surface p-6">
+          <h3 className="text-base font-semibold text-text-primary mb-3">Executive summary</h3>
+          <p className="text-base font-light leading-relaxed text-text-secondary">{scorecard.summary}</p>
         </div>
       )}
 
@@ -700,8 +711,10 @@ function PlatformDetail({ platform, auditId }: { platform: PlatformReport; audit
 
   return (
     <div className="space-y-4">
-      {/* Profile card */}
-      <div className="rounded-xl border border-nativz-border bg-surface p-6">
+      {/* Profile card — min-h-[248px] keeps the card size identical across
+          platforms so switching tabs doesn't reflow the page. Bio line-clamps
+          at 3 lines; longer ones truncate instead of pushing the card taller. */}
+      <div className="flex min-h-[248px] flex-col rounded-xl border border-nativz-border bg-surface p-6">
         <div className="flex items-start gap-4">
           <AvatarWithFallback
             src={platform.profile.avatarUrl}
@@ -711,16 +724,20 @@ function PlatformDetail({ platform, auditId }: { platform: PlatformReport; audit
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-xl font-semibold text-text-primary">{platform.profile.displayName}</h2>
-              <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ backgroundColor: `${color}20`, color }}>{platform.platform}</span>
+              <span className="text-xs px-2.5 py-0.5 rounded-full capitalize font-medium" style={{ backgroundColor: `${color}25`, color: '#FFFFFF' }}>{platform.platform}</span>
               {platform.profile.verified && <CheckCircle size={16} className="text-accent-text" />}
             </div>
-            <a href={platform.profile.profileUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-accent-text hover:underline flex items-center gap-1 mt-1">
+            <a href={platform.profile.profileUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-text-muted hover:text-text-primary transition-colors flex items-center gap-1 mt-1">
               @{String(platform.profile.username).replace(/^@+/, '')} <ExternalLink size={12} />
             </a>
-            {platform.profile.bio && <p className="mt-2 text-sm text-text-secondary leading-relaxed line-clamp-3">{platform.profile.bio}</p>}
+            {/* min-h keeps the bio slot a fixed height even when the page has
+                no bio, so stat cards don't shift between tabs. */}
+            <p className="mt-3 min-h-[4.5rem] text-base font-light leading-relaxed text-text-secondary line-clamp-3">
+              {platform.profile.bio || <span className="text-text-muted/60">No bio set.</span>}
+            </p>
           </div>
         </div>
-        <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="mt-auto pt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard icon={Users} label="Followers" value={formatNumber(platform.profile.followers)} />
           <StatCard icon={Eye} label="Avg views" value={formatNumber(platform.avgViews)} />
           <StatCard icon={TrendingUp} label="Engagement" value={`${(platform.engagementRate * 100).toFixed(2)}%`} />
@@ -800,20 +817,20 @@ function PlatformDetail({ platform, auditId }: { platform: PlatformReport; audit
 function ScorecardCard({ item }: { item: ScorecardItem }) {
   const style = STATUS_COLORS[item.prospectStatus];
   return (
-    <div className="bg-surface p-4">
-      <div className="flex items-center gap-2.5 mb-1.5">
+    <div className="bg-surface p-5">
+      <div className="flex items-center gap-2.5 mb-2">
         <span className={`h-3 w-3 rounded-full shrink-0 ${style.dot}`} />
-        <h4 className="text-sm font-medium text-text-primary">{item.label}</h4>
+        <h4 className="text-base font-medium text-text-primary">{item.label}</h4>
       </div>
-      <p className="text-xs text-text-secondary ml-5.5 pl-0.5">{item.prospectValue}</p>
+      <p className="text-sm font-light leading-relaxed text-text-secondary ml-5.5 pl-0.5">{item.prospectValue}</p>
       {item.competitors.length > 0 && (
-        <div className="mt-2 ml-5.5 pl-0.5 flex flex-wrap gap-1.5">
+        <div className="mt-3 ml-5.5 pl-0.5 flex flex-wrap gap-1.5">
           {item.competitors.map(comp => {
             const compStyle = STATUS_COLORS[comp.status];
             return (
-              <span key={comp.username} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${compStyle.bg} ${compStyle.text}`} title={comp.value}>
+              <span key={comp.username} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${compStyle.bg} ${compStyle.text}`} title={comp.value}>
                 <span className={`h-1.5 w-1.5 rounded-full ${compStyle.dot}`} />
-                @{comp.username}
+                @{String(comp.username).replace(/^@+/, '')}
               </span>
             );
           })}
@@ -828,9 +845,53 @@ function StatCard({ icon: Icon, label, value }: { icon: typeof Users; label: str
     <div className="rounded-lg border border-nativz-border bg-background px-4 py-3">
       <div className="flex items-center gap-1.5 text-text-muted mb-1">
         <Icon size={13} />
-        <span className="text-[11px] font-medium uppercase tracking-wide">{label}</span>
+        <span className="text-xs font-medium uppercase tracking-wide">{label}</span>
       </div>
-      <p className="text-base font-semibold text-text-primary">{value}</p>
+      <p className="text-lg font-semibold text-text-primary">{value}</p>
+    </div>
+  );
+}
+
+/**
+ * Lightweight competitor preview strip shown near the top of the report so
+ * the reader knows which accounts the scorecard's green/red per-competitor
+ * badges are referring to. The full competitor card grid + comparison table
+ * still renders further down.
+ */
+function CompetitorPreview({ competitors }: { competitors: CompetitorProfile[] }) {
+  if (competitors.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-nativz-border bg-surface p-6">
+      <div className="mb-4">
+        <h3 className="text-base font-semibold text-text-primary">Benchmarked against</h3>
+        <p className="mt-0.5 text-sm font-light text-text-muted">
+          {competitors.length} competitor{competitors.length === 1 ? '' : 's'} at a similar scale —
+          these drive the green/red dots in the scorecard below.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-3">
+        {competitors.map((comp) => (
+          <a
+            key={comp.username}
+            href={comp.profileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group flex items-center gap-2.5 rounded-full border border-nativz-border bg-background px-2 pr-3.5 py-1.5 transition-colors hover:border-nativz-border/80 hover:bg-surface-hover"
+          >
+            <AvatarWithFallback
+              src={comp.avatarUrl}
+              name={comp.displayName}
+              className="h-7 w-7 text-[10px]"
+            />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-text-primary">{comp.displayName}</p>
+              <p className="truncate text-[11px] text-text-muted">
+                {formatNumber(comp.followers)} followers · {comp.platform}
+              </p>
+            </div>
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1214,17 +1275,22 @@ function AuditSourceBrowser({ videos }: { videos: AuditVideoRow[] }) {
     return list;
   }, [videos, platform, sort]);
 
+  // 4 posts per row on desktop — user feedback was that 5-per-row crammed
+  // the captions too small to read. Captions dropped entirely; views and
+  // engagement take the space.
   const displayed = showAll ? filteredSorted : filteredSorted.slice(0, 12);
 
   if (videos.length === 0) return null;
 
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-6">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-base font-semibold text-text-primary">Source content</h3>
-          <p className="mt-0.5 text-xs text-text-muted">
-            {videos.length} post{videos.length === 1 ? '' : 's'} scraped across {availablePlatforms.length - 1} platform{availablePlatforms.length - 1 === 1 ? '' : 's'}
+          <h3 className="text-base font-semibold text-text-primary">Your feed</h3>
+          <p className="mt-0.5 text-sm font-light text-text-muted">
+            {videos.length} post{videos.length === 1 ? '' : 's'} scraped across{' '}
+            {availablePlatforms.length - 1} platform
+            {availablePlatforms.length - 1 === 1 ? '' : 's'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1235,10 +1301,10 @@ function AuditSourceBrowser({ videos }: { videos: AuditVideoRow[] }) {
                 key={s}
                 type="button"
                 onClick={() => setSort(s)}
-                className={`px-3 py-1 text-xs font-medium transition-colors ${
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                   sort === s
-                    ? 'bg-accent-surface text-accent-text'
-                    : 'text-text-muted hover:bg-surface-hover hover:text-text-secondary'
+                    ? 'bg-surface-hover text-text-primary'
+                    : 'text-text-muted hover:bg-surface-hover/60 hover:text-text-secondary'
                 }`}
               >
                 {s === 'views' ? 'Top views' : 'Most recent'}
@@ -1253,10 +1319,10 @@ function AuditSourceBrowser({ videos }: { videos: AuditVideoRow[] }) {
                   key={p}
                   type="button"
                   onClick={() => setPlatform(p)}
-                  className={`px-3 py-1 text-xs font-medium transition-colors capitalize ${
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors capitalize ${
                     platform === p
-                      ? 'bg-accent-surface text-accent-text'
-                      : 'text-text-muted hover:bg-surface-hover hover:text-text-secondary'
+                      ? 'bg-surface-hover text-text-primary'
+                      : 'text-text-muted hover:bg-surface-hover/60 hover:text-text-secondary'
                   }`}
                 >
                   {p === 'all' ? 'All' : p}
@@ -1267,43 +1333,56 @@ function AuditSourceBrowser({ videos }: { videos: AuditVideoRow[] }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
         {displayed.map((v) => (
           <a
             key={`${v.platform}-${v.platform_id ?? v.url}`}
             href={v.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="group block overflow-hidden rounded-lg border border-nativz-border bg-background transition-colors hover:border-accent/40"
+            className="group block overflow-hidden rounded-xl border border-nativz-border bg-background transition-colors hover:border-nativz-border/80"
           >
             <PostThumbnail
               src={v.thumbnail_url}
               platform={v.platform}
               duration={v.duration_seconds}
             />
-            <div className="p-2.5">
-              <p className="text-xs font-medium text-text-primary">
-                {formatNumber(v.views ?? 0)} views
-              </p>
-              <p className="mt-0.5 text-[11px] text-text-muted">
-                {formatNumber(v.likes ?? 0)} likes · {formatNumber(v.comments ?? 0)} comments
-              </p>
-              {v.description && (
-                <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-muted/70">
-                  {v.description}
+            <div className="p-3.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-lg font-semibold text-text-primary">
+                  {formatNumber(v.views ?? 0)}
                 </p>
-              )}
+                <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                  views
+                </p>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-sm text-text-muted">
+                <span className="inline-flex items-center gap-1">
+                  <Heart size={12} aria-hidden />
+                  {formatNumber(v.likes ?? 0)}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <MessageCircle size={12} aria-hidden />
+                  {formatNumber(v.comments ?? 0)}
+                </span>
+                {typeof v.shares === 'number' && v.shares > 0 && (
+                  <span className="inline-flex items-center gap-1">
+                    <Share2 size={12} aria-hidden />
+                    {formatNumber(v.shares)}
+                  </span>
+                )}
+              </div>
             </div>
           </a>
         ))}
       </div>
 
       {filteredSorted.length > 12 && !showAll && (
-        <div className="mt-4 flex justify-center">
+        <div className="mt-5 flex justify-center">
           <button
             type="button"
             onClick={() => setShowAll(true)}
-            className="rounded-lg border border-nativz-border px-4 py-2 text-xs font-medium text-text-muted transition-colors hover:border-accent/30 hover:text-text-primary"
+            className="rounded-lg border border-nativz-border px-4 py-2 text-sm font-medium text-text-muted transition-colors hover:border-nativz-border/80 hover:text-text-primary"
           >
             Show {filteredSorted.length - 12} more
           </button>
