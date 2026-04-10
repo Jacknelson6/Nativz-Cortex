@@ -439,6 +439,7 @@ export function TikTokEmbedCarousel({
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                   client_id: clientId || undefined,
+                                  topic_search_id: topicSearchId,
                                 }),
                               });
                               if (res.ok) {

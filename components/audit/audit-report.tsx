@@ -415,35 +415,61 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   return (
     <div className="space-y-6 p-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => router.push('/admin/audit')}><ArrowLeft size={14} /> Back</Button>
-        <div className="flex-1">
-          <h1 className="text-xl font-semibold text-text-primary">
-            Audit{websiteContext ? `: ${websiteContext.title}` : ''}
-          </h1>
-          <p className="text-sm text-text-muted mt-0.5">
-            {audit.website_url && <span>{audit.website_url.replace(/^https?:\/\//, '')} · </span>}
-            {platforms.length} platform{platforms.length !== 1 ? 's' : ''} · {new Date(audit.created_at).toLocaleDateString()}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <AuditExportPdfButton
-            websiteContext={websiteContext}
-            platforms={platforms}
-            competitors={competitors}
-            scorecard={scorecard}
-          />
-          <AuditShareButton auditId={audit.id} />
-          {scorecard && (
-            <div className="flex items-center gap-1 ml-2">
-              <div className={`text-3xl font-bold ${scorecard.overallScore >= 70 ? 'text-emerald-400' : scorecard.overallScore >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
-                {scorecard.overallScore}
-              </div>
-              <span className="text-xs text-text-muted">/100</span>
+      {(() => {
+        // Derive brand label + favicon from the audit website URL or website context
+        let brandName = websiteContext?.title?.trim() || 'Brand';
+        let faviconDomain: string | null = null;
+        try {
+          if (audit.website_url) {
+            const u = new URL(audit.website_url.startsWith('http') ? audit.website_url : `https://${audit.website_url}`);
+            faviconDomain = u.hostname.replace(/^www\./, '');
+            // Fall back to the capitalised hostname segment if websiteContext is missing
+            if (!websiteContext?.title?.trim()) {
+              const firstLabel = faviconDomain.split('.')[0];
+              brandName = firstLabel.charAt(0).toUpperCase() + firstLabel.slice(1);
+            }
+          }
+        } catch { /* ignore malformed URLs */ }
+        const faviconUrl = faviconDomain ? `https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=64` : null;
+        return (
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" onClick={() => router.push('/admin/audit')}><ArrowLeft size={14} /> Back</Button>
+            {faviconUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={faviconUrl}
+                alt=""
+                className="h-8 w-8 shrink-0 rounded-md border border-nativz-border bg-white/5"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
+            )}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl font-semibold text-text-primary truncate">{brandName}</h1>
+              <p className="text-sm text-text-muted mt-0.5">
+                {audit.website_url && <span>{audit.website_url.replace(/^https?:\/\//, '')} · </span>}
+                {platforms.length} platform{platforms.length !== 1 ? 's' : ''} · {new Date(audit.created_at).toLocaleDateString()}
+              </p>
             </div>
-          )}
-        </div>
-      </div>
+            <div className="flex items-center gap-2">
+              <AuditExportPdfButton
+                websiteContext={websiteContext}
+                platforms={platforms}
+                competitors={competitors}
+                scorecard={scorecard}
+              />
+              <AuditShareButton auditId={audit.id} />
+              {scorecard && (
+                <div className="flex items-center gap-1 ml-2">
+                  <div className={`text-3xl font-bold ${scorecard.overallScore >= 70 ? 'text-emerald-400' : scorecard.overallScore >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
+                    {scorecard.overallScore}
+                  </div>
+                  <span className="text-xs text-text-muted">/100</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Website context */}
       {websiteContext && (

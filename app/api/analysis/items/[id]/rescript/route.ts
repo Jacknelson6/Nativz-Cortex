@@ -10,6 +10,7 @@ const rescriptSchema = z.object({
   product: z.string().optional(),
   target_audience: z.string().optional(),
   notes: z.string().optional(),
+  topic_search_id: z.string().uuid().optional(),
 });
 
 /**

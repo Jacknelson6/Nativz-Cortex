@@ -137,14 +137,23 @@ export async function generateScorecard(
   competitors: CompetitorProfile[],
   websiteContext: WebsiteContext | null,
 ): Promise<AuditScorecard> {
+  // Include bios, top hashtags, and sample captions so the LLM can actually judge
+  // hashtag strategy, bio optimisation, and caption quality instead of inventing them.
   const platformSummaries = platforms.map(p => ({
     platform: p.platform,
     username: p.profile.username,
+    displayName: p.profile.displayName,
     followers: p.profile.followers,
     engagementRate: (p.engagementRate * 100).toFixed(2) + '%',
     avgViews: p.avgViews,
     postingFrequency: p.postingFrequency,
     videoCount: p.videos.length,
+    bio: p.profile.bio?.slice(0, 400) || '(empty)',
+    topHashtags: getTopHashtags(p.videos, 12),
+    sampleCaptions: p.videos
+      .slice(0, 6)
+      .map(v => v.description?.replace(/\s+/g, ' ').slice(0, 180) ?? '')
+      .filter((c): c is string => c.length > 0),
   }));
 
   const competitorSummary = competitors.map(c => ({

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createCompletion } from '@/lib/ai/client';
 import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
+import { getBrandContext } from '@/lib/knowledge/brand-context';
 
 export type RescriptResult =
   | { ok: true; script: string; rescript: Record<string, unknown> }
@@ -16,6 +17,7 @@ export async function runMoodboardRescript(
     product?: string;
     target_audience?: string;
     notes?: string;
+    topic_search_id?: string;
   },
 ): Promise<RescriptResult> {
   const { data: item, error: fetchError } = await adminClient.from('moodboard_items').select('*').eq('id', itemId).single();
@@ -24,16 +26,40 @@ export async function runMoodboardRescript(
     return { ok: false, error: 'Item not found', status: 404 };
   }
 
+  // Prefer full Brand DNA (same path ad-creatives / idea-generator use). Fall back
+  // to raw clients fields only if getBrandContext blows up.
   let clientInfo = '';
   if (options.client_id) {
-    const { data: client } = await adminClient
-      .from('clients')
-      .select('name, industry, target_audience, brand_voice')
-      .eq('id', options.client_id)
-      .single();
+    try {
+      const brandContext = await getBrandContext(options.client_id);
+      clientInfo = brandContext.toPromptBlock();
+    } catch (err) {
+      console.warn('[rescript] getBrandContext failed, falling back to clients fields:', err);
+      const { data: client } = await adminClient
+        .from('clients')
+        .select('name, industry, target_audience, brand_voice')
+        .eq('id', options.client_id)
+        .single();
+      if (client) {
+        clientInfo = `Client: ${client.name}\nIndustry: ${client.industry}\nTarget audience: ${client.target_audience || options.target_audience || 'Not specified'}\nBrand voice: ${client.brand_voice || options.brand_voice || 'Not specified'}`;
+      }
+    }
+  }
 
-    if (client) {
-      clientInfo = `Client: ${client.name}\nIndustry: ${client.industry}\nTarget audience: ${client.target_audience || options.target_audience || 'Not specified'}\nBrand voice: ${client.brand_voice || options.brand_voice || 'Not specified'}`;
+  // Topic search context — what the user was researching when they found this video.
+  // Gives the rescripter a steer on the angle/topic the brand cares about.
+  let topicSearchInfo = '';
+  if (options.topic_search_id) {
+    const { data: topicSearch } = await adminClient
+      .from('topic_searches')
+      .select('query, summary')
+      .eq('id', options.topic_search_id)
+      .maybeSingle();
+    if (topicSearch?.query) {
+      const summaryLine = topicSearch.summary
+        ? `\nResearch summary: ${String(topicSearch.summary).slice(0, 600)}`
+        : '';
+      topicSearchInfo = `\n<research_context>\nOriginal search query: "${topicSearch.query}"${summaryLine}\n</research_context>`;
     }
   }
 
@@ -56,7 +82,7 @@ Original video analysis:
 - Content themes: ${((item.content_themes as string[]) ?? []).join(', ') || 'Not analyzed'}
 - Duration: ${item.duration ? `${item.duration}s` : 'Unknown'}
 
-${clientInfo ? `${clientInfo}\n` : ''}${brandVoice ? `Brand Voice: ${brandVoice}\n` : ''}${product ? `Product/Service: ${product}\n` : ''}${targetAudience ? `Target Audience: ${targetAudience}\n` : ''}${userNotes ? `Additional notes: ${userNotes}\n` : ''}
+${clientInfo ? `${clientInfo}\n` : ''}${topicSearchInfo ? `${topicSearchInfo}\n` : ''}${brandVoice ? `Brand Voice override: ${brandVoice}\n` : ''}${product ? `Product/Service: ${product}\n` : ''}${targetAudience ? `Target Audience: ${targetAudience}\n` : ''}${userNotes ? `Additional notes: ${userNotes}\n` : ''}
 
 Rescript this video for the specified brand. Write ONLY the spoken word script — the exact words the person on camera should say. Keep the same structural formula, hook style, and pacing that made the original work, but adapt the content entirely for the brand.
 
