@@ -5,7 +5,7 @@ import { BotMessageSquare, Plus, X, Check, Search as SearchIcon, FileText, Clock
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { PromptInput } from '@/components/ai/prompt-input';
-import { SlashCommandMenu } from '@/components/nerd/slash-command-menu';
+import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
 import { StrategyLabConversationExportButton } from './strategy-lab-conversation-export-button';
 import { cn } from '@/lib/utils/cn';
 import { formatRelativeTime } from '@/lib/utils/format';
@@ -81,6 +81,7 @@ export function StrategyLabNerdChat({
   // commands the admin Nerd registers centrally.
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
   const slashCommands = useMemo(
     () =>
       getAllCommands().map((c) => ({
@@ -90,6 +91,10 @@ export function StrategyLabNerdChat({
         example: c.example,
       })),
     [],
+  );
+  const filteredSlashCommands = useMemo(
+    () => filterSlashCommands(slashQuery, slashCommands),
+    [slashQuery, slashCommands],
   );
 
   const sessionHintRef = useRef<string | null>(
@@ -187,10 +192,18 @@ export function StrategyLabNerdChat({
     if (input.startsWith('/') && !input.includes(' ')) {
       setSlashQuery(input.slice(1));
       setShowSlashMenu(true);
+      setSlashActiveIndex(0);
     } else {
       setShowSlashMenu(false);
     }
   }, [input]);
+
+  // Keep the active index in range as the filter shrinks the list.
+  useEffect(() => {
+    if (slashActiveIndex >= filteredSlashCommands.length) {
+      setSlashActiveIndex(Math.max(0, filteredSlashCommands.length - 1));
+    }
+  }, [filteredSlashCommands.length, slashActiveIndex]);
 
   const handleSlashSelect = useCallback(
     (cmd: { name: string; type: string }) => {
@@ -208,6 +221,34 @@ export function StrategyLabNerdChat({
       }
     },
     [],
+  );
+
+  // Keyboard nav for the slash menu — Arrow keys move selection, Enter picks,
+  // Escape closes. Runs BEFORE PromptInput's own Enter handling via the
+  // onKeyDown prop so it can preventDefault to block submit.
+  const handleInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (!showSlashMenu || filteredSlashCommands.length === 0) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashActiveIndex((i) => (i + 1) % filteredSlashCommands.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashActiveIndex((i) =>
+          (i - 1 + filteredSlashCommands.length) % filteredSlashCommands.length,
+        );
+      } else if (e.key === 'Enter' && !e.shiftKey) {
+        const cmd = filteredSlashCommands[slashActiveIndex];
+        if (cmd) {
+          e.preventDefault();
+          handleSlashSelect(cmd);
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowSlashMenu(false);
+      }
+    },
+    [showSlashMenu, filteredSlashCommands, slashActiveIndex, handleSlashSelect],
   );
 
   // Close the picker when the user clicks outside or presses Escape.
@@ -392,12 +433,14 @@ export function StrategyLabNerdChat({
           disabled={streaming}
           placeholder={`Ask Cortex about ${clientName.trim() || 'this client'}… (try /ideas or /script)`}
           blockEnterSubmit={showSlashMenu}
+          onKeyDown={handleInputKeyDown}
         >
           {showSlashMenu && (
             <SlashCommandMenu
               query={slashQuery}
               commands={slashCommands}
               onSelect={handleSlashSelect}
+              activeIndex={slashActiveIndex}
             />
           )}
         </PromptInput>

@@ -11,6 +11,7 @@ export function PromptInput({
   placeholder,
   children,
   blockEnterSubmit,
+  onKeyDown: onKeyDownOverride,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -20,6 +21,13 @@ export function PromptInput({
   children?: React.ReactNode;
   /** When true, Enter selects from an autocomplete instead of submitting */
   blockEnterSubmit?: boolean;
+  /**
+   * Parent-supplied keydown hook. Runs BEFORE PromptInput's own Enter
+   * handling. If the parent calls e.preventDefault(), PromptInput bails out
+   * of its default behaviour — used to wire Arrow-key navigation / Enter
+   * selection into autocomplete menus (slash commands, mentions).
+   */
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const maxHeight = 200;
@@ -31,7 +39,10 @@ export function PromptInput({
     el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
   }, [value]);
 
-  function handleKeyDown(e: React.KeyboardEvent) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Parent gets first crack — if they preventDefault we stop here.
+    onKeyDownOverride?.(e);
+    if (e.defaultPrevented) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (blockEnterSubmit) return;

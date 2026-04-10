@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Building2, User, Plus, History, Settings } from 'lucide-react';
 import Link from 'next/link';
@@ -11,7 +11,7 @@ import { PromptInput } from '@/components/ai/prompt-input';
 import { MentionAutocomplete, type MentionOption } from '@/components/ai/mention-autocomplete';
 import { ConversationSidebar } from '@/components/nerd/conversation-sidebar';
 import { TopicSearchContextRail } from '@/components/nerd/topic-search-context-rail';
-import { SlashCommandMenu } from '@/components/nerd/slash-command-menu';
+import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
 import { getAllCommands, getCommand, type SlashCommand } from '@/lib/nerd/slash-commands';
 
 // ---------------------------------------------------------------------------
@@ -45,7 +45,12 @@ export default function NerdPage() {
   // Slash command state
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
-  const slashCommands = getAllCommands();
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const slashCommands = useMemo(() => getAllCommands(), []);
+  const filteredSlashCommands = useMemo(
+    () => filterSlashCommands(slashQuery, slashCommands),
+    [slashQuery, slashCommands],
+  );
 
   const abortRef = useRef<AbortController | null>(null);
   const strategyClientPrefilledRef = useRef(false);
@@ -149,10 +154,18 @@ export default function NerdPage() {
     if (input.startsWith('/') && !input.includes(' ')) {
       setSlashQuery(input.slice(1));
       setShowSlashMenu(true);
+      setSlashActiveIndex(0);
     } else {
       setShowSlashMenu(false);
     }
   }, [input]);
+
+  // Keep active index in range as the filter shrinks.
+  useEffect(() => {
+    if (slashActiveIndex >= filteredSlashCommands.length) {
+      setSlashActiveIndex(Math.max(0, filteredSlashCommands.length - 1));
+    }
+  }, [filteredSlashCommands.length, slashActiveIndex]);
 
   // Detect @mention trigger
   useEffect(() => {
@@ -189,6 +202,37 @@ export default function NerdPage() {
       executeDirectCommand(command);
     }
   }
+
+  // Keyboard nav for the slash menu — Arrow keys move selection, Enter picks,
+  // Escape closes. Runs BEFORE PromptInput's own Enter handling.
+  const handleInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (!showSlashMenu || filteredSlashCommands.length === 0) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashActiveIndex((i) => (i + 1) % filteredSlashCommands.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashActiveIndex((i) =>
+          (i - 1 + filteredSlashCommands.length) % filteredSlashCommands.length,
+        );
+      } else if (e.key === 'Enter' && !e.shiftKey) {
+        const cmd = filteredSlashCommands[slashActiveIndex];
+        if (cmd) {
+          e.preventDefault();
+          handleSlashSelect(cmd);
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowSlashMenu(false);
+      }
+    },
+    // handleSlashSelect is a plain function closed over component state —
+    // depending on it would cause endless re-renders; safe to omit since
+    // React still sees the latest function via closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showSlashMenu, filteredSlashCommands, slashActiveIndex],
+  );
 
   async function executeDirectCommand(cmd: SlashCommand) {
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: `/${cmd.name}` };
@@ -406,9 +450,15 @@ export default function NerdPage() {
           disabled={streaming}
           placeholder="Type your response..."
           blockEnterSubmit={mentionsVisible || showSlashMenu}
+          onKeyDown={handleInputKeyDown}
         >
           {showSlashMenu && (
-            <SlashCommandMenu query={slashQuery} commands={slashCommands} onSelect={handleSlashSelect} />
+            <SlashCommandMenu
+              query={slashQuery}
+              commands={slashCommands}
+              onSelect={handleSlashSelect}
+              activeIndex={slashActiveIndex}
+            />
           )}
           {showMentions && mentionOptions.length > 0 && (
             <MentionAutocomplete query={mentionQuery} options={mentionOptions} onSelect={handleMentionSelect} />
