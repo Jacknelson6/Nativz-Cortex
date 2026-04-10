@@ -23,7 +23,6 @@ import {
 } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { EncryptedText } from '@/components/ui/encrypted-text';
-import { VideoGrid } from '@/components/research/video-grid';
 import { toast } from 'sonner';
 import { AuditExportPdfButton } from '@/components/audit/audit-export-pdf-button';
 import { AuditShareButton } from '@/components/audit/audit-share-button';
@@ -605,6 +604,14 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             </div>
           </div>
 
+          {/* Side-by-side metric comparison table — the "checkboxes against
+              each other" view. Each row is a metric, each column is an
+              account, winning cell gets a trophy. */}
+          <CompetitorComparisonTable
+            activePlatform={activePlatform}
+            competitors={competitors}
+          />
+
           {/* Competitor comparison charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Avg views comparison */}
@@ -655,13 +662,10 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         </div>
       )}
 
-      {/* Source browser */}
-      {videos.length > 0 && (
-        <div className="rounded-xl border border-nativz-border bg-surface p-5">
-          <h3 className="text-sm font-semibold text-text-primary mb-4">Source content</h3>
-          <VideoGrid videos={videos} searchId={audit.id} defaultClientId={null} enableInlineVideoAnalysis={false} />
-        </div>
-      )}
+      {/* Source browser — custom grid tuned for audit video shape. The
+          shared VideoGrid assumes TopicSearchVideoRow fields (outlier_score,
+          platform filters) that don't line up cleanly for audit data. */}
+      {videos.length > 0 && <AuditSourceBrowser videos={videos} />}
     </div>
   );
 }
@@ -923,4 +927,388 @@ function formatNumber(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toLocaleString();
+}
+
+// ─── Competitor comparison table ─────────────────────────────────────────
+
+interface ComparisonRow {
+  label: string;
+  format: (value: number) => string;
+  higherIsBetter: boolean;
+  // Values keyed by column id ('target' or competitor id)
+  values: Record<string, number>;
+}
+
+/**
+ * Side-by-side metric comparison between the target's active platform and
+ * each competitor on the same platform. Each row is a metric; the winning
+ * cell gets a trophy icon + green tint. Missing data shows an em-dash.
+ *
+ * "Same platform" matters — the website-grounded competitor discovery
+ * rewrite in 13fcf1e picks competitors whose socials overlap with the
+ * target's, so comparing followers/ER/avg views against each other is
+ * apples-to-apples by construction.
+ */
+function CompetitorComparisonTable({
+  activePlatform,
+  competitors,
+}: {
+  activePlatform: PlatformReport | undefined;
+  competitors: CompetitorProfile[];
+}) {
+  if (!activePlatform || competitors.length === 0) return null;
+
+  // Drop competitors that aren't on the same platform as the active tab —
+  // apples-to-oranges comparisons confuse more than they inform.
+  const samePlatformCompetitors = competitors.filter(
+    (c) => c.platform === activePlatform.platform,
+  );
+  if (samePlatformCompetitors.length === 0) return null;
+
+  const targetCol = {
+    id: 'target' as const,
+    name: activePlatform.profile.displayName || activePlatform.profile.username,
+    username: activePlatform.profile.username,
+    avatarUrl: activePlatform.profile.avatarUrl,
+    isTarget: true,
+  };
+  const competitorCols = samePlatformCompetitors.map((c) => ({
+    id: c.username,
+    name: c.displayName || c.username,
+    username: c.username,
+    avatarUrl: c.avatarUrl,
+    isTarget: false,
+  }));
+  const allCols = [targetCol, ...competitorCols];
+
+  const avgHashtagsTarget =
+    activePlatform.videos.length > 0
+      ? activePlatform.videos.reduce((sum, v) => sum + v.hashtags.length, 0) /
+        activePlatform.videos.length
+      : 0;
+  const avgHashtagsFor = (c: CompetitorProfile) =>
+    c.recentVideos.length > 0
+      ? c.recentVideos.reduce((sum, v) => sum + v.hashtags.length, 0) / c.recentVideos.length
+      : 0;
+
+  const rows: ComparisonRow[] = [
+    {
+      label: 'Followers',
+      format: formatNumber,
+      higherIsBetter: true,
+      values: {
+        target: activePlatform.profile.followers,
+        ...Object.fromEntries(samePlatformCompetitors.map((c) => [c.username, c.followers])),
+      },
+    },
+    {
+      label: 'Average views',
+      format: formatNumber,
+      higherIsBetter: true,
+      values: {
+        target: activePlatform.avgViews,
+        ...Object.fromEntries(samePlatformCompetitors.map((c) => [c.username, c.avgViews])),
+      },
+    },
+    {
+      label: 'Engagement rate',
+      format: (v) => `${(v * 100).toFixed(2)}%`,
+      higherIsBetter: true,
+      values: {
+        target: activePlatform.engagementRate,
+        ...Object.fromEntries(
+          samePlatformCompetitors.map((c) => [c.username, c.engagementRate]),
+        ),
+      },
+    },
+    {
+      label: 'Avg hashtags per post',
+      format: (v) => v.toFixed(1),
+      higherIsBetter: true,
+      values: {
+        target: avgHashtagsTarget,
+        ...Object.fromEntries(
+          samePlatformCompetitors.map((c) => [c.username, avgHashtagsFor(c)]),
+        ),
+      },
+    },
+    {
+      label: 'Posts sampled',
+      format: (v) => v.toFixed(0),
+      higherIsBetter: true,
+      values: {
+        target: activePlatform.videos.length,
+        ...Object.fromEntries(
+          samePlatformCompetitors.map((c) => [c.username, c.recentVideos.length]),
+        ),
+      },
+    },
+  ];
+
+  // Compute the winning column per row.
+  const winnerByRow = new Map<string, string>();
+  for (const row of rows) {
+    const entries = Object.entries(row.values).filter(([, v]) => typeof v === 'number' && !Number.isNaN(v));
+    if (entries.length === 0) continue;
+    const sorted = [...entries].sort((a, b) =>
+      row.higherIsBetter ? b[1] - a[1] : a[1] - b[1],
+    );
+    winnerByRow.set(row.label, sorted[0][0]);
+  }
+
+  // Tally wins per column for the header summary.
+  const winsByCol = new Map<string, number>();
+  for (const winnerId of winnerByRow.values()) {
+    winsByCol.set(winnerId, (winsByCol.get(winnerId) ?? 0) + 1);
+  }
+
+  return (
+    <div className="rounded-xl border border-nativz-border bg-surface p-6">
+      <div className="mb-4 flex items-baseline justify-between">
+        <div>
+          <h3 className="text-base font-semibold text-text-primary">
+            Head-to-head comparison
+          </h3>
+          <p className="mt-0.5 text-xs text-text-muted">
+            {activePlatform.profile.displayName || 'You'} vs.{' '}
+            {samePlatformCompetitors.length} competitor
+            {samePlatformCompetitors.length === 1 ? '' : 's'} on {activePlatform.platform}
+          </p>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] border-collapse text-sm">
+          <thead>
+            <tr>
+              <th className="sticky left-0 z-10 bg-surface px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
+                Metric
+              </th>
+              {allCols.map((col) => {
+                const wins = winsByCol.get(col.id) ?? 0;
+                return (
+                  <th
+                    key={col.id}
+                    className={`min-w-[160px] border-l border-nativz-border px-3 py-3 text-left ${
+                      col.isTarget ? 'bg-accent-surface/15' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <AvatarWithFallback
+                        src={col.avatarUrl}
+                        name={col.name}
+                        className="h-8 w-8 text-[10px]"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-text-primary">
+                          {col.name}
+                        </p>
+                        <p className="truncate text-[10px] text-text-muted">
+                          @{String(col.username).replace(/^@+/, '')}
+                          {col.isTarget ? ' · You' : ''}
+                          {wins > 0 ? ` · ${wins} ${wins === 1 ? 'win' : 'wins'}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const winnerId = winnerByRow.get(row.label);
+              return (
+                <tr key={row.label} className="border-t border-nativz-border/60">
+                  <td className="sticky left-0 z-10 bg-surface px-3 py-3 text-xs font-medium text-text-muted">
+                    {row.label}
+                  </td>
+                  {allCols.map((col) => {
+                    const raw = row.values[col.id];
+                    const isWinner = winnerId === col.id;
+                    return (
+                      <td
+                        key={col.id}
+                        className={`border-l border-nativz-border px-3 py-3 ${
+                          col.isTarget ? 'bg-accent-surface/[0.06]' : ''
+                        } ${isWinner ? 'bg-emerald-500/[0.08]' : ''}`}
+                      >
+                        {typeof raw === 'number' && !Number.isNaN(raw) ? (
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`text-sm font-semibold ${
+                                isWinner ? 'text-emerald-400' : 'text-text-primary'
+                              }`}
+                            >
+                              {row.format(raw)}
+                            </span>
+                            {isWinner && (
+                              <CheckCircle
+                                size={13}
+                                className="shrink-0 text-emerald-400"
+                                aria-label="Winner"
+                              />
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-text-muted">—</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Audit source browser ────────────────────────────────────────────────
+
+type AuditVideoRow = {
+  platform: string;
+  platform_id: string | null;
+  url: string;
+  thumbnail_url: string | null;
+  description: string | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  duration_seconds: number | null;
+  publish_date: string | null;
+  author_username: string | null;
+  hashtags: string[] | null;
+};
+
+/**
+ * Audit-specific source browser. Replaces the shared VideoGrid which
+ * assumes TopicSearchVideoRow fields (outlier_score, hook_text, etc.) the
+ * audit pipeline doesn't populate — hence "not working at all". This grid
+ * shows each scraped post with a thumbnail, sort by views / recent, and a
+ * platform filter that only exposes the platforms actually present.
+ */
+function AuditSourceBrowser({ videos }: { videos: AuditVideoRow[] }) {
+  const [sort, setSort] = useState<'views' | 'recent'>('views');
+  const [platform, setPlatform] = useState<string>('all');
+  const [showAll, setShowAll] = useState(false);
+
+  const availablePlatforms = useMemo(() => {
+    const set = new Set<string>();
+    for (const v of videos) if (v.platform) set.add(v.platform);
+    return ['all', ...Array.from(set)];
+  }, [videos]);
+
+  const filteredSorted = useMemo(() => {
+    let list = platform === 'all' ? videos : videos.filter((v) => v.platform === platform);
+    list = [...list].sort((a, b) => {
+      if (sort === 'recent') {
+        const da = a.publish_date ? new Date(a.publish_date).getTime() : 0;
+        const db = b.publish_date ? new Date(b.publish_date).getTime() : 0;
+        return db - da;
+      }
+      return (b.views ?? 0) - (a.views ?? 0);
+    });
+    return list;
+  }, [videos, platform, sort]);
+
+  const displayed = showAll ? filteredSorted : filteredSorted.slice(0, 12);
+
+  if (videos.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-nativz-border bg-surface p-6">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-base font-semibold text-text-primary">Source content</h3>
+          <p className="mt-0.5 text-xs text-text-muted">
+            {videos.length} post{videos.length === 1 ? '' : 's'} scraped across {availablePlatforms.length - 1} platform{availablePlatforms.length - 1 === 1 ? '' : 's'}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Sort */}
+          <div className="flex overflow-hidden rounded-lg border border-nativz-border">
+            {(['views', 'recent'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSort(s)}
+                className={`px-3 py-1 text-xs font-medium transition-colors ${
+                  sort === s
+                    ? 'bg-accent-surface text-accent-text'
+                    : 'text-text-muted hover:bg-surface-hover hover:text-text-secondary'
+                }`}
+              >
+                {s === 'views' ? 'Top views' : 'Most recent'}
+              </button>
+            ))}
+          </div>
+          {/* Platform filter */}
+          {availablePlatforms.length > 2 && (
+            <div className="flex overflow-hidden rounded-lg border border-nativz-border">
+              {availablePlatforms.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPlatform(p)}
+                  className={`px-3 py-1 text-xs font-medium transition-colors capitalize ${
+                    platform === p
+                      ? 'bg-accent-surface text-accent-text'
+                      : 'text-text-muted hover:bg-surface-hover hover:text-text-secondary'
+                  }`}
+                >
+                  {p === 'all' ? 'All' : p}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {displayed.map((v) => (
+          <a
+            key={`${v.platform}-${v.platform_id ?? v.url}`}
+            href={v.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group block overflow-hidden rounded-lg border border-nativz-border bg-background transition-colors hover:border-accent/40"
+          >
+            <PostThumbnail
+              src={v.thumbnail_url}
+              platform={v.platform}
+              duration={v.duration_seconds}
+            />
+            <div className="p-2.5">
+              <p className="text-xs font-medium text-text-primary">
+                {formatNumber(v.views ?? 0)} views
+              </p>
+              <p className="mt-0.5 text-[11px] text-text-muted">
+                {formatNumber(v.likes ?? 0)} likes · {formatNumber(v.comments ?? 0)} comments
+              </p>
+              {v.description && (
+                <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-muted/70">
+                  {v.description}
+                </p>
+              )}
+            </div>
+          </a>
+        ))}
+      </div>
+
+      {filteredSorted.length > 12 && !showAll && (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className="rounded-lg border border-nativz-border px-4 py-2 text-xs font-medium text-text-muted transition-colors hover:border-accent/30 hover:text-text-primary"
+          >
+            Show {filteredSorted.length - 12} more
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
