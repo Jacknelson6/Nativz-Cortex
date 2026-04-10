@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Library, BarChart3, MessageSquare } from 'lucide-react';
 import type { KnowledgeEntry, KnowledgeGraphData } from '@/lib/knowledge/types';
 import type { Pillar } from '@/components/ideas-hub/pillar-card';
@@ -28,6 +28,12 @@ type BrandGuidelinePayload = {
   created_at: string;
   updated_at: string;
 } | null;
+
+const MAIN_TABS: { id: MainTab; label: string; icon: typeof MessageSquare }[] = [
+  { id: 'chat', label: 'Chat', icon: MessageSquare },
+  { id: 'knowledge-base', label: 'Knowledge Base', icon: Library },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+];
 
 export function StrategyLabWorkspace({
   clientId,
@@ -98,7 +104,6 @@ export function StrategyLabWorkspace({
     } catch {
       /* ignore corrupt storage */
     }
-    // Auto-select most recent completed search if nothing saved
     if (mostRecentCompletedSearch) {
       setSelectedTopicSearchId(mostRecentCompletedSearch.id);
     }
@@ -118,108 +123,88 @@ export function StrategyLabWorkspace({
     }
   }, [selectedTopicSearchId, topicSearches, storageKey]);
 
-  const attachTopicSearch = useCallback(
-    (id: string) => {
-      setSelectedTopicSearchId(id);
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify([id]));
-      } catch {
-        /* ignore quota */
-      }
-    },
-    [storageKey],
-  );
-
-  // Keep attachTopicSearch reference for future use
-  void attachTopicSearch;
-
   const brandDnaHref = `/admin/clients/${clientSlug}/brand-dna`;
   const ideasHubBase = `/admin/ideas?clientId=${encodeURIComponent(clientId)}`;
   const pillarStrategyHref = `${ideasHubBase}&focus=pillars`;
   const ideasHubPillarIdeasHref = `${ideasHubBase}&focus=pillar-ideas`;
   const ideasHref = `/admin/clients/${clientSlug}/ideas`;
 
-  const MAIN_TABS: { id: MainTab; label: string; icon: typeof MessageSquare }[] = [
-    { id: 'chat', label: 'Chat', icon: MessageSquare },
-    { id: 'knowledge-base', label: 'Knowledge Base', icon: Library },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-  ];
-
+  // Chat tab renders its own chrome (sidebar, header, input) so the outer
+  // workspace hands off its entire content area. Other tabs reuse a shared
+  // container shell so the floating tab nav lines up visually with the chat
+  // container the user asked for.
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col">
-      {/* Floating pill nav — centered at top */}
-      <div className="flex justify-center py-3">
-        <div className="inline-flex gap-1 rounded-full border border-nativz-border bg-surface p-1 shadow-sm">
-          {MAIN_TABS.map((tab) => {
-            const active = mainTab === tab.id;
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setMainTab(tab.id)}
-                className={cn(
-                  'flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-all',
-                  active
-                    ? 'bg-accent-surface text-accent-text shadow-sm'
-                    : 'text-text-muted hover:bg-surface-hover hover:text-text-secondary',
-                )}
-              >
-                <Icon size={15} aria-hidden />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Tab content — fills remaining height */}
-      <div className="min-h-0 flex-1 overflow-hidden">
-        {mainTab === 'analytics' ? (
-          <div className="h-full overflow-y-auto px-6 py-4">
-            <div className="overflow-hidden rounded-xl border border-nativz-border/60 bg-surface">
-              <div className="border-b border-nativz-border/50 px-4 py-3">
-                <h3 className="text-sm font-semibold text-text-primary">Client analytics</h3>
-                <p className="text-xs text-text-muted">Cross-platform social performance for this workspace.</p>
-              </div>
-              <div className="p-4">
-                <AnalyticsDashboard initialClientId={clientId} />
-              </div>
+    <div className="flex h-[calc(100vh-4rem)] flex-col p-3 md:p-5">
+      {mainTab === 'chat' ? (
+        <StrategyLabNerdChat
+          clientId={clientId}
+          clientName={clientName}
+          clientSlug={clientSlug}
+          pinnedTopicSearchIds={pinnedTopicSearchIds}
+          mainTabs={MAIN_TABS}
+          activeMainTab={mainTab}
+          onMainTabChange={(next) => setMainTab(next as MainTab)}
+        />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-nativz-border/60 bg-background/40">
+          {/* Shared floating tab nav — same pill that lives inside the chat on
+              the Chat tab, kept in the same position for visual continuity. */}
+          <div className="flex shrink-0 items-center justify-center border-b border-nativz-border/40 px-4 py-3">
+            <div className="inline-flex gap-1 rounded-full border border-nativz-border/60 bg-surface/60 p-1 shadow-sm">
+              {MAIN_TABS.map((tab) => {
+                const active = mainTab === tab.id;
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setMainTab(tab.id)}
+                    className={cn(
+                      'flex cursor-pointer items-center gap-2 rounded-full px-5 py-1.5 text-sm font-medium transition-colors',
+                      active
+                        ? 'bg-surface-hover text-text-primary shadow-sm'
+                        : 'text-text-muted hover:bg-surface-hover/60 hover:text-text-secondary',
+                    )}
+                  >
+                    <Icon size={15} aria-hidden />
+                    {tab.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
-        ) : mainTab === 'knowledge-base' ? (
-          <div className="h-full overflow-y-auto px-6 py-4">
-            <StrategyLabBrandKnowledgeTab
-              clientId={clientId}
-              clientSlug={clientSlug}
-              clientName={clientName}
-              brandDnaStatus={brandDnaStatus}
-              brandGuideline={brandGuideline}
-              vaultEntries={vaultEntries}
-              vaultGraphData={vaultGraphData}
-              pillars={pillars}
-              pillarReferencePreviews={pillarReferencePreviews}
-              hasCompletedTopicSearch={hasCompletedTopicSearch}
-              hasPillars={hasPillars}
-              canGenerateIdeas={canGenerateIdeas}
-              pillarStrategyHref={pillarStrategyHref}
-              ideasHubPillarIdeasHref={ideasHubPillarIdeasHref}
-              ideasHref={ideasHref}
-              brandDnaHref={brandDnaHref}
-            />
+
+          {/* Tab content */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {mainTab === 'analytics' ? (
+              <div className="p-5">
+                <AnalyticsDashboard initialClientId={clientId} />
+              </div>
+            ) : (
+              <div className="p-5">
+                <StrategyLabBrandKnowledgeTab
+                  clientId={clientId}
+                  clientSlug={clientSlug}
+                  clientName={clientName}
+                  brandDnaStatus={brandDnaStatus}
+                  brandGuideline={brandGuideline}
+                  vaultEntries={vaultEntries}
+                  vaultGraphData={vaultGraphData}
+                  pillars={pillars}
+                  pillarReferencePreviews={pillarReferencePreviews}
+                  hasCompletedTopicSearch={hasCompletedTopicSearch}
+                  hasPillars={hasPillars}
+                  canGenerateIdeas={canGenerateIdeas}
+                  pillarStrategyHref={pillarStrategyHref}
+                  ideasHubPillarIdeasHref={ideasHubPillarIdeasHref}
+                  ideasHref={ideasHref}
+                  brandDnaHref={brandDnaHref}
+                />
+              </div>
+            )}
           </div>
-        ) : (
-          /* Chat tab — full height, chat is the primary experience */
-          <div className="flex h-full flex-col px-6 py-2">
-            <StrategyLabNerdChat
-              clientId={clientId}
-              clientName={clientName}
-              clientSlug={clientSlug}
-              pinnedTopicSearchIds={pinnedTopicSearchIds}
-            />
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

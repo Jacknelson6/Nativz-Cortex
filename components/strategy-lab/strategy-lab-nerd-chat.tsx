@@ -1,16 +1,17 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { BotMessageSquare, Plus, Loader2 } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect, useMemo, type ComponentType } from 'react';
+import { BotMessageSquare, Loader2 } from 'lucide-react';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { PromptInput } from '@/components/ai/prompt-input';
 import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
-import { TopicSearchContextRail } from '@/components/nerd/topic-search-context-rail';
 import { StrategyLabConversationExportButton } from './strategy-lab-conversation-export-button';
-import { StrategyLabConversationPicker } from './strategy-lab-conversation-picker';
 import { StrategyLabClientPickerPill } from './strategy-lab-client-picker-pill';
+import { StrategyLabConversationHistoryRail } from './strategy-lab-conversation-history-rail';
+import { StrategyLabTopicSearchChipBar } from './strategy-lab-topic-search-chip-bar';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils/cn';
 import { getAllCommands, getCommand } from '@/lib/nerd/slash-commands';
 import {
   readStrategyLabNerdConversationId,
@@ -25,12 +26,25 @@ const SUGGESTIONS = [
   { label: 'Performance', prompt: 'What should we prioritize on social for ' },
 ];
 
+// The tab nav shape the workspace passes down. We render it as a floating
+// pill inside the chat container instead of above it, per the UI refactor.
+interface MainTabSpec<Id extends string = string> {
+  id: Id;
+  label: string;
+  icon: ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>;
+}
+
 type StrategyLabNerdChatProps = {
   clientId: string;
   clientName: string;
   clientSlug: string;
   /** Topic search IDs the user pinned in Strategy Lab — the initial attached set for the chat context. */
   pinnedTopicSearchIds: string[];
+  /** Floating tab nav passed down from the workspace. Rendered inside the
+   *  chat container's header so it visually belongs to the chat UI. */
+  mainTabs: MainTabSpec[];
+  activeMainTab: string;
+  onMainTabChange: (next: string) => void;
 };
 
 interface TopicSearchItem {
@@ -61,6 +75,9 @@ export function StrategyLabNerdChat({
   clientName,
   clientSlug,
   pinnedTopicSearchIds,
+  mainTabs,
+  activeMainTab,
+  onMainTabChange,
 }: StrategyLabNerdChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -77,11 +94,12 @@ export function StrategyLabNerdChat({
   // so the history dropdown refetches when the user pops it open next.
   const [conversationsRefreshToken, setConversationsRefreshToken] = useState(0);
 
-  // Topic search attachment — initial set from pinned, mutable from the
-  // TopicSearchContextRail on the left side of the chat.
-  const [attachedSearchIds, setAttachedSearchIds] = useState<string[]>(pinnedTopicSearchIds);
+  // Topic search attachment — initial set comes from pinned + auto-attach
+  // latest, both handled inside StrategyLabTopicSearchChipBar now. The
+  // chip bar notifies us whenever the client's search list loads so we can
+  // look up attached-search metadata for the PDF export.
+  const [attachedSearchIds, setAttachedSearchIds] = useState<string[]>([]);
   const [clientSearches, setClientSearches] = useState<TopicSearchItem[]>([]);
-  const [searchesLoading, setSearchesLoading] = useState(false);
 
   // Slash command menu — same /ideas, /script, /pillars, /hooks, /strategy etc.
   // commands the admin Nerd registers centrally.
@@ -108,41 +126,6 @@ export function StrategyLabNerdChat({
   );
   const abortRef = useRef<AbortController | null>(null);
 
-  // Load this client's topic searches so the picker + chip labels work.
-  // Also auto-attach the most recent completed search on first load if nothing
-  // was pinned from Strategy Lab — keeps the chat from cold-starting with no
-  // research context when the user just opens the lab and types a question.
-  useEffect(() => {
-    if (!clientId) {
-      setClientSearches([]);
-      return;
-    }
-    let cancelled = false;
-    setSearchesLoading(true);
-    fetch(`/api/nerd/searches?clientId=${clientId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return;
-        const fetched = (data.searches ?? []) as TopicSearchItem[];
-        setClientSearches(fetched);
-        // Auto-attach latest completed search, only if the user hasn't already
-        // attached anything (nothing from pinned, nothing the picker has set).
-        setAttachedSearchIds((prev) => {
-          if (prev.length > 0) return prev;
-          const latestCompleted = fetched.find((s) => s.status === 'completed');
-          return latestCompleted ? [latestCompleted.id] : prev;
-        });
-      })
-      .catch(() => {
-        if (!cancelled) setClientSearches([]);
-      })
-      .finally(() => {
-        if (!cancelled) setSearchesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [clientId]);
 
   // Resume the persisted conversation for this client. localStorage holds
   // one conversation-id-per-client; if it's set we hydrate prior messages
@@ -462,9 +445,17 @@ export function StrategyLabNerdChat({
     [conversationId, streaming, clientId],
   );
 
-  const inputArea = (
-    <div className="shrink-0 border-t border-nativz-border/50 bg-surface/60 px-4 py-4 backdrop-blur-sm md:px-6">
-      <div className="mx-auto max-w-3xl">
+  const chatFooter = (
+    <div className="shrink-0 px-4 pb-5 pt-3 md:px-8 md:pb-6">
+      <div className="mx-auto flex max-w-3xl flex-col">
+        <StrategyLabTopicSearchChipBar
+          clientId={clientId}
+          clientName={clientName}
+          attachedSearchIds={attachedSearchIds}
+          onToggle={toggleAttach}
+          pinnedTopicSearchIds={pinnedTopicSearchIds}
+          onSearchesLoaded={setClientSearches}
+        />
         <PromptInput
           variant="research"
           value={input}
@@ -494,59 +485,71 @@ export function StrategyLabNerdChat({
   }));
 
   return (
-    <div className="flex h-full min-h-[520px] flex-1 overflow-hidden rounded-xl border border-nativz-border/60 bg-background/40">
-      {/* Left rail: topic searches the user can attach as chat context. Same
-          component the admin Nerd uses so the two surfaces feel identical. */}
-      <TopicSearchContextRail
+    <div className="flex h-full min-h-0 flex-1 overflow-hidden rounded-2xl border border-nativz-border/60 bg-background/40">
+      {/* Left rail: strategy session history — every prior Nerd conversation
+          for this client, grouped by recency. Replaces the old topic-search
+          rail; research attachment moved to a compact chip bar above the
+          chat input. */}
+      <StrategyLabConversationHistoryRail
         clientId={clientId}
         clientName={clientName}
-        attachedSearchIds={attachedSearchIds}
-        onToggleSearch={toggleAttach}
+        activeConversationId={conversationId}
+        onSelect={(id) => void handleSelectConversation(id)}
+        onNewChat={handleReset}
+        refreshToken={conversationsRefreshToken}
       />
 
       {/* Main chat column */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-nativz-border/50 px-4 py-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+        {/* Header: client picker · floating tab nav · export PDF */}
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
+          <div className="flex min-w-0 items-center gap-2">
             <StrategyLabClientPickerPill
               clientId={clientId}
               clientName={clientName}
               clientSlug={clientSlug}
             />
-            <span className="rounded-full bg-accent/[0.12] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-text/90">
-              Strategy lab
-            </span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <StrategyLabConversationPicker
-              clientId={clientId}
-              activeConversationId={conversationId}
-              onSelect={(id) => void handleSelectConversation(id)}
-              refreshToken={conversationsRefreshToken}
-              disabled={streaming}
-            />
-            {messages.length > 0 && (
-              <>
-                <StrategyLabConversationExportButton
-                  clientId={clientId}
-                  clientName={clientName}
-                  conversationTitle={conversationTitle}
-                  messages={messages}
-                  attachedSearches={attachedSearches.map((s) => ({
-                    query: s.query,
-                    created_at: s.created_at,
-                  }))}
-                  disabled={streaming}
-                />
+
+          {/* Floating tab pill — inside the chat container per the UI
+              refactor. Neutral styling so the chat input is the only
+              colored element on the page. */}
+          <div className="inline-flex shrink-0 gap-1 rounded-full border border-nativz-border/60 bg-surface/60 p-1 shadow-sm">
+            {mainTabs.map((tab) => {
+              const active = activeMainTab === tab.id;
+              const Icon = tab.icon;
+              return (
                 <button
+                  key={tab.id}
                   type="button"
-                  onClick={handleReset}
-                  className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-nativz-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:border-accent/20 hover:text-text-primary"
+                  onClick={() => onMainTabChange(tab.id)}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                    active
+                      ? 'bg-surface-hover text-text-primary'
+                      : 'text-text-muted hover:bg-surface-hover/60 hover:text-text-secondary',
+                  )}
                 >
-                  <Plus size={12} aria-hidden />
-                  New chat
+                  <Icon size={14} aria-hidden />
+                  {tab.label}
                 </button>
-              </>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {messages.length > 0 && (
+              <StrategyLabConversationExportButton
+                clientId={clientId}
+                clientName={clientName}
+                conversationTitle={conversationTitle}
+                messages={messages}
+                attachedSearches={attachedSearches.map((s) => ({
+                  query: s.query,
+                  created_at: s.created_at,
+                }))}
+                disabled={streaming}
+              />
             )}
           </div>
         </header>
@@ -554,65 +557,64 @@ export function StrategyLabNerdChat({
       {loadingConversation && messages.length === 0 ? (
         <>
           <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
-            <Loader2 size={24} className="animate-spin text-accent-text" />
-            <p className="mt-3 text-sm font-medium text-text-primary">
+            <Loader2 size={26} className="animate-spin text-text-muted" />
+            <p className="mt-3 text-base font-medium text-text-primary">
               {conversationTitle && conversationTitle !== 'New conversation'
                 ? `Resuming: ${conversationTitle}`
                 : 'Resuming your strategy chat'}
             </p>
             {conversationMessageCount > 0 && (
-              <p className="mt-1 text-[11px] text-text-muted">
+              <p className="mt-1 text-sm text-text-muted">
                 Loading {conversationMessageCount} message
                 {conversationMessageCount === 1 ? '' : 's'}…
               </p>
             )}
           </div>
-          {inputArea}
+          {chatFooter}
         </>
       ) : messages.length === 0 ? (
         <>
           <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
-            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-nativz-border bg-gradient-to-b from-surface to-background shadow-[0_0_24px_rgba(4,107,210,0.1)]">
-              <BotMessageSquare size={24} className="text-accent-text" />
+            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-nativz-border/60 bg-surface/40">
+              <BotMessageSquare size={28} className="text-text-muted" />
             </div>
-            <h2 className="mb-1 text-xl font-semibold tracking-tight text-text-primary">
+            <h2 className="mb-2 text-2xl font-semibold tracking-tight text-text-primary">
               Strategy chat for {clientName.trim() || 'this client'}
             </h2>
-            <p className="mb-8 max-w-md text-center text-sm leading-relaxed text-text-muted">
-              Cortex has full client context, knowledge vault access, and any topic searches you attach above.
+            <p className="mb-8 max-w-md text-center text-base leading-relaxed text-text-muted">
+              Cortex has full client context, knowledge vault access, and any topic searches you attach below.
               Ask about research, pillars, ideas, or performance.
             </p>
-            <div className="flex max-w-lg flex-wrap justify-center gap-2">
+            <div className="flex max-w-xl flex-wrap justify-center gap-2">
               {suggestions.map((s) => (
                 <button
                   key={s.label}
                   type="button"
                   onClick={() => setInput(s.prompt)}
-                  className="cursor-pointer rounded-xl border border-nativz-border px-4 py-2.5 text-sm text-text-secondary transition-all duration-200 hover:border-accent/20 hover:bg-accent/[0.04] hover:text-text-primary"
+                  className="cursor-pointer rounded-xl border border-nativz-border/60 bg-surface/40 px-4 py-2.5 text-sm text-text-secondary transition-colors hover:border-nativz-border hover:bg-surface-hover hover:text-text-primary"
                 >
                   {s.label}
                 </button>
               ))}
             </div>
           </div>
-          {inputArea}
+          {chatFooter}
         </>
       ) : (
         <>
-          <Conversation className="min-h-0 flex-1 overflow-y-auto px-4 md:px-6">
-            <div className="mx-auto max-w-3xl divide-y divide-nativz-border/50 py-4">
+          <Conversation className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8">
+            <div className="mx-auto max-w-3xl divide-y divide-nativz-border/30 py-6">
               {messages.map((msg, index) => {
                 const isLast = index === messages.length - 1;
                 if (msg.role === 'assistant') {
                   // Inline "export this reply" button — only renders when the
-                  // assistant message has finished streaming (non-empty
-                  // content, not currently the streaming target). Uses the
-                  // same export pipeline as the header button but in compact
-                  // icon mode, and ships only this one message to the PDF.
+                  // assistant message has finished streaming. Uses the same
+                  // export pipeline as the header button but in compact icon
+                  // mode, shipping only this one message to the PDF.
                   const hasContent = msg.content.trim().length > 0;
                   const isStreamingTarget = isLast && streaming;
                   return (
-                    <div key={msg.id}>
+                    <div key={msg.id} className="py-2">
                       <AssistantMessage
                         message={msg}
                         isLast={isLast}
@@ -641,7 +643,7 @@ export function StrategyLabNerdChat({
               })}
             </div>
           </Conversation>
-          {inputArea}
+          {chatFooter}
         </>
       )}
       </div>
