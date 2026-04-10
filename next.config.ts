@@ -63,6 +63,13 @@ const nextConfig: NextConfig = {
     ],
   },
   serverExternalPackages: ['ffmpeg-static', 'fluent-ffmpeg', '@resvg/resvg-js', 'playwright-core'],
+  // ffmpeg-static resolves its binary via path.join(__dirname, <name from package.json>)
+  // at runtime, which nft cannot trace statically. Explicitly include the binary file
+  // in the two routes that spawn it so Vercel copies it into the function bundle.
+  outputFileTracingIncludes: {
+    '/api/analysis/items/[id]/extract-frames': ['./node_modules/ffmpeg-static/ffmpeg'],
+    '/api/search/[id]/sources/extract-frames': ['./node_modules/ffmpeg-static/ffmpeg'],
+  },
   webpack: (config, { dev }) => {
     if (dev) {
       // Avoid PackFileCacheStrategy rename/ENOENT races on disk (missing routes-manifest,

@@ -96,8 +96,18 @@ Return a JSON object with exactly this structure (no markdown, just raw JSON):
     script = content;
   }
 
+  // Back-compat shape: the simplified pipeline only generates `script`, but legacy
+  // readers (research video-analysis-panel, tiktok-embed-carousel) expect the richer
+  // RescriptData with `adapted_script` + empty arrays. Mirror `script` into
+  // `adapted_script` and supply empty defaults for the removed fields so nothing
+  // crashes and every caller can display the spoken-word script.
   const rescriptData = {
     script,
+    adapted_script: script,
+    shot_list: [] as { number: number; description: string; timing: string; notes?: string }[],
+    hook_alternatives: [] as string[],
+    hashtags: [] as string[],
+    posting_strategy: '',
     client_id: options.client_id || undefined,
     brand_voice: brandVoice || undefined,
     product: product || undefined,

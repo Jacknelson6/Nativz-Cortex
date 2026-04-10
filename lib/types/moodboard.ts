@@ -105,6 +105,10 @@ export interface VideoAnalysis {
 }
 
 export interface RescriptData {
+  // Canonical field (current pipeline writes this). Older records may be missing it.
+  script?: string;
+  // Legacy alias — always mirrored from `script` by the current backend so existing
+  // consumers keep rendering. Older pre-migration records may be missing it.
   adapted_script: string;
   shot_list: { number: number; description: string; timing: string; notes?: string }[];
   hook_alternatives: string[];
