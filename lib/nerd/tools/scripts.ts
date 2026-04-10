@@ -33,29 +33,34 @@ export const scriptTools: ToolDefinition[] = [
     name: 'script_video_idea',
     description:
       'Turn a raw video idea into a full spoken-word script using Nativz\'s scripting pipeline. Use this when the user has an idea title + concept and wants a performable script (not a rescript of an existing video — use generate_video_rescript for that). Pulls the client\'s brand voice, target audience, and any reference videos you pass. Saves the result to idea_scripts so it\'s retrievable later.',
+    // Keep this schema composed from primitive Zod types only — no z.union,
+    // no nested composed modifiers — because OpenAI's strict function-call
+    // validator rejects property-level `anyOf`, which is what Zod v4's
+    // z.toJSONSchema emits for union types. Breaking that contract takes
+    // down the WHOLE tool list (the first bad tool fails the request), and
+    // that's exactly the regression that caused the Nerd chat to error with
+    // "Invalid schema for function" right after this tool landed.
     parameters: z.object({
-      client_id: z.string().uuid().describe('Client UUID for brand context (required)'),
-      title: z.string().min(1).describe('Video idea title or headline'),
+      client_id: z.string().describe('Client UUID for brand context (required)'),
+      title: z.string().describe('Video idea title or headline'),
       why_it_works: z
-        .union([z.string(), z.array(z.string())])
+        .array(z.string())
         .optional()
-        .describe('Reason bullets explaining why this idea resonates — pulled from /ideas output or the topic search'),
+        .describe('Reason bullets explaining why this idea resonates — pulled from /ideas output or the topic search. Single-reason inputs should still be passed as a 1-element array.'),
       content_pillar: z.string().optional().describe('Content pillar or category this idea lives under'),
       reference_video_ids: z
-        .array(z.string().uuid())
+        .array(z.string())
         .optional()
         .describe('reference_videos UUIDs to match style, pacing, and tone from past winners for this client'),
       cta: z.string().optional().describe('Specific CTA to close the script (defaults to brand-appropriate)'),
       video_length_seconds: z
         .number()
-        .min(10)
-        .max(180)
         .optional()
-        .describe('Target video length in seconds (default 60). Drives word count at ~130 wpm'),
+        .describe('Target video length in seconds. Default 60, valid range 10-180. Drives word count at ~130 wpm.'),
       hook_strategies: z
-        .array(z.enum(HOOK_STRATEGIES))
+        .array(z.string())
         .optional()
-        .describe('Hook styles to blend: negative, curiosity, controversial, story, authority, question, listicle, fomo, tutorial'),
+        .describe('Hook styles to blend. Valid values: negative, curiosity, controversial, story, authority, question, listicle, fomo, tutorial'),
       notes: z.string().optional().describe('Any extra framing the user wants the script to reflect'),
     }),
     riskLevel: 'write',
