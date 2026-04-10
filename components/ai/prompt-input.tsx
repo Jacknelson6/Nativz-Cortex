@@ -1,7 +1,10 @@
 'use client';
 
 import { useRef, useLayoutEffect } from 'react';
-import { ArrowUp, Loader2 } from 'lucide-react';
+import { ArrowRight, ArrowUp, Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils/cn';
+
+export type PromptInputVariant = 'default' | 'research';
 
 export function PromptInput({
   value,
@@ -12,6 +15,7 @@ export function PromptInput({
   children,
   blockEnterSubmit,
   onKeyDown: onKeyDownOverride,
+  variant = 'default',
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -28,6 +32,14 @@ export function PromptInput({
    * selection into autocomplete menus (slash commands, mentions).
    */
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  /**
+   * Visual variant:
+   * - 'default' — compact chat bubble used by the admin Nerd
+   * - 'research' — the larger rounded-[1.75rem] hero shell + accent circle
+   *   ArrowRight submit button from the Research page. Used by the Strategy
+   *   Lab Nerd so the two surfaces feel consistent.
+   */
+  variant?: PromptInputVariant;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const maxHeight = 200;
@@ -50,9 +62,51 @@ export function PromptInput({
     }
   }
 
+  if (variant === 'research') {
+    return (
+      <div
+        className="relative w-full overflow-hidden rounded-[1.75rem] border border-nativz-border bg-surface-hover/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_32px_-12px_rgba(0,0,0,0.45)] transition-colors focus-within:border-accent/35 focus-within:bg-surface-hover/50 focus-within:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(91,163,230,0.12),0_12px_40px_-16px_rgba(0,0,0,0.5)] cursor-text"
+        onClick={() => textareaRef.current?.focus()}
+      >
+        {/* Slot for autocomplete menus (slash commands, mentions) */}
+        {children}
+
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder ?? 'Ask Cortex about your strategy…'}
+          rows={1}
+          disabled={disabled}
+          className="block w-full min-h-[3.25rem] resize-none border-0 bg-transparent px-5 pt-5 pb-16 text-base font-normal leading-relaxed text-foreground placeholder:text-text-muted/80 focus:outline-none md:min-h-[3.5rem]"
+        />
+
+        {/* Submit button — matches Research page */}
+        <div className="absolute bottom-0 right-0 px-3 pb-3">
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={!value.trim() || disabled}
+            aria-label="Send message"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/40 bg-accent text-white shadow-[0_0_24px_-6px_rgba(91,163,230,0.55)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {disabled ? (
+              <Loader2 size={18} className="animate-spin" aria-hidden />
+            ) : (
+              <ArrowRight size={18} strokeWidth={2.25} aria-hidden />
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="relative w-full rounded-2xl border border-nativz-border bg-surface transition-colors focus-within:border-accent/30 cursor-text"
+      className={cn(
+        'relative w-full rounded-2xl border border-nativz-border bg-surface transition-colors focus-within:border-accent/30 cursor-text',
+      )}
       onClick={() => textareaRef.current?.focus()}
     >
       {/* Slot for mention autocomplete etc. */}

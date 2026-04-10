@@ -1,16 +1,16 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { BotMessageSquare, Plus, X, Check, Search as SearchIcon, FileText, Clock, Loader2 } from 'lucide-react';
+import { BotMessageSquare, Plus, Loader2 } from 'lucide-react';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { PromptInput } from '@/components/ai/prompt-input';
 import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
+import { TopicSearchContextRail } from '@/components/nerd/topic-search-context-rail';
 import { StrategyLabConversationExportButton } from './strategy-lab-conversation-export-button';
 import { StrategyLabConversationPicker } from './strategy-lab-conversation-picker';
+import { StrategyLabClientPickerPill } from './strategy-lab-client-picker-pill';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils/cn';
-import { formatRelativeTime } from '@/lib/utils/format';
 import { getAllCommands, getCommand } from '@/lib/nerd/slash-commands';
 import {
   readStrategyLabNerdConversationId,
@@ -77,12 +77,11 @@ export function StrategyLabNerdChat({
   // so the history dropdown refetches when the user pops it open next.
   const [conversationsRefreshToken, setConversationsRefreshToken] = useState(0);
 
-  // Topic search attachment — initial set from pinned, mutable from the picker.
+  // Topic search attachment — initial set from pinned, mutable from the
+  // TopicSearchContextRail on the left side of the chat.
   const [attachedSearchIds, setAttachedSearchIds] = useState<string[]>(pinnedTopicSearchIds);
   const [clientSearches, setClientSearches] = useState<TopicSearchItem[]>([]);
   const [searchesLoading, setSearchesLoading] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const pickerRef = useRef<HTMLDivElement | null>(null);
 
   // Slash command menu — same /ideas, /script, /pillars, /hooks, /strategy etc.
   // commands the admin Nerd registers centrally.
@@ -261,41 +260,18 @@ export function StrategyLabNerdChat({
     [showSlashMenu, filteredSlashCommands, slashActiveIndex, handleSlashSelect],
   );
 
-  // Close the picker when the user clicks outside or presses Escape.
-  useEffect(() => {
-    if (!pickerOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (!pickerRef.current) return;
-      if (!pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
-    }
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setPickerOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
-    };
-  }, [pickerOpen]);
-
   const toggleAttach = useCallback((searchId: string) => {
     setAttachedSearchIds((prev) =>
       prev.includes(searchId) ? prev.filter((id) => id !== searchId) : [...prev, searchId],
     );
   }, []);
 
+  // Used by the PDF export button to look up attached search titles.
   const attachedSearches = useMemo(() => {
-    // Preserve insertion order so the chip row matches the user's selection order.
     return attachedSearchIds
       .map((id) => clientSearches.find((s) => s.id === id))
       .filter((s): s is TopicSearchItem => !!s);
   }, [attachedSearchIds, clientSearches]);
-
-  const completedSearches = useMemo(
-    () => clientSearches.filter((s) => s.status === 'completed'),
-    [clientSearches],
-  );
 
   const handleSend = useCallback(
     async (text?: string) => {
@@ -487,9 +463,10 @@ export function StrategyLabNerdChat({
   );
 
   const inputArea = (
-    <div className="shrink-0 border-t border-nativz-border/50 bg-surface/80 px-4 py-4 backdrop-blur-sm">
+    <div className="shrink-0 border-t border-nativz-border/50 bg-surface/60 px-4 py-4 backdrop-blur-sm md:px-6">
       <div className="mx-auto max-w-3xl">
         <PromptInput
+          variant="research"
           value={input}
           onChange={setInput}
           onSubmit={() => handleSend()}
@@ -517,176 +494,62 @@ export function StrategyLabNerdChat({
   }));
 
   return (
-    <div className="flex h-full min-h-[520px] flex-1 flex-col overflow-hidden rounded-xl border border-nativz-border/60 bg-background/40">
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-nativz-border/50 px-4 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <BotMessageSquare className="h-4 w-4 shrink-0 text-accent-text" aria-hidden />
-          <span className="text-sm font-semibold text-text-primary">Chat with the Nerd</span>
-          <span className="rounded-full bg-accent/[0.12] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-text/90">
-            Strategy lab
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <StrategyLabConversationPicker
-            clientId={clientId}
-            activeConversationId={conversationId}
-            onSelect={(id) => void handleSelectConversation(id)}
-            refreshToken={conversationsRefreshToken}
-            disabled={streaming}
-          />
-          {messages.length > 0 && (
-            <>
-              <StrategyLabConversationExportButton
-                clientId={clientId}
-                clientName={clientName}
-                conversationTitle={conversationTitle}
-                messages={messages}
-                attachedSearches={attachedSearches.map((s) => ({
-                  query: s.query,
-                  created_at: s.created_at,
-                }))}
-                disabled={streaming}
-              />
-              <button
-                type="button"
-                onClick={handleReset}
-                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-nativz-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:border-accent/20 hover:text-text-primary"
-              >
-                <Plus size={12} aria-hidden />
-                New chat
-              </button>
-            </>
-          )}
-        </div>
-      </header>
+    <div className="flex h-full min-h-[520px] flex-1 overflow-hidden rounded-xl border border-nativz-border/60 bg-background/40">
+      {/* Left rail: topic searches the user can attach as chat context. Same
+          component the admin Nerd uses so the two surfaces feel identical. */}
+      <TopicSearchContextRail
+        clientId={clientId}
+        clientName={clientName}
+        attachedSearchIds={attachedSearchIds}
+        onToggleSearch={toggleAttach}
+      />
 
-      {/* Attached research bar — attached topic searches flow into /api/nerd/chat
-          as searchContext and inject the full topic search content into the
-          system prompt. */}
-      <div className="relative flex shrink-0 items-center gap-2 border-b border-nativz-border/40 bg-background/20 px-4 py-2">
-        <FileText size={12} className="shrink-0 text-text-muted" aria-hidden />
-        <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-text-muted">
-          Research
-        </span>
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-          {attachedSearches.length === 0 ? (
-            <span className="text-[11px] text-text-muted/70">
-              {searchesLoading && attachedSearchIds.length > 0
-                ? 'Loading…'
-                : 'No searches attached'}
+      {/* Main chat column */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-nativz-border/50 px-4 py-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <StrategyLabClientPickerPill
+              clientId={clientId}
+              clientName={clientName}
+              clientSlug={clientSlug}
+            />
+            <span className="rounded-full bg-accent/[0.12] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-text/90">
+              Strategy lab
             </span>
-          ) : (
-            attachedSearches.map((s) => (
-              <span
-                key={s.id}
-                className="inline-flex max-w-[220px] items-center gap-1.5 rounded-full border border-accent/25 bg-accent-surface/20 pl-2 pr-1 py-0.5 text-[11px] text-accent-text"
-              >
-                <span className="truncate" title={s.query}>{s.query}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <StrategyLabConversationPicker
+              clientId={clientId}
+              activeConversationId={conversationId}
+              onSelect={(id) => void handleSelectConversation(id)}
+              refreshToken={conversationsRefreshToken}
+              disabled={streaming}
+            />
+            {messages.length > 0 && (
+              <>
+                <StrategyLabConversationExportButton
+                  clientId={clientId}
+                  clientName={clientName}
+                  conversationTitle={conversationTitle}
+                  messages={messages}
+                  attachedSearches={attachedSearches.map((s) => ({
+                    query: s.query,
+                    created_at: s.created_at,
+                  }))}
+                  disabled={streaming}
+                />
                 <button
                   type="button"
-                  onClick={() => toggleAttach(s.id)}
-                  className="cursor-pointer rounded-full p-0.5 text-accent-text/70 hover:bg-accent/20 hover:text-accent-text"
-                  aria-label={`Remove ${s.query} from context`}
+                  onClick={handleReset}
+                  className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-nativz-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:border-accent/20 hover:text-text-primary"
                 >
-                  <X size={10} />
+                  <Plus size={12} aria-hidden />
+                  New chat
                 </button>
-              </span>
-            ))
-          )}
-        </div>
-        <div ref={pickerRef} className="relative shrink-0">
-          <button
-            type="button"
-            onClick={() => setPickerOpen((v) => !v)}
-            className={cn(
-              'inline-flex cursor-pointer items-center gap-1 rounded-lg border px-2 py-1 text-[11px] transition-colors',
-              pickerOpen
-                ? 'border-accent/40 bg-accent-surface/30 text-accent-text'
-                : 'border-nativz-border text-text-muted hover:border-accent/20 hover:text-text-primary',
+              </>
             )}
-          >
-            <Plus size={11} />
-            Add research
-          </button>
-          {pickerOpen && (
-            <div className="absolute right-0 top-full z-30 mt-1 w-[320px] overflow-hidden rounded-xl border border-nativz-border bg-surface shadow-elevated">
-              <div className="flex items-center justify-between border-b border-nativz-border/60 px-3 py-2">
-                <span className="text-[10px] font-medium uppercase tracking-wide text-text-muted">
-                  {clientName}
-                </span>
-                <span className="text-[10px] text-text-muted/70">
-                  {attachedSearchIds.length} of {completedSearches.length} attached
-                </span>
-              </div>
-              <div className="max-h-[320px] overflow-y-auto p-1.5">
-                {searchesLoading ? (
-                  <div className="space-y-1.5 p-1.5">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="h-11 animate-pulse rounded-lg bg-surface-hover" />
-                    ))}
-                  </div>
-                ) : completedSearches.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center gap-1.5 py-8 text-center">
-                    <SearchIcon size={16} className="text-text-muted/40" />
-                    <p className="text-xs text-text-muted">No completed searches yet</p>
-                    <p className="text-[10px] text-text-muted/60">
-                      Run a topic search for {clientName} to attach it here.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-0.5">
-                    {completedSearches.map((s) => {
-                      const isAttached = attachedSearchIds.includes(s.id);
-                      return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => toggleAttach(s.id)}
-                          className={cn(
-                            'group flex w-full cursor-pointer items-start gap-2 rounded-lg border px-2 py-2 text-left transition-colors',
-                            isAttached
-                              ? 'border-accent/25 bg-accent-surface/15'
-                              : 'border-transparent hover:bg-surface-hover',
-                          )}
-                        >
-                          <div className="mt-0.5 shrink-0">
-                            {isAttached ? (
-                              <Check size={12} className="text-accent-text" />
-                            ) : (
-                              <div className="h-3 w-3 rounded-full border border-text-muted/30 group-hover:border-accent/50" />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p
-                              className={cn(
-                                'truncate text-xs leading-snug',
-                                isAttached ? 'font-medium text-text-primary' : 'text-text-secondary',
-                              )}
-                            >
-                              {s.query}
-                            </p>
-                            <div className="mt-0.5 flex items-center gap-1.5">
-                              <span className="flex items-center gap-0.5 text-[10px] text-text-muted/50">
-                                <Clock size={8} />
-                                {formatRelativeTime(s.created_at)}
-                              </span>
-                              {s.metrics?.topic_score != null && (
-                                <span className="text-[10px] text-text-muted/50">
-                                  Score {s.metrics.topic_score}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+          </div>
+        </header>
 
       {loadingConversation && messages.length === 0 ? (
         <>
@@ -781,6 +644,7 @@ export function StrategyLabNerdChat({
           {inputArea}
         </>
       )}
+      </div>
     </div>
   );
 }
