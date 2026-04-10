@@ -231,6 +231,9 @@ export function StrategyLabNerdChat({
             // the admin Nerd uses at /admin/nerd.
             searchContext: attachedSearchIds.length > 0 ? attachedSearchIds : undefined,
             conversationId: conversationId ?? undefined,
+            // Tells /api/nerd/chat to append the Strategy Lab scripting
+            // addendum + preloaded scripting skills to the system prompt.
+            mode: 'strategy-lab' as const,
           }),
           signal: controller.signal,
         });

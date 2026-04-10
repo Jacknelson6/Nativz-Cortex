@@ -14,6 +14,7 @@ import {
 import { buildMarketingSkillsContext } from '@/lib/nerd/marketing-skills';
 import { checkGuardrails } from '@/lib/nerd/guardrails';
 import { buildDbSkillsContext } from '@/lib/nerd/skills-loader';
+import { buildStrategyLabSystemAddendum } from '@/lib/nerd/strategy-lab-scripting-context';
 import { logUsage, calculateCost } from '@/lib/ai/usage';
 import { logApiError } from '@/lib/api/error-log';
 
@@ -55,6 +56,13 @@ const chatSchema = z.object({
   sessionHint: z.string().max(500).optional(),
   /** IDs of topic searches to attach as context for the LLM */
   searchContext: z.array(z.string().uuid()).max(5).optional(),
+  /**
+   * Explicit Nerd surface mode. When 'strategy-lab', the chat route appends
+   * the Strategy Lab scripting addendum (behavioural rules + preloaded
+   * scripting skills from nerd_skills) to the base system prompt. Used by
+   * components/strategy-lab/strategy-lab-nerd-chat.tsx.
+   */
+  mode: z.enum(['strategy-lab']).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -358,7 +366,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Invalid request', details: parsed.error.flatten() }), { status: 400 });
     }
 
-    const { messages, mentions, actionConfirmation, conversationId, portalMode, sessionHint, searchContext } = parsed.data;
+    const { messages, mentions, actionConfirmation, conversationId, portalMode, sessionHint, searchContext, mode } = parsed.data;
 
     // --- Detect portal user (viewer role) ---
     let isPortalUser = false;
@@ -687,7 +695,15 @@ export async function POST(req: NextRequest) {
       guardrailInstruction = `\n\n---\n\nIMPORTANT INSTRUCTION: For this query, you MUST respond with exactly this message (do not deviate, do not add caveats):\n\n${guardrailResult.response}`;
     }
 
-    const systemPrompt = basePrompt + skillsContext + dbSkillsContext + guardrailInstruction;
+    // Strategy Lab mode: append the research-grounded scripting workbench
+    // addendum + preloaded scripting skills from nerd_skills. Only runs when
+    // the caller explicitly opts in via `mode: 'strategy-lab'` — keeps the
+    // default admin Nerd behaviour untouched.
+    const strategyLabAddendum =
+      mode === 'strategy-lab' && !isPortalUser ? await buildStrategyLabSystemAddendum(admin) : '';
+
+    const systemPrompt =
+      basePrompt + skillsContext + dbSkillsContext + strategyLabAddendum + guardrailInstruction;
 
     const apiMessages: Array<{ role: string; content: string; tool_call_id?: string; tool_calls?: unknown[] }> = [
       { role: 'system', content: systemPrompt },
