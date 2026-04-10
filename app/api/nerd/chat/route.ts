@@ -604,13 +604,38 @@ export async function POST(req: NextRequest) {
       activeConvoId = conversationId ?? null;
 
       if (!activeConvoId) {
-        // Create a new conversation
-        const { data: newConvo } = await admin
+        // Create a new conversation. Tag with the first client @mention so
+        // the Strategy Lab conversation picker can list per-client threads.
+        // Falls back to an insert without client_id if the column isn't
+        // present yet (pre-migration 096 deploy window) — ADD COLUMN IF NOT
+        // EXISTS is idempotent so this path disappears once the migration
+        // has run.
+        const firstClientMention = (mentions ?? []).find((m) => m.type === 'client');
+        const insertPayload: Record<string, unknown> = {
+          user_id: user.id,
+          title: 'New conversation',
+        };
+        if (firstClientMention) insertPayload.client_id = firstClientMention.id;
+
+        let newConvoId: string | null = null;
+        const firstAttempt = await admin
           .from('nerd_conversations')
-          .insert({ user_id: user.id, title: 'New conversation' })
+          .insert(insertPayload)
           .select('id')
           .single();
-        activeConvoId = newConvo?.id ?? null;
+        if (firstAttempt.data?.id) {
+          newConvoId = firstAttempt.data.id;
+        } else if (firstClientMention) {
+          // Retry without client_id — handles the brief window where the
+          // column doesn't exist yet.
+          const retry = await admin
+            .from('nerd_conversations')
+            .insert({ user_id: user.id, title: 'New conversation' })
+            .select('id')
+            .single();
+          newConvoId = retry.data?.id ?? null;
+        }
+        activeConvoId = newConvoId;
       } else {
         // Touch updated_at
         await admin

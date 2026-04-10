@@ -7,6 +7,8 @@ import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai
 import { PromptInput } from '@/components/ai/prompt-input';
 import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
 import { StrategyLabConversationExportButton } from './strategy-lab-conversation-export-button';
+import { StrategyLabConversationPicker } from './strategy-lab-conversation-picker';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils/cn';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { getAllCommands, getCommand } from '@/lib/nerd/slash-commands';
@@ -71,6 +73,9 @@ export function StrategyLabNerdChat({
   const [conversationTitle, setConversationTitle] = useState<string | null>(null);
   const [conversationMessageCount, setConversationMessageCount] = useState<number>(0);
   const [loadingConversation, setLoadingConversation] = useState(false);
+  // Bumped whenever we create a new conversation or send a new user message
+  // so the history dropdown refetches when the user pops it open next.
+  const [conversationsRefreshToken, setConversationsRefreshToken] = useState(0);
 
   // Topic search attachment — initial set from pinned, mutable from the picker.
   const [attachedSearchIds, setAttachedSearchIds] = useState<string[]>(pinnedTopicSearchIds);
@@ -396,6 +401,9 @@ export function StrategyLabNerdChat({
                 // Persist it so we resume next time the lab reopens for this client.
                 setConversationId(chunk.conversationId);
                 writeStrategyLabNerdConversationId(clientId, chunk.conversationId);
+                // Nudge the history dropdown to refetch so the new thread
+                // appears next time the user pops it open.
+                setConversationsRefreshToken((t) => t + 1);
               }
             } catch {
               accText += line;
@@ -428,7 +436,55 @@ export function StrategyLabNerdChat({
     clearStrategyLabNerdConversationId(clientId);
     sessionHintRef.current =
       'User is in Strategy Lab with this client pinned. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Prefer topic search, pillar, knowledge, and content tools. Be concise and actionable.';
+    // Ask the picker to refetch the list — the current thread may no longer
+    // be the latest, and a brand-new one is about to start.
+    setConversationsRefreshToken((t) => t + 1);
   }
+
+  /**
+   * Switch to an existing conversation from the History dropdown. Aborts any
+   * in-flight stream, fetches the thread's messages, updates the localStorage
+   * pointer so subsequent mounts resume the correct thread, and clears the
+   * first-turn session hint so we don't re-send it.
+   */
+  const handleSelectConversation = useCallback(
+    async (selectedId: string) => {
+      if (selectedId === conversationId) return;
+      if (streaming) abortRef.current?.abort();
+      setStreaming(false);
+      setLoadingConversation(true);
+      setMessages([]);
+      try {
+        const res = await fetch(`/api/nerd/conversations/${selectedId}`);
+        if (!res.ok) {
+          toast.error('Could not load that conversation');
+          return;
+        }
+        const data = (await res.json()) as {
+          id: string;
+          title: string | null;
+          messages: Array<{ id: string; role: string; content: string; tool_results: unknown }>;
+        };
+        const loaded: ChatMessage[] = (data.messages ?? []).map((m) => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          toolResults: (m.tool_results as ChatMessage['toolResults']) ?? undefined,
+        }));
+        setMessages(loaded);
+        setConversationId(data.id);
+        setConversationTitle(data.title?.trim() ? data.title : null);
+        setConversationMessageCount(loaded.length);
+        writeStrategyLabNerdConversationId(clientId, data.id);
+        sessionHintRef.current = null;
+      } catch {
+        toast.error('Could not load that conversation');
+      } finally {
+        setLoadingConversation(false);
+      }
+    },
+    [conversationId, streaming, clientId],
+  );
 
   const inputArea = (
     <div className="shrink-0 border-t border-nativz-border/50 bg-surface/80 px-4 py-4 backdrop-blur-sm">
@@ -470,29 +526,38 @@ export function StrategyLabNerdChat({
             Strategy lab
           </span>
         </div>
-        {messages.length > 0 ? (
-          <div className="flex items-center gap-1.5">
-            <StrategyLabConversationExportButton
-              clientId={clientId}
-              clientName={clientName}
-              conversationTitle={null}
-              messages={messages}
-              attachedSearches={attachedSearches.map((s) => ({
-                query: s.query,
-                created_at: s.created_at,
-              }))}
-              disabled={streaming}
-            />
-            <button
-              type="button"
-              onClick={handleReset}
-              className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-nativz-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:border-accent/20 hover:text-text-primary"
-            >
-              <Plus size={12} aria-hidden />
-              New chat
-            </button>
-          </div>
-        ) : null}
+        <div className="flex items-center gap-1.5">
+          <StrategyLabConversationPicker
+            clientId={clientId}
+            activeConversationId={conversationId}
+            onSelect={(id) => void handleSelectConversation(id)}
+            refreshToken={conversationsRefreshToken}
+            disabled={streaming}
+          />
+          {messages.length > 0 && (
+            <>
+              <StrategyLabConversationExportButton
+                clientId={clientId}
+                clientName={clientName}
+                conversationTitle={conversationTitle}
+                messages={messages}
+                attachedSearches={attachedSearches.map((s) => ({
+                  query: s.query,
+                  created_at: s.created_at,
+                }))}
+                disabled={streaming}
+              />
+              <button
+                type="button"
+                onClick={handleReset}
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-nativz-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:border-accent/20 hover:text-text-primary"
+              >
+                <Plus size={12} aria-hidden />
+                New chat
+              </button>
+            </>
+          )}
+        </div>
       </header>
 
       {/* Attached research bar — attached topic searches flow into /api/nerd/chat
