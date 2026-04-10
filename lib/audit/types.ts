@@ -100,3 +100,11 @@ export interface AuditReport {
   competitors: CompetitorProfile[];
   scorecard: AuditScorecard;
 }
+
+/** Per-platform failure captured during scrape so the UI can surface which
+ *  platforms silently dropped out and why. */
+export interface FailedPlatform {
+  platform: AuditPlatform;
+  url: string;
+  error: string;
+}

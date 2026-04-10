@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   CheckCircle,
+  AlertCircle,
   AlertTriangle,
   XCircle,
   Loader2,
@@ -26,7 +27,7 @@ import { VideoGrid } from '@/components/research/video-grid';
 import { toast } from 'sonner';
 import { AuditExportPdfButton } from '@/components/audit/audit-export-pdf-button';
 import { AuditShareButton } from '@/components/audit/audit-share-button';
-import type { PlatformReport, CompetitorProfile, AuditScorecard, ScorecardItem, ScoreStatus, WebsiteContext, ProspectVideo } from '@/lib/audit/types';
+import type { PlatformReport, CompetitorProfile, AuditScorecard, ScorecardItem, ScoreStatus, WebsiteContext, ProspectVideo, FailedPlatform } from '@/lib/audit/types';
 import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
 
 interface AuditRecord {
@@ -38,6 +39,7 @@ interface AuditRecord {
     websiteContext?: WebsiteContext | null;
     platforms?: PlatformReport[];
     detectedSocialLinks?: { platform: string; url: string; username: string }[];
+    failedPlatforms?: FailedPlatform[];
   } | null;
   competitors_data: CompetitorProfile[] | null;
   scorecard: AuditScorecard | null;
@@ -466,6 +468,37 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                   <span className="text-xs text-text-muted">/100</span>
                 </div>
               )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Failed platforms warning — surfaces silent scraper drops so they
+          stop hiding inside Vercel logs. */}
+      {(() => {
+        const failed = audit.prospect_data?.failedPlatforms ?? [];
+        if (failed.length === 0) return null;
+        return (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-400" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-200">
+                  Couldn&apos;t scrape {failed.length} platform{failed.length === 1 ? '' : 's'}
+                </p>
+                <p className="mt-0.5 text-xs text-amber-200/70">
+                  The scorecard below is based only on the platforms that returned data.
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {failed.map((f) => (
+                    <li key={`${f.platform}-${f.url}`} className="text-xs text-amber-100/90">
+                      <span className="font-medium capitalize">{f.platform}</span>
+                      {' — '}
+                      <span className="font-mono text-[11px] text-amber-100/70">{f.error}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
         );

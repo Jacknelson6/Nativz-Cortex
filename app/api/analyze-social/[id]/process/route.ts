@@ -13,7 +13,8 @@ import {
   buildCompetitorProfile,
   generateScorecard,
 } from '@/lib/audit/analyze';
-import type { PlatformReport, CompetitorProfile, WebsiteContext, SocialLink, AuditPlatform } from '@/lib/audit/types';
+import type { PlatformReport, CompetitorProfile, WebsiteContext, SocialLink, AuditPlatform, FailedPlatform } from '@/lib/audit/types';
+import { persistAllScrapedImages } from '@/lib/audit/persist-scraped-images';
 
 export const maxDuration = 300;
 
@@ -122,9 +123,13 @@ export async function POST(
         return NextResponse.json({ status: 'needs_social_input' });
       }
 
-      // Step 2: Scrape each platform in parallel
+      // Step 2: Scrape each platform in parallel. Capture per-platform errors
+      // so the report surfaces exactly which platforms failed and why —
+      // before this, failures went to console.error and the UI silently
+      // rendered a scorecard missing entire platforms.
       console.log(`[audit:${id}] Step 2: Scraping ${platformsToScrape.length} platform(s) in parallel...`);
       const platformReports: PlatformReport[] = [];
+      const failedPlatforms: FailedPlatform[] = [];
 
       const scrapeResults = await Promise.allSettled(
         platformsToScrape.map(async ({ platform, url }) => {
@@ -152,11 +157,27 @@ export async function POST(
         })
       );
 
-      for (const result of scrapeResults) {
+      for (let i = 0; i < scrapeResults.length; i++) {
+        const result = scrapeResults[i];
+        const { platform, url } = platformsToScrape[i];
         if (result.status === 'fulfilled' && result.value) {
           platformReports.push(result.value);
         } else if (result.status === 'rejected') {
-          console.error(`[audit:${id}] Platform scrape failed:`, result.reason);
+          const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          console.error(`[audit:${id}] ${platform} scrape failed:`, msg);
+          failedPlatforms.push({ platform, url, error: msg });
+        }
+      }
+
+      // Step 2b: Persist thumbnails + avatars to Supabase storage so the
+      // report survives TikTok/IG CDN URL expiration (~24-48h). Non-blocking
+      // — if upload fails, the report still renders with CDN URLs.
+      if (platformReports.length > 0) {
+        console.log(`[audit:${id}] Step 2b: Persisting scraped images to storage...`);
+        try {
+          await persistAllScrapedImages(adminClient, id, platformReports);
+        } catch (err) {
+          console.warn(`[audit:${id}] Image persistence failed (non-blocking):`, err);
         }
       }
 
@@ -217,6 +238,7 @@ export async function POST(
             websiteContext,
             platforms: platformReports,
             detectedSocialLinks: detectedLinks,
+            failedPlatforms,
           },
           competitors_data: competitors,
           scorecard,
@@ -225,7 +247,7 @@ export async function POST(
         })
         .eq('id', id);
 
-      console.log(`[audit:${id}] Audit completed: ${platformReports.length} platforms, ${competitors.length} competitors, ${allVideos.length} videos`);
+      console.log(`[audit:${id}] Audit completed: ${platformReports.length} platforms (${failedPlatforms.length} failed), ${competitors.length} competitors, ${allVideos.length} videos`);
       return NextResponse.json({ status: 'completed' });
     } catch (processError) {
       const msg = processError instanceof Error ? processError.message : 'Unknown error';

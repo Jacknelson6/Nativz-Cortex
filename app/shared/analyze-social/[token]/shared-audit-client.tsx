@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   CheckCircle,
+  AlertCircle,
   Users,
   Eye,
   TrendingUp,
@@ -26,6 +27,7 @@ import type {
   ScorecardItem,
   ScoreStatus,
   WebsiteContext,
+  FailedPlatform,
 } from '@/lib/audit/types';
 import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
 
@@ -68,6 +70,7 @@ interface AuditRecord {
     websiteContext?: WebsiteContext | null;
     platforms?: PlatformReport[];
     detectedSocialLinks?: { platform: string; url: string; username: string }[];
+    failedPlatforms?: FailedPlatform[];
   } | null;
   competitors_data: CompetitorProfile[] | null;
   scorecard: AuditScorecard | null;
@@ -144,6 +147,36 @@ export function SharedAuditClient({ audit }: { audit: AuditRecord }) {
 
       {/* Content */}
       <div className="w-full max-w-5xl mx-auto px-6 py-8 space-y-6">
+        {/* Failed platforms warning — same treatment as the internal report */}
+        {(() => {
+          const failed = audit.prospect_data?.failedPlatforms ?? [];
+          if (failed.length === 0) return null;
+          return (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-400" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-amber-200">
+                    Couldn&apos;t scrape {failed.length} platform{failed.length === 1 ? '' : 's'}
+                  </p>
+                  <p className="mt-0.5 text-xs text-amber-200/70">
+                    The scorecard below is based only on the platforms that returned data.
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {failed.map((f) => (
+                      <li key={`${f.platform}-${f.url}`} className="text-xs text-amber-100/90">
+                        <span className="font-medium capitalize">{f.platform}</span>
+                        {' — '}
+                        <span className="font-mono text-[11px] text-amber-100/70">{f.error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Website context */}
         {websiteContext && (
           <div className="rounded-xl border border-nativz-border bg-surface p-5">
