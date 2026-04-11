@@ -6,17 +6,56 @@
 
 ---
 
-## Next Session — QA this April 10 batch (11 files + 2 docs uncommitted)
+## Next Session — QA this April 11 Strategy Lab batch
 
-> See **`STATUS.md`** and **`NERD_DIAGNOSIS.md`** at repo root for full session recap.
+> See **`SRL.md`** at repo root for the full self-referential loop log.
 
-### 🔴 Critical — Nerd chat is broken
-- [ ] Paste top row of `select * from api_error_log where route='/api/nerd/chat' order by created_at desc limit 5` — tells us the actual upstream error
-- [ ] Or: DevTools → Network → `/api/nerd/chat` → Response body → paste
-- [ ] Isolate: which surface is broken? (`/admin/nerd`, Strategy Lab chat, or both?)
-- [ ] Check browser console for React mount errors (red ones)
-- [ ] Check OpenRouter credit balance and `/admin/ai-models` nerd model override
-- [ ] **Background agent investigated; latent `gpt-4.1` token-field bug fixed in `lib/ai/openai-model-id.ts`. Probably not the Nerd bug directly, but was a real issue affecting other features using the shared helper. See `NERD_DIAGNOSIS.md`.**
+### ✅ Nerd chat — fixed (April 10), verified (April 11)
+The two stacked upstream bugs (`list_tasks` schema converter dropping
+`type: "object"` and `max_tokens` going to `gpt-5.4-mini` instead of
+`max_completion_tokens`) were already resolved by commits `c3743f8` +
+the `z.toJSONSchema` swap in `lib/nerd/registry.ts`. `api_error_log`
+confirmed the last logged error was 2 min before the fix commit landed
+and there have been zero errors since. `scripts/inspect-nerd-errors.ts`
+and `scripts/smoke-nerd-tools.ts` committed as ongoing diagnostics.
+
+### 🟡 QA — Strategy Lab artifact canvas (April 11 session)
+- [ ] **Open in Strategy Lab from topic search results** — click the
+  FlaskConical button on a completed search. With client: lands in lab
+  with search auto-attached. Without client: opens client picker dialog,
+  attach, lands in lab with search attached.
+- [ ] **Multi-pin persists** — batch-select searches in research history,
+  open the lab, chip bar should show ALL selected, not just the last.
+- [ ] **Streaming mermaid** — send "build a content strategy map" prompt.
+  While streaming, should show a "Rendering diagram…" skeleton. No
+  "syntax error" flash on partial mermaid.
+- [ ] **Mermaid click-to-zoom** — click any rendered diagram → modal
+  opens with full-size render. Buttons: Copy source, Download SVG,
+  Download PNG. PNG should rasterize cleanly via canvas.
+- [ ] **HTML visual click-to-zoom** — same flow for ```html-visual
+  blocks. Only Copy source (iframe is sandboxed).
+- [ ] **GFM tables** — ask for "script A vs B comparison table",
+  verify it renders as a proper dark-theme table, not raw pipes.
+- [ ] **Artifact-style output** — quick-start prompts now push the
+  model toward artifact-style responses (strategy map, 3 full scripts,
+  effort-vs-impact quadrant, performance diagnosis).
+- [ ] **System prompt teaches artifacts** — system addendum at
+  `lib/nerd/strategy-lab-scripting-context.ts` now includes explicit
+  guidance on mermaid + html-visual blocks and a 5-part artifact
+  template. Verify the model follows it.
+- [ ] **Conversation PDF** — export a full chat with a mermaid block.
+  PDF should show "Mermaid diagram — open in Strategy Lab for the
+  live render" above the raw source (full rasterizer is a future
+  enhancement). Per-message PDF via html2canvas captures the SVG live.
+
+### 🟢 Still open from iter 3 (SRL will regenerate)
+- [ ] Validate analytics tool grounding — when user asks "diagnose my
+  performance", verify the Nerd reaches for `get_analytics_summary`,
+  `compare_client_performance`, `get_top_posts`.
+- [ ] Full mermaid rasterizer inside `strategy-lab-conversation-pdf.tsx`
+  so the full PDF export matches the per-message PDF.
+- [ ] `scripts/smoke-markdown-tables.tsx` — could grow into a broader
+  parser regression suite.
 
 ### 🟡 Audit — Stuck-at-92% fix + finish animation
 - [ ] Your currently-stuck audit should auto-recover: refresh → GET self-heal flips it to Failed if >7min old, OR click Retry (process route now unblocks stale rows)
@@ -55,6 +94,33 @@
 - [ ] Analytics: client portfolio, social/affiliates/benchmarking tabs, competitor add/refresh/charts, status dots
 - [ ] Calendar webhooks: test with real Google Chat URL, verify firing on feedback events
 - [ ] Research: suggest topics ontology, history rail client filter with load-more, PDF export matches results page, share links domain-aware
+
+---
+
+## Completed — April 11 Session (Strategy Lab artifact canvas)
+
+### Nerd chat diagnosis (SRL iter 1 prelude)
+- [x] `scripts/inspect-nerd-errors.ts` — query `api_error_log` via Supabase REST (direct DB host is gone) to triage future LLM regressions
+- [x] `scripts/smoke-nerd-tools.ts` — asserts all 48 nerd tools emit `type: "object"` + token-field regex sanity for gpt-5.4-mini / gpt-4.1 / o-series
+- [x] Confirmed prior `list_tasks` schema bug + `max_tokens` on gpt-5.4-mini bug were both fixed by `c3743f8` before this session — zero errors in `api_error_log` since
+
+### Artifact-first chat (SRL iter 1)
+- [x] Open in Strategy Lab button on `app/admin/search/[id]/results-client.tsx` — pre-pins the current search in localStorage and jumps to `/admin/strategy-lab/[clientId]`
+- [x] `lib/nerd/strategy-lab-scripting-context.ts` addendum now teaches the Nerd to produce ```mermaid flowcharts, ```html-visual comparisons, and 5-part artifact outputs (title → tl;dr → visual → sections → next actions); includes mermaid syntax rules
+- [x] Quick-start suggestion pills rewritten for artifact outputs (strategy map, 3 scripts, effort/impact quadrant, performance diagnosis)
+- [x] `components/strategy-lab/pdf-markdown.tsx` — code-block parser tracks language so mermaid / html-visual get labeled in the full conversation PDF instead of silently dumping raw source
+
+### Streaming safety + zoom modal (SRL iter 2)
+- [x] `components/ai/markdown.tsx` — unclosed ```mermaid / ```html / ```html-visual fenced blocks render a "Rendering diagram…" skeleton instead of handing partial code to the live renderers (no more syntax-error flash while streaming)
+- [x] `components/ai/artifact-zoom-modal.tsx` — Claude-web-style canvas with Copy source, Download SVG, Download PNG (canvas rasterization), reuses the same MermaidDiagramBlock / HtmlVisualBlock renderers with `disableZoom` so the modal body doesn't stack expand buttons
+- [x] `components/ai/rich-code-block.tsx` — hover Expand affordance + cursor-zoom-in on the inline diagram blocks, lazy-imports the modal so the default bundle doesn't pull it in
+- [x] `components/strategy-lab/strategy-lab-workspace.tsx` — hoisted to full multi-pin state: `pinnedTopicSearchIds: string[]` loaded from localStorage, pruned against current searches, chip bar gets the real array instead of only `ids.at(-1)`
+
+### GFM tables + client picker (SRL iter 3)
+- [x] `components/ai/markdown.tsx` — GFM table parser: header-row + divider-row lookahead, contiguous data rows, dense dark-theme styling that reads well in the chat column
+- [x] `scripts/smoke-markdown-tables.tsx` — parser-level assertion suite (renderToStaticMarkup + regex) that caught two mid-build bugs (divider flushed the buffer on entry; `<th` regex accidentally matched `<thead`)
+- [x] `PATCH /api/search/[id]` — third branch: `{ client_id }` attaches an unattached topic search to a client, with existence check + activity log
+- [x] `components/strategy-lab/strategy-lab-attach-client-dialog.tsx` — searchable client picker that opens from the Open in Strategy Lab button when the search has no client_id, attaches + pins + navigates in one click
 
 ---
 
