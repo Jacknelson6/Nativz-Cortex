@@ -65,17 +65,20 @@ export function StrategyLabWorkspace({
   const storageKey = strategyLabTopicSearchStorageKey(clientId);
 
   const [mainTab, setMainTab] = useState<MainTab>('chat');
-  const [selectedTopicSearchId, setSelectedTopicSearchId] = useState<string | null>(null);
 
-  // Auto-attach the most recent completed topic search
+  // Full multi-pin state — previously this was a scalar `selectedTopicSearchId`
+  // with the workspace collapsing localStorage down to its last entry, which
+  // threw away multi-select batches from the history feed and the
+  // "Open in Strategy Lab" button. Hoisting the full array means the chip
+  // bar gets the real set of pinned ids on mount, and batches survive round
+  // trips through the lab.
+  const [pinnedTopicSearchIds, setPinnedTopicSearchIds] = useState<string[]>([]);
+
+  // Auto-attach the most recent completed topic search when nothing is
+  // persisted yet. Kept as a fallback for the brand-new-lab experience.
   const mostRecentCompletedSearch = useMemo(
     () => topicSearches.find((s) => s.status === 'completed') ?? null,
     [topicSearches],
-  );
-
-  const pinnedTopicSearchIds = useMemo(
-    () => (selectedTopicSearchId ? [selectedTopicSearchId] : []),
-    [selectedTopicSearchId],
   );
 
   const hasCompletedTopicSearch = useMemo(
@@ -86,17 +89,28 @@ export function StrategyLabWorkspace({
   const brandDnaReady = !!brandGuideline && brandDnaStatus !== 'generating';
   const canGenerateIdeas = hasPillars && brandDnaReady;
 
-  // Load saved selection from localStorage, or auto-select most recent
+  // Load saved selection from localStorage, or auto-select most recent.
+  // Drop any ids that are no longer valid searches so the chip bar never
+  // shows a ghost pin. Runs on mount and whenever the underlying searches
+  // change — so a delete from another tab propagates.
   useEffect(() => {
+    const validIds = new Set(topicSearches.map((s) => s.id));
     try {
       const raw = typeof window !== 'undefined' ? window.localStorage.getItem(storageKey) : null;
       if (raw) {
         const parsed = JSON.parse(raw) as unknown;
         if (Array.isArray(parsed)) {
-          const ids = parsed.filter((x): x is string => typeof x === 'string');
-          const mostRecent = ids.at(-1);
-          if (mostRecent) {
-            setSelectedTopicSearchId(mostRecent);
+          const ids = parsed
+            .filter((x): x is string => typeof x === 'string')
+            .filter((id) => validIds.has(id));
+          if (ids.length > 0) {
+            setPinnedTopicSearchIds(ids);
+            // Re-persist the pruned list so stale ids are cleaned up.
+            try {
+              window.localStorage.setItem(storageKey, JSON.stringify(ids));
+            } catch {
+              /* ignore quota */
+            }
             return;
           }
         }
@@ -105,23 +119,11 @@ export function StrategyLabWorkspace({
       /* ignore corrupt storage */
     }
     if (mostRecentCompletedSearch) {
-      setSelectedTopicSearchId(mostRecentCompletedSearch.id);
+      setPinnedTopicSearchIds([mostRecentCompletedSearch.id]);
+    } else {
+      setPinnedTopicSearchIds([]);
     }
-  }, [storageKey, mostRecentCompletedSearch]);
-
-  // Validate selected search still exists
-  useEffect(() => {
-    if (!selectedTopicSearchId) return;
-    const exists = topicSearches.some((search) => search.id === selectedTopicSearchId);
-    if (!exists) {
-      setSelectedTopicSearchId(null);
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify([]));
-      } catch {
-        /* ignore quota */
-      }
-    }
-  }, [selectedTopicSearchId, topicSearches, storageKey]);
+  }, [storageKey, mostRecentCompletedSearch, topicSearches]);
 
   const brandDnaHref = `/admin/clients/${clientSlug}/brand-dna`;
   const ideasHubBase = `/admin/ideas?clientId=${encodeURIComponent(clientId)}`;
