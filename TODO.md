@@ -48,14 +48,17 @@ and `scripts/smoke-nerd-tools.ts` committed as ongoing diagnostics.
   live render" above the raw source (full rasterizer is a future
   enhancement). Per-message PDF via html2canvas captures the SVG live.
 
-### 🟢 Still open from iter 3 (SRL will regenerate)
+### 🟢 Still open (future session)
 - [ ] Validate analytics tool grounding — when user asks "diagnose my
   performance", verify the Nerd reaches for `get_analytics_summary`,
   `compare_client_performance`, `get_top_posts`.
-- [ ] Full mermaid rasterizer inside `strategy-lab-conversation-pdf.tsx`
-  so the full PDF export matches the per-message PDF.
-- [ ] `scripts/smoke-markdown-tables.tsx` — could grow into a broader
-  parser regression suite.
+- [ ] Html-visual rasterization in the full conversation PDF (only
+  mermaid is rasterized currently — `lib/strategy-lab/rasterize-mermaid.ts`).
+- [ ] First-class artifact persistence table so users can save, tag,
+  and share individual artifacts independently of chat messages.
+- [ ] Shareable artifact permalinks — public URL per artifact.
+- [ ] Dedicated streaming side panel for the primary artifact of a
+  message (Claude-web right-panel polish).
 
 ### 🟡 Audit — Stuck-at-92% fix + finish animation
 - [ ] Your currently-stuck audit should auto-recover: refresh → GET self-heal flips it to Failed if >7min old, OR click Retry (process route now unblocks stale rows)
@@ -121,6 +124,14 @@ and `scripts/smoke-nerd-tools.ts` committed as ongoing diagnostics.
 - [x] `scripts/smoke-markdown-tables.tsx` — parser-level assertion suite (renderToStaticMarkup + regex) that caught two mid-build bugs (divider flushed the buffer on entry; `<th` regex accidentally matched `<thead`)
 - [x] `PATCH /api/search/[id]` — third branch: `{ client_id }` attaches an unattached topic search to a client, with existence check + activity log
 - [x] `components/strategy-lab/strategy-lab-attach-client-dialog.tsx` — searchable client picker that opens from the Open in Strategy Lab button when the search has no client_id, attaches + pins + navigates in one click
+
+### Full-PDF mermaid + starter pack + docs (SRL iter 4)
+- [x] `lib/strategy-lab/rasterize-mermaid.ts` — pre-export helper that renders every ```mermaid body via the live mermaid module in an off-screen DOM container, rasterizes the SVG to a PNG data URL via canvas (light-theme, white background fill), and returns a `Map<hash, dataUrl>` keyed by a stable djb2 content hash
+- [x] `components/strategy-lab/pdf-markdown.tsx` — `renderMarkdownToPdfBlocks` now accepts the rasterized map, emits a react-pdf `<Image>` for mermaid blocks whose hashed body matches, falls back to labeled-source for misses
+- [x] `components/strategy-lab/strategy-lab-conversation-export-button.tsx` — rasterizes mermaid in parallel with PDF renderer import, passes the map into `StrategyLabConversationPdf`
+- [x] `components/strategy-lab/strategy-lab-nerd-chat.tsx` — added a **Full starter pack** quick-start pill (strategy map + 3 scripts + quadrant + cadence table in one composite prompt)
+- [x] Exported `STRATEGY_LAB_ADDENDUM` + added `scripts/smoke-strategy-lab-addendum.ts` — 15 assertions that pin the load-bearing keywords/sections and a 10k-char budget guard (currently 6370 chars)
+- [x] `docs/strategy-lab-artifacts.md` — full architecture doc covering entry points, state plumbing, rendering pipeline, PDF export, system prompt, quick-starts, diagnostic scripts, and future work
 
 ---
 
