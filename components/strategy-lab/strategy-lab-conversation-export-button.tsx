@@ -78,14 +78,21 @@ export function StrategyLabConversationExportButton({
     }
     setExporting(true);
     try {
-      // Fetch the client logo in parallel with loading the PDF renderer.
-      const [clientLogoDataUrl, rendererModule, docModule] = await Promise.all([
-        fetchClientLogoDataUrl(clientId),
-        import('@react-pdf/renderer'),
-        import('./strategy-lab-conversation-pdf'),
-      ]);
+      // Fetch the client logo, load the PDF renderer, and load the mermaid
+      // rasterizer in parallel. The rasterizer runs in the browser using the
+      // real mermaid module + an off-screen DOM container, then returns a
+      // Map<hash, pngDataUrl> that the PDF document embeds as real images
+      // instead of dumping raw mermaid source.
+      const [clientLogoDataUrl, rendererModule, docModule, rasterizerModule] =
+        await Promise.all([
+          fetchClientLogoDataUrl(clientId),
+          import('@react-pdf/renderer'),
+          import('./strategy-lab-conversation-pdf'),
+          import('@/lib/strategy-lab/rasterize-mermaid'),
+        ]);
       const { pdf } = rendererModule;
       const { StrategyLabConversationPdf } = docModule;
+      const { rasterizeMermaidBlocks } = rasterizerModule;
 
       // Only ship user + assistant messages to the PDF. Tool role messages are
       // internal plumbing and don't add value in a client-facing deliverable.
@@ -95,6 +102,10 @@ export function StrategyLabConversationExportButton({
         )
         .map((m) => ({ id: m.id, role: m.role, content: m.content }));
 
+      const mermaidImages = await rasterizeMermaidBlocks(
+        pdfMessages.filter((m) => m.role === 'assistant').map((m) => m.content),
+      );
+
       const blob = await pdf(
         StrategyLabConversationPdf({
           agency: brand,
@@ -103,6 +114,7 @@ export function StrategyLabConversationExportButton({
           conversationTitle,
           messages: pdfMessages,
           attachedSearches,
+          mermaidImages,
         }),
       ).toBlob();
 

@@ -182,6 +182,13 @@ interface StrategyLabConversationPdfProps {
   conversationTitle: string | null;
   messages: PdfConversationMessage[];
   attachedSearches: PdfAttachedSearch[];
+  /**
+   * Pre-rasterized PNG data URLs for every unique mermaid fenced block in
+   * the conversation, keyed by `hashMermaidBody(body)`. Built by the export
+   * button via `rasterizeMermaidBlocks` so the PDF embeds real diagrams
+   * instead of the labeled-source fallback in pdf-markdown.tsx.
+   */
+  mermaidImages?: Map<string, string>;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -229,6 +236,7 @@ export function StrategyLabConversationPdf({
   conversationTitle,
   messages,
   attachedSearches,
+  mermaidImages,
 }: StrategyLabConversationPdfProps) {
   const config = agencyConfig(agency);
   const dateStr = formatDate(new Date());
@@ -314,7 +322,7 @@ export function StrategyLabConversationPdf({
                   // Assistant output is markdown — run it through the real
                   // tree renderer so headings, bold runs, bullets, and code
                   // blocks come through instead of a flat string.
-                  renderMarkdownToPdfBlocks(msg.content)
+                  renderMarkdownToPdfBlocks(msg.content, mermaidImages)
                 )}
               </View>
             </View>

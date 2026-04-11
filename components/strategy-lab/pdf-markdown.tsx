@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
-import { Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Text, View, StyleSheet, Image } from '@react-pdf/renderer';
+import { hashMermaidBody } from '@/lib/strategy-lab/rasterize-mermaid';
 
 /**
  * Lightweight markdown → @react-pdf/renderer node converter.
@@ -76,6 +77,16 @@ const m = StyleSheet.create({
     padding: 8,
     marginBottom: 6,
     marginTop: 2,
+  },
+  mermaidImage: {
+    marginTop: 6,
+    marginBottom: 10,
+    // Width capped by the page column via the outer <View>; @react-pdf
+    // respects the intrinsic aspect ratio when only one dimension is set.
+    alignSelf: 'center',
+    maxWidth: '100%',
+    maxHeight: 360,
+    objectFit: 'contain',
   },
   codeBlockLabel: {
     fontSize: 8,
@@ -314,8 +325,16 @@ function renderInline(raw: string, key?: string | number) {
 /**
  * Convert a markdown string into an array of keyed react-pdf elements.
  * Caller wraps with its own <View> for layout / spacing context.
+ *
+ * @param mermaidImages - optional Map<hashMermaidBody, pngDataUrl>. When a
+ *   ```mermaid fenced block's hashed body matches a key in the map, the
+ *   block renders as an <Image> instead of the labeled source fallback.
+ *   Callers produce the map via rasterizeMermaidBlocks() before export.
  */
-export function renderMarkdownToPdfBlocks(source: string): JSX.Element[] {
+export function renderMarkdownToPdfBlocks(
+  source: string,
+  mermaidImages?: Map<string, string>,
+): JSX.Element[] {
   if (!source.trim()) {
     return [<Text key="empty" style={m.paragraph}>(empty)</Text>];
   }
@@ -366,14 +385,30 @@ export function renderMarkdownToPdfBlocks(source: string): JSX.Element[] {
       );
     }
     if (block.kind === 'code') {
-      // Mermaid and html-visual blocks render as live diagrams in the chat
-      // but there is no SVG rasterizer wired into the react-pdf pipeline yet,
-      // so we fall back to a labeled source dump so the reader understands
-      // why they're seeing code in a client-facing PDF. The per-message PDF
-      // export (exportElementToPdf → html2canvas) captures the rendered SVG
-      // directly and is unaffected.
       const isMermaid = block.lang === 'mermaid';
       const isHtmlVisual = block.lang === 'html-visual' || block.lang === 'html';
+
+      // Mermaid fast path: if the caller pre-rasterized this diagram via
+      // rasterizeMermaidBlocks, embed it as a real PNG image. Falls back to
+      // the labeled-source dump when the hash isn't in the map (which
+      // happens when the block failed to render or wasn't pre-rasterized
+      // at all — the user still sees something meaningful).
+      if (isMermaid && mermaidImages) {
+        const hash = hashMermaidBody(block.text.trimEnd());
+        const dataUrl = mermaidImages.get(hash);
+        if (dataUrl) {
+          return (
+            <View key={idx} wrap={false}>
+              {/* eslint-disable-next-line jsx-a11y/alt-text */}
+              <Image src={dataUrl} style={m.mermaidImage} />
+            </View>
+          );
+        }
+      }
+
+      // Labeled-source fallback for unrasterized mermaid, html-visual, and
+      // generic fenced blocks. The per-message PDF export (html2canvas)
+      // captures live SVGs directly and isn't affected by this path.
       const label = isMermaid
         ? 'Mermaid diagram — open in Strategy Lab for the live render'
         : isHtmlVisual
