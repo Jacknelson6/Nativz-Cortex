@@ -53,13 +53,23 @@ export async function POST(
       return NextResponse.json({ error: 'Audit not found' }, { status: 404 });
     }
 
+    // Allow retry on stale processing rows (updated_at > 7min ago means the
+    // previous Vercel function was killed mid-flight and the row will never
+    // self-transition). Fresh processing rows still 409 so we don't double
+    // up live runs.
     if (audit.status === 'processing') {
-      return NextResponse.json({ error: 'Audit is already processing' }, { status: 409 });
+      const ageMs = audit.updated_at
+        ? Date.now() - new Date(audit.updated_at).getTime()
+        : Infinity;
+      if (ageMs <= 7 * 60 * 1000) {
+        return NextResponse.json({ error: 'Audit is already processing' }, { status: 409 });
+      }
+      console.warn(`[audit:${id}] retrying stale processing audit (${Math.round(ageMs / 1000)}s old)`);
     }
 
     await adminClient
       .from('prospect_audits')
-      .update({ status: 'processing', updated_at: new Date().toISOString() })
+      .update({ status: 'processing', error_message: null, updated_at: new Date().toISOString() })
       .eq('id', id);
 
     try {

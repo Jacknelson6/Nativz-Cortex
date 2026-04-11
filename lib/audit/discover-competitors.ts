@@ -43,6 +43,18 @@ import type {
 const MAX_CANDIDATES_REQUESTED = 6;
 const DEFAULT_TARGET_COMPETITORS = 3;
 
+/**
+ * Hard time budget for the whole discovery phase. The audit's process route
+ * runs on Vercel with maxDuration=300s; if discovery + everything else
+ * exceeds that, the function is terminated mid-flight and the audit gets
+ * stuck in `processing` forever (the frontend then polls indefinitely).
+ *
+ * Scraping 6 candidates serially × (website ~30s + social scrape up to 180s)
+ * can easily burn 18+ minutes worst-case. Cap discovery at 150s so the rest
+ * of the pipeline (scorecard gen, image persistence, DB writes) has headroom.
+ */
+const DISCOVERY_TIME_BUDGET_MS = 150_000;
+
 interface LlmCandidate {
   name: string;
   website: string;
@@ -228,8 +240,23 @@ export async function discoverCompetitorsByWebsite(
   );
 
   // Serial: avoid hammering Apify and any competitor's host in parallel.
+  // Enforce a global time budget so we can't blow past the Vercel 300s
+  // function limit and leave the audit stuck in `processing`.
+  const discoveryStartMs = Date.now();
   for (const candidate of candidates) {
     if (competitors.length >= maxCompetitors) break;
+    const elapsedMs = Date.now() - discoveryStartMs;
+    if (elapsedMs > DISCOVERY_TIME_BUDGET_MS) {
+      console.warn(
+        `[audit] competitor discovery exceeded ${Math.round(DISCOVERY_TIME_BUDGET_MS / 1000)}s budget — stopping early with ${competitors.length} competitors`,
+      );
+      failures.push({
+        name: candidate.name,
+        website: candidate.website,
+        reason: 'discovery time budget exceeded — skipped',
+      });
+      break;
+    }
 
     const website = normaliseWebsite(candidate.website);
     if (!website) {

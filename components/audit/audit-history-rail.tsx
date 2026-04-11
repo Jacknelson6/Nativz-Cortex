@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search,
@@ -76,6 +76,71 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+
+  // Keep a ref so the polling effect can read the latest list without
+  // re-subscribing every time the parent passes a new audits array (which
+  // would reset the interval and never actually tick).
+  const auditsRef = useRef(audits);
+  auditsRef.current = audits;
+  const onAuditsChangeRef = useRef(onAuditsChange);
+  onAuditsChangeRef.current = onAuditsChange;
+
+  /**
+   * Poll any audits that are still `pending` or `processing` so their
+   * status icons don't get stuck on the spinner. The /api/analyze-social/[id]
+   * endpoint has server-side stale detection that auto-fails audits older
+   * than 7 minutes, so polling here also recovers abandoned/crashed jobs.
+   * Polls every 5s while any in-flight audit exists; stops the interval
+   * the moment everything is settled.
+   */
+  const hasInFlight = useMemo(
+    () => audits.some((a) => a.status === 'pending' || a.status === 'processing'),
+    [audits],
+  );
+  useEffect(() => {
+    if (!hasInFlight) return;
+    let cancelled = false;
+
+    const tick = async () => {
+      const inFlight = auditsRef.current.filter(
+        (a) => a.status === 'pending' || a.status === 'processing',
+      );
+      if (inFlight.length === 0) return;
+      const updates: Map<string, AuditSummary> = new Map();
+      await Promise.all(
+        inFlight.map(async (a) => {
+          try {
+            const res = await fetch(`/api/analyze-social/${a.id}`, { cache: 'no-store' });
+            if (!res.ok) return;
+            const data = (await res.json()) as { audit?: Partial<AuditSummary> & { scorecard?: Record<string, unknown> | null } };
+            if (!data.audit) return;
+            updates.set(a.id, {
+              ...a,
+              status: data.audit.status ?? a.status,
+              scorecard: data.audit.scorecard ?? a.scorecard,
+            });
+          } catch {
+            /* ignore transient poll errors */
+          }
+        }),
+      );
+      if (cancelled || updates.size === 0) return;
+      const next = auditsRef.current.map((a) => updates.get(a.id) ?? a);
+      // Only propagate if something actually changed — avoids re-render loops.
+      const changed = next.some((n, i) => n !== auditsRef.current[i]);
+      if (changed) onAuditsChangeRef.current(next);
+    };
+
+    // Tick immediately so the user sees fresh state on mount, then every 5s.
+    void tick();
+    const interval = setInterval(() => {
+      void tick();
+    }, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [hasInFlight]);
 
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return audits;

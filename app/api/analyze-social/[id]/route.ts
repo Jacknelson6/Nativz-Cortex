@@ -31,6 +31,33 @@ export async function GET(
       return NextResponse.json({ error: 'Audit not found' }, { status: 404 });
     }
 
+    // Stale-audit self-heal: if an audit has been stuck in `processing` for
+    // longer than the Vercel function hard limit + a safety margin, the
+    // processing function was almost certainly terminated by the platform
+    // mid-flight (maxDuration=300s). The catch-block that would flip the
+    // row to `failed` never ran, so the row sits in `processing` forever
+    // and the frontend polls indefinitely. Auto-fail it so the UI can
+    // recover and the user sees a retry button instead of a spinning page.
+    const STALE_PROCESSING_MS = 7 * 60 * 1000; // 7 min
+    if (audit.status === 'processing' && audit.updated_at) {
+      const ageMs = Date.now() - new Date(audit.updated_at).getTime();
+      if (ageMs > STALE_PROCESSING_MS) {
+        const errMsg =
+          'Audit timed out — the processing job exceeded the platform time limit. This usually means competitor discovery or a scrape got stuck. Retry to try again.';
+        await adminClient
+          .from('prospect_audits')
+          .update({
+            status: 'failed',
+            error_message: errMsg,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', id);
+        audit.status = 'failed';
+        audit.error_message = errMsg;
+        console.warn(`[audit:${id}] auto-failed stale processing audit (${Math.round(ageMs / 1000)}s old)`);
+      }
+    }
+
     return NextResponse.json({ audit });
   } catch (error) {
     console.error('GET /api/analyze-social/[id] error:', error);

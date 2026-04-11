@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   CheckCircle,
   AlertCircle,
-  AlertTriangle,
   XCircle,
   Loader2,
   Users,
@@ -22,14 +21,18 @@ import {
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  AreaChart, Area, ScatterChart, Scatter, ZAxis,
+  AreaChart, Area,
 } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { EncryptedText } from '@/components/ui/encrypted-text';
 import { toast } from 'sonner';
 import { AuditExportPdfButton } from '@/components/audit/audit-export-pdf-button';
 import { AuditShareButton } from '@/components/audit/audit-share-button';
-import type { PlatformReport, CompetitorProfile, AuditScorecard, ScorecardItem, ScoreStatus, WebsiteContext, ProspectVideo, FailedPlatform } from '@/lib/audit/types';
+import { TikTokMark } from '@/components/integrations/tiktok-mark';
+import { InstagramMark } from '@/components/integrations/instagram-mark';
+import { FacebookMark } from '@/components/integrations/facebook-mark';
+import { YouTubeMark } from '@/components/integrations/youtube-mark';
+import type { PlatformReport, CompetitorProfile, AuditScorecard, ScorecardItem, ScoreStatus, WebsiteContext, FailedPlatform } from '@/lib/audit/types';
 import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
 
 interface AuditRecord {
@@ -70,6 +73,45 @@ const PLATFORM_LABELS: Record<string, string> = {
   youtube: 'YouTube',
 };
 
+/**
+ * Standardized platform icon tile — mirrors the Research tab's PlatformBadgeSearch
+ * look (subdued themed tile, platform mark inside) but covers the four audit
+ * platforms. YouTube gets the full red mark to stay visually consistent with
+ * how Research renders it.
+ */
+function AuditPlatformIcon({ platform, size = 'md' }: { platform: AuditPlatformKey; size?: 'sm' | 'md' }) {
+  const tile = size === 'sm' ? 'h-5 w-5' : 'h-7 w-7';
+  const iconSize = size === 'sm' ? 12 : 14;
+
+  if (platform === 'youtube') {
+    return (
+      <span className="inline-flex shrink-0 items-center justify-center" aria-hidden>
+        <YouTubeMark variant="full" size={size === 'sm' ? 20 : 24} />
+      </span>
+    );
+  }
+  if (platform === 'tiktok') {
+    return (
+      <span className={`inline-flex shrink-0 items-center justify-center rounded-md bg-white/10 ${tile}`}>
+        <TikTokMark size={iconSize} className="text-text-primary" />
+      </span>
+    );
+  }
+  if (platform === 'instagram') {
+    return (
+      <span className={`inline-flex shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-[#FDC830]/15 via-[#F37335]/15 to-[#C13584]/15 ${tile}`}>
+        <InstagramMark variant="onBrand" size={iconSize} className="text-[#E1306C]" />
+      </span>
+    );
+  }
+  // facebook
+  return (
+    <span className={`inline-flex shrink-0 items-center justify-center rounded-md bg-[#1877F2]/10 ${tile}`}>
+      <FacebookMark variant="onBrand" size={iconSize} className="text-[#1877F2]" />
+    </span>
+  );
+}
+
 const PROCESSING_STAGES = [
   'Crawling website',
   'Extracting brand identity',
@@ -93,8 +135,6 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [activePlatformTab, setActivePlatformTab] = useState<string | null>(null);
   const [socialInputs, setSocialInputs] = useState<Partial<Record<AuditPlatformKey, string>>>({});
   const [submittingSocials, setSubmittingSocials] = useState(false);
-  const [completedAudit, setCompletedAudit] = useState<AuditRecord | null>(null);
-  const [finishingAnimation, setFinishingAnimation] = useState(false);
   const [detectedPlatforms, setDetectedPlatforms] = useState<{ platform: string; url: string; username: string }[]>([]);
   const [detecting, setDetecting] = useState(false);
   const [websiteInfo, setWebsiteInfo] = useState<{ title: string; industry: string } | null>(null);
@@ -116,9 +156,11 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
       const ms = Date.now() - startTime;
       setElapsed(Math.floor(ms / 1000));
 
-      // Eased progress: fast at start, slows as it approaches 92%
-      // Uses an ease-out curve so it always feels like it's moving
-      const t = Math.min(1, ms / 120000); // normalize to 0-1 over 2 min
+      // Eased progress: fast at start, slows as it approaches 92%.
+      // Normalise over ~4min so the bar keeps moving for the full duration
+      // of a typical audit (previously capped at 120s, which meant the bar
+      // sat frozen at 92% for the last 2-3 minutes of long audits).
+      const t = Math.min(1, ms / 240000); // normalize to 0-1 over 4 min
       const eased = 1 - Math.pow(1 - t, 2.5); // ease-out curve
       const targetProgress = eased * 92;
 
@@ -137,42 +179,70 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
       }
     }, 50); // 50ms for buttery smooth animation
 
+    // Poll faster (1.5s) so completion is caught quickly and the report
+    // opens immediately. Also log failures instead of swallowing them —
+    // silent catches were how stuck-processing bugs went unnoticed before.
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/analyze-social/${audit.id}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.audit.status !== 'processing') {
-            // Don't show report immediately — animate to 100% first
-            clearInterval(progressInterval);
-            clearInterval(pollInterval);
-            setCompletedAudit(data.audit);
-            setFinishingAnimation(true);
-            setStageIndex(PROCESSING_STAGES.length - 1);
-
-            // Animate from current to 100% over 2s
-            const startPct = currentProgress;
-            const animStart = Date.now();
-            const finishInterval = setInterval(() => {
-              const elapsed = Date.now() - animStart;
-              const frac = Math.min(1, elapsed / 2000);
-              const easedFrac = 1 - Math.pow(1 - frac, 3);
-              setProgress(startPct + (100 - startPct) * easedFrac);
-              if (frac >= 1) {
-                clearInterval(finishInterval);
-                // Show report after a brief pause at 100%
-                setTimeout(() => {
-                  setAudit(data.audit);
-                  setFinishingAnimation(false);
-                }, 400);
-              }
-            }, 16);
-          }
+        const res = await fetch(`/api/analyze-social/${audit.id}`, { cache: 'no-store' });
+        if (!res.ok) {
+          console.warn(`[audit] poll → HTTP ${res.status}`);
+          return;
         }
-      } catch { /* ignore */ }
-    }, 2500);
+        const data = await res.json();
+        const nextStatus = data?.audit?.status;
+        if (nextStatus && nextStatus !== 'processing') {
+          console.log(`[audit] poll → status changed to "${nextStatus}" — finishing`);
+          // Don't show report immediately — animate to 100% first, snappy
+          clearInterval(progressInterval);
+          clearInterval(pollInterval);
+          setStageIndex(PROCESSING_STAGES.length - 1);
 
-    return () => { clearInterval(progressInterval); clearInterval(pollInterval); };
+          // Animate from current to 100% quickly (~900ms), then flip to
+          // the report after a short hold at 100%.
+          const startPct = currentProgress;
+          const animStart = Date.now();
+          const finishInterval = setInterval(() => {
+            const elapsedAnim = Date.now() - animStart;
+            const frac = Math.min(1, elapsedAnim / 900);
+            const easedFrac = 1 - Math.pow(1 - frac, 3);
+            setProgress(startPct + (100 - startPct) * easedFrac);
+            if (frac >= 1) {
+              clearInterval(finishInterval);
+              setTimeout(() => {
+                setAudit(data.audit);
+              }, 150);
+            }
+          }, 16);
+        }
+      } catch (err) {
+        console.warn('[audit] poll failed:', err);
+      }
+    }, 1500);
+
+    // Client-side safety net: if we've been polling for >7 minutes and
+    // the backend is still claiming `processing`, the GET endpoint's
+    // stale-detector should have flipped it by now. If it hasn't, show
+    // a failure state so the user isn't stranded on a spinner.
+    const clientTimeoutMs = 7 * 60 * 1000;
+    const clientTimeoutId = setTimeout(() => {
+      clearInterval(progressInterval);
+      clearInterval(pollInterval);
+      console.warn('[audit] client-side timeout — marking as failed');
+      toast.error('Audit is taking longer than expected. Try again.');
+      setAudit(prev => ({
+        ...prev,
+        status: 'failed',
+        error_message:
+          'Audit took longer than the platform time limit. This usually means a scrape got stuck. Retry to try again.',
+      }));
+    }, clientTimeoutMs);
+
+    return () => {
+      clearInterval(progressInterval);
+      clearInterval(pollInterval);
+      clearTimeout(clientTimeoutId);
+    };
   }, [audit.id, audit.status]);
 
   // Set first platform tab when data loads
@@ -294,8 +364,8 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
               const detected = detectedPlatforms.find(d => d.platform === platform);
               return (
                 <div key={platform} className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 w-24 shrink-0">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PLATFORM_COLORS[platform] }} />
+                  <div className="flex items-center gap-2 w-28 shrink-0">
+                    <AuditPlatformIcon platform={platform} size="sm" />
                     <span className="text-sm text-text-primary font-medium">{PLATFORM_LABELS[platform]}</span>
                   </div>
                   <input
@@ -579,7 +649,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           )}
 
           {/* Active platform detail */}
-          {activePlatform && <PlatformDetail platform={activePlatform} auditId={audit.id} />}
+          {activePlatform && <PlatformDetail platform={activePlatform} />}
         </div>
       )}
 
@@ -683,7 +753,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
 
 // ── Platform detail with Recharts ───────────────────────────────────────
 
-function PlatformDetail({ platform, auditId }: { platform: PlatformReport; auditId: string }) {
+function PlatformDetail({ platform }: { platform: PlatformReport }) {
   const engagementData = useMemo(() => {
     return platform.videos
       .filter(v => v.publishDate)
