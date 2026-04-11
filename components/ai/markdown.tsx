@@ -105,7 +105,111 @@ export function Markdown({
   let codeBuffer: string[] = [];
   let codeLang = '';
 
+  // ─── GFM table accumulator ────────────────────────────────────────────
+  // Tables are detected with a one-line lookahead: a pipe-delimited line
+  // followed by a divider line like "|---|---|" starts a table. Contiguous
+  // pipe-delimited rows are buffered; the first non-table line flushes.
+  type TableBuffer = { header: string[]; rows: string[][] };
+  let tableBuffer: TableBuffer | null = null;
+
+  // Table styling — keep it dense so narrow chat columns stay usable.
+  const tableWrapCls = present
+    ? 'my-3 overflow-x-auto rounded-lg border border-white/[0.08] bg-black/30'
+    : 'my-3 overflow-x-auto rounded-lg border border-white/[0.06] bg-white/[0.02]';
+  const tableCls = 'w-full border-collapse text-left';
+  const thCls = present
+    ? 'border-b border-white/[0.1] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-300'
+    : 'border-b border-white/[0.08] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-text-muted';
+  const tdCls = present
+    ? 'border-t border-white/[0.05] px-3 py-2 align-top text-sm text-zinc-200/95'
+    : 'border-t border-white/[0.05] px-3 py-2 align-top text-sm text-text-secondary';
+
+  function splitTableRow(raw: string): string[] {
+    // Strip leading/trailing pipes, then split on unescaped pipes. Cells
+    // that look empty are kept so alignment matches the header width.
+    const trimmed = raw.trim().replace(/^\|/, '').replace(/\|$/, '');
+    return trimmed.split('|').map((cell) => cell.trim());
+  }
+
+  function isTableDivider(raw: string): boolean {
+    // |---|---| or | :--- | :---: | ---: | etc. At least one cell must
+    // be a run of dashes with optional colons.
+    const trimmed = raw.trim();
+    if (!/^\|?\s*:?-{3,}:?(?:\s*\|\s*:?-{3,}:?)+\s*\|?\s*$/.test(trimmed)) {
+      return false;
+    }
+    return true;
+  }
+
+  function isTableRow(raw: string): boolean {
+    const trimmed = raw.trim();
+    // Pipe somewhere inside and not the divider pattern. Require at least
+    // one internal pipe so a lone "| pipe" in a sentence doesn't trigger.
+    return /\|/.test(trimmed) && trimmed.length > 1 && trimmed.includes('|', trimmed.indexOf('|') + 1);
+  }
+
+  function flushTable(key: string | number) {
+    if (!tableBuffer) return;
+    const { header, rows } = tableBuffer;
+    elements.push(
+      <div key={`tbl-${key}`} className={tableWrapCls}>
+        <table className={tableCls}>
+          <thead>
+            <tr>
+              {header.map((h, hi) => (
+                <th key={hi} className={thCls}>
+                  {formatInline(h, variant)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, ri) => (
+              <tr key={ri}>
+                {header.map((_, ci) => (
+                  <td key={ci} className={tdCls}>
+                    {formatInline(row[ci] ?? '', variant)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>,
+    );
+    tableBuffer = null;
+  }
+
   lines.forEach((line, i) => {
+    // A live table buffer has right-of-way:
+    // 1. Eat the opening divider row (header already consumed, rows empty).
+    // 2. Continue collecting data rows (row that isn't a divider).
+    // 3. Anything else flushes the table and falls through to normal handling.
+    if (tableBuffer && !inCodeBlock) {
+      if (isTableDivider(line) && tableBuffer.rows.length === 0) {
+        return;
+      }
+      if (isTableRow(line) && !isTableDivider(line)) {
+        tableBuffer.rows.push(splitTableRow(line));
+        return;
+      }
+      flushTable(i);
+      // fall through to normal handling for the current line
+    }
+
+    // Table start detection: current line is a row AND next line is a divider.
+    if (
+      !inCodeBlock &&
+      !tableBuffer &&
+      isTableRow(line) &&
+      !isTableDivider(line) &&
+      i + 1 < lines.length &&
+      isTableDivider(lines[i + 1])
+    ) {
+      tableBuffer = { header: splitTableRow(line), rows: [] };
+      return;
+    }
+
     if (line.startsWith('```')) {
       if (inCodeBlock) {
         const codeBody = codeBuffer.join('\n');
@@ -226,6 +330,11 @@ export function Markdown({
 
     elements.push(<p key={i} className={pCls}>{formatInline(line, variant)}</p>);
   });
+
+  // Flush any trailing table that hit end-of-content without a divider below.
+  if (tableBuffer) {
+    flushTable('final');
+  }
 
   if (inCodeBlock && codeBuffer.length) {
     const codeBody = codeBuffer.join('\n');
