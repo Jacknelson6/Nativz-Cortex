@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { HtmlVisualBlock, MermaidDiagramBlock } from '@/components/ai/rich-code-block';
+import { cn } from '@/lib/utils/cn';
 
 /** `present` = full-screen dark presenter (high contrast). `default` = in-app surfaces. */
 export type MarkdownVariant = 'default' | 'present';
@@ -229,11 +230,28 @@ export function Markdown({
   if (inCodeBlock && codeBuffer.length) {
     const codeBody = codeBuffer.join('\n');
     const langLower = codeLang.toLowerCase();
-    const visualVariant = present ? 'present' : 'default';
-    if (langLower === 'mermaid') {
-      elements.push(<MermaidDiagramBlock key="code-final" code={codeBody} variant={visualVariant} />);
-    } else if (langLower === 'html' || langLower === 'html-visual') {
-      elements.push(<HtmlVisualBlock key="code-final" code={codeBody} variant={visualVariant} />);
+
+    // An unclosed fenced block means the closing ``` hasn't streamed in yet.
+    // Rendering MermaidDiagramBlock / HtmlVisualBlock on a partial body
+    // triggers a "syntax error" flash (mermaid) or a broken iframe
+    // (html-visual) every time a chunk arrives. Show a neutral skeleton
+    // instead — once the closing fence lands on the next chunk, the
+    // inline path takes over with the complete code.
+    if (langLower === 'mermaid' || langLower === 'html' || langLower === 'html-visual') {
+      elements.push(
+        <div
+          key="code-final"
+          className={cn(
+            'my-3 flex items-center gap-3 rounded-lg border border-white/[0.06] bg-black/25 px-4 py-4 text-xs text-text-muted',
+            present && 'bg-black/45',
+          )}
+        >
+          <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+          <span>
+            Rendering {langLower === 'mermaid' ? 'diagram' : 'visual'}…
+          </span>
+        </div>,
+      );
     } else {
       elements.push(
         <pre

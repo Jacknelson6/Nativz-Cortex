@@ -1,10 +1,17 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import DOMPurify from 'dompurify';
+import { Maximize2 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
 type VisualVariant = 'default' | 'present';
+
+// Modal is lazy-loaded so the default code path never pulls in the
+// (small) zoom-modal bundle until the user actually clicks Expand.
+const ArtifactZoomModal = lazy(() =>
+  import('./artifact-zoom-modal').then((m) => ({ default: m.ArtifactZoomModal })),
+);
 
 let mermaidInitialized = false;
 
@@ -76,11 +83,16 @@ function renderMermaidFallback(container: HTMLDivElement, code: string, detail?:
 export function MermaidDiagramBlock({
   code,
   variant = 'default',
+  /** When true, skip zoom affordance — used by the zoom modal itself to
+   *  avoid infinite recursive expand buttons. */
+  disableZoom = false,
 }: {
   code: string;
   variant?: VisualVariant;
+  disableZoom?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [zoomOpen, setZoomOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,21 +123,76 @@ export function MermaidDiagramBlock({
     };
   }, [code, variant]);
 
+  // The zoom modal reuses this component with disableZoom=true so it never
+  // stacks another expand button on the fullscreen copy.
+  const wrapperBase = cn(
+    'group relative my-3 overflow-x-auto rounded-lg border border-white/[0.06] bg-black/25 p-4 [&_svg]:max-w-none',
+    variant === 'present' && 'bg-black/45',
+    !disableZoom && 'cursor-zoom-in transition-colors hover:border-white/[0.12] hover:bg-black/35',
+  );
+
+  if (disableZoom) {
+    return <div ref={containerRef} className={wrapperBase} />;
+  }
+
   return (
-    <div
-      ref={containerRef}
-      className={cn(
-        'my-3 overflow-x-auto rounded-lg border border-white/[0.06] bg-black/25 p-4 [&_svg]:max-w-none',
-        variant === 'present' && 'bg-black/45',
+    <>
+      <div
+        ref={containerRef}
+        role="button"
+        tabIndex={0}
+        onClick={() => setZoomOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setZoomOpen(true);
+          }
+        }}
+        aria-label="Expand diagram"
+        className={wrapperBase}
+      >
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setZoomOpen(true);
+          }}
+          className="absolute right-2 top-2 z-10 inline-flex cursor-pointer items-center gap-1 rounded-md border border-white/[0.08] bg-black/60 px-2 py-1 text-[10px] font-medium text-text-muted opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-text-primary"
+          aria-hidden
+          tabIndex={-1}
+        >
+          <Maximize2 size={10} />
+          Expand
+        </button>
+      </div>
+      {zoomOpen && (
+        <Suspense fallback={null}>
+          <ArtifactZoomModal
+            open={zoomOpen}
+            onClose={() => setZoomOpen(false)}
+            kind="mermaid"
+            source={code}
+          />
+        </Suspense>
       )}
-    />
+    </>
   );
 }
 
 /**
  * Renders sanitized HTML in a sandboxed iframe (SVG/CSS layouts; scripts stripped).
  */
-export function HtmlVisualBlock({ code, variant = 'default' }: { code: string; variant?: VisualVariant }) {
+export function HtmlVisualBlock({
+  code,
+  variant = 'default',
+  /** When true, skip the expand affordance — used by the zoom modal itself. */
+  disableZoom = false,
+}: {
+  code: string;
+  variant?: VisualVariant;
+  disableZoom?: boolean;
+}) {
+  const [zoomOpen, setZoomOpen] = useState(false);
   const srcDoc =
     typeof window !== 'undefined'
       ? DOMPurify.sanitize(code.trim(), {
@@ -187,24 +254,62 @@ export function HtmlVisualBlock({ code, variant = 'default' }: { code: string; v
         })
       : '';
 
+  const iframeEl = (
+    <iframe
+      title="Inline visual"
+      srcDoc={srcDoc}
+      sandbox="allow-popups allow-popups-to-escape-sandbox"
+      className="min-h-[220px] w-full bg-[#0a0a0f]"
+      style={{ minHeight: 220 }}
+    />
+  );
+
+  if (disableZoom) {
+    return (
+      <div
+        className={cn(
+          'my-3 overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.03]',
+          variant === 'present' && 'border-white/[0.12]',
+        )}
+      >
+        {iframeEl}
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={cn(
-        'my-3 overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.03]',
-        variant === 'present' && 'border-white/[0.12]',
+    <>
+      <div
+        className={cn(
+          'group relative my-3 overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.03] transition-colors hover:border-white/[0.12]',
+          variant === 'present' && 'border-white/[0.12]',
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => setZoomOpen(true)}
+          className="absolute right-2 top-2 z-10 inline-flex cursor-pointer items-center gap-1 rounded-md border border-white/[0.08] bg-black/60 px-2 py-1 text-[10px] font-medium text-text-muted opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-text-primary"
+          title="Expand visual"
+        >
+          <Maximize2 size={10} />
+          Expand
+        </button>
+        {iframeEl}
+        <p className="border-t border-white/[0.06] px-3 py-1.5 text-[10px] text-text-muted">
+          Inline HTML visual (sanitized, no scripts). For flowcharts and diagrams, use a{' '}
+          <code className="rounded bg-white/[0.06] px-1">mermaid</code> code block.
+        </p>
+      </div>
+      {zoomOpen && (
+        <Suspense fallback={null}>
+          <ArtifactZoomModal
+            open={zoomOpen}
+            onClose={() => setZoomOpen(false)}
+            kind="html-visual"
+            source={code}
+          />
+        </Suspense>
       )}
-    >
-      <iframe
-        title="Inline visual"
-        srcDoc={srcDoc}
-        sandbox="allow-popups allow-popups-to-escape-sandbox"
-        className="min-h-[220px] w-full bg-[#0a0a0f]"
-        style={{ minHeight: 220 }}
-      />
-      <p className="border-t border-white/[0.06] px-3 py-1.5 text-[10px] text-text-muted">
-        Inline HTML visual (sanitized, no scripts). For flowcharts and diagrams, use a{' '}
-        <code className="rounded bg-white/[0.06] px-1">mermaid</code> code block.
-      </p>
-    </div>
+    </>
   );
 }

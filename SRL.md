@@ -27,6 +27,31 @@ since. Smoke test passes for all 48 tools.
 
 **Focus:** Build artifact system (the actual feature). See TaskList.
 
-### Iteration 2 — (regenerated at end of iteration 1)
+### Iteration 2 — 2026-04-11 (continued)
 
-_To be written._
+**Shipped in iteration 1:**
+- `feat(strategy-lab): artifact-first chat — mermaid/html-visual + entry from search` (305c606)
+- `fix(strategy-lab): Open in Strategy Lab pins exactly the clicked search` (522808a)
+
+**Regressions or gaps found after iter 1:**
+- **Streaming mermaid flashes "syntax error".** Assistant messages stream
+  one chunk at a time. MermaidDiagramBlock re-runs its parse effect on
+  every code change, so while the block is mid-stream the user sees the
+  mermaid fallback (raw code + "could not render") until the closing
+  fence arrives. Fix: defer parse while streaming OR buffer fenced blocks
+  until the closing ``` is seen.
+- **No way to blow up an artifact to full-size.** Inline mermaid
+  diagrams are fine in the thread but a Claude-web-style canvas would
+  let the user actually read the diagram at presentation scale, then
+  download it as PNG or SVG. Fix: click-to-expand modal with raster
+  + SVG download.
+- **Workspace still single-pin.** `selectedTopicSearchId` is a scalar;
+  multi-search grounding relies on the chip bar's local `attachedSearchIds`.
+  Pre-pinning multiple searches from the history feed doesn't flow through.
+  Fix: hoist multi-pin state into the workspace so a batch-select from the
+  history feed lands pinned correctly.
+- **No end-to-end smoke run yet.** Dev server not started this session.
+  tsc + lint + smoke test all pass but a real chat round-trip is worth
+  doing before calling it done.
+
+**Next queue:** see TaskCreate items #14+.
