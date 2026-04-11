@@ -21,15 +21,19 @@ export function toOpenAiChatModelId(model: string): string | null {
 }
 
 /**
- * Chat Completions body: GPT-5.x and o-series reject `max_tokens` and require
- * `max_completion_tokens` (see OpenAI API error unsupported_parameter on max_tokens).
+ * Chat Completions body: newer OpenAI frontier models reject `max_tokens` and
+ * require `max_completion_tokens`. Covers the same set the nerd chat route
+ * checks inline (`/^o\d/`, `/^gpt-5/`, `/^gpt-4\.1/`) — keeping these two
+ * lists in lockstep so every code path using this helper (ideas, scripts,
+ * scorecards, etc.) stops silently 400'ing when the user switches the
+ * default model to a 4.1-family id.
  */
 export function openAiChatCompletionTokenFields(
   modelId: string,
   maxTokens: number,
 ): { max_tokens: number } | { max_completion_tokens: number } {
   const id = modelId.trim().toLowerCase();
-  if (id.startsWith('gpt-5') || /^o\d/.test(id)) {
+  if (id.startsWith('gpt-5') || id.startsWith('gpt-4.1') || /^o\d/.test(id)) {
     return { max_completion_tokens: maxTokens };
   }
   return { max_tokens: maxTokens };

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Building2, User, Plus, History, Settings } from 'lucide-react';
+import { Building2, User, Plus, History, Settings, BotMessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Conversation } from '@/components/ai/conversation';
@@ -440,15 +440,22 @@ export default function NerdPage() {
     );
   }
 
+  /**
+   * Chat input footer — styled to match the Strategy Lab version: wider
+   * rounded input with the "research" pill variant, larger mention chips,
+   * and the max-w-3xl column so the composer sits centred under the
+   * conversation instead of crammed against the edges.
+   */
   const inputArea = (
-    <div className="shrink-0 px-6 pb-6">
-      <div className="mx-auto max-w-3xl">
+    <div className="shrink-0 px-4 pb-5 pt-3 md:px-8 md:pb-6">
+      <div className="mx-auto flex max-w-3xl flex-col">
         <PromptInput
+          variant="research"
           value={input}
           onChange={setInput}
           onSubmit={() => handleSend()}
           disabled={streaming}
-          placeholder="Type your response..."
+          placeholder="Ask Cortex anything… (try /ideas, /script, or @client)"
           blockEnterSubmit={mentionsVisible || showSlashMenu}
           onKeyDown={handleInputKeyDown}
         >
@@ -464,15 +471,16 @@ export default function NerdPage() {
             <MentionAutocomplete query={mentionQuery} options={mentionOptions} onSelect={handleMentionSelect} />
           )}
         </PromptInput>
-        {/* Active mention badges below input */}
+        {/* Active mention chips — larger text and softer surface to match the
+            Strategy Lab chip bar styling. */}
         {activeMentions.length > 0 && (
-          <div className="flex items-center gap-1.5 mt-2 px-1">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 px-1">
             {activeMentions.map((m) => (
               <span
                 key={`${m.type}-${m.id}`}
-                className="inline-flex items-center gap-1 rounded-full bg-accent/[0.08] px-2 py-0.5 text-[10px] text-accent-text"
+                className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border/60 bg-surface/60 px-2.5 py-1 text-xs text-text-secondary"
               >
-                {m.type === 'client' ? <Building2 size={10} /> : <User size={10} />}
+                {m.type === 'client' ? <Building2 size={12} /> : <User size={12} />}
                 {m.name}
               </span>
             ))}
@@ -502,70 +510,81 @@ export default function NerdPage() {
         onToggleSearch={handleToggleSearch}
       />
 
-      {/* Main card */}
-      <div className="flex-1 flex flex-col min-w-0 p-3 md:p-4">
-        <div className="flex-1 flex flex-col min-h-0 rounded-2xl border border-nativz-border bg-surface overflow-hidden">
-          {/* Top bar — subtle, only shows contextual info */}
-          <div className="flex items-center justify-between px-4 py-3 shrink-0">
-            <div className="flex items-center gap-2">
+      {/* Main chat card — matches the Strategy Lab Nerd shell: neutral header
+          with minimal controls, welcoming empty state with big copy, max-w-3xl
+          message column. */}
+      <div className="flex min-w-0 flex-1 flex-col p-3 md:p-4">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-nativz-border/60 bg-background/40">
+          {/* Header: chat history toggle · new chat · active client badge · settings */}
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
+            <div className="flex items-center gap-1.5">
               {!sidebarOpen && (
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="flex items-center justify-center h-7 w-7 rounded-lg text-text-muted/40 hover:text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer"
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-text-muted/60 transition-colors hover:bg-surface-hover hover:text-text-secondary"
                   title="Chat history"
                 >
-                  <History size={15} />
+                  <History size={16} />
                 </button>
               )}
               {messages.length > 0 && (
                 <button
                   onClick={handleReset}
-                  className="flex items-center justify-center h-7 w-7 rounded-lg text-text-muted/40 hover:text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer"
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-text-muted/60 transition-colors hover:bg-surface-hover hover:text-text-secondary"
                   title="New chat"
                 >
-                  <Plus size={15} />
+                  <Plus size={16} />
                 </button>
               )}
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Client badge — black pill */}
               {activeClientMentions.map((m) => (
                 <span
                   key={m.id}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-text-primary text-background px-3 py-1 text-xs font-medium"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border/60 bg-surface/60 px-3 py-1 text-xs font-medium text-text-secondary"
                 >
+                  <Building2 size={12} className="text-text-muted" />
                   {m.name}
                 </span>
               ))}
-
-              {/* Settings — super_admin only */}
               {isSuperAdmin && (
                 <Link
                   href="/admin/nerd/settings"
-                  className="flex items-center justify-center h-7 w-7 rounded-lg text-text-muted/40 hover:text-text-secondary hover:bg-surface-hover transition-colors"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted/60 transition-colors hover:bg-surface-hover hover:text-text-secondary"
                   title="Nerd settings"
                 >
-                  <Settings size={15} />
+                  <Settings size={16} />
                 </Link>
               )}
             </div>
-          </div>
+          </header>
 
-          {/* Chat content */}
+          {/* Chat content — three states: loading, empty (welcome), messages */}
           {loadingConvo && messages.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="animate-pulse text-text-muted text-sm">Loading conversation...</div>
+            <div className="flex flex-1 items-center justify-center">
+              <div className="animate-pulse text-sm text-text-muted">Loading conversation…</div>
             </div>
           ) : messages.length === 0 ? (
             <>
-              <div className="flex-1" />
+              <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-nativz-border/60 bg-surface/40">
+                  <BotMessageSquare size={28} className="text-text-muted" />
+                </div>
+                <h2 className="mb-2 text-2xl font-semibold tracking-tight text-text-primary">
+                  Ask Cortex anything
+                </h2>
+                <p className="mb-8 max-w-md text-center text-base leading-relaxed text-text-muted">
+                  Full client context, knowledge vault access, research history, and analytics.
+                  Use <span className="font-mono text-text-secondary">@</span> to mention a client or team member, or <span className="font-mono text-text-secondary">/</span> for a command.
+                </p>
+              </div>
               {inputArea}
             </>
           ) : (
             <>
-              <Conversation className="px-4 md:px-6">
-                <div className="mx-auto max-w-3xl divide-y divide-nativz-border/50">
+              <Conversation className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8">
+                <div className="mx-auto max-w-3xl divide-y divide-nativz-border/30 py-6">
                   {messages.map((msg, index) => {
                     const isLast = index === messages.length - 1;
                     if (msg.role === 'assistant') {
