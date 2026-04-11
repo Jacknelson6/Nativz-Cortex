@@ -24,6 +24,11 @@ import {
 // that render as live visuals in the chat and export cleanly as PDFs.
 const SUGGESTIONS = [
   {
+    label: 'Full starter pack',
+    prompt:
+      'Produce a complete starter pack, all grounded in the attached research: (1) a mermaid flowchart content strategy map (pillars → topic clusters → first 3 video ideas each), (2) three fully written scripts with hook, beats, pattern interrupt, and CTA, (3) a mermaid quadrantChart ranking 10 video ideas on effort vs impact, and (4) a markdown table with a 2-week posting cadence for ',
+  },
+  {
     label: 'Content strategy map',
     prompt:
       'Build a content strategy map as a mermaid flowchart (pillars → topic clusters → first 3 video ideas each) grounded in the attached research for ',

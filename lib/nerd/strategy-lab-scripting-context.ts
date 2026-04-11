@@ -23,7 +23,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-const STRATEGY_LAB_ADDENDUM = `
+export const STRATEGY_LAB_ADDENDUM = `
 
 ---
 
