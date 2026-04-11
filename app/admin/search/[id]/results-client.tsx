@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, Building2, Clock, FlaskConical } from 'lucide-react';
-import { mergeTopicSearchSelectionIntoLocalStorage } from '@/lib/strategy-lab/topic-search-selection-storage';
+import { strategyLabTopicSearchStorageKey } from '@/lib/strategy-lab/topic-search-selection-storage';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
@@ -214,9 +214,16 @@ export function AdminResultsClient({
                   toast.error('Attach this search to a client first to open it in Strategy Lab.');
                   return;
                 }
-                // Pre-pin this search in the client's Strategy Lab selection so
-                // the chip bar auto-attaches it on mount.
-                mergeTopicSearchSelectionIntoLocalStorage(clientInfo.id, [search.id]);
+                // Pre-pin this search as the ONLY selection so the Strategy
+                // Lab workspace reads `ids.at(-1)` on mount and lands the user
+                // on exactly the search they clicked, not whichever pin
+                // happens to sit at the tail of the existing set.
+                try {
+                  const key = strategyLabTopicSearchStorageKey(clientInfo.id);
+                  window.localStorage.setItem(key, JSON.stringify([search.id]));
+                } catch {
+                  /* quota / JSON — non-fatal, user will see the lab but nothing pinned */
+                }
                 // Route param is the client UUID, not the slug.
                 router.push(`/admin/strategy-lab/${clientInfo.id}`);
               }}
