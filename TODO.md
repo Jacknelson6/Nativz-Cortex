@@ -6,33 +6,105 @@
 
 ---
 
-## Next Session
+## Next Session — QA this April 10 batch (11 files + 2 docs uncommitted)
 
-### Audit — Live QA (scrapers built, need live test)
-- [ ] QA all 4 Apify scrapers live (TikTok, Instagram, Facebook, YouTube) — run a real audit and verify data returns
-- [ ] Test new Facebook scraper env override (`FACEBOOK_SCRAPER_ACTOR`) with cheaper community actors
+> See **`STATUS.md`** and **`NERD_DIAGNOSIS.md`** at repo root for full session recap.
 
-### Analytics — QA
-- [ ] Verify analytics client portfolio selector loads with real client data
-- [ ] Verify social/affiliates/benchmarking tabs all work
-- [ ] Verify benchmarking competitor add + refresh + historical charts
-- [ ] Test status dots (green/yellow) accuracy for connected clients
+### 🔴 Critical — Nerd chat is broken
+- [ ] Paste top row of `select * from api_error_log where route='/api/nerd/chat' order by created_at desc limit 5` — tells us the actual upstream error
+- [ ] Or: DevTools → Network → `/api/nerd/chat` → Response body → paste
+- [ ] Isolate: which surface is broken? (`/admin/nerd`, Strategy Lab chat, or both?)
+- [ ] Check browser console for React mount errors (red ones)
+- [ ] Check OpenRouter credit balance and `/admin/ai-models` nerd model override
+- [ ] **Background agent investigated; latent `gpt-4.1` token-field bug fixed in `lib/ai/openai-model-id.ts`. Probably not the Nerd bug directly, but was a real issue affecting other features using the shared helper. See `NERD_DIAGNOSIS.md`.**
 
-### Calendar Webhooks — QA
-- [ ] Test webhook with a real Google Chat webhook URL
-- [ ] Verify webhook fires on shared calendar feedback (approved/changes_requested/comment)
-- [ ] Verify webhook URL save/clear in client settings
+### 🟡 Audit — Stuck-at-92% fix + finish animation
+- [ ] Your currently-stuck audit should auto-recover: refresh → GET self-heal flips it to Failed if >7min old, OR click Retry (process route now unblocks stale rows)
+- [ ] Start a fresh audit end-to-end. Progress bar should move smoothly the whole way (no 2-min freeze at 92%). Finish animation ~1s.
+- [ ] Kill dev server mid-audit → reload → audit should auto-fail within ~7min on next GET
+- [ ] Verify competitor discovery now caps at 150s (check logs for `competitor discovery exceeded 150s budget` warnings on long runs)
 
-### Research — QA
-- [ ] Suggest topics — QA that brand-specific ontology topics generate correctly for different clients
-- [ ] History rail — verify client filter works correctly with load-more (no unrelated searches leaking)
-- [ ] PDF export — QA the overhauled PDF matches the results page (all 3 pages)
-- [ ] Share links — QA that AC domain generates AC share URLs and Nativz generates Nativz URLs
-- [ ] QA: verify PDF renders correctly for both AC and Nativz branded searches
+### 🟡 Research — New features
+- [ ] **Public share link**: Three-dots → Copy link to search → paste in incognito → loads WITHOUT login. Works on completed only; pending should show "still running" toast.
+- [ ] **Bulk share**: Selection mode → Copy link to all → paste → newline-separated public URLs
+- [ ] **Selection rework**: Right-click → Select. Instructional box should be gone. Click rows to toggle (not navigate). Bulk panel = Copy all + Delete all only (no more "Bring to Strategy lab" or "Open all in lab")
+- [ ] **Brand persistence**: Pick brand → click report → back → still selected. Also fresh tab. Also clear brand → click report → back → still cleared.
+- [ ] **Completion toast**: Start search, wait. NO auto-nav. Toast bottom-right with "View results" button. Processing card done state shows "View results" button.
 
-### Remaining from April 3 Session
+### 🟡 History rails — Stuck icons
+- [ ] Audit rail: watch in-flight audit icon update within ~5s of completion
+- [ ] Research rail: multiple concurrent searches should ALL update, not just the first
+
+### 🟢 Cosmetic — Admin Nerd polish + audit icons
+- [ ] `/admin/nerd` should now look like Strategy Lab (bigger fonts, rounded research-style input, welcoming empty state with rounded icon square, soft client badge pill)
+- [ ] Start audit → "Confirm social platforms" screen should show real platform marks (TikTokMark, InstagramMark, FacebookMark, YouTubeMark), not colored dots
+
+### 🟢 Claude-style composer rework (blocked on Nerd fix)
+- [ ] Attachment tray above input with chips (research, PDFs, images, files) + ✕
+- [ ] Paperclip menu: Upload file / Attach research / Attach knowledge entry / Attach moodboard
+- [ ] Drag-and-drop anywhere on chat pane
+- [ ] PDF parsing (`pdf-parse` or similar) → indexed as temporary context chunk
+- [ ] Image support (vision model input)
+- [ ] Citations linking back to attached doc chips
+- [ ] Reuse composer component across `/admin/nerd` and Strategy Lab so both get the upgrade at once
+
+### From earlier sessions (still open)
 - [ ] Frame extraction debugging — ffmpeg-static works locally but carousel returns 0 frames
 - [ ] Video reference library in Strategy Lab Knowledge Base tab
+- [ ] QA all 4 Apify scrapers live end-to-end
+- [ ] Analytics: client portfolio, social/affiliates/benchmarking tabs, competitor add/refresh/charts, status dots
+- [ ] Calendar webhooks: test with real Google Chat URL, verify firing on feedback events
+- [ ] Research: suggest topics ontology, history rail client filter with load-more, PDF export matches results page, share links domain-aware
+
+---
+
+## Completed — April 10 Session
+
+### Audit — Stuck-at-92% bug + full fix
+- [x] Root cause: competitor discovery could burn 18+ min worst-case, blowing past Vercel's 300s function limit. Killed function → audit row stuck in `processing` forever → frontend polled indefinitely.
+- [x] GET `/api/analyze-social/[id]` self-heals audits with `updated_at > 7min` → auto-flips to `failed`
+- [x] POST `/api/analyze-social/[id]/process` now allows retry on stale processing rows (previously 409'd) + clears `error_message` on restart
+- [x] `lib/audit/discover-competitors.ts` — hard 150s time budget on discovery loop
+- [x] `components/audit/audit-report.tsx` — 1.5s poll (was 2.5s), cache: no-store, unmuted catch, 7-min client-side safety net, 900ms finish animation (was 2.4s), progress curve normalised over 4 min
+- [x] Lint cleanup: removed unused recharts/lucide imports, dead write-only state, unused PlatformDetail prop
+
+### Audit — UI polish
+- [x] Standardized platform icons on "Confirm social platforms" screen (replaces colored dots with real platform marks)
+
+### Research — Public share links
+- [x] `copyLinkToSearch` in history-feed mints share tokens via `/api/search/[id]/share` → public `/shared/search/<token>` URL (no login required)
+- [x] `copyAllSelectedLinks` does the same for bulk selections
+- [x] Guards incomplete searches with fallback to internal link + explanatory toast
+
+### Research — Selection behavior rework
+- [x] Removed "Right-click a topic search → Select…" instructional help box
+- [x] Rows in selection mode toggle selection on click (button wrapper instead of Link)
+- [x] Bulk panel: only "Copy link to all" + "Delete all" (removed "Bring to Strategy lab" and "Open all in lab")
+- [x] Context submenu simplified the same way
+- [x] Dropped unused `openAllSelectedInStrategyLab` callback + dead-code folder submenu
+
+### Research — Brand persistence
+- [x] `selectedClientId` persists to localStorage key `cortex:research-hub:selected-client-id`
+- [x] Null stored as literal `"null"` so explicit clear also sticks
+- [x] Stale client IDs validated and silently dropped
+- [x] `ResearchTopicForm` has new `initialClientId` prop that rehydrates brand pill, context mode, and context search field
+
+### Research — Completion toast (no auto-open)
+- [x] `goToResults()` no longer auto-navigates. Fires sonner toast with "View results" action button
+- [x] Processing card done state shows "View results" button instead of auto-redirect text
+
+### History rails — Stuck processing icons
+- [x] `components/audit/audit-history-rail.tsx` — ref-based polling effect (5s cadence), only propagates changes when something actually changed
+- [x] `components/research/research-hub.tsx` — parallel poll all in-flight IDs each tick; stops only when ALL are settled. 5s → 3s interval.
+
+### Admin Nerd — Visual polish
+- [x] `PromptInput variant="research"` (wide rounded pill)
+- [x] `max-w-3xl` content column, `divide-y` message separators
+- [x] Welcoming empty state: rounded icon square + `text-2xl` heading + `@`/`/` helper copy
+- [x] Neutral header, soft border client pill, bigger mention chips
+
+### Nerd — Latent bug (background agent finding)
+- [x] `lib/ai/openai-model-id.ts` — `openAiChatCompletionTokenFields` was missing `gpt-4.1` in its max-completion-tokens detection (diverged from the nerd route's inline check). Fixed so both sites match — plugs a gap for features using the shared helper with 4.1 models.
 
 ---
 
