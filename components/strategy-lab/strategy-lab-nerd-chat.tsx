@@ -19,11 +19,30 @@ import {
   clearStrategyLabNerdConversationId,
 } from '@/lib/strategy-lab/nerd-conversation-storage';
 
+// Quick-start prompts are tuned to push the Nerd toward artifact-style
+// outputs (mermaid flows, structured scripts, effort/impact quadrants)
+// that render as live visuals in the chat and export cleanly as PDFs.
 const SUGGESTIONS = [
-  { label: 'Summarize research', prompt: 'Summarize our topic search findings and what to do next for ' },
-  { label: 'Content pillars', prompt: 'How should we translate our research into content pillars for ' },
-  { label: 'Video ideas', prompt: 'Give me 10 video ideas grounded in our strategy for ' },
-  { label: 'Performance', prompt: 'What should we prioritize on social for ' },
+  {
+    label: 'Content strategy map',
+    prompt:
+      'Build a content strategy map as a mermaid flowchart (pillars → topic clusters → first 3 video ideas each) grounded in the attached research for ',
+  },
+  {
+    label: '3 full scripts',
+    prompt:
+      'Write three full scripts (hook, beats, pattern interrupt, CTA) from the highest-signal topics in the attached research for ',
+  },
+  {
+    label: 'Effort vs impact',
+    prompt:
+      'Give me 12 video ideas ranked as a mermaid quadrantChart on effort vs impact, grounded in the attached research for ',
+  },
+  {
+    label: 'Performance diagnosis',
+    prompt:
+      'Diagnose current social performance and produce a mermaid flowchart of symptom → cause → fix, with a 2-week action plan for ',
+  },
 ];
 
 // The tab nav shape the workspace passes down. We render it as a floating

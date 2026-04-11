@@ -77,6 +77,14 @@ const m = StyleSheet.create({
     marginBottom: 6,
     marginTop: 2,
   },
+  codeBlockLabel: {
+    fontSize: 8,
+    fontFamily: 'Helvetica-Bold',
+    color: '#6A6A7A',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 4,
+  },
   codeBlockText: {
     fontSize: 9,
     fontFamily: 'Courier',
@@ -107,7 +115,7 @@ type Block =
   | { kind: 'paragraph'; text: string }
   | { kind: 'bullet'; items: string[] }
   | { kind: 'numbered'; items: string[] }
-  | { kind: 'code'; text: string };
+  | { kind: 'code'; text: string; lang?: string };
 
 function parseMarkdown(source: string): Block[] {
   const lines = source.replace(/\r\n/g, '\n').split('\n');
@@ -120,6 +128,8 @@ function parseMarkdown(source: string): Block[] {
 
     // Fenced code block
     if (/^```/.test(trimmed)) {
+      const openMatch = trimmed.match(/^```\s*(\S+)?/);
+      const lang = openMatch?.[1]?.toLowerCase();
       const codeLines: string[] = [];
       i += 1;
       while (i < lines.length && !/^```/.test(lines[i].trim())) {
@@ -128,7 +138,7 @@ function parseMarkdown(source: string): Block[] {
       }
       // consume closing fence if present
       if (i < lines.length) i += 1;
-      blocks.push({ kind: 'code', text: codeLines.join('\n') });
+      blocks.push({ kind: 'code', text: codeLines.join('\n'), lang });
       continue;
     }
 
@@ -356,8 +366,24 @@ export function renderMarkdownToPdfBlocks(source: string): JSX.Element[] {
       );
     }
     if (block.kind === 'code') {
+      // Mermaid and html-visual blocks render as live diagrams in the chat
+      // but there is no SVG rasterizer wired into the react-pdf pipeline yet,
+      // so we fall back to a labeled source dump so the reader understands
+      // why they're seeing code in a client-facing PDF. The per-message PDF
+      // export (exportElementToPdf → html2canvas) captures the rendered SVG
+      // directly and is unaffected.
+      const isMermaid = block.lang === 'mermaid';
+      const isHtmlVisual = block.lang === 'html-visual' || block.lang === 'html';
+      const label = isMermaid
+        ? 'Mermaid diagram — open in Strategy Lab for the live render'
+        : isHtmlVisual
+          ? 'HTML visual — open in Strategy Lab for the live render'
+          : block.lang
+            ? block.lang.toUpperCase()
+            : null;
       return (
         <View key={idx} style={m.codeBlock}>
+          {label ? <Text style={m.codeBlockLabel}>{label}</Text> : null}
           <Text style={m.codeBlockText}>{block.text}</Text>
         </View>
       );

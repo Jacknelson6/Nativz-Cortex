@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Building2, Clock } from 'lucide-react';
+import { ArrowLeft, Building2, Clock, FlaskConical } from 'lucide-react';
+import { mergeTopicSearchSelectionIntoLocalStorage } from '@/lib/strategy-lab/topic-search-selection-storage';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
@@ -206,6 +207,25 @@ export function AdminResultsClient({
                 {formatRelativeTime(search.completed_at)}
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                if (!clientInfo) {
+                  toast.error('Attach this search to a client first to open it in Strategy Lab.');
+                  return;
+                }
+                // Pre-pin this search in the client's Strategy Lab selection so
+                // the chip bar auto-attaches it on mount.
+                mergeTopicSearchSelectionIntoLocalStorage(clientInfo.id, [search.id]);
+                // Route param is the client UUID, not the slug.
+                router.push(`/admin/strategy-lab/${clientInfo.id}`);
+              }}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent/60 hover:bg-accent/20"
+              title={clientInfo ? `Open this search in Strategy Lab with ${clientInfo.name}` : 'Attach a client first'}
+            >
+              <FlaskConical size={14} aria-hidden />
+              Open in Strategy Lab
+            </button>
             <ExportPdfButton search={search} clientName={clientInfo?.name} agency={agencyBrand} />
             <ShareButton searchId={search.id} />
           </div>

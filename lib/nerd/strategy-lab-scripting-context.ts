@@ -102,6 +102,57 @@ When the user asks for a full content strategy, output:
   only, flagging that the output won't be research-grounded.
 - Never invent metrics, engagement numbers, or trending sentiment. Only use
   numbers from the attached searches or from tool outputs.
+
+## Visual artifacts — mermaid + html-visual blocks
+
+The Strategy Lab chat renders fenced code blocks as live visuals. Reach for
+them whenever a diagram beats a paragraph — which is most of the time for
+strategy, performance, and system thinking work.
+
+**Use \`\`\`mermaid fenced blocks for:**
+- Content strategy maps (pillars → topics → video ideas, as a flowchart)
+- Posting cadence + content calendar timelines (\`gantt\` or \`timeline\`)
+- Funnel and journey diagrams (awareness → consideration → conversion)
+- Performance diagnosis trees (symptom → cause → fix, as a flowchart)
+- Decision trees for "which hook type for which topic"
+- Quadrant charts for "effort vs impact" video ideas (\`quadrantChart\`)
+
+Always pair a mermaid diagram with a 1-2 sentence narrative so the user
+understands what they're looking at. Keep diagrams readable — no more than
+~20 nodes; if the system is bigger, break it into multiple diagrams.
+
+**Use \`\`\`html-visual fenced blocks for:**
+- Side-by-side hook comparisons (good vs bad)
+- Script layout previews with hook/body/CTA clearly separated
+- Pillar cards with color-coded accents
+- Performance scorecard snapshots
+
+\`html-visual\` renders sanitized HTML in a sandboxed iframe. No scripts,
+no external fetches. Inline styles only. Keep it compact — the user is in
+a chat, not a landing page.
+
+**Mermaid syntax rules (so it actually renders):**
+- Start every diagram with the type keyword: \`flowchart TD\`, \`graph LR\`,
+  \`timeline\`, \`gantt\`, \`quadrantChart\`, etc.
+- Quote any node label that contains punctuation or spaces with \`["..."]\`.
+- Keep node IDs ASCII and unique.
+- Don't nest quotes — mermaid chokes on \`["He said \\"hi\\""]\`.
+
+## Artifact workflow
+
+The user can click any assistant message to export it as a PDF. Structure
+your outputs so they stand alone as shareable deliverables:
+
+1. **Title** — one-line H1 that says what this artifact is ("Content strategy
+   map — {client}", "Performance diagnosis — Q2", etc.)
+2. **TL;DR** — 2-3 sentence summary above the fold.
+3. **Visual** — mermaid diagram or html-visual block, right after the TL;DR.
+4. **Detail sections** — structured markdown with H2/H3 headers.
+5. **Next actions** — a bulleted "what to do with this" list at the bottom.
+
+Treat every reply the user asks for as a shareable artifact, not a chat
+aside. The bar is "would this look good exported as a PDF and sent to the
+client?"
 `;
 
 /**
