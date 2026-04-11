@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, Building2, Clock, FlaskConical } from 'lucide-react';
 import { strategyLabTopicSearchStorageKey } from '@/lib/strategy-lab/topic-search-selection-storage';
+import { StrategyLabAttachClientDialog } from '@/components/strategy-lab/strategy-lab-attach-client-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
@@ -55,6 +56,7 @@ export function AdminResultsClient({
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(search.query);
   const [savingTitle, setSavingTitle] = useState(false);
+  const [attachDialogOpen, setAttachDialogOpen] = useState(false);
   const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
   const trendingTopics = (search.trending_topics ?? []) as (TrendingTopic | LegacyTrendingTopic)[];
 
@@ -211,13 +213,15 @@ export function AdminResultsClient({
               type="button"
               onClick={() => {
                 if (!clientInfo) {
-                  toast.error('Attach this search to a client first to open it in Strategy Lab.');
+                  // No client attached yet — open the inline picker so the
+                  // user can attach in-place and land in the lab without a
+                  // round-trip through the admin settings.
+                  setAttachDialogOpen(true);
                   return;
                 }
                 // Pre-pin this search as the ONLY selection so the Strategy
-                // Lab workspace reads `ids.at(-1)` on mount and lands the user
-                // on exactly the search they clicked, not whichever pin
-                // happens to sit at the tail of the existing set.
+                // Lab workspace auto-attaches it on mount. See the multi-pin
+                // hoisted state in strategy-lab-workspace.tsx.
                 try {
                   const key = strategyLabTopicSearchStorageKey(clientInfo.id);
                   window.localStorage.setItem(key, JSON.stringify([search.id]));
@@ -228,11 +232,16 @@ export function AdminResultsClient({
                 router.push(`/admin/strategy-lab/${clientInfo.id}`);
               }}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent/60 hover:bg-accent/20"
-              title={clientInfo ? `Open this search in Strategy Lab with ${clientInfo.name}` : 'Attach a client first'}
+              title={clientInfo ? `Open this search in Strategy Lab with ${clientInfo.name}` : 'Pick a client and open in Strategy Lab'}
             >
               <FlaskConical size={14} aria-hidden />
               Open in Strategy Lab
             </button>
+            <StrategyLabAttachClientDialog
+              open={attachDialogOpen}
+              onClose={() => setAttachDialogOpen(false)}
+              searchId={search.id}
+            />
             <ExportPdfButton search={search} clientName={clientInfo?.name} agency={agencyBrand} />
             <ShareButton searchId={search.id} />
           </div>

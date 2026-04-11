@@ -9,6 +9,10 @@ const renameSearchBodySchema = z.object({
   query: z.string().trim().min(1, 'Topic name is required').max(500),
 });
 
+const attachClientBodySchema = z.object({
+  client_id: z.string().uuid('client_id must be a UUID'),
+});
+
 /**
  * GET /api/search/[id]
  *
@@ -90,11 +94,51 @@ export async function PATCH(
     }
 
     const hasQuery = typeof body.query === 'string';
+    const hasClientId = typeof body.client_id === 'string';
     const action = body.action;
     const hasAction = action === 'approve' || action === 'reject';
 
-    if (hasQuery && hasAction) {
-      return NextResponse.json({ error: 'Send only one of query or action' }, { status: 400 });
+    const branchCount = [hasQuery, hasAction, hasClientId].filter(Boolean).length;
+    if (branchCount > 1) {
+      return NextResponse.json(
+        { error: 'Send only one of query, action, or client_id' },
+        { status: 400 },
+      );
+    }
+
+    if (hasClientId) {
+      const parsed = attachClientBodySchema.safeParse(body);
+      if (!parsed.success) {
+        const msg = parsed.error.issues[0]?.message ?? 'Invalid client_id';
+        return NextResponse.json({ error: msg }, { status: 400 });
+      }
+      const { client_id: nextClientId } = parsed.data;
+
+      // Verify the client actually exists before pointing a search at it —
+      // otherwise the topic_searches row would dangle with a ghost FK.
+      const { data: clientRow, error: clientErr } = await adminClient
+        .from('clients')
+        .select('id')
+        .eq('id', nextClientId)
+        .maybeSingle();
+      if (clientErr || !clientRow) {
+        return NextResponse.json({ error: 'Client not found' }, { status: 404 });
+      }
+
+      const { error: updateError } = await adminClient
+        .from('topic_searches')
+        .update({ client_id: nextClientId })
+        .eq('id', id);
+      if (updateError) {
+        console.error('Error attaching search to client:', updateError);
+        return NextResponse.json({ error: 'Failed to attach search to client' }, { status: 500 });
+      }
+
+      logActivity(user.id, 'search_attached_to_client', 'search', id, {
+        client_id: nextClientId,
+      }).catch(() => {});
+
+      return NextResponse.json({ success: true, client_id: nextClientId });
     }
 
     if (hasQuery) {
