@@ -220,6 +220,15 @@ export function SearchProcessing({
     }
   }
 
+  /**
+   * Mark the search as finished. Previously this auto-redirected to the
+   * results page after 400ms, but that behaviour disoriented users who
+   * might have switched tabs / started other work during the search. New
+   * behaviour: fire a success toast with a "View results" action button
+   * (matches the background-search-tracker UX) and leave the user wherever
+   * they are. The processing card swaps to a "done" state with its own
+   * prominent "View results" button.
+   */
   function goToResults() {
     if (redirectOnceRef.current) return;
     redirectOnceRef.current = true;
@@ -229,9 +238,13 @@ export function SearchProcessing({
     setProgress(100);
     setStageIndex(stages.length - 1);
     setDone(true);
-    setTimeout(() => {
-      router.push(`${redirectPrefix}/search/${searchId}`);
-    }, 400);
+    toast.success(`Research complete: "${query}"`, {
+      duration: 10000,
+      action: {
+        label: 'View results',
+        onClick: () => router.push(`${redirectPrefix}/search/${searchId}`),
+      },
+    });
   }
 
   function startProgress() {
@@ -517,15 +530,23 @@ export function SearchProcessing({
           <span className="text-xs text-text-muted tabular-nums">{Math.round(progress)}%</span>
         </div>
 
-        {/* Done state */}
+        {/* Done state — no auto-redirect, user clicks through explicitly. */}
         {done && (
-          <div className="mt-4 flex items-center gap-2.5 animate-fade-slide-in">
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/15">
-              <Check size={12} className="text-emerald-400" />
+          <div className="mt-5 flex flex-col items-center gap-3 animate-fade-slide-in">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/15">
+                <Check size={12} className="text-emerald-400" />
+              </div>
+              <span className="text-sm text-emerald-400 font-medium">
+                Research complete
+              </span>
             </div>
-            <span className="text-sm text-emerald-400 font-medium">
-              Research complete — opening your report
-            </span>
+            <Button
+              size="sm"
+              onClick={() => router.push(`${redirectPrefix}/search/${searchId}`)}
+            >
+              View results
+            </Button>
           </div>
         )}
 

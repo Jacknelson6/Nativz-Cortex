@@ -48,6 +48,9 @@ interface ResearchTopicFormProps {
   strategyLabBulkSelection?: { ids: string[]; clientId: string | null };
   /** Called when the selected client changes (for filtering history rail) */
   onClientChange?: (clientId: string | null) => void;
+  /** Preselect a brand on mount — used to rehydrate from localStorage so the
+   *  selection survives navigation (opening a report and hitting back). */
+  initialClientId?: string | null;
   /** Portal mode: lock to a specific client, hide client picker, redirect to /portal */
   portalMode?: boolean;
   fixedClientId?: string | null;
@@ -101,16 +104,26 @@ export function ResearchTopicForm({
   onStarted,
   strategyLabBulkSelection,
   onClientChange,
+  initialClientId = null,
   portalMode = false,
   fixedClientId = null,
   fixedClientName = null,
 }: ResearchTopicFormProps) {
     const router = useRouter();
     const [topicQuery, setTopicQuery] = useState(initialQuery);
-    const [contextMode, setContextMode] = useState<ContextMode>(portalMode && fixedClientId ? 'client' : 'none');
-    const [clientId, setClientId] = useState<string | null>(portalMode ? fixedClientId : null);
+    // Restore the brand selection from the parent's localStorage-backed value
+    // so navigating away and back doesn't reset the user's brand pick.
+    const hydratedClient = portalMode
+      ? null
+      : (initialClientId ? clients.find((c) => c.id === initialClientId) ?? null : null);
+    const [contextMode, setContextMode] = useState<ContextMode>(
+      portalMode && fixedClientId ? 'client' : hydratedClient ? 'client' : 'none',
+    );
+    const [clientId, setClientId] = useState<string | null>(
+      portalMode ? fixedClientId : (hydratedClient?.id ?? null),
+    );
     const [url, setUrl] = useState('');
-    const [contextSearch, setContextSearch] = useState('');
+    const [contextSearch, setContextSearch] = useState(hydratedClient?.name ?? '');
     const [clientPickerOpen, setClientPickerOpen] = useState(false);
     const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
     const [clientPickerPortal, setClientPickerPortal] = useState<HTMLElement | null>(null);

@@ -216,12 +216,7 @@ function HistoryRowMenuBody({
   onToggleStrategyLab,
   onDelete,
   onDeleteAllSelected,
-  onOpenAllSelectedInStrategyLab,
   onCopyAllSelectedLinks,
-  clientMenuLabel,
-  folders,
-  onAddToFolder,
-  onCreateFolder,
   folderContext,
 }: {
   M: RowMenuPrimitives;
@@ -239,12 +234,7 @@ function HistoryRowMenuBody({
   onToggleStrategyLab: () => void;
   onDelete: () => void;
   onDeleteAllSelected: () => void;
-  onOpenAllSelectedInStrategyLab: () => void;
   onCopyAllSelectedLinks: () => void;
-  clientMenuLabel?: string | null;
-  folders?: { id: string; name: string }[];
-  onAddToFolder?: (folderId: string) => void;
-  onCreateFolder?: () => void;
   folderContext?: { onRemoveFromFolder: () => void };
 }) {
   const { Item, Separator, Sub, SubTrigger, SubContent } = M;
@@ -279,40 +269,8 @@ function HistoryRowMenuBody({
           {checked ? 'Deselect' : 'Select'}
         </Item>
       ) : null}
-      {false && isTopicLike && ((folders && folders.length > 0 && onAddToFolder) || onCreateFolder) ? (
-        <>
-          <Separator className="bg-nativz-border" />
-          {folders && folders.length > 0 && onAddToFolder ? (
-            <Sub>
-              <SubTrigger className={cn(menuItemClass, 'data-[state=open]:bg-surface-hover')}>
-                Add to folder
-              </SubTrigger>
-              <SubContent className={cn(menuSurfaceClass, 'min-w-[11rem]')}>
-                {folders.map((f) => (
-                  <Item
-                    key={f.id}
-                    className={menuItemClass}
-                    onSelect={() => {
-                      onAddToFolder(f.id);
-                    }}
-                  >
-                    {f.name}
-                  </Item>
-                ))}
-                {onCreateFolder ? (
-                  <Item className={menuItemClass} onSelect={onCreateFolder}>
-                    New folder…
-                  </Item>
-                ) : null}
-              </SubContent>
-            </Sub>
-          ) : onCreateFolder ? (
-            <Item className={menuItemClass} onSelect={onCreateFolder}>
-              New folder…
-            </Item>
-          ) : null}
-        </>
-      ) : null}
+      {/* "Add to folder" submenu was gated behind `{false && ...}` — dead code
+          removed (folder drag-and-drop is the only supported add path now). */}
       {folderContext ? (
         <>
           <Separator className="bg-nativz-border" />
@@ -354,15 +312,7 @@ function HistoryRowMenuBody({
                 }}
               >
                 <Copy size={14} aria-hidden />
-                Copy links to selected
-              </Item>
-              <Item
-                className={menuItemClass}
-                disabled={bulkCount === 0}
-                onSelect={onOpenAllSelectedInStrategyLab}
-              >
-                <Compass size={14} aria-hidden />
-                Open all in Strategy lab
+                Copy link to all
               </Item>
             </SubContent>
           </Sub>
@@ -596,12 +546,38 @@ export function HistoryFeed({
     }
   }
 
+  /**
+   * Copy a public, shareable URL for a topic search — one that works for
+   * anyone, no Cortex login required. For topic/brand_intel rows we mint a
+   * share token via /api/search/:id/share and use the `/shared/search/:token`
+   * public route. For other row types (e.g. ideas generations) we fall back
+   * to the internal cortex URL because no public share endpoint exists yet.
+   */
   const copyLinkToSearch = useCallback(async (item: HistoryItem) => {
+    const isShareable =
+      (item.type === 'topic' || item.type === 'brand_intel') && item.status === 'completed';
     try {
+      if (isShareable) {
+        const res = await fetch(`/api/search/${item.id}/share`, { method: 'POST' });
+        const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+        if (!res.ok || !data.url) {
+          throw new Error(data.error || 'Failed to create share link');
+        }
+        await navigator.clipboard.writeText(data.url);
+        toast.success('Public share link copied');
+        return;
+      }
+      // Can't mint a share token for pending/processing rows — fall back to
+      // the internal cortex URL so the user at least gets SOMETHING copied.
       const url = `${window.location.origin}${item.href}`;
       await navigator.clipboard.writeText(url);
-      toast.success('Link copied');
-    } catch {
+      if (item.status !== 'completed') {
+        toast.message('Search still running — copied internal link. Public share available once complete.');
+      } else {
+        toast.success('Link copied');
+      }
+    } catch (err) {
+      console.warn('[history-feed] copy share link failed:', err);
       toast.error('Could not copy link');
     }
   }, []);
@@ -620,32 +596,49 @@ export function HistoryFeed({
     [router],
   );
 
-  const openAllSelectedInStrategyLab = useCallback(() => {
-    const ids = orderedSelectedIds;
-    if (ids.length === 0) return;
-    const first = mergedItems.find((i) => i.id === ids[0]);
-    if (!first?.clientId) {
-      toast.message('Pick a client in Strategy lab, then pin topic searches from your history.');
-      router.push('/admin/strategy-lab');
-      return;
-    }
-    mergeTopicSearchSelectionIntoLocalStorage(first.clientId, ids);
-    router.push(`/admin/strategy-lab/${first.clientId}`);
-  }, [mergedItems, orderedSelectedIds, router]);
-
+  /**
+   * Bulk copy — same public share link behaviour as the single-row copy:
+   * topic-like rows get public share URLs, everything else falls back to the
+   * internal cortex URL. Done serially so we don't hammer the share endpoint.
+   */
   const copyAllSelectedLinks = useCallback(async () => {
     const ids = orderedSelectedIds;
     if (ids.length === 0) return;
-    const lines = ids
-      .map((id) => {
-        const row = mergedItems.find((i) => i.id === id);
-        return row ? `${window.location.origin}${row.href}` : '';
-      })
-      .filter(Boolean);
+    const rows = ids
+      .map((id) => mergedItems.find((i) => i.id === id))
+      .filter((r): r is HistoryItem => Boolean(r));
+    if (rows.length === 0) return;
+
+    const lines: string[] = [];
+    let publicCount = 0;
+    for (const row of rows) {
+      const isShareable =
+        (row.type === 'topic' || row.type === 'brand_intel') && row.status === 'completed';
+      if (isShareable) {
+        try {
+          const res = await fetch(`/api/search/${row.id}/share`, { method: 'POST' });
+          const data = (await res.json().catch(() => ({}))) as { url?: string };
+          if (res.ok && data.url) {
+            lines.push(data.url);
+            publicCount += 1;
+            continue;
+          }
+        } catch (err) {
+          console.warn('[history-feed] bulk share link failed for', row.id, err);
+        }
+      }
+      lines.push(`${window.location.origin}${row.href}`);
+    }
     if (lines.length === 0) return;
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
-      toast.success(ids.length === 1 ? 'Link copied' : 'Links copied');
+      if (publicCount === lines.length) {
+        toast.success(
+          lines.length === 1 ? 'Public share link copied' : `${lines.length} public links copied`,
+        );
+      } else {
+        toast.success(lines.length === 1 ? 'Link copied' : 'Links copied');
+      }
     } catch {
       toast.error('Could not copy links');
     }
@@ -894,109 +887,100 @@ export function HistoryFeed({
       onDeleteAllSelected: () => {
         void deleteAllSelected();
       },
-      onOpenAllSelectedInStrategyLab: openAllSelectedInStrategyLab,
       onCopyAllSelectedLinks: () => {
         void copyAllSelectedLinks();
       },
-      clientMenuLabel: hideClientInSidebar && sidebar ? item.clientName : null,
-      folders:
-        enableFolders && isTopicLike
-          ? topicSearchFolders.map((f) => ({ id: f.id, name: f.name }))
-          : undefined,
-      onAddToFolder:
-        enableFolders && isTopicLike
-          ? (folderId: string) => {
-              void (async () => {
-                try {
-                  await addTopicToFolder(folderId, item.id);
-                  toast.success('Added to folder');
-                  setLastDropFolderId(folderId);
-                  setFolderRefreshKey((k) => k + 1);
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : 'Could not add to folder');
-                }
-              })();
-            }
-          : undefined,
-      onCreateFolder:
-        enableFolders && isTopicLike
-          ? () => {
-              const name = window.prompt('Folder name');
-              if (!name?.trim()) return;
-              void (async () => {
-                try {
-                  await createTopicFolder(name.trim());
-                  toast.success('Folder created');
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : 'Could not create folder');
-                }
-              })();
-            }
-          : undefined,
       folderContext: undefined,
     };
+
+    // In selection mode with bulk-select enabled, the whole row should toggle
+    // selection on click instead of navigating. That's what "click a row to
+    // select" behaves like — no more hunting for a tiny checkbox column.
+    const bodyIsSelectable = showCheckboxColumn && anchorCompatible;
+    const bodyClassName =
+      'flex min-w-0 flex-1 overflow-hidden flex-col gap-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+    const bodyContents = (
+      <div className={cn('flex min-w-0 flex-1 items-start', sidebar ? 'gap-0' : 'gap-3')}>
+        {!sidebar ? (
+          <div className="mt-0.5 shrink-0">
+            <TypeIcon type={item.type} />
+          </div>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <p
+            className={cn(
+              'text-sm leading-snug',
+              sidebar
+                ? 'truncate font-normal text-text-secondary transition-colors group-hover:text-text-primary'
+                : 'break-words font-medium leading-normal text-text-primary',
+              sidebar && isActive && 'text-text-primary',
+            )}
+            title={item.title}
+          >
+            {displayTitle(item)}
+          </p>
+          {item.clientName && !(hideClientInSidebar && sidebar) ? (
+            <p
+              className={cn(
+                'mt-1 flex min-w-0 items-center gap-1 text-text-secondary/90',
+                sidebar ? 'text-sm' : 'text-[10px]',
+              )}
+            >
+              <Building2
+                size={sidebar ? 12 : 10}
+                className="shrink-0 text-accent-text/70"
+                aria-hidden
+              />
+              <span className="truncate" title={item.clientName}>{item.clientName}</span>
+            </p>
+          ) : null}
+          {!(hideClientInSidebar && sidebar) ? (
+            <div
+              className={cn(
+                item.clientName && !(hideClientInSidebar && sidebar) ? 'mt-0.5' : 'mt-1',
+              )}
+            >
+              <span
+                className={cn(
+                  'flex items-center gap-1 text-text-secondary/75',
+                  sidebar ? 'text-xs' : 'text-[10px] sm:text-xs',
+                )}
+              >
+                <Clock size={sidebar ? 11 : 10} aria-hidden />
+                {formatRelativeTime(item.createdAt)}
+              </span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
 
     const rowInner = (
       <>
         {selectionCell}
-        <Link
-          href={item.href}
-          className="flex min-w-0 flex-1 overflow-hidden flex-col gap-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-        >
-          <div className={cn('flex min-w-0 flex-1 items-start', sidebar ? 'gap-0' : 'gap-3')}>
-            {!sidebar ? (
-              <div className="mt-0.5 shrink-0">
-                <TypeIcon type={item.type} />
-              </div>
-            ) : null}
-            <div className="min-w-0 flex-1">
-              <p
-                className={cn(
-                  'text-sm leading-snug',
-                  sidebar
-                    ? 'truncate font-normal text-text-secondary transition-colors group-hover:text-text-primary'
-                    : 'break-words font-medium leading-normal text-text-primary',
-                  sidebar && isActive && 'text-text-primary',
-                )}
-                title={item.title}
-              >
-                {displayTitle(item)}
-              </p>
-              {item.clientName && !(hideClientInSidebar && sidebar) ? (
-                <p
-                  className={cn(
-                    'mt-1 flex min-w-0 items-center gap-1 text-text-secondary/90',
-                    sidebar ? 'text-sm' : 'text-[10px]',
-                  )}
-                >
-                  <Building2
-                    size={sidebar ? 12 : 10}
-                    className="shrink-0 text-accent-text/70"
-                    aria-hidden
-                  />
-                  <span className="truncate" title={item.clientName}>{item.clientName}</span>
-                </p>
-              ) : null}
-              {!(hideClientInSidebar && sidebar) ? (
-                <div
-                  className={cn(
-                    item.clientName && !(hideClientInSidebar && sidebar) ? 'mt-0.5' : 'mt-1',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'flex items-center gap-1 text-text-secondary/75',
-                      sidebar ? 'text-xs' : 'text-[10px] sm:text-xs',
-                    )}
-                  >
-                    <Clock size={sidebar ? 11 : 10} aria-hidden />
-                    {formatRelativeTime(item.createdAt)}
-                  </span>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </Link>
+        {bodyIsSelectable ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleStrategyLabToggle(item);
+            }}
+            className={cn(bodyClassName, 'cursor-pointer text-left')}
+            aria-pressed={checked}
+            aria-label={
+              checked
+                ? `Deselect ${displayTitle(item)}`
+                : `Select ${displayTitle(item)}`
+            }
+          >
+            {bodyContents}
+          </button>
+        ) : (
+          <Link href={item.href} className={bodyClassName}>
+            {bodyContents}
+          </Link>
+        )}
         <div
           className={cn(
             'flex shrink-0 items-start',
@@ -1122,9 +1106,16 @@ export function HistoryFeed({
     </div>
   );
 
-  const bringFirstClientId = firstSelectedInOrder?.clientId ?? null;
-  const canBringSelection = orderedSelectedIds.length > 0;
-
+  /**
+   * Selection-mode panel: a minimal bulk action bar at the top of the history
+   * list. User triggers selection mode via a row's "Select" menu item; from
+   * there every row becomes click-to-toggle, and the panel exposes the two
+   * bulk actions the user actually wants — copy all share links, delete all.
+   *
+   * The old panel had an instructional paragraph, a "Bring to Strategy Lab"
+   * primary CTA, and an "Open all in lab" button — all removed per the latest
+   * product direction.
+   */
   const strategyLabSelectionPanel =
     enableStrategyLabBulkSelect && selectionModeActive ? (
       <div
@@ -1136,20 +1127,21 @@ export function HistoryFeed({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className={cn('font-semibold text-text-primary', sidebar ? 'text-sm' : 'text-xs')}>
-              Strategy lab
-            </p>
-            <p
-              className={cn(
-                'mt-0.5 leading-snug text-text-muted',
-                sidebar ? 'text-xs' : 'text-[10px]',
-              )}
-            >
               {selectedTopicSearchIds.size > 0
-                ? `${selectedTopicSearchIds.size} selected${
-                    firstSelectedInOrder?.clientName ? ` · ${firstSelectedInOrder.clientName}` : ''
-                  }`
-                : 'Right-click a topic search → “Select” to show checkboxes, then tick rows here.'}
+                ? `${selectedTopicSearchIds.size} selected`
+                : 'Select rows'}
             </p>
+            {firstSelectedInOrder?.clientName ? (
+              <p
+                className={cn(
+                  'mt-0.5 truncate leading-snug text-text-muted',
+                  sidebar ? 'text-xs' : 'text-[10px]',
+                )}
+                title={firstSelectedInOrder.clientName}
+              >
+                {firstSelectedInOrder.clientName}
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
@@ -1166,54 +1158,7 @@ export function HistoryFeed({
           </button>
         </div>
 
-        {canBringSelection ? (
-          <Link
-            href={
-              bringFirstClientId ? `/admin/strategy-lab/${bringFirstClientId}` : '/admin/strategy-lab'
-            }
-            onClick={() => {
-              if (bringFirstClientId) {
-                mergeTopicSearchSelectionIntoLocalStorage(bringFirstClientId, orderedSelectedIds);
-              } else {
-                toast.message(
-                  'Pick a client in Strategy lab, then pin topic searches from your history.',
-                );
-              }
-            }}
-            className={cn(
-              'flex w-full items-center justify-center gap-2 rounded-lg border border-accent/50 bg-accent px-3 py-2.5 text-sm font-semibold text-white shadow-[0_0_24px_-8px_rgba(91,163,230,0.55)] transition',
-              'hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
-            )}
-          >
-            <Compass size={16} className="shrink-0 opacity-90" aria-hidden />
-            Bring to Strategy lab
-            <span className="tabular-nums opacity-90">({selectedTopicSearchIds.size})</span>
-          </Link>
-        ) : (
-          <span
-            className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-nativz-border/60 bg-surface-hover/30 px-3 py-2.5 text-sm font-semibold text-text-muted opacity-60"
-            aria-disabled
-          >
-            <Compass size={16} className="shrink-0 opacity-90" aria-hidden />
-            Bring to Strategy lab
-          </span>
-        )}
-
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={selectedTopicSearchIds.size === 0}
-            onClick={() => {
-              void deleteAllSelected();
-            }}
-            className={cn(
-              'inline-flex min-h-[2.25rem] flex-1 items-center justify-center gap-1.5 rounded-lg border border-nativz-border bg-surface-hover/80 px-2.5 py-1.5 font-medium text-text-secondary transition hover:border-accent/35 hover:bg-surface-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-40',
-              sidebar ? 'text-xs' : 'text-xs',
-            )}
-          >
-            <Trash2 size={13} className="shrink-0 text-text-muted" aria-hidden />
-            Delete selected
-          </button>
           <button
             type="button"
             disabled={selectedTopicSearchIds.size === 0}
@@ -1226,21 +1171,21 @@ export function HistoryFeed({
             )}
           >
             <Copy size={13} className="shrink-0 text-text-muted" aria-hidden />
-            Copy links
+            Copy link to all
           </button>
           <button
             type="button"
             disabled={selectedTopicSearchIds.size === 0}
             onClick={() => {
-              openAllSelectedInStrategyLab();
+              void deleteAllSelected();
             }}
             className={cn(
-              'inline-flex min-h-[2.25rem] flex-1 items-center justify-center gap-1.5 rounded-lg border border-nativz-border bg-surface-hover/80 px-2.5 py-1.5 font-medium text-text-secondary transition hover:border-accent/35 hover:bg-surface-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-40',
+              'inline-flex min-h-[2.25rem] flex-1 items-center justify-center gap-1.5 rounded-lg border border-nativz-border bg-surface-hover/80 px-2.5 py-1.5 font-medium text-text-secondary transition hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-300 disabled:pointer-events-none disabled:opacity-40',
               sidebar ? 'text-xs' : 'text-xs',
             )}
           >
-            <Compass size={13} className="shrink-0 text-text-muted" aria-hidden />
-            Open all in lab
+            <Trash2 size={13} className="shrink-0" aria-hidden />
+            Delete all
           </button>
         </div>
 

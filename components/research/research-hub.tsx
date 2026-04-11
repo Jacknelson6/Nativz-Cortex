@@ -34,7 +34,44 @@ export function ResearchHub({
     ids: string[];
     clientId: string | null;
   }>({ ids: [], clientId: null });
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  /**
+   * Brand (client) selection persists across navigation via localStorage so
+   * the user doesn't have to re-pick their brand every time they open a
+   * report and hit back. Null means "All brands" — also persisted so an
+   * explicit "clear brand" sticks too.
+   */
+  const [selectedClientId, setSelectedClientIdState] = useState<string | null>(null);
+  const SELECTED_CLIENT_STORAGE_KEY = 'cortex:research-hub:selected-client-id';
+
+  useEffect(() => {
+    try {
+      const raw =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(SELECTED_CLIENT_STORAGE_KEY)
+          : null;
+      if (raw === null) return;
+      // Stored value is either a client UUID, or the literal string "null"
+      // (explicit "All brands"). Either way, honour it.
+      const stored = raw === 'null' ? null : raw;
+      // Validate the stored id still exists — a stale UUID for a removed
+      // client would silently hide all rows.
+      if (stored && !clients.some((c) => c.id === stored)) return;
+      setSelectedClientIdState(stored);
+    } catch {
+      /* ignore corrupt storage */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const setSelectedClientId = useCallback((id: string | null) => {
+    setSelectedClientIdState(id);
+    try {
+      window.localStorage.setItem(SELECTED_CLIENT_STORAGE_KEY, id ?? 'null');
+    } catch {
+      /* ignore quota */
+    }
+  }, []);
+
   const prevHistoryRef = useRef(historyItems);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -76,21 +113,36 @@ export function ResearchHub({
     }
 
     pollingRef.current = setInterval(async () => {
-      for (const id of processingIds) {
-        try {
-          const res = await fetch(`/api/search/${id}`);
-          if (!res.ok) continue;
-          const data = await res.json();
-          if (data.status && data.status !== 'processing' && data.status !== 'pending') {
-            router.refresh();
-            if (pollingRef.current) clearInterval(pollingRef.current);
-            return;
+      // Poll every in-flight search each tick — previously this broke out
+      // after the first completed one, leaving stuck icons for any other
+      // searches still processing. Now the icons refresh as soon as each
+      // search flips, and the interval only clears once they're all done.
+      let anyChanged = false;
+      let stillProcessing = 0;
+      await Promise.all(
+        processingIds.map(async (id) => {
+          try {
+            const res = await fetch(`/api/search/${id}`, { cache: 'no-store' });
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data.status && data.status !== 'processing' && data.status !== 'pending') {
+              anyChanged = true;
+            } else {
+              stillProcessing += 1;
+            }
+          } catch {
+            // Treat transient errors as "still processing" so the poll
+            // keeps trying instead of giving up and leaving a zombie icon.
+            stillProcessing += 1;
           }
-        } catch {
-          // Ignore polling errors
-        }
+        }),
+      );
+      if (anyChanged) router.refresh();
+      if (stillProcessing === 0 && pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
       }
-    }, 5000);
+    }, 3000);
 
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
@@ -168,6 +220,7 @@ export function ResearchHub({
                 strategyLabBulkSelection={strategyLabBulkSelection}
                 onStarted={handleResearchStarted}
                 onClientChange={setSelectedClientId}
+                initialClientId={selectedClientId}
               />
             </div>
           </div>
