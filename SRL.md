@@ -8,16 +8,16 @@ and persistent artifacts.
 
 ### Acceptance criteria
 
-- [ ] **Shared composer component** used by both `/admin/nerd` and Strategy Lab
-- [ ] **Attachment tray** above input showing chips (research, PDFs, images, files) with dismiss
-- [ ] **Paperclip menu** with options: Upload file, Attach research, Attach knowledge entry, Attach moodboard
-- [ ] **Drag-and-drop** anywhere on the chat pane to attach files
-- [ ] **PDF parsing** — uploaded PDFs extracted as temporary context chunks sent to the Nerd
-- [ ] **Image support** — uploaded images passed as vision model input to the Nerd
-- [ ] **Analytics tool grounding** — when user asks "diagnose my performance", the Nerd reaches for `get_analytics_summary`, `compare_client_performance`, `get_top_posts`
-- [ ] **Artifact persistence** — every deliverable the Nerd creates (video ideas, hook ideas, scripts, plans, diagrams) is saved to a table and browseable in a history/gallery view
-- [ ] **Artifact auto-save** — assistant messages containing deliverables are detected and saved automatically (or with a one-click "Save artifact" button)
-- [ ] **Artifact PDF export** — individual artifacts can be exported as standalone PDFs
+- [x] **Shared composer component** used by both `/admin/nerd` and Strategy Lab
+- [x] **Attachment tray** above input showing chips (research, PDFs, images, files) with dismiss
+- [x] **Paperclip menu** with options: Upload file, Attach research, Attach knowledge entry, Attach moodboard
+- [x] **Drag-and-drop** anywhere on the chat pane to attach files
+- [x] **PDF parsing** — uploaded PDFs extracted as temporary context chunks sent to the Nerd
+- [x] **Image support** — uploaded images passed as vision model input to the Nerd
+- [x] **Analytics tool grounding** — when user asks "diagnose my performance", the Nerd reaches for `get_analytics_summary`, `compare_client_performance`, `get_top_posts`
+- [x] **Artifact persistence** — every deliverable the Nerd creates (video ideas, hook ideas, scripts, plans, diagrams) is saved to a table and browseable in a history/gallery view
+- [x] **Artifact auto-save** — assistant messages containing deliverables are detected and saved automatically (or with a one-click "Save artifact" button)
+- [x] **Artifact PDF export** — individual artifacts can be exported as branded standalone PDFs
 
 ### Scope boundaries
 
@@ -125,3 +125,42 @@ and persistent artifacts.
 - Wire artifacts panel into Strategy Lab sidebar
 - Analytics tool grounding validation
 - Update todo.md with progress
+
+### Iteration 4 — 2026-04-12
+
+**Focus:** Artifacts sidebar wiring, branded PDF export, analytics validation, goal completion
+
+**Shipped:**
+- `feat: artifacts tab in Strategy Lab — wire gallery panel into sidebar` (f693ef2)
+- `feat: branded artifact PDF export + sidebar wiring` (c656417)
+
+**Design decisions:**
+- Upgraded artifact PDF from html2canvas screenshot to react-pdf branded document matching the existing conversation PDF pattern (Nativz blue / AC green)
+- Analytics tools confirmed present and properly grounded — no code changes needed
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Shared composer component | done |
+| Attachment tray with chips + dismiss | done |
+| Paperclip menu | done |
+| Drag-and-drop | done |
+| PDF parsing | done |
+| Image support | done |
+| Analytics tool grounding | done (verified — 3 tools registered) |
+| Artifact persistence | done |
+| Artifact auto-save | done |
+| Artifact PDF export | done (branded) |
+
+**SRL complete.** All acceptance criteria met as of iteration 4.
+
+---
+
+## Goal 2 (set 2026-04-12)
+
+Extended features requested by user mid-SRL:
+
+### Acceptance criteria
+- [ ] **Shareable Nerd chats** — copy link to share a conversation externally with users who don't have an account
+- [ ] **Nerd QoL UX features** — best-in-class UX improvements for client-facing Nerd experience
+- [ ] **Prompt fine-tuning** — test and improve system prompts for highest quality, most helpful results
