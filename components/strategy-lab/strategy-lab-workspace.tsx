@@ -1,18 +1,19 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Library, BarChart3, MessageSquare } from 'lucide-react';
+import { Library, BarChart3, MessageSquare, Bookmark } from 'lucide-react';
 import type { KnowledgeEntry, KnowledgeGraphData } from '@/lib/knowledge/types';
 import type { Pillar } from '@/components/ideas-hub/pillar-card';
 import type { TopicSearchRow } from '@/components/strategy-lab/topic-search-selection-card';
 import { StrategyLabBrandKnowledgeTab } from '@/components/strategy-lab/strategy-lab-brand-knowledge-tab';
 import { StrategyLabNerdChat } from '@/components/strategy-lab/strategy-lab-nerd-chat';
 import { AnalyticsDashboard } from '@/components/reporting/analytics-dashboard';
+import { StrategyLabArtifactsPanel } from '@/components/strategy-lab/strategy-lab-artifacts-panel';
 import type { PillarReferencePreview } from '@/lib/strategy-lab/pillar-reference-previews';
 import { strategyLabTopicSearchStorageKey } from '@/lib/strategy-lab/topic-search-selection-storage';
 import { cn } from '@/lib/utils';
 
-type MainTab = 'chat' | 'knowledge-base' | 'analytics';
+type MainTab = 'chat' | 'knowledge-base' | 'analytics' | 'artifacts';
 
 type MoodboardRow = {
   id: string;
@@ -32,6 +33,7 @@ type BrandGuidelinePayload = {
 const MAIN_TABS: { id: MainTab; label: string; icon: typeof MessageSquare }[] = [
   { id: 'chat', label: 'Chat', icon: MessageSquare },
   { id: 'knowledge-base', label: 'Knowledge Base', icon: Library },
+  { id: 'artifacts', label: 'Artifacts', icon: Bookmark },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
 ];
 
@@ -178,7 +180,9 @@ export function StrategyLabWorkspace({
 
           {/* Tab content */}
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {mainTab === 'analytics' ? (
+            {mainTab === 'artifacts' ? (
+              <StrategyLabArtifactsPanel clientId={clientId} />
+            ) : mainTab === 'analytics' ? (
               <div className="p-5">
                 <AnalyticsDashboard initialClientId={clientId} />
               </div>
