@@ -162,8 +162,8 @@ Extended features requested by user mid-SRL:
 
 ### Acceptance criteria
 - [x] **Shareable Nerd chats** — copy link to share a conversation externally with users who don't have an account
-- [ ] **Nerd QoL UX features** — best-in-class UX improvements for client-facing Nerd experience
-- [ ] **Prompt fine-tuning** — test and improve system prompts for highest quality, most helpful results
+- [x] **Nerd QoL UX features** — best-in-class UX improvements for client-facing Nerd experience
+- [x] **Prompt fine-tuning** — test and improve system prompts for highest quality, most helpful results
 
 ## Goal 2 Iterations
 
@@ -193,3 +193,34 @@ Extended features requested by user mid-SRL:
 **Next iteration:**
 - Nerd QoL UX features (keyboard shortcuts, message editing, conversation search, etc.)
 - Prompt fine-tuning (test system prompts, improve quality)
+
+### Iteration 2 — 2026-04-12
+
+**Focus:** QoL UX features + prompt fine-tuning
+
+**Shipped:**
+- `feat: Nerd QoL — Cmd+K new chat, message timestamps on hover` (6c1988c)
+- `feat: Nerd prompt fine-tuning — specificity, visuals-first, no preamble` (7af0533)
+
+**QoL features added:**
+- Cmd+K / Ctrl+K keyboard shortcut → new chat (both surfaces)
+- Message timestamps: createdAt on ChatMessage, relative time on hover (just now / 2m ago / 3h ago)
+- Scroll-to-bottom FAB: already existed in Conversation component
+- Auto-title generation: already existed in API route
+
+**Prompt improvements:**
+- Skip filler phrases — lead with the insight
+- Always search knowledge vault before brand-specific advice
+- Enforce specificity: concrete numbers and data over generic tips
+- Lead analytics with the "so what"
+- Structure every response as a shareable deliverable
+- Prefer visuals (mermaid, html tables) over text walls
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Shareable Nerd chats | done |
+| Nerd QoL UX features | done |
+| Prompt fine-tuning | done |
+
+**SRL Goal 2 complete.** All acceptance criteria met as of iteration 2.
