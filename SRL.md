@@ -56,3 +56,36 @@ and persistent artifacts.
 - PDF text extraction (pdf-parse or similar)
 - Image pass-through to vision model input
 - Wire attachments into the Nerd API request payload
+
+### Iteration 2 — 2026-04-12
+
+**Focus:** Wire file attachments end-to-end: API schema, client-side processing, both surfaces
+
+**Shipped:**
+- `feat: file attachments in Nerd chat — PDF extraction, image support, API wiring` (5788562)
+
+**Design decisions:**
+- Client-side extraction over server-side upload+storage: simpler, no Supabase storage cost, no cleanup. PDFs parsed in-browser via pdfjs-dist, images encoded as base64 data URLs, text files read as UTF-8.
+- Attachment content injected into the LLM system prompt context (alongside portfolio context) rather than as separate messages — keeps the conversation structure clean.
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Shared composer component | done |
+| Attachment tray with chips + dismiss | done |
+| Paperclip menu | done |
+| Drag-and-drop | done |
+| PDF parsing | done |
+| Image support | done |
+| Analytics tool grounding | not started |
+| Artifact persistence | not started |
+| Artifact auto-save | not started |
+| Artifact PDF export | not started |
+
+**Gaps or regressions:**
+- None — clean typecheck, both surfaces compile.
+- Image attachments are encoded as base64 and sent as text context (the LLM sees the data URL string). True vision model support (multipart image content) would require OpenRouter/OpenAI vision API changes — out of scope for now, the text label is sufficient for the user to know images are attached.
+
+**Next iteration:**
+- Analytics tool grounding validation
+- Artifact persistence table + save button
