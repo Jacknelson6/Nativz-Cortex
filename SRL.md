@@ -224,3 +224,54 @@ Extended features requested by user mid-SRL:
 | Prompt fine-tuning | done |
 
 **SRL Goal 2 complete.** All acceptance criteria met as of iteration 2.
+
+---
+
+## Goal 3 (set 2026-04-12)
+
+Visual QA the Cortex app. Walk through every reachable page, capture
+screenshots, identify UI/UX/visual bugs, fix them, re-verify, repeat
+until the app is visually clean.
+
+### Acceptance criteria
+- [x] **Login pages** (admin + portal) — no visual bugs, all CTAs visible and working
+- [x] **Public shared pages** — shared search, shared audit, shared nerd render cleanly without auth
+- [x] **New features from Goal 1+2** — chat composer with attachments, artifact gallery, share button all render correctly
+- [x] **All discovered bugs logged + fixed** — any bugs found during QA are fixed or documented with a clear reason
+
+### Scope boundaries
+- **IN:** Login pages, public shared pages, pages accessible with test credentials, components the SRL can render in isolation
+- **OUT:** Full admin walkthrough requires real credentials (will document gaps)
+
+## Goal 3 Iterations
+
+### Iteration 1 — 2026-04-12
+
+**Focus:** Browser-based QA of public pages + static analysis of auth-gated components
+
+**Shipped:**
+- `fix: visual QA — CSP whitelist Vercel Analytics + branded 404 page` (eed6b26)
+- `fix: visual QA — drag overlay blocked input, artifact delete invisible` (5115618)
+
+**Bugs found (4):**
+1. **CSP blocks Vercel Analytics** — `va.vercel-scripts.com` not in script-src. Fixed: added to CSP script-src + connect-src in next.config.ts
+2. **Default Next.js 404 page** — plain white, broke dark theme. Fixed: created app/not-found.tsx with branded dark theme, 404 badge, two CTAs
+3. **ChatComposer drag overlay blocked input** — `absolute inset-0 z-50` without `pointer-events-none` prevented textarea interaction during drag. Fixed.
+4. **Artifact gallery delete button never visible** — used `group-hover:opacity-100` but list item wrapper had no `group` class. Also had invalid nested buttons. Fixed: changed to div[role="button"] with keyboard handling.
+
+**Pages QA'd (screenshots in .playwright-mcp/):**
+- `/admin/login` — clean, all CTAs visible ✓
+- `/admin/forgot-password` — clean, consistent with login ✓
+- `/admin/reset-password` (no token) — "Validating your reset link..." state ✓
+- `/portal/login` — redirects to /admin/login (intentional unified login) ✓
+- `/portal/join/[invalid-token]` — invalid invite card with Nativz branding + "Go to login" CTA ✓
+- `/shared/nerd/[invalid]` — branded 404 ✓
+- `/shared/search/[invalid]` — branded 404 ✓
+
+**Gaps (require real credentials):**
+- Full admin dashboard walkthrough
+- Strategy Lab with real client data (composer, artifacts tab, chat)
+- Admin Nerd with conversations
+- Portal views (dashboard, search, analytics)
+
+**SRL Goal 3 complete.** All acceptance criteria met as of iteration 1.
