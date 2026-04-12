@@ -79,7 +79,7 @@ export function PromptInput({
           placeholder={placeholder ?? 'Ask Cortex about your strategy…'}
           rows={1}
           disabled={disabled}
-          className="block w-full min-h-[3.25rem] resize-none border-0 bg-transparent px-5 pt-5 pb-16 text-base font-normal leading-relaxed text-foreground placeholder:text-text-muted/80 focus:outline-none md:min-h-[3.5rem]"
+          className="block w-full min-h-[3.25rem] resize-none border-0 bg-transparent pl-14 pr-5 pt-5 pb-16 text-base font-normal leading-relaxed text-foreground placeholder:text-text-muted/80 focus:outline-none md:min-h-[3.5rem]"
         />
 
         {/* Submit button — matches Research page */}

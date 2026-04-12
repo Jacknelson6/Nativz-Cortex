@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
-import { PromptInput } from '@/components/ai/prompt-input';
+import { ChatComposer, type ChatAttachment } from '@/components/ai/chat-composer';
 import { MentionAutocomplete, type MentionOption } from '@/components/ai/mention-autocomplete';
 import { ConversationSidebar } from '@/components/nerd/conversation-sidebar';
 import { TopicSearchContextRail } from '@/components/nerd/topic-search-context-rail';
@@ -449,11 +449,11 @@ export default function NerdPage() {
   const inputArea = (
     <div className="shrink-0 px-4 pb-5 pt-3 md:px-8 md:pb-6">
       <div className="mx-auto flex max-w-3xl flex-col">
-        <PromptInput
+        <ChatComposer
           variant="research"
           value={input}
           onChange={setInput}
-          onSubmit={() => handleSend()}
+          onSubmit={(_attachments: ChatAttachment[]) => handleSend()}
           disabled={streaming}
           placeholder="Ask Cortex anything… (try /ideas, /script, or @client)"
           blockEnterSubmit={mentionsVisible || showSlashMenu}
@@ -470,7 +470,7 @@ export default function NerdPage() {
           {showMentions && mentionOptions.length > 0 && (
             <MentionAutocomplete query={mentionQuery} options={mentionOptions} onSelect={handleMentionSelect} />
           )}
-        </PromptInput>
+        </ChatComposer>
         {/* Active mention chips — larger text and softer surface to match the
             Strategy Lab chip bar styling. */}
         {activeMentions.length > 0 && (

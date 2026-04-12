@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect, useMemo, type ComponentType }
 import { BotMessageSquare, Loader2 } from 'lucide-react';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
-import { PromptInput } from '@/components/ai/prompt-input';
+import { ChatComposer, type ChatAttachment } from '@/components/ai/chat-composer';
 import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
 import { StrategyLabConversationExportButton } from './strategy-lab-conversation-export-button';
 import { StrategyLabClientPickerPill } from './strategy-lab-client-picker-pill';
@@ -480,11 +480,11 @@ export function StrategyLabNerdChat({
           pinnedTopicSearchIds={pinnedTopicSearchIds}
           onSearchesLoaded={setClientSearches}
         />
-        <PromptInput
+        <ChatComposer
           variant="research"
           value={input}
           onChange={setInput}
-          onSubmit={() => handleSend()}
+          onSubmit={(_attachments: ChatAttachment[]) => handleSend()}
           disabled={streaming}
           placeholder={`Ask Cortex about ${clientName.trim() || 'this client'}… (try /ideas or /script)`}
           blockEnterSubmit={showSlashMenu}
@@ -498,7 +498,7 @@ export function StrategyLabNerdChat({
               activeIndex={slashActiveIndex}
             />
           )}
-        </PromptInput>
+        </ChatComposer>
       </div>
     </div>
   );
