@@ -10,6 +10,7 @@ import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-c
 import { toast } from 'sonner';
 import { detectArtifactType, extractArtifactTitle } from '@/lib/artifacts/types';
 import { StrategyLabConversationExportButton } from './strategy-lab-conversation-export-button';
+import { ConversationShareButton } from '@/components/ai/conversation-share-button';
 import { StrategyLabClientPickerPill } from './strategy-lab-client-picker-pill';
 import { StrategyLabConversationHistoryRail } from './strategy-lab-conversation-history-rail';
 import { StrategyLabTopicSearchChipBar } from './strategy-lab-topic-search-chip-bar';
@@ -593,17 +594,23 @@ export function StrategyLabNerdChat({
 
           <div className="flex items-center gap-1.5">
             {messages.length > 0 && (
-              <StrategyLabConversationExportButton
-                clientId={clientId}
-                clientName={clientName}
-                conversationTitle={conversationTitle}
-                messages={messages}
-                attachedSearches={attachedSearches.map((s) => ({
-                  query: s.query,
-                  created_at: s.created_at,
-                }))}
-                disabled={streaming}
-              />
+              <>
+                <ConversationShareButton
+                  conversationId={conversationId}
+                  disabled={streaming}
+                />
+                <StrategyLabConversationExportButton
+                  clientId={clientId}
+                  clientName={clientName}
+                  conversationTitle={conversationTitle}
+                  messages={messages}
+                  attachedSearches={attachedSearches.map((s) => ({
+                    query: s.query,
+                    created_at: s.created_at,
+                  }))}
+                  disabled={streaming}
+                />
+              </>
             )}
           </div>
         </header>

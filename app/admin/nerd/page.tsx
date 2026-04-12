@@ -16,6 +16,7 @@ import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-c
 import { getAllCommands, getCommand, type SlashCommand } from '@/lib/nerd/slash-commands';
 import { toast } from 'sonner';
 import { detectArtifactType, extractArtifactTitle } from '@/lib/artifacts/types';
+import { ConversationShareButton } from '@/components/ai/conversation-share-button';
 
 // ---------------------------------------------------------------------------
 // Page
@@ -586,6 +587,12 @@ export default function NerdPage() {
                   {m.name}
                 </span>
               ))}
+              {messages.length > 0 && conversationId && (
+                <ConversationShareButton
+                  conversationId={conversationId}
+                  disabled={streaming}
+                />
+              )}
               {isSuperAdmin && (
                 <Link
                   href="/admin/nerd/settings"
