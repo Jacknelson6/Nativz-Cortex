@@ -60,14 +60,14 @@ and `scripts/smoke-nerd-tools.ts` committed as ongoing diagnostics.
 - [ ] `/admin/nerd` should now look like Strategy Lab (bigger fonts, rounded research-style input, welcoming empty state with rounded icon square, soft client badge pill)
 - [ ] Start audit → "Confirm social platforms" screen should show real platform marks (TikTokMark, InstagramMark, FacebookMark, YouTubeMark), not colored dots
 
-### 🟢 Claude-style composer rework (blocked on Nerd fix)
-- [ ] Attachment tray above input with chips (research, PDFs, images, files) + ✕
-- [ ] Paperclip menu: Upload file / Attach research / Attach knowledge entry / Attach moodboard
-- [ ] Drag-and-drop anywhere on chat pane
-- [ ] PDF parsing (`pdf-parse` or similar) → indexed as temporary context chunk
-- [ ] Image support (vision model input)
-- [ ] Citations linking back to attached doc chips
-- [ ] Reuse composer component across `/admin/nerd` and Strategy Lab so both get the upgrade at once
+### ✅ Claude-style composer rework (shipped April 12)
+- [x] Attachment tray above input with chips (research, PDFs, images, files) + ✕
+- [x] Paperclip menu: Upload file / Attach research / Attach knowledge entry / Attach moodboard
+- [x] Drag-and-drop anywhere on chat pane
+- [x] PDF parsing (pdfjs-dist) → indexed as temporary context chunk
+- [x] Image support (base64 data URL encoding)
+- [ ] Citations linking back to attached doc chips (future)
+- [x] Reuse composer component across `/admin/nerd` and Strategy Lab so both get the upgrade at once
 
 ### From earlier sessions (still open)
 - [ ] Frame extraction debugging — ffmpeg-static works locally but carousel returns 0 frames
@@ -76,6 +76,34 @@ and `scripts/smoke-nerd-tools.ts` committed as ongoing diagnostics.
 - [ ] Analytics: client portfolio, social/affiliates/benchmarking tabs, competitor add/refresh/charts, status dots
 - [ ] Calendar webhooks: test with real Google Chat URL, verify firing on feedback events
 - [ ] Research: suggest topics ontology, history rail client filter with load-more, PDF export matches results page, share links domain-aware
+
+---
+
+## Completed — April 12 Session (Composer rework + Artifact persistence)
+
+### Claude-style composer rework
+- [x] **ChatComposer** shared component — wraps PromptInput, used by both `/admin/nerd` and Strategy Lab
+- [x] **Attachment tray** above input with typed chips (file/research/knowledge/moodboard) + dismiss
+- [x] **Paperclip menu** — Upload file, Attach research, Attach knowledge entry, Attach moodboard
+- [x] **Drag-and-drop** — file drops anywhere on chat pane with visual overlay
+- [x] **PDF text extraction** — pdfjs-dist in-browser, sent as context to Nerd API
+- [x] **Image support** — base64 data URL encoding via FileReader
+- [x] **Nerd API `attachments` field** — Zod schema + context injection into system prompt
+
+### Artifact persistence
+- [x] **Migration 097** — `nerd_artifacts` table with RLS (admin full, portal read)
+- [x] **CRUD API** — POST/GET /api/nerd/artifacts, GET/DELETE /api/nerd/artifacts/[id]
+- [x] **Auto-detect type** — detectArtifactType heuristics (script/plan/diagram/ideas/hook/strategy)
+- [x] **Save button** — Bookmark icon on every assistant message, auto-detected type + title
+- [x] **Artifacts tab** — fourth tab in Strategy Lab workspace (Chat | Knowledge Base | Artifacts | Analytics)
+- [x] **Gallery panel** — card list with type badges, detail view with rendered markdown
+- [x] **Branded PDF export** — react-pdf document with Nativz/AC branding, client logo, type badge
+
+### Other
+- [x] **Bulk "Open in Strategy Lab"** button re-added to research selection panel
+- [x] **Html-visual PDF rasterization** — sandboxed iframe + html2canvas for conversation PDF
+- [x] **Analytics tool grounding** — verified: get_analytics_summary, get_top_posts, compare_client_performance all registered
+- [x] **/srl skill** — autonomous iterative development loop with Ralph loop's best ideas
 
 ---
 
