@@ -161,6 +161,35 @@ and persistent artifacts.
 Extended features requested by user mid-SRL:
 
 ### Acceptance criteria
-- [ ] **Shareable Nerd chats** — copy link to share a conversation externally with users who don't have an account
+- [x] **Shareable Nerd chats** — copy link to share a conversation externally with users who don't have an account
 - [ ] **Nerd QoL UX features** — best-in-class UX improvements for client-facing Nerd experience
 - [ ] **Prompt fine-tuning** — test and improve system prompts for highest quality, most helpful results
+
+## Goal 2 Iterations
+
+### Iteration 1 — 2026-04-12
+
+**Focus:** Shareable Nerd conversations — full stack
+
+**Shipped:**
+- `feat: shareable Nerd conversations — public link, no login required` (05ffa2b)
+
+**What was built:**
+- Migration 098: `nerd_conversation_share_links` table with token-based access
+- Share API: POST/GET/DELETE at `/api/nerd/conversations/[id]/share`
+- Public API: GET `/api/shared/nerd/[token]` (no auth, fetches messages + client name)
+- Public page: `/shared/nerd/[token]` — server component fetches data, client component renders branded read-only conversation with Markdown support
+- `ConversationShareButton` — reusable button with copy-to-clipboard + toast
+- Wired into both admin Nerd header and Strategy Lab header
+- `/shared/` routes already excluded from auth middleware — no changes needed
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Shareable Nerd chats | done |
+| Nerd QoL UX features | not started |
+| Prompt fine-tuning | not started |
+
+**Next iteration:**
+- Nerd QoL UX features (keyboard shortcuts, message editing, conversation search, etc.)
+- Prompt fine-tuning (test system prompts, improve quality)
