@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Copy, Check, RotateCcw, Loader2, BotMessageSquare, FileDown, Printer } from 'lucide-react';
+import { Copy, Check, RotateCcw, Loader2, BotMessageSquare, FileDown, Printer, Bookmark } from 'lucide-react';
 import { Markdown } from './markdown';
 import { ToolCard, type ToolResultData } from './tool-card';
 import { exportElementToPdf } from '@/lib/chat-export-pdf';
@@ -25,14 +25,17 @@ function MessageActions({
   onRetry,
   isLast,
   exportRootRef,
+  onSaveArtifact,
 }: {
   content: string;
   onRetry: () => void;
   isLast: boolean;
   exportRootRef: React.RefObject<HTMLDivElement | null>;
+  onSaveArtifact?: (content: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   function handleCopy() {
     // Strip markdown to copy as plain text
@@ -102,6 +105,21 @@ function MessageActions({
       >
         <Printer size={14} />
       </button>
+      {onSaveArtifact && (
+        <button
+          type="button"
+          onClick={() => {
+            onSaveArtifact(content);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+          }}
+          disabled={saved}
+          className="rounded-lg p-1.5 text-text-muted hover:text-text-primary hover:bg-white/[0.06] transition-colors cursor-pointer disabled:opacity-50"
+          title={saved ? 'Saved' : 'Save artifact'}
+        >
+          {saved ? <Check size={14} className="text-green-400" /> : <Bookmark size={14} />}
+        </button>
+      )}
       <button
         type="button"
         onClick={onRetry}
@@ -118,10 +136,12 @@ export function AssistantMessage({
   message,
   isLast,
   onRetry,
+  onSaveArtifact,
 }: {
   message: ChatMessage;
   isLast: boolean;
   onRetry: () => void;
+  onSaveArtifact?: (content: string) => void;
 }) {
   const exportRootRef = useRef<HTMLDivElement>(null);
 
@@ -162,6 +182,7 @@ export function AssistantMessage({
             onRetry={onRetry}
             isLast={isLast}
             exportRootRef={exportRootRef}
+            onSaveArtifact={onSaveArtifact}
           />
         )}
       </div>

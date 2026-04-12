@@ -7,11 +7,12 @@ import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai
 import { ChatComposer, type ChatAttachment } from '@/components/ai/chat-composer';
 import { processAttachments } from '@/lib/chat/process-attachments';
 import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
+import { toast } from 'sonner';
+import { detectArtifactType, extractArtifactTitle } from '@/lib/artifacts/types';
 import { StrategyLabConversationExportButton } from './strategy-lab-conversation-export-button';
 import { StrategyLabClientPickerPill } from './strategy-lab-client-picker-pill';
 import { StrategyLabConversationHistoryRail } from './strategy-lab-conversation-history-rail';
 import { StrategyLabTopicSearchChipBar } from './strategy-lab-topic-search-chip-bar';
-import { toast } from 'sonner';
 import { cn } from '@/lib/utils/cn';
 import { getAllCommands, getCommand } from '@/lib/nerd/slash-commands';
 import {
@@ -412,6 +413,30 @@ export function StrategyLabNerdChat({
     [input, streaming, messages, clientId, clientName, clientSlug, attachedSearchIds, conversationId],
   );
 
+  const handleSaveArtifact = useCallback(async (content: string) => {
+    try {
+      const res = await fetch('/api/nerd/artifacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: clientId,
+          conversation_id: conversationId ?? null,
+          title: extractArtifactTitle(content),
+          content,
+          artifact_type: detectArtifactType(content),
+        }),
+      });
+      if (res.ok) {
+        toast.success('Artifact saved');
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed' }));
+        toast.error(err.error ?? 'Failed to save artifact');
+      }
+    } catch {
+      toast.error('Failed to save artifact');
+    }
+  }, [clientId, conversationId]);
+
   function handleReset() {
     if (streaming) abortRef.current?.abort();
     setMessages([]);
@@ -648,6 +673,7 @@ export function StrategyLabNerdChat({
                         message={msg}
                         isLast={isLast}
                         onRetry={() => handleSend('Continue')}
+                        onSaveArtifact={handleSaveArtifact}
                       />
                       {hasContent && !isStreamingTarget && (
                         <div className="flex justify-end pt-1 pb-2 pr-2">

@@ -14,6 +14,8 @@ import { ConversationSidebar } from '@/components/nerd/conversation-sidebar';
 import { TopicSearchContextRail } from '@/components/nerd/topic-search-context-rail';
 import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
 import { getAllCommands, getCommand, type SlashCommand } from '@/lib/nerd/slash-commands';
+import { toast } from 'sonner';
+import { detectArtifactType, extractArtifactTitle } from '@/lib/artifacts/types';
 
 // ---------------------------------------------------------------------------
 // Page
@@ -421,6 +423,31 @@ export default function NerdPage() {
     }
   }, [input, streaming, messages, activeMentions, conversationId]);
 
+  const handleSaveArtifact = useCallback(async (content: string) => {
+    const clientMention = activeMentions.find((m) => m.type === 'client');
+    try {
+      const res = await fetch('/api/nerd/artifacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: clientMention?.id ?? null,
+          conversation_id: conversationId ?? null,
+          title: extractArtifactTitle(content),
+          content,
+          artifact_type: detectArtifactType(content),
+        }),
+      });
+      if (res.ok) {
+        toast.success('Artifact saved');
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed' }));
+        toast.error(err.error ?? 'Failed to save artifact');
+      }
+    } catch {
+      toast.error('Failed to save artifact');
+    }
+  }, [activeMentions, conversationId]);
+
   function handleReset() {
     if (streaming) abortRef.current?.abort();
     setMessages([]);
@@ -605,6 +632,7 @@ export default function NerdPage() {
                           message={msg}
                           isLast={isLast}
                           onRetry={() => handleSend('Continue')}
+                          onSaveArtifact={handleSaveArtifact}
                         />
                       );
                     }
