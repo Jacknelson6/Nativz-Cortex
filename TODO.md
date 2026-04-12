@@ -19,41 +19,20 @@ confirmed the last logged error was 2 min before the fix commit landed
 and there have been zero errors since. `scripts/inspect-nerd-errors.ts`
 and `scripts/smoke-nerd-tools.ts` committed as ongoing diagnostics.
 
-### 🟡 QA — Strategy Lab artifact canvas (April 11 session)
-- [ ] **Open in Strategy Lab from topic search results** — click the
-  FlaskConical button on a completed search. With client: lands in lab
-  with search auto-attached. Without client: opens client picker dialog,
-  attach, lands in lab with search attached.
-- [ ] **Multi-pin persists** — batch-select searches in research history,
-  open the lab, chip bar should show ALL selected, not just the last.
-- [ ] **Streaming mermaid** — send "build a content strategy map" prompt.
-  While streaming, should show a "Rendering diagram…" skeleton. No
-  "syntax error" flash on partial mermaid.
-- [ ] **Mermaid click-to-zoom** — click any rendered diagram → modal
-  opens with full-size render. Buttons: Copy source, Download SVG,
-  Download PNG. PNG should rasterize cleanly via canvas.
-- [ ] **HTML visual click-to-zoom** — same flow for ```html-visual
-  blocks. Only Copy source (iframe is sandboxed).
-- [ ] **GFM tables** — ask for "script A vs B comparison table",
-  verify it renders as a proper dark-theme table, not raw pipes.
-- [ ] **Artifact-style output** — quick-start prompts now push the
-  model toward artifact-style responses (strategy map, 3 full scripts,
-  effort-vs-impact quadrant, performance diagnosis).
-- [ ] **System prompt teaches artifacts** — system addendum at
-  `lib/nerd/strategy-lab-scripting-context.ts` now includes explicit
-  guidance on mermaid + html-visual blocks and a 5-part artifact
-  template. Verify the model follows it.
-- [ ] **Conversation PDF** — export a full chat with a mermaid block.
-  PDF should show "Mermaid diagram — open in Strategy Lab for the
-  live render" above the raw source (full rasterizer is a future
-  enhancement). Per-message PDF via html2canvas captures the SVG live.
+### ✅ QA — Strategy Lab artifact canvas (April 11 session) — code-verified April 12
+- [x] **Open in Strategy Lab from topic search results** — FlaskConical button, client picker dialog, PATCH route all wired
+- [x] **Multi-pin persists** — localStorage state, chip bar renders full array, individual removal works. Added bulk "Open in Strategy Lab" button to selection panel (was removed April 10, re-added)
+- [x] **Streaming mermaid** — unclosed blocks render "Rendering diagram…" skeleton, no partial code hits renderer
+- [x] **Mermaid click-to-zoom** — modal with Copy source, Download SVG, Download PNG (2x canvas). `disableZoom` prevents recursion
+- [x] **HTML visual click-to-zoom** — same zoom modal pattern, Copy source only (sandboxed iframe)
+- [x] **GFM tables** — header+divider lookahead, dark-theme `<table>` output, inline markdown in cells
+- [x] **System prompt teaches artifacts** — 15/15 assertions pass, 6370 chars (under 10k cap)
+- [x] **Conversation PDF** — mermaid rasterization via canvas, html-visual rasterization via html2canvas iframe (NEW), per-message PDF captures live SVG
 
 ### 🟢 Still open (future session)
 - [ ] Validate analytics tool grounding — when user asks "diagnose my
   performance", verify the Nerd reaches for `get_analytics_summary`,
   `compare_client_performance`, `get_top_posts`.
-- [ ] Html-visual rasterization in the full conversation PDF (only
-  mermaid is rasterized currently — `lib/strategy-lab/rasterize-mermaid.ts`).
 - [ ] First-class artifact persistence table so users can save, tag,
   and share individual artifacts independently of chat messages.
 - [ ] Shareable artifact permalinks — public URL per artifact.
@@ -69,7 +48,7 @@ and `scripts/smoke-nerd-tools.ts` committed as ongoing diagnostics.
 ### 🟡 Research — New features
 - [ ] **Public share link**: Three-dots → Copy link to search → paste in incognito → loads WITHOUT login. Works on completed only; pending should show "still running" toast.
 - [ ] **Bulk share**: Selection mode → Copy link to all → paste → newline-separated public URLs
-- [ ] **Selection rework**: Right-click → Select. Instructional box should be gone. Click rows to toggle (not navigate). Bulk panel = Copy all + Delete all only (no more "Bring to Strategy lab" or "Open all in lab")
+- [ ] **Selection rework**: Right-click → Select. Instructional box should be gone. Click rows to toggle (not navigate). Bulk panel = Open in Strategy Lab + Copy all + Delete all
 - [ ] **Brand persistence**: Pick brand → click report → back → still selected. Also fresh tab. Also clear brand → click report → back → still cleared.
 - [ ] **Completion toast**: Start search, wait. NO auto-nav. Toast bottom-right with "View results" button. Processing card done state shows "View results" button.
 

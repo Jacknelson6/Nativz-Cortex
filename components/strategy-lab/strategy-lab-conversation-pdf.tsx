@@ -189,6 +189,8 @@ interface StrategyLabConversationPdfProps {
    * instead of the labeled-source fallback in pdf-markdown.tsx.
    */
   mermaidImages?: Map<string, string>;
+  /** Pre-rasterized PNG data URLs for html-visual fenced blocks, same pattern. */
+  htmlVisualImages?: Map<string, string>;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -237,6 +239,7 @@ export function StrategyLabConversationPdf({
   messages,
   attachedSearches,
   mermaidImages,
+  htmlVisualImages,
 }: StrategyLabConversationPdfProps) {
   const config = agencyConfig(agency);
   const dateStr = formatDate(new Date());
@@ -322,7 +325,7 @@ export function StrategyLabConversationPdf({
                   // Assistant output is markdown — run it through the real
                   // tree renderer so headings, bold runs, bullets, and code
                   // blocks come through instead of a flat string.
-                  renderMarkdownToPdfBlocks(msg.content, mermaidImages)
+                  renderMarkdownToPdfBlocks(msg.content, mermaidImages, htmlVisualImages)
                 )}
               </View>
             </View>

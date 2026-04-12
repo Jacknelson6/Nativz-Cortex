@@ -78,21 +78,22 @@ export function StrategyLabConversationExportButton({
     }
     setExporting(true);
     try {
-      // Fetch the client logo, load the PDF renderer, and load the mermaid
-      // rasterizer in parallel. The rasterizer runs in the browser using the
-      // real mermaid module + an off-screen DOM container, then returns a
-      // Map<hash, pngDataUrl> that the PDF document embeds as real images
-      // instead of dumping raw mermaid source.
-      const [clientLogoDataUrl, rendererModule, docModule, rasterizerModule] =
+      // Fetch the client logo, load the PDF renderer, and load both visual
+      // rasterizers in parallel. Mermaid uses the real mermaid module in an
+      // off-screen DOM; html-visual uses html2canvas in a sandboxed iframe.
+      // Both return Map<hash, pngDataUrl> that the PDF embeds as real images.
+      const [clientLogoDataUrl, rendererModule, docModule, rasterizerModule, htmlVisualModule] =
         await Promise.all([
           fetchClientLogoDataUrl(clientId),
           import('@react-pdf/renderer'),
           import('./strategy-lab-conversation-pdf'),
           import('@/lib/strategy-lab/rasterize-mermaid'),
+          import('@/lib/strategy-lab/rasterize-html-visual'),
         ]);
       const { pdf } = rendererModule;
       const { StrategyLabConversationPdf } = docModule;
       const { rasterizeMermaidBlocks } = rasterizerModule;
+      const { rasterizeHtmlVisualBlocks } = htmlVisualModule;
 
       // Only ship user + assistant messages to the PDF. Tool role messages are
       // internal plumbing and don't add value in a client-facing deliverable.
@@ -102,9 +103,14 @@ export function StrategyLabConversationExportButton({
         )
         .map((m) => ({ id: m.id, role: m.role, content: m.content }));
 
-      const mermaidImages = await rasterizeMermaidBlocks(
-        pdfMessages.filter((m) => m.role === 'assistant').map((m) => m.content),
-      );
+      const assistantContents = pdfMessages
+        .filter((m) => m.role === 'assistant')
+        .map((m) => m.content);
+
+      const [mermaidImages, htmlVisualImages] = await Promise.all([
+        rasterizeMermaidBlocks(assistantContents),
+        rasterizeHtmlVisualBlocks(assistantContents),
+      ]);
 
       const blob = await pdf(
         StrategyLabConversationPdf({
@@ -115,6 +121,7 @@ export function StrategyLabConversationExportButton({
           messages: pdfMessages,
           attachedSearches,
           mermaidImages,
+          htmlVisualImages,
         }),
       ).toBlob();
 

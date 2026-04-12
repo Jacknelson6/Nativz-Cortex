@@ -25,6 +25,7 @@ import {
   ExternalLink,
   MoreHorizontal,
   Copy,
+  FlaskConical,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
@@ -596,6 +597,31 @@ export function HistoryFeed({
     [router],
   );
 
+  /** Bulk open in Strategy Lab — merges all selected search IDs into localStorage. */
+  const openAllSelectedInStrategyLab = useCallback(() => {
+    const ids = orderedSelectedIds;
+    if (ids.length === 0) return;
+    // Resolve client from selection — all must share the same client
+    const rows = ids
+      .map((id) => mergedItems.find((i) => i.id === id))
+      .filter((r): r is HistoryItem => Boolean(r));
+    const clientIds = [...new Set(rows.map((r) => r.clientId).filter(Boolean))];
+    if (clientIds.length === 0) {
+      toast.message('Pick a client in Strategy Lab, then pin topic searches from your history.');
+      router.push('/admin/strategy-lab');
+      return;
+    }
+    if (clientIds.length > 1) {
+      toast.error('Selected searches belong to different clients. Select searches from one client at a time.');
+      return;
+    }
+    const clientId = clientIds[0]!;
+    mergeTopicSearchSelectionIntoLocalStorage(clientId, ids);
+    setSelectionModeActive(false);
+    setSelectedTopicSearchIds(new Set());
+    router.push(`/admin/strategy-lab/${clientId}`);
+  }, [orderedSelectedIds, mergedItems, router]);
+
   /**
    * Bulk copy — same public share link behaviour as the single-row copy:
    * topic-like rows get public share URLs, everything else falls back to the
@@ -1159,6 +1185,18 @@ export function HistoryFeed({
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={selectedTopicSearchIds.size === 0}
+            onClick={openAllSelectedInStrategyLab}
+            className={cn(
+              'inline-flex min-h-[2.25rem] w-full items-center justify-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-2.5 py-1.5 font-medium text-accent-text transition hover:border-accent/50 hover:bg-accent/20 disabled:pointer-events-none disabled:opacity-40',
+              sidebar ? 'text-xs' : 'text-xs',
+            )}
+          >
+            <FlaskConical size={13} className="shrink-0" aria-hidden />
+            Open in Strategy Lab
+          </button>
           <button
             type="button"
             disabled={selectedTopicSearchIds.size === 0}

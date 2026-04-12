@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { hashMermaidBody } from '@/lib/strategy-lab/rasterize-mermaid';
+import { hashHtmlVisualBody } from '@/lib/strategy-lab/rasterize-html-visual';
 
 /**
  * Lightweight markdown → @react-pdf/renderer node converter.
@@ -334,6 +335,7 @@ function renderInline(raw: string, key?: string | number) {
 export function renderMarkdownToPdfBlocks(
   source: string,
   mermaidImages?: Map<string, string>,
+  htmlVisualImages?: Map<string, string>,
 ): JSX.Element[] {
   if (!source.trim()) {
     return [<Text key="empty" style={m.paragraph}>(empty)</Text>];
@@ -396,6 +398,21 @@ export function renderMarkdownToPdfBlocks(
       if (isMermaid && mermaidImages) {
         const hash = hashMermaidBody(block.text.trimEnd());
         const dataUrl = mermaidImages.get(hash);
+        if (dataUrl) {
+          return (
+            <View key={idx} wrap={false}>
+              {/* eslint-disable-next-line jsx-a11y/alt-text */}
+              <Image src={dataUrl} style={m.mermaidImage} />
+            </View>
+          );
+        }
+      }
+
+      // Html-visual fast path: same pattern as mermaid — if the caller
+      // pre-rasterized this block, embed the PNG image.
+      if (isHtmlVisual && htmlVisualImages) {
+        const hash = hashHtmlVisualBody(block.text.trimEnd());
+        const dataUrl = htmlVisualImages.get(hash);
         if (dataUrl) {
           return (
             <View key={idx} wrap={false}>
