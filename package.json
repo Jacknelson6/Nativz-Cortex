@@ -95,7 +95,7 @@
     "jose": "^6.2.1",
     "jsdom": "^28.1.0",
     "jszip": "^3.10.1",
-    "lucide-react": "^0.574.0",
+    "lucide-react": "^1.7.0",
     "next": "^15.5.12",
     "pdfjs-dist": "^5.6.205",
     "playwright-core": "^1.58.2",
