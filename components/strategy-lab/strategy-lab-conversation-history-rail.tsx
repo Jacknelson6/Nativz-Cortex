@@ -6,7 +6,6 @@ import {
   PanelLeftOpen,
   Plus,
   Clock,
-  Loader2,
   Trash2,
   MessageSquare,
   Check,
@@ -59,7 +58,6 @@ export function StrategyLabConversationHistoryRail({
   const [open, setOpen] = useRailOpen();
   const [conversations, setConversations] = useState<NerdConversation[]>([]);
   const [loading, setLoading] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const firstLoadRef = useRef(true);
 
   const load = useCallback(async () => {
@@ -88,23 +86,30 @@ export function StrategyLabConversationHistoryRail({
   const handleDelete = useCallback(
     async (id: string, e: React.MouseEvent) => {
       e.stopPropagation();
-      if (deletingId) return;
-      setDeletingId(id);
+      e.preventDefault();
+      // Optimistic: remove from list immediately, restore if the API rejects.
+      let removed: typeof conversations[number] | undefined;
+      setConversations((prev) => {
+        removed = prev.find((c) => c.id === id);
+        return prev.filter((c) => c.id !== id);
+      });
       try {
         const res = await fetch(`/api/nerd/conversations/${id}`, { method: 'DELETE' });
-        if (!res.ok) {
-          toast.error('Could not delete conversation');
-          return;
-        }
-        setConversations((prev) => prev.filter((c) => c.id !== id));
+        if (!res.ok) throw new Error('Failed');
         toast.success('Conversation deleted');
       } catch {
+        // Rollback — put the conversation back
+        if (removed) {
+          setConversations((prev) => {
+            const next = [...prev, removed!];
+            next.sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? ''));
+            return next;
+          });
+        }
         toast.error('Could not delete conversation');
-      } finally {
-        setDeletingId(null);
       }
     },
-    [deletingId],
+    [],
   );
 
   // Group conversations by date bucket — same shape as the admin Nerd sidebar.
@@ -231,16 +236,11 @@ export function StrategyLabConversationHistoryRail({
                           <button
                             type="button"
                             onClick={(e) => handleDelete(c.id, e)}
-                            disabled={deletingId === c.id}
                             aria-label={`Delete ${displayTitle}`}
                             title={`Delete ${displayTitle}`}
-                            className="absolute right-1.5 top-1.5 flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-text-muted/50 opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="absolute right-1.5 top-1.5 flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-text-muted/50 opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
                           >
-                            {deletingId === c.id ? (
-                              <Loader2 size={10} className="animate-spin" />
-                            ) : (
-                              <Trash2 size={10} />
-                            )}
+                            <Trash2 size={10} />
                           </button>
                         </div>
                       );

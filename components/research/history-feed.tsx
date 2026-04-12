@@ -281,7 +281,7 @@ function HistoryRowMenuBody({
         </>
       ) : null}
       <Separator className="bg-nativz-border" />
-      <Item variant="destructive" className={menuItemClass} onSelect={onDelete}>
+      <Item variant="destructive" className={menuItemClass} onSelect={(e) => { e.preventDefault(); onDelete(); }}>
         <Trash2 size={14} aria-hidden />
         Delete
       </Item>
@@ -527,6 +527,11 @@ export function HistoryFeed({
   loadMoreRef.current = loadMore;
 
   async function deleteHistoryItem(item: HistoryItem): Promise<boolean> {
+    // Optimistic: hide the row immediately, then rollback if the API rejects.
+    setHiddenIds((prev) => new Set(prev).add(item.id));
+    setLoadedMore((prev) => prev.filter((h) => h.id !== item.id));
+    onItemDeleted?.(item.id);
+
     try {
       const endpoint = item.type === 'ideas'
         ? `/api/ideas/${item.id}`
@@ -536,12 +541,15 @@ export function HistoryFeed({
       if (!res.ok) {
         throw new Error(data.error || 'Failed to delete');
       }
-      setHiddenIds((prev) => new Set(prev).add(item.id));
-      setLoadedMore((prev) => prev.filter((h) => h.id !== item.id));
-      onItemDeleted?.(item.id);
       toast.success('Removed from history');
       return true;
     } catch (err) {
+      // Rollback — unhide the row so the user can retry
+      setHiddenIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
       toast.error(err instanceof Error ? err.message : 'Failed to delete');
       return false;
     }
@@ -674,26 +682,45 @@ export function HistoryFeed({
     const ids = [...selectedTopicSearchIds];
     if (ids.length === 0) return;
     if (!window.confirm(`Delete ${ids.length} items from history?`)) return;
-    let ok = 0;
-    for (const id of ids) {
-      const item = mergedItems.find((i) => i.id === id);
-      if (!item) continue;
-      try {
+
+    // Optimistic: hide all rows immediately and clear selection. Run deletes
+    // in parallel; rollback any that fail.
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.add(id);
+      return next;
+    });
+    setLoadedMore((prev) => prev.filter((h) => !ids.includes(h.id)));
+    setSelectedTopicSearchIds(new Set());
+    for (const id of ids) onItemDeleted?.(id);
+
+    const results = await Promise.allSettled(
+      ids.map(async (id) => {
+        const item = mergedItems.find((i) => i.id === id);
+        if (!item) throw new Error('missing');
         const endpoint = item.type === 'ideas' ? `/api/ideas/${id}` : `/api/search/${id}`;
         const res = await fetch(endpoint, { method: 'DELETE' });
-        if (res.ok) {
-          ok += 1;
-          setHiddenIds((prev) => new Set(prev).add(id));
-          setLoadedMore((prev) => prev.filter((h) => h.id !== id));
-          onItemDeleted?.(id);
-        }
-      } catch {
-        /* continue */
+        if (!res.ok) throw new Error('failed');
+        return id;
+      }),
+    );
+    const failedIds = ids.filter((_, i) => results[i].status === 'rejected');
+
+    if (failedIds.length > 0) {
+      // Restore failed rows so user can retry
+      setHiddenIds((prev) => {
+        const next = new Set(prev);
+        for (const id of failedIds) next.delete(id);
+        return next;
+      });
+      if (failedIds.length === ids.length) {
+        toast.error('Could not delete selected items');
+      } else {
+        toast.success(`Removed ${ids.length - failedIds.length} of ${ids.length}`);
       }
+    } else {
+      toast.success('Removed from history');
     }
-    setSelectedTopicSearchIds(new Set());
-    if (ok > 0) toast.success(ok === ids.length ? 'Removed from history' : `Removed ${ok} of ${ids.length}`);
-    else toast.error('Could not delete selected items');
   }, [mergedItems, onItemDeleted, selectedTopicSearchIds]);
 
   const filtered = useMemo(() => {

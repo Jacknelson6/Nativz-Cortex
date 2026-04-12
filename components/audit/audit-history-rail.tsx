@@ -172,31 +172,52 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
   }
 
   async function handleDelete(id: string) {
-    setDeletingIds(prev => new Set(prev).add(id));
+    // Optimistic: hide the row immediately, roll back if the API rejects.
+    const prevAudits = audits;
+    const prevSelected = new Set(selectedIds);
+    onAuditsChange(audits.filter(a => a.id !== id));
+    if (selectedIds.has(id)) {
+      const next = new Set(selectedIds);
+      next.delete(id);
+      setSelectedIds(next);
+    }
     try {
-      await fetch(`/api/analyze-social?id=${id}`, { method: 'DELETE' });
-      onAuditsChange(audits.filter(a => a.id !== id));
-      selectedIds.delete(id);
-      setSelectedIds(new Set(selectedIds));
+      const res = await fetch(`/api/analyze-social?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
       toast.success('Audit deleted');
     } catch {
+      // Rollback
+      onAuditsChange(prevAudits);
+      setSelectedIds(prevSelected);
       toast.error('Failed to delete');
-    } finally {
-      setDeletingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
     }
   }
 
   async function handleDeleteSelected() {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
-    for (const id of ids) {
-      setDeletingIds(prev => new Set(prev).add(id));
-      try { await fetch(`/api/analyze-social?id=${id}`, { method: 'DELETE' }); } catch { /* continue */ }
-    }
+    // Optimistic: remove all selected immediately, rollback any that fail.
+    const prevAudits = audits;
     onAuditsChange(audits.filter(a => !selectedIds.has(a.id)));
     setSelectedIds(new Set());
-    setDeletingIds(new Set());
-    toast.success(`${ids.length} audit${ids.length !== 1 ? 's' : ''} deleted`);
+    const failures: string[] = [];
+    await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const res = await fetch(`/api/analyze-social?id=${id}`, { method: 'DELETE' });
+          if (!res.ok) failures.push(id);
+        } catch {
+          failures.push(id);
+        }
+      }),
+    );
+    if (failures.length > 0) {
+      // Restore failed rows
+      onAuditsChange(prevAudits.filter(a => !ids.includes(a.id) || failures.includes(a.id)));
+      toast.error(`${failures.length} audit${failures.length !== 1 ? 's' : ''} failed to delete`);
+    } else {
+      toast.success(`${ids.length} audit${ids.length !== 1 ? 's' : ''} deleted`);
+    }
   }
 
   function handleCopyLink(id: string) {
@@ -269,22 +290,22 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
                         <MoreHorizontal size={14} />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" sideOffset={4} className={menuSurfaceClass}>
+                    <DropdownMenuContent align="end" sideOffset={4} className={menuSurfaceClass} onClick={(e) => e.stopPropagation()}>
                       <DropdownMenuItem className={menuItemClass} onSelect={() => router.push(`/admin/analyze-social/${audit.id}`)}><ExternalLink size={14} /> Open</DropdownMenuItem>
                       <DropdownMenuItem className={menuItemClass} onSelect={() => handleCopyLink(audit.id)}><Link2 size={14} /> Copy link</DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={() => handleDelete(audit.id)}><Trash2 size={14} /> Delete</DropdownMenuItem>
+                      <DropdownMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={(e) => { e.preventDefault(); handleDelete(audit.id); }}><Trash2 size={14} /> Delete</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
               </ContextMenuTrigger>
-              <ContextMenuContent className={menuSurfaceClass}>
+              <ContextMenuContent className={menuSurfaceClass} onClick={(e) => e.stopPropagation()}>
                 <ContextMenuItem className={menuItemClass} onSelect={() => router.push(`/admin/analyze-social/${audit.id}`)}><ExternalLink size={14} /> Open</ContextMenuItem>
                 <ContextMenuItem className={menuItemClass} onSelect={() => handleCopyLink(audit.id)}><Link2 size={14} /> Copy link</ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={() => handleDelete(audit.id)}><Trash2 size={14} /> Delete</ContextMenuItem>
+                <ContextMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={(e) => { e.preventDefault(); handleDelete(audit.id); }}><Trash2 size={14} /> Delete</ContextMenuItem>
                 {hasSelection && selectedIds.size > 1 && (
-                  <><ContextMenuSeparator /><ContextMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={handleDeleteSelected}><Trash2 size={14} /> Delete {selectedIds.size} selected</ContextMenuItem></>
+                  <><ContextMenuSeparator /><ContextMenuItem className={cn(menuItemClass, 'text-red-400 hover:text-red-300')} onSelect={(e) => { e.preventDefault(); handleDeleteSelected(); }}><Trash2 size={14} /> Delete {selectedIds.size} selected</ContextMenuItem></>
                 )}
               </ContextMenuContent>
             </ContextMenu>
