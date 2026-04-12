@@ -5,6 +5,7 @@ import { BotMessageSquare, Loader2 } from 'lucide-react';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { ChatComposer, type ChatAttachment } from '@/components/ai/chat-composer';
+import { processAttachments } from '@/lib/chat/process-attachments';
 import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
 import { StrategyLabConversationExportButton } from './strategy-lab-conversation-export-button';
 import { StrategyLabClientPickerPill } from './strategy-lab-client-picker-pill';
@@ -149,6 +150,7 @@ export function StrategyLabNerdChat({
     'User is in Strategy Lab with this client pinned. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Prefer topic search, pillar, knowledge, and content tools. Be concise and actionable.',
   );
   const abortRef = useRef<AbortController | null>(null);
+  const pendingAttachmentsRef = useRef<ChatAttachment[]>([]);
 
 
   // Resume the persisted conversation for this client. localStorage holds
@@ -311,6 +313,11 @@ export function StrategyLabNerdChat({
       try {
         const chatHistory = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
 
+        // Process any pending file attachments (PDF text extraction, image encoding)
+        const rawAtts = pendingAttachmentsRef.current;
+        pendingAttachmentsRef.current = [];
+        const processed = rawAtts.length > 0 ? await processAttachments(rawAtts) : undefined;
+
         const res = await fetch('/api/nerd/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -318,15 +325,10 @@ export function StrategyLabNerdChat({
             messages: chatHistory,
             mentions,
             sessionHint: hint ?? undefined,
-            // Backend (/api/nerd/chat) pulls each ID's full topic_searches row —
-            // query, summary, trending_topics, metrics, emotions, content_breakdown —
-            // and injects the formatted content into the system prompt. Same path
-            // the admin Nerd uses at /admin/nerd.
             searchContext: attachedSearchIds.length > 0 ? attachedSearchIds : undefined,
             conversationId: conversationId ?? undefined,
-            // Tells /api/nerd/chat to append the Strategy Lab scripting
-            // addendum + preloaded scripting skills to the system prompt.
             mode: 'strategy-lab' as const,
+            attachments: processed && processed.length > 0 ? processed : undefined,
           }),
           signal: controller.signal,
         });
@@ -484,7 +486,10 @@ export function StrategyLabNerdChat({
           variant="research"
           value={input}
           onChange={setInput}
-          onSubmit={(_attachments: ChatAttachment[]) => handleSend()}
+          onSubmit={(atts: ChatAttachment[]) => {
+            pendingAttachmentsRef.current = atts;
+            handleSend();
+          }}
           disabled={streaming}
           placeholder={`Ask Cortex about ${clientName.trim() || 'this client'}… (try /ideas or /script)`}
           blockEnterSubmit={showSlashMenu}

@@ -32,6 +32,15 @@ const mentionSchema = z.object({
   slug: z.string().optional(),
 });
 
+const attachmentSchema = z.object({
+  /** Content type — pdf_text for extracted PDF content, image for base64, text for plain text files */
+  type: z.enum(['pdf_text', 'image', 'text']),
+  /** Original filename */
+  name: z.string().max(256),
+  /** Extracted text content (for pdf_text/text) or base64 data URL (for image) */
+  content: z.string().max(500_000),
+});
+
 const chatSchema = z.object({
   messages: z
     .array(z.object({
@@ -63,6 +72,8 @@ const chatSchema = z.object({
    * components/strategy-lab/strategy-lab-nerd-chat.tsx.
    */
   mode: z.enum(['strategy-lab']).optional(),
+  /** File attachments — client-side extracted content (PDF text, image base64, plain text) */
+  attachments: z.array(attachmentSchema).max(10).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -366,7 +377,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Invalid request', details: parsed.error.flatten() }), { status: 400 });
     }
 
-    const { messages, mentions, actionConfirmation, conversationId, portalMode, sessionHint, searchContext, mode } = parsed.data;
+    const { messages, mentions, actionConfirmation, conversationId, portalMode, sessionHint, searchContext, mode, attachments } = parsed.data;
 
     // --- Detect portal user (viewer role) ---
     let isPortalUser = false;
@@ -730,9 +741,25 @@ export async function POST(req: NextRequest) {
     const systemPrompt =
       basePrompt + skillsContext + dbSkillsContext + strategyLabAddendum + guardrailInstruction;
 
+    // Build attachment context block if the user attached files
+    const attachmentContextParts: string[] = [];
+    if (attachments && attachments.length > 0) {
+      for (const att of attachments) {
+        if (att.type === 'pdf_text' || att.type === 'text') {
+          attachmentContextParts.push(
+            `--- ATTACHED FILE: ${att.name} ---\n${att.content}\n--- END FILE ---`,
+          );
+        }
+        // Images are handled separately as vision content below
+      }
+    }
+    const attachmentContext = attachmentContextParts.length > 0
+      ? `\n\nThe user has attached the following files for context. Reference them when relevant:\n\n${attachmentContextParts.join('\n\n')}`
+      : '';
+
     const apiMessages: Array<{ role: string; content: string; tool_call_id?: string; tool_calls?: unknown[] }> = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: portfolioContext },
+      { role: 'user', content: portfolioContext + attachmentContext },
       ...messages.map((m) => {
         if (m.role === 'tool' && m.tool_call_id) {
           return { role: 'tool' as const, content: m.content, tool_call_id: m.tool_call_id };

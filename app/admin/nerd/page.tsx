@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { ChatComposer, type ChatAttachment } from '@/components/ai/chat-composer';
+import { processAttachments } from '@/lib/chat/process-attachments';
 import { MentionAutocomplete, type MentionOption } from '@/components/ai/mention-autocomplete';
 import { ConversationSidebar } from '@/components/nerd/conversation-sidebar';
 import { TopicSearchContextRail } from '@/components/nerd/topic-search-context-rail';
@@ -53,6 +54,7 @@ export default function NerdPage() {
   );
 
   const abortRef = useRef<AbortController | null>(null);
+  const pendingAttachmentsRef = useRef<ChatAttachment[]>([]);
   const strategyClientPrefilledRef = useRef(false);
   const strategySessionHintRef = useRef<string | null>(
     strategySource === 'strategy-lab'
@@ -326,6 +328,11 @@ export default function NerdPage() {
     try {
       const chatHistory = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
 
+      // Process any pending file attachments (PDF text extraction, image encoding)
+      const rawAtts = pendingAttachmentsRef.current;
+      pendingAttachmentsRef.current = [];
+      const processed = rawAtts.length > 0 ? await processAttachments(rawAtts) : undefined;
+
       const res = await fetch('/api/nerd/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -335,6 +342,7 @@ export default function NerdPage() {
           conversationId: conversationId ?? undefined,
           sessionHint: strategySessionHintRef.current ?? undefined,
           searchContext: attachedSearchIds.length > 0 ? attachedSearchIds : undefined,
+          attachments: processed && processed.length > 0 ? processed : undefined,
         }),
         signal: controller.signal,
       });
@@ -453,7 +461,10 @@ export default function NerdPage() {
           variant="research"
           value={input}
           onChange={setInput}
-          onSubmit={(_attachments: ChatAttachment[]) => handleSend()}
+          onSubmit={(atts: ChatAttachment[]) => {
+            pendingAttachmentsRef.current = atts;
+            handleSend();
+          }}
           disabled={streaming}
           placeholder="Ask Cortex anything… (try /ideas, /script, or @client)"
           blockEnterSubmit={mentionsVisible || showSlashMenu}
