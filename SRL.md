@@ -25,3 +25,34 @@ and persistent artifacts.
 - **OUT:** Video frame extraction (known ffmpeg issue), citation back-links to attached docs (future), real-time collaboration on artifacts
 
 ## Iterations
+
+### Iteration 1 — 2026-04-12
+
+**Focus:** Build shared ChatComposer component and wire into both surfaces
+
+**Shipped:**
+- `feat: ChatComposer — shared composer with attachments, paperclip menu, drag-and-drop` (ac8fa28)
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Shared composer component | done |
+| Attachment tray with chips + dismiss | done |
+| Paperclip menu (Upload/Research/Knowledge/Moodboard) | done |
+| Drag-and-drop on chat pane | done |
+| PDF parsing | not started |
+| Image support | not started |
+| Analytics tool grounding | not started |
+| Artifact persistence | not started |
+| Artifact auto-save | not started |
+| Artifact PDF export | not started |
+
+**Gaps or regressions:**
+- None — clean iteration. Both surfaces compile and redirect correctly.
+- The `onSubmit` callback now receives `ChatAttachment[]` but neither surface uses them yet — they pass through to the existing `handleSend()`. Next iteration wires the actual file upload + parsing.
+
+**Next iteration:**
+- Build file upload API route (Supabase storage or in-memory for context)
+- PDF text extraction (pdf-parse or similar)
+- Image pass-through to vision model input
+- Wire attachments into the Nerd API request payload
