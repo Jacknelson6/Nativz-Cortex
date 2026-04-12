@@ -89,3 +89,39 @@ and persistent artifacts.
 **Next iteration:**
 - Analytics tool grounding validation
 - Artifact persistence table + save button
+
+### Iteration 3 — 2026-04-12
+
+**Focus:** Artifact persistence — full stack from migration to gallery
+
+**Shipped:**
+- `feat: artifact persistence — save button, API, migration, type detection` (fbb6c19)
+- `feat: artifact gallery panel — list, detail view, PDF export, delete` (c21aa08)
+
+**Design decisions:**
+- Auto-detect artifact type via heuristics (regex on content for mermaid, script beats, strategy keywords, etc.) rather than asking the user. Simpler, zero friction on save.
+- Extract title from first heading or first bold text. Fallback to first line.
+- Gallery panel is a standalone component ready to wire into Strategy Lab sidebar. Not yet mounted — next iteration handles the sidebar tab wiring.
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Shared composer component | done |
+| Attachment tray with chips + dismiss | done |
+| Paperclip menu | done |
+| Drag-and-drop | done |
+| PDF parsing | done |
+| Image support | done |
+| Analytics tool grounding | not started |
+| Artifact persistence | done |
+| Artifact auto-save | done (via save button with auto-detected type/title) |
+| Artifact PDF export | done (via gallery detail view) |
+
+**Gaps or regressions:**
+- Gallery panel is built but not yet mounted in the Strategy Lab layout — needs sidebar tab wiring
+- Migration 097 needs to be applied to production DB
+
+**Next iteration:**
+- Wire artifacts panel into Strategy Lab sidebar
+- Analytics tool grounding validation
+- Update todo.md with progress
