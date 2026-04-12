@@ -18,6 +18,16 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   toolResults?: ToolResult[];
+  createdAt?: number;
+}
+
+function formatRelativeTimestamp(ts: number): string {
+  const diff = Math.floor((Date.now() - ts) / 1000);
+  if (diff < 10) return 'just now';
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return new Date(ts).toLocaleDateString();
 }
 
 function MessageActions({
@@ -154,6 +164,11 @@ export function AssistantMessage({
 
       {/* Content */}
       <div className="min-w-0 flex-1 pt-0.5">
+        {message.createdAt && (
+          <span className="mb-1 block text-[10px] text-text-muted/0 transition-colors group-hover:text-text-muted/60">
+            {formatRelativeTimestamp(message.createdAt)}
+          </span>
+        )}
         <div ref={exportRootRef} className="text-text-secondary">
           {/* Tool results */}
           {message.toolResults && message.toolResults.length > 0 && (
@@ -192,9 +207,16 @@ export function AssistantMessage({
 
 export function UserMessage({ message }: { message: ChatMessage }) {
   return (
-    <div className="flex justify-end py-5">
-      <div className="max-w-[80%] rounded-2xl bg-surface-hover/80 px-4 py-2.5">
-        <p className="text-sm text-text-primary whitespace-pre-wrap">{message.content}</p>
+    <div className="group flex justify-end py-5">
+      <div className="flex flex-col items-end gap-1">
+        <div className="max-w-[80%] rounded-2xl bg-surface-hover/80 px-4 py-2.5">
+          <p className="text-sm text-text-primary whitespace-pre-wrap">{message.content}</p>
+        </div>
+        {message.createdAt && (
+          <span className="px-1 text-[10px] text-text-muted/0 transition-colors group-hover:text-text-muted/60">
+            {formatRelativeTimestamp(message.createdAt)}
+          </span>
+        )}
       </div>
     </div>
   );

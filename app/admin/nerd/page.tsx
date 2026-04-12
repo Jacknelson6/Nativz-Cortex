@@ -241,7 +241,7 @@ export default function NerdPage() {
 
   async function executeDirectCommand(cmd: SlashCommand) {
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: `/${cmd.name}` };
-    const assistantMsg: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: '', toolResults: [] };
+    const assistantMsg: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: '', toolResults: [], createdAt: Date.now() };
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
 
     try {
@@ -318,8 +318,8 @@ export default function NerdPage() {
 
     const messageMentions = activeMentions.filter((m) => content.includes(`@${m.name}`));
 
-    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content };
-    const assistantMsg: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: '', toolResults: [] };
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content, createdAt: Date.now() };
+    const assistantMsg: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: '', toolResults: [], createdAt: Date.now() };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setStreaming(true);
@@ -457,6 +457,18 @@ export default function NerdPage() {
     setConversationId(null);
     router.replace('/admin/nerd');
   }
+
+  // Cmd+K / Ctrl+K → new chat
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        handleReset();
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   function handleSelectConversation(id: string) {
     if (streaming) abortRef.current?.abort();

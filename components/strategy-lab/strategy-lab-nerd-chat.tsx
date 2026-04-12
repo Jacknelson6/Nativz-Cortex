@@ -298,12 +298,13 @@ export function StrategyLabNerdChat({
       const hint = sessionHintRef.current;
       sessionHintRef.current = null;
 
-      const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content };
+      const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content, createdAt: Date.now() };
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
         content: '',
         toolResults: [],
+        createdAt: Date.now(),
       };
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
@@ -451,6 +452,18 @@ export function StrategyLabNerdChat({
     // be the latest, and a brand-new one is about to start.
     setConversationsRefreshToken((t) => t + 1);
   }
+
+  // Cmd+K / Ctrl+K → new chat
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        handleReset();
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   /**
    * Switch to an existing conversation from the History dropdown. Aborts any
