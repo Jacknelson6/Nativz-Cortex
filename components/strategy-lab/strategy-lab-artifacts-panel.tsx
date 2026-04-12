@@ -15,8 +15,8 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils/cn';
 import { Markdown } from '@/components/ai/markdown';
-import { exportElementToPdf } from '@/lib/chat-export-pdf';
 import type { ArtifactType, NerdArtifact } from '@/lib/artifacts/types';
+import type { AgencyBrand } from '@/lib/agency/detect';
 
 const TYPE_CONFIG: Record<ArtifactType, { label: string; icon: React.ReactNode; color: string }> = {
   script: { label: 'Script', icon: <FileText size={12} />, color: 'text-blue-400 bg-blue-400/10 border-blue-400/20' },
@@ -45,9 +45,11 @@ function formatDate(dateStr: string) {
 
 interface ArtifactsPanelProps {
   clientId: string;
+  clientName?: string;
+  agency?: AgencyBrand;
 }
 
-export function StrategyLabArtifactsPanel({ clientId }: ArtifactsPanelProps) {
+export function StrategyLabArtifactsPanel({ clientId, clientName, agency }: ArtifactsPanelProps) {
   const [artifacts, setArtifacts] = useState<NerdArtifact[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -106,19 +108,45 @@ export function StrategyLabArtifactsPanel({ clientId }: ArtifactsPanelProps) {
   }, [selectedId]);
 
   const handleExportPdf = useCallback(async () => {
-    const el = document.getElementById('artifact-detail-content');
-    if (!el) return;
+    if (!selectedArtifact) return;
     setPdfBusy(true);
     try {
-      const title = selectedArtifact?.title ?? 'artifact';
-      const safeName = title.replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 40);
-      await exportElementToPdf(el, `${safeName}.pdf`);
-    } catch {
+      const [rendererModule, docModule] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('./strategy-lab-artifact-pdf'),
+      ]);
+      const { pdf } = rendererModule;
+      const { StrategyLabArtifactPdf } = docModule;
+
+      const blob = await pdf(
+        StrategyLabArtifactPdf({
+          agency: agency ?? 'nativz',
+          clientName: clientName ?? 'Client',
+          clientLogoDataUrl: null,
+          title: selectedArtifact.title,
+          content: selectedArtifact.content,
+          artifactType: selectedArtifact.artifact_type as ArtifactType,
+          createdAt: selectedArtifact.created_at,
+        }),
+      ).toBlob();
+
+      const safeName = selectedArtifact.title.replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 40);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safeName}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Artifact PDF exported');
+    } catch (err) {
+      console.error('Artifact PDF export error:', err);
       toast.error('Failed to export PDF');
     } finally {
       setPdfBusy(false);
     }
-  }, [selectedArtifact]);
+  }, [selectedArtifact, agency, clientName]);
 
   // Detail view
   if (selectedId && selectedArtifact) {

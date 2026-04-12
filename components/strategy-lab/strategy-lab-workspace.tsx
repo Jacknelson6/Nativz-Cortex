@@ -11,6 +11,7 @@ import { AnalyticsDashboard } from '@/components/reporting/analytics-dashboard';
 import { StrategyLabArtifactsPanel } from '@/components/strategy-lab/strategy-lab-artifacts-panel';
 import type { PillarReferencePreview } from '@/lib/strategy-lab/pillar-reference-previews';
 import { strategyLabTopicSearchStorageKey } from '@/lib/strategy-lab/topic-search-selection-storage';
+import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 import { cn } from '@/lib/utils';
 
 type MainTab = 'chat' | 'knowledge-base' | 'analytics' | 'artifacts';
@@ -65,6 +66,7 @@ export function StrategyLabWorkspace({
   vaultGraphData: KnowledgeGraphData;
 }) {
   const storageKey = strategyLabTopicSearchStorageKey(clientId);
+  const { brand } = useAgencyBrand();
 
   const [mainTab, setMainTab] = useState<MainTab>('chat');
 
@@ -181,7 +183,7 @@ export function StrategyLabWorkspace({
           {/* Tab content */}
           <div className="min-h-0 flex-1 overflow-y-auto">
             {mainTab === 'artifacts' ? (
-              <StrategyLabArtifactsPanel clientId={clientId} />
+              <StrategyLabArtifactsPanel clientId={clientId} clientName={clientName} agency={brand} />
             ) : mainTab === 'analytics' ? (
               <div className="p-5">
                 <AnalyticsDashboard initialClientId={clientId} />
