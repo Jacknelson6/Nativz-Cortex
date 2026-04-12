@@ -235,9 +235,9 @@ export function ChatComposer({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Drag overlay */}
+      {/* Drag overlay — pointer-events-none so it doesn't block input */}
       {dragOver && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent/50 bg-accent/10 backdrop-blur-sm">
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent/50 bg-accent/10 backdrop-blur-sm">
           <div className="flex items-center gap-2 text-sm font-medium text-accent-text">
             <Upload size={18} aria-hidden />
             Drop files to attach

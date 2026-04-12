@@ -231,11 +231,18 @@ export function StrategyLabArtifactsPanel({ clientId, clientName, agency }: Arti
         ) : (
           <div className="divide-y divide-nativz-border/30">
             {artifacts.map((art) => (
-              <button
+              <div
                 key={art.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => loadDetail(art.id)}
-                className="w-full px-4 py-3 text-left transition hover:bg-surface-hover/40"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    loadDetail(art.id);
+                  }
+                }}
+                className="group w-full cursor-pointer px-4 py-3 text-left transition hover:bg-surface-hover/40"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
@@ -254,7 +261,7 @@ export function StrategyLabArtifactsPanel({ clientId, clientName, agency }: Arti
                     <Trash2 size={12} />
                   </button>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}
