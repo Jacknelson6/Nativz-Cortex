@@ -86,7 +86,7 @@ export function Markdown({
     ? 'text-sm leading-relaxed text-zinc-200/95'
     : large
       ? 'text-base leading-relaxed text-text-primary'
-      : 'text-sm leading-relaxed';
+      : 'text-sm leading-relaxed text-text-primary';
   const bulletDotCls = present
     ? 'mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400/90'
     : large
@@ -96,7 +96,7 @@ export function Markdown({
     ? 'text-sm leading-relaxed text-zinc-200/95'
     : large
       ? 'text-base leading-relaxed text-text-primary'
-      : 'text-sm leading-relaxed';
+      : 'text-sm leading-relaxed text-text-primary';
   const codeMetaCls = present ? 'text-xs font-medium text-zinc-400' : 'text-xs font-medium text-text-muted';
 
   const lines = content.split('\n');
@@ -122,7 +122,7 @@ export function Markdown({
     : 'border-b border-white/[0.08] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-text-muted';
   const tdCls = present
     ? 'border-t border-white/[0.05] px-3 py-2 align-top text-sm text-zinc-200/95'
-    : 'border-t border-white/[0.05] px-3 py-2 align-top text-sm text-text-secondary';
+    : 'border-t border-white/[0.05] px-3 py-2 align-top text-sm text-text-primary';
 
   function splitTableRow(raw: string): string[] {
     // Strip leading/trailing pipes, then split on unescaped pipes. Cells

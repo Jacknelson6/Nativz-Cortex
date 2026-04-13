@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, useMemo, type ComponentType } from 'react';
-import { BotMessageSquare, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { ClientLogo } from '@/components/clients/client-logo';
+import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { ChatComposer, type ChatAttachment } from '@/components/ai/chat-composer';
 import { processAttachments } from '@/lib/chat/process-attachments';
 import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
 import { toast } from 'sonner';
-import { detectArtifactType, extractArtifactTitle } from '@/lib/artifacts/types';
 import { StrategyLabConversationExportButton } from './strategy-lab-conversation-export-button';
 import { ConversationShareButton } from '@/components/ai/conversation-share-button';
 import { StrategyLabClientPickerPill } from './strategy-lab-client-picker-pill';
@@ -28,29 +29,23 @@ import {
 // that render as live visuals in the chat and export cleanly as PDFs.
 const SUGGESTIONS = [
   {
-    label: 'Full starter pack',
+    label: 'Generate video ideas',
     prompt:
-      'Produce a complete starter pack, all grounded in the attached research: (1) a mermaid flowchart content strategy map (pillars → topic clusters → first 3 video ideas each), (2) three fully written scripts with hook, beats, pattern interrupt, and CTA, (3) a mermaid quadrantChart ranking 10 video ideas on effort vs impact, and (4) a markdown table with a 2-week posting cadence for ',
+      'Generate a topic plan of video ideas, grounded in the attached research and the client knowledge vault, for ',
   },
   {
-    label: 'Content strategy map',
-    prompt:
-      'Build a content strategy map as a mermaid flowchart (pillars → topic clusters → first 3 video ideas each) grounded in the attached research for ',
-  },
-  {
-    label: '3 full scripts',
+    label: 'Generate scripts',
     prompt:
       'Write three full scripts (hook, beats, pattern interrupt, CTA) from the highest-signal topics in the attached research for ',
   },
   {
-    label: 'Effort vs impact',
+    label: 'Explain this topic search',
     prompt:
-      'Give me 12 video ideas ranked as a mermaid quadrantChart on effort vs impact, grounded in the attached research for ',
+      'Summarize the attached topic search — what\'s resonating, the strongest themes, the audience sentiment, and what it means for ',
   },
   {
-    label: 'Performance diagnosis',
-    prompt:
-      'Diagnose current social performance and produce a mermaid flowchart of symptom → cause → fix, with a 2-week action plan for ',
+    label: 'What does this mean?',
+    prompt: 'What does this mean in the context of ',
   },
 ];
 
@@ -129,6 +124,28 @@ export function StrategyLabNerdChat({
   const [attachedSearchIds, setAttachedSearchIds] = useState<string[]>([]);
   const [clientSearches, setClientSearches] = useState<TopicSearchItem[]>([]);
   const [attachResearchOpen, setAttachResearchOpen] = useState(false);
+
+  // Client logo URL so the empty state and export header can render the real
+  // brand mark instead of initials. Pulls from /api/nerd/mentions (same
+  // source the client picker uses).
+  const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
+  const { config: agencyConfig, brandName: agencyName } = useAgencyBrand();
+
+  useEffect(() => {
+    if (!clientId) return;
+    let cancelled = false;
+    fetch('/api/nerd/mentions')
+      .then((r) => r.json())
+      .then((data: { clients?: Array<{ id: string; avatarUrl?: string | null }> }) => {
+        if (cancelled) return;
+        const match = (data.clients ?? []).find((c) => c.id === clientId);
+        setClientLogoUrl(match?.avatarUrl ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setClientLogoUrl(null);
+      });
+    return () => { cancelled = true; };
+  }, [clientId]);
 
   // Slash command menu — same /ideas, /script, /pillars, /hooks, /strategy etc.
   // commands the admin Nerd registers centrally.
@@ -417,30 +434,6 @@ export function StrategyLabNerdChat({
     [input, streaming, messages, clientId, clientName, clientSlug, attachedSearchIds, conversationId],
   );
 
-  const handleSaveArtifact = useCallback(async (content: string) => {
-    try {
-      const res = await fetch('/api/nerd/artifacts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_id: clientId,
-          conversation_id: conversationId ?? null,
-          title: extractArtifactTitle(content),
-          content,
-          artifact_type: detectArtifactType(content),
-        }),
-      });
-      if (res.ok) {
-        toast.success('Artifact saved');
-      } else {
-        const err = await res.json().catch(() => ({ error: 'Failed' }));
-        toast.error(err.error ?? 'Failed to save artifact');
-      }
-    } catch {
-      toast.error('Failed to save artifact');
-    }
-  }, [clientId, conversationId]);
-
   function handleReset() {
     if (streaming) abortRef.current?.abort();
     setMessages([]);
@@ -582,8 +575,10 @@ export function StrategyLabNerdChat({
 
       {/* Main chat column */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Header: client picker · floating tab nav · export PDF */}
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
+        {/* Header: client picker · centered tab nav · export PDF. Three
+            columns with the tab pill absolutely centered so the nav doesn't
+            drift with title/button widths. */}
+        <header className="relative flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <StrategyLabClientPickerPill
               clientId={clientId}
@@ -592,10 +587,9 @@ export function StrategyLabNerdChat({
             />
           </div>
 
-          {/* Floating tab pill — inside the chat container per the UI
-              refactor. Neutral styling so the chat input is the only
-              colored element on the page. */}
-          <div className="inline-flex shrink-0 gap-1 rounded-full border border-nativz-border/60 bg-surface/60 p-1 shadow-sm">
+          {/* Centered tab pill — absolutely positioned so client picker on
+              the left and export buttons on the right don't shift it. */}
+          <div className="pointer-events-auto absolute left-1/2 top-1/2 inline-flex -translate-x-1/2 -translate-y-1/2 shrink-0 gap-1 rounded-full border border-nativz-border/60 bg-surface/60 p-1 shadow-sm">
             {mainTabs.map((tab) => {
               const active = activeMainTab === tab.id;
               const Icon = tab.icon;
@@ -662,16 +656,31 @@ export function StrategyLabNerdChat({
       ) : messages.length === 0 ? (
         <>
           <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
-            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-nativz-border/60 bg-surface/40">
-              <BotMessageSquare size={28} className="text-text-muted" />
+            {/* Agency × client collab mark — "Nativz × Avondale Private Lending".
+                Swaps the agency half to Anderson on that domain via useAgencyBrand. */}
+            <div className="mb-6 flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-nativz-border/60 bg-surface/60 p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={agencyConfig.logoPath}
+                  alt={agencyName}
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+              <span className="text-xl font-light text-text-muted/70" aria-hidden>×</span>
+              <ClientLogo
+                src={clientLogoUrl}
+                name={clientName}
+                size="lg"
+                className="h-14 w-14 !rounded-2xl border border-nativz-border/60 bg-surface/60"
+              />
             </div>
-            <h2 className="mb-2 text-2xl font-semibold tracking-tight text-text-primary">
-              Strategy chat for {clientName.trim() || 'this client'}
-            </h2>
-            <p className="mb-8 max-w-md text-center text-base leading-relaxed text-text-muted">
-              Cortex has full client context, knowledge vault access, and any topic searches you attach below.
-              Ask about research, pillars, ideas, or performance.
+            <p className="mb-1 text-xs font-medium uppercase tracking-wider text-text-muted">
+              {agencyName} × {clientName.trim() || 'this client'}
             </p>
+            <h2 className="mb-8 text-2xl font-semibold tracking-tight text-text-primary">
+              What are we building today?
+            </h2>
             <div className="flex max-w-xl flex-wrap justify-center gap-2">
               {suggestions.map((s) => (
                 <button
@@ -694,36 +703,16 @@ export function StrategyLabNerdChat({
               {messages.map((msg, index) => {
                 const isLast = index === messages.length - 1;
                 if (msg.role === 'assistant') {
-                  // Inline "export this reply" button — only renders when the
-                  // assistant message has finished streaming. Uses the same
-                  // export pipeline as the header button but in compact icon
-                  // mode, shipping only this one message to the PDF.
-                  const hasContent = msg.content.trim().length > 0;
-                  const isStreamingTarget = isLast && streaming;
+                  // Per-message export lives inside MessageActions now so it
+                  // sits flush with Copy / Retry on the left rather than
+                  // floating off to the right as an extra control.
                   return (
                     <div key={msg.id} className="py-2">
                       <AssistantMessage
                         message={msg}
                         isLast={isLast}
                         onRetry={() => handleSend('Continue')}
-                        onSaveArtifact={handleSaveArtifact}
                       />
-                      {hasContent && !isStreamingTarget && (
-                        <div className="flex justify-end pt-1 pb-2 pr-2">
-                          <StrategyLabConversationExportButton
-                            clientId={clientId}
-                            clientName={clientName}
-                            conversationTitle={`${clientName} — strategy note`}
-                            messages={[msg]}
-                            attachedSearches={attachedSearches.map((s) => ({
-                              query: s.query,
-                              created_at: s.created_at,
-                            }))}
-                            compact
-                            ariaLabel="Export this reply as PDF"
-                          />
-                        </div>
-                      )}
                     </div>
                   );
                 }

@@ -137,7 +137,6 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [activePlatformTab, setActivePlatformTab] = useState<string | null>(null);
   const [socialInputs, setSocialInputs] = useState<Partial<Record<AuditPlatformKey, string>>>({});
   const [competitorUrls, setCompetitorUrls] = useState<string[]>(['', '', '']);
-  const [competitorSuggestionsLoading, setCompetitorSuggestionsLoading] = useState(false);
   const [competitorFaviconErrors, setCompetitorFaviconErrors] = useState<boolean[]>([false, false, false]);
   const [submittingSocials, setSubmittingSocials] = useState(false);
   const [detectedPlatforms, setDetectedPlatforms] = useState<{ platform: string; url: string; username: string }[]>([]);
@@ -306,23 +305,23 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           }
         }
         setSocialInputs(preset);
-        setAudit(prev => ({ ...prev, status: 'confirming_platforms' }));
 
-        // Fire competitor suggestions + social goals in parallel (non-blocking)
-        setCompetitorSuggestionsLoading(true);
-        fetch(`/api/analyze-social/${audit.id}/suggest-competitors`, { method: 'POST' })
-          .then(async (r) => {
-            if (!r.ok) return;
-            const d = await r.json();
+        // Block the transition until competitors are suggested so the user
+        // sees a fully-populated confirm screen instead of pulsing inputs.
+        try {
+          const compRes = await fetch(`/api/analyze-social/${audit.id}/suggest-competitors`, { method: 'POST' });
+          if (compRes.ok) {
+            const d = await compRes.json();
             const candidates: { website: string }[] = d.candidates ?? [];
             const urls = candidates.map((c) => prettyUrl(c.website));
-            // Pad to length 3
             while (urls.length < 3) urls.push('');
             setCompetitorUrls(urls);
-          })
-          .catch(() => { /* silently ignore — inputs stay empty */ })
-          .finally(() => setCompetitorSuggestionsLoading(false));
+          }
+        } catch {
+          /* silently ignore — inputs stay empty, user can paste manually */
+        }
 
+        setAudit(prev => ({ ...prev, status: 'confirming_platforms' }));
       } else {
         // If detect fails, go straight to processing
         void startProcessing();
@@ -449,9 +448,21 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                             checked ? prev.filter((x) => x !== g) : [...prev, g]
                           );
                         }}
-                        className="h-4 w-4 shrink-0 rounded border-nativz-border accent-accent"
+                        className="sr-only"
                       />
-                      <span>{g}</span>
+                      <span
+                        className={cn(
+                          'flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors',
+                          checked
+                            ? 'border-accent bg-accent'
+                            : 'border-nativz-border/80 bg-background/40',
+                        )}
+                      >
+                        {checked ? (
+                          <Check size={14} strokeWidth={3} className="text-background" />
+                        ) : null}
+                      </span>
+                      <span className="leading-snug">{g}</span>
                     </label>
                   );
                 })}
@@ -523,7 +534,6 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                   <input
                     type="text"
                     value={url}
-                    disabled={competitorSuggestionsLoading}
                     onChange={(e) => {
                       // Clear favicon error when URL changes so the img retries
                       setCompetitorFaviconErrors((prev) => {
@@ -538,10 +548,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                       });
                     }}
                     placeholder={`Competitor ${i + 1} website — e.g. doughco.com`}
-                    className={cn(
-                      'flex-1 rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-base text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40',
-                      competitorSuggestionsLoading && 'animate-pulse opacity-50 cursor-not-allowed',
-                    )}
+                    className="flex-1 rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-base text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40"
                   />
                 </div>
               );

@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Copy, Check, RotateCcw, Loader2, BotMessageSquare, FileDown, Printer, Bookmark } from 'lucide-react';
+import { Copy, Check, RotateCcw, Loader2, BotMessageSquare, FileDown } from 'lucide-react';
 import { Markdown } from './markdown';
 import { ToolCard, type ToolResultData } from './tool-card';
 import { exportElementToPdf } from '@/lib/chat-export-pdf';
-import { printMessageElement } from '@/lib/chat-print';
 
 export interface ToolResult {
   toolCallId: string;
@@ -35,17 +34,14 @@ function MessageActions({
   onRetry,
   isLast,
   exportRootRef,
-  onSaveArtifact,
 }: {
   content: string;
   onRetry: () => void;
   isLast: boolean;
   exportRootRef: React.RefObject<HTMLDivElement | null>;
-  onSaveArtifact?: (content: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   function handleCopy() {
     // Strip markdown to copy as plain text
@@ -83,11 +79,6 @@ function MessageActions({
     }
   }
 
-  function handlePrint() {
-    const el = exportRootRef.current;
-    if (el) printMessageElement(el);
-  }
-
   return (
     <div className={`flex gap-0.5 mt-1.5 transition-opacity duration-150 ${isLast ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
       <button
@@ -109,29 +100,6 @@ function MessageActions({
       </button>
       <button
         type="button"
-        onClick={handlePrint}
-        className="rounded-lg p-1.5 text-text-muted hover:text-text-primary hover:bg-white/[0.06] transition-colors cursor-pointer"
-        title="Print or save as PDF"
-      >
-        <Printer size={14} />
-      </button>
-      {onSaveArtifact && (
-        <button
-          type="button"
-          onClick={() => {
-            onSaveArtifact(content);
-            setSaved(true);
-            setTimeout(() => setSaved(false), 2000);
-          }}
-          disabled={saved}
-          className="rounded-lg p-1.5 text-text-muted hover:text-text-primary hover:bg-white/[0.06] transition-colors cursor-pointer disabled:opacity-50"
-          title={saved ? 'Saved' : 'Save artifact'}
-        >
-          {saved ? <Check size={14} className="text-green-400" /> : <Bookmark size={14} />}
-        </button>
-      )}
-      <button
-        type="button"
         onClick={onRetry}
         className="rounded-lg p-1.5 text-text-muted hover:text-text-primary hover:bg-white/[0.06] transition-colors cursor-pointer"
         title="Retry"
@@ -146,12 +114,10 @@ export function AssistantMessage({
   message,
   isLast,
   onRetry,
-  onSaveArtifact,
 }: {
   message: ChatMessage;
   isLast: boolean;
   onRetry: () => void;
-  onSaveArtifact?: (content: string) => void;
 }) {
   const exportRootRef = useRef<HTMLDivElement>(null);
 
@@ -169,7 +135,7 @@ export function AssistantMessage({
             {formatRelativeTimestamp(message.createdAt)}
           </span>
         )}
-        <div ref={exportRootRef} className="text-text-secondary">
+        <div ref={exportRootRef} className="text-text-primary">
           {/* Tool results */}
           {message.toolResults && message.toolResults.length > 0 && (
             <div className="mb-3">
@@ -197,7 +163,6 @@ export function AssistantMessage({
             onRetry={onRetry}
             isLast={isLast}
             exportRootRef={exportRootRef}
-            onSaveArtifact={onSaveArtifact}
           />
         )}
       </div>

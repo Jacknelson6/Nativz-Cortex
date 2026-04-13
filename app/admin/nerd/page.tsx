@@ -651,7 +651,6 @@ export default function NerdPage() {
                           message={msg}
                           isLast={isLast}
                           onRetry={() => handleSend('Continue')}
-                          onSaveArtifact={handleSaveArtifact}
                         />
                       );
                     }

@@ -283,10 +283,10 @@ export function ChatComposer({
           {children}
         </PromptInput>
 
-        {/* Paperclip button — positioned in the bottom-left of the input */}
+        {/* Paperclip + research "+" buttons — bottom-left of the input */}
         <div
           className={cn(
-            'absolute z-10',
+            'absolute z-10 flex items-center gap-1',
             variant === 'research'
               ? 'bottom-0 left-0 px-3 pb-3'
               : 'bottom-0 left-0 px-3 pb-2.5',
@@ -298,12 +298,13 @@ export function ChatComposer({
               onClick={() => setMenuOpen(!menuOpen)}
               className={cn(
                 'flex items-center justify-center rounded-full text-text-muted transition hover:text-text-primary',
-                variant === 'research' ? 'h-10 w-10' : 'h-8 w-8',
+                variant === 'research' ? 'h-9 w-9' : 'h-8 w-8',
               )}
               aria-label="Attach files"
+              title="Attach file"
             >
               <Paperclip
-                size={variant === 'research' ? 18 : 16}
+                size={variant === 'research' ? 17 : 16}
                 aria-hidden
               />
             </button>
@@ -332,6 +333,24 @@ export function ChatComposer({
               </>
             )}
           </div>
+
+          {/* Dedicated research "+" button — only renders when the parent wired
+              up onAttachResearch. Lets the user add a topic search from the
+              composer without opening the paperclip menu. */}
+          {onAttachResearch && (
+            <button
+              type="button"
+              onClick={() => onAttachResearch()}
+              className={cn(
+                'flex items-center justify-center rounded-full text-text-muted transition hover:text-accent-text',
+                variant === 'research' ? 'h-9 w-9' : 'h-8 w-8',
+              )}
+              aria-label="Attach research"
+              title="Attach research topic"
+            >
+              <FlaskConical size={variant === 'research' ? 16 : 15} aria-hidden />
+            </button>
+          )}
         </div>
       </div>
 
