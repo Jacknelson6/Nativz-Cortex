@@ -186,6 +186,18 @@ type ScorecardCategory =
 
 Single branch. No feature flag — this is a direct replacement of the existing audit report UI. The existing `prospect_audits` rows that predate Gemini grading will render `—` in the three Gemini-graded rows (gating works the same as a brand with <3 videos). No backfill job required.
 
+## Confirm-platforms screen additions (added 2026-04-13 mid-plan)
+
+Three changes to `components/audit/audit-report.tsx`'s `confirming_platforms` state:
+
+1. **Full URLs, not usernames.** Each detected platform input is pre-filled with the full scraped profile URL (e.g. `https://www.tiktok.com/@toastique`) rather than shortened to `@username`. Users can still edit inline.
+2. **Missing-platform state.** When a platform is not detected on the website, render the input with a red border, em-dash placeholder, and a red "Not found" badge instead of the green "Auto-detected" badge. The input remains editable so the user can paste a URL manually.
+3. **Optional competitor URL inputs.** New card below the 4 platform inputs with 3 URL inputs labeled "Competitor 1/2/3." If the user fills any of them, those URLs override LLM-driven competitor discovery in the process route. If all three are empty, auto-discovery runs as before.
+
+**Storage:** User-provided competitor URLs persist inside the existing `prospect_audits.analysis_data` JSONB column as `competitor_urls_override`. No schema change.
+
+**Backend branch:** `app/api/analyze-social/[id]/process/route.ts` reads `analysis_data.competitor_urls_override`. If non-empty, calls new `scrapeProvidedCompetitors(urls, targetPlatforms)` in `lib/audit/discover-competitors.ts`. Otherwise calls the existing `discoverCompetitorsByWebsite`. Per-candidate scrape logic is factored into a shared `scrapeOneCandidate` helper so both paths stay DRY.
+
 ## Open questions
 
 None — all design decisions resolved in brainstorm.
