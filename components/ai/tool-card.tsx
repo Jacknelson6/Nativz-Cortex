@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { CheckCircle2, XCircle, ExternalLink } from 'lucide-react';
+import { TopicPlanArtifactCard, type TopicPlanArtifactData } from './topic-plan-artifact-card';
 
 export interface ToolResultData {
   success: boolean;
@@ -49,6 +50,18 @@ function ToolDataSummary({ data, cardType }: { data: Record<string, unknown>; ca
 
 export function ToolCard({ toolName, result }: { toolName: string; result: ToolResultData }) {
   const displayName = toolName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+  // Topic plan artifacts get a dedicated, prominent card — this is the
+  // deliverable the user came for, not an incidental tool-call receipt.
+  if (
+    result.success &&
+    result.cardType === 'topic_plan' &&
+    result.data &&
+    typeof result.data === 'object' &&
+    (result.data as { download_url?: string }).download_url
+  ) {
+    return <TopicPlanArtifactCard data={result.data as TopicPlanArtifactData} />;
+  }
 
   if (!result.success) {
     return (

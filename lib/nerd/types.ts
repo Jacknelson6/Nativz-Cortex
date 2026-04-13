@@ -17,7 +17,7 @@ export interface ToolResult {
   /** Optional link to the relevant page in the app */
   link?: { href: string; label: string };
   /** Card type hint for the UI */
-  cardType?: 'task' | 'post' | 'client' | 'shoot' | 'analytics' | 'search' | 'moodboard' | 'team' | 'notification' | 'calendar' | 'affiliate' | 'text' | 'script';
+  cardType?: 'task' | 'post' | 'client' | 'shoot' | 'analytics' | 'search' | 'moodboard' | 'team' | 'notification' | 'calendar' | 'affiliate' | 'text' | 'script' | 'topic_plan';
 }
 
 /** Mention types for the @mention system */

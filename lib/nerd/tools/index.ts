@@ -11,6 +11,7 @@ import { notificationTools } from './notifications';
 import { analyticsTools } from './analytics';
 import { affiliateTools } from './affiliates';
 import { knowledgeTools } from './knowledge';
+import { topicPlanTools } from './topic-plans';
 // Agency knowledge graph tools disabled — KG APIs are still being built,
 // and the RPCs error out in production. Re-enable once the graph is ready.
 // import { agencyKnowledgeTools } from './agency-knowledge';
@@ -30,6 +31,7 @@ export function registerAllTools() {
   registerTools(analyticsTools);
   registerTools(affiliateTools);
   registerTools(knowledgeTools);
+  registerTools(topicPlanTools);
   // registerTools(agencyKnowledgeTools);  // disabled — KG not ready
   registerTools(fyxerTools);
 }
