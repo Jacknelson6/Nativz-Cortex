@@ -58,6 +58,7 @@ export interface PlatformReport {
   engagementRate: number;
   avgViews: number;
   postingFrequency: string;
+  gemini_grades?: GeminiGrades;
 }
 
 export interface CompetitorProfile {
@@ -71,6 +72,7 @@ export interface CompetitorProfile {
   avgViews: number;
   postingFrequency: string;
   recentVideos: ProspectVideo[];
+  gemini_grades?: GeminiGrades;
 }
 
 export type ScoreStatus = 'good' | 'warning' | 'poor';
@@ -86,6 +88,8 @@ export interface ScorecardItem {
     value: string;
   }[];
   description: string;
+  /** Short machine-written "why" for tooltips + callout cards. */
+  status_reason?: string;
 }
 
 export interface AuditScorecard {
@@ -107,4 +111,39 @@ export interface FailedPlatform {
   platform: AuditPlatform;
   url: string;
   error: string;
+}
+
+/**
+ * 13 scorecard categories, grouped for adjacency in the UI.
+ * - `_account` suffix denotes account-level rows (not evaluated per-platform).
+ */
+export type ScorecardCategory =
+  // Performance
+  | 'engagement_rate'
+  | 'avg_views'
+  | 'follower_to_view'
+  // Cadence
+  | 'posting_frequency'
+  | 'cadence_trend'
+  // Content execution (Gemini-graded)
+  | 'content_variety'
+  | 'content_quality'
+  | 'hook_consistency'
+  // Copy & metadata
+  | 'caption_optimization'
+  | 'hashtag_strategy'
+  // Profile & conversion (account-level)
+  | 'bio_optimization_account'
+  | 'cta_intent_account'
+  // Strategy (account-level)
+  | 'platform_focus_account';
+
+/** Cadence direction tokens — used in status_reason + callouts. */
+export type CadenceDirection = 'up' | 'flat' | 'down';
+
+/** Per-platform Gemini-derived grades. Populated after video analysis. */
+export interface GeminiGrades {
+  hook_consistency: { percentage: number; status: ScoreStatus };
+  content_variety: { count: number; status: ScoreStatus };
+  content_quality: { avg: number; status: ScoreStatus };
 }
