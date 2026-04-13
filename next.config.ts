@@ -67,7 +67,20 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'images.unsplash.com' },
     ],
   },
-  serverExternalPackages: ['ffmpeg-static', 'fluent-ffmpeg', '@resvg/resvg-js', 'playwright-core'],
+  serverExternalPackages: [
+    'ffmpeg-static',
+    'fluent-ffmpeg',
+    '@resvg/resvg-js',
+    'playwright-core',
+    // react-pdf has dynamic requires for fonts + pdfkit internals that
+    // webpack's tracer can't follow; bundling causes runtime "Cannot
+    // find module" / "renderToBuffer is not a function" failures on
+    // Vercel. Externalizing makes the server import it as plain CJS.
+    '@react-pdf/renderer',
+    '@react-pdf/pdfkit',
+    '@react-pdf/font',
+    '@react-pdf/textkit',
+  ],
   // ffmpeg-static resolves its binary via path.join(__dirname, <name from package.json>)
   // at runtime, which nft cannot trace statically. Explicitly include the binary file
   // in the two routes that spawn it so Vercel copies it into the function bundle.
