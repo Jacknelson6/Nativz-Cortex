@@ -546,7 +546,13 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">
             {(['tiktok', 'instagram', 'youtube'] as AuditPlatformKey[]).map(platform => {
               const detected = detectedPlatforms.find(d => d.platform === platform);
-              const missing = !detected && !socialInputs[platform]?.trim();
+              const typed = socialInputs[platform]?.trim();
+              // Three states:
+              //  - auto-detected: scraper found it AND user hasn't changed it → "Auto-detected"
+              //  - manually entered: user has typed a value for an undetected platform → "Detected"
+              //  - empty: no scraper hit AND no input → "Not found" + red styling
+              const missing = !detected && !typed;
+              const manuallyAdded = !detected && Boolean(typed);
               const value = socialInputs[platform] ?? prettyUrl(detected?.url ?? '');
               return (
                 <div key={platform} className="flex items-center gap-3">
@@ -568,6 +574,8 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                   />
                   {detected ? (
                     <span className="shrink-0 text-sm text-emerald-400">Auto-detected</span>
+                  ) : manuallyAdded ? (
+                    <span className="shrink-0 text-sm text-emerald-400">Detected</span>
                   ) : (
                     <span className="shrink-0 text-sm text-red-400">Not found</span>
                   )}
