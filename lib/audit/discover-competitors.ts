@@ -206,6 +206,109 @@ function getTopHashtags(videos: ProspectVideo[], limit: number): string[] {
     .map(([tag]) => tag);
 }
 
+/** Result type for scrapeOneCandidate — success or failure. */
+type ScrapeCandidateOutcome =
+  | { type: 'success'; competitor: CompetitorProfile }
+  | { type: 'failure'; failure: CompetitorDiscoveryFailure };
+
+/**
+ * Scrape a single candidate (website → social link → platform metrics).
+ * Extracted so both the LLM-driven and user-provided paths share the same body.
+ */
+async function scrapeOneCandidate(
+  candidate: { name: string; website: string },
+  targetPlatformNames: AuditPlatform[],
+  discoveryStartMs: number,
+): Promise<ScrapeCandidateOutcome> {
+  // Re-check budget inside the helper so the override path also respects it.
+  const elapsedMs = Date.now() - discoveryStartMs;
+  if (elapsedMs > DISCOVERY_TIME_BUDGET_MS) {
+    return {
+      type: 'failure',
+      failure: { name: candidate.name, website: candidate.website, reason: 'discovery time budget exceeded — skipped' },
+    };
+  }
+
+  const website = normaliseWebsite(candidate.website);
+  if (!website) {
+    return { type: 'failure', failure: { name: candidate.name, website: candidate.website, reason: 'empty website' } };
+  }
+
+  // Scrape the candidate's website to find social links.
+  let siteResult;
+  try {
+    siteResult = await scrapeWebsite(website);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`[audit] competitor "${candidate.name}" website scrape failed: ${msg}`);
+    return { type: 'failure', failure: { name: candidate.name, website, reason: `website scrape failed: ${msg}` } };
+  }
+
+  const socials = siteResult.socialLinks ?? [];
+  if (socials.length === 0) {
+    console.log(`[audit] competitor "${candidate.name}" has no social links on ${website}`);
+    return { type: 'failure', failure: { name: candidate.name, website, reason: 'no socials on website' } };
+  }
+
+  const matchingSocial = pickComparisonPlatform(targetPlatformNames, socials);
+  if (!matchingSocial) {
+    console.log(
+      `[audit] competitor "${candidate.name}" has socials (${socials.map((s) => s.platform).join(', ')}) but none overlap with target (${targetPlatformNames.join(', ')})`,
+    );
+    return {
+      type: 'failure',
+      failure: {
+        name: candidate.name,
+        website,
+        reason: `no platform overlap with target (${targetPlatformNames.join(', ')})`,
+      },
+    };
+  }
+
+  // Scrape that platform for real metrics.
+  try {
+    const { profile, videos } = await scrapeSocialForCompetitor(matchingSocial);
+    console.log(
+      `[audit] competitor "${candidate.name}" added via ${matchingSocial.platform}: ${profile.followers} followers, ${videos.length} videos`,
+    );
+    return { type: 'success', competitor: buildCompetitorProfile(profile, videos) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`[audit] competitor "${candidate.name}" ${matchingSocial.platform} scrape failed: ${msg}`);
+    return { type: 'failure', failure: { name: candidate.name, website, reason: `${matchingSocial.platform} scrape failed: ${msg}` } };
+  }
+}
+
+/**
+ * Scrape user-provided competitor URLs directly, bypassing LLM discovery.
+ * Each URL is treated as both the candidate name and website — we scrape it
+ * to find social links, then pull real platform metrics as usual.
+ */
+export async function scrapeProvidedCompetitors(
+  urls: string[],
+  targetPlatforms: AuditPlatform[],
+): Promise<CompetitorDiscoveryResult> {
+  const failures: CompetitorDiscoveryFailure[] = [];
+  const competitors: CompetitorProfile[] = [];
+
+  console.log(`[audit] scrapeProvidedCompetitors: ${urls.length} user-provided URL(s): ${urls.join(', ')}`);
+
+  const discoveryStartMs = Date.now();
+  for (const url of urls) {
+    if (competitors.length >= DEFAULT_TARGET_COMPETITORS) break;
+
+    const candidate = { name: url, website: url };
+    const result = await scrapeOneCandidate(candidate, targetPlatforms, discoveryStartMs);
+    if (result.type === 'success') {
+      competitors.push(result.competitor);
+    } else {
+      failures.push(result.failure);
+    }
+  }
+
+  return { competitors, failures };
+}
+
 /**
  * The rewrite. Use this instead of the old analyze.ts#discoverCompetitors
  * (which returns bare TikTok usernames that the process route then has to
@@ -258,59 +361,11 @@ export async function discoverCompetitorsByWebsite(
       break;
     }
 
-    const website = normaliseWebsite(candidate.website);
-    if (!website) {
-      failures.push({ name: candidate.name, website: candidate.website, reason: 'empty website' });
-      continue;
-    }
-
-    // Scrape the candidate's website to find social links.
-    let siteResult;
-    try {
-      siteResult = await scrapeWebsite(website);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.log(`[audit] competitor "${candidate.name}" website scrape failed: ${msg}`);
-      failures.push({ name: candidate.name, website, reason: `website scrape failed: ${msg}` });
-      continue;
-    }
-
-    const socials = siteResult.socialLinks ?? [];
-    if (socials.length === 0) {
-      console.log(`[audit] competitor "${candidate.name}" has no social links on ${website}`);
-      failures.push({ name: candidate.name, website, reason: 'no socials on website' });
-      continue;
-    }
-
-    const matchingSocial = pickComparisonPlatform(targetPlatformNames, socials);
-    if (!matchingSocial) {
-      console.log(
-        `[audit] competitor "${candidate.name}" has socials (${socials.map((s) => s.platform).join(', ')}) but none overlap with target (${targetPlatformNames.join(', ')})`,
-      );
-      failures.push({
-        name: candidate.name,
-        website,
-        reason: `no platform overlap with target (${targetPlatformNames.join(', ')})`,
-      });
-      continue;
-    }
-
-    // Scrape that platform for real metrics.
-    try {
-      const { profile, videos } = await scrapeSocialForCompetitor(matchingSocial);
-      competitors.push(buildCompetitorProfile(profile, videos));
-      console.log(
-        `[audit] competitor "${candidate.name}" added via ${matchingSocial.platform}: ${profile.followers} followers, ${videos.length} videos`,
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.log(`[audit] competitor "${candidate.name}" ${matchingSocial.platform} scrape failed: ${msg}`);
-      failures.push({
-        name: candidate.name,
-        website,
-        reason: `${matchingSocial.platform} scrape failed: ${msg}`,
-      });
-      continue;
+    const result = await scrapeOneCandidate(candidate, targetPlatformNames, discoveryStartMs);
+    if (result.type === 'success') {
+      competitors.push(result.competitor);
+    } else {
+      failures.push(result.failure);
     }
   }
 

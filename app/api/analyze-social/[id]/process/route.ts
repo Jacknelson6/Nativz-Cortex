@@ -11,7 +11,7 @@ import {
   buildPlatformReport,
   generateScorecard,
 } from '@/lib/audit/analyze';
-import { discoverCompetitorsByWebsite } from '@/lib/audit/discover-competitors';
+import { discoverCompetitorsByWebsite, scrapeProvidedCompetitors } from '@/lib/audit/discover-competitors';
 import { analyzeVideosForBrand } from '@/lib/audit/analyze-videos';
 import type { PlatformReport, CompetitorProfile, WebsiteContext, SocialLink, AuditPlatform, FailedPlatform } from '@/lib/audit/types';
 import type { BrandVideoAudits } from '@/lib/audit/analyze';
@@ -188,8 +188,16 @@ export async function POST(
             }
           })
         ),
-        // 2b: Competitor discovery + scraping (no prospect hashtag signals yet)
-        discoverCompetitorsByWebsite(websiteContext, []).catch((err) => {
+        // 2b: Competitor discovery + scraping.
+        // If the user provided competitor URLs at the confirm-platforms step,
+        // use those directly; otherwise fall back to LLM-driven discovery.
+        (() => {
+          const override = (audit.analysis_data as any)?.competitor_urls_override as string[] | null | undefined;
+          const competitorPromise = override && override.length > 0
+            ? scrapeProvidedCompetitors(override, platformsToScrape.map(p => p.platform))
+            : discoverCompetitorsByWebsite(websiteContext, []);
+          return competitorPromise;
+        })().catch((err) => {
           console.error(`[audit:${id}] Competitor discovery failed (non-blocking):`, err);
           return { competitors: [] as CompetitorProfile[], failures: [] as { name: string; website: string; reason: string }[] };
         }),
