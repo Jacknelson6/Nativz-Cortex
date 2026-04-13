@@ -51,7 +51,11 @@ interface AuditRecord {
   competitors_data: CompetitorProfile[] | null;
   scorecard: AuditScorecard | null;
   videos_data: TopicSearchVideoRow[] | null;
-  analysis_data: { social_goals?: string[] } | null;
+  analysis_data: {
+    social_goals?: string[];
+    suggested_competitors?: { name: string; website: string; why?: string }[];
+    competitor_urls_override?: string[];
+  } | null;
   error_message: string | null;
   created_at: string;
 }
@@ -158,6 +162,53 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     if (audit.status === 'pending') void detectSocials();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Rehydrate state from persisted audit data on revisits. The confirm screen
+  // clears socialInputs + competitorUrls + websiteInfo on unmount; without
+  // this block the user would come back to an empty form.
+  useEffect(() => {
+    if (audit.status !== 'confirming_platforms') return;
+    const prospectData = audit.prospect_data as {
+      websiteContext?: { title?: string; industry?: string; description?: string };
+      detectedSocialLinks?: { platform: string; url: string; username: string }[];
+    } | null;
+    const analysisData = audit.analysis_data as {
+      suggested_competitors?: { name: string; website: string }[];
+      competitor_urls_override?: string[];
+    } | null;
+
+    if (prospectData?.websiteContext) {
+      const { title, industry, description } = prospectData.websiteContext;
+      if (title || industry) setWebsiteInfo({ title: title ?? '', industry: industry ?? '' });
+      if (description) setBrandDescription(description);
+    }
+    if (prospectData?.detectedSocialLinks) {
+      setDetectedPlatforms(prospectData.detectedSocialLinks);
+      // Only seed inputs if user hasn't typed anything yet
+      setSocialInputs((current) => {
+        if (Object.values(current).some((v) => v?.trim())) return current;
+        const preset: Partial<Record<AuditPlatformKey, string>> = {};
+        for (const d of prospectData.detectedSocialLinks ?? []) {
+          if (d.url && (['tiktok', 'instagram', 'youtube'] as const).includes(d.platform as AuditPlatformKey)) {
+            preset[d.platform as AuditPlatformKey] = prettyUrl(d.url);
+          }
+        }
+        return preset;
+      });
+    }
+    const storedCompetitors =
+      analysisData?.competitor_urls_override ??
+      analysisData?.suggested_competitors?.map((c) => c.website);
+    if (storedCompetitors && storedCompetitors.length > 0) {
+      setCompetitorUrls((current) => {
+        if (current.some((u) => u.trim())) return current;
+        const urls = storedCompetitors.map((u) => prettyUrl(u));
+        while (urls.length < 3) urls.push('');
+        return urls;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audit.status, audit.id]);
 
   // Smooth progress: accelerates over time (eased curve), caps at 92% until done
   useEffect(() => {

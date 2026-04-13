@@ -25,7 +25,7 @@ export async function POST(
   const admin = createAdminClient();
   const { data: audit } = await admin
     .from('prospect_audits')
-    .select('id, prospect_data')
+    .select('id, prospect_data, analysis_data')
     .eq('id', id)
     .single();
 
@@ -36,10 +36,28 @@ export async function POST(
     return NextResponse.json({ error: 'websiteContext not available — run detect-socials first' }, { status: 400 });
   }
 
+  // If we already cached suggestions for this audit, return them — avoids
+  // re-running the LLM every time the user revisits the confirm screen.
+  const existingAnalysisData = (audit.analysis_data as Record<string, unknown> | null) ?? {};
+  const cached = existingAnalysisData.suggested_competitors as { name: string; website: string; why: string }[] | undefined;
+  if (cached && cached.length > 0) {
+    return NextResponse.json({ candidates: cached.slice(0, 3), cached: true });
+  }
+
   try {
-    // Pass empty signals — we don't have platform scrapes yet at this stage.
     const candidates = await suggestCompetitorWebsites(websiteContext, []);
-    return NextResponse.json({ candidates: candidates.slice(0, 3) });
+    const top3 = candidates.slice(0, 3);
+
+    // Persist for revisits — no migration needed (analysis_data is JSONB).
+    await admin
+      .from('prospect_audits')
+      .update({
+        analysis_data: { ...existingAnalysisData, suggested_competitors: top3 },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    return NextResponse.json({ candidates: top3 });
   } catch (err) {
     console.warn('[analyze-social] suggest-competitors failed:', err);
     return NextResponse.json({ candidates: [] });

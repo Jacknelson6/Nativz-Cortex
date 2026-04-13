@@ -7,10 +7,14 @@ const NOTE_PATH =
 export function TikTokMark({
   size = 18,
   className,
+  variant = 'onDark',
 }: {
   size?: number;
   className?: string;
+  /** 'onDark' uses a white foreground (dark backgrounds); 'onLight' uses black (for white backgrounds / PDFs). */
+  variant?: 'onDark' | 'onLight';
 }) {
+  const fg = variant === 'onLight' ? '#000000' : '#FFFFFF';
   return (
     <svg
       width={size}
@@ -22,7 +26,7 @@ export function TikTokMark({
     >
       <path d={NOTE_PATH} fill="#00F2EA" transform="translate(-0.55 -0.55)" />
       <path d={NOTE_PATH} fill="#FE2C55" transform="translate(0.55 0.55)" />
-      <path d={NOTE_PATH} fill="#FFFFFF" />
+      <path d={NOTE_PATH} fill={fg} />
     </svg>
   );
 }
