@@ -359,9 +359,9 @@ function UserCard({
           </div>
         )}
 
-        {/* Name + email + team role */}
+        {/* Name + email + team role + client badges */}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium text-text-primary truncate">{u.full_name}</span>
             {u.is_super_admin && <Crown size={12} className="text-amber-400 shrink-0" />}
             <span className={`text-[11px] px-1.5 py-0.5 rounded-full shrink-0 ${
@@ -373,6 +373,21 @@ function UserCard({
               <span className="text-[11px] px-1.5 py-0.5 rounded-full shrink-0 bg-purple-500/10 text-purple-400 flex items-center gap-1">
                 <Briefcase size={9} />
                 {u.team_role}
+              </span>
+            )}
+            {u.client_access.slice(0, 3).map((c) => (
+              <span
+                key={c}
+                className="text-[11px] px-1.5 py-0.5 rounded-full shrink-0 bg-emerald-500/10 text-emerald-400 flex items-center gap-1"
+                title={`Client access: ${c}`}
+              >
+                <Building2 size={9} />
+                {c}
+              </span>
+            ))}
+            {u.client_access.length > 3 && (
+              <span className="text-[11px] px-1.5 py-0.5 rounded-full shrink-0 bg-surface-hover text-text-muted">
+                +{u.client_access.length - 3}
               </span>
             )}
           </div>

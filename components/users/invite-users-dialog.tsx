@@ -2,16 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import {
-  UserPlus, Building2, Shield, Loader2, Copy, Check, ChevronDown, ChevronUp, Send,
+  UserPlus, Building2, Shield, Loader2, Copy, Check, Send, Minus, Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
-
-interface ClientOption {
-  id: string;
-  name: string;
-  slug: string;
-}
+import { ClientPickerButton, type ClientOption as PickerClientOption } from '@/components/ui/client-picker';
 
 interface GeneratedInvite {
   invite_url: string;
@@ -50,30 +45,32 @@ export function InviteUsersDialog({ open, onClose, onInvited }: InviteUsersDialo
   return (
     <Dialog open={open} onClose={handleClose} title="Invite users" maxWidth="lg">
       <div className="space-y-5">
-        {/* Tab switcher */}
-        <div className="flex gap-1 rounded-lg border border-nativz-border p-0.5 w-fit">
-          <button
-            onClick={() => { setTab('portal'); setGenerated([]); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors cursor-pointer ${
-              tab === 'portal'
-                ? 'bg-accent text-white'
-                : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            <Building2 size={12} />
-            Portal user
-          </button>
-          <button
-            onClick={() => { setTab('admin'); setGenerated([]); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors cursor-pointer ${
-              tab === 'admin'
-                ? 'bg-accent text-white'
-                : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            <Shield size={12} />
-            Admin / team
-          </button>
+        {/* Tab switcher — centered, larger hit area */}
+        <div className="flex justify-center">
+          <div className="flex gap-1 rounded-lg border border-nativz-border p-1">
+            <button
+              onClick={() => { setTab('portal'); setGenerated([]); }}
+              className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-colors cursor-pointer ${
+                tab === 'portal'
+                  ? 'bg-accent text-white'
+                  : 'text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              <Building2 size={14} />
+              Portal user
+            </button>
+            <button
+              onClick={() => { setTab('admin'); setGenerated([]); }}
+              className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-colors cursor-pointer ${
+                tab === 'admin'
+                  ? 'bg-accent text-white'
+                  : 'text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              <Shield size={14} />
+              Admin / team
+            </button>
+          </div>
         </div>
 
         {tab === 'portal' ? (
@@ -99,12 +96,10 @@ function PortalInviteForm({
 }: {
   onInvitesCreated: (heading: string, invites: GeneratedInvite[]) => void;
 }) {
-  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [clients, setClients] = useState<PickerClientOption[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
-  const [clientId, setClientId] = useState('');
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [createMultiple, setCreateMultiple] = useState(false);
-  const [count, setCount] = useState(3);
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [count, setCount] = useState(1);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -113,8 +108,13 @@ function PortalInviteForm({
         const res = await fetch('/api/clients');
         if (res.ok) {
           const data = await res.json();
-          const list: ClientOption[] = Array.isArray(data) ? data : (data.clients ?? []);
-          setClients(list.map((c) => ({ id: c.id, name: c.name, slug: c.slug })));
+          const list = Array.isArray(data) ? data : (data.clients ?? []);
+          setClients(list.map((c: { id: string; name: string; logo_url?: string | null; agency?: string | null }) => ({
+            id: c.id,
+            name: c.name,
+            logo_url: c.logo_url ?? null,
+            agency: c.agency ?? null,
+          })));
         }
       } finally {
         setLoadingClients(false);
@@ -122,12 +122,17 @@ function PortalInviteForm({
     })();
   }, []);
 
+  function clampCount(n: number) {
+    if (Number.isNaN(n)) return 1;
+    return Math.max(1, Math.min(50, Math.floor(n)));
+  }
+
   async function handleGenerate() {
     if (!clientId) {
       toast.error('Select a client');
       return;
     }
-    const desired = createMultiple ? Math.max(1, Math.min(50, count)) : 1;
+    const desired = clampCount(count);
 
     setSubmitting(true);
     try {
@@ -162,74 +167,59 @@ function PortalInviteForm({
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-text-muted">
-        Portal users get access to a specific client&apos;s dashboard. Share the generated
-        link(s) with the people you want to invite.
-      </p>
-
-      {/* Client picker */}
+      {/* Client picker — uses the same bento modal as the rest of the app */}
       <div>
         <label className="block text-[11px] font-medium text-text-muted uppercase tracking-wide mb-1.5">
           Client
         </label>
         {loadingClients ? (
-          <div className="h-9 rounded-lg bg-surface-hover animate-pulse" />
+          <div className="h-11 rounded-xl bg-surface-hover animate-pulse" />
         ) : (
-          <select
+          <ClientPickerButton
+            clients={clients}
             value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
-            className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-text transition-colors"
-          >
-            <option value="">Select a client…</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+            onChange={setClientId}
+            placeholder="Select a client"
+          />
         )}
       </div>
 
-      {/* Advanced disclosure */}
-      <div className="rounded-lg border border-nativz-border">
-        <button
-          onClick={() => setAdvancedOpen((o) => !o)}
-          className="w-full flex items-center justify-between px-3 py-2 text-xs text-text-muted hover:text-text-secondary cursor-pointer"
-        >
-          <span>Show advanced settings</span>
-          {advancedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-        </button>
-
-        {advancedOpen && (
-          <div className="px-3 pb-3 pt-1 space-y-3 border-t border-nativz-border/50">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={createMultiple}
-                onChange={(e) => setCreateMultiple(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-nativz-border accent-accent cursor-pointer"
-              />
-              <span className="text-xs text-text-secondary">Create multiple invites</span>
-            </label>
-
-            {createMultiple && (
-              <div className="pl-5">
-                <label className="block text-[11px] text-text-muted mb-1">
-                  Number of invites (1–50)
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={count}
-                  onChange={(e) => setCount(parseInt(e.target.value || '1', 10))}
-                  className="w-24 rounded-lg border border-nativz-border bg-transparent px-2.5 py-1.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-text transition-colors"
-                />
-                <p className="text-[11px] text-text-muted/70 mt-1">
-                  Each invite is a unique, one-time link (7-day expiry).
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+      {/* Number of invites — always visible, default 1, +/- or type */}
+      <div>
+        <label className="block text-[11px] font-medium text-text-muted uppercase tracking-wide mb-1.5">
+          Number of invites
+        </label>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCount((n) => clampCount(n - 1))}
+            disabled={count <= 1}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-nativz-border text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Decrease"
+          >
+            <Minus size={14} />
+          </button>
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={count}
+            onChange={(e) => setCount(clampCount(parseInt(e.target.value, 10)))}
+            className="w-20 text-center rounded-lg border border-nativz-border bg-transparent px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-text transition-colors"
+          />
+          <button
+            type="button"
+            onClick={() => setCount((n) => clampCount(n + 1))}
+            disabled={count >= 50}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-nativz-border text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Increase"
+          >
+            <Plus size={14} />
+          </button>
+          <span className="text-[11px] text-text-muted ml-1">
+            Each one is a unique, one-time link (7-day expiry).
+          </span>
+        </div>
       </div>
 
       <div className="flex justify-end">
@@ -241,7 +231,7 @@ function PortalInviteForm({
           {submitting ? (
             <><Loader2 size={13} className="animate-spin" /> Generating…</>
           ) : (
-            <><UserPlus size={13} /> Generate invite{createMultiple && count > 1 ? 's' : ''}</>
+            <><UserPlus size={13} /> Generate {count > 1 ? `${count} invites` : 'invite'}</>
           )}
         </button>
       </div>
@@ -313,11 +303,6 @@ function AdminInviteForm({
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-text-muted">
-        Admin invites create a team member record + a one-time join link. They&apos;ll be
-        able to set a password and sign into the admin dashboard.
-      </p>
-
       <div>
         <label className="block text-[11px] font-medium text-text-muted uppercase tracking-wide mb-1.5">
           Full name
