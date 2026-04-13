@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { scrapeWebsite } from '@/lib/audit/scrape-website';
@@ -12,7 +12,9 @@ import {
   generateScorecard,
 } from '@/lib/audit/analyze';
 import { discoverCompetitorsByWebsite } from '@/lib/audit/discover-competitors';
+import { analyzeVideosForBrand } from '@/lib/audit/analyze-videos';
 import type { PlatformReport, CompetitorProfile, WebsiteContext, SocialLink, AuditPlatform, FailedPlatform } from '@/lib/audit/types';
+import type { BrandVideoAudits } from '@/lib/audit/analyze';
 import { persistAllScrapedImages, persistAllCompetitorImages } from '@/lib/audit/persist-scraped-images';
 
 export const maxDuration = 300;
@@ -22,12 +24,28 @@ export const maxDuration = 300;
  *
  * Flow:
  * 1. Scrape the prospect's website → extract business context + social links
- * 2. Scrape each social platform in parallel (TikTok, Instagram, etc.)
- * 3. AI discovers competitors based on gathered data
- * 4. Scrape competitor profiles
- * 5. AI generates scorecard
- * 6. Store results
+ * 2a. Scrape each social platform in parallel (TikTok, Instagram, etc.)
+ * 2b. Competitor discovery + scraping — runs in parallel with 2a
+ * 3. Gemini per-video grading for prospect + competitors (concurrency 3)
+ * 4. AI generates scorecard (consumes Gemini grades)
+ * 5. Store results; image persistence fires via after() off critical path
  */
+
+/** Run `tasks` with at most `limit` concurrent workers. */
+async function runWithConcurrency<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < tasks.length) {
+      const i = cursor++;
+      results[i] = await tasks[i]();
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, worker);
+  await Promise.all(workers);
+  return results;
+}
+
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -132,42 +150,52 @@ export async function POST(
         return NextResponse.json({ status: 'needs_social_input' });
       }
 
-      // Step 2: Scrape each platform in parallel. Capture per-platform errors
-      // so the report surfaces exactly which platforms failed and why —
-      // before this, failures went to console.error and the UI silently
-      // rendered a scorecard missing entire platforms.
-      console.log(`[audit:${id}] Step 2: Scraping ${platformsToScrape.length} platform(s) in parallel...`);
+      // Steps 2a + 2b: Run prospect-platform scraping in parallel with
+      // competitor discovery + scraping. Competitor discovery uses websiteContext
+      // alone (targetPlatforms=[]) since prospect scrape hasn't finished yet —
+      // this sacrifices top-hashtag seeding for ~50-60s wall-clock savings.
+      console.log(`[audit:${id}] Steps 2a+2b: Scraping ${platformsToScrape.length} platform(s) + discovering competitors in parallel...`);
+
+      const [prospectScrapeResults, competitorDiscoveryResult] = await Promise.all([
+        // 2a: Prospect platform scrapes
+        Promise.allSettled(
+          platformsToScrape.map(async ({ platform, url }) => {
+            switch (platform) {
+              case 'tiktok': {
+                const result = await scrapeTikTokProfile(url);
+                return buildPlatformReport(result.profile, result.videos);
+              }
+              case 'instagram': {
+                const result = await scrapeInstagramProfile(url);
+                return buildPlatformReport(result.profile, result.videos);
+              }
+              case 'facebook': {
+                const result = await scrapeFacebookProfile(url);
+                return buildPlatformReport(result.profile, result.videos);
+              }
+              case 'youtube': {
+                const result = await scrapeYouTubeProfile(url);
+                return buildPlatformReport(result.profile, result.videos);
+              }
+              default:
+                console.log(`[audit:${id}] Skipping ${platform} (no scraper)`);
+                return null;
+            }
+          })
+        ),
+        // 2b: Competitor discovery + scraping (no prospect hashtag signals yet)
+        discoverCompetitorsByWebsite(websiteContext, []).catch((err) => {
+          console.error(`[audit:${id}] Competitor discovery failed (non-blocking):`, err);
+          return { competitors: [] as CompetitorProfile[], failures: [] as { name: string; website: string; reason: string }[] };
+        }),
+      ]);
+
+      // Collate prospect platform results
       const platformReports: PlatformReport[] = [];
       const failedPlatforms: FailedPlatform[] = [];
 
-      const scrapeResults = await Promise.allSettled(
-        platformsToScrape.map(async ({ platform, url }) => {
-          switch (platform) {
-            case 'tiktok': {
-              const result = await scrapeTikTokProfile(url);
-              return buildPlatformReport(result.profile, result.videos);
-            }
-            case 'instagram': {
-              const result = await scrapeInstagramProfile(url);
-              return buildPlatformReport(result.profile, result.videos);
-            }
-            case 'facebook': {
-              const result = await scrapeFacebookProfile(url);
-              return buildPlatformReport(result.profile, result.videos);
-            }
-            case 'youtube': {
-              const result = await scrapeYouTubeProfile(url);
-              return buildPlatformReport(result.profile, result.videos);
-            }
-            default:
-              console.log(`[audit:${id}] Skipping ${platform} (no scraper)`);
-              return null;
-          }
-        })
-      );
-
-      for (let i = 0; i < scrapeResults.length; i++) {
-        const result = scrapeResults[i];
+      for (let i = 0; i < prospectScrapeResults.length; i++) {
+        const result = prospectScrapeResults[i];
         const { platform, url } = platformsToScrape[i];
         if (result.status === 'fulfilled' && result.value) {
           platformReports.push(result.value);
@@ -178,29 +206,7 @@ export async function POST(
         }
       }
 
-      // Step 2b: Persist thumbnails + avatars to Supabase storage so the
-      // report survives TikTok/IG CDN URL expiration (~24-48h). Non-blocking
-      // — if upload fails, the report still renders with CDN URLs.
-      if (platformReports.length > 0) {
-        console.log(`[audit:${id}] Step 2b: Persisting scraped images to storage...`);
-        try {
-          await persistAllScrapedImages(adminClient, id, platformReports);
-        } catch (err) {
-          console.warn(`[audit:${id}] Image persistence failed (non-blocking):`, err);
-        }
-      }
-
-      // Step 3+4: Website-grounded competitor discovery. New flow asks the
-      // LLM for real competitor companies, scrapes each candidate's website
-      // for social links, then runs the same platform scrapers the target
-      // used. No more hallucinated TikTok usernames, and the comparison
-      // charts are automatically apples-to-apples because we match the
-      // target's platforms. See lib/audit/discover-competitors.ts.
-      console.log(`[audit:${id}] Steps 3+4: Discovering competitors via website grounding...`);
-      const { competitors, failures: competitorFailures } = await discoverCompetitorsByWebsite(
-        websiteContext,
-        platformReports,
-      );
+      const { competitors, failures: competitorFailures } = competitorDiscoveryResult;
       console.log(
         `[audit:${id}] Competitors: ${competitors.length} kept, ${competitorFailures.length} dropped`,
       );
@@ -210,29 +216,68 @@ export async function POST(
         }
       }
 
-      // Persist competitor avatars + video thumbnails to Supabase so they
-      // survive CDN URL expiration — same treatment the target platforms get.
-      if (competitors.length > 0) {
-        console.log(`[audit:${id}] Step 4b: Persisting competitor images...`);
-        try {
-          await persistAllCompetitorImages(adminClient, id, competitors);
-        } catch (err) {
-          console.warn(`[audit:${id}] Competitor image persistence failed (non-blocking):`, err);
+      // Step 2b image persistence: move to after() so it doesn't block scorecard
+      after(async () => {
+        if (platformReports.length > 0) {
+          console.log(`[audit:${id}] after(): persisting prospect images...`);
+          try {
+            await persistAllScrapedImages(adminClient, id, platformReports);
+          } catch (err) {
+            console.warn(`[audit:${id}] after(): prospect image persistence failed:`, err);
+          }
+        }
+        if (competitors.length > 0) {
+          console.log(`[audit:${id}] after(): persisting competitor images...`);
+          try {
+            await persistAllCompetitorImages(adminClient, id, competitors);
+          } catch (err) {
+            console.warn(`[audit:${id}] after(): competitor image persistence failed:`, err);
+          }
+        }
+      });
+
+      // Step 3: Gemini per-video grading — prospect + competitors (concurrency 3)
+      console.log(`[audit:${id}] Step 3: Gemini video grading...`);
+
+      // Build per-platform video map for prospect
+      const prospectVideosByPlatform = Object.fromEntries(
+        platformReports.map((p) => [p.platform, p.videos])
+      ) as Parameters<typeof analyzeVideosForBrand>[0];
+
+      // Grade prospect + each competitor concurrently (up to 3 competitors in parallel)
+      const [prospectVideoAudits, ...competitorAuditResults] = await Promise.all([
+        analyzeVideosForBrand(prospectVideosByPlatform),
+        ...await runWithConcurrency(
+          competitors.map((comp) => async () => {
+            const videosByPlatform = { [comp.platform]: comp.recentVideos } as Parameters<typeof analyzeVideosForBrand>[0];
+            const grades = await analyzeVideosForBrand(videosByPlatform);
+            return { username: comp.username, grades };
+          }),
+          3,
+        ),
+      ]);
+
+      // Build competitorVideoAudits keyed by username
+      const competitorVideoAudits: Record<string, BrandVideoAudits> = {};
+      for (const result of competitorAuditResults) {
+        if (result) {
+          competitorVideoAudits[result.username] = result.grades;
         }
       }
 
-      // Step 5: Generate scorecard
-      // TODO(Task 5): wire prospectVideoAudits + competitorVideoAudits from Gemini stage
-      console.log(`[audit:${id}] Step 5: Generating scorecard...`);
+      console.log(`[audit:${id}] Gemini grading complete: prospect=${Object.keys(prospectVideoAudits).length} platforms, competitors=${Object.keys(competitorVideoAudits).length}`);
+
+      // Step 4: Generate scorecard with Gemini grades wired in
+      console.log(`[audit:${id}] Step 4: Generating scorecard...`);
       const scorecard = await generateScorecard({
         platformSummaries: platformReports,
         competitors,
         websiteContext,
-        prospectVideoAudits: {},
-        competitorVideoAudits: {},
+        prospectVideoAudits,
+        competitorVideoAudits,
       });
 
-      // Step 6: Store results
+      // Step 5: Store results
       // Convert videos to TopicSearchVideoRow format for the video grid
       const allVideos = platformReports.flatMap(p => p.videos.map(v => ({
         id: v.id,
