@@ -90,12 +90,22 @@ function para(runs: TextRun[] | TextRun, opts: {
 // ─── Cover page ─────────────────────────────────────────────────────────────
 
 function buildCoverPage(plan: TopicPlan, clientName: string): Paragraph[] {
-  const counters = [
-    { value: plan.series.length.toString(), label: 'CONTENT SERIES' },
+  // Drop counters that have no real data — a "0 HIGH RESONANCE" or
+  // "— COMBINED VIEWS" tile reads as broken on the cover page.
+  const counters: Array<{ value: string; label: string }> = [
+    { value: plan.series.length.toString(), label: plan.series.length === 1 ? 'CONTENT PILLAR' : 'CONTENT PILLARS' },
     { value: totalIdeas(plan).toString(), label: 'VIDEO TOPICS' },
-    { value: sumViewsLabel(plan), label: 'COMBINED VIEWS' },
-    { value: totalHighResonance(plan).toString(), label: 'HIGH RESONANCE' },
   ];
+  const viewsLabel = sumViewsLabel(plan);
+  if (viewsLabel !== '—') {
+    counters.push({ value: viewsLabel, label: 'COMBINED VIEWS' });
+  }
+  const high = totalHighResonance(plan);
+  if (high > 0) {
+    counters.push({ value: high.toString(), label: 'HIGH RESONANCE' });
+  }
+  // Pad to 4 cells with neutral blanks so the table stays balanced.
+  while (counters.length < 4) counters.push({ value: '', label: '' });
 
   const out: Paragraph[] = [
     new Paragraph({
@@ -286,12 +296,23 @@ function buildSeriesHeader(s: TopicSeries, index: number): (Paragraph | Table)[]
     }));
   }
 
-  const stats = [
-    { value: s.total_views ? formatAudience(s.total_views) : '—', label: 'TOTAL VIEWS' },
+  // Series stat row — drop cells whose data isn't there. Topics count is
+  // always meaningful; the other three only show up if the Nerd grounded
+  // them in actual research metrics.
+  const stats: Array<{ value: string; label: string }> = [
     { value: s.ideas.length.toString(), label: 'TOPICS' },
-    { value: highCount.toString(), label: 'HIGH RESONANCE' },
-    { value: s.engagement_rate ? s.engagement_rate.toFixed(3) : '—', label: 'ENGAGEMENT RATE' },
   ];
+  if (highCount > 0) {
+    stats.push({ value: highCount.toString(), label: 'HIGH RESONANCE' });
+  }
+  if (s.total_views) {
+    stats.push({ value: formatAudience(s.total_views), label: 'TOTAL VIEWS' });
+  }
+  if (s.engagement_rate) {
+    stats.push({ value: s.engagement_rate.toFixed(3), label: 'ENGAGEMENT RATE' });
+  }
+  // Always 4 cells for visual balance; pad with neutral blanks.
+  while (stats.length < 4) stats.push({ value: '', label: '' });
 
   out.push(new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
@@ -398,42 +419,57 @@ function buildIdeaCard(idea: TopicIdea, num: number): (Paragraph | Table)[] {
     }));
   }
 
-  // Stat grid — audience, positive %, negative %, resonance label
-  const statCells = [
-    { value: formatAudience(idea.audience ?? 0) || '—', label: 'AUDIENCE', fill: COLOR_SURFACE, color: COLOR_INK },
-    { value: idea.positive_pct != null ? `${Math.round(idea.positive_pct)}%` : '—', label: 'POSITIVE', fill: 'ECFDF5', color: COLOR_POSITIVE },
-    { value: idea.negative_pct != null ? `${Math.round(idea.negative_pct)}%` : '—', label: 'NEGATIVE', fill: 'FEF3C7', color: COLOR_NEGATIVE },
-    { value: resonanceLabel(idea.resonance) || '—', label: 'RESONANCE', fill: COLOR_SURFACE, color: resonanceColor(idea.resonance) },
-  ];
+  // Stat grid — only render cells that actually have a value. Resonance
+  // already has its own tag in the title row so we drop it from the grid
+  // (was duplicating). If no quantitative stats are present at all, skip
+  // the grid entirely so the card doesn't read as empty placeholders.
+  const candidateCells: Array<{ value: string; label: string; fill: string; color: string }> = [];
+  const audienceLabel = formatAudience(idea.audience ?? undefined);
+  if (audienceLabel) {
+    candidateCells.push({ value: audienceLabel, label: 'AUDIENCE', fill: COLOR_SURFACE, color: COLOR_INK });
+  }
+  if (idea.positive_pct != null) {
+    candidateCells.push({ value: `${Math.round(idea.positive_pct)}%`, label: 'POSITIVE', fill: 'ECFDF5', color: COLOR_POSITIVE });
+  }
+  if (idea.negative_pct != null) {
+    candidateCells.push({ value: `${Math.round(idea.negative_pct)}%`, label: 'NEGATIVE', fill: 'FEF3C7', color: COLOR_NEGATIVE });
+  }
 
-  out.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: noBorder,
-    rows: [new TableRow({
-      children: statCells.map((c) => new TableCell({
-        width: { size: 25, type: WidthType.PERCENTAGE },
-        borders: {
-          top: { style: BorderStyle.SINGLE, size: 2, color: COLOR_BORDER },
-          bottom: { style: BorderStyle.SINGLE, size: 2, color: COLOR_BORDER },
-          left: { style: BorderStyle.SINGLE, size: 2, color: COLOR_BORDER },
-          right: { style: BorderStyle.SINGLE, size: 2, color: COLOR_BORDER },
-        },
-        shading: { type: ShadingType.CLEAR, color: 'auto', fill: c.fill },
-        margins: { top: 140, bottom: 140, left: 100, right: 100 },
-        children: [
-          new Paragraph({
-            children: [text(c.value, { bold: true, size: 26, color: c.color })],
-            alignment: AlignmentType.CENTER,
-            spacing: { after: 40 },
-          }),
-          new Paragraph({
-            children: [text(c.label, { size: 14, color: COLOR_MUTED })],
-            alignment: AlignmentType.CENTER,
-          }),
-        ],
-      })),
-    })],
-  }));
+  if (candidateCells.length > 0) {
+    // Pad with a neutral cell so the row always has 4 columns and stays
+    // visually balanced with the selection row below it.
+    while (candidateCells.length < 4) {
+      candidateCells.push({ value: '', label: '', fill: COLOR_SURFACE, color: COLOR_MUTED });
+    }
+    out.push(new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: noBorder,
+      rows: [new TableRow({
+        children: candidateCells.map((c) => new TableCell({
+          width: { size: 25, type: WidthType.PERCENTAGE },
+          borders: {
+            top: { style: BorderStyle.SINGLE, size: 2, color: COLOR_BORDER },
+            bottom: { style: BorderStyle.SINGLE, size: 2, color: COLOR_BORDER },
+            left: { style: BorderStyle.SINGLE, size: 2, color: COLOR_BORDER },
+            right: { style: BorderStyle.SINGLE, size: 2, color: COLOR_BORDER },
+          },
+          shading: { type: ShadingType.CLEAR, color: 'auto', fill: c.fill },
+          margins: { top: 140, bottom: 140, left: 100, right: 100 },
+          children: [
+            new Paragraph({
+              children: [text(c.value, { bold: true, size: 26, color: c.color })],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 40 },
+            }),
+            new Paragraph({
+              children: [text(c.label, { size: 14, color: COLOR_MUTED })],
+              alignment: AlignmentType.CENTER,
+            }),
+          ],
+        })),
+      })],
+    }));
+  }
 
   if (idea.why_it_works) {
     out.push(new Paragraph({ children: [], spacing: { after: 80 } }));
