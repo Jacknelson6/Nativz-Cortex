@@ -140,6 +140,13 @@ export async function suggestCompetitorWebsites(
     ? `The target's largest platform is ${primary.platform} with ${primary.followers.toLocaleString()} followers. Pick competitors whose follower counts sit roughly between ${Math.max(500, Math.floor(primary.followers * 0.25)).toLocaleString()} and ${Math.floor(primary.followers * 5).toLocaleString()} — same scale or one tier up, NOT mega-brands 100× their size and NOT dead pages with a few hundred followers.`
     : 'Pick competitors at roughly the same scale as this brand — not mega-brands 100× their size.';
 
+  const scopeAnchor =
+    websiteContext.scope === 'local' && websiteContext.location
+      ? `GEOGRAPHIC SCOPE (non-negotiable)
+This is a LOCAL business operating in ${websiteContext.location}. Pick competitors in the SAME metro area or region — businesses a customer in ${websiteContext.location} would actually choose between. A national brand or a competitor in another state is WRONG for this comparison and will be rejected. If you can't confidently place a candidate in ${websiteContext.location} or the immediate surrounding area, SKIP them.`
+      : `GEOGRAPHIC SCOPE (non-negotiable)
+This brand operates NATIONALLY (ships DTC, franchises across states, or sells digitally). Pick nationally-recognized competitors — companies operating in the same product / service category at national scale. Single-city local competitors are WRONG for this comparison.`;
+
   const prompt = `You are a competitive intelligence analyst for social media strategy. Identify ${MAX_CANDIDATES_REQUESTED} direct competitors for this brand — real companies operating in the same sub-niche.
 
 TARGET BRAND
@@ -147,7 +154,10 @@ TARGET BRAND
 - Industry: ${websiteContext.industry}
 - Description: ${websiteContext.description}
 - Keywords: ${websiteContext.keywords.slice(0, 10).join(', ')}
+- Scope: ${websiteContext.scope ?? 'national'}${websiteContext.location ? ` (${websiteContext.location})` : ''}
 ${topSignals ? `\nTARGET SOCIAL SIGNALS\n${topSignals}` : ''}
+
+${scopeAnchor}
 
 SCALE MATCHING (non-negotiable)
 ${sizeAnchor}

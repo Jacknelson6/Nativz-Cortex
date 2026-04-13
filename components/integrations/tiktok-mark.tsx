@@ -11,10 +11,24 @@ export function TikTokMark({
 }: {
   size?: number;
   className?: string;
-  /** 'onDark' uses a white foreground (dark backgrounds); 'onLight' uses black (for white backgrounds / PDFs). */
+  /** 'onDark' uses the chromatic cyan/pink split on a white note (dark backgrounds).
+   *  'onLight' renders a solid black mark — the chromatic split reads as visual noise at small sizes on white. */
   variant?: 'onDark' | 'onLight';
 }) {
-  const fg = variant === 'onLight' ? '#000000' : '#FFFFFF';
+  if (variant === 'onLight') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        className={cn('shrink-0', className)}
+        aria-hidden
+      >
+        <path d={NOTE_PATH} fill="#000000" />
+      </svg>
+    );
+  }
   return (
     <svg
       width={size}
@@ -26,7 +40,7 @@ export function TikTokMark({
     >
       <path d={NOTE_PATH} fill="#00F2EA" transform="translate(-0.55 -0.55)" />
       <path d={NOTE_PATH} fill="#FE2C55" transform="translate(0.55 0.55)" />
-      <path d={NOTE_PATH} fill={fg} />
+      <path d={NOTE_PATH} fill="#FFFFFF" />
     </svg>
   );
 }

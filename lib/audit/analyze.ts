@@ -135,15 +135,24 @@ export async function extractWebsiteContext(
 URL: ${websiteResult.url}
 Title: ${websiteResult.title}
 Description: ${websiteResult.description}
-Body text: ${websiteResult.bodyText.substring(0, 2000)}
+Body text: ${websiteResult.bodyText.substring(0, 2500)}
+
+Also determine the business's geographic scope — this drives whether we compare them against local or national competitors:
+- "local" if the business serves one metro area / single location (single address, phrasing like "serving <city>", "located in <city>", one shop, one law office, one clinic, etc.)
+- "national" if they ship/deliver direct-to-consumer nationwide, franchise across multiple states, operate multiple locations in different metros, or sell an SaaS / digital product with no geographic tie
+If you can't tell confidently, default to "national".
+
+When scope is "local", extract the city + state/region (e.g. "Carrollton, TX", "Brooklyn, NY"). Leave null for national brands.
 
 Return JSON:
 {
   "url": "${websiteResult.url}",
   "title": "business name or title",
   "description": "what this business does in 1-2 sentences",
-  "industry": "specific industry/niche (e.g. 'fitness coaching', 'local restaurant', 'ecommerce fashion')",
+  "industry": "specific industry/niche (e.g. 'personal injury law', 'local bakery', 'DTC skincare')",
   "keywords": ["keyword1", "keyword2", "keyword3"],
+  "scope": "local" | "national",
+  "location": "City, ST" | null,
   "socialLinks": []
 }`;
 
@@ -167,6 +176,8 @@ Return JSON:
       industry: 'unknown',
       keywords: [],
       socialLinks: websiteResult.socialLinks,
+      scope: 'national',
+      location: null,
     };
   }
 }

@@ -43,6 +43,10 @@ export interface WebsiteContext {
   industry: string;
   keywords: string[];
   socialLinks: SocialLink[];
+  /** Geographic scope — drives whether competitor discovery returns local vs national brands. */
+  scope?: 'local' | 'national';
+  /** City + state/region when scope is 'local' (e.g. "Carrollton, TX"). Null otherwise. */
+  location?: string | null;
 }
 
 export interface SocialLink {
