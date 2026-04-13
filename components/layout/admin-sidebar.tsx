@@ -115,7 +115,7 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/clients', label: 'Clients', icon: Building2 },
           { href: '/admin/users', label: 'Users', icon: Users },
           { href: '/admin/knowledge', label: 'Brain', icon: Brain },
-          { href: '/admin/settings/usage', label: 'AI Models', icon: Cpu },
+          { href: '/admin/settings/usage', label: 'AI Settings', icon: Cpu },
           { href: '/admin/nerd/api', label: 'API docs', icon: Code },
         ],
       },
