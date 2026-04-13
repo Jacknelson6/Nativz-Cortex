@@ -79,26 +79,6 @@ export function SidebarAccount({
             <Settings size={15} />
             Account settings
           </Link>
-          {!settingsHref.startsWith('/portal') && (
-            <>
-              <Link
-                href="/admin/nerd/api"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors whitespace-nowrap"
-              >
-                <Key size={15} />
-                API docs
-              </Link>
-              <Link
-                href="/admin/settings/usage"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors whitespace-nowrap"
-              >
-                <Cpu size={15} />
-                AI models
-              </Link>
-            </>
-          )}
           <button
             onClick={handleLogout}
             disabled={loggingOut}
