@@ -433,11 +433,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
 
           <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">
             <div>
-              <p className="text-base text-text-muted">
-                {competitorSuggestionsLoading
-                  ? 'Finding competitors based on your website and industry…'
-                  : "We've suggested 3 competitors based on your website and industry. Edit if you'd like — we'll scrape their socials and rank against them."}
-              </p>
+              <h3 className="text-lg font-semibold text-text-primary">Your competitors</h3>
             </div>
             {[0, 1, 2].map((i) => {
               const url = competitorUrls[i] ?? '';
