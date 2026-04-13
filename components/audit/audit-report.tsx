@@ -433,8 +433,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
 
           <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-text-primary">See how you rank against your competitors</h3>
-              <p className="mt-1 text-base text-text-muted">
+              <p className="text-base text-text-muted">
                 {competitorSuggestionsLoading
                   ? 'Finding competitors based on your website and industry…'
                   : "We've suggested 3 competitors based on your website and industry. Edit if you'd like — we'll scrape their socials and rank against them."}
