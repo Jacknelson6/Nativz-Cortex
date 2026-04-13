@@ -85,3 +85,4 @@ vectors.db-wal
 
 # Local absolute paths to Goldback product shots (regenerate: find … > scripts/.goldback-idaho-image-pool.txt)
 scripts/.goldback-idaho-image-pool.txt
+tmp/
