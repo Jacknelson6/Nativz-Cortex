@@ -11,7 +11,7 @@ export function LandscapeView({ report }: { report: AuditReport }) {
   return (
     <div className="flex flex-col">
       <ToplineCard scorecard={report.scorecard} competitors={report.competitors} />
-      <CalloutCards scorecard={report.scorecard} />
+      <CalloutCards scorecard={report.scorecard} socialGoals={report.socialGoals} />
       <AccountLevelGrid
         scorecard={report.scorecard}
         prospectUsername={prospectUsername}

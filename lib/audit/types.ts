@@ -103,6 +103,7 @@ export interface AuditReport {
   platforms: PlatformReport[];
   competitors: CompetitorProfile[];
   scorecard: AuditScorecard;
+  socialGoals?: string[];
 }
 
 /** Per-platform failure captured during scrape so the UI can surface which

@@ -124,7 +124,7 @@ describe('rankCompetitorGaps', () => {
     competitors: comps.map((status, i) => ({ username: `c${i}`, status, value: '' })),
     description: '',
   });
-  it('returns up to 3 poor items where at least one competitor is good', () => {
+  it('returns up to 3 poor items where at least one competitor is good (no goals)', () => {
     const sc = { overallScore: 40, items: [
       mkItem('posting_frequency', 'poor', 'good'),
       mkItem('hook_consistency', 'poor', 'good', 'good'),
@@ -132,12 +132,28 @@ describe('rankCompetitorGaps', () => {
       mkItem('bio_optimization_account', 'poor', 'warning'),
       mkItem('engagement_rate', 'good', 'poor'),
     ], summary: '' };
+    // All three base-weighted items score 1.5 — they should all be in the top 3
     const gaps = rankCompetitorGaps(sc);
-    expect(gaps.map(g => g.category)).toEqual(['posting_frequency', 'hook_consistency', 'cta_intent_account']);
+    expect(gaps.map(g => g.category)).toHaveLength(3);
+    expect(gaps.map(g => g.category)).toEqual(
+      expect.arrayContaining(['posting_frequency', 'hook_consistency', 'cta_intent_account']),
+    );
   });
   it('returns empty when prospect leads everywhere', () => {
     const sc = { overallScore: 95, items: [mkItem('posting_frequency', 'good', 'poor')], summary: '' };
     expect(rankCompetitorGaps(sc)).toEqual([]);
+  });
+  it('engagement_rate ranks first when "Go viral and maximize engagement" goal is set', () => {
+    // engagement_rate: base 1 + boost 3 = 4
+    // posting_frequency: base 1.5 + boost 0 = 1.5
+    // avg_views: base 1 + boost 0 = 1
+    const sc = { overallScore: 40, items: [
+      mkItem('posting_frequency', 'poor', 'good'),
+      mkItem('engagement_rate', 'poor', 'good'),
+      mkItem('avg_views', 'poor', 'good'),
+    ], summary: '' };
+    const gaps = rankCompetitorGaps(sc, ['Go viral and maximize engagement']);
+    expect(gaps[0].category).toBe('engagement_rate');
   });
 });
 

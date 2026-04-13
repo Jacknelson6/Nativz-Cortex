@@ -269,10 +269,16 @@ ${JSON.stringify(deterministic.items, null, 2)}
 
 ${inputs.websiteContext ? `BUSINESS: ${inputs.websiteContext.title} — ${inputs.websiteContext.industry}` : ''}
 
-${inputs.socialGoals && inputs.socialGoals.length > 0 ? `THE PROSPECT'S STATED SOCIAL GOALS:
+${inputs.socialGoals && inputs.socialGoals.length > 0 ? `
+THE PROSPECT'S STATED SOCIAL GOALS (PRIORITY):
 ${inputs.socialGoals.map(g => `- ${g}`).join('\n')}
 
-When writing status_reason for each scorecard item, tie gaps back to these goals where relevant. If a gap directly undermines one of these goals, mention it.` : ''}
+Your analysis MUST centre these goals. Specifically:
+- Executive summary: lead with whether the prospect's current performance supports or undermines these goals.
+- status_reason for each item: if the item directly drives a stated goal and the prospect is poor, call it out as a critical blocker. If the item is good and reinforces a goal, celebrate it in one sentence.
+- Competitor comparisons: emphasise metrics tied to the goals (e.g. if "Go viral and maximize engagement", engagement rate comparisons matter more than bio optimization).
+
+Example: if goal is "Go viral and maximize engagement" and engagement rate is poor, write something like "2.1% engagement blocks virality — Dough Co hits 5.8% with consistent hook patterns you're missing."` : ''}
 
 GRADE THESE ADDITIONAL CATEGORIES (one item each) using the schema below:
 - engagement_rate, avg_views, follower_to_view, posting_frequency (per-platform — emit one item per platform)

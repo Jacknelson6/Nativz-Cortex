@@ -2,8 +2,8 @@ import type { AuditScorecard } from '@/lib/audit/types';
 import { rankCompetitorGaps } from '@/lib/audit/scorecard-helpers';
 import { cn } from '@/lib/utils/cn';
 
-export function CalloutCards({ scorecard }: { scorecard: AuditScorecard }) {
-  const gaps = rankCompetitorGaps(scorecard);
+export function CalloutCards({ scorecard, socialGoals }: { scorecard: AuditScorecard; socialGoals?: string[] }) {
+  const gaps = rankCompetitorGaps(scorecard, socialGoals);
   if (gaps.length === 0) return null;
   return (
     <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">

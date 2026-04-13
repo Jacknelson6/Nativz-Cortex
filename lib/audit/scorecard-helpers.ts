@@ -71,25 +71,77 @@ export function computePlatformFocus(
 }
 
 /**
+ * Which scorecard categories each social goal most depends on.
+ * Used to bias rankCompetitorGaps so the callout cards surface the gaps
+ * that most directly undermine the prospect's stated goals.
+ */
+export const GOAL_CATEGORY_BOOSTS: Record<string, Record<string, number>> = {
+  'Build brand awareness': {
+    avg_views: 3,
+    follower_to_view: 3,
+    posting_frequency: 2,
+    platform_focus_account: 2,
+    content_quality: 2,
+    hook_consistency: 2,
+  },
+  'Go viral and maximize engagement': {
+    engagement_rate: 3,
+    hook_consistency: 3,
+    content_variety: 2,
+    cadence_trend: 2,
+  },
+  'Drive foot traffic and local visits': {
+    cta_intent_account: 3,
+    bio_optimization_account: 3,
+    caption_optimization: 2,
+  },
+  'Turn followers into paying customers': {
+    cta_intent_account: 3,
+    bio_optimization_account: 3,
+    caption_optimization: 2,
+  },
+  'Launch new products or seasonal content': {
+    posting_frequency: 3,
+    content_variety: 3,
+    cadence_trend: 2,
+  },
+  'Grow a loyal community': {
+    engagement_rate: 3,
+    caption_optimization: 2,
+    content_variety: 2,
+  },
+};
+
+/**
  * Deterministic callout selection:
  * - Keep items where prospect is "poor" AND at least one competitor is "good".
- * - Rank by weight (posting_frequency / hook_consistency / cta_intent_account = 2x).
- * - Tiebreak by number of competitors that are ahead.
+ * - Rank by base weight (posting_frequency / hook_consistency / cta_intent_account = 1.5x)
+ *   plus goal-specific boosts from GOAL_CATEGORY_BOOSTS.
  * - Return top 3.
  */
-export function rankCompetitorGaps(scorecard: AuditScorecard): ScorecardItem[] {
-  const WEIGHTS: Record<string, number> = {
-    posting_frequency: 2,
-    hook_consistency: 2,
-    cta_intent_account: 2,
+export function rankCompetitorGaps(
+  scorecard: AuditScorecard,
+  socialGoals: string[] = [],
+): ScorecardItem[] {
+  const BASE_WEIGHTS: Record<string, number> = {
+    posting_frequency: 1.5,
+    hook_consistency: 1.5,
+    cta_intent_account: 1.5,
   };
+  const goalBoosts: Record<string, number> = {};
+  for (const goal of socialGoals) {
+    const boosts = GOAL_CATEGORY_BOOSTS[goal] ?? {};
+    for (const [cat, w] of Object.entries(boosts)) {
+      goalBoosts[cat] = Math.max(goalBoosts[cat] ?? 0, w);
+    }
+  }
   const candidates = scorecard.items.filter(
     (i) => i.prospectStatus === 'poor' && i.competitors.some((c) => c.status === 'good'),
   );
-  const scored = candidates.map((item) => {
-    const weight = WEIGHTS[item.category] ?? 1;
-    return { item, score: weight * 100 };
-  });
+  const scored = candidates.map((item) => ({
+    item,
+    score: (BASE_WEIGHTS[item.category] ?? 1) + (goalBoosts[item.category] ?? 0),
+  }));
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, 3).map((s) => s.item);
 }

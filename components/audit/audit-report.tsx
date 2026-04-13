@@ -51,6 +51,7 @@ interface AuditRecord {
   competitors_data: CompetitorProfile[] | null;
   scorecard: AuditScorecard | null;
   videos_data: TopicSearchVideoRow[] | null;
+  analysis_data: { social_goals?: string[] } | null;
   error_message: string | null;
   created_at: string;
 }
@@ -149,9 +150,8 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     'Turn followers into paying customers',
     'Launch new products or seasonal content',
     'Grow a loyal community',
-    'All of the above — awareness, engagement, and conversions',
   ] as const;
-  const [socialGoal, setSocialGoal] = useState<string>(SOCIAL_GOAL_OPTIONS[0]);
+  const [socialGoals, setSocialGoals] = useState<string[]>(['Build brand awareness']);
   const [brandDescription, setBrandDescription] = useState<string>('');
 
   // Auto-detect socials for pending audits (don't start processing yet)
@@ -341,7 +341,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     if (Object.keys(filled).length > 0 || cleanedCompetitors.length > 0) {
       await fetch(`/api/analyze-social/${audit.id}/resume`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ social_urls: filled, competitor_urls: cleanedCompetitors, social_goals: [socialGoal] }),
+        body: JSON.stringify({ social_urls: filled, competitor_urls: cleanedCompetitors, social_goals: socialGoals }),
       });
     }
     setProgress(0); setStageIndex(0); setElapsed(0);
@@ -427,19 +427,35 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-text-secondary" htmlFor="social-goal">
-                Social goal
-              </label>
-              <select
-                id="social-goal"
-                value={socialGoal}
-                onChange={(e) => setSocialGoal(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-base text-text-primary focus:outline-none focus:border-accent/40"
-              >
-                {SOCIAL_GOAL_OPTIONS.map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
+              <label className="text-sm font-medium text-text-secondary">Social goals</label>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {SOCIAL_GOAL_OPTIONS.map((g) => {
+                  const checked = socialGoals.includes(g);
+                  return (
+                    <label
+                      key={g}
+                      className={cn(
+                        'flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 text-base transition-colors',
+                        checked
+                          ? 'border-accent/50 bg-accent/10 text-text-primary'
+                          : 'border-nativz-border bg-transparent text-text-secondary hover:border-nativz-border/80 hover:bg-surface/40',
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          setSocialGoals((prev) =>
+                            checked ? prev.filter((x) => x !== g) : [...prev, g]
+                          );
+                        }}
+                        className="h-4 w-4 shrink-0 rounded border-nativz-border accent-accent"
+                      />
+                      <span>{g}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -812,6 +828,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             platforms,
             competitors,
             scorecard,
+            socialGoals: audit.analysis_data?.social_goals,
           }}
         />
       )}
