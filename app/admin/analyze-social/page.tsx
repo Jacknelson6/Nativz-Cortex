@@ -17,14 +17,19 @@ export default async function AuditPage() {
     .order('created_at', { ascending: false })
     .limit(20);
 
-  // Get user first name for greeting
-  const { data: userData } = await adminClient
+  // Get user first name for greeting — matches the Research page pattern
+  // (full_name column, not display_name; fall back to auth email prefix).
+  const { data: userRow } = await adminClient
     .from('users')
-    .select('display_name, email')
+    .select('full_name')
     .eq('id', user.id)
     .single();
 
-  const firstName = userData?.display_name?.split(/\s+/)[0] ?? userData?.email?.split('@')[0] ?? null;
+  const raw = userRow?.full_name?.trim();
+  const firstName =
+    raw && raw.length > 0
+      ? raw.split(/\s+/)[0] ?? null
+      : user.email?.split('@')[0] ?? null;
 
   return <AuditHub audits={audits ?? []} userFirstName={firstName} />;
 }
