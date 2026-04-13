@@ -389,7 +389,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
               <ArrowLeft size={14} /> Back
             </Button>
             <Button onClick={() => void startProcessing()} disabled={!hasPlatforms}>
-              {hasPlatforms ? 'Start audit' : 'Add at least one platform'}
+              {hasPlatforms ? 'Start analysis' : 'Add at least one platform'}
             </Button>
           </div>
         </div>
