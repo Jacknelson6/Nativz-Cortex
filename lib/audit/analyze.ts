@@ -312,44 +312,6 @@ Return ONLY JSON matching:
 
 // ── Suggest social goals ────────────────────────────────────────────────
 
-/**
- * Given the scraped website context, generate 3-4 plausible short-form social
- * goals (one per line). These are editable seeds — the user refines on the
- * confirm-platforms screen, then generateScorecard uses them to write
- * goal-aware status_reason strings.
- */
-export async function suggestSocialGoals(websiteContext: WebsiteContext): Promise<string[]> {
-  const prompt = `You are a short-form video strategist. Given this brand's website context, write 3-4 plausible GOALS for their short-form social media (TikTok / Reels / Shorts). One per line, sentence case, under 10 words each. Think like a marketing agency pitching them. Examples of good goals:
-- Drive local foot traffic from TikTok viewers
-- Turn one-time customers into repeat visits via IG
-- Grow DC + Virginia brand awareness
-
-BRAND
-- Name: ${websiteContext.title}
-- Industry: ${websiteContext.industry}
-- Description: ${websiteContext.description}
-- Keywords: ${websiteContext.keywords.slice(0, 10).join(', ')}
-
-Return ONLY the goals as plain text, one per line. No numbering, no bullets, no commentary.`;
-
-  try {
-    const result = await createCompletion({
-      messages: [{ role: 'user', content: prompt }],
-      maxTokens: 300,
-      feature: 'audit_social_goals',
-      timeoutMs: 30000,
-    });
-    return result.text
-      .split('\n')
-      .map((l) => l.trim().replace(/^[-*•]\s*/, ''))
-      .filter((l) => l.length > 0 && l.length < 120)
-      .slice(0, 4);
-  } catch (err) {
-    console.warn('[audit] suggestSocialGoals failed:', err);
-    return [];
-  }
-}
-
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 export function calculateEngagementRate(videos: ProspectVideo[], followers: number): number {
