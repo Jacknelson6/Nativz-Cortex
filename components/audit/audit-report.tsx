@@ -1019,27 +1019,41 @@ function PlatformDetail({ platform }: { platform: PlatformReport }) {
         </div>
       </div>
 
-      {/* Engagement rate over time chart */}
+      {/* Engagement rate over time chart — only render when there's actual
+          engagement data. Facebook Reels returns 0 for likes/comments/shares
+          (Meta blocks them), so a flat-zero line is misleading. */}
       {engagementData.length > 2 && (
         <div className="rounded-xl border border-nativz-border bg-surface p-5">
           <h4 className="text-sm font-semibold text-text-primary mb-4">Engagement rate over time</h4>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={engagementData}>
-                <defs>
-                  <linearGradient id={`erGrad-${platform.platform}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-                    <stop offset="95%" stopColor={color} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--nativz-border)" />
-                <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
-                <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', border: '1px solid var(--nativz-border)', borderRadius: '8px', fontSize: '12px' }} formatter={(value: number | undefined) => [`${value ?? 0}%`, 'ER']} />
-                <Area type="monotone" dataKey="er" stroke={color} fillOpacity={1} fill={`url(#erGrad-${platform.platform})`} strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          {engagementData.some((d) => d.er > 0) ? (
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={engagementData}>
+                  <defs>
+                    <linearGradient id={`erGrad-${platform.platform}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={color} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={color} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--nativz-border)" />
+                  <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
+                  <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', border: '1px solid var(--nativz-border)', borderRadius: '8px', fontSize: '12px' }} formatter={(value: number | undefined) => [`${value ?? 0}%`, 'ER']} />
+                  <Area type="monotone" dataKey="er" stroke={color} fillOpacity={1} fill={`url(#erGrad-${platform.platform})`} strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex h-48 flex-col items-center justify-center text-center">
+              <AlertCircle size={28} className="text-text-muted/60 mb-3" />
+              <p className="text-sm text-text-muted">Engagement data unavailable</p>
+              <p className="mt-1 text-xs text-text-muted/70 max-w-sm">
+                {platform.platform === 'facebook'
+                  ? 'Meta blocks like/comment/share counts on Facebook Reels scraping.'
+                  : 'No engagement counts returned from the scraper for this account.'}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
