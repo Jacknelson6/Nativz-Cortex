@@ -345,19 +345,19 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   if (audit.status === 'confirming_platforms' || (audit.status === 'pending' && detectedPlatforms.length >= 0 && !detecting)) {
     const hasPlatforms = Object.values(socialInputs).some(v => v?.trim());
     return (
-      <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 py-8">
-        <div className="w-full max-w-2xl space-y-6">
+      <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 py-10">
+        <div className="w-full max-w-2xl space-y-7">
           <div className="text-center">
-            <h2 className="text-2xl font-semibold text-text-primary">Confirm social platforms</h2>
-            <p className="mt-1 text-base text-text-muted">
+            <h2 className="text-3xl font-semibold text-text-primary">Confirm social platforms</h2>
+            <p className="mt-2 text-lg text-text-muted">
               {websiteInfo ? `${websiteInfo.title} — ${websiteInfo.industry}` : audit.website_url?.replace(/^https?:\/\//, '')}
             </p>
             {detectedPlatforms.length > 0 ? (
-              <p className="mt-2 text-xs text-emerald-400">
+              <p className="mt-3 text-base text-emerald-400">
                 Found {detectedPlatforms.length} social profile{detectedPlatforms.length !== 1 ? 's' : ''} on the website
               </p>
             ) : (
-              <p className="mt-2 text-xs text-amber-400">
+              <p className="mt-3 text-base text-amber-400">
                 No social profiles detected — add them manually below
               </p>
             )}
@@ -372,7 +372,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                 <div key={platform} className="flex items-center gap-3">
                   <div className="flex items-center gap-2 w-32 shrink-0">
                     <AuditPlatformIcon platform={platform} size="sm" />
-                    <span className="text-base text-text-primary font-medium">{PLATFORM_LABELS[platform]}</span>
+                    <span className="text-lg text-text-primary font-medium">{PLATFORM_LABELS[platform]}</span>
                   </div>
                   <input
                     type="text"
@@ -380,16 +380,16 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                     onChange={(e) => setSocialInputs(prev => ({ ...prev, [platform]: e.target.value }))}
                     placeholder={missing ? '—' : `${platform}.com/@username`}
                     className={cn(
-                      'flex-1 rounded-lg border bg-transparent px-4 py-2.5 text-base focus:outline-none',
+                      'flex-1 rounded-lg border bg-transparent px-4 py-3 text-lg focus:outline-none',
                       missing
                         ? 'border-red-500/40 text-red-300 placeholder:text-red-400/50 focus:border-red-400/60'
                         : 'border-nativz-border text-text-primary placeholder:text-text-muted/50 focus:border-accent/40',
                     )}
                   />
                   {detected ? (
-                    <span className="shrink-0 text-xs text-emerald-400">Auto-detected</span>
+                    <span className="shrink-0 text-sm text-emerald-400">Auto-detected</span>
                   ) : (
-                    <span className="shrink-0 text-xs text-red-400">Not found</span>
+                    <span className="shrink-0 text-sm text-red-400">Not found</span>
                   )}
                 </div>
               );
@@ -398,8 +398,8 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
 
           <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">
             <div>
-              <h3 className="text-sm font-semibold text-text-primary">Competitors (optional)</h3>
-              <p className="mt-0.5 text-xs text-text-muted">
+              <h3 className="text-lg font-semibold text-text-primary">Competitors (optional)</h3>
+              <p className="mt-1 text-base text-text-muted">
                 Paste up to 3 competitor websites. We'll scrape their socials and rank against them. Leave blank to auto-discover.
               </p>
             </div>
@@ -416,16 +416,16 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                   });
                 }}
                 placeholder={`Competitor ${i + 1} website — e.g. https://doughco.com`}
-                className="w-full rounded-lg border border-nativz-border bg-transparent px-4 py-2.5 text-base text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40"
+                className="w-full rounded-lg border border-nativz-border bg-transparent px-4 py-3 text-lg text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40"
               />
             ))}
           </div>
 
           <div className="flex items-center justify-between">
-            <Button variant="ghost" size="sm" onClick={() => router.push('/admin/analyze-social')}>
-              <ArrowLeft size={14} /> Back
+            <Button variant="ghost" onClick={() => router.push('/admin/analyze-social')} className="text-base px-4 py-2.5">
+              <ArrowLeft size={16} /> Back
             </Button>
-            <Button onClick={() => void startProcessing()} disabled={!hasPlatforms}>
+            <Button onClick={() => void startProcessing()} disabled={!hasPlatforms} className="text-base px-6 py-3">
               {hasPlatforms ? 'Start analysis' : 'Add at least one platform'}
             </Button>
           </div>
