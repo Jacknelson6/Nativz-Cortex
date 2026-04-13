@@ -222,8 +222,15 @@ export async function POST(
       }
 
       // Step 5: Generate scorecard
+      // TODO(Task 5): wire prospectVideoAudits + competitorVideoAudits from Gemini stage
       console.log(`[audit:${id}] Step 5: Generating scorecard...`);
-      const scorecard = await generateScorecard(platformReports, competitors, websiteContext);
+      const scorecard = await generateScorecard({
+        platformSummaries: platformReports,
+        competitors,
+        websiteContext,
+        prospectVideoAudits: {},
+        competitorVideoAudits: {},
+      });
 
       // Step 6: Store results
       // Convert videos to TopicSearchVideoRow format for the video grid

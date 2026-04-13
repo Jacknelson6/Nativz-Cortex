@@ -16,7 +16,112 @@ import type {
   PlatformReport,
   ProspectProfile,
   SocialLink,
+  ScorecardItem,
+  CadenceDirection,
 } from './types';
+import {
+  aggregateContentQuality,
+  aggregateContentVariety,
+  aggregateHookConsistency,
+  computeCadenceTrend,
+  computePlatformFocus,
+} from './scorecard-helpers';
+import type { VideoAudit } from './analyze-videos';
+
+/** Per-brand Gemini grades, keyed by platform. */
+export type BrandVideoAudits = Partial<Record<PlatformReport['platform'], VideoAudit[]>>;
+
+export interface ScorecardInputs {
+  platformSummaries: PlatformReport[];
+  competitors: CompetitorProfile[];
+  websiteContext: { title: string; industry: string } | null;
+  prospectVideoAudits: BrandVideoAudits;
+  competitorVideoAudits: Record<string, BrandVideoAudits>; // keyed by competitor username
+}
+
+const LABELS: Record<string, string> = {
+  engagement_rate: 'Engagement rate',
+  avg_views: 'Avg views',
+  follower_to_view: 'Follower-to-view ratio',
+  posting_frequency: 'Posting frequency',
+  cadence_trend: 'Cadence trend',
+  content_variety: 'Content variety',
+  content_quality: 'Content quality',
+  hook_consistency: 'Hook consistency',
+  caption_optimization: 'Caption optimization',
+  hashtag_strategy: 'Hashtag strategy',
+  bio_optimization_account: 'Bio optimization',
+  cta_intent_account: 'CTA / conversion intent',
+  platform_focus_account: 'Platform focus',
+};
+
+function cadencePhrase(d: CadenceDirection): string {
+  if (d === 'up') return '↑ growing';
+  if (d === 'down') return '↓ losing momentum';
+  return '→ stable';
+}
+
+function writeDeterministicItems(inputs: ScorecardInputs): { items: ScorecardItem[]; deltas: Record<string, unknown> } {
+  const items: ScorecardItem[] = [];
+  const prospect = inputs.platformSummaries;
+
+  // Platform focus (account-level)
+  const focus = computePlatformFocus(prospect);
+  items.push({
+    category: 'platform_focus_account',
+    label: LABELS.platform_focus_account,
+    prospectStatus: focus.focus === 'focused' ? 'good' : 'warning',
+    prospectValue: focus.focus === 'focused' ? `${focus.primary}-focused` : 'Spread thin',
+    competitors: [],   // filled by LLM narration pass
+    description: '',
+  });
+
+  // Per-platform Gemini-derived grades
+  for (const platform of prospect) {
+    const audits = inputs.prospectVideoAudits[platform.platform] ?? [];
+    if (audits.length >= 3) {
+      const hc = aggregateHookConsistency(audits);
+      const cv = aggregateContentVariety(audits);
+      const cq = aggregateContentQuality(audits);
+      items.push({
+        category: 'hook_consistency',
+        label: `${LABELS.hook_consistency} · ${platform.platform}`,
+        prospectStatus: hc.status,
+        prospectValue: `${Math.round(hc.percentage * 100)}% consistent`,
+        competitors: [],
+        description: '',
+      });
+      items.push({
+        category: 'content_variety',
+        label: `${LABELS.content_variety} · ${platform.platform}`,
+        prospectStatus: cv.status,
+        prospectValue: `${cv.count} format${cv.count === 1 ? '' : 's'}`,
+        competitors: [],
+        description: '',
+      });
+      items.push({
+        category: 'content_quality',
+        label: `${LABELS.content_quality} · ${platform.platform}`,
+        prospectStatus: cq.status,
+        prospectValue: cq.avg >= 2.3 ? 'High' : cq.avg >= 1.7 ? 'Mixed' : 'Low',
+        competitors: [],
+        description: '',
+      });
+    }
+    // Cadence trend
+    const trend = computeCadenceTrend(platform.videos);
+    items.push({
+      category: 'cadence_trend',
+      label: `${LABELS.cadence_trend} · ${platform.platform}`,
+      prospectStatus: trend === 'up' ? 'good' : trend === 'flat' ? 'warning' : 'poor',
+      prospectValue: cadencePhrase(trend),
+      competitors: [],
+      description: '',
+    });
+  }
+
+  return { items, deltas: {} };
+}
 import type { WebsiteScrapeResult } from './scrape-website';
 
 // ── Extract website context via AI ──────────────────────────────────────
@@ -132,94 +237,70 @@ Return ONLY valid JSON: ["username1", "username2", "username3"]`;
 
 // ── Generate scorecard ──────────────────────────────────────────────────
 
-export async function generateScorecard(
-  platforms: PlatformReport[],
-  competitors: CompetitorProfile[],
-  websiteContext: WebsiteContext | null,
-): Promise<AuditScorecard> {
-  // Include bios, top hashtags, and sample captions so the LLM can actually judge
-  // hashtag strategy, bio optimisation, and caption quality instead of inventing them.
-  const platformSummaries = platforms.map(p => ({
+export async function generateScorecard(inputs: ScorecardInputs): Promise<AuditScorecard> {
+  const deterministic = writeDeterministicItems(inputs);
+
+  // LLM pass: grade remaining categories + write status_reason + narrate all items with competitor comparisons.
+  const prompt = `You are analyzing a prospect's short-form social presence vs up to 3 competitors for a marketing agency sales call.
+
+PROSPECT PLATFORMS:
+${JSON.stringify(inputs.platformSummaries.map((p) => ({
     platform: p.platform,
-    username: p.profile.username,
-    displayName: p.profile.displayName,
-    followers: p.profile.followers,
-    engagementRate: (p.engagementRate * 100).toFixed(2) + '%',
+    profile: { username: p.profile.username, bio: p.profile.bio, followers: p.profile.followers },
     avgViews: p.avgViews,
+    engagementRate: p.engagementRate,
     postingFrequency: p.postingFrequency,
     videoCount: p.videos.length,
-    bio: p.profile.bio?.slice(0, 400) || '(empty)',
-    topHashtags: getTopHashtags(p.videos, 12),
-    sampleCaptions: p.videos
-      .slice(0, 6)
-      .map(v => v.description?.replace(/\s+/g, ' ').slice(0, 180) ?? '')
-      .filter((c): c is string => c.length > 0),
-  }));
+  })), null, 2)}
 
-  const competitorSummary = competitors.map(c => ({
+COMPETITORS:
+${JSON.stringify(inputs.competitors.map((c) => ({
     username: c.username,
     platform: c.platform,
     followers: c.followers,
-    engagementRate: (c.engagementRate * 100).toFixed(2) + '%',
     avgViews: c.avgViews,
+    engagementRate: c.engagementRate,
     postingFrequency: c.postingFrequency,
-  }));
+  })), null, 2)}
 
-  const prompt = `You are an expert social media auditor. Create a competitive analysis scorecard.
+DETERMINISTIC ITEMS (already graded — you narrate competitor columns + write status_reason):
+${JSON.stringify(deterministic.items, null, 2)}
 
-PROSPECT PLATFORMS:
-${JSON.stringify(platformSummaries, null, 2)}
+${inputs.websiteContext ? `BUSINESS: ${inputs.websiteContext.title} — ${inputs.websiteContext.industry}` : ''}
 
-COMPETITORS:
-${JSON.stringify(competitorSummary, null, 2)}
+GRADE THESE ADDITIONAL CATEGORIES (one item each) using the schema below:
+- engagement_rate, avg_views, follower_to_view, posting_frequency (per-platform — emit one item per platform)
+- caption_optimization, hashtag_strategy (per-platform — hashtag is binary: "good" if hashtags used, else "poor")
+- bio_optimization_account, cta_intent_account (account-level — one item each)
 
-${websiteContext ? `BUSINESS: ${websiteContext.title} — ${websiteContext.industry}` : ''}
+For EVERY item (deterministic + your new ones), fill in:
+- competitors: [{username, status: "good"|"warning"|"poor", value: short string}]
+- status_reason: one short sentence (≤14 words) explaining WHY the prospect is at this status. Example: "Posts 1.2×/week, Dough Co. posts 5.3×/week." Avoid words like "dying" — prefer "losing momentum".
+- description: one neutral sentence explaining what the category means.
 
-Generate a scorecard. For each item, rate as "good", "warning", or "poor".
-
-Categories:
-1. Posting frequency — how consistently they post
-2. Engagement rate — likes+comments+shares relative to followers
-3. Average views — typical view count per video
-4. Hashtag strategy — mix of branded, trending, and niche hashtags
-5. Content variety — range of formats and topics
-6. Bio optimization — clear CTA, links, description
-7. Follower-to-view ratio — are views proportional to follower count
-8. Caption optimization — do captions use hooks, CTAs, and keywords effectively
-9. Content quality — production value, lighting, framing, audio quality based on engagement signals
-
-Return JSON:
+Return ONLY JSON matching:
 {
-  "overallScore": <0-100>,
-  "items": [
-    {
-      "category": "posting_frequency",
-      "label": "Posting frequency",
-      "prospectStatus": "good" | "warning" | "poor",
-      "prospectValue": "description",
-      "competitors": [{ "username": "comp1", "status": "good", "value": "description" }],
-      "description": "What this means"
-    }
-  ],
-  "summary": "2-3 sentence executive summary"
+  "overallScore": 0-100,
+  "items": [/* all items, deterministic + your new ones */],
+  "summary": "2-sentence executive summary"
 }`;
 
   const result = await createCompletion({
     messages: [{ role: 'user', content: prompt }],
-    maxTokens: 4000,
+    maxTokens: 6000,
     feature: 'audit_scorecard',
     jsonMode: true,
-    timeoutMs: 60000,
+    timeoutMs: 90000,
   });
 
   try {
     const parsed = parseAIResponseJSON<AuditScorecard>(result.text);
     if (!parsed || !Array.isArray(parsed.items)) {
-      return { overallScore: 0, items: [], summary: 'Analysis could not be completed.' };
+      return { overallScore: 0, items: deterministic.items, summary: 'Analysis could not be completed.' };
     }
     return parsed;
   } catch {
-    return { overallScore: 0, items: [], summary: 'Analysis could not be completed.' };
+    return { overallScore: 0, items: deterministic.items, summary: 'Analysis could not be completed.' };
   }
 }
 
