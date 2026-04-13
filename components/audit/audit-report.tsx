@@ -76,40 +76,39 @@ const PLATFORM_LABELS: Record<string, string> = {
 };
 
 /**
- * Standardized platform icon tile — mirrors the Research tab's PlatformBadgeSearch
- * look (subdued themed tile, platform mark inside) but covers the four audit
- * platforms. YouTube gets the full red mark to stay visually consistent with
- * how Research renders it.
+ * Standardized platform icon — renders the brand mark directly on transparent
+ * background with no tile wrappers. YouTube keeps its full red mark.
+ * Instagram uses the gradient 'full' variant so it shows the brand gradient
+ * without needing a coloured tile behind it.
  */
 function AuditPlatformIcon({ platform, size = 'md' }: { platform: AuditPlatformKey; size?: 'sm' | 'md' }) {
-  const tile = size === 'sm' ? 'h-5 w-5' : 'h-7 w-7';
-  const iconSize = size === 'sm' ? 12 : 14;
+  const iconSize = size === 'sm' ? 24 : 28;
 
   if (platform === 'youtube') {
     return (
       <span className="inline-flex shrink-0 items-center justify-center" aria-hidden>
-        <YouTubeMark variant="full" size={size === 'sm' ? 20 : 24} />
+        <YouTubeMark variant="full" size={iconSize} />
       </span>
     );
   }
   if (platform === 'tiktok') {
     return (
-      <span className={`inline-flex shrink-0 items-center justify-center rounded-md bg-white/10 ${tile}`}>
-        <TikTokMark size={iconSize} className="text-text-primary" />
+      <span className="inline-flex shrink-0 items-center justify-center" aria-hidden>
+        <TikTokMark size={iconSize} />
       </span>
     );
   }
   if (platform === 'instagram') {
     return (
-      <span className={`inline-flex shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-[#FDC830]/15 via-[#F37335]/15 to-[#C13584]/15 ${tile}`}>
-        <InstagramMark variant="onBrand" size={iconSize} className="text-[#E1306C]" />
+      <span className="inline-flex shrink-0 items-center justify-center" aria-hidden>
+        <InstagramMark variant="full" size={iconSize} />
       </span>
     );
   }
   // facebook
   return (
-    <span className={`inline-flex shrink-0 items-center justify-center rounded-md bg-[#1877F2]/10 ${tile}`}>
-      <FacebookMark variant="onBrand" size={iconSize} className="text-[#1877F2]" />
+    <span className="inline-flex shrink-0 items-center justify-center" aria-hidden>
+      <FacebookMark variant="full" size={iconSize} />
     </span>
   );
 }
@@ -137,6 +136,8 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [activePlatformTab, setActivePlatformTab] = useState<string | null>(null);
   const [socialInputs, setSocialInputs] = useState<Partial<Record<AuditPlatformKey, string>>>({});
   const [competitorUrls, setCompetitorUrls] = useState<string[]>(['', '', '']);
+  const [competitorSuggestionsLoading, setCompetitorSuggestionsLoading] = useState(false);
+  const [competitorFaviconErrors, setCompetitorFaviconErrors] = useState<boolean[]>([false, false, false]);
   const [submittingSocials, setSubmittingSocials] = useState(false);
   const [detectedPlatforms, setDetectedPlatforms] = useState<{ platform: string; url: string; username: string }[]>([]);
   const [detecting, setDetecting] = useState(false);
@@ -256,6 +257,20 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     }
   }, [audit.prospect_data, activePlatformTab]);
 
+  function normaliseHttps(url: string): string {
+    const trimmed = url.trim();
+    if (!trimmed) return '';
+    return trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
+  }
+
+  function faviconDomain(url: string): string | null {
+    try {
+      return new URL(normaliseHttps(url)).hostname;
+    } catch {
+      return null;
+    }
+  }
+
   async function detectSocials() {
     setDetecting(true);
     try {
@@ -273,6 +288,21 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         }
         setSocialInputs(preset);
         setAudit(prev => ({ ...prev, status: 'confirming_platforms' }));
+
+        // Fire competitor suggestions in parallel (non-blocking)
+        setCompetitorSuggestionsLoading(true);
+        fetch(`/api/analyze-social/${audit.id}/suggest-competitors`, { method: 'POST' })
+          .then(async (r) => {
+            if (!r.ok) return;
+            const d = await r.json();
+            const candidates: { website: string }[] = d.candidates ?? [];
+            const urls = candidates.map((c) => normaliseHttps(c.website));
+            // Pad to length 3
+            while (urls.length < 3) urls.push('');
+            setCompetitorUrls(urls);
+          })
+          .catch(() => { /* silently ignore — inputs stay empty */ })
+          .finally(() => setCompetitorSuggestionsLoading(false));
       } else {
         // If detect fails, go straight to processing
         void startProcessing();
@@ -398,27 +428,63 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
 
           <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-text-primary">Competitors (optional)</h3>
+              <h3 className="text-lg font-semibold text-text-primary">Competitors</h3>
               <p className="mt-1 text-base text-text-muted">
-                Paste up to 3 competitor websites. We'll scrape their socials and rank against them. Leave blank to auto-discover.
+                {competitorSuggestionsLoading
+                  ? 'Finding competitors based on your website and industry…'
+                  : "We've suggested 3 competitors based on your website and industry. Edit if you'd like — we'll scrape their socials and rank against them."}
               </p>
             </div>
-            {[0, 1, 2].map((i) => (
-              <input
-                key={i}
-                type="text"
-                value={competitorUrls[i] ?? ''}
-                onChange={(e) => {
-                  setCompetitorUrls((prev) => {
-                    const next = [...prev];
-                    next[i] = e.target.value;
-                    return next;
-                  });
-                }}
-                placeholder={`Competitor ${i + 1} website — e.g. https://doughco.com`}
-                className="w-full rounded-lg border border-nativz-border bg-transparent px-4 py-3 text-lg text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40"
-              />
-            ))}
+            {[0, 1, 2].map((i) => {
+              const url = competitorUrls[i] ?? '';
+              const domain = faviconDomain(url);
+              const imgError = competitorFaviconErrors[i] ?? false;
+              return (
+                <div key={i} className="flex items-center gap-3">
+                  <span className="shrink-0 w-5 h-5 flex items-center justify-center">
+                    {domain && !imgError ? (
+                      <img
+                        src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
+                        alt=""
+                        width={20}
+                        height={20}
+                        className="rounded-sm object-contain"
+                        onError={() => setCompetitorFaviconErrors((prev) => {
+                          const next = [...prev];
+                          next[i] = true;
+                          return next;
+                        })}
+                      />
+                    ) : (
+                      <Globe size={16} className="text-text-muted/50" />
+                    )}
+                  </span>
+                  <input
+                    type="text"
+                    value={url}
+                    disabled={competitorSuggestionsLoading}
+                    onChange={(e) => {
+                      // Clear favicon error when URL changes so the img retries
+                      setCompetitorFaviconErrors((prev) => {
+                        const next = [...prev];
+                        next[i] = false;
+                        return next;
+                      });
+                      setCompetitorUrls((prev) => {
+                        const next = [...prev];
+                        next[i] = e.target.value;
+                        return next;
+                      });
+                    }}
+                    placeholder={`Competitor ${i + 1} website — e.g. https://doughco.com`}
+                    className={cn(
+                      'flex-1 rounded-lg border border-nativz-border bg-transparent px-4 py-3 text-lg text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40',
+                      competitorSuggestionsLoading && 'animate-pulse opacity-50 cursor-not-allowed',
+                    )}
+                  />
+                </div>
+              );
+            })}
           </div>
 
           <div className="flex items-center justify-between">

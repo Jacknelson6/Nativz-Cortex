@@ -55,7 +55,7 @@ const DEFAULT_TARGET_COMPETITORS = 3;
  */
 const DISCOVERY_TIME_BUDGET_MS = 150_000;
 
-interface LlmCandidate {
+export interface LlmCandidate {
   name: string;
   website: string;
   why: string;
@@ -116,8 +116,11 @@ async function scrapeSocialForCompetitor(
  * Ask the LLM for a ranked list of competitors as {name, website, why}.
  * Uses jsonMode to keep the output parseable and requests up to 6 so we
  * have runway when individual scrapes fail.
+ *
+ * Exported as `suggestCompetitorWebsites` for the confirm-platforms API
+ * route that pre-fills the competitor inputs without scraping.
  */
-async function askLlmForCompetitors(
+export async function suggestCompetitorWebsites(
   websiteContext: WebsiteContext,
   targetPlatformSignals: { platform: AuditPlatform; topHashtags: string[]; followers: number }[],
 ): Promise<LlmCandidate[]> {
@@ -333,7 +336,7 @@ export async function discoverCompetitorsByWebsite(
     followers: p.profile.followers,
   }));
 
-  const candidates = await askLlmForCompetitors(websiteContext, targetSignals);
+  const candidates = await suggestCompetitorWebsites(websiteContext, targetSignals);
   if (candidates.length === 0) {
     console.warn('[audit] LLM returned zero competitor candidates');
     return { competitors, failures };
