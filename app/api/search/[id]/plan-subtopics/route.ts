@@ -48,16 +48,50 @@ export async function POST(
     const timeLabel = getTimeRangeOptionLabel(timeRange);
     const mainTopic = JSON.stringify(search.query);
 
-    const prompt = `You are a keyword research assistant. Given a topic, generate specific, searchable keyword phrases.
+    // Pull client context when a brand is attached to the search so the planner
+    // generates brand-specific keywords (e.g. a Carrollton personal-injury firm
+    // gets "car accident Carrollton" not "morning routine tips").
+    const clientId = (search as { client_id?: string | null }).client_id ?? null;
+    let clientContext: { name: string; industry: string | null; target_audience: string | null; brand_voice: string | null } | null = null;
+    if (clientId) {
+      const { data: client } = await admin
+        .from('clients')
+        .select('name, industry, target_audience, brand_voice')
+        .eq('id', clientId)
+        .single();
+      if (client) {
+        clientContext = {
+          name: client.name,
+          industry: client.industry ?? null,
+          target_audience: client.target_audience ?? null,
+          brand_voice: client.brand_voice ?? null,
+        };
+      }
+    }
 
-Main topic: ${mainTopic}
-Time window: **${timeLabel}**. Keywords should reflect what people are actually searching for, discussing, and creating content about within ${timeLabel}.
+    const brandBlock = clientContext
+      ? `ATTACHED BRAND — you MUST anchor keywords to this brand's business, industry, and audience. Do not return generic topic keywords.
+- Name: ${clientContext.name}
+- Industry: ${clientContext.industry ?? 'n/a'}
+- Target audience: ${clientContext.target_audience ?? 'n/a'}
+- Brand voice: ${clientContext.brand_voice ?? 'n/a'}
+
+Every keyword should be something this specific brand would genuinely create content about or rank for. If a keyword could apply to any random brand in any niche, it's wrong — rewrite it to reference the brand's specific service, locale, audience pain points, or category.
+`
+      : '';
+
+    const prompt = `You are a keyword research assistant. Given a topic${clientContext ? ' and an attached brand' : ''}, generate specific, searchable keyword phrases.
+
+${brandBlock}Main topic: ${mainTopic}
+Time window: **${timeLabel}**. Keywords should reflect what people are actually searching for, discussing, and creating content about within ${timeLabel}${clientContext ? ` — framed through ${clientContext.name}'s lens` : ''}.
 
 Return ONLY valid JSON: {"subtopics": string[]} with exactly 10 distinct items. Each string is a **2–4 word keyword phrase** that is specific and searchable — the kind of phrase someone would type into a search engine or use as a content topic.
 
 Rules:
-- Each keyword must be 2–4 words. Short and punchy, like "cooking hacks", "indie game dev", "morning routine tips".
-- Keywords must be specific to the topic, not generic.
+- Each keyword must be 2–4 words. Short and punchy.
+- Keywords must be specific to the topic${clientContext ? ` AND to ${clientContext.name}'s brand/industry/audience` : ''}.
+${clientContext ? `- Prefer keywords that tie directly to ${clientContext.name}'s service (e.g. for a personal injury firm: "car accident claim", not "legal tips"; for a local bakery: "sourdough orders NYC", not "baking trends").
+- When the brand is local and the topic allows it, include at least 2–3 geo-anchored keywords.` : ''}
 - Keywords must reflect real search interest within ${timeLabel}.
 - No numbering prefixes.
 - No full sentences — just keyword phrases.
