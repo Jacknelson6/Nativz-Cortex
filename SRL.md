@@ -227,6 +227,32 @@ Extended features requested by user mid-SRL:
 
 ---
 
+## Goal 4 (set 2026-04-13)
+
+**LAUNCH-DAY QA**: Verify every client-facing flow is 100% production ready.
+Fix any blockers found. Ship-ready means a Nativz client could use this
+today without hitting any errors or missing features.
+
+### Acceptance criteria
+- [ ] **Build clean**: `npx tsc --noEmit` + `npm run build` succeed
+- [ ] **All migrations applied**: 039/095/096/097/098 verified + REST schema cache reloaded
+- [ ] **Smoke tests pass**: nerd-tools, markdown-tables, strategy-lab-addendum
+- [ ] **Prompt harness ≥ 90%**: re-run the 4-scenario suite, confirm quality
+- [ ] **Artifact create flow**: log in → Strategy Lab → save artifact → see in gallery → export PDF
+- [ ] **Shareable Nerd chat**: log in → start convo → click share → paste link in incognito → loads
+- [ ] **Topic search import dialog**: paperclip → Attach research → modal opens → toggle works
+- [ ] **Delete flows**: research, strategy lab, audit — delete is instant + doesn't open item
+- [ ] **Audit view loads**: toastique audit page renders without errors, FB shows N/A correctly
+- [ ] **Public 404 branded**: invalid share token → branded 404 with CTAs (not default Next.js)
+- [ ] **Critical console errors = 0**: no red errors on login, dashboard, Strategy Lab, audit pages
+- [ ] **Production deploy**: latest main is live on cortex.nativz.io
+
+### Scope boundaries
+- **IN:** Every feature shipped this session + core existing flows
+- **OUT:** Brand-new feature work; this is verification only
+
+---
+
 ## Goal 3 (set 2026-04-12)
 
 Visual QA the Cortex app. Walk through every reachable page, capture
