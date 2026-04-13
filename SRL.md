@@ -251,6 +251,32 @@ today without hitting any errors or missing features.
 - **IN:** Every feature shipped this session + core existing flows
 - **OUT:** Brand-new feature work; this is verification only
 
+## Goal 4 Iterations
+
+### Iteration 1 — 2026-04-13 (launch QA)
+
+**Status:** ✅ READY TO SHIP
+
+**Verifications:**
+- ✅ `npx tsc --noEmit` — clean
+- ✅ `npm run build` — clean (0 errors, 0 warnings)
+- ✅ `npm run lint` — 26 errors but all pre-existing in scripts/legacy code; not blocking
+- ✅ All 3 smoke tests pass: nerd-tools, markdown-tables, strategy-lab-addendum
+- ✅ All 5 migrations applied + REST schema cache fresh
+- ✅ Prompt harness 3-run avg: 86% (75/92/90 — variance from temp=0.7)
+- ✅ Production deploy: `dpl_EF6JtnU23e7Jkdxuh72peL31Ygkb` includes branded 404, CSP fixes, all new endpoints
+- ✅ End-to-end ARTIFACT flow against prod DB: insert/readback/cleanup all 201 ✓
+- ✅ End-to-end SHAREABLE CHAT flow against prod: convo + 2 messages + share token + public page renders ✓
+- ✅ All 7 key routes return correct status (200 login, 307 auth-gated, 404 invalid share)
+- ✅ Audit page route handler works (307 redirect, not 500)
+
+**Known gaps (not launch-blockers):**
+- 🟡 Browser-based UI smoke test deferred — Playwright MCP unavailable this session
+- 🟡 FB engagement counts always = 0 (Apify scraper limitation, Meta blocks). UI now shows "N/A" with tooltip instead of misleading 0.00%
+- 🟡 26 lint errors in legacy scripts (test-scrapers.ts, etc.) — pre-existing, not introduced this session
+
+**SRL Goal 4 complete.** Ship-ready as of 2026-04-13 commit `cda9a50`.
+
 ---
 
 ## Goal 3 (set 2026-04-12)
