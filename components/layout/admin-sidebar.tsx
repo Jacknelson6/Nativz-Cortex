@@ -65,11 +65,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
-    ],
-  },
-  {
-    label: 'Content',
-    items: [
       {
         href: '/admin/pipeline',
         label: 'Monthly pipeline',
@@ -86,6 +81,11 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/pipeline?stage=boosting', label: 'Boosting', icon: Megaphone },
         ],
       },
+    ],
+  },
+  {
+    label: 'Content',
+    items: [
       { href: '/admin/scheduler', label: 'Post scheduler', icon: Send },
       { href: '/admin/search/new', label: 'Research', icon: Telescope },
       { href: '/admin/strategy-lab', label: 'Strategy lab', icon: Compass },
