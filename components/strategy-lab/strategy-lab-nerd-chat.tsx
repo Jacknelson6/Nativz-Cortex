@@ -14,6 +14,7 @@ import { ConversationShareButton } from '@/components/ai/conversation-share-butt
 import { StrategyLabClientPickerPill } from './strategy-lab-client-picker-pill';
 import { StrategyLabConversationHistoryRail } from './strategy-lab-conversation-history-rail';
 import { StrategyLabTopicSearchChipBar } from './strategy-lab-topic-search-chip-bar';
+import { StrategyLabAttachResearchDialog } from './strategy-lab-attach-research-dialog';
 import { cn } from '@/lib/utils/cn';
 import { getAllCommands, getCommand } from '@/lib/nerd/slash-commands';
 import {
@@ -127,6 +128,7 @@ export function StrategyLabNerdChat({
   // look up attached-search metadata for the PDF export.
   const [attachedSearchIds, setAttachedSearchIds] = useState<string[]>([]);
   const [clientSearches, setClientSearches] = useState<TopicSearchItem[]>([]);
+  const [attachResearchOpen, setAttachResearchOpen] = useState(false);
 
   // Slash command menu — same /ideas, /script, /pillars, /hooks, /strategy etc.
   // commands the admin Nerd registers centrally.
@@ -533,6 +535,7 @@ export function StrategyLabNerdChat({
           placeholder={`Ask Cortex about ${clientName.trim() || 'this client'}… (try /ideas or /script)`}
           blockEnterSubmit={showSlashMenu}
           onKeyDown={handleInputKeyDown}
+          onAttachResearch={() => setAttachResearchOpen(true)}
         >
           {showSlashMenu && (
             <SlashCommandMenu
@@ -544,6 +547,16 @@ export function StrategyLabNerdChat({
           )}
         </ChatComposer>
       </div>
+
+      <StrategyLabAttachResearchDialog
+        open={attachResearchOpen}
+        onClose={() => setAttachResearchOpen(false)}
+        clientId={clientId}
+        clientName={clientName}
+        clientSlug={clientSlug}
+        attachedSearchIds={attachedSearchIds}
+        onToggle={toggleAttach}
+      />
     </div>
   );
 

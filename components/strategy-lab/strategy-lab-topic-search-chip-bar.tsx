@@ -157,8 +157,10 @@ export function StrategyLabTopicSearchChipBar({
       </div>
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
         {attachedSearches.length === 0 ? (
-          <span className="text-[11px] text-text-muted/50">
-            {loading && attachedSearchIds.length > 0 ? 'Loading…' : 'Nothing attached'}
+          <span className="text-[11px] text-text-muted/60">
+            {loading && attachedSearchIds.length > 0
+              ? 'Loading…'
+              : 'No topic searches attached — click 📎 in the input or "+ Add research"'}
           </span>
         ) : (
           attachedSearches.map((s) => (

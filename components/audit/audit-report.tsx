@@ -676,7 +676,14 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div><span className="text-xs text-text-muted">Followers</span><p className="font-semibold text-text-primary">{formatNumber(comp.followers)}</p></div>
-                    <div><span className="text-xs text-text-muted">Engagement</span><p className="font-semibold text-text-primary">{(comp.engagementRate * 100).toFixed(2)}%</p></div>
+                    <div>
+                      <span className="text-xs text-text-muted">Engagement</span>
+                      <p className="font-semibold text-text-primary">
+                        {comp.platform === 'facebook' && comp.engagementRate === 0
+                          ? <span className="text-text-muted" title="Meta blocks engagement counts on Facebook Reels scraping">—</span>
+                          : `${(comp.engagementRate * 100).toFixed(2)}%`}
+                      </p>
+                    </div>
                     <div><span className="text-xs text-text-muted">Avg views</span><p className="font-semibold text-text-primary">{formatNumber(comp.avgViews)}</p></div>
                     <div><span className="text-xs text-text-muted">Frequency</span><p className="font-semibold text-text-primary">{comp.postingFrequency}</p></div>
                   </div>
@@ -810,7 +817,20 @@ function PlatformDetail({ platform }: { platform: PlatformReport }) {
         <div className="mt-auto pt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard icon={Users} label="Followers" value={formatNumber(platform.profile.followers)} />
           <StatCard icon={Eye} label="Avg views" value={formatNumber(platform.avgViews)} />
-          <StatCard icon={TrendingUp} label="Engagement" value={`${(platform.engagementRate * 100).toFixed(2)}%`} />
+          <StatCard
+            icon={TrendingUp}
+            label="Engagement"
+            value={
+              platform.platform === 'facebook' && platform.engagementRate === 0
+                ? 'N/A'
+                : `${(platform.engagementRate * 100).toFixed(2)}%`
+            }
+            hint={
+              platform.platform === 'facebook' && platform.engagementRate === 0
+                ? 'Meta hides engagement counts on Facebook Reels scraping'
+                : undefined
+            }
+          />
           <StatCard icon={BarChart3} label="Frequency" value={platform.postingFrequency} />
         </div>
       </div>
@@ -910,9 +930,19 @@ function ScorecardCard({ item }: { item: ScorecardItem }) {
   );
 }
 
-function StatCard({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: string }) {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: typeof Users;
+  label: string;
+  value: string;
+  hint?: string;
+}) {
   return (
-    <div className="rounded-lg border border-nativz-border bg-background px-4 py-3">
+    <div className="rounded-lg border border-nativz-border bg-background px-4 py-3" title={hint}>
       <div className="flex items-center gap-1.5 text-text-muted mb-1">
         <Icon size={13} />
         <span className="text-xs font-medium uppercase tracking-wide">{label}</span>
