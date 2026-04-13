@@ -20,10 +20,12 @@ export const topicPlanTools: ToolDefinition[] = [
     parameters: z.object({
       client_id: z.string().uuid().describe('UUID of the client this plan is for'),
       plan: topicPlanSchema.describe(
-        'The full plan body. Every idea has a title and should carry audience/sentiment/resonance when the attached research supports it. Skip a stat rather than inventing one.',
+        'The full plan body. Every idea has a title and should carry audience/sentiment/resonance when the attached research supports it. Skip a stat rather than inventing one. Do NOT include client_id or topic_search_ids inside this plan object — those go on the wrapper.',
       ),
-      topic_search_ids: z.array(z.string().uuid()).max(10).optional().describe(
-        'IDs of the topic_searches this plan was built from, for traceability',
+      // Permissive: accept any strings so the Nerd doesn't fail the call when
+      // it confuses query labels for IDs. We filter to UUIDs before insert.
+      topic_search_ids: z.array(z.string()).max(10).optional().describe(
+        'UUIDs of the topic_searches this plan was built from, for traceability. Only include actual UUIDs you can see in the attached research blocks — otherwise leave empty.',
       ),
       conversation_id: z.string().uuid().optional().describe(
         'Nerd conversation this plan was produced in (optional)',
@@ -37,6 +39,12 @@ export const topicPlanTools: ToolDefinition[] = [
         topic_search_ids?: string[];
         conversation_id?: string;
       };
+
+      // Strip non-UUID strings out of topic_search_ids so a Nerd hallucination
+      // (passing the search query name instead of the UUID) doesn't fail the
+      // insert against the uuid[] column type.
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const cleanTopicSearchIds = (topic_search_ids ?? []).filter((s) => uuidRe.test(s));
 
       const admin = createAdminClient();
       const { data: client } = await admin
@@ -56,7 +64,7 @@ export const topicPlanTools: ToolDefinition[] = [
           title: plan.title,
           subtitle: plan.subtitle ?? null,
           plan_json: plan,
-          topic_search_ids: topic_search_ids ?? [],
+          topic_search_ids: cleanTopicSearchIds,
           conversation_id: conversation_id ?? null,
           created_by: userId,
         })

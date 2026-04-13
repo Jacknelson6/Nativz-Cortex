@@ -48,10 +48,6 @@ export const topicPlanSchema = z.object({
   title: z.string().min(2).max(200),
   /** Subtitle / sell line under the title. */
   subtitle: z.string().max(400).optional(),
-  /** Client the plan is for — uuid. */
-  client_id: z.string().uuid(),
-  /** Source topic search rows grounding the plan. */
-  topic_search_ids: z.array(z.string().uuid()).max(10).default([]),
   /** One or more series. Always at least one, even if it's just "All ideas". */
   series: z.array(topicSeriesSchema).min(1).max(20),
   /** North-star metric this plan targets. "Placement Test Bookings", etc. */
@@ -59,6 +55,10 @@ export const topicPlanSchema = z.object({
   /** Recommended content split. Free text. */
   content_split_note: z.string().max(500).optional(),
 });
+// Note: client_id and topic_search_ids live as table columns (topic_plans
+// row), not inside plan_json. Storing them in JSON would require the Nerd
+// to pass them twice, and any drift between the two copies surfaces as
+// "Plan data is corrupted" when the docx route re-parses on download.
 export type TopicPlan = z.infer<typeof topicPlanSchema>;
 
 /**

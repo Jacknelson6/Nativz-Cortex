@@ -39,10 +39,14 @@ export function AgencyClientAvatar({
   const { config, brandName } = useAgencyBrand();
   const t = sizeTokens[size];
 
+  // The agency marks are designed for white backgrounds (navy ink on
+  // transparent for AC, teal/black for Nativz). A dark gradient tile
+  // crushes them into a blob — render on white so the mark reads cleanly
+  // even at 32px.
   return (
     <div
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-gradient-to-b from-surface to-[#0d0d14] shadow-sm',
+        'flex shrink-0 items-center justify-center rounded-full border border-nativz-border/40 bg-white shadow-sm',
         t.tile,
         t.padding,
         className,
