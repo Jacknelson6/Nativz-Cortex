@@ -103,7 +103,8 @@ export function StrategyLabClientPickerPill({
     (client: MentionClient) => {
       setOpen(false);
       if (client.id === clientId) return;
-      router.push(`/admin/strategy-lab/${client.slug}`);
+      // /admin/strategy-lab/[clientId] loads by UUID, not slug.
+      router.push(`/admin/strategy-lab/${client.id}`);
     },
     [clientId, router],
   );

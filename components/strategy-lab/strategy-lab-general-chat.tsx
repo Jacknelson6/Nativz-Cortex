@@ -213,8 +213,10 @@ export function StrategyLabGeneralChat({ clients }: StrategyLabGeneralChatProps)
 
   function handlePickClient(id: string) {
     setPickerOpen(false);
-    const client = clients.find((c) => c.id === id);
-    if (client?.slug) router.push(`/admin/strategy-lab/${client.slug}`);
+    // The Strategy Lab dynamic route loads by client UUID (param name is
+    // `clientId` and the page filters `clients.id`). Routing with the
+    // slug 404s.
+    if (id) router.push(`/admin/strategy-lab/${id}`);
   }
 
   return (
