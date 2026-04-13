@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
+  Check,
   CheckCircle,
   AlertCircle,
   XCircle,
@@ -377,14 +378,26 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const videos = (audit.videos_data ?? []) as TopicSearchVideoRow[];
   const activePlatform = platforms.find(p => p.platform === activePlatformTab) ?? platforms[0];
 
-  // ── Detecting socials (initial website scrape) ─────────────────────────
+  // ── Detecting socials (initial website scrape + competitor suggest) ────
   if (audit.status === 'pending' && detecting) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 animate-fade-slide-in">
-        <div className="w-full max-w-md text-center">
-          <Loader2 size={32} className="animate-spin text-accent-text mx-auto mb-4" />
-          <h2 className="text-lg font-semibold text-text-primary">Scanning website</h2>
-          <p className="mt-1 text-sm text-text-muted">Looking for social media profiles...</p>
+      <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 py-10 animate-fade-slide-in">
+        <div className="w-full max-w-2xl">
+          <div className="rounded-xl border border-nativz-border bg-surface p-8 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-accent/30 bg-accent/10">
+              <Loader2 size={28} className="animate-spin text-accent-text" />
+            </div>
+            <h2 className="mt-5 text-3xl font-semibold text-text-primary">Scanning website</h2>
+            <p className="mt-2 text-lg text-text-muted">
+              Pulling social profiles and competitors from{' '}
+              <span className="text-text-secondary">
+                {audit.website_url?.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '')}
+              </span>
+            </p>
+            <p className="mt-4 text-base text-text-muted/80">
+              This takes a few seconds — we'll pre-fill everything on the next screen.
+            </p>
+          </div>
         </div>
       </div>
     );
