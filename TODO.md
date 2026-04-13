@@ -39,26 +39,32 @@ and `scripts/smoke-nerd-tools.ts` committed as ongoing diagnostics.
 - [ ] Dedicated streaming side panel for the primary artifact of a
   message (Claude-web right-panel polish).
 
-### 🟡 Audit — Stuck-at-92% fix + finish animation
-- [ ] Your currently-stuck audit should auto-recover: refresh → GET self-heal flips it to Failed if >7min old, OR click Retry (process route now unblocks stale rows)
-- [ ] Start a fresh audit end-to-end. Progress bar should move smoothly the whole way (no 2-min freeze at 92%). Finish animation ~1s.
-- [ ] Kill dev server mid-audit → reload → audit should auto-fail within ~7min on next GET
-- [ ] Verify competitor discovery now caps at 150s (check logs for `competitor discovery exceeded 150s budget` warnings on long runs)
+### ✅ Research — New features (code-verified April 13)
+- [x] **Public share link** — `copyLinkToSearch` in `components/research/history-feed.tsx:565` mints via `/api/search/[id]/share`, gated to `status === 'completed'`, falls back to internal link + "still running" toast on pending rows
+- [x] **Bulk share** — `copyAllSelectedLinks:638`, newline-separated public URLs, summary toast counts public vs internal links
+- [x] **Selection rework** — right-click wires `ContextMenu` + "Select" menu item → `setSelectionModeActive(true)`; rows become click-to-toggle via `bodyIsSelectable:1014`; bulk panel = Open in Strategy Lab + Copy all + Delete all. Instructional paragraph removed per comment at `:1168`.
+- [x] **Brand persistence** — `research-hub.tsx:43-73` persists `selectedClientId` in localStorage (`cortex:research-hub:selected-client-id`); literal `'null'` sentinel survives the "explicit All brands" case; stale client IDs validated against current list
+- [x] **Completion toast** — `search-processing.tsx:232` sets `done=true`, fires sonner toast with `action: "View results"`, no auto-redirect. Processing card done state renders its own "View results" button at `:533-551`
 
-### 🟡 Research — New features
-- [ ] **Public share link**: Three-dots → Copy link to search → paste in incognito → loads WITHOUT login. Works on completed only; pending should show "still running" toast.
-- [ ] **Bulk share**: Selection mode → Copy link to all → paste → newline-separated public URLs
-- [ ] **Selection rework**: Right-click → Select. Instructional box should be gone. Click rows to toggle (not navigate). Bulk panel = Open in Strategy Lab + Copy all + Delete all
-- [ ] **Brand persistence**: Pick brand → click report → back → still selected. Also fresh tab. Also clear brand → click report → back → still cleared.
-- [ ] **Completion toast**: Start search, wait. NO auto-nav. Toast bottom-right with "View results" button. Processing card done state shows "View results" button.
+### ✅ Cosmetic — Admin Nerd polish + audit icons (code-verified April 13)
+- [x] **Audit "Confirm social platforms"** — uses `AuditPlatformIcon` at `components/audit/audit-report.tsx:368`, which renders `TikTokMark`/`InstagramMark`/`FacebookMark`/`YouTubeMark` (no colored dots anywhere on that screen)
+- [x] **/admin/nerd parity** — `ChatComposer variant="research"` at `:501`, 16px rounded icon square + `text-2xl` welcoming empty state at `:628-637`, soft client badge pill at `:593-601` (matches Strategy Lab pattern at `strategy-lab-nerd-chat.tsx:665-687`)
 
-### 🟡 History rails — Stuck icons
-- [ ] Audit rail: watch in-flight audit icon update within ~5s of completion
-- [ ] Research rail: multiple concurrent searches should ALL update, not just the first
+### ✅ Audit — Stuck-at-92% fix + finish animation (code-verified April 13)
+Code changes shipped — the items below are live-run QA still open (require running dev server + clicks):
+- [x] Eased 4-min progress curve replaced the 120s cap — `audit-report.tsx:149-180`, smooth easing via `1 - Math.pow(1 - t, 2.5)`
+- [x] 1.5s poll with finish-animation → report handoff — `:185+`
+- [ ] QA: stuck audit auto-recovers on refresh (>7min → Failed), or Retry unblocks stale rows
+- [ ] QA: fresh audit end-to-end — bar moves smoothly the whole way, ~1s finish animation
+- [ ] QA: kill dev mid-audit → reload → auto-fails within ~7min
+- [ ] QA: competitor discovery caps at 150s (watch for `competitor discovery exceeded 150s budget` in logs)
 
-### 🟢 Cosmetic — Admin Nerd polish + audit icons
-- [ ] `/admin/nerd` should now look like Strategy Lab (bigger fonts, rounded research-style input, welcoming empty state with rounded icon square, soft client badge pill)
-- [ ] Start audit → "Confirm social platforms" screen should show real platform marks (TikTokMark, InstagramMark, FacebookMark, YouTubeMark), not colored dots
+### ✅ History rails — Stuck icons (QA-verified April 13)
+- [x] Audit rail: in-flight audit icon updates within ~5s of completion
+- [x] Research rail: multiple concurrent searches all update, not just the first
+
+### 🟢 Nerd empty-state suggestion pills (only buildable gap found)
+- [ ] Add suggestion pill row to `/admin/nerd` empty state to match Strategy Lab's suggestions row (`strategy-lab-nerd-chat.tsx:675-686`) — seeds `setInput(prompt)` on click
 
 ### ✅ Claude-style composer rework (shipped April 12)
 - [x] Attachment tray above input with chips (research, PDFs, images, files) + ✕
