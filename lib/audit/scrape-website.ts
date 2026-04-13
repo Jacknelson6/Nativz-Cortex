@@ -25,8 +25,21 @@ const SOCIAL_PATTERNS: { platform: AuditPlatform; regex: RegExp; extractUsername
   },
   {
     platform: 'facebook',
-    regex: /(?:https?:)?\/\/(?:(?:www|m|business)\.)?(?:facebook|fb)\.com\/([\w.]+)\/?(?:[?#]|$)/gi,
-    extractUsername: (url) => url.match(/(?:facebook|fb)\.com\/([\w.]+)/)?.[1] ?? '',
+    // Matches:
+    //   facebook.com/username
+    //   www.facebook.com/username, m.facebook.com/username, business.facebook.com/username
+    //   fb.com/username
+    //   facebook.com/pages/Name-Goes-Here/123456
+    //   facebook.com/profile.php?id=123456
+    regex: /(?:https?:)?\/\/(?:(?:www|m|web|business|l)\.)?(?:facebook|fb)\.com\/(?:pages\/[^/]+\/(\d+)|profile\.php\?id=(\d+)|([\w.-]+))/gi,
+    extractUsername: (url) => {
+      const pagesMatch = url.match(/facebook\.com\/pages\/[^/]+\/(\d+)/i);
+      if (pagesMatch) return pagesMatch[1];
+      const profileIdMatch = url.match(/profile\.php\?id=(\d+)/i);
+      if (profileIdMatch) return profileIdMatch[1];
+      const simpleMatch = url.match(/(?:facebook|fb)\.com\/([\w.-]+)/i);
+      return simpleMatch?.[1] ?? '';
+    },
   },
   {
     platform: 'youtube',

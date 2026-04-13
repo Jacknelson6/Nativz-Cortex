@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { scrapeWebsite } from '@/lib/audit/scrape-website';
 import { scrapeTikTokProfile } from '@/lib/audit/scrape-tiktok-profile';
 import { scrapeInstagramProfile } from '@/lib/audit/scrape-instagram-profile';
+import { scrapeFacebookProfile } from '@/lib/audit/scrape-facebook-profile';
 import { scrapeYouTubeProfile } from '@/lib/audit/scrape-youtube-profile';
 import {
   extractWebsiteContext,
@@ -117,9 +118,9 @@ export async function POST(
 
       // Add detected social links for all supported platforms
       for (const link of detectedLinks) {
-        // Facebook intentionally excluded — Meta blocks like/comment/share counts
-        // on Reels scraping so every ER value comes back 0 (useless signal).
-        if (['tiktok', 'instagram', 'youtube'].includes(link.platform)) {
+        // Facebook ER will come back 0/N/A (Meta blocks engagement data on Reels)
+        // but we still include it so the profile is visible in the report.
+        if (['tiktok', 'instagram', 'facebook', 'youtube'].includes(link.platform)) {
           platformsToScrape.push({ platform: link.platform, url: link.url });
         }
       }
@@ -173,6 +174,10 @@ export async function POST(
               }
               case 'instagram': {
                 const result = await scrapeInstagramProfile(url);
+                return buildPlatformReport(result.profile, result.videos);
+              }
+              case 'facebook': {
+                const result = await scrapeFacebookProfile(url);
                 return buildPlatformReport(result.profile, result.videos);
               }
               case 'youtube': {

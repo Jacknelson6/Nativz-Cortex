@@ -132,7 +132,7 @@ const PROCESSING_STAGES = [
   'Generating analysis scorecard',
 ];
 
-type AuditPlatformKey = 'tiktok' | 'instagram' | 'youtube';
+type AuditPlatformKey = 'tiktok' | 'instagram' | 'facebook' | 'youtube';
 
 export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const router = useRouter();
@@ -189,7 +189,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     setSocialInputs((current) => {
       if (Object.values(current).some((v) => v?.trim())) return current;
       const preset: Partial<Record<AuditPlatformKey, string>> = {};
-      const allowed = ['tiktok', 'instagram', 'youtube'] as const;
+      const allowed = ['tiktok', 'instagram', 'facebook', 'youtube'] as const;
 
       // First: user's own persisted URLs from the social_urls column
       const userUrls = (audit.social_urls ?? {}) as Partial<Record<string, string>>;
@@ -361,7 +361,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         // Pre-fill social inputs with prettified URLs (scrapers re-add https:// on submit)
         const preset: Partial<Record<AuditPlatformKey, string>> = {};
         for (const d of data.detectedPlatforms ?? []) {
-          if (d.url && (['tiktok', 'instagram', 'youtube'] as const).includes(d.platform as AuditPlatformKey)) {
+          if (d.url && (['tiktok', 'instagram', 'facebook', 'youtube'] as const).includes(d.platform as AuditPlatformKey)) {
             preset[d.platform as AuditPlatformKey] = prettyUrl(d.url);
           }
         }
@@ -544,7 +544,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           </div>
 
           <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">
-            {(['tiktok', 'instagram', 'youtube'] as AuditPlatformKey[]).map(platform => {
+            {(['tiktok', 'instagram', 'facebook', 'youtube'] as AuditPlatformKey[]).map(platform => {
               const detected = detectedPlatforms.find(d => d.platform === platform);
               const typed = socialInputs[platform]?.trim();
               // Three states:
@@ -703,7 +703,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             </p>
           </div>
           <div className="rounded-xl border border-nativz-border bg-surface p-4 space-y-3">
-            {(['tiktok', 'instagram', 'youtube'] as AuditPlatformKey[]).map(platform => (
+            {(['tiktok', 'instagram', 'facebook', 'youtube'] as AuditPlatformKey[]).map(platform => (
               <div key={platform} className="flex items-center gap-3">
                 <span className="text-sm text-text-muted w-20 shrink-0">{PLATFORM_LABELS[platform]}</span>
                 <input type="text" value={socialInputs[platform] ?? ''} onChange={(e) => setSocialInputs(prev => ({ ...prev, [platform]: e.target.value }))}

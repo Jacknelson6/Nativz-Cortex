@@ -142,8 +142,8 @@ export async function suggestCompetitorWebsites(
 
   const scopeAnchor =
     websiteContext.scope === 'local' && websiteContext.location
-      ? `GEOGRAPHIC SCOPE (non-negotiable)
-This is a LOCAL business operating in ${websiteContext.location}. Pick competitors in the SAME metro area or region — businesses a customer in ${websiteContext.location} would actually choose between. A national brand or a competitor in another state is WRONG for this comparison and will be rejected. If you can't confidently place a candidate in ${websiteContext.location} or the immediate surrounding area, SKIP them.`
+      ? `GEOGRAPHIC SCOPE
+This is a LOCAL business operating in ${websiteContext.location}. Strongly prefer competitors in the SAME metro area or region — businesses a customer in ${websiteContext.location} would actually choose between. If you cannot find enough same-metro competitors to reach 3+ candidates, it is acceptable to include a handful from the broader region (same state or nearby major metro).`
       : `GEOGRAPHIC SCOPE (non-negotiable)
 This brand operates NATIONALLY (ships DTC, franchises across states, or sells digitally). Pick nationally-recognized competitors — companies operating in the same product / service category at national scale. Single-city local competitors are WRONG for this comparison.`;
 
@@ -170,7 +170,7 @@ Return ONLY a JSON array — no markdown fences, no prose. Shape:
   { "name": "Brand Name", "website": "example.com", "why": "one-sentence reason they compete" }
 ]
 
-Exactly ${MAX_CANDIDATES_REQUESTED} entries, ordered most-similar-scale first.`;
+Up to ${MAX_CANDIDATES_REQUESTED} entries, minimum 3, ordered most-similar-scale first.`;
 
   const result = await createCompletion({
     messages: [{ role: 'user', content: prompt }],
@@ -179,9 +179,8 @@ Exactly ${MAX_CANDIDATES_REQUESTED} entries, ordered most-similar-scale first.`;
     jsonMode: true,
   });
 
-  try {
-    // jsonMode often wraps arrays in an object, so accept both shapes.
-    const raw = parseAIResponseJSON<unknown>(result.text);
+  function parseRawCandidates(text: string): LlmCandidate[] {
+    const raw = parseAIResponseJSON<unknown>(text);
     const arr = Array.isArray(raw)
       ? raw
       : Array.isArray((raw as { competitors?: unknown })?.competitors)
@@ -197,6 +196,44 @@ Exactly ${MAX_CANDIDATES_REQUESTED} entries, ordered most-similar-scale first.`;
       }))
       .filter((c) => c.name.length > 0 && c.website.length > 0)
       .slice(0, MAX_CANDIDATES_REQUESTED);
+  }
+
+  try {
+    // jsonMode often wraps arrays in an object, so accept both shapes.
+    const parsed = parseRawCandidates(result.text);
+
+    if (parsed.length > 0) return parsed;
+
+    // First pass returned 0 — log and retry with a simpler prompt.
+    console.warn(
+      `[audit] askLlmForCompetitors: first pass returned 0 — raw response (first 500 chars): ${result.text.slice(0, 500)}`,
+    );
+    console.warn('[audit] askLlmForCompetitors: first pass returned 0 — retrying with relaxed prompt');
+
+    const fallbackPrompt = `Name 5 direct competitors for this business as JSON: [{"name":"...","website":"...","why":"..."}].
+Business: ${websiteContext.title} — ${websiteContext.industry} — ${websiteContext.description}
+${websiteContext.scope === 'local' && websiteContext.location ? `Location: ${websiteContext.location}. Prefer same-metro competitors.` : 'National scale competitors.'}
+Return JSON only, no prose.`;
+
+    const retry = await createCompletion({
+      messages: [{ role: 'user', content: fallbackPrompt }],
+      maxTokens: 800,
+      feature: 'audit_competitor_discovery',
+      jsonMode: true,
+      timeoutMs: 30000,
+    });
+
+    try {
+      const retryParsed = parseRawCandidates(retry.text);
+      if (retryParsed.length > 0) return retryParsed.slice(0, MAX_CANDIDATES_REQUESTED);
+      console.warn(
+        `[audit] askLlmForCompetitors: retry also returned 0 — raw response (first 500 chars): ${retry.text.slice(0, 500)}`,
+      );
+    } catch {
+      console.error('[audit] LLM competitor candidates retry — failed to parse JSON');
+    }
+
+    return [];
   } catch {
     console.error('[audit] LLM competitor candidates — failed to parse JSON');
     return [];
