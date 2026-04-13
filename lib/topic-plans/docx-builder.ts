@@ -147,7 +147,7 @@ function buildCoverPage(plan: TopicPlan, clientName: string): Paragraph[] {
   );
 
   const counterTable = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: 10106, type: WidthType.DXA },
     borders: {
       top: { style: BorderStyle.SINGLE, size: 4, color: COLOR_BORDER },
       bottom: { style: BorderStyle.SINGLE, size: 4, color: COLOR_BORDER },
@@ -159,7 +159,7 @@ function buildCoverPage(plan: TopicPlan, clientName: string): Paragraph[] {
     rows: [
       new TableRow({
         children: counters.map((c) => new TableCell({
-          width: { size: 25, type: WidthType.PERCENTAGE },
+          width: { size: 2526, type: WidthType.DXA },
           borders: noBorder,
           margins: { top: 300, bottom: 300, left: 100, right: 100 },
           children: [
@@ -222,7 +222,7 @@ function buildLegend(): (Paragraph | Table)[] {
     new TableRow({
       children: [
         new TableCell({
-          width: { size: 25, type: WidthType.PERCENTAGE },
+          width: { size: 2526, type: WidthType.DXA },
           borders: thinBorder,
           shading: shade ? { type: ShadingType.CLEAR, color: 'auto', fill: shade } : undefined,
           margins: { top: 120, bottom: 120, left: 200, right: 200 },
@@ -231,7 +231,7 @@ function buildLegend(): (Paragraph | Table)[] {
           })],
         }),
         new TableCell({
-          width: { size: 75, type: WidthType.PERCENTAGE },
+          width: { size: 7580, type: WidthType.DXA },
           borders: thinBorder,
           margins: { top: 120, bottom: 120, left: 200, right: 200 },
           children: [new Paragraph({
@@ -251,7 +251,7 @@ function buildLegend(): (Paragraph | Table)[] {
       spacing: { after: 200 },
     }),
     new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
+      width: { size: 10106, type: WidthType.DXA },
       rows: [
         row('☐', 'YES — Film This', 'Approved for scripting and production.', 'ECFDF5'),
         row('☐', 'MAYBE — Review', 'Needs further discussion before committing.', 'FEF3C7'),
@@ -315,7 +315,7 @@ function buildSeriesHeader(s: TopicSeries, index: number): (Paragraph | Table)[]
   while (stats.length < 4) stats.push({ value: '', label: '' });
 
   out.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: 10106, type: WidthType.DXA },
     borders: {
       top: { style: BorderStyle.SINGLE, size: 4, color: COLOR_ACCENT },
       bottom: { style: BorderStyle.SINGLE, size: 2, color: COLOR_BORDER },
@@ -327,7 +327,7 @@ function buildSeriesHeader(s: TopicSeries, index: number): (Paragraph | Table)[]
     rows: [
       new TableRow({
         children: stats.map((st) => new TableCell({
-          width: { size: 25, type: WidthType.PERCENTAGE },
+          width: { size: 2526, type: WidthType.DXA },
           borders: noBorder,
           margins: { top: 160, bottom: 160, left: 100, right: 100 },
           shading: { type: ShadingType.CLEAR, color: 'auto', fill: COLOR_SURFACE },
@@ -368,13 +368,13 @@ function buildIdeaCard(idea: TopicIdea, num: number): (Paragraph | Table)[] {
 
   // Title row with resonance + priority badges on the right
   out.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: 10106, type: WidthType.DXA },
     borders: noBorder,
     rows: [
       new TableRow({
         children: [
           new TableCell({
-            width: { size: 70, type: WidthType.PERCENTAGE },
+            width: { size: 7074, type: WidthType.DXA },
             borders: noBorder,
             margins: { top: 200, bottom: 80, left: 0, right: 0 },
             children: [new Paragraph({
@@ -385,7 +385,7 @@ function buildIdeaCard(idea: TopicIdea, num: number): (Paragraph | Table)[] {
             })],
           }),
           new TableCell({
-            width: { size: 30, type: WidthType.PERCENTAGE },
+            width: { size: 3032, type: WidthType.DXA },
             borders: noBorder,
             margins: { top: 200, bottom: 80, left: 0, right: 0 },
             children: [
@@ -442,11 +442,11 @@ function buildIdeaCard(idea: TopicIdea, num: number): (Paragraph | Table)[] {
       candidateCells.push({ value: '', label: '', fill: COLOR_SURFACE, color: COLOR_MUTED });
     }
     out.push(new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
+      width: { size: 10106, type: WidthType.DXA },
       borders: noBorder,
       rows: [new TableRow({
         children: candidateCells.map((c) => new TableCell({
-          width: { size: 25, type: WidthType.PERCENTAGE },
+          width: { size: 2526, type: WidthType.DXA },
           borders: {
             top: { style: BorderStyle.SINGLE, size: 2, color: COLOR_BORDER },
             bottom: { style: BorderStyle.SINGLE, size: 2, color: COLOR_BORDER },
@@ -485,7 +485,7 @@ function buildIdeaCard(idea: TopicIdea, num: number): (Paragraph | Table)[] {
   // Selection row — symbolic checkboxes with colored fills per Kumon's style.
   const selectionCell = (symbol: string, label: string, fill: string, textColor: string) =>
     new TableCell({
-      width: { size: 25, type: WidthType.PERCENTAGE },
+      width: { size: 2526, type: WidthType.DXA },
       borders: thinBorder,
       shading: { type: ShadingType.CLEAR, color: 'auto', fill },
       margins: { top: 120, bottom: 120, left: 160, right: 160 },
@@ -498,14 +498,14 @@ function buildIdeaCard(idea: TopicIdea, num: number): (Paragraph | Table)[] {
     });
 
   out.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: 10106, type: WidthType.DXA },
     rows: [new TableRow({
       children: [
         selectionCell('☐', 'YES — Film This', 'ECFDF5', '065F46'),
         selectionCell('☐', 'MAYBE — Review', 'FEF3C7', '92400E'),
         selectionCell('☐', 'NO — Skip', 'FEE2E2', '991B1B'),
         new TableCell({
-          width: { size: 25, type: WidthType.PERCENTAGE },
+          width: { size: 2526, type: WidthType.DXA },
           borders: thinBorder,
           margins: { top: 120, bottom: 120, left: 160, right: 160 },
           children: [new Paragraph({
