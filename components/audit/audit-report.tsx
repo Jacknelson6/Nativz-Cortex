@@ -263,9 +263,14 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     return trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
   }
 
+  /** Strip `https://` + leading `www.` for display. Scrapers normalise back on submit. */
+  function prettyUrl(url: string): string {
+    return url.trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+  }
+
   function faviconDomain(url: string): string | null {
     try {
-      return new URL(normaliseHttps(url)).hostname;
+      return new URL(normaliseHttps(url)).hostname.replace(/^www\./i, '');
     } catch {
       return null;
     }
@@ -279,11 +284,11 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         const data = await res.json();
         setDetectedPlatforms(data.detectedPlatforms ?? []);
         setWebsiteInfo(data.websiteContext ? { title: data.websiteContext.title, industry: data.websiteContext.industry } : null);
-        // Pre-fill social inputs with full detected URLs (runs once per detect)
+        // Pre-fill social inputs with prettified URLs (scrapers re-add https:// on submit)
         const preset: Partial<Record<AuditPlatformKey, string>> = {};
         for (const d of data.detectedPlatforms ?? []) {
           if (d.url && (['tiktok', 'instagram', 'facebook', 'youtube'] as const).includes(d.platform as AuditPlatformKey)) {
-            preset[d.platform as AuditPlatformKey] = d.url;
+            preset[d.platform as AuditPlatformKey] = prettyUrl(d.url);
           }
         }
         setSocialInputs(preset);
@@ -296,7 +301,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             if (!r.ok) return;
             const d = await r.json();
             const candidates: { website: string }[] = d.candidates ?? [];
-            const urls = candidates.map((c) => normaliseHttps(c.website));
+            const urls = candidates.map((c) => prettyUrl(c.website));
             // Pad to length 3
             while (urls.length < 3) urls.push('');
             setCompetitorUrls(urls);
@@ -397,12 +402,12 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             {(['tiktok', 'instagram', 'facebook', 'youtube'] as AuditPlatformKey[]).map(platform => {
               const detected = detectedPlatforms.find(d => d.platform === platform);
               const missing = !detected && !socialInputs[platform]?.trim();
-              const value = socialInputs[platform] ?? (detected?.url ?? '');
+              const value = socialInputs[platform] ?? prettyUrl(detected?.url ?? '');
               return (
                 <div key={platform} className="flex items-center gap-3">
                   <div className="flex items-center gap-2 w-32 shrink-0">
                     <AuditPlatformIcon platform={platform} size="sm" />
-                    <span className="text-lg text-text-primary font-medium">{PLATFORM_LABELS[platform]}</span>
+                    <span className="text-base text-text-primary font-medium">{PLATFORM_LABELS[platform]}</span>
                   </div>
                   <input
                     type="text"
@@ -410,7 +415,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                     onChange={(e) => setSocialInputs(prev => ({ ...prev, [platform]: e.target.value }))}
                     placeholder={missing ? '—' : `${platform}.com/@username`}
                     className={cn(
-                      'flex-1 rounded-lg border bg-transparent px-4 py-3 text-lg focus:outline-none',
+                      'flex-1 rounded-lg border bg-transparent px-3 py-2 text-base focus:outline-none',
                       missing
                         ? 'border-red-500/40 text-red-300 placeholder:text-red-400/50 focus:border-red-400/60'
                         : 'border-nativz-border text-text-primary placeholder:text-text-muted/50 focus:border-accent/40',
@@ -476,9 +481,9 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                         return next;
                       });
                     }}
-                    placeholder={`Competitor ${i + 1} website — e.g. https://doughco.com`}
+                    placeholder={`Competitor ${i + 1} website — e.g. doughco.com`}
                     className={cn(
-                      'flex-1 rounded-lg border border-nativz-border bg-transparent px-4 py-3 text-lg text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40',
+                      'flex-1 rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-base text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40',
                       competitorSuggestionsLoading && 'animate-pulse opacity-50 cursor-not-allowed',
                     )}
                   />
