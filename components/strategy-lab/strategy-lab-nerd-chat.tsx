@@ -133,8 +133,10 @@ export function StrategyLabNerdChat({
   // Wide agency lockup (white-background, no boxed container) for the empty
   // state. Falls back to the tile logo for brands that don't ship a wide
   // variant yet.
+  // Use the "-dark" variant on the empty state — its white/light background
+  // needs the navy wordmark, not the teal-on-transparent default.
   const wideAgencyLogoPath =
-    agencyBrand === 'anderson' ? '/anderson-collaborative-logo.svg' : '/nativz-logo.svg';
+    agencyBrand === 'anderson' ? '/anderson-logo-dark.svg' : '/nativz-logo.svg';
 
   useEffect(() => {
     if (!clientId) return;

@@ -99,7 +99,7 @@ function AuditPlatformIcon({ platform, size = 'md' }: { platform: AuditPlatformK
   if (platform === 'tiktok') {
     return (
       <span className="inline-flex shrink-0 items-center justify-center" aria-hidden>
-        <TikTokMark size={iconSize} />
+        <TikTokMark size={iconSize} variant="onLight" />
       </span>
     );
   }
