@@ -29,9 +29,9 @@ import {
   TopicPlan,
   TopicSeries,
   TopicIdea,
-  Resonance,
   formatAudience,
   resonanceLabel,
+  normalizeResonance,
   totalIdeas,
   totalHighResonance,
 } from './types';
@@ -331,8 +331,9 @@ function buildSeriesHeader(s: TopicSeries, index: number): (Paragraph | Table)[]
 
 // ─── Idea card ──────────────────────────────────────────────────────────────
 
-function resonanceColor(r: Resonance | undefined): string {
-  switch (r) {
+function resonanceColor(r: string | null | undefined): string {
+  switch (normalizeResonance(r)) {
+    case 'viral': return COLOR_PRIORITY;
     case 'high': return COLOR_ACCENT;
     case 'rising': return COLOR_PRIORITY;
     case 'medium': return COLOR_MUTED;
@@ -535,7 +536,7 @@ export async function buildTopicPlanDocx(
   const doc = new Document({
     creator: 'Nativz Cortex',
     title: plan.title,
-    description: plan.subtitle,
+    description: plan.subtitle ?? undefined,
     styles: {
       default: {
         document: {

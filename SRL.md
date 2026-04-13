@@ -327,3 +327,41 @@ until the app is visually clean.
 - Portal views (dashboard, search, analytics)
 
 **SRL Goal 3 complete.** All acceptance criteria met as of iteration 1.
+
+---
+
+## Goal 5 (set 2026-04-13)
+
+**TOPIC PLAN DELIVERY**: Get the Strategy Lab → create_topic_plan → .docx
+download flow working end-to-end so the artifact card actually delivers a
+well-formatted Word document.
+
+### Acceptance criteria
+- [x] **Live row parses**: latest topic_plans row in prod parses cleanly against `topicPlanSchema`
+- [x] **DOCX builds**: running the docx builder against the live row produces a real .docx (validated via `file` + `unzip`)
+- [x] **Schema matches Nerd vocabulary**: resonance accepts open strings (`viral` was the failure), nullable numeric stat fields accept `null`
+- [x] **Per-message Nerd avatar**: replace agency-logo-in-tile (which crushed at 32px) with a Sparkles glyph in agency accent color on a tinted accent tile
+
+### Goal 5 Iterations
+
+#### Iteration 1 — 2026-04-13
+
+**Diagnosis (via Supabase Management API):**
+- Latest plan_json: 4 series, 40 ideas, no extra top-level keys (previous fix was good)
+- `resonance` values seen: `high`, `medium`, `low`, `viral` — `viral` not in our enum
+- `audience`, `positive_pct`, `negative_pct`: passed as JSON `null` — schema had `.optional()` (T | undefined), rejected explicit null
+
+**Shipped:**
+- Open-vocabulary `resonance` (any string + canonical-name normalizer)
+- `.nullish()` everywhere a stat could be null
+- `normalizeResonance()` helper + `resonanceLabel()` accepts any string
+- DOCX builder uses normalized resonance for color logic; canonical 'viral' maps to priority orange
+- Avatar swap: Sparkles in `text-accent-text` on `bg-accent/[0.08]` tile
+
+**Verification:**
+- `npx tsx scripts/verify-topic-plan.ts $LIVE_PLAN` → `OK series=4 ideas=40`
+- `npx tsx scripts/verify-topic-plan-docx.ts $LIVE_PLAN` → `wrote /tmp/topic-plan-test.docx size=21621`
+- `file /tmp/topic-plan-test.docx` → `Microsoft Word 2007+`
+- `unzip -l` → 12 entries incl. `word/document.xml` (445KB content)
+
+**SRL Goal 5 complete.** The existing corrupted row now downloads cleanly with the new schema; future plans round-trip without intervention.
