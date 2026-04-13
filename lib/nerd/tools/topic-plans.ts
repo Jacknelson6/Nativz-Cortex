@@ -56,6 +56,20 @@ export const topicPlanTools: ToolDefinition[] = [
         return { success: false, error: 'Client not found', cardType: 'topic_plan' as const };
       }
 
+      // The Nerd sometimes hallucinates a conversation_id (or passes one from
+      // a thread that doesn't exist yet). Verify the row exists before we
+      // hand it to the FK constraint — null it out otherwise so the insert
+      // succeeds rather than 500ing the whole tool call.
+      let safeConversationId: string | null = null;
+      if (conversation_id && uuidRe.test(conversation_id)) {
+        const { data: convo } = await admin
+          .from('nerd_conversations')
+          .select('id')
+          .eq('id', conversation_id)
+          .maybeSingle();
+        if (convo) safeConversationId = convo.id;
+      }
+
       const { data: plansRow, error } = await admin
         .from('topic_plans')
         .insert({
@@ -65,7 +79,7 @@ export const topicPlanTools: ToolDefinition[] = [
           subtitle: plan.subtitle ?? null,
           plan_json: plan,
           topic_search_ids: cleanTopicSearchIds,
-          conversation_id: conversation_id ?? null,
+          conversation_id: safeConversationId,
           created_by: userId,
         })
         .select('id, title, subtitle, created_at')
