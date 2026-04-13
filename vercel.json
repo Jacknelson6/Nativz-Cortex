@@ -31,10 +31,6 @@
       "schedule": "30 * * * *"
     },
     {
-      "path": "/api/cron/fyxer-import",
-      "schedule": "15,45 * * * *"
-    },
-    {
       "path": "/api/cron/data-retention",
       "schedule": "0 3 * * *"
     },

@@ -1,66 +1,38 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { importFyxerEmails } from '@/lib/knowledge/fyxer-importer';
-import { isServiceAccountConfigured } from '@/lib/google/service-account';
-import { embedAllKnowledgeEntries } from '@/lib/ai/embeddings';
-
-export const maxDuration = 60;
-
 /**
- * GET/POST /api/cron/fyxer-import
+ * GET/POST /api/cron/fyxer-import — DEPRECATED (410 Gone)
  *
- * Vercel cron job (runs every 30 minutes): import Fyxer meeting recap emails from Gmail
- * into the knowledge base. Uses a Google service account with domain-wide delegation —
- * no AI tokens are consumed. Matches subjects to active clients (excluding Nativz-agency
- * rows unless `FYXER_INCLUDE_NATIVZ_CLIENTS=true`); unmatched → `fyxer-prospects` bucket.
- * Also generates embeddings for any entries missing them.
+ * Fyxer ingestion moved to Agency Brain on 2026-04-13. Brain polls
+ * Fyxer's official MCP server every 5 minutes at
+ * `/api/cron/brain-fyxer-poll` and writes directly into `brain.documents`.
  *
- * @auth Bearer CRON_SECRET (Vercel cron)
- * @returns {{ success: true, imported: number, skipped: number, errors: string[], embeddings: EmbedResult }}
+ * This route ran alongside the Brain poller for ~1 day and was
+ * double-ingesting every meeting. Disabled to stop the drift.
+ *
+ * Timeline:
+ *   - Replaced by `/api/cron/brain-fyxer-poll` in Agency Brain repo
+ *   - Removed from `vercel.json` crons on 2026-04-13
+ *   - This route returns 410 so any stale callers fail loudly
+ *   - The importer helper at `lib/knowledge/fyxer-importer.ts` is
+ *     retained for one more slice in case we need to reference the
+ *     Gmail-scraping parser logic for a migration backfill; it will be
+ *     deleted in Strangler Slice 3 (Meetings).
+ *
+ * See: Agency Brain `docs/REVERSE-MERGE-AUDIT.md`, section 4 (Ingestion).
  */
-async function handleFyxerImport(request: NextRequest) {
-  try {
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
-    if (!isServiceAccountConfigured()) {
-      return NextResponse.json(
-        {
-          error:
-            'Google service account not configured (GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_SERVICE_ACCOUNT_KEY_PATH)',
-        },
-        { status: 400 },
-      );
-    }
+import { NextResponse } from 'next/server'
 
-    const result = await importFyxerEmails();
+const GONE_PAYLOAD = {
+  error: 'This endpoint was retired.',
+  reason:
+    'Fyxer ingestion is now owned by Agency Brain. See Agency Brain `/api/cron/brain-fyxer-poll`.',
+  retired_at: '2026-04-13',
+} as const
 
-    console.log(
-      `Fyxer import: ${result.imported} imported, ${result.skipped} skipped, ${result.errors.length} errors`,
-    );
-
-    // Generate embeddings for any entries missing them
-    const embedResult = await embedAllKnowledgeEntries().catch(() => ({
-      embedded: 0,
-      failed: 0,
-      skipped: 0,
-    }));
-
-    return NextResponse.json({ success: true, ...result, embeddings: embedResult });
-  } catch (error) {
-    console.error('POST /api/cron/fyxer-import error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 },
-    );
-  }
+export async function GET(): Promise<NextResponse> {
+  return NextResponse.json(GONE_PAYLOAD, { status: 410 })
 }
 
-export async function GET(request: NextRequest) {
-  return handleFyxerImport(request);
-}
-
-export async function POST(request: NextRequest) {
-  return handleFyxerImport(request);
+export async function POST(): Promise<NextResponse> {
+  return NextResponse.json(GONE_PAYLOAD, { status: 410 })
 }
