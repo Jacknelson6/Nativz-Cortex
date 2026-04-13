@@ -100,10 +100,11 @@ export const GOAL_CATEGORY_BOOSTS: Record<string, Record<string, number>> = {
     bio_optimization_account: 3,
     caption_optimization: 2,
   },
-  'Launch new products or seasonal content': {
-    posting_frequency: 3,
+  'Create content to use for better ads': {
+    content_quality: 3,
     content_variety: 3,
-    cadence_trend: 2,
+    hook_consistency: 2,
+    avg_views: 2,
   },
   'Grow a loyal community': {
     engagement_rate: 3,

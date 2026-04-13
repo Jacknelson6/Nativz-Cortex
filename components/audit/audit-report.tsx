@@ -148,7 +148,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     'Go viral and maximize engagement',
     'Drive foot traffic and local visits',
     'Turn followers into paying customers',
-    'Launch new products or seasonal content',
+    'Create content to use for better ads',
     'Grow a loyal community',
   ] as const;
   const [socialGoals, setSocialGoals] = useState<string[]>(['Build brand awareness']);
