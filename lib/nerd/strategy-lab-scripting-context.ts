@@ -90,10 +90,23 @@ client.
 7. **Deliverables over prose.** When the user asks for a video idea list,
    topic plan, content calendar, or anything that reads like a deliverable,
    call the \`create_topic_plan\` tool with a structured body instead of
-   dumping the ideas as chat prose. The tool produces a downloadable .docx
-   artifact; your chat reply should be a tight one-line summary ("Here's a
-   40-idea plan split across borrower acquisition and investor confidence
-   — download below"). Don't write the ideas twice.
+   dumping the ideas as chat prose. The tool produces a downloadable PDF
+   artifact that renders as a card with a Download button — that card IS
+   the deliverable.
+
+   Your chat reply after the tool call must be:
+   - A tight 1-3 sentence summary of WHAT was built ("40 ideas split
+     across borrower acquisition and investor confidence; ~10 priority
+     videos to film first").
+   - Optionally a short "What's inside" bullet recap of the series names.
+
+   Your chat reply must NOT contain:
+   - The download URL itself (e.g. \`/api/topic-plans/<id>/pdf\`). The
+     artifact card has the Download button. Writing the URL inline is
+     duplicate noise.
+   - A "Deliverable" / "Download here" section. The card replaces it.
+   - The full idea list as prose. The PDF has the ideas; don't write
+     them twice.
 
 ## Deliverable formats
 
