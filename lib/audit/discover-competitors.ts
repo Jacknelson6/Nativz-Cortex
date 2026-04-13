@@ -233,6 +233,29 @@ Return JSON only, no prose.`;
       console.error('[audit] LLM competitor candidates retry — failed to parse JSON');
     }
 
+    // Third-tier fallback: strip all geographic constraints and ask for
+    // same-industry competitors at any geography.
+    console.warn('[audit] askLlmForCompetitors: retry also returned 0 — final attempt with no geo constraint');
+    const nogeoPrompt = `Name 5 direct competitors in the same industry as this business. Return JSON: [{"name":"...","website":"...","why":"..."}].
+Business: ${websiteContext.title}
+Industry: ${websiteContext.industry}
+Description: ${websiteContext.description}
+Return JSON only, no prose. Do not say you cannot find any — make your best guess if the industry is ambiguous.`;
+    const noGeo = await createCompletion({
+      messages: [{ role: 'user', content: nogeoPrompt }],
+      maxTokens: 800,
+      feature: 'audit_competitor_discovery',
+      jsonMode: true,
+      timeoutMs: 30000,
+    });
+    try {
+      const noGeoParsed = parseRawCandidates(noGeo.text);
+      if (noGeoParsed.length > 0) return noGeoParsed;
+      console.warn(`[audit] askLlmForCompetitors: final attempt returned 0 — raw: ${noGeo.text.slice(0, 500)}`);
+    } catch {
+      console.error('[audit] LLM competitor candidates final attempt — failed to parse JSON');
+    }
+
     return [];
   } catch {
     console.error('[audit] LLM competitor candidates — failed to parse JSON');
@@ -290,14 +313,44 @@ async function scrapeOneCandidate(
     siteResult = await scrapeWebsite(website);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.log(`[audit] competitor "${candidate.name}" website scrape failed: ${msg}`);
-    return { type: 'failure', failure: { name: candidate.name, website, reason: `website scrape failed: ${msg}` } };
+    console.log(`[audit] competitor "${candidate.name}" website scrape failed: ${msg} — adding stub competitor`);
+    // Soft failure: the LLM suggested this brand. Surface it as a stub with 0
+    // stats so the report shows "we found these competitors but couldn't pull
+    // full metrics." Use the target's primary platform for the stub entry.
+    const stubPlatform = targetPlatformNames[0] ?? 'tiktok';
+    const stub: CompetitorProfile = {
+      username: candidate.name,
+      displayName: candidate.name,
+      platform: stubPlatform,
+      followers: 0,
+      avatarUrl: null,
+      profileUrl: website,
+      engagementRate: 0,
+      avgViews: 0,
+      postingFrequency: 'unknown',
+      recentVideos: [],
+    };
+    return { type: 'success', competitor: stub };
   }
 
   const socials = siteResult.socialLinks ?? [];
   if (socials.length === 0) {
-    console.log(`[audit] competitor "${candidate.name}" has no social links on ${website}`);
-    return { type: 'failure', failure: { name: candidate.name, website, reason: 'no socials on website' } };
+    console.log(`[audit] competitor "${candidate.name}" has no social links on ${website} — adding stub competitor`);
+    // Soft failure: website loaded but had no social links. Still surface the brand.
+    const stubPlatform = targetPlatformNames[0] ?? 'tiktok';
+    const stub: CompetitorProfile = {
+      username: candidate.name,
+      displayName: candidate.name,
+      platform: stubPlatform,
+      followers: 0,
+      avatarUrl: null,
+      profileUrl: website,
+      engagementRate: 0,
+      avgViews: 0,
+      postingFrequency: 'unknown',
+      recentVideos: [],
+    };
+    return { type: 'success', competitor: stub };
   }
 
   const matchingSocial = pickComparisonPlatform(targetPlatformNames, socials);
@@ -324,8 +377,23 @@ async function scrapeOneCandidate(
     return { type: 'success', competitor: buildCompetitorProfile(profile, videos) };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.log(`[audit] competitor "${candidate.name}" ${matchingSocial.platform} scrape failed: ${msg}`);
-    return { type: 'failure', failure: { name: candidate.name, website, reason: `${matchingSocial.platform} scrape failed: ${msg}` } };
+    console.log(`[audit] competitor "${candidate.name}" ${matchingSocial.platform} scrape failed: ${msg} — adding stub competitor`);
+    // Soft failure: social scrape failed (timeout, 403, etc.) but we confirmed
+    // this brand competes. Surface it as a stub so the report isn't empty just
+    // because one scraper was blocked. The username comes from the social link.
+    const stub: CompetitorProfile = {
+      username: matchingSocial.username || candidate.name,
+      displayName: candidate.name,
+      platform: matchingSocial.platform,
+      followers: 0,
+      avatarUrl: null,
+      profileUrl: matchingSocial.url,
+      engagementRate: 0,
+      avgViews: 0,
+      postingFrequency: 'unknown',
+      recentVideos: [],
+    };
+    return { type: 'success', competitor: stub };
   }
 }
 

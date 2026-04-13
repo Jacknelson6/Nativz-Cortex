@@ -220,10 +220,30 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
     }
   }
 
-  function handleCopyLink(id: string) {
-    const url = `${window.location.origin}/admin/analyze-social/${id}`;
-    navigator.clipboard.writeText(url);
-    toast.success('Link copied');
+  async function handleCopyLink(id: string) {
+    // Mint (or retrieve) a public share token via the same endpoint AuditShareButton
+    // uses, then copy the returned public URL to the clipboard.
+    try {
+      const res = await fetch(`/api/analyze-social/${id}/share`, { method: 'POST' });
+      if (res.ok) {
+        const data = (await res.json()) as { url?: string };
+        if (data.url) {
+          await navigator.clipboard.writeText(data.url);
+          toast.success('Public share link copied');
+          return;
+        }
+      }
+    } catch {
+      // fall through to internal link fallback
+    }
+    // Fallback: copy the internal (login-required) link
+    const internalUrl = `${window.location.origin}/admin/analyze-social/${id}`;
+    try {
+      await navigator.clipboard.writeText(internalUrl);
+    } catch {
+      // clipboard may be unavailable in some contexts
+    }
+    toast.warning("Internal link copied — couldn't create public share");
   }
 
   const hasSelection = selectedIds.size > 0;
