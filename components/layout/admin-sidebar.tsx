@@ -24,6 +24,10 @@ import {
   Compass,
   Users,
   ClipboardCheck,
+  Settings as SettingsIcon,
+  Cpu,
+  Code,
+  Calendar,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
@@ -61,14 +65,34 @@ interface NavSection {
 
 const NAV_SECTIONS: NavSection[] = [
   {
-    label: 'Overview',
+    label: 'Dashboard',
     items: [
       { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
+      { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    label: 'Intelligence',
+    items: [
+      { href: '/admin/search/new', label: 'Topic Search', icon: Telescope },
+      { href: '/admin/analyze-social', label: 'Analyze Social', icon: ClipboardCheck },
+    ],
+  },
+  {
+    label: 'Create',
+    items: [
+      { href: '/admin/strategy-lab', label: 'Content Lab', icon: Compass },
+      { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
+      { href: '/admin/presentations', label: 'Notes', icon: StickyNote },
+    ],
+  },
+  {
+    label: 'Manage',
+    items: [
       {
         href: '/admin/pipeline',
-        label: 'Monthly pipeline',
-        icon: Workflow,
+        label: 'Edits',
+        icon: Scissors,
         children: [
           { href: '/admin/pipeline', label: 'All stages', icon: Workflow },
           { href: '/admin/shoots', label: 'Shoot calendar', icon: Camera },
@@ -79,28 +103,22 @@ const NAV_SECTIONS: NavSection[] = [
             icon: ThumbsUp,
           },
           { href: '/admin/pipeline?stage=boosting', label: 'Boosting', icon: Megaphone },
+          { href: '/admin/scheduler', label: 'Calendars', icon: Calendar },
         ],
       },
-      { href: '/admin/scheduler', label: 'Calendars', icon: Send },
-    ],
-  },
-  {
-    label: 'Content',
-    items: [
-      { href: '/admin/search/new', label: 'Research', icon: Telescope },
-      { href: '/admin/strategy-lab', label: 'Strategy lab', icon: Compass },
-      { href: '/admin/ad-creatives', label: 'Ad creatives', icon: ImagePlus },
-      { href: '/admin/analyze-social', label: 'Analyze Social', icon: ClipboardCheck },
-    ],
-  },
-  {
-    label: 'Manage',
-    items: [
-      { href: '/admin/clients', label: 'Clients', icon: Building2 },
-      { href: '/admin/users', label: 'Users', icon: Users },
-      { href: '/admin/presentations', label: 'Notes', icon: StickyNote },
-      { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
-      { href: '/admin/knowledge', label: 'Knowledge', icon: Brain },
+      { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
+      {
+        href: '/admin/settings',
+        label: 'Settings',
+        icon: SettingsIcon,
+        children: [
+          { href: '/admin/clients', label: 'Clients', icon: Building2 },
+          { href: '/admin/users', label: 'Users', icon: Users },
+          { href: '/admin/knowledge', label: 'Brain', icon: Brain },
+          { href: '/admin/nerd/settings', label: 'AI Models', icon: Cpu },
+          { href: '/admin/nerd/api', label: 'API docs', icon: Code },
+        ],
+      },
     ],
   },
 ];
