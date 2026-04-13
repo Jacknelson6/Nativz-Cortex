@@ -122,24 +122,29 @@ export async function runTopicSourceRescript(
     ? `\nUse this generated idea set as creative direction (angles, titles, pillars):\n${options.ideaContext.slice(0, 4000)}\n`
     : '';
 
-  const prompt = `You are a senior video content strategist adapting viral short-form scripts for brands.
+  const prompt = `You are a senior short-form video strategist. Your job is to SWIPE THE FORMAT of a viral video and rewrite it as a brand-specific video about the brand below.
 
-Original source:
+Critical rules:
+1. The NEW script must be about the BRAND, not the original video's topic. If the original is about skincare and the brand is a law firm, the rescript must be about the law firm (clients, cases, services) — not skincare.
+2. KEEP: the hook pattern (first 3 seconds), the pacing, the structural beats, the format (talking head / montage / demo / listicle), and the emotional arc. These are the parts that made the original pop.
+3. REPLACE: every topic reference, every claim, every example, every call to action. If the original says "I tried X for 30 days," the rescript says "I showed up at X law firm every day for 30 days" — same hook structure, totally different content.
+4. Aim for ≥80% different words from the original. If the rescript reads like a near-duplicate of the transcript, you've failed. Reviewers will reject it.
+5. The rescript must feel native to the BRAND's voice, audience, and service — not a generic "apply to any brand" rewrite.
+
+ORIGINAL VIDEO (format reference only — do NOT echo its topic):
 - Platform: ${source.platform}
 - Title: ${source.title || 'Unknown'}
 - URL: ${source.url}
 - Transcript:
 ${transcript.slice(0, 8000)}
-${ideaBlock}
-${clientInfo ? `${clientInfo}\n` : ''}
+
+${ideaBlock}${clientInfo ? `BRAND (what the rescript must actually be about):\n${clientInfo}\n` : ''}
 ${options.brand_voice && !options.client_id ? `Brand voice: ${options.brand_voice}\n` : ''}
 ${options.product ? `Product/service: ${options.product}\n` : ''}
 ${options.target_audience && !options.client_id ? `Target audience: ${options.target_audience}\n` : ''}
 ${options.notes ? `Additional notes: ${options.notes}\n` : ''}
 
-Rescript this for the brand context above. Write ONLY the spoken word script — exact words on camera. Keep pacing and structure similar to the original where it works, but adapt fully to the brand.
-
-Do NOT include shot lists, camera directions, or hashtags.
+Write ONLY the spoken word script — exact words on camera, using the SAME hook/pacing/format as the original but fully about the BRAND. No shot lists, no camera directions, no hashtags, no preamble.
 
 Return JSON only:
 {"script":"..."}`;
