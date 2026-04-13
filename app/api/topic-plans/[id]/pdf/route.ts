@@ -15,12 +15,21 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { topicPlanSchema } from '@/lib/topic-plans/types';
 import { TopicPlanPdf } from '@/components/topic-plans/topic-plan-pdf';
+import { detectAgencyFromHostname } from '@/lib/agency/detect';
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  // Detect which agency the request came from so the PDF wears the right
+  // brand. x-forwarded-host wins behind Vercel's proxy; fall back to the
+  // request URL hostname for local dev.
+  const hostHeader =
+    req.headers.get('x-forwarded-host') ??
+    req.headers.get('host') ??
+    new URL(req.url).hostname;
+  const agency = detectAgencyFromHostname(hostHeader);
 
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -56,7 +65,7 @@ export async function GET(
     : (row.clients as { name: string } | null)?.name ?? 'Client';
 
   const buffer = await renderToBuffer(
-    TopicPlanPdf({ plan: parsedPlan.data, clientName }),
+    TopicPlanPdf({ plan: parsedPlan.data, clientName, agency }),
   );
 
   const safeClient = clientName.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '') || 'client';

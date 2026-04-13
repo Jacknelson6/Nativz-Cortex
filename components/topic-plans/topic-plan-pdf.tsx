@@ -1,5 +1,5 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import {
   TopicPlan,
   TopicSeries,
@@ -10,16 +10,18 @@ import {
   totalIdeas,
   totalHighResonance,
 } from '@/lib/topic-plans/types';
+import type { AgencyBrand } from '@/lib/agency/detect';
+import { NATIVZ_LOGO_ON_LIGHT_PNG, AC_LOGO_PNG } from '@/lib/brand-logo';
 
 // ─── Palette ──────────────────────────────────────────────────────────────
+// Neutral surface colors stay the same across brands; the accent flexes
+// per-agency below via agencyTheme().
 const c = {
   bg: '#FFFFFF',
   surface: '#F7F7FA',
-  surfaceAccent: '#EEF3FB',
   border: '#E4E4EA',
   ink: '#0F1117',
   muted: '#6A6A7A',
-  accent: '#2CC2C6',
   positive: '#10B981',
   positiveBg: '#ECFDF5',
   negative: '#F59E0B',
@@ -32,6 +34,30 @@ const c = {
   noBg: '#FEE2E2',
   noText: '#991B1B',
 };
+
+interface AgencyTheme {
+  logo: string;
+  agencyName: string;
+  accent: string;
+  surfaceAccent: string;
+}
+
+function agencyTheme(brand: AgencyBrand): AgencyTheme {
+  if (brand === 'anderson') {
+    return {
+      logo: AC_LOGO_PNG,
+      agencyName: 'Anderson Collaborative',
+      accent: '#10B981',
+      surfaceAccent: '#ECF9F3',
+    };
+  }
+  return {
+    logo: NATIVZ_LOGO_ON_LIGHT_PNG,
+    agencyName: 'Nativz',
+    accent: '#046BD2',
+    surfaceAccent: '#EEF6FF',
+  };
+}
 
 // ─── Styles ───────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
@@ -64,7 +90,6 @@ const s = StyleSheet.create({
   },
   coverSub: {
     fontSize: 30,
-    color: c.accent,
     textAlign: 'center' as const,
     fontFamily: 'Helvetica-Bold',
     marginBottom: 14,
@@ -87,7 +112,6 @@ const s = StyleSheet.create({
   },
   counterValue: {
     fontSize: 22,
-    color: c.accent,
     fontFamily: 'Helvetica-Bold',
     textAlign: 'center' as const,
     marginBottom: 4,
@@ -105,7 +129,7 @@ const s = StyleSheet.create({
     textAlign: 'center' as const,
     marginTop: 28,
   },
-  northStarValue: { color: c.accent, fontFamily: 'Helvetica-Bold' },
+  northStarValue: { fontFamily: 'Helvetica-Bold' },
 
   // Legend page
   sectionTitle: {
@@ -147,7 +171,6 @@ const s = StyleSheet.create({
     gap: 6,
     backgroundColor: c.surface,
     borderTopWidth: 2,
-    borderTopColor: c.accent,
     paddingVertical: 10,
     marginBottom: 16,
   },
@@ -213,7 +236,7 @@ const s = StyleSheet.create({
     textTransform: 'uppercase' as const,
   },
   whyLine: { fontSize: 9.5, color: c.ink, lineHeight: 1.4, marginTop: 6, marginBottom: 8 },
-  whyLabel: { fontFamily: 'Helvetica-Bold', color: c.accent, fontSize: 8, letterSpacing: 0.5 },
+  whyLabel: { fontFamily: 'Helvetica-Bold', fontSize: 8, letterSpacing: 0.5 },
   selectionRow: { flexDirection: 'row', gap: 4, marginTop: 4 },
   selectionCell: {
     flex: 1,
@@ -249,10 +272,10 @@ const s = StyleSheet.create({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-function resonanceColor(r: string | null | undefined): string {
+function resonanceColor(r: string | null | undefined, theme: AgencyTheme): string {
   switch (normalizeResonance(r)) {
     case 'viral': return c.priority;
-    case 'high': return c.accent;
+    case 'high': return theme.accent;
     case 'rising': return c.priority;
     case 'medium':
     case 'low':
@@ -266,12 +289,12 @@ function sumViewsLabel(plan: TopicPlan): string {
   return sum > 0 ? formatAudience(sum) : '';
 }
 
-function PageFooter({ clientName }: { clientName: string }) {
+function PageFooter({ clientName, theme }: { clientName: string; theme: AgencyTheme }) {
   return (
     <Text
       style={s.footer}
       render={({ pageNumber, totalPages }) =>
-        `Nativz Cortex  ·  ${clientName}  ·  Page ${pageNumber} of ${totalPages}`
+        `${theme.agencyName} Cortex  ·  ${clientName}  ·  Page ${pageNumber} of ${totalPages}`
       }
       fixed
     />
@@ -280,7 +303,15 @@ function PageFooter({ clientName }: { clientName: string }) {
 
 // ─── Cover page ───────────────────────────────────────────────────────────
 
-function CoverPage({ plan, clientName }: { plan: TopicPlan; clientName: string }) {
+function CoverPage({
+  plan,
+  clientName,
+  theme,
+}: {
+  plan: TopicPlan;
+  clientName: string;
+  theme: AgencyTheme;
+}) {
   const counters: Array<{ value: string; label: string }> = [
     { value: plan.series.length.toString(), label: plan.series.length === 1 ? 'CONTENT PILLAR' : 'CONTENT PILLARS' },
     { value: totalIdeas(plan).toString(), label: 'VIDEO TOPICS' },
@@ -293,15 +324,24 @@ function CoverPage({ plan, clientName }: { plan: TopicPlan; clientName: string }
   return (
     <Page size="A4" style={s.page}>
       <View style={s.coverWrap}>
+        {/* Agency lockup, centered above the title */}
+        <View style={{ alignItems: 'center', marginBottom: 28 }}>
+          {/* eslint-disable-next-line jsx-a11y/alt-text */}
+          <Image
+            src={theme.logo}
+            style={{ height: 36, maxWidth: 220, objectFit: 'contain' }}
+          />
+        </View>
+
         <Text style={s.coverKicker}>{clientName.toUpperCase()}</Text>
         <Text style={s.coverTitle}>Content Strategy</Text>
-        <Text style={s.coverSub}>{plan.title}</Text>
+        <Text style={[s.coverSub, { color: theme.accent }]}>{plan.title}</Text>
         {plan.subtitle ? <Text style={s.coverBlurb}>{plan.subtitle}</Text> : null}
 
         <View style={s.counterRow}>
           {counters.map((cnt, i) => (
             <View key={i} style={s.counterCell}>
-              <Text style={s.counterValue}>{cnt.value}</Text>
+              <Text style={[s.counterValue, { color: theme.accent }]}>{cnt.value}</Text>
               <Text style={s.counterLabel}>{cnt.label}</Text>
             </View>
           ))}
@@ -310,18 +350,18 @@ function CoverPage({ plan, clientName }: { plan: TopicPlan; clientName: string }
         {plan.north_star_metric ? (
           <Text style={s.northStarLine}>
             North Star Metric:{' '}
-            <Text style={s.northStarValue}>{plan.north_star_metric}</Text>
+            <Text style={[s.northStarValue, { color: theme.accent }]}>{plan.north_star_metric}</Text>
           </Text>
         ) : null}
       </View>
-      <PageFooter clientName={clientName} />
+      <PageFooter clientName={clientName} theme={theme} />
     </Page>
   );
 }
 
 // ─── Legend page ──────────────────────────────────────────────────────────
 
-function LegendPage({ clientName }: { clientName: string }) {
+function LegendPage({ clientName, theme }: { clientName: string; theme: AgencyTheme }) {
   return (
     <Page size="A4" style={s.page}>
       <Text style={s.sectionTitle}>HOW TO USE THIS DOCUMENT</Text>
@@ -358,17 +398,25 @@ function LegendPage({ clientName }: { clientName: string }) {
         Topics marked{' '}
         <Text style={{ fontFamily: 'Helvetica-Bold', color: c.priority }}>PRIORITY</Text> are the
         recommended first-film topics based on resonance data.{' '}
-        <Text style={{ fontFamily: 'Helvetica-Bold', color: c.accent }}>HIGH RESONANCE</Text>{' '}
+        <Text style={{ fontFamily: 'Helvetica-Bold', color: theme.accent }}>HIGH RESONANCE</Text>{' '}
         topics generate the most shares, saves, and follows.
       </Text>
-      <PageFooter clientName={clientName} />
+      <PageFooter clientName={clientName} theme={theme} />
     </Page>
   );
 }
 
 // ─── Series + idea cards ──────────────────────────────────────────────────
 
-function SeriesHeader({ series, index }: { series: TopicSeries; index: number }) {
+function SeriesHeader({
+  series,
+  index,
+  theme,
+}: {
+  series: TopicSeries;
+  index: number;
+  theme: AgencyTheme;
+}) {
   const high = series.ideas.filter((i) => {
     const n = normalizeResonance(i.resonance);
     return n === 'high' || n === 'viral';
@@ -386,7 +434,7 @@ function SeriesHeader({ series, index }: { series: TopicSeries; index: number })
       <Text style={s.seriesKicker}>SERIES {String(index + 1).padStart(2, '0')}</Text>
       <Text style={s.seriesName}>{series.name}</Text>
       {series.tagline ? <Text style={s.seriesTagline}>{series.tagline}</Text> : null}
-      <View style={s.seriesStatRow}>
+      <View style={[s.seriesStatRow, { borderTopColor: theme.accent }]}>
         {stats.map((st, i) => (
           <View key={i} style={s.seriesStatCell}>
             <Text style={s.seriesStatValue}>{st.value}</Text>
@@ -398,9 +446,9 @@ function SeriesHeader({ series, index }: { series: TopicSeries; index: number })
   );
 }
 
-function IdeaCard({ idea, num }: { idea: TopicIdea; num: number }) {
+function IdeaCard({ idea, num, theme }: { idea: TopicIdea; num: number; theme: AgencyTheme }) {
   const tag = resonanceLabel(idea.resonance);
-  const tagColor = resonanceColor(idea.resonance);
+  const tagColor = resonanceColor(idea.resonance, theme);
 
   // Stat cells — only show what has data, drop the rest entirely.
   const statCells: Array<{ value: string; label: string; bg: string; color: string }> = [];
@@ -452,7 +500,7 @@ function IdeaCard({ idea, num }: { idea: TopicIdea; num: number }) {
 
       {idea.why_it_works ? (
         <Text style={s.whyLine}>
-          <Text style={s.whyLabel}>WHY IT WORKS  </Text>
+          <Text style={[s.whyLabel, { color: theme.accent }]}>WHY IT WORKS  </Text>
           {idea.why_it_works}
         </Text>
       ) : null}
@@ -479,35 +527,47 @@ function SeriesPage({
   series,
   index,
   clientName,
+  theme,
 }: {
   series: TopicSeries;
   index: number;
   clientName: string;
+  theme: AgencyTheme;
 }) {
   return (
     <Page size="A4" style={s.page}>
-      <SeriesHeader series={series} index={index} />
+      <SeriesHeader series={series} index={index} theme={theme} />
       {series.ideas.map((idea, i) => (
-        <IdeaCard key={i} idea={idea} num={idea.number ?? i + 1} />
+        <IdeaCard key={i} idea={idea} num={idea.number ?? i + 1} theme={theme} />
       ))}
-      <PageFooter clientName={clientName} />
+      <PageFooter clientName={clientName} theme={theme} />
     </Page>
   );
 }
 
 // ─── Public document ──────────────────────────────────────────────────────
 
-export function TopicPlanPdf({ plan, clientName }: { plan: TopicPlan; clientName: string }) {
+export function TopicPlanPdf({
+  plan,
+  clientName,
+  agency = 'nativz',
+}: {
+  plan: TopicPlan;
+  clientName: string;
+  /** Which agency theme to render. Determines logo + accent color. */
+  agency?: AgencyBrand;
+}) {
+  const theme = agencyTheme(agency);
   return (
     <Document
       title={plan.title}
       subject={plan.subtitle ?? undefined}
-      creator="Nativz Cortex"
+      creator={`${theme.agencyName} Cortex`}
     >
-      <CoverPage plan={plan} clientName={clientName} />
-      <LegendPage clientName={clientName} />
+      <CoverPage plan={plan} clientName={clientName} theme={theme} />
+      <LegendPage clientName={clientName} theme={theme} />
       {plan.series.map((series, i) => (
-        <SeriesPage key={i} series={series} index={i} clientName={clientName} />
+        <SeriesPage key={i} series={series} index={i} clientName={clientName} theme={theme} />
       ))}
     </Document>
   );
