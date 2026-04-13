@@ -33,7 +33,8 @@ const nextConfig: NextConfig = {
       'framer-motion',
       'date-fns',
       'recharts',
-      '@react-pdf/renderer',
+      // @react-pdf/renderer moved to serverExternalPackages — Next 15 errors
+      // out if a package is in both lists (transpile-vs-external conflict).
     ],
   },
   async headers() {
