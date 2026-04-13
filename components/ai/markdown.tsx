@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { HtmlVisualBlock, MermaidDiagramBlock } from '@/components/ai/rich-code-block';
+import { HtmlVisualBlock, MermaidDiagramBlock, GraphvizDiagramBlock } from '@/components/ai/rich-code-block';
 import { cn } from '@/lib/utils/cn';
 
 /** `present` = full-screen dark presenter (high contrast). `default` = in-app surfaces. */
@@ -220,6 +220,10 @@ export function Markdown({
           elements.push(
             <MermaidDiagramBlock key={`code-${i}`} code={codeBody} variant={visualVariant} />,
           );
+        } else if (langLower === 'graphviz' || langLower === 'dot') {
+          elements.push(
+            <GraphvizDiagramBlock key={`code-${i}`} code={codeBody} variant={visualVariant} />,
+          );
         } else if (langLower === 'html' || langLower === 'html-visual') {
           elements.push(
             <HtmlVisualBlock key={`code-${i}`} code={codeBody} variant={visualVariant} />,
@@ -346,7 +350,17 @@ export function Markdown({
     // (html-visual) every time a chunk arrives. Show a neutral skeleton
     // instead — once the closing fence lands on the next chunk, the
     // inline path takes over with the complete code.
-    if (langLower === 'mermaid' || langLower === 'html' || langLower === 'html-visual') {
+    if (
+      langLower === 'mermaid' ||
+      langLower === 'graphviz' ||
+      langLower === 'dot' ||
+      langLower === 'html' ||
+      langLower === 'html-visual'
+    ) {
+      const label =
+        langLower === 'mermaid' ? 'diagram' :
+        langLower === 'graphviz' || langLower === 'dot' ? 'graph' :
+        'visual';
       elements.push(
         <div
           key="code-final"
@@ -356,9 +370,7 @@ export function Markdown({
           )}
         >
           <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
-          <span>
-            Rendering {langLower === 'mermaid' ? 'diagram' : 'visual'}…
-          </span>
+          <span>Rendering {label}…</span>
         </div>,
       );
     } else {

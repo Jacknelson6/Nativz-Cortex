@@ -179,6 +179,139 @@ export function MermaidDiagramBlock({
   );
 }
 
+// ─── Graphviz (DOT) ──────────────────────────────────────────────────────────
+// Graphviz is the right tool for node-edge graphs (relationships, clusters,
+// dependency trees, knowledge maps) where layout matters more than chart type.
+// Mermaid stays for flowcharts, timelines, gantts — different job.
+//
+// The WASM bundle (~1.3MB) is lazy-loaded via dynamic import so pages that
+// don't contain a graphviz fence never pay the cost.
+
+interface VizInstance {
+  renderSVGElement(src: string): SVGSVGElement;
+}
+let vizPromise: Promise<VizInstance> | null = null;
+async function getViz(): Promise<VizInstance> {
+  if (!vizPromise) {
+    vizPromise = import('@viz-js/viz').then((m) => m.instance()) as Promise<VizInstance>;
+  }
+  return vizPromise;
+}
+
+function renderGraphvizFallback(container: HTMLDivElement, code: string, detail?: string) {
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
+  const wrap = document.createElement('div');
+  wrap.className = 'space-y-2 text-left';
+  const msg = document.createElement('p');
+  msg.className = 'text-xs text-text-muted';
+  msg.textContent =
+    detail ??
+    'This graph could not be rendered. The Graphviz DOT syntax may be invalid.';
+  const pre = document.createElement('pre');
+  pre.className =
+    'max-h-40 overflow-auto rounded-md bg-black/40 p-2 text-xs leading-relaxed text-text-secondary whitespace-pre-wrap break-words';
+  pre.textContent = code.trim();
+  wrap.appendChild(msg);
+  wrap.appendChild(pre);
+  container.appendChild(wrap);
+}
+
+export function GraphvizDiagramBlock({
+  code,
+  variant = 'default',
+  disableZoom = false,
+}: {
+  code: string;
+  variant?: VisualVariant;
+  disableZoom?: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [zoomOpen, setZoomOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const viz = await getViz();
+        if (cancelled || !containerRef.current) return;
+        const svg = viz.renderSVGElement(code.trim());
+        // Let the SVG scale to its container — the default emitted width/height
+        // is a fixed pixel size which breaks responsive layouts.
+        svg.removeAttribute('width');
+        svg.removeAttribute('height');
+        svg.setAttribute('style', 'max-width: 100%; height: auto;');
+        while (containerRef.current.firstChild) {
+          containerRef.current.removeChild(containerRef.current.firstChild);
+        }
+        containerRef.current.appendChild(svg);
+      } catch (e) {
+        if (cancelled || !containerRef.current) return;
+        renderGraphvizFallback(
+          containerRef.current,
+          code,
+          `Could not render graph: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [code, variant]);
+
+  const wrapperBase = cn(
+    'group relative my-3 overflow-x-auto rounded-lg border border-white/[0.06] bg-black/25 p-4 [&_svg]:max-w-none',
+    variant === 'present' && 'bg-black/45',
+    !disableZoom && 'cursor-zoom-in transition-colors hover:border-white/[0.12] hover:bg-black/35',
+  );
+
+  if (disableZoom) {
+    return <div ref={containerRef} className={wrapperBase} />;
+  }
+
+  return (
+    <>
+      <div
+        ref={containerRef}
+        role="button"
+        tabIndex={0}
+        onClick={() => setZoomOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setZoomOpen(true);
+          }
+        }}
+        aria-label="Expand graph"
+        className={wrapperBase}
+      >
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setZoomOpen(true);
+          }}
+          className="absolute right-2 top-2 z-10 inline-flex cursor-pointer items-center gap-1 rounded-md border border-white/[0.08] bg-black/60 px-2 py-1 text-[10px] font-medium text-text-muted opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-text-primary"
+          aria-hidden
+          tabIndex={-1}
+        >
+          <Maximize2 size={10} />
+          Expand
+        </button>
+      </div>
+      {zoomOpen && (
+        <Suspense fallback={null}>
+          <ArtifactZoomModal
+            open={zoomOpen}
+            onClose={() => setZoomOpen(false)}
+            kind="graphviz"
+            source={code}
+          />
+        </Suspense>
+      )}
+    </>
+  );
+}
+
 /**
  * Renders sanitized HTML in a sandboxed iframe (SVG/CSS layouts; scripts stripped).
  */

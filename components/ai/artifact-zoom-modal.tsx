@@ -18,10 +18,10 @@
 import { useState } from 'react';
 import { Copy, Check, Download, FileImage } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
-import { HtmlVisualBlock, MermaidDiagramBlock } from '@/components/ai/rich-code-block';
+import { HtmlVisualBlock, MermaidDiagramBlock, GraphvizDiagramBlock } from '@/components/ai/rich-code-block';
 import { toast } from 'sonner';
 
-export type ArtifactKind = 'mermaid' | 'html-visual';
+export type ArtifactKind = 'mermaid' | 'html-visual' | 'graphviz';
 
 interface ArtifactZoomModalProps {
   open: boolean;
@@ -110,7 +110,10 @@ export function ArtifactZoomModal({ open, onClose, kind, source }: ArtifactZoomM
   const [downloading, setDownloading] = useState<null | 'svg' | 'png'>(null);
 
   const isMermaid = kind === 'mermaid';
-  const title = isMermaid ? 'Diagram' : 'Visual';
+  const isGraphviz = kind === 'graphviz';
+  // Both SVG-emitting renderers share the download affordances.
+  const isSvgKind = isMermaid || isGraphviz;
+  const title = isMermaid ? 'Diagram' : isGraphviz ? 'Graph' : 'Visual';
 
   async function handleDownloadSvg() {
     const host = document.querySelector<HTMLElement>('[data-artifact-zoom-body]');
@@ -159,7 +162,7 @@ export function ArtifactZoomModal({ open, onClose, kind, source }: ArtifactZoomM
           {copied ? <Check size={13} /> : <Copy size={13} />}
           {copied ? 'Copied' : 'Copy source'}
         </button>
-        {isMermaid && (
+        {isSvgKind && (
           <>
             <button
               type="button"
@@ -190,6 +193,8 @@ export function ArtifactZoomModal({ open, onClose, kind, source }: ArtifactZoomM
       >
         {isMermaid ? (
           <MermaidDiagramBlock code={source} variant="present" disableZoom />
+        ) : isGraphviz ? (
+          <GraphvizDiagramBlock code={source} variant="present" disableZoom />
         ) : (
           <HtmlVisualBlock code={source} variant="present" disableZoom />
         )}
