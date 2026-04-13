@@ -68,7 +68,7 @@ export function TopicPlanArtifactCard({ data }: { data: TopicPlanArtifactData })
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-accent-text">
-              Topic plan · deliverable
+              Topic plan · ready
             </span>
             <CheckCircle2 size={12} className="text-emerald-400" />
           </div>
