@@ -42,6 +42,8 @@ interface AuditRecord {
   website_url: string | null;
   tiktok_url: string;
   status: string;
+  /** Persisted user edits from the confirm-platforms screen / resume route. */
+  social_urls: Record<string, string> | null;
   prospect_data: {
     websiteContext?: WebsiteContext | null;
     platforms?: PlatformReport[];
@@ -168,34 +170,42 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   // this block the user would come back to an empty form.
   useEffect(() => {
     if (audit.status !== 'confirming_platforms') return;
-    const prospectData = audit.prospect_data as {
-      websiteContext?: { title?: string; industry?: string; description?: string };
-      detectedSocialLinks?: { platform: string; url: string; username: string }[];
-    } | null;
-    const analysisData = audit.analysis_data as {
-      suggested_competitors?: { name: string; website: string }[];
-      competitor_urls_override?: string[];
-    } | null;
+    const prospectData = audit.prospect_data;
+    const analysisData = audit.analysis_data;
 
     if (prospectData?.websiteContext) {
       const { title, industry, description } = prospectData.websiteContext;
       if (title || industry) setWebsiteInfo({ title: title ?? '', industry: industry ?? '' });
       if (description) setBrandDescription(description);
     }
-    if (prospectData?.detectedSocialLinks) {
-      setDetectedPlatforms(prospectData.detectedSocialLinks);
-      // Only seed inputs if user hasn't typed anything yet
-      setSocialInputs((current) => {
-        if (Object.values(current).some((v) => v?.trim())) return current;
-        const preset: Partial<Record<AuditPlatformKey, string>> = {};
-        for (const d of prospectData.detectedSocialLinks ?? []) {
-          if (d.url && (['tiktok', 'instagram', 'youtube'] as const).includes(d.platform as AuditPlatformKey)) {
-            preset[d.platform as AuditPlatformKey] = prettyUrl(d.url);
-          }
+
+    // Seed detectedPlatforms (powers the Auto-detected / Not found badges)
+    const detectedLinks = prospectData?.detectedSocialLinks ?? [];
+    if (detectedLinks.length > 0) setDetectedPlatforms(detectedLinks);
+
+    // Seed socialInputs — prefer persisted user edits (social_urls column),
+    // fall back to the scraper's detectedSocialLinks. Only skip if user has
+    // already typed into an input this session.
+    setSocialInputs((current) => {
+      if (Object.values(current).some((v) => v?.trim())) return current;
+      const preset: Partial<Record<AuditPlatformKey, string>> = {};
+      const allowed = ['tiktok', 'instagram', 'youtube'] as const;
+
+      // First: user's own persisted URLs from the social_urls column
+      const userUrls = (audit.social_urls ?? {}) as Partial<Record<string, string>>;
+      for (const p of allowed) {
+        const u = userUrls[p];
+        if (u && u.trim()) preset[p] = prettyUrl(u);
+      }
+      // Then: detected scrapes — only fill slots the user didn't set
+      for (const d of detectedLinks) {
+        if (d.url && allowed.includes(d.platform as AuditPlatformKey) && !preset[d.platform as AuditPlatformKey]) {
+          preset[d.platform as AuditPlatformKey] = prettyUrl(d.url);
         }
-        return preset;
-      });
-    }
+      }
+      return preset;
+    });
+
     const storedCompetitors =
       analysisData?.competitor_urls_override ??
       analysisData?.suggested_competitors?.map((c) => c.website);
