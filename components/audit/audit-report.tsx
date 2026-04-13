@@ -23,6 +23,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   AreaChart, Area,
 } from 'recharts';
+import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/button';
 import { EncryptedText } from '@/components/ui/encrypted-text';
 import { toast } from 'sonner';
@@ -135,6 +136,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [elapsed, setElapsed] = useState(0);
   const [activePlatformTab, setActivePlatformTab] = useState<string | null>(null);
   const [socialInputs, setSocialInputs] = useState<Partial<Record<AuditPlatformKey, string>>>({});
+  const [competitorUrls, setCompetitorUrls] = useState<string[]>(['', '', '']);
   const [submittingSocials, setSubmittingSocials] = useState(false);
   const [detectedPlatforms, setDetectedPlatforms] = useState<{ platform: string; url: string; username: string }[]>([]);
   const [detecting, setDetecting] = useState(false);
@@ -262,14 +264,14 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         const data = await res.json();
         setDetectedPlatforms(data.detectedPlatforms ?? []);
         setWebsiteInfo(data.websiteContext ? { title: data.websiteContext.title, industry: data.websiteContext.industry } : null);
-        // Pre-fill social inputs with detected URLs
-        const prefilled: Partial<Record<AuditPlatformKey, string>> = {};
-        for (const link of data.detectedPlatforms ?? []) {
-          if (['tiktok', 'instagram', 'facebook', 'youtube'].includes(link.platform)) {
-            prefilled[link.platform as AuditPlatformKey] = link.url;
+        // Pre-fill social inputs with full detected URLs (runs once per detect)
+        const preset: Partial<Record<AuditPlatformKey, string>> = {};
+        for (const d of data.detectedPlatforms ?? []) {
+          if (d.url && (['tiktok', 'instagram', 'facebook', 'youtube'] as const).includes(d.platform as AuditPlatformKey)) {
+            preset[d.platform as AuditPlatformKey] = d.url;
           }
         }
-        setSocialInputs(prefilled);
+        setSocialInputs(preset);
         setAudit(prev => ({ ...prev, status: 'confirming_platforms' }));
       } else {
         // If detect fails, go straight to processing
@@ -285,10 +287,11 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   async function startProcessing() {
     // Save any manual social URLs before processing
     const filled = Object.fromEntries(Object.entries(socialInputs).filter(([, v]) => v?.trim()));
-    if (Object.keys(filled).length > 0) {
+    const cleanedCompetitors = competitorUrls.map((u) => u.trim()).filter(Boolean);
+    if (Object.keys(filled).length > 0 || cleanedCompetitors.length > 0) {
       await fetch(`/api/analyze-social/${audit.id}/resume`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ social_urls: filled }),
+        body: JSON.stringify({ social_urls: filled, competitor_urls: cleanedCompetitors }),
       });
     }
     setProgress(0); setStageIndex(0); setElapsed(0);
@@ -363,6 +366,8 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           <div className="rounded-xl border border-nativz-border bg-surface p-5 space-y-3">
             {(['tiktok', 'instagram', 'facebook', 'youtube'] as AuditPlatformKey[]).map(platform => {
               const detected = detectedPlatforms.find(d => d.platform === platform);
+              const missing = !detected && !socialInputs[platform]?.trim();
+              const value = socialInputs[platform] ?? (detected?.url ?? '');
               return (
                 <div key={platform} className="flex items-center gap-3">
                   <div className="flex items-center gap-2 w-28 shrink-0">
@@ -371,17 +376,49 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                   </div>
                   <input
                     type="text"
-                    value={socialInputs[platform] ?? ''}
+                    value={value}
                     onChange={(e) => setSocialInputs(prev => ({ ...prev, [platform]: e.target.value }))}
-                    placeholder={detected ? '' : `${platform}.com/@username`}
-                    className="flex-1 rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40"
+                    placeholder={missing ? '—' : `${platform}.com/@username`}
+                    className={cn(
+                      'flex-1 rounded-lg border bg-transparent px-3 py-2 text-sm focus:outline-none',
+                      missing
+                        ? 'border-red-500/40 text-red-300 placeholder:text-red-400/50 focus:border-red-400/60'
+                        : 'border-nativz-border text-text-primary placeholder:text-text-muted/50 focus:border-accent/40',
+                    )}
                   />
-                  {detected && (
+                  {detected ? (
                     <span className="shrink-0 text-xs text-emerald-400">Auto-detected</span>
+                  ) : (
+                    <span className="shrink-0 text-xs text-red-400">Not found</span>
                   )}
                 </div>
               );
             })}
+          </div>
+
+          <div className="rounded-xl border border-nativz-border bg-surface p-5 space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-text-primary">Competitors (optional)</h3>
+              <p className="mt-0.5 text-xs text-text-muted">
+                Paste up to 3 competitor profile URLs to rank against. Leave blank to auto-discover.
+              </p>
+            </div>
+            {[0, 1, 2].map((i) => (
+              <input
+                key={i}
+                type="text"
+                value={competitorUrls[i] ?? ''}
+                onChange={(e) => {
+                  setCompetitorUrls((prev) => {
+                    const next = [...prev];
+                    next[i] = e.target.value;
+                    return next;
+                  });
+                }}
+                placeholder={`Competitor ${i + 1} — e.g. tiktok.com/@brandname`}
+                className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40"
+              />
+            ))}
           </div>
 
           <div className="flex items-center justify-between">
