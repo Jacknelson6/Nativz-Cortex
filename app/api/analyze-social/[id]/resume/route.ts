@@ -8,6 +8,7 @@ export const maxDuration = 30;
 const ResumeSchema = z.object({
   social_urls: z.record(z.string(), z.string()),
   competitor_urls: z.array(z.string().url()).max(3).optional(),
+  social_goals: z.array(z.string()).max(10).optional(),
 });
 
 /**
@@ -52,9 +53,11 @@ export async function POST(
 
     const existingAnalysisData = (existing?.analysis_data as Record<string, unknown> | null) ?? {};
     const competitorUrlsOverride = parsed.data.competitor_urls?.filter(Boolean) ?? [];
+    const socialGoals = parsed.data.social_goals?.filter(Boolean) ?? [];
     const analysisData: Record<string, unknown> = {
       ...existingAnalysisData,
       ...(competitorUrlsOverride.length > 0 ? { competitor_urls_override: competitorUrlsOverride } : {}),
+      ...(socialGoals.length > 0 ? { social_goals: socialGoals } : {}),
     };
 
     // Update audit with the manual social URLs and reset to pending for reprocessing

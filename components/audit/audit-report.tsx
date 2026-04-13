@@ -142,6 +142,9 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [detectedPlatforms, setDetectedPlatforms] = useState<{ platform: string; url: string; username: string }[]>([]);
   const [detecting, setDetecting] = useState(false);
   const [websiteInfo, setWebsiteInfo] = useState<{ title: string; industry: string } | null>(null);
+  const [socialGoals, setSocialGoals] = useState<string>('');
+  const [socialGoalsLoading, setSocialGoalsLoading] = useState(false);
+  const [brandDescription, setBrandDescription] = useState<string>('');
 
   // Auto-detect socials for pending audits (don't start processing yet)
   useEffect(() => {
@@ -284,6 +287,9 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         const data = await res.json();
         setDetectedPlatforms(data.detectedPlatforms ?? []);
         setWebsiteInfo(data.websiteContext ? { title: data.websiteContext.title, industry: data.websiteContext.industry } : null);
+        if (data.websiteContext?.description) {
+          setBrandDescription(data.websiteContext.description);
+        }
         // Pre-fill social inputs with prettified URLs (scrapers re-add https:// on submit)
         const preset: Partial<Record<AuditPlatformKey, string>> = {};
         for (const d of data.detectedPlatforms ?? []) {
@@ -294,7 +300,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         setSocialInputs(preset);
         setAudit(prev => ({ ...prev, status: 'confirming_platforms' }));
 
-        // Fire competitor suggestions in parallel (non-blocking)
+        // Fire competitor suggestions + social goals in parallel (non-blocking)
         setCompetitorSuggestionsLoading(true);
         fetch(`/api/analyze-social/${audit.id}/suggest-competitors`, { method: 'POST' })
           .then(async (r) => {
@@ -308,6 +314,17 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           })
           .catch(() => { /* silently ignore — inputs stay empty */ })
           .finally(() => setCompetitorSuggestionsLoading(false));
+
+        setSocialGoalsLoading(true);
+        fetch(`/api/analyze-social/${audit.id}/suggest-goals`, { method: 'POST' })
+          .then(async (r) => {
+            if (!r.ok) return;
+            const d = await r.json();
+            const goals: string[] = d.goals ?? [];
+            if (goals.length > 0) setSocialGoals(goals.join('\n'));
+          })
+          .catch(() => { /* silently ignore */ })
+          .finally(() => setSocialGoalsLoading(false));
       } else {
         // If detect fails, go straight to processing
         void startProcessing();
@@ -323,10 +340,11 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     // Save any manual social URLs before processing
     const filled = Object.fromEntries(Object.entries(socialInputs).filter(([, v]) => v?.trim()));
     const cleanedCompetitors = competitorUrls.map((u) => u.trim()).filter(Boolean);
-    if (Object.keys(filled).length > 0 || cleanedCompetitors.length > 0) {
+    const cleanedGoals = socialGoals.split('\n').map((g) => g.trim()).filter(Boolean);
+    if (Object.keys(filled).length > 0 || cleanedCompetitors.length > 0 || cleanedGoals.length > 0) {
       await fetch(`/api/analyze-social/${audit.id}/resume`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ social_urls: filled, competitor_urls: cleanedCompetitors }),
+        body: JSON.stringify({ social_urls: filled, competitor_urls: cleanedCompetitors, social_goals: cleanedGoals }),
       });
     }
     setProgress(0); setStageIndex(0); setElapsed(0);
@@ -384,18 +402,47 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         <div className="w-full max-w-2xl space-y-7">
           <div className="text-center">
             <h2 className="text-3xl font-semibold text-text-primary">Confirm social platforms</h2>
-            <p className="mt-2 text-lg text-text-muted">
-              {websiteInfo ? `${websiteInfo.title} — ${websiteInfo.industry}` : audit.website_url?.replace(/^https?:\/\//, '')}
-            </p>
-            {detectedPlatforms.length > 0 ? (
-              <p className="mt-3 text-base text-emerald-400">
-                Found {detectedPlatforms.length} social profile{detectedPlatforms.length !== 1 ? 's' : ''} on the website
-              </p>
-            ) : (
-              <p className="mt-3 text-base text-amber-400">
-                No social profiles detected — add them manually below
-              </p>
-            )}
+          </div>
+
+          {/* Brand card */}
+          <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">
+            <div className="flex items-start gap-4">
+              {(() => {
+                const domain = faviconDomain(audit.website_url ?? '');
+                return domain ? (
+                  <img
+                    src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
+                    alt=""
+                    width={48}
+                    height={48}
+                    className="rounded-lg shrink-0"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                ) : (
+                  <Globe size={40} className="text-text-muted shrink-0" />
+                );
+              })()}
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-semibold text-text-primary">{websiteInfo?.title ?? 'Your brand'}</h3>
+                {brandDescription ? (
+                  <p className="mt-1 text-base text-text-muted leading-relaxed">{brandDescription}</p>
+                ) : null}
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-text-secondary">Social goals</label>
+              <textarea
+                value={socialGoals}
+                onChange={(e) => setSocialGoals(e.target.value)}
+                disabled={socialGoalsLoading}
+                rows={4}
+                placeholder={socialGoalsLoading ? 'Drafting your social goals…' : 'What do you want to achieve with short-form social?'}
+                className={cn(
+                  'mt-1 w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-base text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40 resize-y',
+                  socialGoalsLoading && 'animate-pulse opacity-50 cursor-not-allowed',
+                )}
+              />
+            </div>
           </div>
 
           <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">

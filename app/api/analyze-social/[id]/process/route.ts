@@ -307,12 +307,14 @@ export async function POST(
 
       // Step 4: Generate scorecard with Gemini grades wired in
       console.log(`[audit:${id}] Step 4: Generating scorecard...`);
+      const socialGoals = (audit.analysis_data as any)?.social_goals as string[] | undefined;
       const scorecard = await generateScorecard({
         platformSummaries: platformReports,
         competitors,
         websiteContext,
         prospectVideoAudits,
         competitorVideoAudits,
+        socialGoals,
       });
 
       // Step 5: Store results
