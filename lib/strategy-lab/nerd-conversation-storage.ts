@@ -10,6 +10,36 @@
  */
 
 export const STRATEGY_LAB_NERD_CONVERSATION_PREFIX = 'strategy-lab:nerd-conversation:';
+/** Sentinel used for the no-client (general) Strategy Lab chat. */
+export const STRATEGY_LAB_GENERAL_KEY = 'strategy-lab:nerd-conversation:__general__';
+
+export function readGeneralStrategyLabConversationId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(STRATEGY_LAB_GENERAL_KEY);
+    return raw && raw.length > 0 ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeGeneralStrategyLabConversationId(id: string): void {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    window.localStorage.setItem(STRATEGY_LAB_GENERAL_KEY, id);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearGeneralStrategyLabConversationId(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(STRATEGY_LAB_GENERAL_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 export function strategyLabNerdConversationKey(clientId: string): string {
   return `${STRATEGY_LAB_NERD_CONVERSATION_PREFIX}${clientId}`;

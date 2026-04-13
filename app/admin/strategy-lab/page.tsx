@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
 import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 import { PageError } from '@/components/shared/page-error';
-import { StrategyLabIndex } from '@/components/strategy-lab/strategy-lab-index';
+import { StrategyLabGeneralChat } from '@/components/strategy-lab/strategy-lab-general-chat';
 
 type ClientRow = {
   id: string;
@@ -11,6 +11,7 @@ type ClientRow = {
   slug: string;
   is_active: boolean | null;
   logo_url: string | null;
+  agency: string | null;
 };
 
 export default async function StrategyLabIndexPage() {
@@ -22,34 +23,33 @@ export default async function StrategyLabIndexPage() {
     redirect('/admin/login');
   }
 
-  let userFirstName: string | null = null;
-  const { data: userRow } = await supabase
-    .from('users')
-    .select('full_name')
-    .eq('id', user.id)
-    .maybeSingle();
-  const raw = userRow?.full_name?.trim();
-  if (raw) {
-    userFirstName = raw.split(/\s+/)[0] ?? null;
-  } else if (user.email) {
-    userFirstName = user.email.split('@')[0] ?? null;
-  }
-
   try {
     const adminClient = createAdminClient();
     const { data: dbClients, error: dbError } = await selectClientsWithRosterVisibility<ClientRow>(
       adminClient,
       {
-        select: 'id, name, slug, is_active, logo_url',
+        select: 'id, name, slug, is_active, logo_url, agency',
         orderBy: { column: 'name' },
       },
     );
 
     if (dbError) throw dbError;
 
-    const clients = (dbClients ?? []).filter((c) => c.is_active !== false);
+    const clients = (dbClients ?? [])
+      .filter((c) => c.is_active !== false)
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        logo_url: c.logo_url,
+        agency: c.agency,
+      }));
 
-    return <StrategyLabIndex clients={clients} userFirstName={userFirstName} />;
+    return (
+      <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col p-4 md:p-6">
+        <StrategyLabGeneralChat clients={clients} />
+      </div>
+    );
   } catch (err) {
     console.error('Strategy lab index:', err);
     return <PageError title="Could not load clients" />;
