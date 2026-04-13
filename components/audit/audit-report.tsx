@@ -439,7 +439,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-text-secondary">Social goals</label>
+              <label className="text-sm font-medium text-text-secondary">What are your biggest goals for social media?</label>
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {SOCIAL_GOAL_OPTIONS.map((g) => {
                   const checked = socialGoals.includes(g);
