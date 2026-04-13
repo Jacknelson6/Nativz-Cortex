@@ -100,7 +100,7 @@ export const GOAL_CATEGORY_BOOSTS: Record<string, Record<string, number>> = {
     bio_optimization_account: 3,
     caption_optimization: 2,
   },
-  'Create content to use for higher performance ads': {
+  'Create content to use for higher-performing ads': {
     content_quality: 3,
     content_variety: 3,
     hook_consistency: 2,
