@@ -16,6 +16,11 @@ import { analyzeVideosForBrand } from '@/lib/audit/analyze-videos';
 import type { PlatformReport, CompetitorProfile, WebsiteContext, SocialLink, AuditPlatform, FailedPlatform } from '@/lib/audit/types';
 import type { BrandVideoAudits } from '@/lib/audit/analyze';
 import { persistAllScrapedImages, persistAllCompetitorImages } from '@/lib/audit/persist-scraped-images';
+import {
+  aggregateHookConsistency,
+  aggregateContentVariety,
+  aggregateContentQuality,
+} from '@/lib/audit/scorecard-helpers';
 
 export const maxDuration = 300;
 
@@ -266,6 +271,30 @@ export async function POST(
       }
 
       console.log(`[audit:${id}] Gemini grading complete: prospect=${Object.keys(prospectVideoAudits).length} platforms, competitors=${Object.keys(competitorVideoAudits).length}`);
+
+      // Attach gemini_grades to each PlatformReport
+      for (const p of platformReports) {
+        const audits = prospectVideoAudits[p.platform] ?? [];
+        if (audits.length >= 3) {
+          p.gemini_grades = {
+            hook_consistency: aggregateHookConsistency(audits),
+            content_variety: aggregateContentVariety(audits),
+            content_quality: aggregateContentQuality(audits),
+          };
+        }
+      }
+
+      // Attach gemini_grades to each CompetitorProfile
+      for (const comp of competitors) {
+        const perPlatform = competitorVideoAudits[comp.username]?.[comp.platform] ?? [];
+        if (perPlatform.length >= 3) {
+          comp.gemini_grades = {
+            hook_consistency: aggregateHookConsistency(perPlatform),
+            content_variety: aggregateContentVariety(perPlatform),
+            content_quality: aggregateContentQuality(perPlatform),
+          };
+        }
+      }
 
       // Step 4: Generate scorecard with Gemini grades wired in
       console.log(`[audit:${id}] Step 4: Generating scorecard...`);
