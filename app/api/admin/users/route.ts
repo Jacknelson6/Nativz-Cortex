@@ -69,18 +69,48 @@ export async function GET() {
   return NextResponse.json({ users: enriched });
 }
 
-/** PATCH /api/admin/users — update user role/permissions */
+/** PATCH /api/admin/users — update user role/permissions/name */
 export async function PATCH(req: NextRequest) {
   const auth = await requireSuperAdmin();
   if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-  const { id, role, is_super_admin } = await req.json();
+  const { id, role, is_super_admin, full_name, email } = await req.json();
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
   const admin = createAdminClient();
+
+  // Super admin must only be grantable to admin-role users. Block the grant at
+  // the API layer even if the UI button leaks through.
+  if (is_super_admin === true) {
+    const { data: target } = await admin.from('users').select('role').eq('id', id).single();
+    const effectiveRole = role ?? target?.role;
+    if (effectiveRole !== 'admin') {
+      return NextResponse.json(
+        { error: 'Super admin can only be granted to users with admin role. Change their role first.' },
+        { status: 400 }
+      );
+    }
+  }
+
   const updates: Record<string, unknown> = {};
   if (role !== undefined) updates.role = role;
   if (is_super_admin !== undefined) updates.is_super_admin = is_super_admin;
+  if (typeof full_name === 'string') {
+    const trimmed = full_name.trim();
+    if (!trimmed) return NextResponse.json({ error: 'Name cannot be empty' }, { status: 400 });
+    updates.full_name = trimmed;
+  }
+  if (typeof email === 'string') {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed.includes('@')) return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
+    updates.email = trimmed;
+    // Keep auth email in sync
+    await admin.auth.admin.updateUserById(id, { email: trimmed });
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: 'No changes' }, { status: 400 });
+  }
 
   const { error } = await admin.from('users').update(updates).eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
