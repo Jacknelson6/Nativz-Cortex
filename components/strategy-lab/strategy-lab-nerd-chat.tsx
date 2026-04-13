@@ -129,7 +129,12 @@ export function StrategyLabNerdChat({
   // brand mark instead of initials. Pulls from /api/nerd/mentions (same
   // source the client picker uses).
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
-  const { brandName: agencyName } = useAgencyBrand();
+  const { brand: agencyBrand, brandName: agencyName } = useAgencyBrand();
+  // Wide agency lockup (white-background, no boxed container) for the empty
+  // state. Falls back to the tile logo for brands that don't ship a wide
+  // variant yet.
+  const wideAgencyLogoPath =
+    agencyBrand === 'anderson' ? '/anderson-collaborative-logo.svg' : '/nativz-logo.svg';
 
   useEffect(() => {
     if (!clientId) return;
@@ -671,17 +676,20 @@ export function StrategyLabNerdChat({
       ) : messages.length === 0 ? (
         <>
           <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
-            {/* "Nativz × client" collab mark — swaps the agency half to
-                Anderson on that domain via useAgencyBrand inside the avatar. */}
-            <AgencyClientAvatar
-              clientName={clientName}
-              clientLogoUrl={clientLogoUrl}
-              size="lg"
-              className="mb-6"
-            />
-            <p className="mb-1 text-xs font-medium uppercase tracking-wider text-text-muted">
-              {agencyName} × {clientName.trim() || 'this client'}
-            </p>
+            {/* Agency lockup × client name — wide agency logo (no boxed
+                container, white-bg variant) and the client name as text. */}
+            <div className="mb-6 flex items-center gap-5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={wideAgencyLogoPath}
+                alt={agencyName}
+                className="h-10 w-auto max-w-[260px] object-contain"
+              />
+              <span className="text-2xl font-light text-text-muted/60" aria-hidden>×</span>
+              <span className="text-2xl font-semibold text-text-primary">
+                {clientName.trim() || 'Client'}
+              </span>
+            </div>
             <h2 className="mb-8 text-2xl font-semibold tracking-tight text-text-primary">
               What are we building today?
             </h2>
