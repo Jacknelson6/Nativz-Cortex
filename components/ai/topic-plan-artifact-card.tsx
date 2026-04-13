@@ -40,7 +40,7 @@ export function TopicPlanArtifactCard({ data }: { data: TopicPlanArtifactData })
       const a = document.createElement('a');
       a.href = url;
       const safeTitle = data.title.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '') || 'topic_plan';
-      a.download = `${safeTitle}.docx`;
+      a.download = `${safeTitle}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -92,7 +92,7 @@ export function TopicPlanArtifactCard({ data }: { data: TopicPlanArtifactData })
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Download size={14} />
-          {downloading ? 'Downloading…' : 'Download .docx'}
+          {downloading ? 'Downloading…' : 'Download PDF'}
         </button>
       </div>
     </div>

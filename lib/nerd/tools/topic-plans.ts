@@ -111,12 +111,12 @@ export const topicPlanTools: ToolDefinition[] = [
           series_count: plan.series.length,
           total_ideas: totalIdeas,
           high_resonance_count: highResonance,
-          download_url: `/api/topic-plans/${plansRow.id}/docx`,
+          download_url: `/api/topic-plans/${plansRow.id}/pdf`,
           created_at: plansRow.created_at,
         },
         link: {
-          href: `/api/topic-plans/${plansRow.id}/docx`,
-          label: 'Download .docx',
+          href: `/api/topic-plans/${plansRow.id}/pdf`,
+          label: 'Download PDF',
         },
       };
     },
