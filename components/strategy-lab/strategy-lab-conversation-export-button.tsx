@@ -32,26 +32,48 @@ interface StrategyLabConversationExportButtonProps {
  * browser). Returns null if the client has no logo or fetching fails — the
  * PDF falls back to initials.
  */
-async function fetchClientLogoDataUrl(clientId: string): Promise<string | null> {
-  try {
-    const res = await fetch('/api/nerd/mentions');
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      clients?: Array<{ id: string; avatarUrl?: string | null }>;
-    };
-    const match = (data.clients ?? []).find((c) => c.id === clientId);
-    const url = match?.avatarUrl;
-    if (!url || typeof url !== 'string' || !url.startsWith('http')) return null;
+async function blobToDataUrl(blob: Blob): Promise<string | null> {
+  return await new Promise<string | null>((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
+}
 
+async function fetchLogoAsDataUrl(url: string | null | undefined): Promise<string | null> {
+  if (!url || typeof url !== 'string' || !url.startsWith('http')) return null;
+  try {
     const logoRes = await fetch(url);
     if (!logoRes.ok) return null;
     const blob = await logoRes.blob();
-    return await new Promise<string | null>((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : null);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
+    return await blobToDataUrl(blob);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchClientLogoDataUrl(clientId: string): Promise<string | null> {
+  // Primary path: /api/nerd/mentions (active clients only, exposes logo_url
+  // as avatarUrl). Fallback: /api/clients/[id] direct so inactive clients
+  // or any client missing from the mentions list still resolves a logo.
+  try {
+    const res = await fetch('/api/nerd/mentions');
+    if (res.ok) {
+      const data = (await res.json()) as {
+        clients?: Array<{ id: string; avatarUrl?: string | null }>;
+      };
+      const match = (data.clients ?? []).find((c) => c.id === clientId);
+      const dataUrl = await fetchLogoAsDataUrl(match?.avatarUrl);
+      if (dataUrl) return dataUrl;
+    }
+
+    const clientRes = await fetch(`/api/clients/${clientId}`);
+    if (clientRes.ok) {
+      const client = (await clientRes.json()) as { logo_url?: string | null };
+      return await fetchLogoAsDataUrl(client.logo_url);
+    }
+    return null;
   } catch {
     return null;
   }

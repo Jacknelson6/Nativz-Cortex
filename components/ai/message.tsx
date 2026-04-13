@@ -114,19 +114,27 @@ export function AssistantMessage({
   message,
   isLast,
   onRetry,
+  avatarOverride,
 }: {
   message: ChatMessage;
   isLast: boolean;
   onRetry: () => void;
+  /** Optional avatar node to render in place of the default bot icon. Strategy
+   *  Lab passes an Agency × Client avatar here. */
+  avatarOverride?: React.ReactNode;
 }) {
   const exportRootRef = useRef<HTMLDivElement>(null);
 
   return (
     <div className="group flex gap-3 py-5">
       {/* Avatar */}
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-gradient-to-b from-surface to-[#0d0d14] shadow-sm">
-        <BotMessageSquare size={16} className="text-accent-text" />
-      </div>
+      {avatarOverride ? (
+        <div className="flex shrink-0 items-start pt-0.5">{avatarOverride}</div>
+      ) : (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-gradient-to-b from-surface to-[#0d0d14] shadow-sm">
+          <BotMessageSquare size={16} className="text-accent-text" />
+        </div>
+      )}
 
       {/* Content */}
       <div className="min-w-0 flex-1 pt-0.5">

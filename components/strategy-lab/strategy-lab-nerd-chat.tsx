@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo, type ComponentType } from 'react';
 import { Loader2 } from 'lucide-react';
-import { ClientLogo } from '@/components/clients/client-logo';
+import { AgencyClientAvatar } from './agency-client-avatar';
 import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
@@ -129,21 +129,36 @@ export function StrategyLabNerdChat({
   // brand mark instead of initials. Pulls from /api/nerd/mentions (same
   // source the client picker uses).
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
-  const { config: agencyConfig, brandName: agencyName } = useAgencyBrand();
+  const { brandName: agencyName } = useAgencyBrand();
 
   useEffect(() => {
     if (!clientId) return;
     let cancelled = false;
-    fetch('/api/nerd/mentions')
-      .then((r) => r.json())
-      .then((data: { clients?: Array<{ id: string; avatarUrl?: string | null }> }) => {
-        if (cancelled) return;
-        const match = (data.clients ?? []).find((c) => c.id === clientId);
-        setClientLogoUrl(match?.avatarUrl ?? null);
-      })
-      .catch(() => {
+    // Primary path: mentions endpoint exposes every active client's logo.
+    // Fallback: hit /api/clients/[id] directly in case the client is inactive
+    // or the mentions list omits logo_url for any reason.
+    (async () => {
+      try {
+        const mentionsRes = await fetch('/api/nerd/mentions');
+        if (mentionsRes.ok) {
+          const data = (await mentionsRes.json()) as {
+            clients?: Array<{ id: string; avatarUrl?: string | null }>;
+          };
+          const match = (data.clients ?? []).find((c) => c.id === clientId);
+          if (match?.avatarUrl) {
+            if (!cancelled) setClientLogoUrl(match.avatarUrl);
+            return;
+          }
+        }
+        const clientRes = await fetch(`/api/clients/${clientId}`);
+        if (clientRes.ok) {
+          const client = (await clientRes.json()) as { logo_url?: string | null };
+          if (!cancelled) setClientLogoUrl(client.logo_url ?? null);
+        }
+      } catch {
         if (!cancelled) setClientLogoUrl(null);
-      });
+      }
+    })();
     return () => { cancelled = true; };
   }, [clientId]);
 
@@ -656,25 +671,14 @@ export function StrategyLabNerdChat({
       ) : messages.length === 0 ? (
         <>
           <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
-            {/* Agency × client collab mark — "Nativz × Avondale Private Lending".
-                Swaps the agency half to Anderson on that domain via useAgencyBrand. */}
-            <div className="mb-6 flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-nativz-border/60 bg-surface/60 p-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={agencyConfig.logoPath}
-                  alt={agencyName}
-                  className="max-h-full max-w-full object-contain"
-                />
-              </div>
-              <span className="text-xl font-light text-text-muted/70" aria-hidden>×</span>
-              <ClientLogo
-                src={clientLogoUrl}
-                name={clientName}
-                size="lg"
-                className="h-14 w-14 !rounded-2xl border border-nativz-border/60 bg-surface/60"
-              />
-            </div>
+            {/* "Nativz × client" collab mark — swaps the agency half to
+                Anderson on that domain via useAgencyBrand inside the avatar. */}
+            <AgencyClientAvatar
+              clientName={clientName}
+              clientLogoUrl={clientLogoUrl}
+              size="lg"
+              className="mb-6"
+            />
             <p className="mb-1 text-xs font-medium uppercase tracking-wider text-text-muted">
               {agencyName} × {clientName.trim() || 'this client'}
             </p>
@@ -712,6 +716,13 @@ export function StrategyLabNerdChat({
                         message={msg}
                         isLast={isLast}
                         onRetry={() => handleSend('Continue')}
+                        avatarOverride={
+                          <AgencyClientAvatar
+                            clientName={clientName}
+                            clientLogoUrl={clientLogoUrl}
+                            size="sm"
+                          />
+                        }
                       />
                     </div>
                   );
