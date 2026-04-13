@@ -345,11 +345,11 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   if (audit.status === 'confirming_platforms' || (audit.status === 'pending' && detectedPlatforms.length >= 0 && !detecting)) {
     const hasPlatforms = Object.values(socialInputs).some(v => v?.trim());
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4">
-        <div className="w-full max-w-lg space-y-5">
+      <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 py-8">
+        <div className="w-full max-w-2xl space-y-6">
           <div className="text-center">
-            <h2 className="text-xl font-semibold text-text-primary">Confirm social platforms</h2>
-            <p className="mt-1 text-sm text-text-muted">
+            <h2 className="text-2xl font-semibold text-text-primary">Confirm social platforms</h2>
+            <p className="mt-1 text-base text-text-muted">
               {websiteInfo ? `${websiteInfo.title} — ${websiteInfo.industry}` : audit.website_url?.replace(/^https?:\/\//, '')}
             </p>
             {detectedPlatforms.length > 0 ? (
@@ -363,16 +363,16 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             )}
           </div>
 
-          <div className="rounded-xl border border-nativz-border bg-surface p-5 space-y-3">
+          <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">
             {(['tiktok', 'instagram', 'facebook', 'youtube'] as AuditPlatformKey[]).map(platform => {
               const detected = detectedPlatforms.find(d => d.platform === platform);
               const missing = !detected && !socialInputs[platform]?.trim();
               const value = socialInputs[platform] ?? (detected?.url ?? '');
               return (
                 <div key={platform} className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 w-28 shrink-0">
+                  <div className="flex items-center gap-2 w-32 shrink-0">
                     <AuditPlatformIcon platform={platform} size="sm" />
-                    <span className="text-sm text-text-primary font-medium">{PLATFORM_LABELS[platform]}</span>
+                    <span className="text-base text-text-primary font-medium">{PLATFORM_LABELS[platform]}</span>
                   </div>
                   <input
                     type="text"
@@ -380,7 +380,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                     onChange={(e) => setSocialInputs(prev => ({ ...prev, [platform]: e.target.value }))}
                     placeholder={missing ? '—' : `${platform}.com/@username`}
                     className={cn(
-                      'flex-1 rounded-lg border bg-transparent px-3 py-2 text-sm focus:outline-none',
+                      'flex-1 rounded-lg border bg-transparent px-4 py-2.5 text-base focus:outline-none',
                       missing
                         ? 'border-red-500/40 text-red-300 placeholder:text-red-400/50 focus:border-red-400/60'
                         : 'border-nativz-border text-text-primary placeholder:text-text-muted/50 focus:border-accent/40',
@@ -396,11 +396,11 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             })}
           </div>
 
-          <div className="rounded-xl border border-nativz-border bg-surface p-5 space-y-3">
+          <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">
             <div>
               <h3 className="text-sm font-semibold text-text-primary">Competitors (optional)</h3>
               <p className="mt-0.5 text-xs text-text-muted">
-                Paste up to 3 competitor profile URLs to rank against. Leave blank to auto-discover.
+                Paste up to 3 competitor websites. We'll scrape their socials and rank against them. Leave blank to auto-discover.
               </p>
             </div>
             {[0, 1, 2].map((i) => (
@@ -415,8 +415,8 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                     return next;
                   });
                 }}
-                placeholder={`Competitor ${i + 1} — e.g. tiktok.com/@brandname`}
-                className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40"
+                placeholder={`Competitor ${i + 1} website — e.g. https://doughco.com`}
+                className="w-full rounded-lg border border-nativz-border bg-transparent px-4 py-2.5 text-base text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40"
               />
             ))}
           </div>
