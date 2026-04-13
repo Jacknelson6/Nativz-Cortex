@@ -81,12 +81,12 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/pipeline?stage=boosting', label: 'Boosting', icon: Megaphone },
         ],
       },
+      { href: '/admin/scheduler', label: 'Calendars', icon: Send },
     ],
   },
   {
     label: 'Content',
     items: [
-      { href: '/admin/scheduler', label: 'Post scheduler', icon: Send },
       { href: '/admin/search/new', label: 'Research', icon: Telescope },
       { href: '/admin/strategy-lab', label: 'Strategy lab', icon: Compass },
       { href: '/admin/ad-creatives', label: 'Ad creatives', icon: ImagePlus },
