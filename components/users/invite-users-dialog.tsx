@@ -318,30 +318,32 @@ function AdminInviteForm({
         able to set a password and sign into the admin dashboard.
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-[11px] font-medium text-text-muted uppercase tracking-wide mb-1.5">
-            Full name
-          </label>
-          <input
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="Jane Doe"
-            className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text transition-colors"
-          />
-        </div>
-        <div>
-          <label className="block text-[11px] font-medium text-text-muted uppercase tracking-wide mb-1.5">
-            Email
-          </label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="jane@nativz.io"
-            className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text transition-colors"
-          />
-        </div>
+      <div>
+        <label className="block text-[11px] font-medium text-text-muted uppercase tracking-wide mb-1.5">
+          Full name
+        </label>
+        <input
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          placeholder="Jane Doe"
+          className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text transition-colors"
+        />
+      </div>
+
+      <div>
+        <label className="block text-[11px] font-medium text-text-muted uppercase tracking-wide mb-1.5">
+          Email
+        </label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="jane@nativz.io"
+          className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text transition-colors"
+        />
+        <p className="text-[11px] text-text-muted/70 mt-1">
+          The invite email will be sent here, and it becomes their login.
+        </p>
       </div>
 
       <div>
