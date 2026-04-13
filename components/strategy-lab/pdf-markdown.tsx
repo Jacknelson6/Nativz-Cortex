@@ -427,9 +427,9 @@ export function renderMarkdownToPdfBlocks(
       // generic fenced blocks. The per-message PDF export (html2canvas)
       // captures live SVGs directly and isn't affected by this path.
       const label = isMermaid
-        ? 'Mermaid diagram — open in Strategy Lab for the live render'
+        ? 'Mermaid diagram — open in Content Lab for the live render'
         : isHtmlVisual
-          ? 'HTML visual — open in Strategy Lab for the live render'
+          ? 'HTML visual — open in Content Lab for the live render'
           : block.lang
             ? block.lang.toUpperCase()
             : null;

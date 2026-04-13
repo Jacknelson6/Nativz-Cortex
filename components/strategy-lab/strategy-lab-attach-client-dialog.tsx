@@ -113,7 +113,7 @@ export function StrategyLabAttachClientDialog({
     >
       <div className="border-b border-white/[0.06] px-5 py-4">
         <p className="text-sm text-text-muted">
-          Strategy Lab sessions are scoped to a client. Pick the brand this research
+          Content Lab sessions are scoped to a client. Pick the brand this research
           belongs to and we&apos;ll attach the search and jump you into the lab.
         </p>
       </div>

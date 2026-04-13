@@ -257,7 +257,7 @@ function HistoryRowMenuBody({
       {isTopicLike ? (
         <Item className={menuItemClass} onSelect={onOpenStrategyLab}>
           <Compass size={14} aria-hidden />
-          Open in Strategy lab
+          Open in Content lab
         </Item>
       ) : null}
       {showStrategyLabToggleItem && isTopicLike ? (
@@ -598,7 +598,7 @@ export function HistoryFeed({
         mergeTopicSearchSelectionIntoLocalStorage(item.clientId, [item.id]);
         router.push(`/admin/strategy-lab/${item.clientId}`);
       } else {
-        toast.message('Pick a client in Strategy lab, then pin topic searches from your history.');
+        toast.message('Pick a client in Content lab, then pin topic searches from your history.');
         router.push('/admin/strategy-lab');
       }
     },
@@ -615,7 +615,7 @@ export function HistoryFeed({
       .filter((r): r is HistoryItem => Boolean(r));
     const clientIds = [...new Set(rows.map((r) => r.clientId).filter(Boolean))];
     if (clientIds.length === 0) {
-      toast.message('Pick a client in Strategy Lab, then pin topic searches from your history.');
+      toast.message('Pick a client in Content Lab, then pin topic searches from your history.');
       router.push('/admin/strategy-lab');
       return;
     }
@@ -890,7 +890,7 @@ export function HistoryFeed({
             )}
             aria-label={
               checked
-                ? `Deselect for Strategy lab: ${displayTitle(item)}`
+                ? `Deselect for Content lab: ${displayTitle(item)}`
                 : `Select: ${displayTitle(item)}`
             }
             aria-pressed={checked}

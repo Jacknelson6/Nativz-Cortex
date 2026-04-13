@@ -232,10 +232,10 @@ export function AdminResultsClient({
                 router.push(`/admin/strategy-lab/${clientInfo.id}`);
               }}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent/60 hover:bg-accent/20"
-              title={clientInfo ? `Open this search in Strategy Lab with ${clientInfo.name}` : 'Pick a client and open in Strategy Lab'}
+              title={clientInfo ? `Open this search in Content Lab with ${clientInfo.name}` : 'Pick a client and open in Content Lab'}
             >
               <FlaskConical size={14} aria-hidden />
-              Open in Strategy Lab
+              Open in Content Lab
             </button>
             <StrategyLabAttachClientDialog
               open={attachDialogOpen}

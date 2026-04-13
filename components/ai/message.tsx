@@ -138,7 +138,10 @@ export function AssistantMessage({
 
       {/* Content */}
       <div className="min-w-0 flex-1 pt-0.5">
-        {message.createdAt && (
+        {/* Hidden until hover; suppressed entirely while the content is
+            still streaming so the timestamp row doesn't push Thinking…
+            below the avatar. */}
+        {message.createdAt && message.content && (
           <span className="mb-1 block text-[10px] text-text-muted/0 transition-colors group-hover:text-text-muted/60">
             {formatRelativeTimestamp(message.createdAt)}
           </span>

@@ -26,15 +26,15 @@ export function IdeationPipelinePanel({
             <Brain size={20} className="text-accent-text" />
           </div>
           <div>
-            <CardTitle className="text-base font-semibold">Strategy Lab</CardTitle>
+            <CardTitle className="text-base font-semibold">Content Lab</CardTitle>
             <p className="mt-0.5 text-sm text-text-muted">
-              Use this research in the Strategy Lab to generate video ideas and content strategy.
+              Use this research in the Content Lab to generate video ideas and content strategy.
             </p>
           </div>
         </div>
         <Link href={labHref}>
           <Button type="button" variant="primary" size="sm" className="gap-1.5 whitespace-nowrap">
-            Open in Strategy Lab
+            Open in Content Lab
             <ChevronRight size={14} />
           </Button>
         </Link>

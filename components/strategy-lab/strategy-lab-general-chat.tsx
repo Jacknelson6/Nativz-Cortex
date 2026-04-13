@@ -225,7 +225,7 @@ export function StrategyLabGeneralChat({ clients }: StrategyLabGeneralChatProps)
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
         <div className="flex items-center gap-2 text-sm text-text-muted">
           <Sparkles size={14} className="text-accent-text" aria-hidden />
-          <span>Strategy Lab — general</span>
+          <span>Content Lab — general</span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -262,7 +262,7 @@ export function StrategyLabGeneralChat({ clients }: StrategyLabGeneralChatProps)
               className="h-10 w-auto max-w-[260px] object-contain"
             />
             <span className="text-2xl font-light text-text-muted/60" aria-hidden>×</span>
-            <span className="text-2xl font-semibold text-text-primary">Strategy Lab</span>
+            <span className="text-2xl font-semibold text-text-primary">Content Lab</span>
           </div>
           <h2 className="mb-2 text-2xl font-semibold tracking-tight text-text-primary">
             What are we thinking about?

@@ -341,7 +341,7 @@ function FolderRowDroppable({
                     }}
                   >
                     <Compass size={14} aria-hidden />
-                    Open in Strategy lab
+                    Open in Content lab
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-nativz-border" />
                   <DropdownMenuItem
