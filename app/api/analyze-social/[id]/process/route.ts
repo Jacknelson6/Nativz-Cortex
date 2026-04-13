@@ -258,9 +258,10 @@ export async function POST(
       ) as Parameters<typeof analyzeVideosForBrand>[0];
 
       // Grade prospect + each competitor concurrently (up to 3 competitors in parallel)
-      const [prospectVideoAudits, ...competitorAuditResults] = await Promise.all([
+      // Prospect and competitors grade in parallel, not sequentially
+      const [prospectVideoAudits, competitorAuditResults] = await Promise.all([
         analyzeVideosForBrand(prospectVideosByPlatform),
-        ...await runWithConcurrency(
+        runWithConcurrency(
           competitors.map((comp) => async () => {
             const videosByPlatform = { [comp.platform]: comp.recentVideos } as Parameters<typeof analyzeVideosForBrand>[0];
             const grades = await analyzeVideosForBrand(videosByPlatform);
