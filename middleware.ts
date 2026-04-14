@@ -9,20 +9,25 @@ type SupabaseFromMiddleware = ReturnType<typeof createServerClient>;
 
 /**
  * Prefer getUser() (validates JWT with Supabase Auth). On Edge, that uses fetch and can
- * throw "fetch failed" (transient network, DNS, sandbox). Fall back to cookie session.
+ * throw "fetch failed" (transient network, DNS, sandbox). Fall back to the cookie
+ * session ONLY on thrown exceptions — not on auth errors like "JWT expired", which
+ * the server-side layout's strict `getUser()` will agree is unauthenticated. Trusting
+ * a stale session on expired JWTs caused a redirect loop: middleware sees a user via
+ * the fallback, sends them to PORTAL_HOME_PATH; the portal layout's strict check sees
+ * no user and sends them back to `/admin/login`.
  */
 async function getAuthUserResilient(supabase: SupabaseFromMiddleware): Promise<User | null> {
   try {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (!error && user) return user;
+    const { data: { user } } = await supabase.auth.getUser();
+    return user ?? null;
   } catch {
-    // Network failure during JWT validation — session is still usable for routing
-  }
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user ?? null;
-  } catch {
-    return null;
+    // Network failure during JWT validation — fall back to session cookie for routing only.
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      return session?.user ?? null;
+    } catch {
+      return null;
+    }
   }
 }
 
