@@ -270,23 +270,19 @@ export default function UsersPage() {
               <p className="text-sm text-text-muted">No users found</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
+            <div className="flex flex-col gap-2">
               {filtered.map((user) => {
                 const isExpanded = expandedId === user.id;
                 return (
-                  <div
+                  <UserCard
                     key={user.id}
-                    className={isExpanded ? 'md:col-span-2 xl:col-span-3' : ''}
-                  >
-                    <UserCard
-                      user={user}
-                      expanded={isExpanded}
-                      onToggle={() => setExpandedId(isExpanded ? null : user.id)}
-                      onUpdated={loadUsers}
-                      onDeleted={(id) => setUsers((prev) => prev.filter((u) => u.id !== id))}
-                      onSendEmail={(r) => openComposerFor([r])}
-                    />
-                  </div>
+                    user={user}
+                    expanded={isExpanded}
+                    onToggle={() => setExpandedId(isExpanded ? null : user.id)}
+                    onUpdated={loadUsers}
+                    onDeleted={(id) => setUsers((prev) => prev.filter((u) => u.id !== id))}
+                    onSendEmail={(r) => openComposerFor([r])}
+                  />
                 );
               })}
             </div>
