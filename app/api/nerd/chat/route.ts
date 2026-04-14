@@ -191,13 +191,18 @@ BEHAVIOR RULES:
 - If analytics data is provided, analyze it with strategic insight, not just number recitation.`;
 }
 
-/** Tools that portal (viewer) users are allowed to use — read-only, single-client scoped */
+/** Tools that portal (viewer) users are allowed to use — single-client scoped */
 const PORTAL_ALLOWED_TOOLS = new Set([
   'search_knowledge_base',
   'query_client_knowledge',
   'get_knowledge_entry',
   'get_client_details',
   'generate_video_ideas',
+  // Content Lab grounding pipeline. Both tools self-scope to the caller's
+  // organization_id — a portal user can only read signals / write plans
+  // for clients their org has access to.
+  'extract_topic_signals',
+  'create_topic_plan',
 ]);
 
 // ---------------------------------------------------------------------------
