@@ -6,7 +6,7 @@ import {
   X,
   FileText,
   Image as ImageIcon,
-  FlaskConical,
+  Search,
   BookOpen,
   Palette,
   Upload,
@@ -74,7 +74,7 @@ const ACCEPT_DEFAULT =
   'application/pdf,image/png,image/jpeg,image/webp,image/gif,text/plain,text/markdown,text/csv';
 
 function attachmentIcon(type: AttachmentType, mimeType?: string) {
-  if (type === 'research') return <FlaskConical size={12} aria-hidden />;
+  if (type === 'research') return <Search size={12} aria-hidden />;
   if (type === 'knowledge') return <BookOpen size={12} aria-hidden />;
   if (type === 'moodboard') return <Palette size={12} aria-hidden />;
   if (mimeType?.startsWith('image/')) return <ImageIcon size={12} aria-hidden />;
@@ -199,7 +199,7 @@ export function ChatComposer({
     },
     {
       label: 'Attach research',
-      icon: <FlaskConical size={14} aria-hidden />,
+      icon: <Search size={14} aria-hidden />,
       onClick: () => {
         onAttachResearch?.();
         setMenuOpen(false);
@@ -348,7 +348,7 @@ export function ChatComposer({
               aria-label="Attach research"
               title="Attach research topic"
             >
-              <FlaskConical size={variant === 'research' ? 16 : 15} aria-hidden />
+              <Search size={variant === 'research' ? 16 : 15} aria-hidden />
             </button>
           )}
         </div>

@@ -439,42 +439,48 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
     [conversationId, streaming, clientId],
   );
 
+  // Composer rendered inline in the centered pre-chat state AND pinned as a
+  // bottom footer once messages start streaming — same extract the admin
+  // Strategy Lab uses, so the two surfaces share the pattern.
+  const composer = (
+    <div className="flex flex-col">
+      <StrategyLabTopicSearchChipBar
+        clientId={clientId}
+        clientName={clientName}
+        attachedSearchIds={attachedSearchIds}
+        onToggle={toggleAttach}
+        pinnedTopicSearchIds={[]}
+        onSearchesLoaded={setClientSearches}
+      />
+      <ChatComposer
+        variant="research"
+        value={input}
+        onChange={setInput}
+        onSubmit={(atts: ChatAttachment[]) => {
+          pendingAttachmentsRef.current = atts;
+          handleSend();
+        }}
+        disabled={streaming}
+        placeholder={`Ask Cortex about ${clientName.trim() || 'this client'}… (try /ideas or /script)`}
+        blockEnterSubmit={showSlashMenu}
+        onKeyDown={handleInputKeyDown}
+        onAttachResearch={() => setAttachResearchOpen(true)}
+      >
+        {showSlashMenu && (
+          <SlashCommandMenu
+            query={slashQuery}
+            commands={slashCommands}
+            onSelect={handleSlashSelect}
+            activeIndex={slashActiveIndex}
+          />
+        )}
+      </ChatComposer>
+    </div>
+  );
+
   const chatFooter = (
     <div className="shrink-0 px-4 pb-5 pt-3 md:px-8 md:pb-6">
-      <div className="mx-auto flex max-w-3xl flex-col">
-        <StrategyLabTopicSearchChipBar
-          clientId={clientId}
-          clientName={clientName}
-          attachedSearchIds={attachedSearchIds}
-          onToggle={toggleAttach}
-          pinnedTopicSearchIds={[]}
-          onSearchesLoaded={setClientSearches}
-        />
-        <ChatComposer
-          variant="research"
-          value={input}
-          onChange={setInput}
-          onSubmit={(atts: ChatAttachment[]) => {
-            pendingAttachmentsRef.current = atts;
-            handleSend();
-          }}
-          disabled={streaming}
-          placeholder={`Ask Cortex about ${clientName.trim() || 'this client'}… (try /ideas or /script)`}
-          blockEnterSubmit={showSlashMenu}
-          onKeyDown={handleInputKeyDown}
-          onAttachResearch={() => setAttachResearchOpen(true)}
-        >
-          {showSlashMenu && (
-            <SlashCommandMenu
-              query={slashQuery}
-              commands={slashCommands}
-              onSelect={handleSlashSelect}
-              activeIndex={slashActiveIndex}
-            />
-          )}
-        </ChatComposer>
-      </div>
-
+      <div className="mx-auto flex max-w-3xl flex-col">{composer}</div>
       <StrategyLabAttachResearchDialog
         open={attachResearchOpen}
         onClose={() => setAttachResearchOpen(false)}
@@ -493,10 +499,9 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
   }));
 
   return (
-    <div className="flex h-full min-h-0 flex-1 overflow-hidden rounded-2xl border border-nativz-border/60 bg-background/40">
+    <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-background">
       <StrategyLabConversationHistoryRail
         clientId={clientId}
-        clientName={clientName}
         activeConversationId={conversationId}
         onSelect={(id) => void handleSelectConversation(id)}
         onNewChat={handleReset}
@@ -504,6 +509,8 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Header — client avatar + name. Viewer-scoped portal has no client
+            switcher, so nothing else lives here. */}
         <header className="relative flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <AgencyClientAvatar
@@ -537,8 +544,8 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
             {chatFooter}
           </>
         ) : messages.length === 0 ? (
-          <>
-            <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
+          <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 md:px-8">
+            <div className="flex w-full max-w-3xl flex-col items-center">
               <div className="mb-6 flex items-center gap-5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -554,7 +561,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
               <h2 className="mb-8 text-2xl font-semibold tracking-tight text-text-primary">
                 What are we building today?
               </h2>
-              <div className="flex max-w-xl flex-wrap justify-center gap-2">
+              <div className="mb-6 flex max-w-xl flex-wrap justify-center gap-2">
                 {suggestions.map((s) => (
                   <button
                     key={s.label}
@@ -566,9 +573,18 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
                   </button>
                 ))}
               </div>
+              <div className="w-full">{composer}</div>
             </div>
-            {chatFooter}
-          </>
+            <StrategyLabAttachResearchDialog
+              open={attachResearchOpen}
+              onClose={() => setAttachResearchOpen(false)}
+              clientId={clientId}
+              clientName={clientName}
+              clientSlug={clientSlug}
+              attachedSearchIds={attachedSearchIds}
+              onToggle={toggleAttach}
+            />
+          </div>
         ) : (
           <>
             <Conversation className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8">

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, Image, Camera, Users, Telescope, BarChart3, Search,
+  LayoutDashboard, Image, Camera, Users, BarChart3, Search,
   Settings, ArrowRight, Clock, ChevronRight, Plus, Loader2, CheckCircle, Mic2,
   Workflow, Send,
 } from 'lucide-react';
@@ -77,7 +77,7 @@ export function CommandPalette() {
     { id: 'post-scheduler', label: 'Post scheduler', group: 'Navigation', icon: <Send className="w-4 h-4" />, action: () => navigate('/admin/scheduler'), keywords: 'late publish social posts scheduling smm' },
     { id: 'clients', label: 'Clients', group: 'Navigation', icon: <Users className="w-4 h-4" />, action: () => navigate('/admin/clients'), keywords: 'accounts brands' },
     { id: 'meetings', label: 'Meetings', group: 'Navigation', icon: <Mic2 className="w-4 h-4" />, action: () => navigate('/admin/meetings'), keywords: 'fyxer notes recurring adhoc prospects' },
-    { id: 'research', label: 'Research', group: 'Navigation', icon: <Telescope className="w-4 h-4" />, action: () => navigate('/admin/search/new'), keywords: 'topic social listening ideas generate' },
+    { id: 'research', label: 'Research', group: 'Navigation', icon: <Search className="w-4 h-4" />, action: () => navigate('/admin/search/new'), keywords: 'topic social listening ideas generate' },
     { id: 'research-history', label: 'Research history', group: 'Navigation', icon: <Clock className="w-4 h-4" />, action: () => navigate('/admin/search/new'), keywords: 'past searches' },
     { id: 'analytics', label: 'Analytics', group: 'Navigation', icon: <BarChart3 className="w-4 h-4" />, action: () => navigate('/admin/analytics'), keywords: 'metrics reports data' },
     { id: 'settings', label: 'Settings', group: 'Navigation', icon: <Settings className="w-4 h-4" />, action: () => navigate('/admin/settings'), keywords: 'preferences config' },

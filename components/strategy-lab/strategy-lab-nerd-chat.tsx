@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect, useMemo, type ComponentType } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { AgencyClientAvatar } from './agency-client-avatar';
 import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
@@ -16,7 +16,6 @@ import { StrategyLabClientPickerPill } from './strategy-lab-client-picker-pill';
 import { StrategyLabConversationHistoryRail } from './strategy-lab-conversation-history-rail';
 import { StrategyLabTopicSearchChipBar } from './strategy-lab-topic-search-chip-bar';
 import { StrategyLabAttachResearchDialog } from './strategy-lab-attach-research-dialog';
-import { cn } from '@/lib/utils/cn';
 import { getAllCommands, getCommand } from '@/lib/nerd/slash-commands';
 import {
   readStrategyLabNerdConversationId,
@@ -49,25 +48,12 @@ const SUGGESTIONS = [
   },
 ];
 
-// The tab nav shape the workspace passes down. We render it as a floating
-// pill inside the chat container instead of above it, per the UI refactor.
-interface MainTabSpec<Id extends string = string> {
-  id: Id;
-  label: string;
-  icon: ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>;
-}
-
 type StrategyLabNerdChatProps = {
   clientId: string;
   clientName: string;
   clientSlug: string;
   /** Topic search IDs the user pinned in Strategy Lab — the initial attached set for the chat context. */
   pinnedTopicSearchIds: string[];
-  /** Floating tab nav passed down from the workspace. Rendered inside the
-   *  chat container's header so it visually belongs to the chat UI. */
-  mainTabs: MainTabSpec[];
-  activeMainTab: string;
-  onMainTabChange: (next: string) => void;
 };
 
 interface TopicSearchItem {
@@ -98,9 +84,6 @@ export function StrategyLabNerdChat({
   clientName,
   clientSlug,
   pinnedTopicSearchIds,
-  mainTabs,
-  activeMainTab,
-  onMainTabChange,
 }: StrategyLabNerdChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -527,42 +510,48 @@ export function StrategyLabNerdChat({
     [conversationId, streaming, clientId],
   );
 
+  // Composer is rendered in two places: centered above the hero on the empty
+  // state (Topic Search style), and pinned at the bottom while streaming.
+  // Extracted so the layout switch doesn't duplicate attach/slash wiring.
+  const composer = (
+    <div className="flex flex-col">
+      <StrategyLabTopicSearchChipBar
+        clientId={clientId}
+        clientName={clientName}
+        attachedSearchIds={attachedSearchIds}
+        onToggle={toggleAttach}
+        pinnedTopicSearchIds={pinnedTopicSearchIds}
+        onSearchesLoaded={setClientSearches}
+      />
+      <ChatComposer
+        variant="research"
+        value={input}
+        onChange={setInput}
+        onSubmit={(atts: ChatAttachment[]) => {
+          pendingAttachmentsRef.current = atts;
+          handleSend();
+        }}
+        disabled={streaming}
+        placeholder={`Ask Cortex about ${clientName.trim() || 'this client'}… (try /ideas or /script)`}
+        blockEnterSubmit={showSlashMenu}
+        onKeyDown={handleInputKeyDown}
+        onAttachResearch={() => setAttachResearchOpen(true)}
+      >
+        {showSlashMenu && (
+          <SlashCommandMenu
+            query={slashQuery}
+            commands={slashCommands}
+            onSelect={handleSlashSelect}
+            activeIndex={slashActiveIndex}
+          />
+        )}
+      </ChatComposer>
+    </div>
+  );
+
   const chatFooter = (
     <div className="shrink-0 px-4 pb-5 pt-3 md:px-8 md:pb-6">
-      <div className="mx-auto flex max-w-3xl flex-col">
-        <StrategyLabTopicSearchChipBar
-          clientId={clientId}
-          clientName={clientName}
-          attachedSearchIds={attachedSearchIds}
-          onToggle={toggleAttach}
-          pinnedTopicSearchIds={pinnedTopicSearchIds}
-          onSearchesLoaded={setClientSearches}
-        />
-        <ChatComposer
-          variant="research"
-          value={input}
-          onChange={setInput}
-          onSubmit={(atts: ChatAttachment[]) => {
-            pendingAttachmentsRef.current = atts;
-            handleSend();
-          }}
-          disabled={streaming}
-          placeholder={`Ask Cortex about ${clientName.trim() || 'this client'}… (try /ideas or /script)`}
-          blockEnterSubmit={showSlashMenu}
-          onKeyDown={handleInputKeyDown}
-          onAttachResearch={() => setAttachResearchOpen(true)}
-        >
-          {showSlashMenu && (
-            <SlashCommandMenu
-              query={slashQuery}
-              commands={slashCommands}
-              onSelect={handleSlashSelect}
-              activeIndex={slashActiveIndex}
-            />
-          )}
-        </ChatComposer>
-      </div>
-
+      <div className="mx-auto flex max-w-3xl flex-col">{composer}</div>
       <StrategyLabAttachResearchDialog
         open={attachResearchOpen}
         onClose={() => setAttachResearchOpen(false)}
@@ -581,14 +570,12 @@ export function StrategyLabNerdChat({
   }));
 
   return (
-    <div className="flex h-full min-h-0 flex-1 overflow-hidden rounded-2xl border border-nativz-border/60 bg-background/40">
-      {/* Left rail: strategy session history — every prior Nerd conversation
-          for this client, grouped by recency. Replaces the old topic-search
-          rail; research attachment moved to a compact chip bar above the
-          chat input. */}
+    <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-background">
+      {/* Left rail: conversation history + saved artifacts for this client.
+          Sits flush against the primary app sidebar now — the old rounded
+          card container was removed so the chat spans the viewport. */}
       <StrategyLabConversationHistoryRail
         clientId={clientId}
-        clientName={clientName}
         activeConversationId={conversationId}
         onSelect={(id) => void handleSelectConversation(id)}
         onNewChat={handleReset}
@@ -597,9 +584,10 @@ export function StrategyLabNerdChat({
 
       {/* Main chat column */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Header: client picker · centered tab nav · export PDF. Three
-            columns with the tab pill absolutely centered so the nav doesn't
-            drift with title/button widths. */}
+        {/* Header: client picker (admin only) · export buttons on right. The
+            Chat/Knowledge Base/Artifacts/Analytics tab row was removed; all
+            four surfaces now live under the chat (artifacts in the rail,
+            everything else automatically reachable from the sidebar). */}
         <header className="relative flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <StrategyLabClientPickerPill
@@ -607,31 +595,6 @@ export function StrategyLabNerdChat({
               clientName={clientName}
               clientSlug={clientSlug}
             />
-          </div>
-
-          {/* Centered tab pill — absolutely positioned so client picker on
-              the left and export buttons on the right don't shift it. */}
-          <div className="pointer-events-auto absolute left-1/2 top-1/2 inline-flex -translate-x-1/2 -translate-y-1/2 shrink-0 gap-1 rounded-full border border-nativz-border/60 bg-surface/60 p-1 shadow-sm">
-            {mainTabs.map((tab) => {
-              const active = activeMainTab === tab.id;
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => onMainTabChange(tab.id)}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
-                    active
-                      ? 'bg-surface-hover text-text-primary'
-                      : 'text-text-muted hover:bg-surface-hover/60 hover:text-text-secondary',
-                  )}
-                >
-                  <Icon size={14} aria-hidden />
-                  {tab.label}
-                </button>
-              );
-            })}
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -676,8 +639,10 @@ export function StrategyLabNerdChat({
           {chatFooter}
         </>
       ) : messages.length === 0 ? (
-        <>
-          <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
+        // Pre-chat state — hero + centered composer, matching Topic Search.
+        // Composer drops to the bottom as soon as the first message arrives.
+        <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 md:px-8">
+          <div className="flex w-full max-w-3xl flex-col items-center">
             {/* Agency lockup × client name — wide agency logo (no boxed
                 container, white-bg variant) and the client name as text. */}
             <div className="mb-6 flex items-center gap-5">
@@ -695,7 +660,7 @@ export function StrategyLabNerdChat({
             <h2 className="mb-8 text-2xl font-semibold tracking-tight text-text-primary">
               What are we building today?
             </h2>
-            <div className="flex max-w-xl flex-wrap justify-center gap-2">
+            <div className="mb-6 flex max-w-xl flex-wrap justify-center gap-2">
               {suggestions.map((s) => (
                 <button
                   key={s.label}
@@ -707,9 +672,18 @@ export function StrategyLabNerdChat({
                 </button>
               ))}
             </div>
+            <div className="w-full">{composer}</div>
           </div>
-          {chatFooter}
-        </>
+          <StrategyLabAttachResearchDialog
+            open={attachResearchOpen}
+            onClose={() => setAttachResearchOpen(false)}
+            clientId={clientId}
+            clientName={clientName}
+            clientSlug={clientSlug}
+            attachedSearchIds={attachedSearchIds}
+            onToggle={toggleAttach}
+          />
+        </div>
       ) : (
         <>
           <Conversation className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8">
