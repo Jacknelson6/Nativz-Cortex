@@ -331,28 +331,30 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
     const { open } = useSidebar();
     const [showTooltip, setShowTooltip] = useState(false);
 
-    // Expanded: row layout with icon + text + active-row highlight.
-    // Collapsed: centered icon-only square so the active highlight is a
-    // square pill behind the icon instead of an off-center rectangle.
-    const sizing = open
-      ? 'flex w-full items-center gap-2.5 px-2.5 min-h-[40px]'
-      : 'flex h-9 w-9 mx-auto items-center justify-center';
-
-    const shellStyles = isActive
-      ? 'bg-accent-surface text-text-primary font-semibold'
-      : 'text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium';
-
+    // Click area is the full row; the visible "active pill" lives on an
+    // inner span sized to its content. So when the rail is collapsed the
+    // pill is icon-sized (looks square). When the rail is expanded, the
+    // text fades in and the pill grows around icon + text. Icon's x-
+    // position never changes — Supabase-style reveal.
     return (
       <button
         ref={ref}
         data-active={isActive ? true : undefined}
         suppressHydrationWarning
-        className={`relative rounded-lg text-[15px] transition-[color,background-color,border-color,box-shadow] duration-150 cursor-pointer ${sizing} ${shellStyles} ${className}`}
+        className={`relative flex w-full items-center min-h-[40px] cursor-pointer text-[15px] ${className}`}
         onMouseEnter={() => !open && setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         {...props}
       >
-        {children}
+        <span
+          className={`flex items-center rounded-md px-2 py-1.5 transition-colors duration-150 ${
+            isActive
+              ? 'bg-accent-surface text-text-primary font-semibold'
+              : 'text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium'
+          }`}
+        >
+          {children}
+        </span>
 
         {/* Collapsed tooltip */}
         {!open && showTooltip && tooltip && (

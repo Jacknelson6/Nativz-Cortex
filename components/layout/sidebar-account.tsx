@@ -107,33 +107,36 @@ export function SidebarAccount({
 
       <button
         onClick={() => setOpen((prev) => !prev)}
-        className={`rounded-lg transition-colors ${
-          collapsed ? 'flex h-9 w-9 mx-auto items-center justify-center' : 'flex w-full items-center gap-2.5 px-2.5 py-2'
-        } ${open ? 'bg-surface-hover' : 'hover:bg-surface-hover'}`}
+        className="flex w-full items-center min-h-[40px]"
       >
-        {/* Compact avatar — same h-7 w-7 footprint as nav icons so the
-            footer stays the same height regardless of collapse state. */}
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full overflow-hidden bg-accent-surface">
-          {avatarUrl ? (
-            <Image
-              src={avatarUrl}
-              alt={userName || 'Profile'}
-              width={28}
-              height={28}
-              className="h-full w-full object-cover"
-            />
-          ) : userName ? (
-            <span className="text-xs font-semibold text-accent-text">{initials}</span>
-          ) : (
-            <User size={13} className="text-accent-text" />
-          )}
-        </div>
-
-        {!collapsed && (
-          <span className="flex-1 min-w-0 truncate text-left text-sm font-medium text-text-primary">
+        <span
+          className={`flex items-center rounded-md px-2 py-1.5 transition-colors ${
+            open ? 'bg-surface-hover' : 'hover:bg-surface-hover'
+          }`}
+        >
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full overflow-hidden bg-accent-surface">
+            {avatarUrl ? (
+              <Image
+                src={avatarUrl}
+                alt={userName || 'Profile'}
+                width={28}
+                height={28}
+                className="h-full w-full object-cover"
+              />
+            ) : userName ? (
+              <span className="text-xs font-semibold text-accent-text">{initials}</span>
+            ) : (
+              <User size={13} className="text-accent-text" />
+            )}
+          </span>
+          <span
+            className={`overflow-hidden whitespace-nowrap text-left text-sm font-medium text-text-primary transition-[max-width,margin,opacity] duration-200 ease-out ${
+              !collapsed ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
+            }`}
+          >
             {userName || 'Account'}
           </span>
-        )}
+        </span>
       </button>
     </div>
   );

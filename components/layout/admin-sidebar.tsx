@@ -372,7 +372,13 @@ export function AdminSidebar({
                     <SidebarMenuItem key={item.label + '-soon'}>
                       <SidebarMenuButton isActive={false} tooltip="Coming soon" className="opacity-40 pointer-events-none">
                         <item.icon size={18} className="shrink-0" />
-                        {open && <span className="truncate">{item.label}</span>}
+                        <span
+                          className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
+                            open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
+                          }`}
+                        >
+                          {item.label}
+                        </span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );
@@ -383,7 +389,13 @@ export function AdminSidebar({
                     <Link href={item.href}>
                       <SidebarMenuButton isActive={active} tooltip={item.label}>
                         <item.icon size={18} className="shrink-0" />
-                        {open && <span className="truncate">{item.label}</span>}
+                        <span
+                          className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
+                            open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
+                          }`}
+                        >
+                          {item.label}
+                        </span>
                       </SidebarMenuButton>
                     </Link>
                   </SidebarMenuItem>
@@ -401,16 +413,24 @@ export function AdminSidebar({
         <div className={role === 'viewer' ? 'opacity-40 pointer-events-none' : undefined} title={role === 'viewer' ? 'Coming soon' : undefined}>
           <Link
             href={role === 'viewer' ? '#' : `${routePrefix}/nerd`}
-            className={`rounded-lg text-[15px] transition-colors ${
-              open ? 'flex items-center gap-2.5 px-2.5 py-2' : 'flex h-9 w-9 mx-auto items-center justify-center'
-            } ${
-              isActivePath(pathname, '/admin/nerd')
-                ? 'bg-accent-surface text-text-primary font-semibold'
-                : 'text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium'
-            }`}
+            className="flex w-full items-center min-h-[40px] text-[15px]"
           >
-            <BotMessageSquare size={18} className="shrink-0" />
-            {open && <span className="truncate">The Nerd</span>}
+            <span
+              className={`flex items-center rounded-md px-2 py-1.5 transition-colors duration-150 ${
+                isActivePath(pathname, '/admin/nerd')
+                  ? 'bg-accent-surface text-text-primary font-semibold'
+                  : 'text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium'
+              }`}
+            >
+              <BotMessageSquare size={18} className="shrink-0" />
+              <span
+                className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
+                  open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
+                }`}
+              >
+                The Nerd
+              </span>
+            </span>
           </Link>
         </div>
 
