@@ -83,6 +83,26 @@ const PLATFORM_LABELS: Record<string, string> = {
 };
 
 /**
+ * Canonical platform order across the audit UI. TikTok and Instagram
+ * come first because they're richest for short-form video; YouTube next;
+ * Facebook last because its API is the most restricted (limited engagement
+ * data, fewer post fields, frequent auth blocks).
+ */
+const PLATFORM_PRIORITY: Record<string, number> = {
+  tiktok: 0,
+  instagram: 1,
+  youtube: 2,
+  facebook: 3,
+};
+
+function sortPlatforms<T extends { platform: string }>(list: T[]): T[] {
+  return [...list].sort(
+    (a, b) =>
+      (PLATFORM_PRIORITY[a.platform] ?? 99) - (PLATFORM_PRIORITY[b.platform] ?? 99),
+  );
+}
+
+/**
  * Standardized platform icon — renders the brand mark directly on transparent
  * background with no tile wrappers. YouTube keeps its full red mark.
  * Instagram uses the gradient 'full' variant so it shows the brand gradient
@@ -331,7 +351,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
 
   // Set first platform tab when data loads
   useEffect(() => {
-    const platforms = audit.prospect_data?.platforms ?? [];
+    const platforms = sortPlatforms(audit.prospect_data?.platforms ?? []);
     if (platforms.length > 0 && !activePlatformTab) {
       setActivePlatformTab(platforms[0].platform);
     }
@@ -475,7 +495,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
   }
 
-  const platforms = audit.prospect_data?.platforms ?? [];
+  const platforms = sortPlatforms(audit.prospect_data?.platforms ?? []);
   const websiteContext = audit.prospect_data?.websiteContext ?? null;
   const competitors = audit.competitors_data ?? [];
   const scorecard = audit.scorecard;
