@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { PanelLeft, PanelLeftClose, MousePointer, Check } from 'lucide-react';
 import { useSidebar, type SidebarMode } from './sidebar';
 
-const MODE_OPTIONS: { value: SidebarMode; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; hint: string }[] = [
-  { value: 'expanded', label: 'Expanded', icon: PanelLeft, hint: 'Full width always' },
-  { value: 'collapsed', label: 'Collapsed', icon: PanelLeftClose, hint: 'Icon rail only' },
-  { value: 'hover', label: 'Expand on hover', icon: MousePointer, hint: 'Grows when you hover' },
+const MODE_OPTIONS: { value: SidebarMode; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+  { value: 'expanded', label: 'Expanded', icon: PanelLeft },
+  { value: 'collapsed', label: 'Collapsed', icon: PanelLeftClose },
+  { value: 'hover', label: 'Expand on hover', icon: MousePointer },
 ];
 
 /**
@@ -63,7 +63,7 @@ export function SidebarModePicker() {
       {popoverOpen && (
         <div
           role="menu"
-          className="absolute bottom-full left-0 z-40 mb-2 w-56 rounded-lg border border-nativz-border bg-surface shadow-elevated backdrop-blur animate-[sidebarTooltipIn_120ms_ease-out_forwards]"
+          className="absolute bottom-full left-0 z-40 mb-2 w-60 rounded-lg border border-nativz-border bg-surface shadow-elevated backdrop-blur animate-[sidebarTooltipIn_120ms_ease-out_forwards]"
         >
           <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
             Sidebar control
@@ -87,12 +87,8 @@ export function SidebarModePicker() {
                     }`}
                   >
                     <Icon size={14} className="shrink-0 text-text-muted" />
-                    <span className="flex-1 truncate">{opt.label}</span>
-                    {selected ? (
-                      <Check size={14} className="shrink-0 text-accent-text" />
-                    ) : (
-                      <span className="shrink-0 text-[11px] text-text-muted/70">{opt.hint}</span>
-                    )}
+                    <span className="flex-1 whitespace-nowrap">{opt.label}</span>
+                    {selected && <Check size={14} className="shrink-0 text-accent-text" />}
                   </button>
                 </li>
               );
