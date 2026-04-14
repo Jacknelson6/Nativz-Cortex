@@ -122,7 +122,7 @@ export function SidebarModePicker() {
   );
 
   return (
-    <div className="relative mt-2">
+    <div className="relative mt-2 flex justify-end">
       <button
         ref={buttonRef}
         type="button"
@@ -131,11 +131,11 @@ export function SidebarModePicker() {
         aria-haspopup="menu"
         aria-expanded={popoverOpen}
         title={`Sidebar: ${active.label}`}
-        className={`flex w-full items-center justify-end rounded-lg px-2.5 py-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors cursor-pointer ${
+        className={`flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors cursor-pointer ${
           popoverOpen ? 'bg-surface-hover text-text-secondary' : ''
         }`}
       >
-        <ActiveIcon size={16} className="shrink-0" />
+        <ActiveIcon size={15} className="shrink-0" />
       </button>
 
       {mounted && popover && createPortal(popover, document.body)}
