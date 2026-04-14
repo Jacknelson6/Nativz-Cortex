@@ -333,6 +333,18 @@ async function main() {
       require_(result.success === false, `expected rejection, got success`);
       require_(/access/i.test(result.error ?? ''), `expected access error, got: ${result.error}`);
     });
+
+    const { clientTools } = await import('../lib/nerd/tools/clients');
+    const getClientTool = clientTools.find((t) => t.name === 'get_client_details');
+    require_(getClientTool != null, 'get_client_details tool not found');
+    await check('cross-org viewer: get_client_details rejected', async () => {
+      const result = await getClientTool!.handler(
+        { client_id: clientId! },
+        crossOrgViewerId,
+      );
+      require_(result.success === false, `expected rejection, got success`);
+      require_(/not found/i.test(result.error ?? ''), `expected not-found error, got: ${result.error}`);
+    });
   }
 
   // ─── 5. PDF builds from an enriched plan ────────────────────────────────

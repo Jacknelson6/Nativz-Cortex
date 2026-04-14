@@ -14,7 +14,7 @@ export const clientTools: ToolDefinition[] = [
       client_id: z.string(),
     }),
     riskLevel: 'read',
-    handler: async (params) => {
+    handler: async (params, userId) => {
       try {
         const supabase = createAdminClient();
         const clientId = params.client_id as string;
@@ -29,6 +29,20 @@ export const clientTools: ToolDefinition[] = [
 
         if (clientError) {
           return { success: false, error: `Client not found: ${clientError.message}` };
+        }
+
+        // Tenant isolation. Admin client bypasses RLS, so we gate here
+        // before returning a client's social profiles, strategy, and
+        // contacts — all of which could leak across orgs otherwise.
+        const { data: me } = await supabase
+          .from('users')
+          .select('role, organization_id')
+          .eq('id', userId)
+          .single();
+        if (me && me.role !== 'admin') {
+          if (!me.organization_id || client.organization_id !== me.organization_id) {
+            return { success: false, error: 'Client not found' };
+          }
         }
 
         // Fetch social profiles, latest completed strategy, and contacts in parallel
