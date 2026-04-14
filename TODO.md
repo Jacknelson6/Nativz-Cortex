@@ -6,9 +6,37 @@
 
 ---
 
-## Next Session — QA this April 11 Strategy Lab batch
+## Next Session — human QA for April 13 drops
 
 > See **`SRL.md`** at repo root for the full self-referential loop log.
+
+### 🟡 Users-page email composer (shipped April 13, needs human QA)
+Code complete across 14 commits (`3fa769e` → `bf93d15`, plus `ac166d2` SRL entry). See `docs/superpowers/specs/2026-04-13-users-page-email-design.md` + `docs/superpowers/plans/2026-04-13-users-page-email.md`.
+- [ ] Apply migrations 100 + 101 to the live Supabase project
+- [ ] Send a real email to yourself via the /admin/users kebab → Send email → Follow-up day 3 → Send now
+- [ ] Schedule one 2 min out; verify it flips to `sent` in the Scheduled emails tab after the cron fires
+- [ ] Edit + delete a template via the rail pencil/trash icons
+- [ ] Create a new template via "+ New template"
+- [ ] Audit `select * from activity_log where action = 'user_email_sent'` — one row per successful send, metadata has template_id + subject + resend_id
+
+### 🟡 Social analyzer redesign (shipped April 13, needs human QA)
+Spec at `docs/superpowers/specs/2026-04-13-social-analyzer-redesign-design.md`. 14 feature commits on main. Most flows verified in-session; the remaining human QA is the full end-to-end wall-time test.
+- [ ] Start analysis on a new prospect (e.g. jamnola.com). Target wall time ≤150s.
+- [ ] Confirm-platforms screen: all 4 platforms pre-filled with full URLs (https + www stripped for display), "Not found" red state when a platform is missing, "Detected" green state after manual paste, "Auto-detected" for scraper hits, brand card with favicon + description + goal checkboxes
+- [ ] Competitor card auto-populates with 3 LLM-suggested websites + favicons before the confirm screen renders (no pulsing loading state)
+- [ ] Goal checkboxes: start unchecked; Start analysis disabled until ≥1 checked AND ≥1 platform filled
+- [ ] Analysis report renders old-style (topline + callouts rolled back to original scorecard grid + Recharts + CompetitorComparisonTable per commit `824743f`)
+- [ ] Competitor discovery returns 3–5 candidates for local brands via scope-aware prompt + 3-tier fallback (b00982b, d3088ec)
+- [ ] ER chart shows "Engagement data unavailable" placeholder when all values = 0 (Facebook case)
+
+### ✅ Sidebar restructure (shipped April 13)
+- [x] Dashboard / Intelligence / Create / Manage — 4-section structure (`7ebfc29`)
+- [x] Strategy Lab renamed to Content Lab in all user-visible surfaces (`fc5f8c9`) — 9 files, routes unchanged
+- [x] AI Models → AI Settings in sidebar (`200a284`)
+- [x] Post scheduler → Calendars (parked as child of Edits) (`b59053a`, `4585f3c`)
+- [x] Account menu dropped duplicate API docs + AI models links (`022cf85`)
+- [x] Brain replaces Knowledge in Settings submenu
+- [x] Portal-side Content Lab added + org-scoping audit patches (Goal 6)
 
 ### ✅ Nerd chat — fixed (April 10), verified (April 11)
 The two stacked upstream bugs (`list_tasks` schema converter dropping
