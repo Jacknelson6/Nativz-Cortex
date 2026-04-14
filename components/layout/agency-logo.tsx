@@ -14,8 +14,11 @@ export function AgencyLogo() {
   const { mode } = useBrandMode();
   const [showHiTooltip, setShowHiTooltip] = useState(false);
 
+  // Left offset mirrors the sidebar's inner padding (SidebarContent px-3 +
+  // SidebarMenuButton px-2.5 = 1.375rem), so the logo visually aligns with
+  // the nav item icons and section labels underneath it.
   return (
-    <div className="fixed top-3 left-3 z-40 pointer-events-none">
+    <div className="fixed top-3 left-[1.375rem] z-40 pointer-events-none">
       <button
         type="button"
         onClick={() => {
