@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireBoardAccess } from '@/lib/moodboard/auth';
 
 const positionSchema = z.object({
   id: z.string().uuid(),
@@ -45,15 +46,8 @@ export async function PATCH(
     }
 
     const adminClient = createAdminClient();
-    const { data: userData } = await adminClient
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!userData || userData.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
+    const gate = await requireBoardAccess(boardId, user, adminClient);
+    if (!gate.ok) return gate.response;
 
     const body = await request.json();
     const parsed = batchPositionsSchema.safeParse(body);

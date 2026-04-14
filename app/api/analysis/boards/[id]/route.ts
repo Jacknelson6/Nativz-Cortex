@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireBoardAccess } from '@/lib/moodboard/auth';
 
 const updateBoardSchema = z.object({
   name: z.string().min(1).max(200).optional(),
@@ -33,15 +34,8 @@ export async function GET(
     }
 
     const adminClient = createAdminClient();
-    const { data: userData } = await adminClient
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!userData || userData.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
+    const gate = await requireBoardAccess(id, user, adminClient);
+    if (!gate.ok) return gate.response;
 
     // Fetch board with client name
     const { data: board, error: boardError } = await adminClient
@@ -116,15 +110,8 @@ export async function PATCH(
     }
 
     const adminClient = createAdminClient();
-    const { data: userData } = await adminClient
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!userData || userData.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
+    const gate = await requireBoardAccess(id, user, adminClient);
+    if (!gate.ok) return gate.response;
 
     const body = await request.json();
     const parsed = updateBoardSchema.safeParse(body);
@@ -199,15 +186,8 @@ export async function DELETE(
     }
 
     const adminClient = createAdminClient();
-    const { data: userData } = await adminClient
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!userData || userData.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
+    const gate = await requireBoardAccess(id, user, adminClient);
+    if (!gate.ok) return gate.response;
 
     // Delete the board — cascade deletes items, notes, and comments
     const { error: deleteError } = await adminClient

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireBoardAccess } from '@/lib/moodboard/auth';
 import { gatherQuickMetadataForItemUrl } from '@/lib/analysis/gather-quick-item-metadata';
 import { ensureAnalysisBoardForTopicSearch } from '@/lib/analysis/ensure-topic-search-analysis-board';
 
@@ -60,11 +61,6 @@ export async function POST(request: NextRequest) {
     }
 
     const adminClient = createAdminClient();
-    const { data: userData } = await adminClient.from('users').select('role').eq('id', user.id).single();
-
-    if (!userData || userData.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
 
     const body = await request.json();
     console.log('Received request:', { board_id: body.board_id, url: body.url, type: body.type });
@@ -77,6 +73,20 @@ export async function POST(request: NextRequest) {
         { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
         { status: 400 },
       );
+    }
+
+    // Board-scoped routes: admins OK on any board; non-admins only on their
+    // own personal boards. topic_search_id flow ensures an analysis board
+    // exists first and is admin-only (handled below).
+    if (parsed.data.board_id) {
+      const gate = await requireBoardAccess(parsed.data.board_id, user, adminClient);
+      if (!gate.ok) return gate.response;
+    } else {
+      // topic_search_id path — admin only
+      const { data: userData } = await adminClient.from('users').select('role').eq('id', user.id).single();
+      if (!userData || userData.role !== 'admin') {
+        return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+      }
     }
 
     let resolvedBoardId = parsed.data.board_id ?? null;
