@@ -37,6 +37,12 @@ export interface AuditSummary {
   status: string;
   created_at: string;
   scorecard: Record<string, unknown> | null;
+  /** Subset of the stored prospect_data we actually render in the rail.
+   *  `websiteContext.title` is the LLM-parsed business name (e.g.
+   *  "Kayser Fitness") — the reliable source for the row label. */
+  prospect_data?: {
+    websiteContext?: { title?: string | null } | null;
+  } | null;
 }
 
 interface AuditHistoryRailProps {
@@ -54,24 +60,62 @@ function extractDomain(url: string | null): string {
 }
 
 /**
- * Convert a website URL to a display label: the bare company name when we can
- * reasonably derive one, otherwise the hostname. `nike.com` → `Nike`,
- * `anderson-collaborative.com` → `Anderson collaborative`, a multi-segment
- * host like `shop.example.co.uk` falls back to `shop.example.co.uk` so we
- * don't pretend "Shop" is the brand.
+ * Turn a single word into Title Case.
  */
-function formatCompanyLabel(url: string | null): string {
-  const domain = extractDomain(url);
+function titleCase(s: string): string {
+  return s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/**
+ * Best-effort rendering of a scrape-friendly label from a business name the
+ * website provided (page `<title>`, og:site_name, etc.). Strips the usual
+ * "... | Home", "... - Personal Trainer", and trailing domain suffixes so the
+ * rail label stays short.
+ */
+function cleanExtractedTitle(raw: string): string {
+  let name = raw.trim();
+  if (!name) return '';
+  // Split on pipes/dashes/middots — the first chunk is almost always the brand.
+  const firstChunk = name.split(/\s*[|\u2022·—–\-]\s*/).filter(Boolean)[0];
+  if (firstChunk) name = firstChunk;
+  // Drop ".com/.co/.net" if the <title> tag weirdly included it.
+  name = name.replace(/\.(com|co|net|org|io|ai|app|shop)\b/gi, '').trim();
+  return name;
+}
+
+/**
+ * Label for a row. Preference order:
+ *   1. `websiteContext.title` (LLM-extracted business name, already properly
+ *      spaced — "Kayser Fitness", "Anderson Collaborative")
+ *   2. Hyphen/underscore split of the first domain label — "anderson-
+ *      collaborative.com" → "Anderson collaborative"
+ *   3. The hostname itself (fallback for multi-segment hosts we can't clean)
+ */
+function formatCompanyLabel(audit: AuditSummary): string {
+  const title = audit.prospect_data?.websiteContext?.title ?? null;
+  if (title && title.trim()) {
+    return cleanExtractedTitle(title);
+  }
+
+  const domain = extractDomain(audit.website_url);
   if (!domain) return 'Unknown';
-  // Single-label-before-TLD hosts (nike.com, foo-bar.co) get the label.
-  // Anything deeper keeps the full host so we don't misrepresent subdomains.
   const parts = domain.split('.');
   if (parts.length > 2) return domain;
   const [first] = parts;
   if (!first) return domain;
-  const cleaned = first.replace(/[-_]+/g, ' ').trim();
-  if (!cleaned) return domain;
-  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  if (/[-_]/.test(first)) {
+    // Hyphenated: split and title-case each word.
+    return titleCase(first.replace(/[-_]+/g, ' '));
+  }
+  // No separator — just capitalize the single token. Concatenated lowercase
+  // words like "malaikitchen" can't be reliably split without a dictionary;
+  // we rely on `websiteContext.title` to surface the real spaced name once
+  // the audit finishes scraping.
+  return first.charAt(0).toUpperCase() + first.slice(1);
 }
 
 /** Google favicon service — same source the mention picker uses. */
@@ -133,6 +177,12 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
               ...a,
               status: data.audit.status ?? a.status,
               scorecard: data.audit.scorecard ?? a.scorecard,
+              // Refresh prospect_data too — the rail label depends on
+              // `websiteContext.title`, which only lands after Step 1
+              // (website scrape) completes.
+              prospect_data:
+                (data.audit as { prospect_data?: AuditSummary['prospect_data'] }).prospect_data ??
+                a.prospect_data,
             });
           } catch {
             /* ignore transient poll errors */
@@ -160,7 +210,8 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return audits;
     const q = searchQuery.toLowerCase();
-    return audits.filter(a =>
+    return audits.filter((a) =>
+      formatCompanyLabel(a).toLowerCase().includes(q) ||
       extractDomain(a.website_url).toLowerCase().includes(q) ||
       a.tiktok_url?.toLowerCase().includes(q)
     );
@@ -307,7 +358,7 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
           const isSelected = selectedIds.has(audit.id);
           const isDeleting = deletingIds.has(audit.id);
           const isProcessing = audit.status === 'processing' || audit.status === 'pending';
-          const label = formatCompanyLabel(audit.website_url);
+          const label = formatCompanyLabel(audit);
           const icon = faviconUrl(audit.website_url, 32);
           const showFavicon = icon && !faviconErrors.has(audit.id);
 
