@@ -145,6 +145,16 @@ async function persistPlatformReportImages(
   }
 
   // Video thumbnails
+  // Count how many videos came back without a thumbnail — when this rate is
+  // high it's the leading cause of the "lots of black tiles in the feed"
+  // bug. Logged per-platform so we can see in Vercel logs which scraper
+  // is dropping images.
+  const videosWithoutThumb = report.videos.filter((v) => !v.thumbnailUrl).length;
+  if (videosWithoutThumb > 0) {
+    console.warn(
+      `[audit] ${report.platform}: ${videosWithoutThumb}/${report.videos.length} scraped videos had no thumbnail_url — they'll render as black tiles in the feed grid`,
+    );
+  }
   report.videos.forEach((video, i) => {
     if (!video.thumbnailUrl) return;
     jobs.push(

@@ -77,6 +77,14 @@ export interface CompetitorProfile {
   postingFrequency: string;
   recentVideos: ProspectVideo[];
   gemini_grades?: GeminiGrades;
+  /**
+   * True when we surfaced this competitor as a known brand but the scrape
+   * failed (website unreachable, no socials found, platform scrape 403'd).
+   * UI should show "Data unavailable" instead of 0-valued metrics so the
+   * report doesn't mislead clients into thinking the competitor has no
+   * engagement.
+   */
+  isStub?: boolean;
 }
 
 export type ScoreStatus = 'good' | 'warning' | 'poor';

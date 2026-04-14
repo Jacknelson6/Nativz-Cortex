@@ -1089,8 +1089,28 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           <div className="rounded-xl border border-nativz-border bg-surface p-6">
             <h3 className="text-base font-semibold text-text-primary mb-4">Competitors</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {competitors.map(comp => (
-                <div key={comp.username} className="rounded-lg border border-nativz-border bg-background p-4">
+              {competitors.map(comp => {
+                const emDash = <span className="text-text-muted">—</span>;
+                // Stub competitors = we surfaced the brand but couldn't scrape
+                // them (website 404, no socials, platform 403). Showing 0 for
+                // followers / engagement is misleading — em-dash + tooltip is
+                // honest.
+                const followersNode = comp.isStub
+                  ? emDash
+                  : formatNumber(comp.followers);
+                const engagementNode = comp.isStub
+                  ? emDash
+                  : comp.platform === 'facebook' && comp.engagementRate === 0
+                    ? <span className="text-text-muted" title="Meta blocks engagement counts on Facebook Reels scraping">—</span>
+                    : `${(comp.engagementRate * 100).toFixed(2)}%`;
+                const viewsNode = comp.isStub ? emDash : formatNumber(comp.avgViews);
+                const freqNode = comp.isStub ? emDash : comp.postingFrequency;
+                return (
+                <div
+                  key={comp.username}
+                  className={`rounded-lg border bg-background p-4 ${comp.isStub ? 'border-nativz-border/60 opacity-80' : 'border-nativz-border'}`}
+                  title={comp.isStub ? 'Scrape failed — we found this brand but couldn’t pull live stats' : undefined}
+                >
                   <div className="flex items-center gap-3 mb-3">
                     <AvatarWithFallback
                       src={comp.avatarUrl}
@@ -1098,27 +1118,31 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                       className="h-11 w-11 text-sm"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-text-primary truncate">{comp.displayName}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium text-text-primary truncate">{comp.displayName}</p>
+                        {comp.isStub && (
+                          <span className="shrink-0 rounded-full border border-nativz-border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-text-muted">
+                            Data unavailable
+                          </span>
+                        )}
+                      </div>
                       <a href={comp.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent-text hover:underline flex items-center gap-1 truncate">
                         @{String(comp.username).replace(/^@+/, '')} <ExternalLink size={10} className="shrink-0" />
                       </a>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div><span className="text-xs text-text-muted">Followers</span><p className="font-semibold text-text-primary">{formatNumber(comp.followers)}</p></div>
+                    <div><span className="text-xs text-text-muted">Followers</span><p className="font-semibold text-text-primary">{followersNode}</p></div>
                     <div>
                       <span className="text-xs text-text-muted">Engagement</span>
-                      <p className="font-semibold text-text-primary">
-                        {comp.platform === 'facebook' && comp.engagementRate === 0
-                          ? <span className="text-text-muted" title="Meta blocks engagement counts on Facebook Reels scraping">—</span>
-                          : `${(comp.engagementRate * 100).toFixed(2)}%`}
-                      </p>
+                      <p className="font-semibold text-text-primary">{engagementNode}</p>
                     </div>
-                    <div><span className="text-xs text-text-muted">Avg views</span><p className="font-semibold text-text-primary">{formatNumber(comp.avgViews)}</p></div>
-                    <div><span className="text-xs text-text-muted">Frequency</span><p className="font-semibold text-text-primary">{comp.postingFrequency}</p></div>
+                    <div><span className="text-xs text-text-muted">Avg views</span><p className="font-semibold text-text-primary">{viewsNode}</p></div>
+                    <div><span className="text-xs text-text-muted">Frequency</span><p className="font-semibold text-text-primary">{freqNode}</p></div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
