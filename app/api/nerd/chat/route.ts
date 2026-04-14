@@ -747,12 +747,17 @@ export async function POST(req: NextRequest) {
       guardrailInstruction = `\n\n---\n\nIMPORTANT INSTRUCTION: For this query, you MUST respond with exactly this message (do not deviate, do not add caveats):\n\n${guardrailResult.response}`;
     }
 
-    // Strategy Lab mode: append the research-grounded scripting workbench
-    // addendum + preloaded scripting skills from nerd_skills. Only runs when
-    // the caller explicitly opts in via `mode: 'strategy-lab'` — keeps the
-    // default admin Nerd behaviour untouched.
+    // Strategy Lab / Content Lab mode: append the research-grounded
+    // scripting workbench addendum + preloaded scripting skills from
+    // nerd_skills. Admins get the cross-client framing; portal users get
+    // a locked-to-their-one-client variant.
     const strategyLabAddendum =
-      mode === 'strategy-lab' && !isPortalUser ? await buildStrategyLabSystemAddendum(admin) : '';
+      mode === 'strategy-lab'
+        ? await buildStrategyLabSystemAddendum(admin, {
+            portalMode: isPortalUser,
+            clientName: isPortalUser ? portalClientName : undefined,
+          })
+        : '';
 
     const systemPrompt =
       basePrompt + skillsContext + dbSkillsContext + strategyLabAddendum + guardrailInstruction;

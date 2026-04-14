@@ -23,16 +23,27 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export const STRATEGY_LAB_ADDENDUM = `
-
----
-
-# STRATEGY LAB MODE — Research-grounded scripting workbench
-
-You are running inside the Strategy Lab with a specific client pinned and one or
+/**
+ * Intro paragraph for the admin Strategy Lab surface. Admin users may
+ * reason across clients when helpful, so the framing doesn't lock them
+ * to a single one.
+ */
+const ADMIN_INTRO = `You are running inside the Strategy Lab with a specific client pinned and one or
 more completed topic searches attached. Your job shifts from generalist
 strategist to **research-grounded short-form video script factory** for this
-client.
+client.`;
+
+/**
+ * Intro paragraph for the portal Content Lab surface. Portal users are
+ * strictly scoped to their own org-bound client — never reference any
+ * other client's work, strategy, or data.
+ */
+function portalIntro(clientName: string | undefined): string {
+  const who = clientName ? `${clientName}'s` : "this client's";
+  return `You are working inside ${who} portal Content Lab. You are scoped to this one client only — you have no visibility into any other client in the agency, and every reference in this session is about THIS client. Your job is **research-grounded short-form video script factory** for them.`;
+}
+
+const STRATEGY_LAB_ADDENDUM_BODY = `
 
 ## Ground-rules (non-negotiable)
 
@@ -290,10 +301,29 @@ async function loadScriptingSkillsBlock(admin: SupabaseClient): Promise<string> 
 }
 
 /**
- * Build the full Strategy Lab addendum (behavioural rules + preloaded
- * scripting skills) to append to the base Nerd system prompt.
+ * Build the full Strategy Lab / Content Lab addendum (behavioural rules +
+ * preloaded scripting skills) to append to the base Nerd system prompt.
+ *
+ * @param admin Supabase admin client, used to load scripting skills
+ * @param opts.portalMode When true, the intro framing locks the model to
+ *                        the user's one bound client and strips any
+ *                        cross-client reasoning language. Default: false.
+ * @param opts.clientName Used in the portal intro to name the client.
  */
-export async function buildStrategyLabSystemAddendum(admin: SupabaseClient): Promise<string> {
+export async function buildStrategyLabSystemAddendum(
+  admin: SupabaseClient,
+  opts?: { portalMode?: boolean; clientName?: string },
+): Promise<string> {
   const skillsBlock = await loadScriptingSkillsBlock(admin);
-  return STRATEGY_LAB_ADDENDUM + skillsBlock;
+  const intro = opts?.portalMode ? portalIntro(opts.clientName) : ADMIN_INTRO;
+  const heading = opts?.portalMode
+    ? '# CONTENT LAB — Research-grounded scripting workbench'
+    : '# STRATEGY LAB MODE — Research-grounded scripting workbench';
+  return `\n\n---\n\n${heading}\n\n${intro}\n${STRATEGY_LAB_ADDENDUM_BODY}${skillsBlock}`;
 }
+
+/**
+ * @deprecated Exported for backwards compatibility only. Use
+ * `buildStrategyLabSystemAddendum()` — it composes the intro + body.
+ */
+export const STRATEGY_LAB_ADDENDUM = `\n\n---\n\n# STRATEGY LAB MODE — Research-grounded scripting workbench\n\n${ADMIN_INTRO}\n${STRATEGY_LAB_ADDENDUM_BODY}`;
