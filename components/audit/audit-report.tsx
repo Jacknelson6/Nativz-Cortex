@@ -677,6 +677,34 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           <div className="text-center mb-4">
             <EncryptedText key={`stage-${stageIndex}`} text={PROCESSING_STAGES[stageIndex]} revealDelayMs={40} className="text-sm text-text-muted" />
           </div>
+          {/* List of exactly what we're analyzing — so the user can confirm
+              their submitted platforms + competitors are actually in the run.
+              Previously this screen was opaque; scraping could silently drop
+              manual entries and the user would only notice on the report. */}
+          {(() => {
+            const socials = (audit.social_urls as Record<string, string> | null) ?? {};
+            const platformList = Object.entries(socials)
+              .filter(([, v]) => !!v?.trim())
+              .map(([p]) => PLATFORM_LABELS[p as AuditPlatformKey] ?? p);
+            const competitorList =
+              ((audit.analysis_data as { competitor_urls_override?: string[] } | null)?.competitor_urls_override ?? [])
+                .map((u) => u.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, ''));
+            if (platformList.length === 0 && competitorList.length === 0) return null;
+            return (
+              <div className="mb-4 space-y-1 text-center">
+                {platformList.length > 0 && (
+                  <p className="text-[11px] text-text-muted/70">
+                    Platforms: {platformList.join(', ')}
+                  </p>
+                )}
+                {competitorList.length > 0 && (
+                  <p className="text-[11px] text-text-muted/70">
+                    Competitors: {competitorList.join(', ')}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
           <div className="h-1.5 rounded-full bg-surface-hover overflow-hidden">
             <div className="h-full rounded-full transition-all duration-300 ease-out" style={{ width: `${progress}%`, background: 'linear-gradient(90deg, var(--accent), var(--accent2))' }} />
           </div>

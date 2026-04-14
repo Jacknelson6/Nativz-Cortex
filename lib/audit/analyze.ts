@@ -16,114 +16,15 @@ import type {
   PlatformReport,
   ProspectProfile,
   SocialLink,
-  ScorecardItem,
-  CadenceDirection,
 } from './types';
-import {
-  aggregateContentQuality,
-  aggregateContentVariety,
-  aggregateHookConsistency,
-  computeCadenceTrend,
-  computePlatformFocus,
-} from './scorecard-helpers';
-import type { VideoAudit } from './analyze-videos';
-
-/** Per-brand Gemini grades, keyed by platform. */
-export type BrandVideoAudits = Partial<Record<PlatformReport['platform'], VideoAudit[]>>;
+import type { WebsiteScrapeResult } from './scrape-website';
 
 export interface ScorecardInputs {
   platformSummaries: PlatformReport[];
   competitors: CompetitorProfile[];
   websiteContext: { title: string; industry: string } | null;
-  prospectVideoAudits: BrandVideoAudits;
-  competitorVideoAudits: Record<string, BrandVideoAudits>; // keyed by competitor username
   socialGoals?: string[];
 }
-
-const LABELS: Record<string, string> = {
-  engagement_rate: 'Engagement rate',
-  avg_views: 'Avg views',
-  follower_to_view: 'Follower-to-view ratio',
-  posting_frequency: 'Posting frequency',
-  cadence_trend: 'Cadence trend',
-  content_variety: 'Content variety',
-  content_quality: 'Content quality',
-  hook_consistency: 'Hook consistency',
-  caption_optimization: 'Caption optimization',
-  hashtag_strategy: 'Hashtag strategy',
-  bio_optimization_account: 'Bio optimization',
-  cta_intent_account: 'CTA / conversion intent',
-  platform_focus_account: 'Platform focus',
-};
-
-function cadencePhrase(d: CadenceDirection): string {
-  if (d === 'up') return '↑ growing';
-  if (d === 'down') return '↓ losing momentum';
-  return '→ stable';
-}
-
-function writeDeterministicItems(inputs: ScorecardInputs): { items: ScorecardItem[]; deltas: Record<string, unknown> } {
-  const items: ScorecardItem[] = [];
-  const prospect = inputs.platformSummaries;
-
-  // Platform focus (account-level)
-  const focus = computePlatformFocus(prospect);
-  items.push({
-    category: 'platform_focus_account',
-    label: LABELS.platform_focus_account,
-    prospectStatus: focus.focus === 'focused' ? 'good' : 'warning',
-    prospectValue: focus.focus === 'focused' ? `${focus.primary}-focused` : 'Spread thin',
-    competitors: [],   // filled by LLM narration pass
-    description: '',
-  });
-
-  // Per-platform Gemini-derived grades
-  for (const platform of prospect) {
-    const audits = inputs.prospectVideoAudits[platform.platform] ?? [];
-    if (audits.length >= 3) {
-      const hc = aggregateHookConsistency(audits);
-      const cv = aggregateContentVariety(audits);
-      const cq = aggregateContentQuality(audits);
-      items.push({
-        category: 'hook_consistency',
-        label: `${LABELS.hook_consistency} · ${platform.platform}`,
-        prospectStatus: hc.status,
-        prospectValue: `${Math.round(hc.percentage * 100)}% consistent`,
-        competitors: [],
-        description: '',
-      });
-      items.push({
-        category: 'content_variety',
-        label: `${LABELS.content_variety} · ${platform.platform}`,
-        prospectStatus: cv.status,
-        prospectValue: `${cv.count} format${cv.count === 1 ? '' : 's'}`,
-        competitors: [],
-        description: '',
-      });
-      items.push({
-        category: 'content_quality',
-        label: `${LABELS.content_quality} · ${platform.platform}`,
-        prospectStatus: cq.status,
-        prospectValue: cq.avg >= 2.3 ? 'High' : cq.avg >= 1.7 ? 'Mixed' : 'Low',
-        competitors: [],
-        description: '',
-      });
-    }
-    // Cadence trend
-    const trend = computeCadenceTrend(platform.videos);
-    items.push({
-      category: 'cadence_trend',
-      label: `${LABELS.cadence_trend} · ${platform.platform}`,
-      prospectStatus: trend === 'up' ? 'good' : trend === 'flat' ? 'warning' : 'poor',
-      prospectValue: cadencePhrase(trend),
-      competitors: [],
-      description: '',
-    });
-  }
-
-  return { items, deltas: {} };
-}
-import type { WebsiteScrapeResult } from './scrape-website';
 
 // ── Extract website context via AI ──────────────────────────────────────
 
@@ -249,81 +150,109 @@ Return ONLY valid JSON: ["username1", "username2", "username3"]`;
 
 // ── Generate scorecard ──────────────────────────────────────────────────
 
+/**
+ * Generate a 6-card analysis scorecard — the simple shape the sales team
+ * wants on the report (Brand overview + Benchmarked against + 6 cards). The
+ * 13-category deterministic-pre-grading pipeline was retired; one LLM call
+ * produces all six items plus the executive summary.
+ *
+ * Cards (in order):
+ *   1. Posting frequency
+ *   2. Engagement rate
+ *   3. Average views
+ *   4. Hashtag strategy
+ *   5. Content variety
+ *   6. Bio optimization
+ */
 export async function generateScorecard(inputs: ScorecardInputs): Promise<AuditScorecard> {
-  const deterministic = writeDeterministicItems(inputs);
-
-  // LLM pass: grade remaining categories + write status_reason + narrate all items with competitor comparisons.
-  const prompt = `You are analyzing a prospect's short-form social presence vs up to 3 competitors for a marketing agency sales call.
-
-PROSPECT PLATFORMS:
-${JSON.stringify(inputs.platformSummaries.map((p) => ({
+  const platformSummaries = inputs.platformSummaries.map((p) => ({
     platform: p.platform,
-    profile: { username: p.profile.username, bio: p.profile.bio, followers: p.profile.followers },
+    username: p.profile.username,
+    bio: p.profile.bio,
+    followers: p.profile.followers,
     avgViews: p.avgViews,
     engagementRate: p.engagementRate,
     postingFrequency: p.postingFrequency,
     videoCount: p.videos.length,
-  })), null, 2)}
+    topHashtags: getTopHashtags(p.videos, 10),
+  }));
 
-COMPETITORS:
-${JSON.stringify(inputs.competitors.map((c) => ({
+  const competitorSummaries = inputs.competitors.map((c) => ({
     username: c.username,
     platform: c.platform,
     followers: c.followers,
     avgViews: c.avgViews,
     engagementRate: c.engagementRate,
     postingFrequency: c.postingFrequency,
-  })), null, 2)}
+  }));
 
-DETERMINISTIC ITEMS (already graded — you narrate competitor columns + write status_reason):
-${JSON.stringify(deterministic.items, null, 2)}
+  const goalsBlock =
+    inputs.socialGoals && inputs.socialGoals.length > 0
+      ? `\nPROSPECT'S STATED SOCIAL GOALS (weight analysis toward these):\n${inputs.socialGoals
+          .map((g) => `- ${g}`)
+          .join('\n')}\n`
+      : '';
+
+  const prompt = `You are an expert social media auditor. Create a competitive analysis scorecard comparing the prospect against their direct competitors for a marketing agency sales call.
+
+PROSPECT PLATFORMS:
+${JSON.stringify(platformSummaries, null, 2)}
+
+COMPETITORS:
+${JSON.stringify(competitorSummaries, null, 2)}
 
 ${inputs.websiteContext ? `BUSINESS: ${inputs.websiteContext.title} — ${inputs.websiteContext.industry}` : ''}
+${goalsBlock}
 
-${inputs.socialGoals && inputs.socialGoals.length > 0 ? `
-THE PROSPECT'S STATED SOCIAL GOALS (PRIORITY):
-${inputs.socialGoals.map(g => `- ${g}`).join('\n')}
+Produce EXACTLY 6 scorecard items in this order:
+  1. posting_frequency — "Posting frequency" — how consistently the prospect posts short-form video.
+  2. engagement_rate — "Engagement rate" — likes+comments+shares vs. followers on recent posts.
+  3. avg_views — "Average views" — typical view count per post.
+  4. hashtag_strategy — "Hashtag strategy" — mix/quality of branded, trending, and niche hashtags.
+  5. content_variety — "Content variety" — range of formats and topics.
+  6. bio_optimization — "Bio optimization" — clarity of bio, CTA, and links.
 
-Your analysis MUST centre these goals. Specifically:
-- Executive summary: lead with whether the prospect's current performance supports or undermines these goals.
-- status_reason for each item: if the item directly drives a stated goal and the prospect is poor, call it out as a critical blocker. If the item is good and reinforces a goal, celebrate it in one sentence.
-- Competitor comparisons: emphasise metrics tied to the goals (e.g. if "Go viral and maximize engagement", engagement rate comparisons matter more than bio optimization).
+For each item:
+- prospectStatus: "good" | "warning" | "poor"
+- prospectValue: short phrase (e.g. "2.1% ER", "4.3 posts/week", "Thin — one format")
+- competitors: up to 3 entries [{ username, status, value }]
+- status_reason: one sentence (≤14 words) explaining WHY the prospect is at this status, ideally referencing a competitor.
+- description: one neutral sentence explaining what the category measures.
 
-Example: if goal is "Go viral and maximize engagement" and engagement rate is poor, write something like "2.1% engagement blocks virality — Dough Co hits 5.8% with consistent hook patterns you're missing."` : ''}
-
-GRADE THESE ADDITIONAL CATEGORIES (one item each) using the schema below:
-- engagement_rate, avg_views, follower_to_view, posting_frequency (per-platform — emit one item per platform)
-- caption_optimization, hashtag_strategy (per-platform — hashtag is binary: "good" if hashtags used, else "poor")
-- bio_optimization_account, cta_intent_account (account-level — one item each)
-
-For EVERY item (deterministic + your new ones), fill in:
-- competitors: [{username, status: "good"|"warning"|"poor", value: short string}]
-- status_reason: one short sentence (≤14 words) explaining WHY the prospect is at this status. Example: "Posts 1.2×/week, Dough Co. posts 5.3×/week." Avoid words like "dying" — prefer "losing momentum".
-- description: one neutral sentence explaining what the category means.
-
-Return ONLY JSON matching:
+Return ONLY JSON:
 {
   "overallScore": 0-100,
-  "items": [/* all items, deterministic + your new ones */],
+  "items": [
+    { "category": "posting_frequency", "label": "Posting frequency", "prospectStatus": "...", "prospectValue": "...", "competitors": [...], "status_reason": "...", "description": "..." },
+    ...
+  ],
   "summary": "2-sentence executive summary"
 }`;
 
   const result = await createCompletion({
     messages: [{ role: 'user', content: prompt }],
-    maxTokens: 6000,
+    maxTokens: 4000,
     feature: 'audit_scorecard',
     jsonMode: true,
-    timeoutMs: 90000,
+    timeoutMs: 60000,
   });
 
   try {
     const parsed = parseAIResponseJSON<AuditScorecard>(result.text);
-    if (!parsed || !Array.isArray(parsed.items)) {
-      return { overallScore: 0, items: deterministic.items, summary: 'Analysis could not be completed.' };
+    if (!parsed || !Array.isArray(parsed.items) || parsed.items.length === 0) {
+      return {
+        overallScore: 0,
+        items: [],
+        summary: 'Analysis could not be completed.',
+      };
     }
     return parsed;
   } catch {
-    return { overallScore: 0, items: deterministic.items, summary: 'Analysis could not be completed.' };
+    return {
+      overallScore: 0,
+      items: [],
+      summary: 'Analysis could not be completed.',
+    };
   }
 }
 

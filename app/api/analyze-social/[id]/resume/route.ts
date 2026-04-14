@@ -54,9 +54,16 @@ export async function POST(
     const existingAnalysisData = (existing?.analysis_data as Record<string, unknown> | null) ?? {};
     const competitorUrlsOverride = parsed.data.competitor_urls?.filter(Boolean) ?? [];
     const socialGoals = parsed.data.social_goals?.filter(Boolean) ?? [];
+
+    // Always set the override field — if the user submitted competitors it
+    // gets the new list, if they cleared them it becomes an empty array.
+    // Previously the resume route only wrote the field when non-empty, so
+    // removing competitors from a re-submitted audit didn't actually remove
+    // them — process route kept reading the old override and re-scraping
+    // stale URLs.
     const analysisData: Record<string, unknown> = {
       ...existingAnalysisData,
-      ...(competitorUrlsOverride.length > 0 ? { competitor_urls_override: competitorUrlsOverride } : {}),
+      competitor_urls_override: competitorUrlsOverride,
       ...(socialGoals.length > 0 ? { social_goals: socialGoals } : {}),
     };
 

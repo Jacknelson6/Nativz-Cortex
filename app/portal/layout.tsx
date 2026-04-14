@@ -7,6 +7,7 @@ import { AdminSidebar } from '@/components/layout/admin-sidebar';
 import { AdminHeader } from '@/components/layout/admin-header';
 import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
 import { ImpersonationBanner } from '@/components/portal/impersonation-banner';
+import { AdminInPortalGuard } from '@/components/portal/admin-in-portal-guard';
 import { BrandModeProvider } from '@/components/layout/brand-mode-provider';
 import type { FeatureFlags } from '@/lib/portal/get-portal-client';
 import { buildPortalFeatureFlags } from '@/lib/portal/feature-flags';
@@ -25,7 +26,7 @@ const getCachedPortalUser = unstable_cache(
     const adminClient = createAdminClient();
     const { data: userData } = await adminClient
       .from('users')
-      .select('full_name, avatar_url, organization_id')
+      .select('full_name, avatar_url, organization_id, role')
       .eq('id', userId)
       .single();
     if (!userData) return null;
@@ -51,6 +52,7 @@ const getCachedPortalUser = unstable_cache(
         avatarUrl: userData.avatar_url as string | null,
         featureFlags,
         agency,
+        role: (userData.role as string | null) ?? null,
       };
     }
 
@@ -59,6 +61,7 @@ const getCachedPortalUser = unstable_cache(
       avatarUrl: userData.avatar_url as string | null,
       featureFlags,
       agency: null,
+      role: (userData.role as string | null) ?? null,
     };
   },
   ['portal-layout-user'],
@@ -173,9 +176,14 @@ export default async function PortalLayout({
   const forcedBrandMode: 'anderson' | 'nativz' =
     domainAgency === 'anderson' ? 'anderson' : 'nativz';
 
+  // Admin viewing portal gets a safety net — one-time modal + persistent
+  // "back to admin" pill. Viewers see nothing.
+  const isAdminInPortal = cached?.role === 'admin';
+
   return (
     <BrandModeProvider forcedMode={forcedBrandMode}>
       <ImpersonationBanner />
+      <AdminInPortalGuard isAdmin={isAdminInPortal} />
       <SidebarProvider>
         <AdminSidebar
           userName={userName}

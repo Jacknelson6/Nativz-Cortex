@@ -469,6 +469,32 @@ export async function scrapeProvidedCompetitors(
   for (const url of urls) {
     if (competitors.length >= DEFAULT_TARGET_COMPETITORS) break;
 
+    // Users paste social URLs (instagram.com/handle, tiktok.com/@handle, etc.)
+    // more often than company websites. If the URL is a direct social profile,
+    // skip the website hop and scrape the social platform directly — matches
+    // what the confirm-platforms UI accepts for the prospect.
+    const directSocial = detectSocialFromUrl(url);
+    if (directSocial) {
+      try {
+        const { profile, videos } = await scrapeSocialForCompetitor({
+          platform: directSocial.platform,
+          username: directSocial.username,
+          url,
+        });
+        console.log(
+          `[audit] competitor (provided) via ${directSocial.platform}: ${profile.username} — ${profile.followers} followers, ${videos.length} videos`,
+        );
+        competitors.push(buildCompetitorProfile(profile, videos));
+        continue;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log(`[audit] competitor (provided) ${directSocial.platform} scrape failed for ${url}: ${msg}`);
+        failures.push({ name: url, website: url, reason: `${directSocial.platform} scrape failed: ${msg}` });
+        continue;
+      }
+    }
+
+    // Otherwise treat it as a website — same path as LLM-suggested candidates.
     const candidate = { name: url, website: url };
     const result = await scrapeOneCandidate(candidate, targetPlatforms, discoveryStartMs);
     if (result.type === 'success') {
@@ -479,6 +505,40 @@ export async function scrapeProvidedCompetitors(
   }
 
   return { competitors, failures };
+}
+
+/**
+ * Best-effort detection of a direct social URL. Returns null for websites.
+ * Intentionally conservative — we only match when we're sure what platform
+ * it is, so ambiguous inputs fall through to the website-scrape path.
+ */
+function detectSocialFromUrl(raw: string): { platform: AuditPlatform; username: string } | null {
+  try {
+    const u = new URL(raw.trim());
+    const host = u.hostname.replace(/^www\./i, '').toLowerCase();
+    const firstSeg = u.pathname.split('/').filter(Boolean)[0] ?? '';
+    const username = firstSeg.replace(/^@+/, '');
+    if (!username) return null;
+    if (host === 'tiktok.com' || host.endsWith('.tiktok.com')) {
+      return { platform: 'tiktok', username };
+    }
+    if (host === 'instagram.com' || host.endsWith('.instagram.com')) {
+      return { platform: 'instagram', username };
+    }
+    if (
+      host === 'facebook.com' ||
+      host === 'fb.com' ||
+      host.endsWith('.facebook.com')
+    ) {
+      return { platform: 'facebook', username };
+    }
+    if (host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtu.be') {
+      return { platform: 'youtube', username };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**

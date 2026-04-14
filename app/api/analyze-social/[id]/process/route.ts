@@ -12,17 +12,22 @@ import {
   generateScorecard,
 } from '@/lib/audit/analyze';
 import { discoverCompetitorsByWebsite, scrapeProvidedCompetitors } from '@/lib/audit/discover-competitors';
-import { analyzeVideosForBrand } from '@/lib/audit/analyze-videos';
 import type { PlatformReport, CompetitorProfile, WebsiteContext, SocialLink, AuditPlatform, FailedPlatform } from '@/lib/audit/types';
-import type { BrandVideoAudits } from '@/lib/audit/analyze';
 import { persistAllScrapedImages, persistAllCompetitorImages } from '@/lib/audit/persist-scraped-images';
-import {
-  aggregateHookConsistency,
-  aggregateContentVariety,
-  aggregateContentQuality,
-} from '@/lib/audit/scorecard-helpers';
 
 export const maxDuration = 300;
+
+/**
+ * Platforms we can actually scrape today. Anything else the user adds gets
+ * surfaced on the report as "no scraper yet" rather than silently dropped.
+ * Add a platform to this set the moment its scraper + `switch` case land.
+ */
+const SUPPORTED_SCRAPE_PLATFORMS = new Set<AuditPlatform>([
+  'tiktok',
+  'instagram',
+  'facebook',
+  'youtube',
+]);
 
 /**
  * POST /api/analyze-social/[id]/process — Run the full audit pipeline
@@ -31,25 +36,9 @@ export const maxDuration = 300;
  * 1. Scrape the prospect's website → extract business context + social links
  * 2a. Scrape each social platform in parallel (TikTok, Instagram, etc.)
  * 2b. Competitor discovery + scraping — runs in parallel with 2a
- * 3. Gemini per-video grading for prospect + competitors (concurrency 3)
- * 4. AI generates scorecard (consumes Gemini grades)
- * 5. Store results; image persistence fires via after() off critical path
+ * 3. AI generates the 6-card scorecard
+ * 4. Store results; image persistence fires via after() off critical path
  */
-
-/** Run `tasks` with at most `limit` concurrent workers. */
-async function runWithConcurrency<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[]> {
-  const results: T[] = new Array(tasks.length);
-  let cursor = 0;
-  async function worker() {
-    while (cursor < tasks.length) {
-      const i = cursor++;
-      results[i] = await tasks[i]();
-    }
-  }
-  const workers = Array.from({ length: Math.min(limit, tasks.length) }, worker);
-  await Promise.all(workers);
-  return results;
-}
 
 export async function POST(
   _request: NextRequest,
@@ -112,35 +101,54 @@ export async function POST(
         }
       }
 
-      // Merge manually-provided social URLs with detected ones
+      // Scrape every platform the user has given us a URL for — detected from
+      // the website OR typed in manually on the confirm-platforms screen. The
+      // prior version hardcoded ['tiktok','instagram','facebook','youtube'] on
+      // the detection side and silently dropped anything else, so a user who
+      // pasted a LinkedIn URL saw it disappear. Now: any key in social_urls is
+      // accepted; unsupported platforms (no scraper yet) surface a clear
+      // failure message on the report instead of vanishing.
       const manualPlatforms = (audit.social_urls as Record<string, string> | null) ?? {};
       const platformsToScrape: { platform: AuditPlatform; url: string }[] = [];
+      const unsupportedPlatforms: FailedPlatform[] = [];
 
-      // Add detected social links for all supported platforms
-      for (const link of detectedLinks) {
-        // Facebook ER will come back 0/N/A (Meta blocks engagement data on Reels)
-        // but we still include it so the profile is visible in the report.
-        if (['tiktok', 'instagram', 'facebook', 'youtube'].includes(link.platform)) {
-          platformsToScrape.push({ platform: link.platform, url: link.url });
+      const pushOrReplace = (platform: AuditPlatform, url: string) => {
+        if (!url) return;
+        if (!SUPPORTED_SCRAPE_PLATFORMS.has(platform)) {
+          if (!unsupportedPlatforms.some((p) => p.platform === platform)) {
+            unsupportedPlatforms.push({
+              platform,
+              url,
+              error: `No scraper for ${platform} yet — we'll show this profile once support lands.`,
+            });
+          }
+          return;
         }
-      }
-
-      // Add manual overrides (take priority)
-      for (const [platform, url] of Object.entries(manualPlatforms)) {
-        if (!url) continue;
-        const existing = platformsToScrape.findIndex(p => p.platform === platform);
+        const existing = platformsToScrape.findIndex((p) => p.platform === platform);
         if (existing >= 0) platformsToScrape[existing].url = url;
-        else platformsToScrape.push({ platform: platform as AuditPlatform, url });
+        else platformsToScrape.push({ platform, url });
+      };
+
+      // Detected from the website — baseline set
+      for (const link of detectedLinks) {
+        pushOrReplace(link.platform, link.url);
       }
 
-      // Also check if tiktok_url was provided directly (legacy field)
-      if (audit.tiktok_url && !platformsToScrape.some(p => p.platform === 'tiktok')) {
-        platformsToScrape.push({ platform: 'tiktok', url: audit.tiktok_url });
+      // Manual overrides win when both are present
+      for (const [platform, url] of Object.entries(manualPlatforms)) {
+        pushOrReplace(platform as AuditPlatform, url);
       }
 
-      // If no social profiles found anywhere, pause and ask user for input
+      // Legacy direct-TikTok column, for audits created before social_urls existed
+      if (audit.tiktok_url) {
+        pushOrReplace('tiktok', audit.tiktok_url);
+      }
+
+      // If no SCRAPEABLE profiles were found (detected or typed), pause and
+      // ask the user to provide URLs. Unsupported-platform entries alone
+      // don't count — we can't do anything with them yet.
       if (platformsToScrape.length === 0) {
-        console.log(`[audit:${id}] No social profiles found — requesting manual input`);
+        console.log(`[audit:${id}] No scrapeable social profiles found — requesting manual input`);
         await adminClient
           .from('prospect_audits')
           .update({
@@ -149,6 +157,7 @@ export async function POST(
               websiteContext,
               platforms: [],
               detectedSocialLinks: detectedLinks,
+              failedPlatforms: unsupportedPlatforms,
             },
             updated_at: new Date().toISOString(),
           })
@@ -205,9 +214,12 @@ export async function POST(
         }),
       ]);
 
-      // Collate prospect platform results
+      // Collate prospect platform results. Unsupported-platform entries
+      // (LinkedIn, etc.) are already in `unsupportedPlatforms`; merge them
+      // in so the report shows "no scraper yet" instead of pretending the
+      // user's URL was never submitted.
       const platformReports: PlatformReport[] = [];
-      const failedPlatforms: FailedPlatform[] = [];
+      const failedPlatforms: FailedPlatform[] = [...unsupportedPlatforms];
 
       for (let i = 0; i < prospectScrapeResults.length; i++) {
         const result = prospectScrapeResults[i];
@@ -251,71 +263,16 @@ export async function POST(
         }
       });
 
-      // Step 3: Gemini per-video grading — prospect + competitors (concurrency 3)
-      console.log(`[audit:${id}] Step 3: Gemini video grading...`);
-
-      // Build per-platform video map for prospect
-      const prospectVideosByPlatform = Object.fromEntries(
-        platformReports.map((p) => [p.platform, p.videos])
-      ) as Parameters<typeof analyzeVideosForBrand>[0];
-
-      // Grade prospect + each competitor concurrently (up to 3 competitors in parallel)
-      // Prospect and competitors grade in parallel, not sequentially
-      const [prospectVideoAudits, competitorAuditResults] = await Promise.all([
-        analyzeVideosForBrand(prospectVideosByPlatform),
-        runWithConcurrency(
-          competitors.map((comp) => async () => {
-            const videosByPlatform = { [comp.platform]: comp.recentVideos } as Parameters<typeof analyzeVideosForBrand>[0];
-            const grades = await analyzeVideosForBrand(videosByPlatform);
-            return { username: comp.username, grades };
-          }),
-          3,
-        ),
-      ]);
-
-      // Build competitorVideoAudits keyed by username
-      const competitorVideoAudits: Record<string, BrandVideoAudits> = {};
-      for (const result of competitorAuditResults) {
-        if (result) {
-          competitorVideoAudits[result.username] = result.grades;
-        }
-      }
-
-      console.log(`[audit:${id}] Gemini grading complete: prospect=${Object.keys(prospectVideoAudits).length} platforms, competitors=${Object.keys(competitorVideoAudits).length}`);
-
-      // Attach gemini_grades to each PlatformReport
-      for (const p of platformReports) {
-        const audits = prospectVideoAudits[p.platform] ?? [];
-        if (audits.length >= 3) {
-          p.gemini_grades = {
-            hook_consistency: aggregateHookConsistency(audits),
-            content_variety: aggregateContentVariety(audits),
-            content_quality: aggregateContentQuality(audits),
-          };
-        }
-      }
-
-      // Attach gemini_grades to each CompetitorProfile
-      for (const comp of competitors) {
-        const perPlatform = competitorVideoAudits[comp.username]?.[comp.platform] ?? [];
-        if (perPlatform.length >= 3) {
-          comp.gemini_grades = {
-            hook_consistency: aggregateHookConsistency(perPlatform),
-            content_variety: aggregateContentVariety(perPlatform),
-            content_quality: aggregateContentQuality(perPlatform),
-          };
-        }
-      }
-
-      // Step 4: Generate scorecard with Gemini grades wired in
-      console.log(`[audit:${id}] Step 4: Generating scorecard...`);
+      // Step 3: Generate the 6-card scorecard. The old Gemini per-video
+      // pre-grading pipeline was retired along with the 13-category scorecard
+      // — we're back to a single LLM pass that compares the prospect vs.
+      // competitors on six high-leverage categories.
+      console.log(`[audit:${id}] Step 3: Generating scorecard...`);
       const socialGoals = (audit.analysis_data as any)?.social_goals as string[] | undefined;
       const scorecard = await generateScorecard({
         platformSummaries: platformReports,
         competitors,
         websiteContext,
-        prospectVideoAudits,
-        competitorVideoAudits,
         socialGoals,
       });
 
