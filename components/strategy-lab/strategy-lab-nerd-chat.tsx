@@ -379,15 +379,19 @@ export function StrategyLabNerdChat({
 
   const handleSend = useCallback(
     async (text?: string) => {
-      let content = (text ?? input).trim();
-      if (!content || streaming) return;
+      const originalContent = (text ?? input).trim();
+      if (!originalContent || streaming) return;
+      // displayContent = what the user's chat bubble shows (their own input).
+      // content = what actually gets sent to the AI (may be template-expanded).
+      let displayContent = originalContent;
+      let content = originalContent;
 
       // ── User-installed skill commands (/<slug>) ──────────────────────
       // If the message starts with a slash matching a skill-sourced
       // command, expand it locally using the skill's content + template
-      // before sending to the AI. Built-in slash commands keep their
-      // existing server-side / hardcoded expansion path.
-      const skillMatch = content.match(/^\/([a-z][a-z0-9-]{1,39})\b\s*(.*)$/i);
+      // before sending to the AI. The bubble keeps the original "/cold-email
+      // John at Acme" so the user doesn't see a wall of expanded template.
+      const skillMatch = originalContent.match(/^\/([a-z][a-z0-9-]{1,39})\b\s*(.*)$/i);
       if (skillMatch) {
         const [, slug, skillArgs] = skillMatch;
         const skillCmd = unifiedCommands.find(
@@ -408,7 +412,7 @@ export function StrategyLabNerdChat({
         const userMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'user',
-          content,
+          content: displayContent,
           createdAt: Date.now(),
         };
         const promptMsg: ChatMessage = {
@@ -427,7 +431,7 @@ export function StrategyLabNerdChat({
           const userMsg: ChatMessage = {
             id: crypto.randomUUID(),
             role: 'user',
-            content,
+            content: displayContent,
             createdAt: Date.now(),
           };
           const retryMsg: ChatMessage = {
@@ -443,6 +447,8 @@ export function StrategyLabNerdChat({
         setPendingIdeaCount(false);
         // Rewrite the input so slash-command expansion downstream handles
         // clamping + the full prompt consistently with a direct `/idea 20`.
+        // Display stays as "20" (or whatever the user typed) so their bubble
+        // reads naturally as an answer to the prior question.
         content = `/idea ${match[0]}`;
       }
       // ──────────────────────────────────────────────────────────────────
@@ -456,7 +462,7 @@ export function StrategyLabNerdChat({
       const hint = sessionHintRef.current;
       sessionHintRef.current = null;
 
-      const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content, createdAt: Date.now() };
+      const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: displayContent, createdAt: Date.now() };
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -472,7 +478,13 @@ export function StrategyLabNerdChat({
       abortRef.current = controller;
 
       try {
+        // For skill commands, the bubble shows the original "/slug args"
+        // text but the AI needs the expanded template. Rewrite the last
+        // message in chatHistory if displayContent and content differ.
         const chatHistory = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
+        if (content !== displayContent && chatHistory.length > 0) {
+          chatHistory[chatHistory.length - 1] = { role: 'user', content };
+        }
 
         // Process any pending file attachments (PDF text extraction, image encoding)
         const rawAtts = pendingAttachmentsRef.current;
