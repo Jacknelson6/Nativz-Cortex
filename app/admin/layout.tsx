@@ -5,6 +5,7 @@ import { unstable_cache } from 'next/cache';
 /** Avoid static prerender during `next build` when Preview env omits Supabase vars. */
 export const dynamic = 'force-dynamic';
 import { AdminSidebar } from '@/components/layout/admin-sidebar';
+import { AdminSettingsSidebar } from '@/components/layout/admin-settings-sidebar';
 import { AdminHeader } from '@/components/layout/admin-header';
 import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
 import { EasterEgg } from '@/components/easter-egg';
@@ -57,6 +58,7 @@ export default async function AdminLayout({
           <EasterEgg />
           <CommandPalette />
           <AdminSidebar userName={userName} avatarUrl={avatarUrl} />
+          <AdminSettingsSidebar />
           <SidebarInset>
             <AdminHeader />
             <PageTransition>{children}</PageTransition>

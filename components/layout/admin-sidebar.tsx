@@ -6,27 +6,25 @@ import Image from 'next/image';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
-  Building2,
-  Telescope,
+  Search,
   BarChart3,
   CheckSquare,
   Send,
   Workflow,
   BotMessageSquare,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Contact,
   ImagePlus,
   StickyNote,
-  Brain,
   Scissors,
   ThumbsUp,
   Megaphone,
   Camera,
   Compass,
-  Users,
   ClipboardCheck,
   Settings as SettingsIcon,
-  Cpu,
-  Code,
   Calendar,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
@@ -74,7 +72,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Intelligence',
     items: [
-      { href: '/admin/search/new', label: 'Topic Search', icon: Telescope },
+      { href: '/admin/search/new', label: 'Topic Search', icon: Search },
       { href: '/admin/analyze-social', label: 'Analyze Social', icon: ClipboardCheck },
     ],
   },
@@ -89,6 +87,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Manage',
     items: [
+      { href: '/admin/clients', label: 'Clients', icon: Contact },
       {
         href: '/admin/pipeline',
         label: 'Edits',
@@ -107,18 +106,7 @@ const NAV_SECTIONS: NavSection[] = [
         ],
       },
       { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
-      {
-        href: '/admin/settings',
-        label: 'Settings',
-        icon: SettingsIcon,
-        children: [
-          { href: '/admin/clients', label: 'Clients', icon: Building2 },
-          { href: '/admin/users', label: 'Users', icon: Users },
-          { href: '/admin/knowledge', label: 'Brain', icon: Brain },
-          { href: '/admin/settings/usage', label: 'AI Settings', icon: Cpu },
-          { href: '/admin/nerd/api', label: 'API docs', icon: Code },
-        ],
-      },
+      { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
     ],
   },
 ];
@@ -262,7 +250,7 @@ export function AdminSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { open } = useSidebar();
+  const { open, toggleSidebar } = useSidebar();
   const { mode, toggleMode, isForced } = useBrandMode();
   const [showHiTooltip, setShowHiTooltip] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
@@ -338,7 +326,7 @@ export function AdminSidebar({
         {getNavSectionsForRole(role, routePrefix).map((section, idx) => (
           <SidebarGroup key={section.label}>
             {open && (
-              <span className="px-2.5 pb-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
+              <span className="px-2.5 pb-1 text-[13px] font-semibold uppercase tracking-wide text-text-muted">
                 {section.label}
               </span>
             )}
@@ -380,13 +368,13 @@ export function AdminSidebar({
                                 <li key={child.href}>
                                   <Link
                                     href={child.href}
-                                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors ${
                                       cActive
                                         ? 'text-accent-text bg-accent-surface'
                                         : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
                                     }`}
                                   >
-                                    <child.icon size={14} className="shrink-0" />
+                                    <child.icon size={16} className="shrink-0" />
                                     <span className="truncate">{child.label}</span>
                                   </Link>
                                 </li>
@@ -483,6 +471,20 @@ export function AdminSidebar({
           logoutRedirect={logoutPath}
           collapsed={!open}
         />
+
+        {/* Collapse toggle — visible whether open or collapsed */}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
+          title={open ? 'Collapse sidebar (⌘B)' : 'Expand sidebar (⌘B)'}
+          className={`mt-2 flex items-center rounded-lg text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors cursor-pointer ${
+            open ? 'w-full gap-2 px-2.5 py-1.5 text-[13px] font-medium' : 'justify-center w-full py-2'
+          }`}
+        >
+          {open ? <ChevronsLeft size={16} /> : <ChevronsRight size={16} />}
+          {open && <span>Collapse</span>}
+        </button>
 
       </SidebarFooter>
     </Sidebar>

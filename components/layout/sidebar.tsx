@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 // Constants
 // ---------------------------------------------------------------------------
 
-const SIDEBAR_WIDTH = '14rem';        // 224px
+const SIDEBAR_WIDTH = '15rem';        // 240px
 const SIDEBAR_WIDTH_ICON = '3.5rem';  // 56px
 const SIDEBAR_WIDTH_MOBILE = '18rem';
 const STORAGE_KEY = 'cortex:sidebar-collapsed';
@@ -37,6 +37,8 @@ interface SidebarContextValue {
   openMobile: boolean;
   setOpenMobile: (open: boolean) => void;
   toggleSidebar: () => void;
+  forceCollapsed: boolean;
+  setForceCollapsed: (value: boolean) => void;
 }
 
 const SidebarContext = createContext<SidebarContextValue>({
@@ -46,6 +48,8 @@ const SidebarContext = createContext<SidebarContextValue>({
   openMobile: false,
   setOpenMobile: () => {},
   toggleSidebar: () => {},
+  forceCollapsed: false,
+  setForceCollapsed: () => {},
 });
 
 export function useSidebar() {
@@ -62,26 +66,34 @@ interface SidebarProviderProps {
 }
 
 export function SidebarProvider({ defaultOpen = true, children }: SidebarProviderProps) {
-  const [open, setOpenState] = useState(defaultOpen);
+  const [storedOpen, setStoredOpen] = useState(defaultOpen);
   const [openMobile, setOpenMobile] = useState(false);
+  const [forceCollapsed, setForceCollapsedState] = useState(false);
   const pathname = usePathname();
 
   // Hydrate from localStorage
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored === 'false') setOpenState(false);
+      if (stored === 'false') setStoredOpen(false);
     } catch {}
   }, []);
 
   const setOpen = useCallback((value: boolean) => {
-    setOpenState(value);
+    setStoredOpen(value);
+    setForceCollapsedState(false); // user intent overrides forced collapse
     try { localStorage.setItem(STORAGE_KEY, String(value)); } catch {}
   }, []);
 
+  const setForceCollapsed = useCallback((value: boolean) => {
+    setForceCollapsedState(value);
+  }, []);
+
+  const effectiveOpen = storedOpen && !forceCollapsed;
+
   const toggleSidebar = useCallback(() => {
-    setOpen(!open);
-  }, [open, setOpen]);
+    setOpen(!effectiveOpen);
+  }, [effectiveOpen, setOpen]);
 
   // Close mobile on route change
   useEffect(() => {
@@ -100,10 +112,10 @@ export function SidebarProvider({ defaultOpen = true, children }: SidebarProvide
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [toggleSidebar]);
 
-  const state: SidebarState = open ? 'expanded' : 'collapsed';
+  const state: SidebarState = effectiveOpen ? 'expanded' : 'collapsed';
 
   return (
-    <SidebarContext.Provider value={{ state, open, setOpen, openMobile, setOpenMobile, toggleSidebar }}>
+    <SidebarContext.Provider value={{ state, open: effectiveOpen, setOpen, openMobile, setOpenMobile, toggleSidebar, forceCollapsed, setForceCollapsed }}>
       <div
         className="flex h-screen w-full overflow-hidden"
         style={{
@@ -212,7 +224,7 @@ export function SidebarGroupLabel({ children, className = '' }: { children: Reac
   if (!open) return null;
 
   return (
-    <div className={`px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-text-muted ${className}`}>
+    <div className={`px-2 py-1.5 text-[13px] font-semibold uppercase tracking-wider text-text-muted ${className}`}>
       {children}
     </div>
   );
@@ -264,7 +276,7 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
         ref={ref}
         data-active={isActive ? true : undefined}
         suppressHydrationWarning
-        className={`relative flex w-full items-center rounded-lg text-sm transition-[color,background-color,border-color,box-shadow] duration-150 min-h-[40px] cursor-pointer ${layout} ${shellStyles} ${className}`}
+        className={`relative flex w-full items-center rounded-lg text-[15px] transition-[color,background-color,border-color,box-shadow] duration-150 min-h-[40px] cursor-pointer ${layout} ${shellStyles} ${className}`}
         onMouseEnter={() => !open && setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         {...props}
