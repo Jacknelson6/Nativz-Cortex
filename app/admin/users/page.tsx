@@ -46,7 +46,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'viewer' | 'team'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'team' | 'viewer'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -113,9 +113,9 @@ export default function UsersPage() {
 
   const filtered = useMemo(() => {
     let list = users;
-    if (roleFilter === 'admin') list = list.filter((u) => u.role === 'admin');
+    // Admins and team members are synonymous — the Team filter shows both
+    if (roleFilter === 'team') list = list.filter((u) => u.role === 'admin' || u.is_team_member);
     else if (roleFilter === 'viewer') list = list.filter((u) => u.role === 'viewer');
-    else if (roleFilter === 'team') list = list.filter((u) => u.is_team_member);
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter((u) =>
@@ -144,9 +144,8 @@ export default function UsersPage() {
     return list;
   }, [users, roleFilter, searchQuery, sortField, sortDir]);
 
-  const adminCount = users.filter((u) => u.role === 'admin').length;
   const viewerCount = users.filter((u) => u.role === 'viewer').length;
-  const teamCount = users.filter((u) => u.is_team_member).length;
+  const teamCount = users.filter((u) => u.role === 'admin' || u.is_team_member).length;
 
   if (isSuperAdmin === null) {
     return (
@@ -157,7 +156,7 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="cortex-page-gutter space-y-5 max-w-5xl">
+    <div className="cortex-page-gutter space-y-5 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -166,7 +165,7 @@ export default function UsersPage() {
             All users
           </h1>
           <p className="text-base text-text-muted mt-1">
-            {adminCount} admin{adminCount !== 1 ? 's' : ''} · {viewerCount} portal user{viewerCount !== 1 ? 's' : ''} · {teamCount} team · {users.length} total
+            {teamCount} team · {viewerCount} portal user{viewerCount !== 1 ? 's' : ''} · {users.length} total
           </p>
         </div>
         <button
@@ -222,7 +221,7 @@ export default function UsersPage() {
               />
             </div>
             <div className="flex gap-1 rounded-lg border border-nativz-border p-1">
-              {(['all', 'admin', 'viewer', 'team'] as const).map((r) => (
+              {(['all', 'team', 'viewer'] as const).map((r) => (
                 <button
                   key={r}
                   onClick={() => setRoleFilter(r)}
@@ -232,7 +231,7 @@ export default function UsersPage() {
                       : 'text-text-muted hover:text-text-secondary'
                   }`}
                 >
-                  {r === 'all' ? 'All' : r === 'admin' ? 'Admins' : r === 'viewer' ? 'Portal' : 'Team'}
+                  {r === 'all' ? 'All' : r === 'team' ? 'Team' : 'Portal'}
                 </button>
               ))}
             </div>
@@ -271,18 +270,25 @@ export default function UsersPage() {
               <p className="text-sm text-text-muted">No users found</p>
             </div>
           ) : (
-            <div className="space-y-1.5">
-              {filtered.map((user) => (
-                <UserCard
-                  key={user.id}
-                  user={user}
-                  expanded={expandedId === user.id}
-                  onToggle={() => setExpandedId(expandedId === user.id ? null : user.id)}
-                  onUpdated={loadUsers}
-                  onDeleted={(id) => setUsers((prev) => prev.filter((u) => u.id !== id))}
-                  onSendEmail={(r) => openComposerFor([r])}
-                />
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
+              {filtered.map((user) => {
+                const isExpanded = expandedId === user.id;
+                return (
+                  <div
+                    key={user.id}
+                    className={isExpanded ? 'md:col-span-2 xl:col-span-3' : ''}
+                  >
+                    <UserCard
+                      user={user}
+                      expanded={isExpanded}
+                      onToggle={() => setExpandedId(isExpanded ? null : user.id)}
+                      onUpdated={loadUsers}
+                      onDeleted={(id) => setUsers((prev) => prev.filter((u) => u.id !== id))}
+                      onSendEmail={(r) => openComposerFor([r])}
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
         </>

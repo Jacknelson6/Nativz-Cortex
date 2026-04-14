@@ -10,7 +10,6 @@ import {
   BarChart3,
   CheckSquare,
   Send,
-  Workflow,
   BotMessageSquare,
   ChevronRight,
   ChevronsLeft,
@@ -19,13 +18,9 @@ import {
   ImagePlus,
   StickyNote,
   Scissors,
-  ThumbsUp,
-  Megaphone,
-  Camera,
   Compass,
   ClipboardCheck,
   Settings as SettingsIcon,
-  Calendar,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
@@ -88,23 +83,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Manage',
     items: [
       { href: '/admin/clients', label: 'Clients', icon: Contact },
-      {
-        href: '/admin/pipeline',
-        label: 'Edits',
-        icon: Scissors,
-        children: [
-          { href: '/admin/pipeline', label: 'All stages', icon: Workflow },
-          { href: '/admin/shoots', label: 'Shoot calendar', icon: Camera },
-          { href: '/admin/pipeline?stage=editing', label: 'Editing', icon: Scissors },
-          {
-            href: '/admin/pipeline?stage=scheduling',
-            label: 'Approvals & handoff',
-            icon: ThumbsUp,
-          },
-          { href: '/admin/pipeline?stage=boosting', label: 'Boosting', icon: Megaphone },
-          { href: '/admin/scheduler', label: 'Calendars', icon: Calendar },
-        ],
-      },
+      { href: '/admin/pipeline', label: 'Edits', icon: Scissors },
       { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
       { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
     ],
