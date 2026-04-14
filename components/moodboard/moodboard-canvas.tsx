@@ -308,7 +308,7 @@ export function MoodboardCanvas({
 
         {isNotesVariant && (
           <>
-            <DrawingOverlay active={drawingActive} onClose={() => setDrawingActive(false)} />
+            <DrawingOverlay active={drawingActive} onClose={() => setDrawingActive(false)} boardId={boardId} />
             {!drawingActive && (
               <button
                 type="button"

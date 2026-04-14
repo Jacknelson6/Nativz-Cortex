@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pencil, Eraser, Trash2, X } from 'lucide-react';
 
 type Point = { x: number; y: number };
@@ -28,15 +28,60 @@ const COLORS = [
 export function DrawingOverlay({
   active,
   onClose,
+  boardId,
 }: {
   active: boolean;
   onClose: () => void;
+  /** When provided, strokes persist to /api/moodboard/boards/[id]/strokes */
+  boardId?: string;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
   const [color, setColor] = useState<string>(COLORS[0].value);
   const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
+
+  // Hydrate from DB on mount when a boardId is supplied.
+  useEffect(() => {
+    if (!boardId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/moodboard/boards/${boardId}/strokes`);
+        if (!res.ok) return;
+        const d = await res.json();
+        if (cancelled) return;
+        const loaded: Stroke[] = (d.strokes ?? []).map((s: { id: string; color: string; width: number; points: Point[] }) => ({
+          id: s.id,
+          color: s.color,
+          width: typeof s.width === 'number' ? s.width : 2,
+          points: Array.isArray(s.points) ? s.points : [],
+        }));
+        setStrokes(loaded);
+      } catch {
+        /* offline — strokes stay session-local */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [boardId]);
+
+  // Persist new strokes. We fire-and-forget on stroke completion rather
+  // than batching so a tab close doesn't lose the most recent marks.
+  const persistStroke = useCallback(
+    async (stroke: Stroke) => {
+      if (!boardId) return;
+      try {
+        await fetch(`/api/moodboard/boards/${boardId}/strokes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ color: stroke.color, width: stroke.width, points: stroke.points }),
+        });
+      } catch {
+        /* local copy still visible — persistence can recover on next stroke */
+      }
+    },
+    [boardId],
+  );
 
   const toSvgPoint = useCallback((clientX: number, clientY: number): Point => {
     const svg = svgRef.current;
@@ -52,14 +97,19 @@ export function DrawingOverlay({
     const point = toSvgPoint(e.clientX, e.clientY);
     if (tool === 'eraser') {
       // Remove the topmost stroke that the point is reasonably close to.
+      let erasedId: string | null = null;
       setStrokes((prev) => {
         for (let i = prev.length - 1; i >= 0; i--) {
           if (strokeHitsPoint(prev[i], point, 12)) {
+            erasedId = prev[i].id;
             return [...prev.slice(0, i), ...prev.slice(i + 1)];
           }
         }
         return prev;
       });
+      if (erasedId && boardId) {
+        void fetch(`/api/moodboard/boards/${boardId}/strokes?stroke_id=${erasedId}`, { method: 'DELETE' }).catch(() => {});
+      }
       return;
     }
     setCurrentStroke({
@@ -74,7 +124,19 @@ export function DrawingOverlay({
     if (!active) return;
     const point = toSvgPoint(e.clientX, e.clientY);
     if (tool === 'eraser' && e.buttons) {
-      setStrokes((prev) => prev.filter((s) => !strokeHitsPoint(s, point, 12)));
+      const toErase: string[] = [];
+      setStrokes((prev) => prev.filter((s) => {
+        if (strokeHitsPoint(s, point, 12)) {
+          toErase.push(s.id);
+          return false;
+        }
+        return true;
+      }));
+      if (boardId) {
+        for (const id of toErase) {
+          void fetch(`/api/moodboard/boards/${boardId}/strokes?stroke_id=${id}`, { method: 'DELETE' }).catch(() => {});
+        }
+      }
       return;
     }
     if (!currentStroke) return;
@@ -85,6 +147,7 @@ export function DrawingOverlay({
     if (!active) return;
     if (currentStroke && currentStroke.points.length > 1) {
       setStrokes((prev) => [...prev, currentStroke]);
+      void persistStroke(currentStroke);
     }
     setCurrentStroke(null);
   };
@@ -94,7 +157,12 @@ export function DrawingOverlay({
     return list.map((s) => ({ ...s, d: pointsToPath(s.points) }));
   }, [strokes, currentStroke]);
 
-  const clearAll = () => setStrokes([]);
+  const clearAll = () => {
+    setStrokes([]);
+    if (boardId) {
+      void fetch(`/api/moodboard/boards/${boardId}/strokes`, { method: 'DELETE' }).catch(() => {});
+    }
+  };
 
   return (
     <>
