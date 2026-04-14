@@ -249,10 +249,11 @@ export function AdminSidebar({
           (b) stays within the primary sidebar's x-bounds — a fixed-position
           overlay overlapped the "← Back to dashboard" text in the secondary
           Edits / Settings rails. Click keeps the "Hi there!" easter egg. */}
-      <SidebarHeader className="pt-4 pb-2">
-        {/* Logo slot is a fixed h-9 box so the rail's vertical geometry is
-            identical whether the wordmark is visible or not. Fade the
-            wordmark out when collapsed (no icon-only variant exists). */}
+      <SidebarHeader className="h-[60px] py-3 flex items-center">
+        {/* Header height is locked to 60px in both expanded and collapsed
+            states so nav icons sit at the same y-coordinate regardless
+            of mode/hover. Logo wordmark fades opacity-0 when collapsed
+            (no icon-only variant exists) but the slot keeps its space. */}
         <div className="relative flex h-9 w-full items-center justify-center">
           <button
             type="button"
