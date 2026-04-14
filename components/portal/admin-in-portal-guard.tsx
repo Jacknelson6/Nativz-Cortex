@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { ShieldAlert, LayoutDashboard, X } from 'lucide-react';
+import { ShieldAlert, ArrowRight, LayoutDashboard, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const SESSION_ACK_KEY = 'cortex:admin-in-portal-acknowledged';
@@ -55,40 +55,44 @@ export function AdminInPortalGuard({ isAdmin }: { isAdmin: boolean }) {
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-md rounded-2xl border border-nativz-border bg-surface shadow-elevated">
-            <div className="flex items-start gap-3 border-b border-nativz-border/50 px-5 py-4">
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
-                <ShieldAlert size={18} />
+          <div className="relative w-full max-w-md rounded-2xl border border-nativz-border bg-surface px-6 py-7 shadow-elevated">
+            <button
+              type="button"
+              onClick={dismiss}
+              aria-label="Dismiss"
+              className="absolute right-3 top-3 cursor-pointer rounded-md p-1 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+            >
+              <X size={16} />
+            </button>
+
+            <div className="flex flex-col items-center text-center">
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
+                <ShieldAlert size={20} />
               </div>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-base font-semibold text-text-primary">
-                  You&apos;re signed in as an admin
-                </h2>
-                <p className="mt-1 text-sm text-text-muted">
-                  This is the client portal view. Head back to the admin
-                  dashboard unless you&apos;re intentionally testing what a
-                  client sees.
-                </p>
+              <h2 className="text-base font-semibold text-text-primary">
+                You&apos;re signed in as an admin
+              </h2>
+              <p className="mt-1.5 text-sm text-text-muted">
+                This is the client portal view. Head back to the admin
+                dashboard unless you&apos;re intentionally testing what a
+                client sees.
+              </p>
+
+              <div className="mt-6 flex w-full flex-col items-center gap-3">
+                <Link href="/admin/dashboard" className="w-full max-w-xs">
+                  <Button className="w-full">
+                    Back to admin dashboard
+                    <ArrowRight size={14} aria-hidden />
+                  </Button>
+                </Link>
+                <button
+                  type="button"
+                  onClick={dismiss}
+                  className="cursor-pointer text-xs text-text-muted transition-colors hover:text-text-secondary"
+                >
+                  I&apos;m just testing
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={dismiss}
-                aria-label="Dismiss"
-                className="cursor-pointer rounded-md p-1 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-4">
-              <Button variant="ghost" onClick={dismiss}>
-                I&apos;m just testing
-              </Button>
-              <Link href="/admin/dashboard">
-                <Button>
-                  <LayoutDashboard size={14} aria-hidden />
-                  Back to admin
-                </Button>
-              </Link>
             </div>
           </div>
         </div>
