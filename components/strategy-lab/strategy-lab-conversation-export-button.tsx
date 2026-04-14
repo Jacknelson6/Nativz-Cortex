@@ -5,7 +5,8 @@ import { FileDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 import type { ChatMessage } from '@/components/ai/message';
-import type { PdfAttachedSearch, PdfConversationMessage } from './strategy-lab-conversation-pdf';
+import type { PdfAttachedSearch } from './strategy-lab-conversation-pdf';
+import { exportConversationPdf } from '@/lib/strategy-lab/export-conversation-pdf';
 
 interface StrategyLabConversationExportButtonProps {
   clientId: string;
@@ -22,61 +23,6 @@ interface StrategyLabConversationExportButtonProps {
   compact?: boolean;
   /** Aria label override — used in compact mode where there's no text label. */
   ariaLabel?: string;
-}
-
-/**
- * Fetch the client's logo URL (from the mentions endpoint, which already
- * returns every active client with `avatarUrl: c.logo_url`) and convert it
- * to a data URL so @react-pdf/renderer can embed it reliably (avoids CORS
- * issues that sometimes bite remote <Image src> during PDF generation in the
- * browser). Returns null if the client has no logo or fetching fails — the
- * PDF falls back to initials.
- */
-async function blobToDataUrl(blob: Blob): Promise<string | null> {
-  return await new Promise<string | null>((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : null);
-    reader.onerror = () => resolve(null);
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function fetchLogoAsDataUrl(url: string | null | undefined): Promise<string | null> {
-  if (!url || typeof url !== 'string' || !url.startsWith('http')) return null;
-  try {
-    const logoRes = await fetch(url);
-    if (!logoRes.ok) return null;
-    const blob = await logoRes.blob();
-    return await blobToDataUrl(blob);
-  } catch {
-    return null;
-  }
-}
-
-async function fetchClientLogoDataUrl(clientId: string): Promise<string | null> {
-  // Primary path: /api/nerd/mentions (active clients only, exposes logo_url
-  // as avatarUrl). Fallback: /api/clients/[id] direct so inactive clients
-  // or any client missing from the mentions list still resolves a logo.
-  try {
-    const res = await fetch('/api/nerd/mentions');
-    if (res.ok) {
-      const data = (await res.json()) as {
-        clients?: Array<{ id: string; avatarUrl?: string | null }>;
-      };
-      const match = (data.clients ?? []).find((c) => c.id === clientId);
-      const dataUrl = await fetchLogoAsDataUrl(match?.avatarUrl);
-      if (dataUrl) return dataUrl;
-    }
-
-    const clientRes = await fetch(`/api/clients/${clientId}`);
-    if (clientRes.ok) {
-      const client = (await clientRes.json()) as { logo_url?: string | null };
-      return await fetchLogoAsDataUrl(client.logo_url);
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 export function StrategyLabConversationExportButton({
@@ -100,65 +46,14 @@ export function StrategyLabConversationExportButton({
     }
     setExporting(true);
     try {
-      // Fetch the client logo, load the PDF renderer, and load both visual
-      // rasterizers in parallel. Mermaid uses the real mermaid module in an
-      // off-screen DOM; html-visual uses html2canvas in a sandboxed iframe.
-      // Both return Map<hash, pngDataUrl> that the PDF embeds as real images.
-      const [clientLogoDataUrl, rendererModule, docModule, rasterizerModule, htmlVisualModule] =
-        await Promise.all([
-          fetchClientLogoDataUrl(clientId),
-          import('@react-pdf/renderer'),
-          import('./strategy-lab-conversation-pdf'),
-          import('@/lib/strategy-lab/rasterize-mermaid'),
-          import('@/lib/strategy-lab/rasterize-html-visual'),
-        ]);
-      const { pdf } = rendererModule;
-      const { StrategyLabConversationPdf } = docModule;
-      const { rasterizeMermaidBlocks } = rasterizerModule;
-      const { rasterizeHtmlVisualBlocks } = htmlVisualModule;
-
-      // Only ship user + assistant messages to the PDF. Tool role messages are
-      // internal plumbing and don't add value in a client-facing deliverable.
-      const pdfMessages: PdfConversationMessage[] = messages
-        .filter((m): m is ChatMessage & { role: 'user' | 'assistant' } =>
-          m.role === 'user' || m.role === 'assistant',
-        )
-        .map((m) => ({ id: m.id, role: m.role, content: m.content }));
-
-      const assistantContents = pdfMessages
-        .filter((m) => m.role === 'assistant')
-        .map((m) => m.content);
-
-      const [mermaidImages, htmlVisualImages] = await Promise.all([
-        rasterizeMermaidBlocks(assistantContents),
-        rasterizeHtmlVisualBlocks(assistantContents),
-      ]);
-
-      const blob = await pdf(
-        StrategyLabConversationPdf({
-          agency: brand,
-          clientName,
-          clientLogoDataUrl,
-          conversationTitle,
-          messages: pdfMessages,
-          attachedSearches,
-          mermaidImages,
-          htmlVisualImages,
-        }),
-      ).toBlob();
-
-      const safeName = clientName.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '') || 'strategy';
-      const datePart = new Date().toISOString().slice(0, 10);
-      const filename = `${safeName}_strategy_${datePart}.pdf`;
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await exportConversationPdf({
+        clientId,
+        clientName,
+        conversationTitle,
+        messages,
+        attachedSearches,
+        agency: brand,
+      });
       toast.success('Strategy PDF exported');
     } catch (err) {
       console.error('Strategy Lab PDF export error:', err);

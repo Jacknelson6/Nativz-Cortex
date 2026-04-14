@@ -11,6 +11,10 @@ import { processAttachments } from '@/lib/chat/process-attachments';
 import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
 import { toast } from 'sonner';
 import { StrategyLabConversationExportButton } from './strategy-lab-conversation-export-button';
+import {
+  exportConversationPdf,
+  looksLikeVideoIdeasResponse,
+} from '@/lib/strategy-lab/export-conversation-pdf';
 import { ConversationShareButton } from '@/components/ai/conversation-share-button';
 import { StrategyLabClientPickerPill } from './strategy-lab-client-picker-pill';
 import { StrategyLabConversationHistoryRail } from './strategy-lab-conversation-history-rail';
@@ -113,6 +117,14 @@ export function StrategyLabNerdChat({
   // source the client picker uses).
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
   const { brand: agencyBrand, brandName: agencyName } = useAgencyBrand();
+
+  // Auto-export PDF when the latest assistant response looks like a
+  // "video ideas" deliverable. Fires once per message id on the edge
+  // where streaming flips true → false, so streaming tokens don't
+  // re-trigger it mid-response. The manual Export PDF button in the
+  // header still works for anything that fails the heuristic.
+  const autoExportedRef = useRef<Set<string>>(new Set());
+  const wasStreamingRef = useRef(false);
   // Wide agency lockup (white-background, no boxed container) for the empty
   // state. Falls back to the tile logo for brands that don't ship a wide
   // variant yet.
@@ -307,6 +319,44 @@ export function StrategyLabNerdChat({
       .map((id) => clientSearches.find((s) => s.id === id))
       .filter((s): s is TopicSearchItem => !!s);
   }, [attachedSearchIds, clientSearches]);
+
+  // Heuristic auto-export: when streaming finishes and the last assistant
+  // message looks like a video-ideas list, fire the same branded PDF the
+  // manual button would produce. One-shot per message via autoExportedRef.
+  useEffect(() => {
+    if (wasStreamingRef.current && !streaming && messages.length > 0) {
+      const last = messages[messages.length - 1];
+      if (
+        last.role === 'assistant' &&
+        typeof last.content === 'string' &&
+        !autoExportedRef.current.has(last.id) &&
+        clientId &&
+        clientName &&
+        looksLikeVideoIdeasResponse(last.content)
+      ) {
+        autoExportedRef.current.add(last.id);
+        toast.message('Exporting video ideas PDF…');
+        void exportConversationPdf({
+          clientId,
+          clientName,
+          conversationTitle,
+          messages,
+          attachedSearches: attachedSearches.map((s) => ({
+            query: s.query,
+            created_at: s.created_at,
+          })),
+          agency: agencyBrand,
+          filenameSuffix: 'video-ideas',
+        })
+          .then(() => toast.success('Video ideas PDF exported'))
+          .catch((err) => {
+            console.error('Auto-export failed:', err);
+            toast.error('Auto-export failed — use Export PDF to retry');
+          });
+      }
+    }
+    wasStreamingRef.current = streaming;
+  }, [streaming, messages, clientId, clientName, conversationTitle, attachedSearches, agencyBrand]);
 
   const handleSend = useCallback(
     async (text?: string) => {
