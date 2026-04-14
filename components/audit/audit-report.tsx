@@ -1477,11 +1477,17 @@ function PostThumbnail({
   duration: number | null;
 }) {
   const [failed, setFailed] = useState(false);
-  const isVertical =
+  // Initial platform-based guess — replaced with the image's actual natural
+  // aspect once it loads so 16:9 thumbnails render 16:9, 9:16 renders 9:16,
+  // and square IG feed posts render 1:1 instead of being cropped.
+  const initiallyVertical =
     platform === 'tiktok' ||
     platform === 'instagram' ||
     (platform === 'youtube' && duration != null && duration <= 60);
-  const aspectClass = isVertical ? 'aspect-[9/16]' : 'aspect-video';
+  type AspectClass = 'aspect-[9/16]' | 'aspect-video' | 'aspect-square';
+  const [aspectClass, setAspectClass] = useState<AspectClass>(
+    initiallyVertical ? 'aspect-[9/16]' : 'aspect-video',
+  );
 
   if (!src || failed) {
     return (
@@ -1491,12 +1497,23 @@ function PostThumbnail({
     );
   }
 
+  function onLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const img = e.currentTarget;
+    const { naturalWidth: w, naturalHeight: h } = img;
+    if (!w || !h) return;
+    const ratio = w / h;
+    if (ratio < 0.85) setAspectClass('aspect-[9/16]');
+    else if (ratio > 1.15) setAspectClass('aspect-video');
+    else setAspectClass('aspect-square');
+  }
+
   return (
     <div className={`bg-surface-hover overflow-hidden ${aspectClass}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
         alt=""
+        onLoad={onLoad}
         onError={() => setFailed(true)}
         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
       />
