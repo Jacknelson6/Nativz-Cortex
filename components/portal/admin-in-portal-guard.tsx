@@ -98,10 +98,11 @@ export function AdminInPortalGuard({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      {/* Persistent floating pill — fixed to the bottom-left, sits above
-          the Nerd card without touching the sidebar internals. z-index is
-          below the modal (z-90) but above page content. */}
-      <div className="pointer-events-none fixed bottom-20 left-3 z-40 lg:left-4">
+      {/* Persistent floating pill — fixed to the top-right so it never sits
+          on top of the sidebar footer (The Nerd, account row, collapse
+          toggle) or any page-level bottom composer. Below the modal (z-90)
+          but above the page header. */}
+      <div className="pointer-events-none fixed right-4 top-4 z-40">
         <Link
           href="/admin/dashboard"
           className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-200 shadow-sm backdrop-blur transition-colors hover:border-amber-500/50 hover:bg-amber-500/20"
