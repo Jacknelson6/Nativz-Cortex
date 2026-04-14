@@ -15,6 +15,7 @@
     "test": "vitest run -c app/vitest.config.ts",
     "test:watch": "vitest -c app/vitest.config.ts",
     "test:ad-library": "vitest run lib/ad-creatives/extract-ad-library-urls.test.ts -c app/vitest.config.ts",
+    "test:topic-plan": "tsx scripts/qa-topic-plan.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:routes": "playwright test tests/routes-redirects.spec.ts tests/legacy-redirects.spec.ts tests/api-security.spec.ts",
