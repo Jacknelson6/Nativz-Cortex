@@ -191,16 +191,30 @@ BEHAVIOR RULES:
 - If analytics data is provided, analyze it with strategic insight, not just number recitation.`;
 }
 
-/** Tools that portal (viewer) users are allowed to use — single-client scoped */
+/**
+ * Tools that portal (viewer) users are allowed to use.
+ *
+ * ⚠️ Adding a tool here WITHOUT adding a caller-org check inside its
+ * handler is a cross-org data leak. The admin Supabase client bypasses
+ * RLS, so every handler that accepts a client_id / entry_id / search_id
+ * from the caller must look up the caller's organization_id and reject
+ * when the resource belongs to another org.
+ *
+ * Current gates (keep this block in sync with the handlers):
+ *   - search_knowledge_base      → requireClientAccess in knowledge.ts
+ *   - query_client_knowledge     → requireClientAccess in knowledge.ts
+ *   - get_knowledge_entry        → requireClientAccess on entry.client_id
+ *   - get_client_details         → inline role/org check in clients.ts
+ *   - generate_video_ideas       → requireClientAccess in knowledge.ts
+ *   - extract_topic_signals      → filter search_ids by caller org
+ *   - create_topic_plan          → inline role/org check before insert
+ */
 const PORTAL_ALLOWED_TOOLS = new Set([
   'search_knowledge_base',
   'query_client_knowledge',
   'get_knowledge_entry',
   'get_client_details',
   'generate_video_ideas',
-  // Content Lab grounding pipeline. Both tools self-scope to the caller's
-  // organization_id — a portal user can only read signals / write plans
-  // for clients their org has access to.
   'extract_topic_signals',
   'create_topic_plan',
 ]);
