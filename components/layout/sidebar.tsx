@@ -331,10 +331,12 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
     const { open } = useSidebar();
     const [showTooltip, setShowTooltip] = useState(false);
 
-    // Always left-aligned with the same padding regardless of open state —
-    // icons keep their exact x position so the rail doesn't visually shift
-    // on collapse / expand. Text labels just appear/disappear next to them.
-    const layout = 'gap-2.5 px-2.5';
+    // Expanded: row layout with icon + text + active-row highlight.
+    // Collapsed: centered icon-only square so the active highlight is a
+    // square pill behind the icon instead of an off-center rectangle.
+    const sizing = open
+      ? 'flex w-full items-center gap-2.5 px-2.5 min-h-[40px]'
+      : 'flex h-9 w-9 mx-auto items-center justify-center';
 
     const shellStyles = isActive
       ? 'bg-accent-surface text-text-primary font-semibold'
@@ -345,7 +347,7 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
         ref={ref}
         data-active={isActive ? true : undefined}
         suppressHydrationWarning
-        className={`relative flex w-full items-center rounded-lg text-[15px] transition-[color,background-color,border-color,box-shadow] duration-150 min-h-[40px] cursor-pointer ${layout} ${shellStyles} ${className}`}
+        className={`relative rounded-lg text-[15px] transition-[color,background-color,border-color,box-shadow] duration-150 cursor-pointer ${sizing} ${shellStyles} ${className}`}
         onMouseEnter={() => !open && setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         {...props}

@@ -107,9 +107,9 @@ export function SidebarAccount({
 
       <button
         onClick={() => setOpen((prev) => !prev)}
-        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors ${
-          open ? 'bg-surface-hover' : 'hover:bg-surface-hover'
-        }`}
+        className={`rounded-lg transition-colors ${
+          collapsed ? 'flex h-9 w-9 mx-auto items-center justify-center' : 'flex w-full items-center gap-2.5 px-2.5 py-2'
+        } ${open ? 'bg-surface-hover' : 'hover:bg-surface-hover'}`}
       >
         {/* Compact avatar — same h-7 w-7 footprint as nav icons so the
             footer stays the same height regardless of collapse state. */}

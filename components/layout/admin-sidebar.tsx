@@ -400,7 +400,9 @@ export function AdminSidebar({
         <div className={role === 'viewer' ? 'opacity-40 pointer-events-none' : undefined} title={role === 'viewer' ? 'Coming soon' : undefined}>
           <Link
             href={role === 'viewer' ? '#' : `${routePrefix}/nerd`}
-            className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[15px] transition-colors ${
+            className={`rounded-lg text-[15px] transition-colors ${
+              open ? 'flex items-center gap-2.5 px-2.5 py-2' : 'flex h-9 w-9 mx-auto items-center justify-center'
+            } ${
               isActivePath(pathname, '/admin/nerd')
                 ? 'bg-accent-surface text-text-primary font-semibold'
                 : 'text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium'
