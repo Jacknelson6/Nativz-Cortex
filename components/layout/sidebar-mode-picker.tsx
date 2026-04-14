@@ -2,13 +2,15 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { PanelLeft, PanelLeftClose, MousePointer, Check } from 'lucide-react';
+import { PanelLeft } from 'lucide-react';
 import { useSidebar, type SidebarMode } from './sidebar';
 
-const MODE_OPTIONS: { value: SidebarMode; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; hint: string }[] = [
-  { value: 'expanded', label: 'Expanded', icon: PanelLeft, hint: 'Full width always' },
-  { value: 'collapsed', label: 'Collapsed', icon: PanelLeftClose, hint: 'Icon rail only' },
-  { value: 'hover', label: 'Expand on hover', icon: MousePointer, hint: 'Grows when you hover' },
+// Single icon for all three modes — Supabase pattern. The picker is about
+// behavior, not visual variants, so the icon is a constant.
+const MODE_OPTIONS: { value: SidebarMode; label: string; hint: string }[] = [
+  { value: 'expanded', label: 'Expanded', hint: 'Full width always' },
+  { value: 'collapsed', label: 'Collapsed', hint: 'Icon rail only' },
+  { value: 'hover', label: 'Expand on hover', hint: 'Grows when you hover' },
 ];
 
 const POPOVER_WIDTH = 240;
@@ -73,7 +75,6 @@ export function SidebarModePicker() {
   }, [popoverOpen]);
 
   const active = MODE_OPTIONS.find((o) => o.value === mode) ?? MODE_OPTIONS[0];
-  const ActiveIcon = active.icon;
 
   const popover = popoverOpen && position && (
     <div
@@ -86,12 +87,11 @@ export function SidebarModePicker() {
         width: POPOVER_WIDTH,
       }}
     >
-      <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+      <div className="px-3 pt-3 pb-2 text-[11px] font-medium text-text-muted">
         Sidebar control
       </div>
-      <ul className="py-1">
+      <ul className="pb-1">
         {MODE_OPTIONS.map((opt) => {
-          const Icon = opt.icon;
           const selected = mode === opt.value;
           return (
             <li key={opt.value}>
@@ -103,16 +103,18 @@ export function SidebarModePicker() {
                   setMode(opt.value);
                   setPopoverOpen(false);
                 }}
-                className={`w-full flex items-start gap-2.5 px-3 py-2 text-left transition-colors cursor-pointer ${
-                  selected ? 'bg-accent-surface/40 text-text-primary' : 'text-text-secondary hover:bg-surface-hover'
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors cursor-pointer ${
+                  selected ? 'text-text-primary' : 'text-text-secondary hover:bg-surface-hover'
                 }`}
+                title={opt.hint}
               >
-                <Icon size={14} className="mt-0.5 shrink-0 text-text-muted" />
-                <span className="min-w-0 flex-1">
-                  <span className="block whitespace-nowrap text-sm">{opt.label}</span>
-                  <span className="block text-[11px] leading-tight text-text-muted">{opt.hint}</span>
-                </span>
-                {selected && <Check size={14} className="mt-0.5 shrink-0 text-accent-text" />}
+                <span
+                  aria-hidden
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                    selected ? 'bg-text-primary' : 'bg-transparent'
+                  }`}
+                />
+                <span className="whitespace-nowrap">{opt.label}</span>
               </button>
             </li>
           );
@@ -135,7 +137,7 @@ export function SidebarModePicker() {
           popoverOpen ? 'bg-surface-hover text-text-secondary' : ''
         }`}
       >
-        <ActiveIcon size={15} className="shrink-0" />
+        <PanelLeft size={15} className="shrink-0" />
       </button>
 
       {mounted && popover && createPortal(popover, document.body)}
