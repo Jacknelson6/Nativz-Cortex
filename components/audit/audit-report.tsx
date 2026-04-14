@@ -31,6 +31,8 @@ import { EncryptedText } from '@/components/ui/encrypted-text';
 import { toast } from 'sonner';
 import { AuditExportPdfButton } from '@/components/audit/audit-export-pdf-button';
 import { AuditShareButton } from '@/components/audit/audit-share-button';
+import { AttachToClientDialog } from '@/components/audit/attach-to-client-dialog';
+import { Users2 } from 'lucide-react';
 import { TikTokMark } from '@/components/integrations/tiktok-mark';
 import { InstagramMark } from '@/components/integrations/instagram-mark';
 import { FacebookMark } from '@/components/integrations/facebook-mark';
@@ -163,6 +165,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [elapsed, setElapsed] = useState(0);
   const [activePlatformTab, setActivePlatformTab] = useState<string | null>(null);
   const [scorecardView, setScorecardView] = useState<'list' | 'matrix'>('list');
+  const [attachDialogOpen, setAttachDialogOpen] = useState(false);
   const [socialInputs, setSocialInputs] = useState<Partial<Record<AuditPlatformKey, string>>>({});
   const [competitorUrls, setCompetitorUrls] = useState<string[]>(['', '', '']);
   const [competitorFaviconErrors, setCompetitorFaviconErrors] = useState<boolean[]>([false, false, false]);
@@ -985,6 +988,14 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                 scorecard={scorecard}
               />
               <AuditShareButton auditId={audit.id} />
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setAttachDialogOpen(true)}
+                title="Attach this audit to a client for recurring competitor tracking"
+              >
+                <Users2 size={14} aria-hidden /> Attach to client
+              </Button>
               {scorecard && (
                 <div className="flex items-center gap-1 ml-2">
                   <div className={`text-3xl font-bold ${scorecard.overallScore >= 70 ? 'text-emerald-400' : scorecard.overallScore >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
@@ -1254,6 +1265,15 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           shared VideoGrid assumes TopicSearchVideoRow fields (outlier_score,
           platform filters) that don't line up cleanly for audit data. */}
       {videos.length > 0 && <AuditSourceBrowser videos={videos} />}
+
+      {/* Phase 1: attach the audit to a client so the cron can track its
+          competitors over time. Admin-only; /admin/* middleware already
+          gates access, but the API route re-checks on POST. */}
+      <AttachToClientDialog
+        open={attachDialogOpen}
+        onClose={() => setAttachDialogOpen(false)}
+        auditId={audit.id}
+      />
     </div>
   );
 }
