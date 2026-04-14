@@ -486,3 +486,20 @@ Ship a template-driven email composer on `/admin/users` that sends now or schedu
 - Rich-text / WYSIWYG editor
 
 **SRL Goal 7 code complete — awaiting human QA before marking goal closed.**
+
+### Overnight hardening — 2026-04-13
+
+**Shipped after SRL Goal 6 termination:**
+- `chore(portal): content-lab regression + cleanup` (e529ab0) — /portal/content-lab added to PORTAL_PROTECTED_ROUTES, sentinel-UUID hack replaced with `.in('id', [])`.
+- `test(api-security): assert 401 for portal Content Lab endpoints` (ad5be0d) — 3 new unauth assertions (searches, mentions, chat).
+- `perf(nerd-chat): scope social_profiles + client_strategies loads to allClients` (eecd83c) — both queries now .in('client_id', allClientIds), parallelized with Promise.all. Removes cross-org rows from server memory on every portal turn.
+- `docs(nerd-chat): future-proof PORTAL_ALLOWED_TOOLS with gate contract` (badd15c) — block comment lists each allowlisted tool and its gate so a future dev adding a new tool can't skip the scoping check.
+
+**QA state:**
+- `npm run test:topic-plan` — 15 passes
+- `npm run test:e2e:routes` — 46 passes (includes new /portal/content-lab redirect + 3 unauth API 401 assertions)
+- `npm run test:e2e:deep` — 66 passes, 2 pre-existing failures unrelated to this work (`ui-smoke.spec.ts:49`, `e2e-edge-deep.spec.ts:102` still assume /portal/login has its own shell; the app redirects to /admin/login and has since weeks before Content Lab — left untouched, not in scope).
+- `npm run build` — clean
+- `npx tsc --noEmit` — clean
+
+Portal Content Lab is code-ready to ship. Remaining blockers are human-only: log in as a real viewer and do a hands-on smoke; flip `feature_flags.can_use_nerd=true` on pilot clients.
