@@ -533,6 +533,22 @@ export async function scrapeProvidedCompetitors(
     // what the confirm-platforms UI accepts for the prospect.
     const directSocial = detectSocialFromUrl(url);
     if (directSocial) {
+      // Only scrape platforms the prospect is actually on. Scraping a
+      // competitor's TikTok when the prospect only has Facebook + YouTube
+      // burns an Apify run for data that has no comparison column on the
+      // report anyway. Surfaces as a visible failure instead of silent
+      // drop so the user sees why a pasted URL didn't make it in.
+      if (targetPlatforms.length > 0 && !targetPlatforms.includes(directSocial.platform)) {
+        console.log(
+          `[audit] competitor (provided) skipped: ${url} is on ${directSocial.platform}, target is on ${targetPlatforms.join(', ')}`,
+        );
+        failures.push({
+          name: url,
+          website: url,
+          reason: `${directSocial.platform} isn't one of the platforms being analyzed (${targetPlatforms.join(', ')})`,
+        });
+        continue;
+      }
       try {
         const { profile, videos } = await scrapeSocialForCompetitor({
           platform: directSocial.platform,
