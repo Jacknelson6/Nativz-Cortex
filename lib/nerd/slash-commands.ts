@@ -259,6 +259,46 @@ Rules:
 });
 
 registerCommand({
+  name: 'idea',
+  description: 'Interactive — generate N video ideas (auto-exports PDF)',
+  type: 'ai',
+  example: '/idea 20  →  20 ideas',
+  expandPrompt: (args: string) => {
+    // Parse a leading integer from args (`/idea 20`, `/idea 40 something`).
+    // Fall back to 10 when none is provided so /idea alone still works.
+    const trimmed = (args ?? '').trim();
+    const match = trimmed.match(/^\s*(\d{1,3})/);
+    const requestedN = match ? parseInt(match[1], 10) : 10;
+    // Clamp to something sensible — huge N costs a lot of tokens without
+    // being useful, and zero/negative makes no sense.
+    const n = Math.max(3, Math.min(50, Number.isFinite(requestedN) ? requestedN : 10));
+
+    return `Generate ${n} short-form video ideas for this client using ONLY signals from the topic searches attached in this chat plus the client's Brand DNA. No generic best practices — every idea must trace back to a specific trending topic, video idea, or sentiment from the attached research.
+
+Scripting frameworks are preloaded in your Strategy Lab system context (see "AGENCY SCRIPTING FRAMEWORKS"). Use them as scaffolding for every hook. For additional client-specific context — past winning hooks, brand voice notes, meeting takeaways — call \`search_knowledge_base\` before drafting.
+
+Start with a short heading: "${n} video ideas for [client name]".
+
+Output each idea in this exact format:
+
+**#N — [Title]**
+- **Hook**: [the exact first 3 seconds — opening words or visual beat, said verbatim the way the creator would say it]
+- **Angle**: [specific trending topic or sentiment from the attached research]
+- **Concept**: [one-sentence video description]
+- **Why it works**: [reference the research signal AND the brand positioning]
+
+Rules:
+- Mix hook types across all ${n} — negative, curiosity gap, hot take, story, pattern interrupt. Do not lean on one type.
+- Specific beats generic. "My 7-year-old outsold my sales team" beats "sales tip that changed my life".
+- Respect the brand voice — do NOT drift into generic social media patter.
+- First three words of each hook should earn the fourth. No "Hey guys" / "So today" / "Here's the thing".
+- No hashtags, no stage directions, no camera notes.
+
+The user will also receive this as a branded PDF automatically once you finish.`;
+  },
+});
+
+registerCommand({
   name: 'script',
   description: 'Turn an idea into a full spoken-word script',
   type: 'ai',
