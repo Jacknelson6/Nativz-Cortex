@@ -16,6 +16,7 @@ import {
   looksLikeVideoIdeasResponse,
 } from '@/lib/strategy-lab/export-conversation-pdf';
 import { ConversationShareButton } from '@/components/ai/conversation-share-button';
+import { CommandsCatalogButton } from '@/components/nerd/commands-catalog-button';
 import { StrategyLabClientPickerPill } from './strategy-lab-client-picker-pill';
 import { StrategyLabConversationHistoryRail } from './strategy-lab-conversation-history-rail';
 import { StrategyLabTopicSearchChipBar } from './strategy-lab-topic-search-chip-bar';
@@ -125,6 +126,12 @@ export function StrategyLabNerdChat({
   // header still works for anything that fails the heuristic.
   const autoExportedRef = useRef<Set<string>>(new Set());
   const wasStreamingRef = useRef(false);
+
+  // Interactive /idea flow: when the user submits a bare "/idea" with no
+  // number, intercept before hitting the AI and ask them how many ideas
+  // they want. Their next input (parsed as an integer) gets rewritten
+  // to "/idea N" and flows through normal slash-command expansion.
+  const [pendingIdeaCount, setPendingIdeaCount] = useState(false);
   // Wide agency lockup (white-background, no boxed container) for the empty
   // state. Falls back to the tile logo for brands that don't ship a wide
   // variant yet.
@@ -360,8 +367,57 @@ export function StrategyLabNerdChat({
 
   const handleSend = useCallback(
     async (text?: string) => {
-      const content = (text ?? input).trim();
+      let content = (text ?? input).trim();
       if (!content || streaming) return;
+
+      // ── Interactive /idea follow-up ────────────────────────────────────
+      // Step 1 — user sent bare "/idea" (or "/idea " with no number).
+      // Don't call the AI: display a prompt message asking how many ideas
+      // they want, flip pendingIdeaCount, and wait for their next input.
+      if (!pendingIdeaCount && /^\/idea\s*$/i.test(content)) {
+        setInput('');
+        setPendingIdeaCount(true);
+        const userMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content,
+          createdAt: Date.now(),
+        };
+        const promptMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'How many ideas do you want? Reply with a number (3–50).',
+          createdAt: Date.now(),
+        };
+        setMessages((prev) => [...prev, userMsg, promptMsg]);
+        return;
+      }
+      // Step 2 — pendingIdeaCount was set, treat this input as the count.
+      if (pendingIdeaCount) {
+        const match = content.match(/\d{1,3}/);
+        if (!match) {
+          const userMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'user',
+            content,
+            createdAt: Date.now(),
+          };
+          const retryMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: "I didn't catch a number there. Reply with just a digit like `12` — or type `/idea 12` next time to skip this step.",
+            createdAt: Date.now(),
+          };
+          setMessages((prev) => [...prev, userMsg, retryMsg]);
+          setInput('');
+          return;
+        }
+        setPendingIdeaCount(false);
+        // Rewrite the input so slash-command expansion downstream handles
+        // clamping + the full prompt consistently with a direct `/idea 20`.
+        content = `/idea ${match[0]}`;
+      }
+      // ──────────────────────────────────────────────────────────────────
 
       setInput('');
 
@@ -648,6 +704,7 @@ export function StrategyLabNerdChat({
           </div>
 
           <div className="flex items-center gap-1.5">
+            <CommandsCatalogButton />
             {messages.length > 0 && (
               <>
                 <ConversationShareButton

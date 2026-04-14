@@ -292,7 +292,7 @@ export function ChatComposer({
               : 'bottom-0 left-0 px-3 pb-2.5',
           )}
         >
-          <div className="relative" ref={menuRef}>
+          <div className="relative group" ref={menuRef}>
             <button
               type="button"
               onClick={() => setMenuOpen(!menuOpen)}
@@ -301,13 +301,21 @@ export function ChatComposer({
                 variant === 'research' ? 'h-9 w-9' : 'h-8 w-8',
               )}
               aria-label="Attach files"
-              title="Attach file"
             >
               <Paperclip
                 size={variant === 'research' ? 17 : 16}
                 aria-hidden
               />
             </button>
+            {/* Styled tooltip — only when the dropdown isn't open */}
+            {!menuOpen && (
+              <span
+                className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-nativz-border bg-surface px-2 py-1 text-[11px] font-medium text-text-primary opacity-0 shadow-elevated transition-opacity duration-150 group-hover:opacity-100"
+                role="tooltip"
+              >
+                Add files — attach PDFs, images, research, or knowledge
+              </span>
+            )}
 
             {/* Dropdown menu */}
             {menuOpen && (
@@ -338,18 +346,25 @@ export function ChatComposer({
               up onAttachResearch. Lets the user add a topic search from the
               composer without opening the paperclip menu. */}
           {onAttachResearch && (
-            <button
-              type="button"
-              onClick={() => onAttachResearch()}
-              className={cn(
-                'flex items-center justify-center rounded-full text-text-muted transition hover:text-accent-text',
-                variant === 'research' ? 'h-9 w-9' : 'h-8 w-8',
-              )}
-              aria-label="Attach research"
-              title="Attach research topic"
-            >
-              <Search size={variant === 'research' ? 16 : 15} aria-hidden />
-            </button>
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={() => onAttachResearch()}
+                className={cn(
+                  'flex items-center justify-center rounded-full text-text-muted transition hover:text-text-primary',
+                  variant === 'research' ? 'h-9 w-9' : 'h-8 w-8',
+                )}
+                aria-label="Attach research"
+              >
+                <Search size={variant === 'research' ? 16 : 15} aria-hidden />
+              </button>
+              <span
+                className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-nativz-border bg-surface px-2 py-1 text-[11px] font-medium text-text-primary opacity-0 shadow-elevated transition-opacity duration-150 group-hover:opacity-100"
+                role="tooltip"
+              >
+                Add topic searches — pin research into the conversation
+              </span>
+            </div>
           )}
         </div>
       </div>

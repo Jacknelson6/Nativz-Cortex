@@ -120,7 +120,7 @@ export function PromptInput({
         placeholder={placeholder ?? 'Type a message...'}
         rows={1}
         disabled={disabled}
-        className="min-h-[48px] w-full resize-none border-none bg-transparent px-4 pt-3 pb-12 text-sm text-text-primary placeholder:text-text-muted/60 outline-none leading-relaxed"
+        className="min-h-[48px] w-full resize-none border-none bg-transparent pl-3 pr-4 pt-3 pb-12 text-sm text-text-primary placeholder:text-text-muted/60 outline-none leading-relaxed"
       />
 
       {/* Bottom bar */}
