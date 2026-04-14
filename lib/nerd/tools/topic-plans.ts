@@ -57,6 +57,26 @@ export const topicPlanTools: ToolDefinition[] = [
         return { success: false, error: 'Client not found', cardType: 'topic_plan' as const };
       }
 
+      // Role + org scoping. Viewers can only create plans for clients their
+      // org has access to; admins can create for any client.
+      const { data: me } = await admin
+        .from('users')
+        .select('role, organization_id')
+        .eq('id', userId)
+        .single();
+      if (!me) {
+        return { success: false, error: 'User not found', cardType: 'topic_plan' as const };
+      }
+      if (me.role !== 'admin') {
+        if (!me.organization_id || client.organization_id !== me.organization_id) {
+          return {
+            success: false,
+            error: 'You do not have access to this client.',
+            cardType: 'topic_plan' as const,
+          };
+        }
+      }
+
       // The Nerd sometimes hallucinates a conversation_id (or passes one from
       // a thread that doesn't exist yet). Verify the row exists before we
       // hand it to the FK constraint — null it out otherwise so the insert

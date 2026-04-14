@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ToolDefinition } from '../types';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { loadTopicSignals } from '@/lib/topic-plans/signals';
 
 /**
@@ -27,9 +28,38 @@ export const topicSignalTools: ToolDefinition[] = [
       ),
     }),
     riskLevel: 'read',
-    handler: async (params) => {
+    handler: async (params, userId) => {
       const { search_ids } = params as { search_ids: string[] };
-      const signals = await loadTopicSignals(search_ids);
+
+      // For viewers, filter search_ids to only those belonging to clients in
+      // the caller's organization. Admins see everything.
+      const admin = createAdminClient();
+      const { data: me } = await admin
+        .from('users')
+        .select('role, organization_id')
+        .eq('id', userId)
+        .single();
+
+      let scopedIds = search_ids;
+      if (me && me.role !== 'admin') {
+        if (!me.organization_id) {
+          return { success: true, cardType: 'search' as const, data: { total: 0, signals: [] } };
+        }
+        const { data: rows } = await admin
+          .from('topic_searches')
+          .select('id, clients!inner(organization_id)')
+          .in('id', search_ids);
+        scopedIds = (rows ?? [])
+          .filter((r) => {
+            const org = Array.isArray(r.clients)
+              ? r.clients[0]?.organization_id
+              : (r.clients as { organization_id: string } | null)?.organization_id;
+            return org === me.organization_id;
+          })
+          .map((r) => r.id as string);
+      }
+
+      const signals = await loadTopicSignals(scopedIds);
       return {
         success: true,
         cardType: 'search' as const,
