@@ -18,7 +18,7 @@ interface PersonalMoodboardProps {
 export function PersonalMoodboard({ boardId }: PersonalMoodboardProps) {
   return (
     <ReactFlowProvider>
-      <MoodboardCanvas boardId={boardId} variant="analysis" />
+      <MoodboardCanvas boardId={boardId} variant="notes" />
     </ReactFlowProvider>
   );
 }

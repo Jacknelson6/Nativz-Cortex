@@ -41,6 +41,8 @@ import { SelectionToolbar } from '@/components/moodboard/toolbar/selection-toolb
 import { FilterBar } from '@/components/moodboard/filter-bar';
 import { useMoodboardShortcuts } from '@/components/moodboard/hooks/use-moodboard-shortcuts';
 import { useMoodboardData } from '@/components/moodboard/hooks/use-moodboard-data';
+import { DrawingOverlay } from '@/components/moodboard/drawing-overlay';
+import { useState, useEffect } from 'react';
 
 const AddItemModal = dynamic(() =>
   import('@/components/moodboard/add-item-modal').then((m) => ({ default: m.AddItemModal })),
@@ -69,7 +71,7 @@ const edgeTypes: EdgeTypes = {
   labeled: LabeledEdge,
 };
 
-export type MoodboardCanvasVariant = 'analysis' | 'clientWorkspace';
+export type MoodboardCanvasVariant = 'analysis' | 'clientWorkspace' | 'notes';
 
 export function MoodboardCanvas({
   boardId,
@@ -84,6 +86,18 @@ export function MoodboardCanvas({
   const router = useRouter();
   const mb = useMoodboardData(boardId);
   const isClientWorkspace = variant === 'clientWorkspace';
+  const isNotesVariant = variant === 'notes';
+  const [drawingActive, setDrawingActive] = useState(false);
+
+  // Esc exits drawing mode so people don't get trapped.
+  useEffect(() => {
+    if (!drawingActive) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setDrawingActive(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawingActive]);
 
   useMoodboardShortcuts({
     onDeleteSelected: mb.handleDeleteSelected,
@@ -116,9 +130,10 @@ export function MoodboardCanvas({
     <div
       className={cn(
         'flex min-h-0 flex-col',
-        isClientWorkspace ? 'h-full' : 'h-[calc(100vh-56px)]',
+        isClientWorkspace || isNotesVariant ? 'h-full' : 'h-[calc(100vh-56px)]',
       )}
     >
+      {!isNotesVariant && (
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-nativz-border bg-surface/80 px-3 py-2 backdrop-blur-sm sm:px-4">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <button
@@ -235,13 +250,16 @@ export function MoodboardCanvas({
           </Button>
         </div>
       </div>
+      )}
 
-      <FilterBar
-        boardId={boardId}
-        boardTags={mb.boardTags}
-        filters={mb.filters}
-        onFiltersChange={mb.setFilters}
-      />
+      {!isNotesVariant && (
+        <FilterBar
+          boardId={boardId}
+          boardTags={mb.boardTags}
+          filters={mb.filters}
+          onFiltersChange={mb.setFilters}
+        />
+      )}
 
       <div className="relative min-h-0 flex-1 moodboard-canvas-area">
         <SelectionToolbar selectedNodes={mb.selectedNodes} onUpdatePositions={mb.handleAlignmentUpdate} />
@@ -288,6 +306,23 @@ export function MoodboardCanvas({
           ) : null}
         </ReactFlow>
 
+        {isNotesVariant && (
+          <>
+            <DrawingOverlay active={drawingActive} onClose={() => setDrawingActive(false)} />
+            {!drawingActive && (
+              <button
+                type="button"
+                onClick={() => setDrawingActive(true)}
+                className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-nativz-border bg-surface/95 text-text-muted shadow-elevated backdrop-blur transition-colors hover:bg-surface-hover hover:text-text-secondary cursor-pointer"
+                aria-label="Draw on the board"
+                title="Draw on the board"
+              >
+                <Pencil size={15} />
+              </button>
+            )}
+          </>
+        )}
+
         {mb.isEmpty && !mb.loading ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
             <div className="flex max-w-xs flex-col items-center gap-4 text-center">
@@ -312,12 +347,14 @@ export function MoodboardCanvas({
         ) : null}
       </div>
 
-      <AddItemModal
-        open={mb.addItemOpen}
-        onClose={() => mb.setAddItemOpen(false)}
-        boardId={boardId}
-        onItemAdded={mb.fetchBoard}
-      />
+      {!isNotesVariant && (
+        <AddItemModal
+          open={mb.addItemOpen}
+          onClose={() => mb.setAddItemOpen(false)}
+          boardId={boardId}
+          onItemAdded={mb.fetchBoard}
+        />
+      )}
 
       {mb.analysisItem ? (
         <VideoAnalysisPanel
@@ -330,7 +367,7 @@ export function MoodboardCanvas({
         />
       ) : null}
 
-      {mb.chatOpen ? (
+      {mb.chatOpen && !isNotesVariant ? (
         <AiChatPanel
           boardId={boardId}
           items={mb.items}
@@ -339,7 +376,9 @@ export function MoodboardCanvas({
         />
       ) : null}
 
-      <ShareBoardModal boardId={boardId} open={mb.shareOpen} onClose={() => mb.setShareOpen(false)} />
+      {!isNotesVariant && (
+        <ShareBoardModal boardId={boardId} open={mb.shareOpen} onClose={() => mb.setShareOpen(false)} />
+      )}
 
       {mb.replicateItem ? (
         <ReplicationBriefModal
