@@ -179,8 +179,17 @@ const ADMIN_ONLY_HREFS = new Set([
 /** Items shown but grayed out with "Coming soon" tooltip for viewers */
 const COMING_SOON_HREFS = new Set([
   '/admin/analytics',
-  '/admin/strategy-lab',
 ]);
+
+/**
+ * One-off href rewrites for portal viewers. Used when the portal route
+ * doesn't share the admin path suffix (e.g. admin's /strategy-lab maps
+ * to portal's /content-lab). Keyed on the admin href so the lookup
+ * lines up with NAV_SECTIONS.
+ */
+const PORTAL_HREF_REWRITES: Record<string, string> = {
+  '/admin/strategy-lab': '/portal/content-lab',
+};
 
 function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSection[] {
   if (role === 'admin') return NAV_SECTIONS;
@@ -191,14 +200,18 @@ function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSec
     for (const item of section.items) {
       if (ADMIN_ONLY_HREFS.has(item.href)) continue;
       const isComingSoon = COMING_SOON_HREFS.has(item.href);
-      // Remap /admin/ → portal prefix
+      const portalRewrite = PORTAL_HREF_REWRITES[item.href];
+      // Remap /admin/ → portal prefix (with per-item override for paths
+      // that don't share the admin suffix, e.g. strategy-lab → content-lab)
       const remapped: NavItem = {
         ...item,
-        href: isComingSoon ? '#' : item.href.replace('/admin/', `${prefix}/`),
+        href: isComingSoon
+          ? '#'
+          : (portalRewrite ?? item.href.replace('/admin/', `${prefix}/`)),
         comingSoon: isComingSoon,
         children: isComingSoon ? undefined : item.children?.filter(c => !ADMIN_ONLY_HREFS.has(c.href)).map(c => ({
           ...c,
-          href: c.href.replace('/admin/', `${prefix}/`),
+          href: PORTAL_HREF_REWRITES[c.href] ?? c.href.replace('/admin/', `${prefix}/`),
         })),
       };
       viewerItems.push(remapped);
