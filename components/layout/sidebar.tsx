@@ -202,53 +202,26 @@ export function Sidebar({ children, className = '', ...props }: SidebarProps) {
   const shell = 'border-r border-nativz-border bg-surface';
 
   const isHoverMode = mode === 'hover';
-  const hoverExpanded = isHoverMode && open;
 
-  // In hover mode we reserve the icon-width slot in the flex row (so main
-  // content keeps its layout) and render the expanded panel as an overlay
-  // that floats above with shadow. In expanded/collapsed modes the aside
-  // sits inline and the inset sizes around it — unchanged behavior.
+  // Hover mode pushes content like a normal click-toggle — same flex
+  // physics, just driven by mouseenter/leave instead of a button click.
+  // The width transition lives on the aside so the inset reflows smoothly.
   return (
     <>
       {/* Desktop sidebar */}
-      {isHoverMode ? (
-        <>
-          {/* Flow placeholder keeps the inset at the same width whether the
-              rail is hovered or not. */}
-          <div
-            aria-hidden
-            className="hidden md:block shrink-0 h-screen"
-            style={{ width: 'var(--sidebar-width-icon)' }}
-          />
-          <aside
-            data-state={state}
-            data-shell="default"
-            data-mode={mode}
-            suppressHydrationWarning
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-            className={`fixed top-0 left-0 h-screen hidden md:flex flex-col transition-[width] duration-200 ease-out overflow-hidden ${shell} ${className} ${
-              hoverExpanded ? 'z-30 shadow-elevated' : 'z-20'
-            }`}
-            style={{ width: hoverExpanded ? 'var(--sidebar-width)' : 'var(--sidebar-width-icon)' }}
-            {...props}
-          >
-            {children}
-          </aside>
-        </>
-      ) : (
-        <aside
-          data-state={state}
-          data-shell="default"
-          data-mode={mode}
-          suppressHydrationWarning
-          className={`sticky top-0 h-screen hidden md:flex flex-col shrink-0 transition-[width] duration-200 ease-out overflow-hidden ${shell} ${className}`}
-          style={{ width: open ? 'var(--sidebar-width)' : 'var(--sidebar-width-icon)' }}
-          {...props}
-        >
-          {children}
-        </aside>
-      )}
+      <aside
+        data-state={state}
+        data-shell="default"
+        data-mode={mode}
+        suppressHydrationWarning
+        onMouseEnter={isHoverMode ? () => setHovered(true) : undefined}
+        onMouseLeave={isHoverMode ? () => setHovered(false) : undefined}
+        className={`sticky top-0 h-screen hidden md:flex flex-col shrink-0 transition-[width] duration-200 ease-out overflow-hidden ${shell} ${className}`}
+        style={{ width: open ? 'var(--sidebar-width)' : 'var(--sidebar-width-icon)' }}
+        {...props}
+      >
+        {children}
+      </aside>
 
       {/* Mobile overlay */}
       <div className="md:hidden">
