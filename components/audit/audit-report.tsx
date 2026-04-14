@@ -161,6 +161,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [activePlatformTab, setActivePlatformTab] = useState<string | null>(null);
+  const [scorecardView, setScorecardView] = useState<'list' | 'matrix'>('list');
   const [socialInputs, setSocialInputs] = useState<Partial<Record<AuditPlatformKey, string>>>({});
   const [competitorUrls, setCompetitorUrls] = useState<string[]>(['', '', '']);
   const [competitorFaviconErrors, setCompetitorFaviconErrors] = useState<boolean[]>([false, false, false]);
@@ -1004,10 +1005,10 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           who those competitors are. */}
       {competitors.length > 0 && <CompetitorPreview competitors={competitors} />}
 
-      {/* Scorecard with dots */}
+      {/* Scorecard with view toggle — List (current) or Head-to-head matrix */}
       {scorecard && scorecard.items.length > 0 && (
         <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
-          <div className="px-6 py-5 border-b border-nativz-border flex items-center justify-between">
+          <div className="px-6 py-5 border-b border-nativz-border flex items-center justify-between flex-wrap gap-3">
             <div>
               <h3 className="text-base font-semibold text-text-primary">Analysis scorecard</h3>
               <div className="flex items-center gap-4 mt-2">
@@ -1019,12 +1020,35 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                 ))}
               </div>
             </div>
+            <div className="flex rounded-lg border border-nativz-border p-0.5">
+              {(['list', 'matrix'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setScorecardView(v)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                    scorecardView === v
+                      ? 'bg-accent-surface text-accent-text'
+                      : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  {v === 'list' ? 'List' : 'Head-to-head'}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-nativz-border">
-            {scorecard.items.map((item, i) => (
-              <ScorecardCard key={i} item={item} />
-            ))}
-          </div>
+          {scorecardView === 'list' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-nativz-border">
+              {scorecard.items.map((item, i) => (
+                <ScorecardCard key={i} item={item} />
+              ))}
+            </div>
+          ) : (
+            <ScorecardComparisonMatrix
+              items={scorecard.items}
+              prospectLabel={websiteContext?.title ?? 'Your brand'}
+            />
+          )}
         </div>
       )}
 
@@ -1346,6 +1370,97 @@ function ScorecardCard({ item }: { item: ScorecardItem }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Head-to-head scorecard matrix. Same data as the card grid, laid out as a
+ * pricing-table-style comparison so you can scan one dimension across every
+ * entity at once. Prospect column is highlighted; cells color-code by status.
+ *
+ * Columns: prospect + each competitor on the first item (scorecard items all
+ * share the same competitor set upstream, so competitors[0] is canonical).
+ */
+function ScorecardComparisonMatrix({
+  items,
+  prospectLabel,
+}: {
+  items: ScorecardItem[];
+  prospectLabel: string;
+}) {
+  // Collect the canonical competitor list across all items so the column
+  // order is stable even if some items lack a competitor entry.
+  const competitorMap = new Map<string, string>();
+  for (const item of items) {
+    for (const c of item.competitors) {
+      if (!competitorMap.has(c.username)) competitorMap.set(c.username, c.username);
+    }
+  }
+  const competitors = Array.from(competitorMap.keys());
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] border-collapse text-sm">
+        <thead>
+          <tr>
+            <th className="sticky left-0 z-10 bg-surface px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
+              Dimension
+            </th>
+            <th className="min-w-[160px] border-l border-nativz-border bg-accent-surface/15 px-4 py-3 text-left">
+              <p className="truncate text-sm font-semibold text-text-primary">{prospectLabel}</p>
+              <p className="truncate text-[10px] text-text-muted">You</p>
+            </th>
+            {competitors.map((username) => (
+              <th
+                key={username}
+                className="min-w-[160px] border-l border-nativz-border px-4 py-3 text-left"
+              >
+                <p className="truncate text-sm font-semibold text-text-primary">
+                  @{String(username).replace(/^@+/, '')}
+                </p>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item, idx) => {
+            const prospectStyle = STATUS_COLORS[item.prospectStatus];
+            return (
+              <tr key={idx} className={idx % 2 === 0 ? '' : 'bg-background/30'}>
+                <td className="sticky left-0 z-10 bg-surface px-4 py-3 text-sm font-medium text-text-secondary">
+                  {item.label}
+                </td>
+                <td className="border-l border-nativz-border bg-accent-surface/15 px-4 py-3 align-top">
+                  <div className="flex items-start gap-2">
+                    <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${prospectStyle.dot}`} />
+                    <p className={`text-sm leading-snug ${prospectStyle.text}`}>{item.prospectValue}</p>
+                  </div>
+                </td>
+                {competitors.map((username) => {
+                  const comp = item.competitors.find((c) => c.username === username);
+                  if (!comp) {
+                    return (
+                      <td key={username} className="border-l border-nativz-border px-4 py-3 text-xs text-text-muted/50">
+                        —
+                      </td>
+                    );
+                  }
+                  const style = STATUS_COLORS[comp.status];
+                  return (
+                    <td key={username} className="border-l border-nativz-border px-4 py-3 align-top">
+                      <div className="flex items-start gap-2">
+                        <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
+                        <p className={`text-sm leading-snug ${style.text}`}>{comp.value}</p>
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
