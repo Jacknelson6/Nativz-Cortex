@@ -12,14 +12,15 @@ Admins handle follow-ups, reminders, and onboarding touchpoints via their person
 
 - Send templated or free-form email to a single user or bulk-selected users from `/admin/users`
 - A shared template library (CRUD) that all admins see, categorised (followup / reminder / calendar / welcome / general)
-- Merge fields resolve per recipient at send time (no manual `[NAME HERE]` placeholders)
+- Schedule individual sends for a future date/time (v1: single-shot; multi-step drip sequences are v2)
+- Merge fields resolve per recipient at send/schedule time (no manual `[NAME HERE]` placeholders)
 - Every send is logged to `activity_log` for auditability
 - Brand-aware `from` address and HTML wrapper — matches existing `lib/email/resend.ts` pattern
 
 ## Non-goals
 
 - `.ics` calendar attachments — flagged as a follow-up once Nango calendar write-back lands. Meeting-confirmation template body references a scheduling link today.
-- Scheduled sends / drip sequences — send-now only in v1
+- Multi-step drip sequences — v1 supports single-shot scheduled sends (pick a date/time once per email). To approximate a 3-touch drip, an admin schedules three individual sends; a built-in sequence builder is v2.
 - Open/click tracking — not in v1; Resend exposes webhooks we can wire later
 - Email reply handling — replies go to the brand `reply-to` address; admins handle them in their personal mail client
 - Rich-text / WYSIWYG editor — Markdown textarea + live preview is sufficient for v1
@@ -135,7 +136,16 @@ Composer modal layout matches the user's reference screenshot:
 └────────────────┴──────────────────────────────────────┘
 ```
 
-- **Template rail** (left): groups by category, "Blank" pinned at top. Click a template → subject + body load into the right pane.
+- **Template rail** (left): groups by category, "Blank" pinned at top. Click a template name → subject + body load into the right pane (send mode). Each rail row also has a small **pencil** icon (edit) and **trash** icon (delete) that appear on hover. "+ New template" button at the bottom of the rail opens the same modal in template-edit mode with an empty form.
+
+**Template-edit mode** (toggled when the pencil or "+ New template" is clicked):
+- Recipient chips row is replaced with two fields: `name` (text) + `category` (select: followup / reminder / calendar / welcome / general)
+- Subject + body editors are unchanged
+- Primary button switches to **Save template** (calls `POST` for new, `PATCH` for existing)
+- Trash icon on the top-right for existing templates (calls `DELETE`, prompts confirm)
+- "Back to send" link returns to send mode pre-filled with this template's content
+
+Edits take effect immediately — the rail refetches after save/delete.
 - **Recipient chips** (top of right pane): removable. In bulk mode, shows "Sending to N users" with a peek-expand list.
 - **Subject**: single-line input, placeholder `"Subject"`.
 - **Body**: monospace textarea, Markdown. No WYSIWYG.
@@ -160,11 +170,72 @@ Every successful send writes one row to the existing `activity_log` table:
 
 No new logging table. Failures are NOT logged to `activity_log` (they're returned to the caller); they're left in Resend's dashboard + the server `console.warn` trail.
 
+### 7. Scheduled sends
+
+Admins can send-now or schedule for a future time. Single-shot only — multi-step drip sequences are v2.
+
+**New table — `scheduled_emails`:**
+
+```sql
+create table scheduled_emails (
+  id uuid primary key default gen_random_uuid(),
+  recipient_id uuid not null references users(id) on delete cascade,
+  template_id uuid references email_templates(id) on delete set null,
+  subject text not null,
+  body_markdown text not null,
+  send_at timestamptz not null,
+  status text not null default 'pending' check (status in ('pending', 'sent', 'failed', 'cancelled')),
+  sent_at timestamptz,
+  resend_id text,
+  failure_reason text,
+  scheduled_by uuid not null references auth.users(id),
+  created_at timestamptz not null default now()
+);
+
+create index scheduled_emails_pending_idx on scheduled_emails (send_at) where status = 'pending';
+create index scheduled_emails_recipient_idx on scheduled_emails (recipient_id);
+
+alter table scheduled_emails enable row level security;
+
+create policy scheduled_emails_admin_all on scheduled_emails for all
+  using (exists (select 1 from users u where u.id = auth.uid() and u.role = 'admin'))
+  with check (exists (select 1 from users u where u.id = auth.uid() and u.role = 'admin'));
+```
+
+Subject + body are frozen at schedule time (not re-fetched from `email_templates` when the cron fires) so admin edits to a template don't silently rewrite pending sends. Merge fields are also resolved at schedule time and stored already-interpolated.
+
+**UI change in composer:** the primary **Send** button becomes a split button. Default action is "Send now" (existing behaviour). A dropdown exposes "Schedule…" which opens a datetime picker inline. Picking a date + time + confirm creates a `scheduled_emails` row per recipient (bulk-aware) and closes the modal.
+
+**New routes:**
+
+- `POST /api/admin/users/[id]/schedule-email` — single-recipient scheduled send. Body: `{ subject, body_markdown, template_id?, send_at (ISO) }`. Validates `send_at > now() + 1 min` (no past or near-instant scheduling — use Send now instead). Inserts one `scheduled_emails` row.
+- `POST /api/admin/users/bulk-schedule-email` — bulk variant. Body: `{ user_ids[], subject, body_markdown, template_id?, send_at }`. Inserts N rows.
+- `GET /api/admin/scheduled-emails` → `{ scheduled: ScheduledEmail[] }` with recipient join (`user_id, email, full_name`).
+- `DELETE /api/admin/scheduled-emails/[id]` → sets `status = 'cancelled'` (soft so the audit trail survives).
+- `PATCH /api/admin/scheduled-emails/[id]` → edit `subject`, `body_markdown`, or `send_at` while `status = 'pending'`. 400 if already sent/failed/cancelled.
+
+**Cron:**
+
+- Endpoint: `GET /api/cron/send-scheduled-emails`
+- Vercel cron schedule: `*/1 * * * *` (every minute) — piggybacks the same Vercel Cron config file already used by `weekly-affiliate-report`.
+- Logic:
+  1. `select * from scheduled_emails where status = 'pending' and send_at <= now() limit 50`
+  2. For each row: send via Resend with branded `from` + `layout()` wrapper, using the frozen subject + body.
+  3. On success: update row to `status = 'sent'`, `sent_at = now()`, `resend_id = <id>`. Insert `activity_log` row with `action = 'user_email_sent'` and metadata `{ template_id, recipient_id, subject, resend_id, scheduled_email_id }`.
+  4. On failure: update row to `status = 'failed'`, `failure_reason = <error.message>`. Log to `console.warn`; do NOT retry in v1 (manual re-schedule is the recovery path).
+
+Protect the endpoint with the `CRON_SECRET` header already used by the affiliate-report cron (`x-vercel-cron` verification or shared secret — match the existing pattern exactly).
+
+**UI — "Scheduled" tab on `/admin/users`:**
+
+New tab at the top of the page: `All users | Scheduled emails (N)`. The Scheduled tab renders a table: `Recipient · Subject · Send at · Status · Actions`. Actions per row: Edit, Cancel. Clicking Edit reopens the composer modal pre-filled with the row's content in "edit scheduled" mode; Save updates via `PATCH`. Rows auto-refresh when the tab is active (every 30s) so newly-sent rows flip to `sent` without a manual refresh.
+
 ## Testing
 
 - **Unit:** `resolveMergeFields` pure function — fixtures for every token, the unknown-placeholder case, and an empty-context case.
 - **Route:** one end-to-end test per route against a mocked Resend client (`resend.emails.send` returns a fake ID). Asserts auth gate rejects non-admins, Zod rejects bad bodies, success path writes to `activity_log`.
-- **Manual QA:** send a templated + a blank email to a real test user from the dev server. Open the inbox, verify branding + merge fields + reply-to.
+- **Cron:** unit test `send-scheduled-emails` — seed three `scheduled_emails` rows (one due, one future, one already-sent). Assert the cron sends only the due one, updates status, and leaves the others alone.
+- **Manual QA:** send a templated + a blank email to a real test user from the dev server. Schedule a send 2 minutes out. Open the inbox, verify branding + merge fields + reply-to. Check the Scheduled tab flips `pending → sent` after cron fires.
 
 ## Rollout
 
