@@ -81,10 +81,9 @@ export function SidebarModePicker() {
       role="menu"
       className="fixed z-[9999] rounded-lg border border-nativz-border bg-surface shadow-elevated backdrop-blur animate-[sidebarTooltipIn_120ms_ease-out_forwards]"
       style={{
-        top: position.top,
+        bottom: position.bottom,
         left: position.left,
         width: POPOVER_WIDTH,
-        transform: 'translateY(-100%)',
       }}
     >
       <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">

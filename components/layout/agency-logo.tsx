@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { useBrandMode } from './brand-mode-provider';
+import { useSidebar } from './sidebar';
 
 /**
  * Agency logo pinned to the top-left of the admin shell, detached from the
@@ -12,13 +13,19 @@ import { useBrandMode } from './brand-mode-provider';
  */
 export function AgencyLogo() {
   const { mode } = useBrandMode();
+  const { open } = useSidebar();
   const [showHiTooltip, setShowHiTooltip] = useState(false);
 
-  // Left offset mirrors the sidebar's inner padding (SidebarContent px-3 +
-  // SidebarMenuButton px-2.5 = 1.375rem), so the logo visually aligns with
-  // the nav item icons and section labels underneath it.
+  // Container width tracks the sidebar so the logo centers inside the rail
+  // when expanded and tucks into the corner when collapsed. Transition
+  // matches the sidebar's own width transition so they move as one.
   return (
-    <div className="fixed top-3 left-[1.375rem] z-40 pointer-events-none">
+    <div
+      className={`fixed top-3 left-0 z-40 pointer-events-none flex items-center transition-[width] duration-200 ease-out ${
+        open ? 'justify-center' : 'justify-start pl-3'
+      }`}
+      style={{ width: open ? 'var(--sidebar-width)' : 'var(--sidebar-width-icon)' }}
+    >
       <button
         type="button"
         onClick={() => {
@@ -34,7 +41,7 @@ export function AgencyLogo() {
             alt="Nativz"
             width={150}
             height={56}
-            className="h-11 w-auto"
+            className={`${open ? 'h-11' : 'h-5'} w-auto max-w-full object-contain transition-[height] duration-200 ease-out`}
             priority
           />
         ) : (
@@ -43,7 +50,7 @@ export function AgencyLogo() {
           <img
             src="/anderson-logo-dark.svg"
             alt="Anderson Collaborative"
-            className="h-11 w-auto"
+            className={`${open ? 'h-11' : 'h-5'} w-auto max-w-full object-contain transition-[height] duration-200 ease-out`}
           />
         )}
       </button>
