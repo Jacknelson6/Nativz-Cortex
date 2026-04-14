@@ -6,6 +6,16 @@
 
 ---
 
+## Deferred — visible UI fixes (paused April 14 in favor of personal-moodboards spec)
+
+Jack noticed these in the live admin shell and asked to come back to them after the personal-moodboards spec lands. Pick up next session.
+
+- [ ] **Users page bento — verify on a real screen.** Shipped in `a844ff3`: centered layout (`max-w-7xl mx-auto`), 1/2/3-column grid, single Team filter (replaces the old Admins + Team split), expanded cards span the full row. Confirm spacing, that long client-access badge runs don't blow out card width, and that 3-up at xl isn't cramped — drop to 2-up if it is.
+- [ ] **Edits secondary sidebar — same.** Shipped in `a844ff3`: new rail at `components/layout/admin-edits-sidebar.tsx` mirrors Settings; main rail force-collapses on `/admin/pipeline`, `/admin/shoots`, `/admin/scheduler`. Verify pipeline `?stage=` highlighting and the "Back to dashboard" link reads right.
+- [ ] **Personal moodboards spec ready for review.** `tasks/personal-moodboards.md`. Read the "Open questions" section and answer the 5 inline so the SRL has unblocking direction. Then `/srl tasks/personal-moodboards.md`.
+- [ ] **Cole's invite retest.** Safari double-redirect bug fix shipped in `d339411`. After Vercel goes green, ask Cole to retry the existing invite link (still valid until 2026-04-21, no need to burn a new token). If he still hits "Safari can't open the page", capture the exact URL and we go deeper.
+- [ ] **Migrations 100 + 101 — done April 14.** Marked complete elsewhere in this file; just noting here for continuity.
+
 ## Next Session — human QA for April 13 drops
 
 > See **`SRL.md`** at repo root for the full self-referential loop log.
