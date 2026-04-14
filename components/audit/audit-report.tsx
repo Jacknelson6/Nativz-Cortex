@@ -144,6 +144,11 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [socialInputs, setSocialInputs] = useState<Partial<Record<AuditPlatformKey, string>>>({});
   const [competitorUrls, setCompetitorUrls] = useState<string[]>(['', '', '']);
   const [competitorFaviconErrors, setCompetitorFaviconErrors] = useState<boolean[]>([false, false, false]);
+  const [competitorScope, setCompetitorScope] = useState<'national' | 'local'>('national');
+  const [suggestedCandidates, setSuggestedCandidates] = useState<{ name: string; website: string; why: string }[]>([]);
+  const [selectedCompetitorWebsites, setSelectedCompetitorWebsites] = useState<Set<string>>(new Set());
+  const [generatingCompetitors, setGeneratingCompetitors] = useState(false);
+  const MAX_PICKED_COMPETITORS = 3;
   const [submittingSocials, setSubmittingSocials] = useState(false);
   const [detectedPlatforms, setDetectedPlatforms] = useState<{ platform: string; url: string; username: string }[]>([]);
   const [detecting, setDetecting] = useState(false);
@@ -206,16 +211,20 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
       return preset;
     });
 
-    const storedCompetitors =
-      analysisData?.competitor_urls_override ??
-      analysisData?.suggested_competitors?.map((c) => c.website);
-    if (storedCompetitors && storedCompetitors.length > 0) {
-      setCompetitorUrls((current) => {
-        if (current.some((u) => u.trim())) return current;
-        const urls = storedCompetitors.map((u) => prettyUrl(u));
-        while (urls.length < 3) urls.push('');
-        return urls;
-      });
+    // Seed the generate-competitors list on revisit so the user sees the
+    // same candidates they had before (no re-burning LLM tokens).
+    const persistedCandidates = analysisData?.suggested_competitors ?? [];
+    if (persistedCandidates.length > 0) {
+      setSuggestedCandidates((current) =>
+        current.length > 0 ? current : persistedCandidates.map((c) => ({ name: c.name, website: c.website, why: c.why ?? '' })),
+      );
+    }
+    // Seed previously-selected picks
+    const persistedOverride = analysisData?.competitor_urls_override ?? [];
+    if (persistedOverride.length > 0) {
+      setSelectedCompetitorWebsites((current) =>
+        current.size > 0 ? current : new Set(persistedOverride),
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audit.status, audit.id]);
@@ -367,21 +376,9 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         }
         setSocialInputs(preset);
 
-        // Block the transition until competitors are suggested so the user
-        // sees a fully-populated confirm screen instead of pulsing inputs.
-        try {
-          const compRes = await fetch(`/api/analyze-social/${audit.id}/suggest-competitors`, { method: 'POST' });
-          if (compRes.ok) {
-            const d = await compRes.json();
-            const candidates: { website: string }[] = d.candidates ?? [];
-            const urls = candidates.map((c) => prettyUrl(c.website));
-            while (urls.length < 3) urls.push('');
-            setCompetitorUrls(urls);
-          }
-        } catch {
-          /* silently ignore — inputs stay empty, user can paste manually */
-        }
-
+        // Competitor suggestions are now explicit: the user clicks
+        // "Generate competitors" on the confirm screen and chooses a
+        // scope (national/local). No LLM burn on mount.
         setAudit(prev => ({ ...prev, status: 'confirming_platforms' }));
       } else {
         // If detect fails, go straight to processing
@@ -394,10 +391,49 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     }
   }
 
+  async function generateCompetitors() {
+    if (generatingCompetitors) return;
+    setGeneratingCompetitors(true);
+    try {
+      const res = await fetch(`/api/analyze-social/${audit.id}/suggest-competitors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: competitorScope }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const candidates: { name: string; website: string; why: string }[] = d.candidates ?? [];
+        setSuggestedCandidates(candidates);
+        // Don't auto-select — let the user pick the ones they actually recognize.
+        setSelectedCompetitorWebsites(new Set());
+      }
+    } catch {
+      /* swallow — the list just won't populate, user can retry */
+    } finally {
+      setGeneratingCompetitors(false);
+    }
+  }
+
+  function toggleCompetitorPick(website: string) {
+    setSelectedCompetitorWebsites((prev) => {
+      const next = new Set(prev);
+      if (next.has(website)) {
+        next.delete(website);
+      } else if (next.size < MAX_PICKED_COMPETITORS) {
+        next.add(website);
+      }
+      return next;
+    });
+  }
+
   async function startProcessing() {
     // Save any manual social URLs before processing
     const filled = Object.fromEntries(Object.entries(socialInputs).filter(([, v]) => v?.trim()));
-    const cleanedCompetitors = competitorUrls.map((u) => u.trim()).filter(Boolean);
+    // Prefer the user's picks from the Generate flow; fall back to any
+    // manually-typed legacy competitor inputs if we're revisiting an old audit.
+    const picked = Array.from(selectedCompetitorWebsites);
+    const legacy = competitorUrls.map((u) => u.trim()).filter(Boolean);
+    const cleanedCompetitors = picked.length > 0 ? picked : legacy;
     if (Object.keys(filled).length > 0 || cleanedCompetitors.length > 0) {
       await fetch(`/api/analyze-social/${audit.id}/resume`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -586,55 +622,115 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           </div>
 
           <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold text-text-primary">Your competitors</h3>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <h3 className="text-lg font-semibold text-text-primary">Your competitors</h3>
+                <p className="text-sm text-text-muted mt-0.5">
+                  Pick up to {MAX_PICKED_COMPETITORS} to benchmark against. Generated from your brand and checked against live websites.
+                </p>
+              </div>
+
+              {/* National / Local scope toggle */}
+              <div className="inline-flex rounded-lg border border-nativz-border p-0.5">
+                {(['national', 'local'] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setCompetitorScope(s)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors cursor-pointer ${
+                      competitorScope === s
+                        ? 'bg-accent text-white'
+                        : 'text-text-muted hover:text-text-secondary'
+                    }`}
+                  >
+                    {s === 'national' ? 'National' : 'Local'}
+                  </button>
+                ))}
+              </div>
             </div>
-            {[0, 1, 2].map((i) => {
-              const url = competitorUrls[i] ?? '';
-              const domain = faviconDomain(url);
-              const imgError = competitorFaviconErrors[i] ?? false;
-              return (
-                <div key={i} className="flex items-center gap-3">
-                  <span className="shrink-0 w-5 h-5 flex items-center justify-center">
-                    {domain && !imgError ? (
-                      <img
-                        src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
-                        alt=""
-                        width={20}
-                        height={20}
-                        className="rounded-sm object-contain"
-                        onError={() => setCompetitorFaviconErrors((prev) => {
-                          const next = [...prev];
-                          next[i] = true;
-                          return next;
-                        })}
-                      />
-                    ) : (
-                      <Globe size={16} className="text-text-muted/50" />
-                    )}
-                  </span>
-                  <input
-                    type="text"
-                    value={url}
-                    onChange={(e) => {
-                      // Clear favicon error when URL changes so the img retries
-                      setCompetitorFaviconErrors((prev) => {
-                        const next = [...prev];
-                        next[i] = false;
-                        return next;
-                      });
-                      setCompetitorUrls((prev) => {
-                        const next = [...prev];
-                        next[i] = e.target.value;
-                        return next;
-                      });
-                    }}
-                    placeholder={`Competitor ${i + 1} website — e.g. doughco.com`}
-                    className="flex-1 rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-base text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/40"
-                  />
-                </div>
-              );
-            })}
+
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => void generateCompetitors()}
+                disabled={generatingCompetitors}
+                variant={suggestedCandidates.length > 0 ? 'secondary' : 'primary'}
+                className="text-sm"
+              >
+                {generatingCompetitors
+                  ? 'Generating...'
+                  : suggestedCandidates.length > 0
+                    ? 'Regenerate'
+                    : 'Generate competitors'}
+              </Button>
+              {suggestedCandidates.length > 0 && (
+                <span className="text-xs text-text-muted">
+                  {selectedCompetitorWebsites.size} of {MAX_PICKED_COMPETITORS} selected
+                </span>
+              )}
+            </div>
+
+            {/* Empty state */}
+            {!generatingCompetitors && suggestedCandidates.length === 0 && (
+              <div className="rounded-lg border border-dashed border-nativz-border bg-background/40 px-4 py-6 text-center">
+                <p className="text-sm text-text-muted">
+                  Click Generate to see {competitorScope === 'local' ? 'local' : 'national'} competitor candidates for your brand.
+                </p>
+                <p className="text-xs text-text-muted/70 mt-1">
+                  You can also skip this step and start without competitors.
+                </p>
+              </div>
+            )}
+
+            {/* Candidate list */}
+            {suggestedCandidates.length > 0 && (
+              <ul className="space-y-1.5">
+                {suggestedCandidates.map((c) => {
+                  const picked = selectedCompetitorWebsites.has(c.website);
+                  const atLimit = !picked && selectedCompetitorWebsites.size >= MAX_PICKED_COMPETITORS;
+                  return (
+                    <li key={c.website}>
+                      <button
+                        type="button"
+                        onClick={() => toggleCompetitorPick(c.website)}
+                        disabled={atLimit}
+                        className={`w-full flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                          picked
+                            ? 'border-accent/40 bg-accent-surface/30'
+                            : 'border-nativz-border bg-surface hover:bg-surface-hover'
+                        } ${atLimit ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                        title={c.why || undefined}
+                      >
+                        <span
+                          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                            picked ? 'border-accent-text bg-accent text-white' : 'border-nativz-border'
+                          }`}
+                          aria-hidden
+                        >
+                          {picked && <Check size={11} />}
+                        </span>
+                        <img
+                          src={`https://www.google.com/s2/favicons?domain=${faviconDomain(c.website) ?? c.website}&sz=32`}
+                          alt=""
+                          width={18}
+                          height={18}
+                          className="mt-0.5 rounded-sm object-contain shrink-0"
+                          onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline gap-2 flex-wrap">
+                            <span className="text-sm font-medium text-text-primary truncate">{c.name}</span>
+                            <span className="text-xs text-text-muted truncate">{prettyUrl(c.website)}</span>
+                          </div>
+                          {c.why && (
+                            <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{c.why}</p>
+                          )}
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
 
           <div className="flex items-center justify-between">

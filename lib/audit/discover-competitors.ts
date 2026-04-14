@@ -72,6 +72,55 @@ export interface CompetitorDiscoveryResult {
   failures: CompetitorDiscoveryFailure[];
 }
 
+/**
+ * HEAD-check each candidate's domain and drop anything that doesn't resolve.
+ *
+ * LLMs hallucinate plausible-sounding domains — e.g. "sapahouse.com" for a
+ * Vietnamese restaurant that doesn't exist. Before we surface a list to the
+ * user we probe each domain to make sure it's real. Runs requests in parallel
+ * with a short per-candidate timeout so the whole check finishes in a few
+ * seconds even when many candidates are dead.
+ */
+export async function filterReachableCandidates<T extends { website: string }>(
+  candidates: T[],
+  timeoutMs: number = 4000,
+): Promise<T[]> {
+  async function probe(url: string): Promise<boolean> {
+    const target = url.startsWith('http') ? url : `https://${url}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      // HEAD first — many sites accept it and return fast
+      const headRes = await fetch(target, {
+        method: 'HEAD',
+        signal: controller.signal,
+        redirect: 'follow',
+      });
+      if (headRes.ok || (headRes.status >= 300 && headRes.status < 400)) return true;
+      // Some hosts refuse HEAD (405) — fall back to a range-limited GET
+      if (headRes.status === 405) {
+        const getRes = await fetch(target, {
+          method: 'GET',
+          signal: controller.signal,
+          headers: { range: 'bytes=0-1024' },
+          redirect: 'follow',
+        });
+        return getRes.ok;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  const results = await Promise.all(
+    candidates.map(async (c) => ({ candidate: c, ok: await probe(c.website) })),
+  );
+  return results.filter((r) => r.ok).map((r) => r.candidate);
+}
+
 /** Normalise the LLM's website guess into something scrapeWebsite can eat. */
 function normaliseWebsite(raw: string): string {
   const trimmed = raw.trim().replace(/^https?:\/\//i, '').replace(/\/$/, '');
@@ -123,7 +172,13 @@ async function scrapeSocialForCompetitor(
 export async function suggestCompetitorWebsites(
   websiteContext: WebsiteContext,
   targetPlatformSignals: { platform: AuditPlatform; topHashtags: string[]; followers: number }[],
+  options: { scopeOverride?: 'national' | 'local' } = {},
 ): Promise<LlmCandidate[]> {
+  // When the caller provides an explicit scope, trust it over whatever the
+  // website-context extractor inferred. Users toggling "local / national"
+  // on the confirm screen are a stronger signal than a keyword sniff of
+  // the homepage.
+  const effectiveScope = options.scopeOverride ?? websiteContext.scope ?? 'national';
   const topSignals = targetPlatformSignals
     .map(
       (p) =>
@@ -141,9 +196,9 @@ export async function suggestCompetitorWebsites(
     : 'Pick competitors at roughly the same scale as this brand — not mega-brands 100× their size.';
 
   const scopeAnchor =
-    websiteContext.scope === 'local' && websiteContext.location
+    effectiveScope === 'local'
       ? `GEOGRAPHIC SCOPE
-This is a LOCAL business operating in ${websiteContext.location}. Strongly prefer competitors in the SAME metro area or region — businesses a customer in ${websiteContext.location} would actually choose between. If you cannot find enough same-metro competitors to reach 3+ candidates, it is acceptable to include a handful from the broader region (same state or nearby major metro).`
+This is a LOCAL business${websiteContext.location ? ` operating in ${websiteContext.location}` : ''}. Strongly prefer competitors in the SAME metro area or region — businesses a customer${websiteContext.location ? ` in ${websiteContext.location}` : ''} would actually choose between. If you cannot find enough same-metro competitors to reach 3+ candidates, it is acceptable to include a handful from the broader region (same state or nearby major metro).`
       : `GEOGRAPHIC SCOPE (non-negotiable)
 This brand operates NATIONALLY (ships DTC, franchises across states, or sells digitally). Pick nationally-recognized competitors — companies operating in the same product / service category at national scale. Single-city local competitors are WRONG for this comparison.`;
 
@@ -154,7 +209,7 @@ TARGET BRAND
 - Industry: ${websiteContext.industry}
 - Description: ${websiteContext.description}
 - Keywords: ${websiteContext.keywords.slice(0, 10).join(', ')}
-- Scope: ${websiteContext.scope ?? 'national'}${websiteContext.location ? ` (${websiteContext.location})` : ''}
+- Scope: ${effectiveScope}${websiteContext.location ? ` (${websiteContext.location})` : ''}
 ${topSignals ? `\nTARGET SOCIAL SIGNALS\n${topSignals}` : ''}
 
 ${scopeAnchor}
