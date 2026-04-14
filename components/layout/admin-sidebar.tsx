@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -23,7 +22,6 @@ import {
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { SidebarModePicker } from '@/components/layout/sidebar-mode-picker';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
-import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import {
   Sidebar,
   SidebarHeader,
@@ -229,8 +227,6 @@ export function AdminSidebar({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { open } = useSidebar();
-  const { mode, toggleMode, isForced } = useBrandMode();
-  const [showHiTooltip, setShowHiTooltip] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
 
   function toggleMenu(href: string) {
@@ -244,54 +240,10 @@ export function AdminSidebar({
 
   return (
     <Sidebar>
-      {/* Logo — click toggles brand mode (Nativz ↔ Anderson Collaborative), or shows 'Hi there!' when forced */}
-      <SidebarHeader>
-        <div className="relative flex w-full items-center justify-center mb-3">
-          <button
-            type="button"
-            onClick={() => {
-              setShowHiTooltip(true);
-              setTimeout(() => setShowHiTooltip(false), 2200); // matches hiTooltip animation duration
-            }}
-            aria-label="Hi there!"
-            className="flex w-full items-center justify-center hover:opacity-80 transition-all duration-200 cursor-pointer"
-          >
-            {mode === 'nativz' ? (
-              <Image
-                src="/nativz-logo.svg"
-                alt="Nativz"
-                width={open ? 120 : 28}
-                height={open ? 46 : 10}
-                className={`${open ? 'h-9 w-auto' : 'h-5 w-auto'} transition-opacity duration-200`}
-                priority
-              />
-            ) : (
-              <img
-                src="/anderson-logo-dark.svg"
-                alt="Anderson Collaborative"
-                className={`${open ? 'h-9 w-auto' : 'h-5 w-auto'} transition-opacity duration-200`}
-              />
-            )}
-          </button>
-
-          {/* 'Hi there!' tooltip — centered under the logo */}
-          {showHiTooltip && (
-            <div
-              className="fixed top-16 z-[9999]"
-              style={{
-                animation: 'hiTooltip 2.2s cubic-bezier(0.16,1,0.3,1) forwards',
-                left: open ? '7rem' : '28px',
-                transform: 'translateX(-50%)',
-              }}
-            >
-              <div className="rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm font-medium text-text-primary shadow-elevated whitespace-nowrap">
-                Hi there! 👋
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Brand switcher for portal users with multiple clients */}
+      {/* Logo moved to <AgencyLogo /> at the admin-layout level (top-left
+          of the viewport). Sidebar header reserves vertical room for that
+          fixed logo so nav items don't collide with it. */}
+      <SidebarHeader className="pt-16">
         {role === 'viewer' && brands && brands.length > 1 && activeBrandId && (
           <div className="mb-1">
             <BrandSwitcher activeBrandId={activeBrandId} brands={brands} collapsed={!open} />

@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 import { AdminSidebar } from '@/components/layout/admin-sidebar';
 import { AdminSettingsSidebar } from '@/components/layout/admin-settings-sidebar';
 import { AdminEditsSidebar } from '@/components/layout/admin-edits-sidebar';
+import { AgencyLogo } from '@/components/layout/agency-logo';
 import { AdminHeader } from '@/components/layout/admin-header';
 import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
 import { EasterEgg } from '@/components/easter-egg';
@@ -58,6 +59,7 @@ export default async function AdminLayout({
         <SidebarProvider>
           <EasterEgg />
           <CommandPalette />
+          <AgencyLogo />
           <AdminSidebar userName={userName} avatarUrl={avatarUrl} />
           <AdminSettingsSidebar />
           <AdminEditsSidebar />
