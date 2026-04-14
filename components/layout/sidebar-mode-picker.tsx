@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { PanelLeft, PanelLeftClose, MousePointer, Check } from 'lucide-react';
 import { useSidebar, type SidebarMode } from './sidebar';
 
@@ -10,24 +11,51 @@ const MODE_OPTIONS: { value: SidebarMode; label: string; icon: React.ComponentTy
   { value: 'hover', label: 'Expand on hover', icon: MousePointer },
 ];
 
+const POPOVER_WIDTH = 240;
+
 /**
  * Compact button that opens a popover with three sidebar layout options.
- * Replaces the old "Collapse" toggle in the sidebar footer so users can pick
- * between a persistent expanded rail, a persistent icon rail, or a hover-to-
- * expand overlay — no longer a binary.
+ * Popover renders into document.body via a portal so it escapes the
+ * sidebar's overflow-hidden and stays visible when the rail is collapsed
+ * to the icon-only width.
  */
 export function SidebarModePicker() {
   const { open, mode, setMode } = useSidebar();
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
 
-  // Click-outside dismiss.
+  useEffect(() => { setMounted(true); }, []);
+
+  // Recompute position whenever the popover opens or the viewport changes.
+  useLayoutEffect(() => {
+    if (!popoverOpen || !buttonRef.current) return;
+    function updatePos() {
+      const rect = buttonRef.current!.getBoundingClientRect();
+      setPosition({
+        top: rect.top - 8, // sits above the trigger with a small gap
+        left: rect.left,
+      });
+    }
+    updatePos();
+    window.addEventListener('resize', updatePos);
+    window.addEventListener('scroll', updatePos, true);
+    return () => {
+      window.removeEventListener('resize', updatePos);
+      window.removeEventListener('scroll', updatePos, true);
+    };
+  }, [popoverOpen]);
+
+  // Click-outside + Escape dismiss.
   useEffect(() => {
     if (!popoverOpen) return;
     function onDoc(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setPopoverOpen(false);
-      }
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setPopoverOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') setPopoverOpen(false);
@@ -43,9 +71,54 @@ export function SidebarModePicker() {
   const active = MODE_OPTIONS.find((o) => o.value === mode) ?? MODE_OPTIONS[0];
   const ActiveIcon = active.icon;
 
+  const popover = popoverOpen && position && (
+    <div
+      ref={popoverRef}
+      role="menu"
+      className="fixed z-[9999] rounded-lg border border-nativz-border bg-surface shadow-elevated backdrop-blur animate-[sidebarTooltipIn_120ms_ease-out_forwards]"
+      style={{
+        top: position.top,
+        left: position.left,
+        width: POPOVER_WIDTH,
+        transform: 'translateY(-100%)',
+      }}
+    >
+      <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+        Sidebar control
+      </div>
+      <ul className="py-1">
+        {MODE_OPTIONS.map((opt) => {
+          const Icon = opt.icon;
+          const selected = mode === opt.value;
+          return (
+            <li key={opt.value}>
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={selected}
+                onClick={() => {
+                  setMode(opt.value);
+                  setPopoverOpen(false);
+                }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors cursor-pointer ${
+                  selected ? 'bg-accent-surface/40 text-text-primary' : 'text-text-secondary hover:bg-surface-hover'
+                }`}
+              >
+                <Icon size={14} className="shrink-0 text-text-muted" />
+                <span className="flex-1 whitespace-nowrap">{opt.label}</span>
+                {selected && <Check size={14} className="shrink-0 text-accent-text" />}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+
   return (
-    <div ref={wrapperRef} className="relative mt-2">
+    <div className="relative mt-2">
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setPopoverOpen((v) => !v)}
         aria-label="Sidebar control"
@@ -60,42 +133,7 @@ export function SidebarModePicker() {
         {open && <span className="truncate">{active.label}</span>}
       </button>
 
-      {popoverOpen && (
-        <div
-          role="menu"
-          className="absolute bottom-full left-0 z-40 mb-2 w-60 rounded-lg border border-nativz-border bg-surface shadow-elevated backdrop-blur animate-[sidebarTooltipIn_120ms_ease-out_forwards]"
-        >
-          <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            Sidebar control
-          </div>
-          <ul className="py-1">
-            {MODE_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              const selected = mode === opt.value;
-              return (
-                <li key={opt.value}>
-                  <button
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={selected}
-                    onClick={() => {
-                      setMode(opt.value);
-                      setPopoverOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors cursor-pointer ${
-                      selected ? 'bg-accent-surface/40 text-text-primary' : 'text-text-secondary hover:bg-surface-hover'
-                    }`}
-                  >
-                    <Icon size={14} className="shrink-0 text-text-muted" />
-                    <span className="flex-1 whitespace-nowrap">{opt.label}</span>
-                    {selected && <Check size={14} className="shrink-0 text-accent-text" />}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
+      {mounted && popover && createPortal(popover, document.body)}
     </div>
   );
 }
