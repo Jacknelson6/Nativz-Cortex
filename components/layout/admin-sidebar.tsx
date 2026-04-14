@@ -76,7 +76,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/admin/strategy-lab', label: 'Content Lab', icon: Compass },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
-      { href: '/admin/presentations', label: 'Notes', icon: StickyNote },
+      { href: '/admin/notes', label: 'My board', icon: StickyNote },
     ],
   },
   {
