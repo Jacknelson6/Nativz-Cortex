@@ -5,9 +5,21 @@ import { z } from 'zod';
 
 export const maxDuration = 30;
 
+// Accept either a fully-qualified URL or a bare domain (doughco.com, sapahouse.com).
+// The process route calls normaliseWebsite() before scraping anyway, so either
+// form lands correctly downstream. Enforcing z.string().url() here silently
+// dropped entries from the Generate-competitors flow that store bare domains.
+const domainOrUrl = z
+  .string()
+  .min(1)
+  .transform((s) => s.trim())
+  .refine((s) => /^(?:https?:\/\/)?[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:\/.*)?$/i.test(s), {
+    message: 'Must be a URL or domain',
+  });
+
 const ResumeSchema = z.object({
   social_urls: z.record(z.string(), z.string()),
-  competitor_urls: z.array(z.string().url()).max(3).optional(),
+  competitor_urls: z.array(domainOrUrl).max(3).optional(),
   social_goals: z.array(z.string()).max(10).optional(),
 });
 

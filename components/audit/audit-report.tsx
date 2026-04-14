@@ -431,8 +431,16 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     const filled = Object.fromEntries(Object.entries(socialInputs).filter(([, v]) => v?.trim()));
     // Prefer the user's picks from the Generate flow; fall back to any
     // manually-typed legacy competitor inputs if we're revisiting an old audit.
-    const picked = Array.from(selectedCompetitorWebsites);
-    const legacy = competitorUrls.map((u) => u.trim()).filter(Boolean);
+    // Normalize every URL — the resume route validates each entry with
+    // Zod's .url() which requires a scheme, and LLM candidates come back
+    // as bare domains (e.g. "doughco.com") that would otherwise fail silently.
+    const normalize = (u: string) => {
+      const trimmed = u.trim();
+      if (!trimmed) return '';
+      return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    };
+    const picked = Array.from(selectedCompetitorWebsites).map(normalize).filter(Boolean);
+    const legacy = competitorUrls.map(normalize).filter(Boolean);
     const cleanedCompetitors = picked.length > 0 ? picked : legacy;
     if (Object.keys(filled).length > 0 || cleanedCompetitors.length > 0) {
       await fetch(`/api/analyze-social/${audit.id}/resume`, {
