@@ -449,6 +449,7 @@ export function AdminSidebar({
           settingsHref={settingsPath}
           logoutRedirect={logoutPath}
           collapsed={!open}
+          clientViewHref={role === 'admin' ? '/portal' : undefined}
         />
 
         {/* Collapse toggle — visible whether open or collapsed */}

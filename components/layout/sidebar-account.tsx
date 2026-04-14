@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Settings, LogOut, User, Key, Cpu } from 'lucide-react';
+import { Settings, LogOut, User, Eye } from 'lucide-react';
 
 interface SidebarAccountProps {
   userName?: string;
@@ -12,6 +12,10 @@ interface SidebarAccountProps {
   settingsHref: string;
   logoutRedirect: string;
   collapsed?: boolean;
+  /** When set, renders a "Client view" menu item linking here. Used by the
+   *  admin sidebar to let the team peek at the portal without losing the
+   *  admin session. Omit for portal users. */
+  clientViewHref?: string;
 }
 
 export function SidebarAccount({
@@ -20,6 +24,7 @@ export function SidebarAccount({
   settingsHref,
   logoutRedirect,
   collapsed = false,
+  clientViewHref,
 }: SidebarAccountProps) {
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -79,6 +84,16 @@ export function SidebarAccount({
             <Settings size={15} />
             Account settings
           </Link>
+          {clientViewHref && (
+            <Link
+              href={clientViewHref}
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors whitespace-nowrap"
+            >
+              <Eye size={15} />
+              Client view
+            </Link>
+          )}
           <button
             onClick={handleLogout}
             disabled={loggingOut}
