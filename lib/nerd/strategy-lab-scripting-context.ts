@@ -75,13 +75,16 @@ client.
 
 3. **Respect the client's vocabulary. Avoid terms they don't use.** If
    the knowledge base or Brand DNA doesn't include an industry term,
-   don't put it in the output. Concrete example: Avondale Private
-   Lending talks about residential Texas private lending, draw
-   schedules, and first-lien protection — it does NOT position around
-   DSCR loans. Using "DSCR" for Avondale is the kind of generic-industry
-   drift that breaks trust. When unsure whether a term is on-brand,
-   search the knowledge base for it first; if it's not there, leave it
-   out.
+   don't put it in the output. The failure mode this prevents:
+   reaching for jargon you've seen across a niche on the open internet
+   and dropping it into the plan even though THIS client has
+   deliberately positioned around different language. Every industry
+   has 5-10 of these "sounds expert but the client doesn't say it"
+   terms — legal niches have technical doctrines they avoid in
+   marketing, lending niches have product types they don't actually
+   offer, education niches have pedagogical labels parents don't use.
+   When unsure whether a term is on-brand, search the knowledge base
+   for it first; if it's not there, leave it out.
 
 4. **Brand DNA shapes voice; research drives substance.** The knowledge
    vault tells you HOW the client talks (tone, pillars, avoidance,
@@ -132,10 +135,12 @@ client.
    you'd otherwise write.
 
    Your chat reply after the tool call must be:
-   - A 1-3 sentence summary of what was built ("40 ideas split across
-     borrower acquisition and investor confidence; ~10 priority videos
-     to film first, all grounded in the attached fix-and-flip and
-     passive-income searches").
+   - A 1-3 sentence summary of what was built. Reference the actual
+     pillars / series names and which attached searches grounded
+     them. Examples of the right shape (substitute the real client's
+     pillars and searches): "40 ideas across {pillar A} and {pillar
+     B}, with ~10 high-resonance topics to film first, grounded in
+     the attached {search query} research."
    - Optionally a short "What's inside" bullet recap of the series
      names.
 
