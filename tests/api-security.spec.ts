@@ -18,4 +18,24 @@ test.describe('API without session', () => {
     const json = await res.json().catch(() => ({}));
     expect(json).toMatchObject({ error: 'Unauthorized' });
   });
+
+  // Portal Content Lab endpoints — verify the unauthed boundary. Deeper
+  // cross-org scoping is exercised by scripts/qa-topic-plan.ts at the
+  // tool-handler level.
+  test('GET /api/nerd/searches without session returns 401', async ({ request }) => {
+    const res = await request.get('/api/nerd/searches?clientId=00000000-0000-0000-0000-000000000000');
+    expect(res.status()).toBe(401);
+  });
+
+  test('GET /api/nerd/mentions without session returns 401', async ({ request }) => {
+    const res = await request.get('/api/nerd/mentions');
+    expect(res.status()).toBe(401);
+  });
+
+  test('POST /api/nerd/chat without session returns 401', async ({ request }) => {
+    const res = await request.post('/api/nerd/chat', {
+      data: { messages: [{ role: 'user', content: 'hi' }], portalMode: true },
+    });
+    expect(res.status()).toBe(401);
+  });
 });
