@@ -47,15 +47,22 @@ export async function GET() {
       .eq('is_active', true)
       .order('name');
 
+    // Viewers don't need team_members in the autocomplete — the portal
+    // @mention surfaces don't support team mentions — and returning them
+    // would leak the full agency contact directory. Admins still get it.
+    const isViewer = userData?.role === 'viewer';
+
     const [clientsResult, teamResult] = await Promise.all([
       accessibleClientIds
         ? baseClientsQuery.in('id', accessibleClientIds)
         : baseClientsQuery,
-      admin
-        .from('team_members')
-        .select('id, full_name, email, role, avatar_url')
-        .eq('is_active', true)
-        .order('full_name'),
+      isViewer
+        ? Promise.resolve({ data: [] as Array<{ id: string; full_name: string; role: string; avatar_url: string | null }> })
+        : admin
+            .from('team_members')
+            .select('id, full_name, email, role, avatar_url')
+            .eq('is_active', true)
+            .order('full_name'),
     ]);
 
     const clients = (clientsResult.data ?? []).map((c) => ({

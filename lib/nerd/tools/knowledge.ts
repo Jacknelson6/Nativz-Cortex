@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ToolDefinition } from '../types';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getKnowledgeEntries, createKnowledgeEntry } from '@/lib/knowledge/queries';
 import { searchKnowledge, searchKnowledgeWithIntent } from '@/lib/knowledge/search';
 import { KNOWLEDGE_ENTRY_TYPES, type KnowledgeEntryType } from '@/lib/knowledge/types';
@@ -8,6 +9,40 @@ import { generateVideoIdeas } from '@/lib/knowledge/idea-generator';
 import { embedKnowledgeEntry } from '@/lib/ai/embeddings';
 
 const knowledgeTypeEnum = z.enum(KNOWLEDGE_ENTRY_TYPES as unknown as [string, ...string[]]);
+
+/**
+ * Gate a tool call by the caller's role + organization_id. Admins pass
+ * through. Viewers are only allowed to touch data that belongs to a
+ * client in their own organization. Returns null when allowed, or a
+ * ToolResult-shaped rejection when not.
+ *
+ * Called by every knowledge tool that accepts a `client_id` parameter —
+ * without this gate, the admin Supabase client would bypass RLS and a
+ * portal viewer could read/write any client's vault cross-org.
+ */
+async function requireClientAccess(
+  userId: string,
+  clientId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = createAdminClient();
+  const { data: me } = await admin
+    .from('users')
+    .select('role, organization_id')
+    .eq('id', userId)
+    .single();
+  if (!me) return { ok: false, error: 'User not found' };
+  if (me.role === 'admin') return { ok: true };
+  if (!me.organization_id) return { ok: false, error: 'You do not have access to this client.' };
+  const { data: client } = await admin
+    .from('clients')
+    .select('organization_id')
+    .eq('id', clientId)
+    .maybeSingle();
+  if (!client || client.organization_id !== me.organization_id) {
+    return { ok: false, error: 'You do not have access to this client.' };
+  }
+  return { ok: true };
+}
 
 export const knowledgeTools: ToolDefinition[] = [
   // ── query_client_knowledge ──────────────────────────────────
@@ -21,11 +56,14 @@ export const knowledgeTools: ToolDefinition[] = [
       keyword: z.string().optional(),
     }),
     riskLevel: 'read',
-    handler: async (params) => {
+    handler: async (params, userId) => {
       try {
         const clientId = params.client_id as string;
         const type = params.type as string | undefined;
         const keyword = (params.keyword as string | undefined)?.toLowerCase();
+
+        const gate = await requireClientAccess(userId, clientId);
+        if (!gate.ok) return { success: false, error: gate.error };
 
         let entries = await getKnowledgeEntries(clientId, type as KnowledgeEntryType | undefined);
 
@@ -68,9 +106,8 @@ export const knowledgeTools: ToolDefinition[] = [
       entry_id: z.string().describe('The knowledge entry ID from a search result'),
     }),
     riskLevel: 'read',
-    handler: async (params) => {
+    handler: async (params, userId) => {
       try {
-        const { createAdminClient } = await import('@/lib/supabase/admin');
         const admin = createAdminClient();
         const { data, error } = await admin
           .from('client_knowledge_entries')
@@ -83,6 +120,13 @@ export const knowledgeTools: ToolDefinition[] = [
         if (error || !data) {
           return { success: false, error: 'Entry not found' };
         }
+
+        // The select above went through the admin client (bypasses RLS), so
+        // we now verify the caller has access to this entry's owning client.
+        // Rejecting AFTER the fetch is fine — we aren't returning the row
+        // contents, just the 404-shaped error.
+        const gate = await requireClientAccess(userId, data.client_id as string);
+        if (!gate.ok) return { success: false, error: 'Entry not found' };
 
         return {
           success: true,
@@ -121,12 +165,15 @@ export const knowledgeTools: ToolDefinition[] = [
       limit: z.number().min(1).max(20).default(5),
     }),
     riskLevel: 'read',
-    handler: async (params) => {
+    handler: async (params, userId) => {
       try {
         const clientId = params.client_id as string;
         const query = params.query as string;
         const type = params.type as string | undefined;
         const limit = (params.limit as number) ?? 5;
+
+        const gate = await requireClientAccess(userId, clientId);
+        if (!gate.ok) return { success: false, error: gate.error };
 
         const { results, intent, preferCurrentOnly } = type
           ? {
@@ -300,11 +347,14 @@ export const knowledgeTools: ToolDefinition[] = [
       count: z.number().min(1).max(20).default(10),
     }),
     riskLevel: 'read',
-    handler: async (params) => {
+    handler: async (params, userId) => {
       try {
         const clientId = params.client_id as string;
         const concept = params.concept as string | undefined;
         const count = (params.count as number) ?? 10;
+
+        const gate = await requireClientAccess(userId, clientId);
+        if (!gate.ok) return { success: false, error: gate.error };
 
         const ideas = await generateVideoIdeas({ clientId, concept, count });
 

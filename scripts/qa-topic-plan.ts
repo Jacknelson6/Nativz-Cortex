@@ -296,6 +296,45 @@ async function main() {
     });
   }
 
+  // ─── 4b. Knowledge tools — cross-org viewer rejected ────────────────────
+  console.log('\n4b. Knowledge tools — cross-org viewer rejected');
+  const { knowledgeTools } = await import('../lib/nerd/tools/knowledge');
+  const searchKbTool = knowledgeTools.find((t) => t.name === 'search_knowledge_base');
+  const queryKbTool = knowledgeTools.find((t) => t.name === 'query_client_knowledge');
+  const genIdeasTool = knowledgeTools.find((t) => t.name === 'generate_video_ideas');
+  require_(searchKbTool != null && queryKbTool != null && genIdeasTool != null, 'knowledge tools not found');
+
+  if (!crossOrgViewerId) {
+    console.log('  SKIP  no cross-org viewer — cannot run knowledge scoping tests');
+  } else {
+    await check('cross-org viewer: search_knowledge_base rejected', async () => {
+      const result = await searchKbTool!.handler(
+        { client_id: clientId!, query: 'anything', limit: 3 },
+        crossOrgViewerId,
+      );
+      require_(result.success === false, `expected rejection, got success`);
+      require_(/access/i.test(result.error ?? ''), `expected access error, got: ${result.error}`);
+    });
+
+    await check('cross-org viewer: query_client_knowledge rejected', async () => {
+      const result = await queryKbTool!.handler(
+        { client_id: clientId! },
+        crossOrgViewerId,
+      );
+      require_(result.success === false, `expected rejection, got success`);
+      require_(/access/i.test(result.error ?? ''), `expected access error, got: ${result.error}`);
+    });
+
+    await check('cross-org viewer: generate_video_ideas rejected', async () => {
+      const result = await genIdeasTool!.handler(
+        { client_id: clientId!, count: 1 },
+        crossOrgViewerId,
+      );
+      require_(result.success === false, `expected rejection, got success`);
+      require_(/access/i.test(result.error ?? ''), `expected access error, got: ${result.error}`);
+    });
+  }
+
   // ─── 5. PDF builds from an enriched plan ────────────────────────────────
   console.log('\n5. PDF rendering');
   await check('PDF renders from enriched plan, both agencies', async () => {

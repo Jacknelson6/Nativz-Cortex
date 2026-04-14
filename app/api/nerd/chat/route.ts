@@ -568,11 +568,48 @@ export async function POST(req: NextRequest) {
 
     // --- Attach topic search results as context ---
     if (searchContext && searchContext.length > 0) {
-      const { data: attachedSearches } = await admin
-        .from('topic_searches')
-        .select('id, query, summary, trending_topics, metrics, content_breakdown, emotions, platforms, volume, search_mode')
-        .in('id', searchContext)
-        .eq('status', 'completed');
+      // Viewer tenancy: filter searchContext to IDs whose client belongs to
+      // the caller's organization. Admins pass through unchanged. Without
+      // this, a crafted POST with cross-org UUIDs would leak those search
+      // results into the system prompt injection below.
+      let scopedIds = searchContext;
+      if (isPortalUser) {
+        const { data: callerUser } = await admin
+          .from('users')
+          .select('organization_id')
+          .eq('id', user.id)
+          .single();
+        const callerOrg = callerUser?.organization_id as string | null;
+        if (!callerOrg) {
+          scopedIds = [];
+        } else {
+          const { data: scopeRows } = await admin
+            .from('topic_searches')
+            .select('id, clients!inner(organization_id)')
+            .in('id', searchContext);
+          scopedIds = (scopeRows ?? [])
+            .filter((r) => {
+              const org = Array.isArray(r.clients)
+                ? r.clients[0]?.organization_id
+                : (r.clients as { organization_id: string } | null)?.organization_id;
+              return org === callerOrg;
+            })
+            .map((r) => r.id as string);
+        }
+      }
+
+      const { data: attachedSearches } = scopedIds.length === 0
+        ? { data: [] as Array<{
+            id: string; query: string; summary: string | null;
+            trending_topics: unknown; metrics: unknown; content_breakdown: unknown;
+            emotions: unknown; platforms: string[] | null; volume: string | null;
+            search_mode: string | null;
+          }> }
+        : await admin
+            .from('topic_searches')
+            .select('id, query, summary, trending_topics, metrics, content_breakdown, emotions, platforms, volume, search_mode')
+            .in('id', scopedIds)
+            .eq('status', 'completed');
 
       if (attachedSearches && attachedSearches.length > 0) {
         const searchBlocks = attachedSearches.map((s: {
