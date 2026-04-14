@@ -348,6 +348,8 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
       >
         <span
           className={`flex items-center rounded-md px-2 py-1.5 transition-colors duration-150 ${
+            open ? 'w-full' : ''
+          } ${
             isActive
               ? 'bg-accent-surface text-text-primary font-semibold'
               : 'text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium'

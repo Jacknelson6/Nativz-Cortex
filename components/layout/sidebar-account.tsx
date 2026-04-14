@@ -111,8 +111,8 @@ export function SidebarAccount({
       >
         <span
           className={`flex items-center rounded-md px-2 py-1.5 transition-colors ${
-            open ? 'bg-surface-hover' : 'hover:bg-surface-hover'
-          }`}
+            !collapsed ? 'w-full' : ''
+          } ${open ? 'bg-surface-hover' : 'hover:bg-surface-hover'}`}
         >
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full overflow-hidden bg-accent-surface">
             {avatarUrl ? (
