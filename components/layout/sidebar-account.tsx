@@ -107,9 +107,7 @@ export function SidebarAccount({
 
       <button
         onClick={() => setOpen((prev) => !prev)}
-        className={`group flex w-full items-center rounded-xl border transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
-          collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3 py-2.5'
-        } ${
+        className={`group flex w-full items-center rounded-xl border gap-2.5 px-3 py-2.5 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
           open
             ? 'border-accent/30 bg-accent-surface shadow-[0_0_12px_var(--accent-surface)]'
             : 'border-transparent hover:border-nativz-border hover:bg-surface-hover'

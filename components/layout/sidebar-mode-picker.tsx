@@ -5,10 +5,10 @@ import { createPortal } from 'react-dom';
 import { PanelLeft, PanelLeftClose, MousePointer, Check } from 'lucide-react';
 import { useSidebar, type SidebarMode } from './sidebar';
 
-const MODE_OPTIONS: { value: SidebarMode; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
-  { value: 'expanded', label: 'Expanded', icon: PanelLeft },
-  { value: 'collapsed', label: 'Collapsed', icon: PanelLeftClose },
-  { value: 'hover', label: 'Expand on hover', icon: MousePointer },
+const MODE_OPTIONS: { value: SidebarMode; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; hint: string }[] = [
+  { value: 'expanded', label: 'Expanded', icon: PanelLeft, hint: 'Full width always' },
+  { value: 'collapsed', label: 'Collapsed', icon: PanelLeftClose, hint: 'Icon rail only' },
+  { value: 'hover', label: 'Expand on hover', icon: MousePointer, hint: 'Grows when you hover' },
 ];
 
 const POPOVER_WIDTH = 240;
@@ -103,13 +103,16 @@ export function SidebarModePicker() {
                   setMode(opt.value);
                   setPopoverOpen(false);
                 }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors cursor-pointer ${
+                className={`w-full flex items-start gap-2.5 px-3 py-2 text-left transition-colors cursor-pointer ${
                   selected ? 'bg-accent-surface/40 text-text-primary' : 'text-text-secondary hover:bg-surface-hover'
                 }`}
               >
-                <Icon size={14} className="shrink-0 text-text-muted" />
-                <span className="flex-1 whitespace-nowrap">{opt.label}</span>
-                {selected && <Check size={14} className="shrink-0 text-accent-text" />}
+                <Icon size={14} className="mt-0.5 shrink-0 text-text-muted" />
+                <span className="min-w-0 flex-1">
+                  <span className="block whitespace-nowrap text-sm">{opt.label}</span>
+                  <span className="block text-[11px] leading-tight text-text-muted">{opt.hint}</span>
+                </span>
+                {selected && <Check size={14} className="mt-0.5 shrink-0 text-accent-text" />}
               </button>
             </li>
           );
@@ -124,16 +127,15 @@ export function SidebarModePicker() {
         ref={buttonRef}
         type="button"
         onClick={() => setPopoverOpen((v) => !v)}
-        aria-label="Sidebar control"
+        aria-label={`Sidebar: ${active.label}`}
         aria-haspopup="menu"
         aria-expanded={popoverOpen}
         title={`Sidebar: ${active.label}`}
-        className={`flex items-center rounded-lg text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors cursor-pointer ${
-          open ? 'w-full gap-2 px-2.5 py-1.5 text-[13px] font-medium' : 'justify-center w-full py-2'
-        } ${popoverOpen ? 'bg-surface-hover text-text-secondary' : ''}`}
+        className={`flex w-full items-center justify-end rounded-lg px-2.5 py-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors cursor-pointer ${
+          popoverOpen ? 'bg-surface-hover text-text-secondary' : ''
+        }`}
       >
         <ActiveIcon size={16} className="shrink-0" />
-        {open && <span className="truncate">{active.label}</span>}
       </button>
 
       {mounted && popover && createPortal(popover, document.body)}

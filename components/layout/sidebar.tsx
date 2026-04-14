@@ -331,7 +331,10 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
     const { open } = useSidebar();
     const [showTooltip, setShowTooltip] = useState(false);
 
-    const layout = open ? 'gap-2.5 px-2.5' : 'justify-center px-0';
+    // Always left-aligned with the same padding regardless of open state —
+    // icons keep their exact x position so the rail doesn't visually shift
+    // on collapse / expand. Text labels just appear/disappear next to them.
+    const layout = 'gap-2.5 px-2.5';
 
     const shellStyles = isActive
       ? 'bg-accent-surface text-text-primary font-semibold'

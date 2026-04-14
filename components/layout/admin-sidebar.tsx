@@ -420,7 +420,7 @@ export function AdminSidebar({
 
             <div
               className={`relative z-[1] flex items-center border border-nativz-border bg-surface transition-all duration-200 group-hover/nerd:shadow-[0_0_20px_var(--accent-surface)] ${
-                open ? 'gap-2.5 rounded-xl px-3 py-2.5' : 'justify-center rounded-lg px-2 py-2.5'
+                'gap-2.5 rounded-xl px-3 py-2.5'
               } ${
                 isActivePath(pathname, '/admin/nerd')
                   ? 'border-accent/30 shadow-[0_0_16px_var(--accent-surface)]'
