@@ -250,39 +250,44 @@ export function AdminSidebar({
           overlay overlapped the "← Back to dashboard" text in the secondary
           Edits / Settings rails. Click keeps the "Hi there!" easter egg. */}
       <SidebarHeader className="h-[60px] py-3 flex items-center">
-        {/* Header height is locked to 60px in both expanded and collapsed
-            states so nav icons sit at the same y-coordinate regardless
-            of mode/hover. Logo wordmark fades opacity-0 when collapsed
-            (no icon-only variant exists) but the slot keeps its space. */}
+        {/* Header height is locked to 60px so nav icons sit at the same y
+            in both states. When the rail is expanded we render the full
+            wordmark; when collapsed we swap to the favicon-sized icon
+            mark so there's still a brand presence in the corner. */}
         <div className="relative flex h-9 w-full items-center justify-center">
           <button
             type="button"
             onClick={() => {
-              if (!open) return;
               setShowHiTooltip(true);
               setTimeout(() => setShowHiTooltip(false), 2200);
             }}
             aria-label="Hi there!"
-            tabIndex={open ? 0 : -1}
-            className={`flex items-center justify-center transition-opacity duration-200 cursor-pointer ${
-              open ? 'opacity-100 hover:opacity-80' : 'opacity-0 pointer-events-none'
-            }`}
+            className="flex items-center justify-center transition-opacity duration-200 cursor-pointer hover:opacity-80"
           >
-            {mode === 'nativz' ? (
-              <Image
-                src="/nativz-logo.svg"
-                alt="Nativz"
-                width={140}
-                height={52}
-                className="h-9 w-auto"
-                priority
-              />
+            {open ? (
+              mode === 'nativz' ? (
+                <Image
+                  src="/nativz-logo.svg"
+                  alt="Nativz"
+                  width={140}
+                  height={52}
+                  className="h-9 w-auto"
+                  priority
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src="/anderson-logo-dark.svg"
+                  alt="Anderson Collaborative"
+                  className="h-9 w-auto"
+                />
+              )
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src="/anderson-logo-dark.svg"
-                alt="Anderson Collaborative"
-                className="h-9 w-auto"
+                src={mode === 'nativz' ? '/favicon.png' : '/favicon-ac.png'}
+                alt={mode === 'nativz' ? 'Nativz' : 'Anderson Collaborative'}
+                className="h-7 w-7 rounded-md object-contain"
               />
             )}
           </button>

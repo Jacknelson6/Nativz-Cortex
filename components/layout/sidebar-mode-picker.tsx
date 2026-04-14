@@ -124,7 +124,7 @@ export function SidebarModePicker() {
   );
 
   return (
-    <div className={`relative mt-2 flex ${open ? 'justify-start' : 'justify-center'}`}>
+    <div className="relative mt-2 flex justify-start">
       <button
         ref={buttonRef}
         type="button"
