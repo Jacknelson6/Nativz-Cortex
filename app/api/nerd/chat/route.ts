@@ -492,13 +492,11 @@ export async function POST(req: NextRequest) {
 
     if (isPortalUser) {
       // Defense in depth: if resolvedPortalClientId is missing (no
-      // user_client_access rows) we'd otherwise fall through to an
-      // unfiltered clients query. Force an empty result instead.
-      if (!portalClientId) {
-        clientsQuery = clientsQuery.eq('id', '00000000-0000-0000-0000-000000000000');
-      } else {
-        clientsQuery = clientsQuery.eq('id', portalClientId);
-      }
+      // user_client_access rows) force an empty result — never fall
+      // through to an unfiltered clients query for a portal caller.
+      clientsQuery = portalClientId
+        ? clientsQuery.eq('id', portalClientId)
+        : clientsQuery.in('id', []);
     } else {
       clientsQuery = clientsQuery.order('name');
     }

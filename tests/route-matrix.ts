@@ -43,6 +43,7 @@ export const PORTAL_PROTECTED_ROUTES: string[] = [
   '/portal/brand',
   '/portal/analyze',
   '/portal/nerd',
+  '/portal/content-lab',
 ];
 
 /** Logged-in portal crawl — minimal client surface (research + settings only). */
