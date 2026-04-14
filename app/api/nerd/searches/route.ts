@@ -23,6 +23,26 @@ export async function GET(req: NextRequest) {
   const { clientId } = parsed.data;
   const admin = createAdminClient();
 
+  // Tenant isolation: viewers may only list searches for a client in
+  // their own organization. Any mismatch returns 404 (not 403) so the
+  // response shape doesn't confirm the client exists in another org.
+  const { data: userData } = await admin
+    .from('users')
+    .select('role, organization_id')
+    .eq('id', user.id)
+    .single();
+
+  if (userData?.role === 'viewer') {
+    const { data: client } = await admin
+      .from('clients')
+      .select('organization_id')
+      .eq('id', clientId)
+      .maybeSingle();
+    if (!client || client.organization_id !== userData.organization_id) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+  }
+
   const { data: searches } = await admin
     .from('topic_searches')
     .select('id, query, status, created_at, completed_at, search_mode, platforms, volume, metrics')

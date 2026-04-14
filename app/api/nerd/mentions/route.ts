@@ -21,12 +21,36 @@ export async function GET() {
 
     const admin = createAdminClient();
 
+    // Tenant isolation: viewers only see clients their org has access to.
+    // Admins see everything (needed for the Nerd @mention autocomplete).
+    const { data: userData } = await admin
+      .from('users')
+      .select('role, organization_id')
+      .eq('id', user.id)
+      .single();
+
+    let accessibleClientIds: string[] | null = null;
+    if (userData?.role === 'viewer') {
+      const { data: accessRows } = await admin
+        .from('user_client_access')
+        .select('client_id')
+        .eq('user_id', user.id);
+      accessibleClientIds = (accessRows ?? []).map((r) => r.client_id as string);
+      if (accessibleClientIds.length === 0) {
+        return NextResponse.json({ clients: [], team: [] });
+      }
+    }
+
+    const baseClientsQuery = admin
+      .from('clients')
+      .select('id, name, slug, agency, logo_url')
+      .eq('is_active', true)
+      .order('name');
+
     const [clientsResult, teamResult] = await Promise.all([
-      admin
-        .from('clients')
-        .select('id, name, slug, agency, logo_url')
-        .eq('is_active', true)
-        .order('name'),
+      accessibleClientIds
+        ? baseClientsQuery.in('id', accessibleClientIds)
+        : baseClientsQuery,
       admin
         .from('team_members')
         .select('id, full_name, email, role, avatar_url')
