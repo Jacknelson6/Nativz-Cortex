@@ -12,8 +12,6 @@ import {
   Send,
   BotMessageSquare,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   Contact,
   ImagePlus,
   StickyNote,
@@ -23,6 +21,7 @@ import {
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
+import { SidebarModePicker } from '@/components/layout/sidebar-mode-picker';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import {
@@ -229,7 +228,7 @@ export function AdminSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { open, toggleSidebar } = useSidebar();
+  const { open } = useSidebar();
   const { mode, toggleMode, isForced } = useBrandMode();
   const [showHiTooltip, setShowHiTooltip] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
@@ -452,19 +451,8 @@ export function AdminSidebar({
           clientViewHref={role === 'admin' ? '/portal' : undefined}
         />
 
-        {/* Collapse toggle — visible whether open or collapsed */}
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
-          title={open ? 'Collapse sidebar (⌘B)' : 'Expand sidebar (⌘B)'}
-          className={`mt-2 flex items-center rounded-lg text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors cursor-pointer ${
-            open ? 'w-full gap-2 px-2.5 py-1.5 text-[13px] font-medium' : 'justify-center w-full py-2'
-          }`}
-        >
-          {open ? <ChevronsLeft size={16} /> : <ChevronsRight size={16} />}
-          {open && <span>Collapse</span>}
-        </button>
+        {/* Sidebar layout mode picker — Expanded / Collapsed / Hover */}
+        <SidebarModePicker />
 
       </SidebarFooter>
     </Sidebar>

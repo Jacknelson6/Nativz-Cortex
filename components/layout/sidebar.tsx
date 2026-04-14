@@ -22,7 +22,10 @@ import { cn } from '@/lib/utils';
 const SIDEBAR_WIDTH = '15rem';        // 240px
 const SIDEBAR_WIDTH_ICON = '3.5rem';  // 56px
 const SIDEBAR_WIDTH_MOBILE = '18rem';
-const STORAGE_KEY = 'cortex:sidebar-collapsed';
+const STORAGE_KEY = 'cortex:sidebar-collapsed'; // legacy boolean key — still honored for back-compat
+const MODE_STORAGE_KEY = 'cortex:sidebar-mode';  // canonical: 'expanded' | 'collapsed' | 'hover'
+
+export type SidebarMode = 'expanded' | 'collapsed' | 'hover';
 
 // ---------------------------------------------------------------------------
 // Context
@@ -39,6 +42,10 @@ interface SidebarContextValue {
   toggleSidebar: () => void;
   forceCollapsed: boolean;
   setForceCollapsed: (value: boolean) => void;
+  mode: SidebarMode;
+  setMode: (mode: SidebarMode) => void;
+  hovered: boolean;
+  setHovered: (hovered: boolean) => void;
 }
 
 const SidebarContext = createContext<SidebarContextValue>({
@@ -50,6 +57,10 @@ const SidebarContext = createContext<SidebarContextValue>({
   toggleSidebar: () => {},
   forceCollapsed: false,
   setForceCollapsed: () => {},
+  mode: 'expanded',
+  setMode: () => {},
+  hovered: false,
+  setHovered: () => {},
 });
 
 export function useSidebar() {
@@ -66,41 +77,73 @@ interface SidebarProviderProps {
 }
 
 export function SidebarProvider({ defaultOpen = true, children }: SidebarProviderProps) {
-  const [storedOpen, setStoredOpen] = useState(defaultOpen);
+  const [mode, setModeState] = useState<SidebarMode>(defaultOpen ? 'expanded' : 'collapsed');
   const [openMobile, setOpenMobile] = useState(false);
   const [forceCollapsed, setForceCollapsedState] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const pathname = usePathname();
 
-  // Hydrate from localStorage
+  // Hydrate mode from localStorage. Prefer the canonical MODE_STORAGE_KEY;
+  // fall back to the legacy boolean STORAGE_KEY so users who already had a
+  // stored collapsed preference don't get reset to expanded on first visit.
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored === 'false') setStoredOpen(false);
+      const storedMode = localStorage.getItem(MODE_STORAGE_KEY);
+      if (storedMode === 'expanded' || storedMode === 'collapsed' || storedMode === 'hover') {
+        setModeState(storedMode);
+        return;
+      }
+      const legacy = localStorage.getItem(STORAGE_KEY);
+      if (legacy === 'false') setModeState('collapsed');
+    } catch {}
+  }, []);
+
+  const setMode = useCallback((next: SidebarMode) => {
+    setModeState(next);
+    setForceCollapsedState(false);
+    try {
+      localStorage.setItem(MODE_STORAGE_KEY, next);
+      // Keep legacy key in sync so older tabs / agents reading the old key
+      // see something sensible. Hover mode maps to collapsed for legacy.
+      localStorage.setItem(STORAGE_KEY, next === 'expanded' ? 'true' : 'false');
     } catch {}
   }, []);
 
   const setOpen = useCallback((value: boolean) => {
-    setStoredOpen(value);
-    setForceCollapsedState(false); // user intent overrides forced collapse
-    try { localStorage.setItem(STORAGE_KEY, String(value)); } catch {}
-  }, []);
+    // Toggle the persisted mode between expanded/collapsed. Hover mode is
+    // reached via setMode explicitly — setOpen should never land there.
+    setMode(value ? 'expanded' : 'collapsed');
+  }, [setMode]);
 
   const setForceCollapsed = useCallback((value: boolean) => {
     setForceCollapsedState(value);
   }, []);
 
-  const effectiveOpen = storedOpen && !forceCollapsed;
+  // Derived "effective open" — what the UI actually renders at.
+  // expanded → always open (unless forceCollapsed overrides)
+  // collapsed → always icon-rail
+  // hover → icon-rail when cursor is away, full width when hovered
+  const effectiveOpen =
+    forceCollapsed
+      ? false
+      : mode === 'expanded'
+        ? true
+        : mode === 'collapsed'
+          ? false
+          : hovered;
 
   const toggleSidebar = useCallback(() => {
-    setOpen(!effectiveOpen);
-  }, [effectiveOpen, setOpen]);
+    setMode(effectiveOpen ? 'collapsed' : 'expanded');
+  }, [effectiveOpen, setMode]);
 
   // Close mobile on route change
   useEffect(() => {
     setOpenMobile(false);
   }, [pathname]);
 
-  // Keyboard shortcut: cmd+b / ctrl+b
+  // Keyboard shortcut: cmd+b / ctrl+b — cycles expanded ↔ collapsed.
+  // Hover mode is intentionally mouse-only; keyboard users should get a
+  // deterministic state instead of a flicker.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'b' && (e.metaKey || e.ctrlKey)) {
@@ -115,7 +158,22 @@ export function SidebarProvider({ defaultOpen = true, children }: SidebarProvide
   const state: SidebarState = effectiveOpen ? 'expanded' : 'collapsed';
 
   return (
-    <SidebarContext.Provider value={{ state, open: effectiveOpen, setOpen, openMobile, setOpenMobile, toggleSidebar, forceCollapsed, setForceCollapsed }}>
+    <SidebarContext.Provider
+      value={{
+        state,
+        open: effectiveOpen,
+        setOpen,
+        openMobile,
+        setOpenMobile,
+        toggleSidebar,
+        forceCollapsed,
+        setForceCollapsed,
+        mode,
+        setMode,
+        hovered,
+        setHovered,
+      }}
+    >
       <div
         className="flex h-screen w-full overflow-hidden"
         style={{
@@ -138,24 +196,59 @@ interface SidebarProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
 }
 
 export function Sidebar({ children, className = '', ...props }: SidebarProps) {
-  const { state, open, openMobile, setOpenMobile } = useSidebar();
+  const { state, open, openMobile, setOpenMobile, mode, setHovered } = useSidebar();
 
   /** Same rail as admin — portal and app shell share one visual system */
   const shell = 'border-r border-nativz-border bg-surface';
 
+  const isHoverMode = mode === 'hover';
+  const hoverExpanded = isHoverMode && open;
+
+  // In hover mode we reserve the icon-width slot in the flex row (so main
+  // content keeps its layout) and render the expanded panel as an overlay
+  // that floats above with shadow. In expanded/collapsed modes the aside
+  // sits inline and the inset sizes around it — unchanged behavior.
   return (
     <>
       {/* Desktop sidebar */}
-      <aside
-        data-state={state}
-        data-shell="default"
-        suppressHydrationWarning
-        className={`sticky top-0 h-screen hidden md:flex flex-col shrink-0 transition-[width] duration-200 ease-out overflow-hidden ${shell} ${className}`}
-        style={{ width: open ? 'var(--sidebar-width)' : 'var(--sidebar-width-icon)' }}
-        {...props}
-      >
-        {children}
-      </aside>
+      {isHoverMode ? (
+        <>
+          {/* Flow placeholder keeps the inset at the same width whether the
+              rail is hovered or not. */}
+          <div
+            aria-hidden
+            className="hidden md:block shrink-0 h-screen"
+            style={{ width: 'var(--sidebar-width-icon)' }}
+          />
+          <aside
+            data-state={state}
+            data-shell="default"
+            data-mode={mode}
+            suppressHydrationWarning
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+            className={`fixed top-0 left-0 h-screen hidden md:flex flex-col transition-[width] duration-200 ease-out overflow-hidden ${shell} ${className} ${
+              hoverExpanded ? 'z-30 shadow-elevated' : 'z-20'
+            }`}
+            style={{ width: hoverExpanded ? 'var(--sidebar-width)' : 'var(--sidebar-width-icon)' }}
+            {...props}
+          >
+            {children}
+          </aside>
+        </>
+      ) : (
+        <aside
+          data-state={state}
+          data-shell="default"
+          data-mode={mode}
+          suppressHydrationWarning
+          className={`sticky top-0 h-screen hidden md:flex flex-col shrink-0 transition-[width] duration-200 ease-out overflow-hidden ${shell} ${className}`}
+          style={{ width: open ? 'var(--sidebar-width)' : 'var(--sidebar-width-icon)' }}
+          {...props}
+        >
+          {children}
+        </aside>
+      )}
 
       {/* Mobile overlay */}
       <div className="md:hidden">
