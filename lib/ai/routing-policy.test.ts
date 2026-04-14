@@ -47,15 +47,18 @@ describe('getFeatureRoutingSummaryItems', () => {
 
 describe('buildOrderedModelChain', () => {
   it('dedupes explicit, policy, and fallback models in order', () => {
+    // Uses an explicit model that is intentionally NOT DEFAULT_OPENROUTER_MODEL
+    // so the policy chain (which defaults to DEFAULT_OPENROUTER_MODEL) contributes
+    // a distinct entry instead of deduping to nothing.
     const chain = buildOrderedModelChain({
-      explicitPreference: ['openai/gpt-5.4-mini', 'qwen/qwen3-30b-a3b'],
+      explicitPreference: ['anthropic/claude-sonnet-4-5', 'qwen/qwen3-30b-a3b'],
       policyPreference: DEFAULT_CHAIN_BY_TIER.standard,
       primary: 'deepseek/deepseek-v3.2',
-      fallbacks: ['qwen/qwen3-30b-a3b', 'openai/gpt-5.4-mini'],
+      fallbacks: ['qwen/qwen3-30b-a3b', 'anthropic/claude-sonnet-4-5'],
     });
 
     expect(chain).toEqual([
-      'openai/gpt-5.4-mini',
+      'anthropic/claude-sonnet-4-5',
       'qwen/qwen3-30b-a3b',
       DEFAULT_OPENROUTER_MODEL,
       'deepseek/deepseek-v3.2',
