@@ -120,7 +120,7 @@ export function CommandsCatalogButton() {
 
           <div className="border-t border-nativz-border/60 px-4 py-2.5 bg-background/40">
             <Link
-              href="/admin/settings/skills"
+              href="/admin/nerd/settings"
               onClick={() => setOpen(false)}
               className="block text-[11px] text-text-muted hover:text-accent-text transition-colors"
             >

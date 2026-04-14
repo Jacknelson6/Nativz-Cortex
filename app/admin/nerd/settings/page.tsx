@@ -279,11 +279,22 @@ function AddSkillForm({ onAdded, onCancel }: { onAdded: () => void; onCancel: ()
   const [path, setPath] = useState('SKILL.md');
   const [branch, setBranch] = useState('main');
   const [keywords, setKeywords] = useState('');
+  const [commandSlug, setCommandSlug] = useState('');
+  const [promptTemplate, setPromptTemplate] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !repo.trim()) return;
+
+    // Client-side slug shape check — server repeats this, but catching it
+    // here avoids a round-trip for obvious typos.
+    const slug = commandSlug.trim();
+    if (slug && !/^[a-z][a-z0-9-]{1,39}$/.test(slug)) {
+      toast.error('Slug must be lowercase letters, digits, or dashes — no spaces');
+      return;
+    }
+
     setSaving(true);
 
     const res = await fetch('/api/nerd/skills', {
@@ -295,6 +306,8 @@ function AddSkillForm({ onAdded, onCancel }: { onAdded: () => void; onCancel: ()
         github_path: path.trim() || 'SKILL.md',
         github_branch: branch.trim() || 'main',
         keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean),
+        command_slug: slug || null,
+        prompt_template: promptTemplate.trim() || null,
       }),
     });
 
@@ -356,6 +369,38 @@ function AddSkillForm({ onAdded, onCancel }: { onAdded: () => void; onCancel: ()
           placeholder="seo, strategy, hooks"
           className="mt-1 w-full rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-sm text-text-primary outline-none focus:border-accent/30"
         />
+      </div>
+
+      {/* Slash command wiring — optional. When set, the skill shows up in the
+          Nerd's slash menu as /slug. Leave blank to keep the skill as
+          keyword-match-only (invisible but still injected when relevant). */}
+      <div className="space-y-2 rounded-lg border border-accent/20 bg-background/40 p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Slash command (optional)</p>
+        <div className="grid grid-cols-[1fr_2fr] gap-3">
+          <div>
+            <label className="text-[10px] font-medium text-text-muted">Slug</label>
+            <input
+              value={commandSlug}
+              onChange={(e) => setCommandSlug(e.target.value)}
+              placeholder="cold-email"
+              className="mt-1 w-full rounded-lg border border-nativz-border bg-surface px-3 py-1.5 font-mono text-sm text-text-primary outline-none focus:border-accent/30"
+            />
+            <p className="mt-1 text-[10px] text-text-muted/70">lowercase, dashes ok</p>
+          </div>
+          <div>
+            <label className="text-[10px] font-medium text-text-muted">Prompt template</label>
+            <textarea
+              value={promptTemplate}
+              onChange={(e) => setPromptTemplate(e.target.value)}
+              placeholder="Using the skill below, help with: {args}&#10;&#10;---&#10;{content}"
+              rows={3}
+              className="mt-1 w-full rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-sm text-text-primary outline-none focus:border-accent/30 font-mono"
+            />
+            <p className="mt-1 text-[10px] text-text-muted/70">
+              {'{args}'} = user input after /slug, {'{content}'} = full skill markdown
+            </p>
+          </div>
+        </div>
       </div>
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="px-3 py-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors cursor-pointer">
