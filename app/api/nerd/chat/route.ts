@@ -504,26 +504,35 @@ export async function POST(req: NextRequest) {
     const { data: clients } = await clientsQuery;
 
     const allClients = (clients ?? []) as ClientRow[];
+    const allClientIds = allClients.map((c) => c.id);
 
-    const { data: socialProfiles } = await admin
-      .from('social_profiles')
-      .select('id, client_id, platform, username')
-      .eq('is_active', true);
-
+    // Scope ancillary loads to the clients we already fetched. For admin
+    // users that's all active clients; for portal users it's their single
+    // resolved client. Avoids pulling the whole social_profiles /
+    // client_strategies tables into memory on every portal chat turn.
     const profilesByClient = new Map<string, SocialProfileRow[]>();
-    for (const p of (socialProfiles ?? []) as SocialProfileRow[]) {
-      const arr = profilesByClient.get(p.client_id) ?? [];
-      arr.push(p);
-      profilesByClient.set(p.client_id, arr);
-    }
-
     const strategyByClient = new Map<string, StrategyRow>();
-    if (allClients.length > 0) {
-      const { data: strategies } = await admin
-        .from('client_strategies')
-        .select('client_id, executive_summary, content_pillars')
-        .eq('status', 'completed')
-        .order('created_at', { ascending: false });
+
+    if (allClientIds.length > 0) {
+      const [{ data: socialProfiles }, { data: strategies }] = await Promise.all([
+        admin
+          .from('social_profiles')
+          .select('id, client_id, platform, username')
+          .eq('is_active', true)
+          .in('client_id', allClientIds),
+        admin
+          .from('client_strategies')
+          .select('client_id, executive_summary, content_pillars')
+          .eq('status', 'completed')
+          .in('client_id', allClientIds)
+          .order('created_at', { ascending: false }),
+      ]);
+
+      for (const p of (socialProfiles ?? []) as SocialProfileRow[]) {
+        const arr = profilesByClient.get(p.client_id) ?? [];
+        arr.push(p);
+        profilesByClient.set(p.client_id, arr);
+      }
 
       for (const s of (strategies ?? []) as StrategyRow[]) {
         if (!strategyByClient.has(s.client_id)) {
