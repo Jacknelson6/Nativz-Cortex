@@ -16,6 +16,7 @@ import {
   RefreshCw,
   ExternalLink,
   Globe,
+  MapPin,
   Heart,
   MessageCircle,
   Share2,
@@ -165,8 +166,12 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [socialInputs, setSocialInputs] = useState<Partial<Record<AuditPlatformKey, string>>>({});
   const [competitorUrls, setCompetitorUrls] = useState<string[]>(['', '', '']);
   const [competitorFaviconErrors, setCompetitorFaviconErrors] = useState<boolean[]>([false, false, false]);
-  const [competitorScope, setCompetitorScope] = useState<'national' | 'local'>('national');
-  const [suggestedCandidates, setSuggestedCandidates] = useState<{ name: string; website: string; why: string }[]>([]);
+  // Candidates from both tiers are kept side-by-side so the user can mix
+  // national and local picks in a single audit. Each candidate carries its
+  // originating scope so we can render the right icon (Globe / MapPin).
+  type CompetitorScope = 'national' | 'local';
+  type ScopedCandidate = { name: string; website: string; why: string; scope: CompetitorScope };
+  const [suggestedCandidates, setSuggestedCandidates] = useState<ScopedCandidate[]>([]);
   const [selectedCompetitorWebsites, setSelectedCompetitorWebsites] = useState<Set<string>>(new Set());
   const [generatingCompetitors, setGeneratingCompetitors] = useState(false);
   const MAX_PICKED_COMPETITORS = 3;
@@ -237,7 +242,16 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     const persistedCandidates = analysisData?.suggested_competitors ?? [];
     if (persistedCandidates.length > 0) {
       setSuggestedCandidates((current) =>
-        current.length > 0 ? current : persistedCandidates.map((c) => ({ name: c.name, website: c.website, why: c.why ?? '' })),
+        current.length > 0
+          ? current
+          : persistedCandidates.map((c) => ({
+              name: c.name,
+              website: c.website,
+              why: c.why ?? '',
+              // Persisted rows predate the mixed-scope layout; assume national
+              // until the user regenerates and gets fresh, scope-tagged rows.
+              scope: 'national' as const,
+            })),
       );
     }
     // Seed previously-selected picks
@@ -416,18 +430,46 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     if (generatingCompetitors) return;
     setGeneratingCompetitors(true);
     try {
-      const res = await fetch(`/api/analyze-social/${audit.id}/suggest-competitors`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scope: competitorScope }),
-      });
-      if (res.ok) {
-        const d = await res.json();
-        const candidates: { name: string; website: string; why: string }[] = d.candidates ?? [];
-        setSuggestedCandidates(candidates);
-        // Don't auto-select — let the user pick the ones they actually recognize.
-        setSelectedCompetitorWebsites(new Set());
+      // Pull national + local in parallel. User can mix scopes up to the
+      // 3-pick cap. De-dupe by website in case the LLM returns the same
+      // brand under both tiers.
+      const [nationalRes, localRes] = await Promise.all([
+        fetch(`/api/analyze-social/${audit.id}/suggest-competitors`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope: 'national' }),
+        }),
+        fetch(`/api/analyze-social/${audit.id}/suggest-competitors`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope: 'local' }),
+        }),
+      ]);
+
+      const merged: ScopedCandidate[] = [];
+      const seen = new Set<string>();
+      for (const [res, scope] of [
+        [nationalRes, 'national'] as const,
+        [localRes, 'local'] as const,
+      ]) {
+        if (!res.ok) continue;
+        try {
+          const d = (await res.json()) as {
+            candidates?: { name: string; website: string; why: string }[];
+          };
+          for (const c of d.candidates ?? []) {
+            const key = c.website?.toLowerCase();
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            merged.push({ ...c, scope });
+          }
+        } catch {
+          /* skip malformed payload */
+        }
       }
+
+      setSuggestedCandidates(merged);
+      setSelectedCompetitorWebsites(new Set());
     } catch {
       /* swallow — the list just won't populate, user can retry */
     } finally {
@@ -650,40 +692,20 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             })}
           </div>
 
-          <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div>
-                <h3 className="text-lg font-semibold text-text-primary">Your competitors</h3>
-                <p className="text-sm text-text-muted mt-0.5">
-                  Pick up to {MAX_PICKED_COMPETITORS} to benchmark against. Generated from your brand and checked against live websites.
+          <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-5">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="min-w-0">
+                <h3 className="text-xl font-semibold text-text-primary">Your competitors</h3>
+                <p className="text-base text-text-muted mt-1">
+                  Pick up to {MAX_PICKED_COMPETITORS} to benchmark against — mix national and local
+                  brands however you want. Generated from your business and checked against live websites.
                 </p>
               </div>
-
-              {/* National / Local scope toggle */}
-              <div className="inline-flex rounded-lg border border-nativz-border p-0.5">
-                {(['national', 'local'] as const).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setCompetitorScope(s)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors cursor-pointer ${
-                      competitorScope === s
-                        ? 'bg-accent text-white'
-                        : 'text-text-muted hover:text-text-secondary'
-                    }`}
-                  >
-                    {s === 'national' ? 'National' : 'Local'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
               <Button
                 onClick={() => void generateCompetitors()}
                 disabled={generatingCompetitors}
                 variant={suggestedCandidates.length > 0 ? 'secondary' : 'primary'}
-                className="text-sm"
+                className="text-sm shrink-0"
               >
                 {generatingCompetitors
                   ? 'Generating...'
@@ -691,38 +713,53 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                     ? 'Regenerate'
                     : 'Generate competitors'}
               </Button>
-              {suggestedCandidates.length > 0 && (
-                <span className="text-xs text-text-muted">
+            </div>
+
+            {suggestedCandidates.length > 0 && (
+              <div className="flex items-center gap-4 text-sm">
+                <span className="text-text-muted">
                   {selectedCompetitorWebsites.size} of {MAX_PICKED_COMPETITORS} selected
                 </span>
-              )}
-            </div>
+                <span className="flex items-center gap-1.5 text-text-muted">
+                  <Globe size={14} className="text-accent-text/70" aria-hidden />
+                  National
+                </span>
+                <span className="flex items-center gap-1.5 text-text-muted">
+                  <MapPin size={14} className="text-emerald-400/70" aria-hidden />
+                  Local
+                </span>
+              </div>
+            )}
 
             {/* Empty state */}
             {!generatingCompetitors && suggestedCandidates.length === 0 && (
-              <div className="rounded-lg border border-dashed border-nativz-border bg-background/40 px-4 py-6 text-center">
-                <p className="text-sm text-text-muted">
-                  Click Generate to see {competitorScope === 'local' ? 'local' : 'national'} competitor candidates for your brand.
+              <div className="rounded-lg border border-dashed border-nativz-border bg-background/40 px-4 py-8 text-center">
+                <p className="text-base text-text-muted">
+                  Click Generate to see national and local competitor candidates for your brand.
                 </p>
-                <p className="text-xs text-text-muted/70 mt-1">
+                <p className="text-sm text-text-muted/70 mt-1.5">
                   You can also skip this step and start without competitors.
                 </p>
               </div>
             )}
 
-            {/* Candidate list */}
+            {/* Candidate list — national and local mixed, each row tagged with a scope icon. */}
             {suggestedCandidates.length > 0 && (
-              <ul className="space-y-1.5">
+              <ul className="space-y-2">
                 {suggestedCandidates.map((c) => {
                   const picked = selectedCompetitorWebsites.has(c.website);
                   const atLimit = !picked && selectedCompetitorWebsites.size >= MAX_PICKED_COMPETITORS;
+                  const isNational = c.scope === 'national';
+                  const ScopeIcon = isNational ? Globe : MapPin;
+                  const scopeColor = isNational ? 'text-accent-text/80' : 'text-emerald-400/80';
+                  const scopeLabel = isNational ? 'National' : 'Local';
                   return (
                     <li key={c.website}>
                       <button
                         type="button"
                         onClick={() => toggleCompetitorPick(c.website)}
                         disabled={atLimit}
-                        className={`w-full flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                        className={`w-full flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
                           picked
                             ? 'border-accent/40 bg-accent-surface/30'
                             : 'border-nativz-border bg-surface hover:bg-surface-hover'
@@ -730,28 +767,37 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                         title={c.why || undefined}
                       >
                         <span
-                          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                          className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border transition-colors ${
                             picked ? 'border-accent-text bg-accent text-white' : 'border-nativz-border'
                           }`}
                           aria-hidden
                         >
-                          {picked && <Check size={11} />}
+                          {picked && <Check size={12} />}
                         </span>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={`https://www.google.com/s2/favicons?domain=${faviconDomain(c.website) ?? c.website}&sz=32`}
                           alt=""
-                          width={18}
-                          height={18}
+                          width={20}
+                          height={20}
                           className="mt-0.5 rounded-sm object-contain shrink-0"
                           onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-baseline gap-2 flex-wrap">
-                            <span className="text-sm font-medium text-text-primary truncate">{c.name}</span>
-                            <span className="text-xs text-text-muted truncate">{prettyUrl(c.website)}</span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-base font-medium text-text-primary truncate">{c.name}</span>
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full border border-nativz-border/60 bg-background/50 px-2 py-0.5 text-[11px] font-medium ${scopeColor}`}
+                              aria-label={scopeLabel}
+                              title={scopeLabel}
+                            >
+                              <ScopeIcon size={11} aria-hidden />
+                              {scopeLabel}
+                            </span>
+                            <span className="text-sm text-text-muted truncate">{prettyUrl(c.website)}</span>
                           </div>
                           {c.why && (
-                            <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{c.why}</p>
+                            <p className="text-sm text-text-muted mt-1 line-clamp-2">{c.why}</p>
                           )}
                         </div>
                       </button>
