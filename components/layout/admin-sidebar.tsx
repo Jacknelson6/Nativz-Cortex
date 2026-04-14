@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import {
@@ -22,6 +23,7 @@ import {
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { SidebarModePicker } from '@/components/layout/sidebar-mode-picker';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import {
   Sidebar,
   SidebarHeader,
@@ -228,6 +230,8 @@ export function AdminSidebar({
   const searchParams = useSearchParams();
   const { open } = useSidebar();
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
+  const [showHiTooltip, setShowHiTooltip] = useState(false);
+  const { mode } = useBrandMode();
 
   function toggleMenu(href: string) {
     setExpandedMenus((prev) => {
@@ -240,12 +244,55 @@ export function AdminSidebar({
 
   return (
     <Sidebar>
-      {/* Logo moved to <AgencyLogo /> at the admin-layout level (top-left
-          of the viewport). Sidebar header reserves vertical room for that
-          fixed logo so nav items don't collide with it. */}
-      <SidebarHeader className="pt-16">
+      {/* Agency logo lives inside the sidebar header as its own dedicated
+          element so it (a) scales with the sidebar's open/collapsed state and
+          (b) stays within the primary sidebar's x-bounds — a fixed-position
+          overlay overlapped the "← Back to dashboard" text in the secondary
+          Edits / Settings rails. Click keeps the "Hi there!" easter egg. */}
+      <SidebarHeader className="pt-4 pb-2">
+        <div className="relative flex w-full items-center justify-center">
+          <button
+            type="button"
+            onClick={() => {
+              setShowHiTooltip(true);
+              setTimeout(() => setShowHiTooltip(false), 2200);
+            }}
+            aria-label="Hi there!"
+            className="flex items-center justify-center transition-opacity duration-200 hover:opacity-80 cursor-pointer"
+          >
+            {mode === 'nativz' ? (
+              <Image
+                src="/nativz-logo.svg"
+                alt="Nativz"
+                width={140}
+                height={52}
+                className={`${open ? 'h-9' : 'h-5'} w-auto transition-[height] duration-200`}
+                priority
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src="/anderson-logo-dark.svg"
+                alt="Anderson Collaborative"
+                className={`${open ? 'h-9' : 'h-5'} w-auto transition-[height] duration-200`}
+              />
+            )}
+          </button>
+
+          {showHiTooltip && (
+            <div
+              className="absolute left-1/2 top-full mt-2 -translate-x-1/2 pointer-events-none"
+              style={{ animation: 'hiTooltip 2.2s cubic-bezier(0.16,1,0.3,1) forwards' }}
+            >
+              <div className="whitespace-nowrap rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm font-medium text-text-primary shadow-elevated">
+                Hi there! 👋
+              </div>
+            </div>
+          )}
+        </div>
+
         {role === 'viewer' && brands && brands.length > 1 && activeBrandId && (
-          <div className="mb-1">
+          <div className="mb-1 mt-3">
             <BrandSwitcher activeBrandId={activeBrandId} brands={brands} collapsed={!open} />
           </div>
         )}
