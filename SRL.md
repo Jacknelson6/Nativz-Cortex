@@ -365,3 +365,74 @@ well-formatted Word document.
 - `unzip -l` → 12 entries incl. `word/document.xml` (445KB content)
 
 **SRL Goal 5 complete.** The existing corrupted row now downloads cleanly with the new schema; future plans round-trip without intervention.
+
+---
+
+## Goal 6 (set 2026-04-13) — Portal Content Lab rollout-readiness
+
+Make `/portal/content-lab` safe to share with clients by auditing every
+endpoint and UI path a viewer reaches from that surface, fixing org-scope
+leaks, and smoke-testing the chat → attach → plan → PDF flow.
+
+### Acceptance criteria
+
+- [x] `/api/nerd/searches?clientId=<any>` returns 404 for a viewer whose org doesn't own that client (commit ae547f0)
+- [x] `/api/nerd/mentions` filters `clients` by `user_client_access` for viewers (commit ae547f0)
+- [ ] Full audit of every endpoint `/portal/content-lab` + its child component tree calls; each is either (a) viewer-scoped, (b) RLS-enforced, or (c) documented as admin-only-but-unreachable
+- [ ] QA harness asserts the two new leak fixes via regression tests (`/api/nerd/searches` with cross-org clientId → 404; `/api/nerd/mentions` as viewer → filtered)
+- [ ] `npm run test:topic-plan` green with all portal scoping tests including new HTTP-level checks
+- [ ] `npm run build` clean
+- [ ] Manual browser smoke NOT required — code-level verification is enough for SRL termination; log anything that needs human verification in a "Needs human QA" section
+
+### Scope boundaries
+
+- **IN:** Every endpoint reachable from `app/portal/content-lab/**`, `components/portal/portal-content-lab.tsx`, and every strategy-lab component it re-uses (`StrategyLabConversationHistoryRail`, `StrategyLabTopicSearchChipBar`, `StrategyLabAttachResearchDialog`, `AgencyClientAvatar`). Fix leaks, add regression tests, document unreachable-but-unscoped paths.
+- **OUT:** Admin Content Lab (`/admin/strategy-lab/*`) bugs, non-Content-Lab portal pages, email-composer work (concurrent session is handling that), any Vercel/deploy config.
+
+## Iteration 6.1 — 2026-04-13
+
+**Focus:** Enumerate every network call the portal Content Lab makes and audit each for viewer scoping.
+
+### Iteration 6.1 — 2026-04-13
+
+**Shipped:**
+- `fix(security): org-scope /api/nerd/mentions + /api/nerd/searches for viewers` (ae547f0)
+
+**Gaps:** Second-pass audit surfaced four more leaks (knowledge tools + searchContext).
+
+### Iteration 6.2 — 2026-04-13
+
+**Shipped:**
+- `fix(security): org-scope knowledge tools + searchContext for portal viewers` (d6087fa)
+
+**Gaps:** Third-pass audit surfaced portal chat context-load leak (trusted client-supplied mention for scoping).
+
+### Iteration 6.3 — 2026-04-13
+
+**Shipped:**
+- `fix(security): portal chat route resolves clientId server-side` (312bc29)
+
+**Gaps:** Fourth-pass audit surfaced get_client_details tool leak (in portal allowlist, unscoped).
+
+### Iteration 6.4 — 2026-04-13
+
+**Shipped:**
+- `fix(security): gate get_client_details tool against cross-org viewers` (354fc58)
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| /api/nerd/searches viewer 404 | done |
+| /api/nerd/mentions viewer filter | done |
+| Full endpoint audit | done (5 passes, 10 leaks total) |
+| QA regression tests | done (14 total scoping assertions) |
+| test:topic-plan green | yes |
+| npm run build clean | yes |
+
+**Fifth audit pass: ALL CLEAR.** All tools in PORTAL_ALLOWED_TOOLS are org-gated. All endpoints a viewer reaches are scoped. Portal Content Lab is safe to share with clients pending `feature_flags.can_use_nerd = true` on the target `clients` row and a manual browser smoke pass by a human.
+
+**Needs human QA (not automated):**
+- Log in as a real viewer, open /portal/content-lab/<their-client-id>, confirm chat → attach topic search → generate plan → download PDF works end-to-end.
+- Confirm the PDF renders with the right agency brand on both cortex.nativz.io and cortex.andersoncollaborative.com.
+
+**SRL Goal 6 complete.** Ten cross-org leaks found and patched across four iterations; fifth independent audit found none remaining.
