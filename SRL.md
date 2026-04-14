@@ -436,3 +436,53 @@ leaks, and smoke-testing the chat → attach → plan → PDF flow.
 - Confirm the PDF renders with the right agency brand on both cortex.nativz.io and cortex.andersoncollaborative.com.
 
 **SRL Goal 6 complete.** Ten cross-org leaks found and patched across four iterations; fifth independent audit found none remaining.
+
+---
+
+## Goal 7 (set 2026-04-13)
+
+Ship a template-driven email composer on `/admin/users` that sends now or schedules for later, with full template CRUD and a 1-minute cron draining pending sends.
+
+### Acceptance criteria
+- [x] Email templates table + 6 seed rows (migration 100)
+- [x] scheduled_emails table + partial pending index (migration 101)
+- [x] Merge-fields pure function (TDD, 6/6 tests pass)
+- [x] Brand-aware sendUserEmail helper via existing layout() wrapper
+- [x] Shared requireAdmin auth helper (role='admin' gate)
+- [x] 8 admin API routes (templates CRUD, send single/bulk, schedule single/bulk, scheduled list/edit/cancel)
+- [x] 1-minute Vercel cron drains pending → sent/failed with activity_log entries
+- [x] EmailComposerModal with send + edit-template + schedule modes; XSS-safe preview via React nodes (no dangerouslySetInnerHTML)
+- [x] ScheduledEmailsTab with 30s auto-refresh + cancel action
+- [x] Wired into /admin/users — tab nav + "Send email" in per-user kebab
+- [ ] **Needs human QA:** apply migrations, send a real email to a real inbox, schedule a send 2min out, cancel one, edit a template, delete a template, audit activity_log.
+
+## Goal 7 Iterations
+
+### Iteration 1 — 2026-04-13
+
+**Shipped (14 commits, main):**
+- `3fa769e` migrations 100/101 (email_templates + scheduled_emails)
+- `a5da334` merge-fields helper + types (TDD)
+- `f0851e3` sendUserEmail helper + Markdown→HTML wrapper
+- `618288b` requireAdmin shared helper
+- `7ad8ba0` resolveMergeContext (client name when exactly one access row)
+- `9d2a25e` email_templates CRUD API
+- `0f30020` single + bulk send-email routes with activity_log
+- `dde3eb3` single + bulk schedule-email routes (frozen subject/body at schedule time)
+- `4b30001` scheduled-emails list + edit + cancel routes
+- `d3c310f` 1-min cron + vercel.json entry
+- `7b9f65f` EmailComposerModal + rail + XSS-safe preview
+- `8244262` ScheduledEmailsTab (30s auto-refresh)
+- `bf93d15` wire into /admin/users page
+- `2e00b7a` fix pre-existing routing-policy dedup test (unrelated but was failing)
+
+**Build + tests:** 170/170 passing, typecheck clean, `npm run build` clean.
+
+**Deferred to v2 (non-goals per spec):**
+- Multi-step drip sequences (can approximate with 3 individual scheduled sends)
+- `.ics` calendar attachments
+- Open/click tracking (Resend webhooks)
+- Inbox reply handling
+- Rich-text / WYSIWYG editor
+
+**SRL Goal 7 code complete — awaiting human QA before marking goal closed.**
