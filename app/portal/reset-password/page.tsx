@@ -21,14 +21,37 @@ export default function PortalResetPasswordPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
+
+    // Supabase admin-generated recovery link lands as `?token_hash=<h>&
+    // type=recovery`. Exchange it ourselves — PKCE auto-exchange fails on
+    // this device because there's no paired code_verifier cookie (the
+    // link was generated server-side, not by the browser).
+    const params = new URLSearchParams(window.location.search);
+    const tokenHash = params.get('token_hash');
+    const type = params.get('type');
+
+    async function init() {
+      if (tokenHash && type === 'recovery') {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: 'recovery',
+        });
+        if (verifyError) {
+          setError('Reset link is invalid or expired. Request a new one.');
+          return;
+        }
+        window.history.replaceState({}, '', window.location.pathname);
         setReady(true);
+        return;
       }
-    });
-    // Also handle case where session is already set
-    supabase.auth.getSession().then(({ data: { session } }) => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (session) setReady(true);
+    }
+
+    void init();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setReady(true);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -77,8 +100,10 @@ export default function PortalResetPasswordPage() {
               />
             )}
           </div>
-          <p className="mt-2 text-sm text-text-muted">
-            {ready ? 'Set a new password' : 'Validating your reset link…'}
+          <p className={`mt-2 text-sm ${!ready && error ? 'text-red-400' : 'text-text-muted'}`}>
+            {ready
+              ? 'Set a new password'
+              : error || 'Validating your reset link…'}
           </p>
         </div>
 

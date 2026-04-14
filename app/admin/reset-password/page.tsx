@@ -22,14 +22,40 @@ export default function AdminResetPasswordPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
+
+    // Supabase admin-generated recovery link lands on this page as
+    // `?token_hash=<h>&type=recovery`. Exchange the token ourselves — the
+    // browser client's PKCE auto-exchange can't run because there's no
+    // paired code_verifier cookie on this device.
+    const params = new URLSearchParams(window.location.search);
+    const tokenHash = params.get('token_hash');
+    const type = params.get('type');
+
+    async function init() {
+      if (tokenHash && type === 'recovery') {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: 'recovery',
+        });
+        if (verifyError) {
+          setError('Reset link is invalid or expired. Request a new one.');
+          return;
+        }
+        // Strip token params from URL so refreshes don't re-run verifyOtp.
+        window.history.replaceState({}, '', window.location.pathname);
         setReady(true);
+        return;
       }
-    });
-    // Also check if session already exists (e.g. page reloaded after token exchange)
-    supabase.auth.getSession().then(({ data: { session } }) => {
+
+      // Fallback for existing sessions (page reload after a successful verify).
+      const { data: { session } } = await supabase.auth.getSession();
       if (session) setReady(true);
+    }
+
+    void init();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setReady(true);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -140,8 +166,14 @@ export default function AdminResetPasswordPage() {
             <h1 className={`text-2xl font-bold text-center mb-1 ${isAC ? 'text-[#00161F]' : 'text-white'}`}>
               Set new password
             </h1>
-            <p className={`text-sm text-center mb-8 ${isAC ? 'text-[#617792]' : 'text-white/40'}`}>
-              {ready ? 'Choose a new password for your account' : 'Validating your reset link…'}
+            <p className={`text-sm text-center mb-8 ${
+              !ready && error
+                ? 'text-red-400'
+                : isAC ? 'text-[#617792]' : 'text-white/40'
+            }`}>
+              {ready
+                ? 'Choose a new password for your account'
+                : error || 'Validating your reset link…'}
             </p>
 
             {ready && (

@@ -33,13 +33,14 @@ export async function POST(req: NextRequest) {
   const { email, redirectTo } = parsed.data;
   const admin = createAdminClient();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io';
+  const resetPage = redirectTo ?? `${appUrl}/admin/reset-password`;
 
   // Generate recovery link via Supabase admin API (no email sent by Supabase)
   const { data, error } = await admin.auth.admin.generateLink({
     type: 'recovery',
     email,
     options: {
-      redirectTo: redirectTo ?? `${appUrl}/admin/reset-password`,
+      redirectTo: resetPage,
     },
   });
 
@@ -50,11 +51,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ sent: true });
   }
 
-  const resetUrl = data?.properties?.action_link;
-  if (!resetUrl) {
-    console.error('[forgot-password] No action_link in response');
+  // IMPORTANT: don't use `action_link` directly — it redirects through
+  // Supabase's `/auth/v1/verify` which hands back a PKCE `?code=...` URL.
+  // Our browser clients don't have the paired code_verifier cookie (the link
+  // was generated server-side, not by the client), so exchange fails silently
+  // and the reset page hangs on "Validating your reset link…" forever.
+  //
+  // Instead, hand the raw `hashed_token` to our own reset page and let it
+  // call `supabase.auth.verifyOtp({ token_hash, type: 'recovery' })` — no
+  // code_verifier needed.
+  const hashedToken = data?.properties?.hashed_token;
+  if (!hashedToken) {
+    console.error('[forgot-password] No hashed_token in response');
     return NextResponse.json({ sent: true });
   }
+  const resetUrl = `${resetPage}?token_hash=${encodeURIComponent(hashedToken)}&type=recovery`;
 
   // Determine agency brand from email domain
   const agency: AgencyBrand = email.toLowerCase().includes('andersoncollaborative') ? 'anderson' : 'nativz';
