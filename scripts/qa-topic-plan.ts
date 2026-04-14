@@ -204,8 +204,100 @@ async function main() {
     if (planRowId) await admin.from('topic_plans').delete().eq('id', planRowId);
   });
 
-  // ─── 4. PDF builds from an enriched plan ────────────────────────────────
-  console.log('\n4. PDF rendering');
+  // ─── 4. Portal scoping — create_topic_plan + extract_topic_signals ──────
+  console.log('\n4. Portal scoping — cross-org viewer is rejected');
+
+  const { topicSignalTools } = await import('../lib/nerd/tools/topic-signals');
+  const extractTool = topicSignalTools.find((t) => t.name === 'extract_topic_signals');
+  require_(extractTool != null, 'extract_topic_signals tool not found');
+
+  // Look up the test client's org so we can pick a viewer from a different org.
+  const { data: testClient } = await admin
+    .from('clients')
+    .select('organization_id')
+    .eq('id', clientId!)
+    .single();
+  const testClientOrg = testClient?.organization_id as string | null;
+  require_(typeof testClientOrg === 'string', 'test client has no organization_id');
+
+  // Find a viewer user whose organization_id differs from the test client's.
+  const { data: otherOrgViewers } = await admin
+    .from('users')
+    .select('id, organization_id')
+    .eq('role', 'viewer')
+    .neq('organization_id', testClientOrg!)
+    .limit(1);
+  const crossOrgViewerId = otherOrgViewers?.[0]?.id as string | undefined;
+
+  if (!crossOrgViewerId) {
+    console.log('  SKIP  no cross-org viewer user in this environment — cannot run portal scoping tests');
+  } else {
+    await check('cross-org viewer: create_topic_plan rejected with access error', async () => {
+      const result = await createPlanTool!.handler(
+        { client_id: clientId!, plan: goodPlan, topic_search_ids: [TEST_SEARCH_ID] },
+        crossOrgViewerId,
+      );
+      require_(result.success === false, 'expected rejection for cross-org viewer');
+      require_(
+        /access/i.test(result.error ?? ''),
+        `error should reference access control, got: ${result.error}`,
+      );
+      // Belt + suspenders: no row should have been written.
+      const { count } = await admin
+        .from('topic_plans')
+        .select('*', { count: 'exact', head: true })
+        .eq('created_by', crossOrgViewerId)
+        .eq('client_id', clientId!);
+      require_((count ?? 0) === 0, `expected no rows from cross-org viewer, got ${count}`);
+    });
+
+    await check('cross-org viewer: extract_topic_signals returns empty', async () => {
+      const result = await extractTool!.handler(
+        { search_ids: [TEST_SEARCH_ID] },
+        crossOrgViewerId,
+      );
+      require_(result.success === true, `expected success with empty data, got error: ${result.error}`);
+      const d = result.data as { total: number; signals: unknown[] } | undefined;
+      require_(d?.total === 0, `expected total=0 for cross-org viewer, got ${d?.total}`);
+      require_(Array.isArray(d?.signals) && d.signals.length === 0, 'expected empty signals array');
+    });
+  }
+
+  // In-org viewer happy path: find (or skip) a viewer inside the test client's org.
+  const { data: inOrgViewers } = await admin
+    .from('users')
+    .select('id')
+    .eq('role', 'viewer')
+    .eq('organization_id', testClientOrg!)
+    .limit(1);
+  const inOrgViewerId = inOrgViewers?.[0]?.id as string | undefined;
+
+  if (!inOrgViewerId) {
+    console.log('  SKIP  no in-org viewer user in this environment — cannot run happy-path scoping test');
+  } else {
+    await check('in-org viewer: create_topic_plan succeeds for own-org client', async () => {
+      const result = await createPlanTool!.handler(
+        { client_id: clientId!, plan: goodPlan, topic_search_ids: [TEST_SEARCH_ID] },
+        inOrgViewerId,
+      );
+      require_(result.success === true, `expected success for in-org viewer, got: ${result.error}`);
+      const planRowId = (result.data as { id: string } | undefined)?.id;
+      if (planRowId) await admin.from('topic_plans').delete().eq('id', planRowId);
+    });
+
+    await check('in-org viewer: extract_topic_signals returns the search', async () => {
+      const result = await extractTool!.handler(
+        { search_ids: [TEST_SEARCH_ID] },
+        inOrgViewerId,
+      );
+      require_(result.success === true, `expected success, got: ${result.error}`);
+      const d = result.data as { total: number } | undefined;
+      require_((d?.total ?? 0) > 0, `expected in-org viewer to see signals, got total=${d?.total}`);
+    });
+  }
+
+  // ─── 5. PDF builds from an enriched plan ────────────────────────────────
+  console.log('\n5. PDF rendering');
   await check('PDF renders from enriched plan, both agencies', async () => {
     const enrichedIdeas = signals.slice(0, 3).map((s, i) => ({
       number: i + 1,
