@@ -22,7 +22,7 @@ const POPOVER_WIDTH = 240;
 export function SidebarModePicker() {
   const { open, mode, setMode } = useSidebar();
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [position, setPosition] = useState<{ bottom: number; left: number } | null>(null);
   const [mounted, setMounted] = useState(false);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -34,8 +34,12 @@ export function SidebarModePicker() {
     if (!popoverOpen || !buttonRef.current) return;
     function updatePos() {
       const rect = buttonRef.current!.getBoundingClientRect();
+      // Anchor via `bottom` so the popover sits above the button regardless
+      // of its own rendered height — avoids a collision with the
+      // sidebarTooltipIn keyframes, which end on transform: translateX(0)
+      // and would otherwise clobber a translateY(-100%).
       setPosition({
-        top: rect.top - 8, // sits above the trigger with a small gap
+        bottom: window.innerHeight - rect.top + 8,
         left: rect.left,
       });
     }
