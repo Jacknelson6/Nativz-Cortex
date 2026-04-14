@@ -250,15 +250,22 @@ export function AdminSidebar({
           overlay overlapped the "← Back to dashboard" text in the secondary
           Edits / Settings rails. Click keeps the "Hi there!" easter egg. */}
       <SidebarHeader className="pt-4 pb-2">
-        <div className="relative flex w-full items-center justify-center">
+        {/* Logo slot is a fixed h-9 box so the rail's vertical geometry is
+            identical whether the wordmark is visible or not. Fade the
+            wordmark out when collapsed (no icon-only variant exists). */}
+        <div className="relative flex h-9 w-full items-center justify-center">
           <button
             type="button"
             onClick={() => {
+              if (!open) return;
               setShowHiTooltip(true);
               setTimeout(() => setShowHiTooltip(false), 2200);
             }}
             aria-label="Hi there!"
-            className="flex items-center justify-center transition-opacity duration-200 hover:opacity-80 cursor-pointer"
+            tabIndex={open ? 0 : -1}
+            className={`flex items-center justify-center transition-opacity duration-200 cursor-pointer ${
+              open ? 'opacity-100 hover:opacity-80' : 'opacity-0 pointer-events-none'
+            }`}
           >
             {mode === 'nativz' ? (
               <Image
@@ -266,7 +273,7 @@ export function AdminSidebar({
                 alt="Nativz"
                 width={140}
                 height={52}
-                className={`${open ? 'h-9' : 'h-5'} w-auto transition-[height] duration-200`}
+                className="h-9 w-auto"
                 priority
               />
             ) : (
@@ -274,7 +281,7 @@ export function AdminSidebar({
               <img
                 src="/anderson-logo-dark.svg"
                 alt="Anderson Collaborative"
-                className={`${open ? 'h-9' : 'h-5'} w-auto transition-[height] duration-200`}
+                className="h-9 w-auto"
               />
             )}
           </button>
@@ -298,16 +305,11 @@ export function AdminSidebar({
         )}
       </SidebarHeader>
 
-      {/* Navigation */}
+      {/* Navigation — Supabase-style: thin dividers between groups, no labels */}
       <SidebarContent>
         {getNavSectionsForRole(role, routePrefix).map((section, idx) => (
           <SidebarGroup key={section.label}>
-            {open && (
-              <span className="px-2.5 pb-1 text-[13px] font-semibold uppercase tracking-wide text-text-muted">
-                {section.label}
-              </span>
-            )}
-            {!open && idx > 0 && <SidebarSeparator />}
+            {idx > 0 && <SidebarSeparator />}
             <SidebarMenu>
               {section.items.map((item) => {
                 const active = isActivePath(pathname, item.href, searchParams);
@@ -394,50 +396,18 @@ export function AdminSidebar({
 
       {/* Footer: The Nerd + account */}
       <SidebarFooter className="border-t-0">
-        {/* The Nerd — AI chat agent (StarBorder pattern) */}
-        <div className={`px-1 pb-2 ${role === 'viewer' ? 'opacity-40 pointer-events-none' : ''}`} title={role === 'viewer' ? 'Coming soon' : undefined}>
+        {/* The Nerd — flat nav-row style, matches the rest of the rail */}
+        <div className={role === 'viewer' ? 'opacity-40 pointer-events-none' : undefined} title={role === 'viewer' ? 'Coming soon' : undefined}>
           <Link
             href={role === 'viewer' ? '#' : `${routePrefix}/nerd`}
-            className={`group/nerd relative block overflow-hidden rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200 ${open ? '' : 'rounded-lg'}`}
-            style={{ padding: '1px 0' }}
+            className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[15px] transition-colors ${
+              isActivePath(pathname, '/admin/nerd')
+                ? 'bg-accent-surface text-text-primary font-semibold'
+                : 'text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium'
+            }`}
           >
-            {/* Orbiting star — bottom */}
-            <div
-              className="absolute w-[300%] h-[50%] opacity-70 group-hover/nerd:opacity-100 bottom-[-11px] right-[-250%] rounded-full z-0 transition-opacity duration-300"
-              style={{
-                background: 'radial-gradient(circle, var(--accent-text), transparent 10%)',
-                animation: 'star-movement-bottom 6s linear infinite alternate',
-              }}
-            />
-            {/* Orbiting star — top */}
-            <div
-              className="absolute w-[300%] h-[50%] opacity-70 group-hover/nerd:opacity-100 top-[-10px] left-[-250%] rounded-full z-0 transition-opacity duration-300"
-              style={{
-                background: 'radial-gradient(circle, var(--accent), transparent 10%)',
-                animation: 'star-movement-top 6s linear infinite alternate',
-              }}
-            />
-
-            <div
-              className={`relative z-[1] flex items-center border border-nativz-border bg-surface transition-all duration-200 group-hover/nerd:shadow-[0_0_20px_var(--accent-surface)] ${
-                'gap-2.5 rounded-xl px-3 py-2.5'
-              } ${
-                isActivePath(pathname, '/admin/nerd')
-                  ? 'border-accent/30 shadow-[0_0_16px_var(--accent-surface)]'
-                  : 'group-hover/nerd:border-accent/25'
-              }`}
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0 bg-accent-surface">
-                <BotMessageSquare size={16} className={`transition-colors duration-200 ${
-                  isActivePath(pathname, '/admin/nerd') ? 'text-accent-text' : 'text-accent-text/70 group-hover/nerd:text-accent-text'
-                }`} />
-              </div>
-              {open && (
-                <p className="text-sm font-semibold truncate text-text-primary min-w-0 flex-1">
-                  The Nerd
-                </p>
-              )}
-            </div>
+            <BotMessageSquare size={18} className="shrink-0" />
+            {open && <span className="truncate">The Nerd</span>}
           </Link>
         </div>
 

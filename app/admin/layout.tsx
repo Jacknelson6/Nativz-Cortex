@@ -7,6 +7,8 @@ export const dynamic = 'force-dynamic';
 import { AdminSidebar } from '@/components/layout/admin-sidebar';
 import { AdminSettingsSidebar } from '@/components/layout/admin-settings-sidebar';
 import { AdminEditsSidebar } from '@/components/layout/admin-edits-sidebar';
+// AgencyLogo lives inside the sidebar header now (admin-sidebar.tsx) so it
+// scales with collapse state and doesn't overlap the secondary rails.
 import { AdminHeader } from '@/components/layout/admin-header';
 import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
 import { EasterEgg } from '@/components/easter-egg';

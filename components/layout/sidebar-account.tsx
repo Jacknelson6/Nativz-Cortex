@@ -68,11 +68,11 @@ export function SidebarAccount({
     : '?';
 
   return (
-    <div ref={containerRef} className={`relative ${collapsed ? 'p-2' : 'p-3'}`}>
+    <div ref={containerRef} className="relative">
       {open && (
         <div
           className={`absolute rounded-xl border border-nativz-border bg-surface p-1.5 shadow-elevated animate-[popIn_200ms_cubic-bezier(0.16,1,0.3,1)_forwards] ${
-            collapsed ? 'left-full ml-2 bottom-0' : 'bottom-full mb-2 left-3 right-3'
+            collapsed ? 'left-full ml-2 bottom-0' : 'bottom-full mb-2 left-0 right-0'
           }`}
           style={{ backdropFilter: 'blur(16px)', zIndex: 50 }}
         >
@@ -107,49 +107,32 @@ export function SidebarAccount({
 
       <button
         onClick={() => setOpen((prev) => !prev)}
-        className={`group flex w-full items-center rounded-xl border gap-2.5 px-3 py-2.5 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
-          open
-            ? 'border-accent/30 bg-accent-surface shadow-[0_0_12px_var(--accent-surface)]'
-            : 'border-transparent hover:border-nativz-border hover:bg-surface-hover'
+        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors ${
+          open ? 'bg-surface-hover' : 'hover:bg-surface-hover'
         }`}
       >
-        {/* Avatar */}
-        <div className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-shadow duration-300 ${
-          open ? 'shadow-[0_0_10px_var(--accent-surface)]' : 'group-hover:shadow-[0_0_8px_var(--accent-surface)]'
-        }`}>
+        {/* Compact avatar — same h-7 w-7 footprint as nav icons so the
+            footer stays the same height regardless of collapse state. */}
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full overflow-hidden bg-accent-surface">
           {avatarUrl ? (
             <Image
               src={avatarUrl}
               alt={userName || 'Profile'}
-              width={32}
-              height={32}
-              className="rounded-full object-cover"
+              width={28}
+              height={28}
+              className="h-full w-full object-cover"
             />
+          ) : userName ? (
+            <span className="text-xs font-semibold text-accent-text">{initials}</span>
           ) : (
-            <div className="flex h-full w-full items-center justify-center rounded-full bg-accent-surface">
-              {userName ? (
-                <span className="text-xs font-semibold text-accent-text">{initials}</span>
-              ) : (
-                <User size={14} className="text-accent-text" />
-              )}
-            </div>
+            <User size={13} className="text-accent-text" />
           )}
-          <div className={`absolute inset-0 rounded-full border-2 transition-all duration-300 ${
-            open
-              ? 'border-accent/50'
-              : 'border-transparent group-hover:border-accent/25'
-          }`} />
         </div>
 
-        {/* Name + Chevron — hidden when collapsed */}
         {!collapsed && (
-          <>
-            <div className="flex-1 min-w-0 text-left">
-              <p className="truncate text-sm font-medium text-text-primary">
-                {userName || 'Account'}
-              </p>
-            </div>
-          </>
+          <span className="flex-1 min-w-0 truncate text-left text-sm font-medium text-text-primary">
+            {userName || 'Account'}
+          </span>
         )}
       </button>
     </div>

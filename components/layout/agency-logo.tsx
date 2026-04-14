@@ -16,23 +16,27 @@ export function AgencyLogo() {
   const { open } = useSidebar();
   const [showHiTooltip, setShowHiTooltip] = useState(false);
 
-  // Container width tracks the sidebar so the logo centers inside the rail
-  // when expanded and tucks into the corner when collapsed. Transition
-  // matches the sidebar's own width transition so they move as one.
+  // Logo centers in the expanded rail (240px) and fades out entirely when
+  // collapsed — Supabase pattern. Constant h-11 so its bottom edge never
+  // moves the rail's other elements (no more "icons jumping when the
+  // logo shrinks"); we just toggle visibility instead.
   return (
     <div
-      className={`fixed top-3 left-0 z-40 pointer-events-none flex items-center transition-[width] duration-200 ease-out ${
-        open ? 'justify-center' : 'justify-start pl-3'
+      className={`fixed top-3 left-0 z-40 flex items-center justify-center transition-opacity duration-200 ease-out ${
+        open ? 'opacity-100 pointer-events-none' : 'opacity-0 pointer-events-none'
       }`}
-      style={{ width: open ? 'var(--sidebar-width)' : 'var(--sidebar-width-icon)' }}
+      style={{ width: 'var(--sidebar-width)' }}
+      aria-hidden={!open}
     >
       <button
         type="button"
         onClick={() => {
+          if (!open) return;
           setShowHiTooltip(true);
           setTimeout(() => setShowHiTooltip(false), 2200);
         }}
         aria-label="Hi there!"
+        tabIndex={open ? 0 : -1}
         className="pointer-events-auto flex items-center hover:opacity-80 transition-opacity duration-200 cursor-pointer"
       >
         {mode === 'nativz' ? (
@@ -41,7 +45,7 @@ export function AgencyLogo() {
             alt="Nativz"
             width={150}
             height={56}
-            className={`${open ? 'h-11' : 'h-5'} w-auto max-w-full object-contain transition-[height] duration-200 ease-out`}
+            className="h-11 w-auto"
             priority
           />
         ) : (
@@ -50,7 +54,7 @@ export function AgencyLogo() {
           <img
             src="/anderson-logo-dark.svg"
             alt="Anderson Collaborative"
-            className={`${open ? 'h-11' : 'h-5'} w-auto max-w-full object-contain transition-[height] duration-200 ease-out`}
+            className="h-11 w-auto"
           />
         )}
       </button>
