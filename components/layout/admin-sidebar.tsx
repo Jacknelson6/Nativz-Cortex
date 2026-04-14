@@ -264,30 +264,21 @@ export function AdminSidebar({
             aria-label="Hi there!"
             className="flex items-center justify-center transition-opacity duration-200 cursor-pointer hover:opacity-80"
           >
-            {open ? (
-              mode === 'nativz' ? (
-                <Image
-                  src="/nativz-logo.svg"
-                  alt="Nativz"
-                  width={140}
-                  height={52}
-                  className="h-9 w-auto"
-                  priority
-                />
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src="/anderson-logo-dark.svg"
-                  alt="Anderson Collaborative"
-                  className="h-9 w-auto"
-                />
-              )
+            {mode === 'nativz' ? (
+              <Image
+                src="/nativz-logo.svg"
+                alt="Nativz"
+                width={140}
+                height={52}
+                className={`${open ? 'h-9' : 'h-5'} w-auto transition-[height] duration-200 ease-out`}
+                priority
+              />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={mode === 'nativz' ? '/favicon.png' : '/favicon-ac.png'}
-                alt={mode === 'nativz' ? 'Nativz' : 'Anderson Collaborative'}
-                className="h-7 w-7 rounded-md object-contain"
+                src="/anderson-logo-dark.svg"
+                alt="Anderson Collaborative"
+                className={`${open ? 'h-9' : 'h-5'} w-auto transition-[height] duration-200 ease-out`}
               />
             )}
           </button>
