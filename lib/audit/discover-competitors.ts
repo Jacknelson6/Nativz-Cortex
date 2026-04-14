@@ -179,15 +179,38 @@ Up to ${MAX_CANDIDATES_REQUESTED} entries, minimum 3, ordered most-similar-scale
     jsonMode: true,
   });
 
+  function looksLikeCandidateArray(val: unknown): val is Array<{ name?: unknown; website?: unknown }> {
+    if (!Array.isArray(val) || val.length === 0) return false;
+    return val.some(
+      (entry) =>
+        entry && typeof entry === 'object'
+        && typeof (entry as { name?: unknown }).name === 'string'
+        && typeof (entry as { website?: unknown }).website === 'string',
+    );
+  }
+
+  function findCandidateArray(raw: unknown): Array<{ name?: unknown; website?: unknown; why?: unknown }> {
+    if (looksLikeCandidateArray(raw)) return raw as Array<{ name?: unknown; website?: unknown; why?: unknown }>;
+    if (raw && typeof raw === 'object') {
+      // Scan all values of the wrapper object for the first array of candidate-shaped entries.
+      // Handles variations like { competitors: [...] }, { results: [...] }, { data: [...] }, and
+      // nested cases like { response: { competitors: [...] } }.
+      for (const value of Object.values(raw as Record<string, unknown>)) {
+        if (looksLikeCandidateArray(value)) return value as Array<{ name?: unknown; website?: unknown; why?: unknown }>;
+        if (value && typeof value === 'object') {
+          const nested = findCandidateArray(value);
+          if (nested.length > 0) return nested;
+        }
+      }
+    }
+    return [];
+  }
+
   function parseRawCandidates(text: string): LlmCandidate[] {
     const raw = parseAIResponseJSON<unknown>(text);
-    const arr = Array.isArray(raw)
-      ? raw
-      : Array.isArray((raw as { competitors?: unknown })?.competitors)
-        ? (raw as { competitors: unknown[] }).competitors
-        : [];
+    const arr = findCandidateArray(raw);
 
-    return (arr as Array<{ name?: unknown; website?: unknown; why?: unknown }>)
+    return arr
       .filter((c) => typeof c.name === 'string' && typeof c.website === 'string')
       .map((c) => ({
         name: String(c.name).trim(),
@@ -233,27 +256,58 @@ Return JSON only, no prose.`;
       console.error('[audit] LLM competitor candidates retry — failed to parse JSON');
     }
 
-    // Third-tier fallback: strip all geographic constraints and ask for
-    // same-industry competitors at any geography.
-    console.warn('[audit] askLlmForCompetitors: retry also returned 0 — final attempt with no geo constraint');
-    const nogeoPrompt = `Name 5 direct competitors in the same industry as this business. Return JSON: [{"name":"...","website":"...","why":"..."}].
-Business: ${websiteContext.title}
-Industry: ${websiteContext.industry}
-Description: ${websiteContext.description}
-Return JSON only, no prose. Do not say you cannot find any — make your best guess if the industry is ambiguous.`;
-    const noGeo = await createCompletion({
-      messages: [{ role: 'user', content: nogeoPrompt }],
+    // Third-tier fallback: flip the scope assumption. If the first two tiers
+    // were told "national" (and got 0), try again as if this is a local brand —
+    // and vice versa. Scope misclassification by the website-context extractor
+    // is the most common reason earlier tiers return nothing for things like
+    // single-city physical therapy practices.
+    const flippedScope = websiteContext.scope === 'local' ? 'national' : 'local';
+    console.warn(`[audit] askLlmForCompetitors: retry also returned 0 — flipping scope to ${flippedScope}`);
+    const flipPrompt = `Name 5 direct competitors for this business as JSON: [{"name":"...","website":"...","why":"..."}].
+Business: ${websiteContext.title} — ${websiteContext.industry} — ${websiteContext.description}
+${flippedScope === 'local' && websiteContext.location
+    ? `Treat this as a LOCAL business in ${websiteContext.location}; return competitors in the same metro area or region.`
+    : flippedScope === 'local'
+      ? 'Treat this as a LOCAL single-location business; return competitors in the same kind of local market.'
+      : 'Treat this as a NATIONAL/online business; return nationally-recognized competitors in the same category.'}
+Return JSON only, no prose.`;
+    const flipRes = await createCompletion({
+      messages: [{ role: 'user', content: flipPrompt }],
       maxTokens: 800,
       feature: 'audit_competitor_discovery',
       jsonMode: true,
       timeoutMs: 30000,
     });
     try {
-      const noGeoParsed = parseRawCandidates(noGeo.text);
-      if (noGeoParsed.length > 0) return noGeoParsed;
-      console.warn(`[audit] askLlmForCompetitors: final attempt returned 0 — raw: ${noGeo.text.slice(0, 500)}`);
+      const flipParsed = parseRawCandidates(flipRes.text);
+      if (flipParsed.length > 0) return flipParsed;
+      console.warn(`[audit] askLlmForCompetitors: flipped-scope attempt returned 0 — raw: ${flipRes.text.slice(0, 500)}`);
     } catch {
-      console.error('[audit] LLM competitor candidates final attempt — failed to parse JSON');
+      console.error('[audit] LLM competitor candidates flipped-scope — failed to parse JSON');
+    }
+
+    // Fourth-tier safety net: industry-only, no scope, no scale, no geo.
+    // This should basically never return 0 — if it does, the LLM layer itself
+    // is broken and the route's empty-result logging will surface it.
+    console.warn('[audit] askLlmForCompetitors: flipped scope also returned 0 — industry-only safety net');
+    const industryOnlyPrompt = `List 5 real companies that compete in the same industry. Return JSON only, no prose.
+Format: [{"name":"Company Name","website":"example.com","why":"one-sentence reason"}]
+Industry: ${websiteContext.industry || websiteContext.description || websiteContext.title}
+${websiteContext.location ? `Region: ${websiteContext.location} (prefer nearby, but any are acceptable).` : ''}
+You MUST return at least 3 real companies. If the industry is ambiguous, make your best guess — never return an empty list.`;
+    const industryOnly = await createCompletion({
+      messages: [{ role: 'user', content: industryOnlyPrompt }],
+      maxTokens: 800,
+      feature: 'audit_competitor_discovery',
+      jsonMode: true,
+      timeoutMs: 30000,
+    });
+    try {
+      const industryOnlyParsed = parseRawCandidates(industryOnly.text);
+      if (industryOnlyParsed.length > 0) return industryOnlyParsed;
+      console.warn(`[audit] askLlmForCompetitors: industry-only safety net returned 0 — raw: ${industryOnly.text.slice(0, 500)}`);
+    } catch {
+      console.error('[audit] LLM competitor candidates industry-only — failed to parse JSON');
     }
 
     return [];

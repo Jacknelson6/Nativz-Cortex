@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { suggestCompetitorWebsites } from '@/lib/audit/discover-competitors';
+import { logApiError } from '@/lib/api/error-log';
 
 export const maxDuration = 30;
 
@@ -57,9 +58,38 @@ export async function POST(
       })
       .eq('id', id);
 
+    // If every tier returned empty, log the scope + industry snapshot so we
+    // can tell whether the LLM is failing or the scope extractor is misclassifying.
+    if (top3.length === 0) {
+      await logApiError({
+        route: '/api/analyze-social/[id]/suggest-competitors',
+        statusCode: 200,
+        errorMessage: 'No competitor candidates returned after all fallback tiers',
+        userId: user.id,
+        userEmail: user.email,
+        meta: {
+          audit_id: id,
+          scope: (websiteContext as { scope?: string })?.scope ?? null,
+          location: (websiteContext as { location?: string })?.location ?? null,
+          industry: (websiteContext as { industry?: string })?.industry ?? null,
+          title: (websiteContext as { title?: string })?.title ?? null,
+        },
+      });
+    }
+
     return NextResponse.json({ candidates: top3 });
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     console.warn('[analyze-social] suggest-competitors failed:', err);
+    await logApiError({
+      route: '/api/analyze-social/[id]/suggest-competitors',
+      statusCode: 500,
+      errorMessage: message,
+      errorDetail: err instanceof Error ? err.stack ?? undefined : undefined,
+      userId: user.id,
+      userEmail: user.email,
+      meta: { audit_id: id },
+    });
     return NextResponse.json({ candidates: [] });
   }
 }
