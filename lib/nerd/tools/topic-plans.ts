@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ToolDefinition } from '../types';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { topicPlanSchema } from '@/lib/topic-plans/types';
+import { loadTopicSignals, matchSignal } from '@/lib/topic-plans/signals';
 
 /**
  * create_topic_plan — the Nerd's artifact-producing tool.
@@ -68,6 +69,69 @@ export const topicPlanTools: ToolDefinition[] = [
           .eq('id', conversation_id)
           .maybeSingle();
         if (convo) safeConversationId = convo.id;
+      }
+
+      // ─── Server-side grounding: enrich + validate each idea against the
+      // actual research. The Nerd's ideas SHOULD have a `source` matching a
+      // real trending topic; we look it up, fill in the stat fields from the
+      // matched signal (overwriting any guess), and track how grounded the
+      // overall plan is. If too few ideas are traceable to real signals, we
+      // reject so the model has to retry — instead of silently shipping a
+      // made-up plan.
+      let groundedIdeas = 0;
+      let totalIdeasCount = 0;
+      if (cleanTopicSearchIds.length > 0) {
+        const signals = await loadTopicSignals(cleanTopicSearchIds);
+        if (signals.length > 0) {
+          for (const series of plan.series) {
+            for (const idea of series.ideas) {
+              totalIdeasCount += 1;
+              const match = matchSignal(idea.source, signals);
+              if (match) {
+                groundedIdeas += 1;
+                // Canonicalize the source name to the real trending topic so
+                // the PDF reads consistently across ideas pointing at the
+                // same signal.
+                idea.source = match.topic_name;
+                // Pull real stats — only overwrite when the signal has data
+                // and the idea field is missing, so the Nerd can still pass
+                // a more specific number if it has one.
+                if (idea.audience == null && match.search_audience != null) {
+                  idea.audience = match.search_audience;
+                }
+                if (idea.positive_pct == null && match.positive_pct != null) {
+                  idea.positive_pct = match.positive_pct;
+                }
+                if (idea.negative_pct == null && match.negative_pct != null) {
+                  idea.negative_pct = match.negative_pct;
+                }
+                // Resonance: the search's own bucket wins over the Nerd's
+                // guess — the model loves "viral" / "high" without basis.
+                if (match.resonance) {
+                  idea.resonance = match.resonance;
+                }
+              } else if (idea.source) {
+                // Source provided but not in the research — drop it rather
+                // than render a fabricated provenance label on the PDF.
+                idea.source = undefined;
+              }
+            }
+          }
+
+          // Reject low-grounding plans only when we DID have signals to
+          // ground against. If the Nerd built ideas with no usable source
+          // attribution at all, force a retry.
+          if (totalIdeasCount > 0) {
+            const groundedRatio = groundedIdeas / totalIdeasCount;
+            if (groundedRatio < 0.5) {
+              return {
+                success: false,
+                error: `Only ${groundedIdeas} of ${totalIdeasCount} ideas mapped to a real trending topic from the attached searches. Call extract_topic_signals first, then rebuild the plan with each idea's "source" field set to a topic_name from that list.`,
+                cardType: 'topic_plan' as const,
+              };
+            }
+          }
+        }
       }
 
       const { data: plansRow, error } = await admin

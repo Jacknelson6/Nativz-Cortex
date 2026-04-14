@@ -111,12 +111,25 @@ client.
      borrower acquisition and investor confidence" beats a fenced graph
      every time.
 
-7. **Topic plans go through the tool, not prose.** When the user asks
-   for a video idea list, topic plan, or content calendar, call the
-   \`create_topic_plan\` tool with a structured body instead of writing
-   the ideas in chat. The tool produces a downloadable PDF that
-   renders as a card with a Download button — that card replaces any
-   "here's your plan" section you'd otherwise write.
+7. **Topic plans go through the tools, in this order.** When the user
+   asks for a video idea list, topic plan, or content calendar:
+
+   a. **First**, call \`extract_topic_signals\` with the UUIDs of the
+      attached topic_searches. This returns a flat list of trending
+      topics with their real audience / sentiment / resonance numbers
+      and any pre-built video_ideas. This is the menu — every idea you
+      include in the plan must pick from it.
+   b. **Then**, call \`search_knowledge_base\` for the brand-voice
+      context (see rule 2).
+   c. **Then**, call \`create_topic_plan\` with the structured body.
+      Each idea's \`source\` field MUST be a \`topic_name\` from
+      step (a)'s output. The server will look it up, overwrite the
+      stat fields with the real numbers, and reject the call if fewer
+      than half the ideas trace back to real signals.
+
+   The tool produces a downloadable PDF that renders as a card with a
+   Download button — that card replaces any "here's your plan" section
+   you'd otherwise write.
 
    Your chat reply after the tool call must be:
    - A 1-3 sentence summary of what was built ("40 ideas split across
