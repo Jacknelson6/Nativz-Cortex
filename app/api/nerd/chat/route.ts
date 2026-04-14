@@ -403,6 +403,12 @@ export async function POST(req: NextRequest) {
     // --- Detect portal user (viewer role) ---
     let isPortalUser = false;
     let portalClientName = '';
+    // Server-resolved client ID. Never trust the client-supplied mention
+    // for portal scoping — a crafted POST could point at another org's
+    // client and have the rest of the route load that client's context
+    // (brand profile, strategy, searches). We look up the caller's
+    // user_client_access rows and use only an ID found there.
+    let resolvedPortalClientId: string | undefined;
     if (portalMode) {
       const { data: userData } = await createAdminClient()
         .from('users')
@@ -410,8 +416,38 @@ export async function POST(req: NextRequest) {
         .eq('id', user.id)
         .single();
       isPortalUser = userData?.role === 'viewer';
-      // Get client name from the mention (auto-injected by portal client)
-      portalClientName = mentions?.find((m) => m.type === 'client')?.name ?? '';
+
+      if (isPortalUser) {
+        const adminForResolve = createAdminClient();
+        const { data: accessRows } = await adminForResolve
+          .from('user_client_access')
+          .select('client_id')
+          .eq('user_id', user.id);
+        const accessIds = new Set((accessRows ?? []).map((r) => r.client_id as string));
+
+        const requestedId = mentions?.find((m) => m.type === 'client')?.id;
+        if (requestedId && accessIds.has(requestedId)) {
+          resolvedPortalClientId = requestedId;
+        } else if (accessIds.size > 0) {
+          // Mention points elsewhere or is missing — fall back to any
+          // client the viewer has access to. They'll see their own data
+          // rather than an error.
+          resolvedPortalClientId = Array.from(accessIds)[0];
+        } else {
+          resolvedPortalClientId = undefined;
+        }
+
+        // Use the server-resolved client's name for the addendum intro,
+        // not whatever name arrived in the mention payload.
+        if (resolvedPortalClientId) {
+          const { data: resolvedClient } = await adminForResolve
+            .from('clients')
+            .select('name')
+            .eq('id', resolvedPortalClientId)
+            .single();
+          portalClientName = (resolvedClient?.name as string | null) ?? '';
+        }
+      }
     }
 
     // --- Handle action confirmation (execute a pending write tool) ---
@@ -445,16 +481,24 @@ export async function POST(req: NextRequest) {
     const admin = createAdminClient();
 
     // --- Load client portfolio context ---
-    // Portal users only see their own client; admins see all
-    const portalClientId = isPortalUser ? mentions?.find((m) => m.type === 'client')?.id : undefined;
+    // Portal users only see their server-resolved client (never the one
+    // from the mention payload — see resolvedPortalClientId above).
+    const portalClientId = isPortalUser ? resolvedPortalClientId : undefined;
 
     let clientsQuery = admin
       .from('clients')
       .select('id, name, slug, industry, target_audience, brand_voice, topic_keywords, website_url, agency, services, preferences, health_score, logo_url')
       .eq('is_active', true);
 
-    if (portalClientId) {
-      clientsQuery = clientsQuery.eq('id', portalClientId);
+    if (isPortalUser) {
+      // Defense in depth: if resolvedPortalClientId is missing (no
+      // user_client_access rows) we'd otherwise fall through to an
+      // unfiltered clients query. Force an empty result instead.
+      if (!portalClientId) {
+        clientsQuery = clientsQuery.eq('id', '00000000-0000-0000-0000-000000000000');
+      } else {
+        clientsQuery = clientsQuery.eq('id', portalClientId);
+      }
     } else {
       clientsQuery = clientsQuery.order('name');
     }
