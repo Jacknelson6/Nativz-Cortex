@@ -10,6 +10,6 @@ export const dynamic = 'force-dynamic';
  */
 export default async function PortalContentLabRedirect() {
   const portal = await getPortalClient();
-  if (!portal) redirect('/portal/login');
+  if (!portal) redirect('/admin/login');
   redirect(`/portal/content-lab/${portal.client.id}`);
 }

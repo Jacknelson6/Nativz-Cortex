@@ -61,7 +61,7 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
     if (pathname.startsWith('/portal')) {
-      return NextResponse.redirect(new URL('/portal/login', request.url));
+      return NextResponse.redirect(new URL('/admin/login', request.url));
     }
     return NextResponse.redirect(new URL('/admin/login', request.url));
   }

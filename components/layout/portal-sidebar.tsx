@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Search, Settings, PanelLeftClose, Telescope } from 'lucide-react';
+import { Search, Settings, PanelLeftClose } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
@@ -23,8 +23,8 @@ import type { FeatureFlags } from '@/lib/portal/get-portal-client';
 import { PORTAL_HOME_PATH } from '@/lib/portal/client-surface';
 
 /** Client portal: research + settings only (other routes redirect in middleware). */
-const NAV_ITEMS: { href: string; label: string; icon: typeof Telescope; flag: string | null }[] = [
-  { href: '/portal/search/new', label: 'Research', icon: Telescope, flag: 'can_search' },
+const NAV_ITEMS: { href: string; label: string; icon: typeof Search; flag: string | null }[] = [
+  { href: '/portal/search/new', label: 'Research', icon: Search, flag: 'can_search' },
   { href: '/portal/settings', label: 'Settings', icon: Settings, flag: null },
 ];
 
@@ -154,7 +154,7 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
           userName={userName}
           avatarUrl={avatarUrl}
           settingsHref="/portal/settings"
-          logoutRedirect="/portal/login"
+          logoutRedirect="/admin/login"
           collapsed={!open}
         />
       </SidebarFooter>
