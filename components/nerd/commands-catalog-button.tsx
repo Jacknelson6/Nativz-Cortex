@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Command, Zap, X } from 'lucide-react';
-import { getAllCommands } from '@/lib/nerd/slash-commands';
+import { Command, Zap, X, Sparkles } from 'lucide-react';
+import { useSlashCommands } from '@/lib/nerd/use-slash-commands';
 
 /**
  * Button that reveals the full catalog of available slash commands. Mirrors
@@ -33,7 +33,7 @@ export function CommandsCatalogButton() {
     };
   }, [open]);
 
-  const commands = getAllCommands();
+  const { commands, loading } = useSlashCommands();
 
   return (
     <div className="relative" ref={wrapperRef}>
@@ -73,17 +73,21 @@ export function CommandsCatalogButton() {
           </div>
 
           <div className="max-h-[340px] overflow-y-auto">
-            {commands.length === 0 ? (
+            {loading && commands.length === 0 ? (
+              <p className="px-4 py-6 text-center text-xs text-text-muted">Loading commands…</p>
+            ) : commands.length === 0 ? (
               <p className="px-4 py-6 text-center text-xs text-text-muted">
                 No commands registered.
               </p>
             ) : (
               <ul className="py-1">
                 {commands.map((cmd) => (
-                  <li key={cmd.name}>
+                  <li key={`${cmd.source}-${cmd.name}`}>
                     <div className="flex items-start gap-2.5 px-4 py-2">
                       <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.04]">
-                        {cmd.type === 'direct' ? (
+                        {cmd.source === 'skill' ? (
+                          <Sparkles size={12} className="text-accent-text" />
+                        ) : cmd.type === 'direct' ? (
                           <Command size={12} className="text-accent-text" />
                         ) : (
                           <Zap size={12} className="text-accent2-text" />
@@ -92,6 +96,11 @@ export function CommandsCatalogButton() {
                       <div className="min-w-0 flex-1">
                         <p className="font-mono text-xs font-medium text-text-primary">
                           /{cmd.name}
+                          {cmd.source === 'skill' && (
+                            <span className="ml-1.5 rounded-full bg-accent-surface/40 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-accent-text">
+                              skill
+                            </span>
+                          )}
                         </p>
                         <p className="mt-0.5 text-[11px] leading-relaxed text-text-muted">
                           {cmd.description}

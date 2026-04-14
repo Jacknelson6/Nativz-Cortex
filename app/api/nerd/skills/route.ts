@@ -34,6 +34,12 @@ export async function GET() {
   return NextResponse.json({ skills: data ?? [] });
 }
 
+const slugSchema = z
+  .string()
+  .min(2)
+  .max(40)
+  .regex(/^[a-z][a-z0-9-]{1,39}$/, 'Lowercase letters, digits, and dashes only — must start with a letter');
+
 const createSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).default(''),
@@ -41,6 +47,8 @@ const createSchema = z.object({
   github_path: z.string().max(500).default('SKILL.md'),
   github_branch: z.string().max(100).default('main'),
   keywords: z.array(z.string()).default([]),
+  command_slug: slugSchema.optional().nullable(),
+  prompt_template: z.string().max(2000).optional().nullable(),
 });
 
 /** POST /api/nerd/skills — create + sync from GitHub */
@@ -54,7 +62,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { name, description, github_repo, github_path, github_branch, keywords } = parsed.data;
+  const { name, description, github_repo, github_path, github_branch, keywords, command_slug, prompt_template } = parsed.data;
 
   // Fetch content from GitHub
   let content: string;
@@ -80,6 +88,8 @@ export async function POST(req: NextRequest) {
       github_branch,
       content,
       keywords: allKeywords,
+      command_slug: command_slug ?? null,
+      prompt_template: prompt_template ?? null,
       last_synced_at: new Date().toISOString(),
       created_by: auth.user!.id,
     })
@@ -103,6 +113,8 @@ const updateSchema = z.object({
   description: z.string().max(500).optional(),
   keywords: z.array(z.string()).optional(),
   is_active: z.boolean().optional(),
+  command_slug: slugSchema.optional().nullable(),
+  prompt_template: z.string().max(2000).optional().nullable(),
   sync: z.boolean().optional(), // re-sync from GitHub
 });
 

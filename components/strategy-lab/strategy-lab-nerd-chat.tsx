@@ -9,6 +9,7 @@ import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai
 import { ChatComposer, type ChatAttachment } from '@/components/ai/chat-composer';
 import { processAttachments } from '@/lib/chat/process-attachments';
 import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
+import { useSlashCommands, expandSkillCommand } from '@/lib/nerd/use-slash-commands';
 import { toast } from 'sonner';
 import { StrategyLabConversationExportButton } from './strategy-lab-conversation-export-button';
 import {
@@ -21,7 +22,7 @@ import { StrategyLabClientPickerPill } from './strategy-lab-client-picker-pill';
 import { StrategyLabConversationHistoryRail } from './strategy-lab-conversation-history-rail';
 import { StrategyLabTopicSearchChipBar } from './strategy-lab-topic-search-chip-bar';
 import { StrategyLabAttachResearchDialog } from './strategy-lab-attach-research-dialog';
-import { getAllCommands, getCommand } from '@/lib/nerd/slash-commands';
+import { getCommand } from '@/lib/nerd/slash-commands';
 import {
   readStrategyLabNerdConversationId,
   writeStrategyLabNerdConversationId,
@@ -176,15 +177,19 @@ export function StrategyLabNerdChat({
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  // Unified command list = hardcoded builtins + user-installed skills (with
+  // command_slug set). Fetched from /api/nerd/slash-commands so skill edits
+  // in /admin/nerd/settings show up without a redeploy.
+  const { commands: unifiedCommands } = useSlashCommands();
   const slashCommands = useMemo(
     () =>
-      getAllCommands().map((c) => ({
+      unifiedCommands.map((c) => ({
         name: c.name,
         description: c.description,
         type: c.type,
-        example: c.example,
+        example: c.example ?? undefined,
       })),
-    [],
+    [unifiedCommands],
   );
   const filteredSlashCommands = useMemo(
     () => filterSlashCommands(slashQuery, slashCommands),
@@ -270,20 +275,27 @@ export function StrategyLabNerdChat({
 
   const handleSlashSelect = useCallback(
     (cmd: { name: string; type: string }) => {
-      const command = getCommand(cmd.name);
-      if (!command) return;
-      if (command.type === 'ai' && command.expandPrompt) {
-        // Fill the input with the expanded prompt — user presses Enter to send.
-        setInput(command.expandPrompt(''));
+      // Built-in: expand immediately so the user can see the full prompt
+      // before hitting Enter. Skill-sourced: just put "/slug " in the input
+      // — handleSend expands the template client-side on submit using the
+      // skill content from the unified command list.
+      const builtin = getCommand(cmd.name);
+      if (builtin) {
+        if (builtin.type === 'ai' && builtin.expandPrompt) {
+          setInput(builtin.expandPrompt(''));
+        }
         setShowSlashMenu(false);
-      } else if (command.type === 'direct') {
-        // Direct commands are executed via /api/nerd/command on the admin
-        // Nerd; Strategy Lab currently doesn't expose direct commands so
-        // fall back to expandPrompt treatment if one ever lands here.
+        return;
+      }
+      const skillCmd = unifiedCommands.find(
+        (c) => c.source === 'skill' && c.name === cmd.name,
+      );
+      if (skillCmd) {
+        setInput(`/${skillCmd.name} `);
         setShowSlashMenu(false);
       }
     },
-    [],
+    [unifiedCommands],
   );
 
   // Keyboard nav for the slash menu — Arrow keys move selection, Enter picks,
@@ -369,6 +381,22 @@ export function StrategyLabNerdChat({
     async (text?: string) => {
       let content = (text ?? input).trim();
       if (!content || streaming) return;
+
+      // ── User-installed skill commands (/<slug>) ──────────────────────
+      // If the message starts with a slash matching a skill-sourced
+      // command, expand it locally using the skill's content + template
+      // before sending to the AI. Built-in slash commands keep their
+      // existing server-side / hardcoded expansion path.
+      const skillMatch = content.match(/^\/([a-z][a-z0-9-]{1,39})\b\s*(.*)$/i);
+      if (skillMatch) {
+        const [, slug, skillArgs] = skillMatch;
+        const skillCmd = unifiedCommands.find(
+          (c) => c.source === 'skill' && c.name.toLowerCase() === slug.toLowerCase(),
+        );
+        if (skillCmd) {
+          content = expandSkillCommand(skillCmd, skillArgs ?? '');
+        }
+      }
 
       // ── Interactive /idea follow-up ────────────────────────────────────
       // Step 1 — user sent bare "/idea" (or "/idea " with no number).
@@ -542,7 +570,7 @@ export function StrategyLabNerdChat({
         abortRef.current = null;
       }
     },
-    [input, streaming, messages, clientId, clientName, clientSlug, attachedSearchIds, conversationId],
+    [input, streaming, messages, clientId, clientName, clientSlug, attachedSearchIds, conversationId, pendingIdeaCount, unifiedCommands],
   );
 
   function handleReset() {
