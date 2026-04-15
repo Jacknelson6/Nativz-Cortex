@@ -17,6 +17,7 @@ import {
   ExternalLink,
   Globe,
   MapPin,
+  Plus,
   Heart,
   MessageCircle,
   Share2,
@@ -177,11 +178,16 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [suggestedCandidates, setSuggestedCandidates] = useState<ScopedCandidate[]>([]);
   const [selectedCompetitorWebsites, setSelectedCompetitorWebsites] = useState<Set<string>>(new Set());
   const [generatingCompetitors, setGeneratingCompetitors] = useState(false);
+  // Manual entries the user typed in — merged with auto-generated candidates
+  // at submit time. Stored as raw strings; normalized when pushed into the
+  // selected-websites set.
+  const [manualCompetitorInput, setManualCompetitorInput] = useState('');
+  const [manualCompetitorWebsites, setManualCompetitorWebsites] = useState<string[]>([]);
   const MAX_PICKED_COMPETITORS = 3;
   const [submittingSocials, setSubmittingSocials] = useState(false);
   const [detectedPlatforms, setDetectedPlatforms] = useState<{ platform: string; url: string; username: string }[]>([]);
   const [detecting, setDetecting] = useState(false);
-  const [websiteInfo, setWebsiteInfo] = useState<{ title: string; industry: string } | null>(null);
+  const [websiteInfo, setWebsiteInfo] = useState<{ title: string; industry: string; scope?: 'local' | 'national' | null } | null>(null);
   const SOCIAL_GOAL_OPTIONS = [
     'Build brand awareness',
     'Go viral and maximize engagement',
@@ -209,7 +215,8 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
 
     if (prospectData?.websiteContext) {
       const { title, industry, description } = prospectData.websiteContext;
-      if (title || industry) setWebsiteInfo({ title: title ?? '', industry: industry ?? '' });
+      const scope = (prospectData.websiteContext as { scope?: 'local' | 'national' | null }).scope ?? null;
+      if (title || industry) setWebsiteInfo({ title: title ?? '', industry: industry ?? '', scope });
       if (description) setBrandDescription(description);
     }
 
@@ -401,7 +408,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
       if (res.ok) {
         const data = await res.json();
         setDetectedPlatforms(data.detectedPlatforms ?? []);
-        setWebsiteInfo(data.websiteContext ? { title: data.websiteContext.title, industry: data.websiteContext.industry } : null);
+        setWebsiteInfo(data.websiteContext ? { title: data.websiteContext.title, industry: data.websiteContext.industry, scope: data.websiteContext.scope ?? null } : null);
         if (data.websiteContext?.description) {
           setBrandDescription(data.websiteContext.description);
         }
@@ -433,28 +440,38 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     if (generatingCompetitors) return;
     setGeneratingCompetitors(true);
     try {
-      // Pull national + local in parallel. User can mix scopes up to the
-      // 3-pick cap. De-dupe by website in case the LLM returns the same
-      // brand under both tiers.
-      const [nationalRes, localRes] = await Promise.all([
+      // DTC / online-only brands don't have "local" competitors in any
+      // meaningful sense — forcing a local fetch yields hallucinations
+      // ("Viet Street") dressed up with a misleading pin icon. When the
+      // LLM tagged the business as national, skip the local tier entirely.
+      // Otherwise (local brands, unknown scope) pull both so the user can
+      // mix tiers.
+      const isNationalOnly = websiteInfo?.scope === 'national';
+      const fetches: Array<Promise<Response>> = [
         fetch(`/api/analyze-social/${audit.id}/suggest-competitors`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ scope: 'national' }),
         }),
-        fetch(`/api/analyze-social/${audit.id}/suggest-competitors`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scope: 'local' }),
-        }),
-      ]);
+      ];
+      const fetchScopes: CompetitorScope[] = ['national'];
+      if (!isNationalOnly) {
+        fetches.push(
+          fetch(`/api/analyze-social/${audit.id}/suggest-competitors`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scope: 'local' }),
+          }),
+        );
+        fetchScopes.push('local');
+      }
+      const responses = await Promise.all(fetches);
 
       const merged: ScopedCandidate[] = [];
       const seen = new Set<string>();
-      for (const [res, scope] of [
-        [nationalRes, 'national'] as const,
-        [localRes, 'local'] as const,
-      ]) {
+      for (let i = 0; i < responses.length; i++) {
+        const res = responses[i];
+        const scope = fetchScopes[i];
         if (!res.ok) continue;
         try {
           const d = (await res.json()) as {
@@ -478,6 +495,50 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     } finally {
       setGeneratingCompetitors(false);
     }
+  }
+
+  // Auto-run the first generate pass when the user lands on the confirm
+  // screen — no more "Click Generate to see candidates" cold-start state.
+  // Only fires when we have a websiteContext (otherwise the LLM has nothing
+  // to work from) and we haven't generated yet this session.
+  useEffect(() => {
+    if (audit.status !== 'confirming_platforms') return;
+    if (!websiteInfo || suggestedCandidates.length > 0 || generatingCompetitors) return;
+    void generateCompetitors();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audit.status, websiteInfo]);
+
+  function addManualCompetitor() {
+    const raw = manualCompetitorInput.trim();
+    if (!raw) return;
+    // Normalize: strip protocol + trailing slash so dedup vs. auto-generated
+    // candidates compares apples-to-apples.
+    const normalized = raw.replace(/^https?:\/\//i, '').replace(/\/$/, '').toLowerCase();
+    if (!normalized || manualCompetitorWebsites.includes(normalized)) {
+      setManualCompetitorInput('');
+      return;
+    }
+    const url = `https://${normalized}`;
+    setManualCompetitorWebsites((prev) => [...prev, normalized]);
+    setManualCompetitorInput('');
+    // Auto-select so the user doesn't have to add + click pick.
+    setSelectedCompetitorWebsites((prev) => {
+      if (prev.size >= MAX_PICKED_COMPETITORS) return prev;
+      const next = new Set(prev);
+      next.add(url);
+      return next;
+    });
+  }
+
+  function removeManualCompetitor(normalized: string) {
+    const url = `https://${normalized}`;
+    setManualCompetitorWebsites((prev) => prev.filter((w) => w !== normalized));
+    setSelectedCompetitorWebsites((prev) => {
+      if (!prev.has(url)) return prev;
+      const next = new Set(prev);
+      next.delete(url);
+      return next;
+    });
   }
 
   function toggleCompetitorPick(website: string) {
@@ -696,53 +757,56 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           </div>
 
           <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-5">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="min-w-0">
-                <h3 className="text-xl font-semibold text-text-primary">Your competitors</h3>
-                <p className="text-base text-text-muted mt-1">
-                  Pick up to {MAX_PICKED_COMPETITORS} to benchmark against — mix national and local
-                  brands however you want. Generated from your business and checked against live websites.
-                </p>
-              </div>
-              <Button
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <h3 className="text-xl font-semibold text-text-primary">Your competitors</h3>
+              {/* Small icon-only regenerate; the first pass auto-runs on
+                  mount so there's no big "Generate" CTA needed anymore. */}
+              <button
+                type="button"
                 onClick={() => void generateCompetitors()}
                 disabled={generatingCompetitors}
-                variant={suggestedCandidates.length > 0 ? 'secondary' : 'primary'}
-                className="text-sm shrink-0"
+                title="Regenerate competitor suggestions"
+                aria-label="Regenerate competitors"
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-nativz-border bg-surface text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
               >
-                {generatingCompetitors
-                  ? 'Generating...'
-                  : suggestedCandidates.length > 0
-                    ? 'Regenerate'
-                    : 'Generate competitors'}
-              </Button>
+                <RefreshCw
+                  size={14}
+                  className={generatingCompetitors ? 'animate-spin' : ''}
+                  aria-hidden
+                />
+              </button>
             </div>
 
-            {suggestedCandidates.length > 0 && (
+            {(suggestedCandidates.length > 0 || manualCompetitorWebsites.length > 0) && (
               <div className="flex items-center gap-4 text-sm">
                 <span className="text-text-muted">
                   {selectedCompetitorWebsites.size} of {MAX_PICKED_COMPETITORS} selected
                 </span>
-                <span className="flex items-center gap-1.5 text-text-muted">
-                  <Globe size={14} className="text-accent-text/70" aria-hidden />
-                  National
-                </span>
-                <span className="flex items-center gap-1.5 text-text-muted">
-                  <MapPin size={14} className="text-emerald-400/70" aria-hidden />
-                  Local
-                </span>
+                {/* Scope legend only when the LLM actually returned a mix —
+                    DTC/national-only brands have no local tier to explain. */}
+                {websiteInfo?.scope !== 'national' && (
+                  <>
+                    <span className="flex items-center gap-1.5 text-text-muted">
+                      <Globe size={14} className="text-accent-text/70" aria-hidden />
+                      National
+                    </span>
+                    <span className="flex items-center gap-1.5 text-text-muted">
+                      <MapPin size={14} className="text-emerald-400/70" aria-hidden />
+                      Local
+                    </span>
+                  </>
+                )}
               </div>
             )}
 
-            {/* Empty state */}
-            {!generatingCompetitors && suggestedCandidates.length === 0 && (
-              <div className="rounded-lg border border-dashed border-nativz-border bg-background/40 px-4 py-8 text-center">
-                <p className="text-base text-text-muted">
-                  Click Generate to see national and local competitor candidates for your brand.
-                </p>
-                <p className="text-sm text-text-muted/70 mt-1.5">
-                  You can also skip this step and start without competitors.
-                </p>
+            {/* Initial loading — no candidates yet, first auto-gen still
+                running. After the first pass lands the empty state never
+                re-appears since regenerate doesn't wipe the list until a
+                new one arrives. */}
+            {generatingCompetitors && suggestedCandidates.length === 0 && (
+              <div className="flex items-center justify-center gap-2 py-8 text-sm text-text-muted">
+                <Loader2 size={14} className="animate-spin" />
+                Finding competitors for your brand...
               </div>
             )}
 
