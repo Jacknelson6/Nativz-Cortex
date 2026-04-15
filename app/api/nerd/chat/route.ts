@@ -1160,6 +1160,16 @@ export async function POST(req: NextRequest) {
               continueHeaders['X-Title'] = 'Nativz Cortex - The Nerd';
             }
 
+            // Keep forcing tool_choice: 'required' across continuation turns
+            // until create_topic_plan has actually fired. Otherwise the model
+            // calls extract_topic_signals + search_knowledge_base (satisfying
+            // the initial 'required' constraint) and then reverts to prose on
+            // the next turn. Once the plan tool has been called, switch to
+            // 'auto' so the final summary turn can produce text.
+            const topicPlanFired = allToolResults.some((r) => r.toolName === 'create_topic_plan');
+            const continueToolChoice: string | undefined =
+              forceToolUse && !topicPlanFired ? 'required' : undefined;
+
             const continueRes = await fetch(chatCompletionsUrl, {
               method: 'POST',
               headers: continueHeaders,
@@ -1169,6 +1179,7 @@ export async function POST(req: NextRequest) {
                 stream: true,
                 ...tokenLimitField,
                 tools: tools.length > 0 ? tools : undefined,
+                ...(continueToolChoice ? { tool_choice: continueToolChoice } : {}),
               }),
             });
 
