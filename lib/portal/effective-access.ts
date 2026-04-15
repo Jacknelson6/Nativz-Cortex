@@ -42,13 +42,17 @@ export interface EffectiveAccessContext {
 }
 
 export async function getEffectiveAccessContext(
-  user: User,
+  userOrId: User | string,
   adminClient: SupabaseClient,
 ): Promise<EffectiveAccessContext> {
+  // Tool handlers only have the user id (passed in from the chat route's
+  // auth resolution) — accept either a full User or a bare id string.
+  const userId = typeof userOrId === 'string' ? userOrId : userOrId.id;
+
   const { data: userRow } = await adminClient
     .from('users')
     .select('role, organization_id, is_super_admin')
-    .eq('id', user.id)
+    .eq('id', userId)
     .single();
 
   const underlyingRole: 'admin' | 'super_admin' | 'viewer' | null =
@@ -96,7 +100,7 @@ export async function getEffectiveAccessContext(
     }
 
     return {
-      userId: user.id,
+      userId: userId,
       role: 'viewer',
       isImpersonating: true,
       underlyingRole,
@@ -108,7 +112,7 @@ export async function getEffectiveAccessContext(
 
   if (realIsAdmin) {
     return {
-      userId: user.id,
+      userId: userId,
       role: 'admin',
       isImpersonating: false,
       underlyingRole,
@@ -122,12 +126,12 @@ export async function getEffectiveAccessContext(
   const { data: access } = await adminClient
     .from('user_client_access')
     .select('client_id')
-    .eq('user_id', user.id);
+    .eq('user_id', userId);
 
   const clientIds = (access ?? []).map((r) => r.client_id as string);
 
   return {
-    userId: user.id,
+    userId: userId,
     role: 'viewer',
     isImpersonating: false,
     underlyingRole,

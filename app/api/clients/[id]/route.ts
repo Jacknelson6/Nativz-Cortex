@@ -53,9 +53,10 @@ export async function GET(
     }
 
     if (ctx.role === 'viewer') {
-      const inScope =
-        (ctx.clientIds && ctx.clientIds.includes(dbClient.id as string)) ||
-        (ctx.organizationId && dbClient.organization_id === ctx.organizationId);
+      // Strict client-id match. Orgs can host multiple brands (e.g.
+      // Avondale + Landshark share one organization_id) — scoping by
+      // organization_id would leak sibling brands.
+      const inScope = ctx.clientIds?.includes(dbClient.id as string) ?? false;
       if (!inScope) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
@@ -210,10 +211,8 @@ export async function PATCH(
         .eq('id', id)
         .single();
 
-      const inScope =
-        !!clientRow &&
-        ((ctx.clientIds && ctx.clientIds.includes(id)) ||
-          (ctx.organizationId && clientRow.organization_id === ctx.organizationId));
+      // Strict client-id match — see GET for the multi-brand-org rationale.
+      const inScope = !!clientRow && (ctx.clientIds?.includes(id) ?? false);
       if (!inScope) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }

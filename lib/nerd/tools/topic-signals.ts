@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ToolDefinition } from '../types';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { loadTopicSignals } from '@/lib/topic-plans/signals';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 /**
  * extract_topic_signals — flat data accessor for attached topic searches.
@@ -31,31 +32,25 @@ export const topicSignalTools: ToolDefinition[] = [
     handler: async (params, userId) => {
       const { search_ids } = params as { search_ids: string[] };
 
-      // For viewers, filter search_ids to only those belonging to clients in
-      // the caller's organization. Admins see everything.
+      // Viewers + impersonating admins: filter search_ids to only those
+      // belonging to clients in the caller's effective client list —
+      // strict client-id match, not org equality, because orgs can host
+      // multiple brands.
       const admin = createAdminClient();
-      const { data: me } = await admin
-        .from('users')
-        .select('role, organization_id')
-        .eq('id', userId)
-        .single();
+      const ctx = await getEffectiveAccessContext(userId, admin);
 
       let scopedIds = search_ids;
-      if (me && me.role !== 'admin') {
-        if (!me.organization_id) {
+      if (ctx.role !== 'admin') {
+        const allowed = new Set(ctx.clientIds ?? []);
+        if (allowed.size === 0) {
           return { success: true, cardType: 'search' as const, data: { total: 0, signals: [] } };
         }
         const { data: rows } = await admin
           .from('topic_searches')
-          .select('id, clients!inner(organization_id)')
+          .select('id, client_id')
           .in('id', search_ids);
         scopedIds = (rows ?? [])
-          .filter((r) => {
-            const org = Array.isArray(r.clients)
-              ? r.clients[0]?.organization_id
-              : (r.clients as { organization_id: string } | null)?.organization_id;
-            return org === me.organization_id;
-          })
+          .filter((r) => allowed.has(r.client_id as string))
           .map((r) => r.id as string);
       }
 

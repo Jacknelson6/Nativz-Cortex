@@ -32,9 +32,10 @@ export async function GET(
   if (!plan) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   if (ctx.role !== 'admin') {
-    const inScope =
-      (ctx.clientIds && plan.client_id && ctx.clientIds.includes(plan.client_id as string)) ||
-      (ctx.organizationId && plan.organization_id === ctx.organizationId);
+    // Strict client-id match — orgs can host multiple brands, so
+    // organization_id equivalence would leak sibling brands' plans.
+    const planClientId = plan.client_id as string | null;
+    const inScope = !!planClientId && (ctx.clientIds?.includes(planClientId) ?? false);
     if (!inScope) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

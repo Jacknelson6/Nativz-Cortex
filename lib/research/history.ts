@@ -28,8 +28,21 @@ export interface FetchHistoryOptions {
   /**
    * When set, only searches / ideas whose `client_id` belongs to this org are returned.
    * Omit or pass `null` for admin-wide history (internal dashboards).
+   *
+   * NOTE: multi-brand orgs (one organization_id → multiple active clients)
+   * broaden beyond a single brand. Prefer `allowedClientIds` for strict
+   * isolation — pass it to scope to exact brands the caller is authorized
+   * for.
    */
   organizationId?: string | null;
+  /**
+   * Strict allowlist of client_ids the caller is authorized to see. When
+   * provided, overrides `organizationId` resolution. A caller-supplied
+   * `clientId` must be in this set or the call returns empty. This is the
+   * correct option for portal viewers + admins impersonating — anywhere
+   * the "same org, different brand" leak risk applies.
+   */
+  allowedClientIds?: string[] | null;
 }
 
 /**
@@ -68,11 +81,29 @@ export async function fetchHistory({
   cursor = null,
   includeIdeas = true,
   organizationId = null,
+  allowedClientIds = null,
 }: FetchHistoryOptions = {}): Promise<HistoryItem[]> {
   const supabase = createAdminClient();
   const items: HistoryItem[] = [];
 
-  const scope = await resolveClientIdsForHistoryScope(supabase, organizationId, clientId);
+  // Explicit allowlist takes precedence — this is how callers enforce
+  // brand-level isolation inside multi-brand orgs.
+  let scope: { clientIds: string[] | null; empty: boolean };
+  if (allowedClientIds) {
+    if (allowedClientIds.length === 0) {
+      scope = { clientIds: null, empty: true };
+    } else if (clientId) {
+      if (!allowedClientIds.includes(clientId)) {
+        scope = { clientIds: null, empty: true };
+      } else {
+        scope = { clientIds: [clientId], empty: false };
+      }
+    } else {
+      scope = { clientIds: allowedClientIds, empty: false };
+    }
+  } else {
+    scope = await resolveClientIdsForHistoryScope(supabase, organizationId, clientId);
+  }
   if (scope.empty) return [];
 
   if (!type || type === 'brand_intel' || type === 'topic') {

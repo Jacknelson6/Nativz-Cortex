@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ToolDefinition } from '../types';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -31,16 +32,15 @@ export const clientTools: ToolDefinition[] = [
           return { success: false, error: `Client not found: ${clientError.message}` };
         }
 
-        // Tenant isolation. Admin client bypasses RLS, so we gate here
-        // before returning a client's social profiles, strategy, and
-        // contacts — all of which could leak across orgs otherwise.
-        const { data: me } = await supabase
-          .from('users')
-          .select('role, organization_id')
-          .eq('id', userId)
-          .single();
-        if (me && me.role !== 'admin') {
-          if (!me.organization_id || client.organization_id !== me.organization_id) {
+        // Tenant isolation, impersonation-aware. A real admin passes
+        // through. A real viewer OR an admin currently impersonating a
+        // client can only see the clients in their effective clientIds
+        // — strict client-id match, because orgs can host multiple
+        // brands (Avondale + Landshark share one org) and scoping by
+        // organization_id would leak sibling brands to the AI.
+        const ctx = await getEffectiveAccessContext(userId, supabase);
+        if (ctx.role !== 'admin') {
+          if (!ctx.clientIds || !ctx.clientIds.includes(client.id as string)) {
             return { success: false, error: 'Client not found' };
           }
         }

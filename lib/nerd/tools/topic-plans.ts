@@ -3,6 +3,7 @@ import { ToolDefinition } from '../types';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { topicPlanSchema } from '@/lib/topic-plans/types';
 import { loadTopicSignals, matchSignal } from '@/lib/topic-plans/signals';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 /**
  * create_topic_plan — the Nerd's artifact-producing tool.
@@ -57,18 +58,12 @@ export const topicPlanTools: ToolDefinition[] = [
         return { success: false, error: 'Client not found', cardType: 'topic_plan' as const };
       }
 
-      // Role + org scoping. Viewers can only create plans for clients their
-      // org has access to; admins can create for any client.
-      const { data: me } = await admin
-        .from('users')
-        .select('role, organization_id')
-        .eq('id', userId)
-        .single();
-      if (!me) {
-        return { success: false, error: 'User not found', cardType: 'topic_plan' as const };
-      }
-      if (me.role !== 'admin') {
-        if (!me.organization_id || client.organization_id !== me.organization_id) {
+      // Impersonation-aware scoping. Admins impersonating a client are
+      // downgraded to viewer-of-that-client, so they can't mint plans
+      // for a sibling brand in the same org.
+      const ctx = await getEffectiveAccessContext(userId, admin);
+      if (ctx.role !== 'admin') {
+        if (!ctx.clientIds || !ctx.clientIds.includes(client.id as string)) {
           return {
             success: false,
             error: 'You do not have access to this client.',

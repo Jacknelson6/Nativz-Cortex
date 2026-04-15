@@ -7,6 +7,7 @@ import { KNOWLEDGE_ENTRY_TYPES, type KnowledgeEntryType } from '@/lib/knowledge/
 import { generateBrandProfile } from '@/lib/knowledge/brand-profile';
 import { generateVideoIdeas } from '@/lib/knowledge/idea-generator';
 import { embedKnowledgeEntry } from '@/lib/ai/embeddings';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 const knowledgeTypeEnum = z.enum(KNOWLEDGE_ENTRY_TYPES as unknown as [string, ...string[]]);
 
@@ -25,23 +26,15 @@ async function requireClientAccess(
   clientId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const admin = createAdminClient();
-  const { data: me } = await admin
-    .from('users')
-    .select('role, organization_id')
-    .eq('id', userId)
-    .single();
-  if (!me) return { ok: false, error: 'User not found' };
-  if (me.role === 'admin') return { ok: true };
-  if (!me.organization_id) return { ok: false, error: 'You do not have access to this client.' };
-  const { data: client } = await admin
-    .from('clients')
-    .select('organization_id')
-    .eq('id', clientId)
-    .maybeSingle();
-  if (!client || client.organization_id !== me.organization_id) {
-    return { ok: false, error: 'You do not have access to this client.' };
-  }
-  return { ok: true };
+  // Impersonation-aware gate. A real admin passes through unrestricted.
+  // A real viewer — or an admin currently impersonating a client — is
+  // scoped to the caller's effective clientIds. That means when Jack
+  // (admin) impersonates Avondale, the AI can't call this tool with
+  // Landshark's id even though Avondale + Landshark share an org.
+  const ctx = await getEffectiveAccessContext(userId, admin);
+  if (ctx.role === 'admin') return { ok: true };
+  if (ctx.clientIds && ctx.clientIds.includes(clientId)) return { ok: true };
+  return { ok: false, error: 'You do not have access to this client.' };
 }
 
 export const knowledgeTools: ToolDefinition[] = [
