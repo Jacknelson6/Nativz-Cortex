@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 const querySchema = z.object({
   clientId: z.string().uuid(),
@@ -23,22 +24,12 @@ export async function GET(req: NextRequest) {
   const { clientId } = parsed.data;
   const admin = createAdminClient();
 
-  // Tenant isolation: viewers may only list searches for a client in
-  // their own organization. Any mismatch returns 404 (not 403) so the
-  // response shape doesn't confirm the client exists in another org.
-  const { data: userData } = await admin
-    .from('users')
-    .select('role, organization_id')
-    .eq('id', user.id)
-    .single();
-
-  if (userData?.role === 'viewer') {
-    const { data: client } = await admin
-      .from('clients')
-      .select('organization_id')
-      .eq('id', clientId)
-      .maybeSingle();
-    if (!client || client.organization_id !== userData.organization_id) {
+  // Tenant isolation — viewers + impersonating admins must match the
+  // requested client against their effective clientIds. A mismatch
+  // returns 404 (not 403) so we don't confirm the client exists elsewhere.
+  const ctx = await getEffectiveAccessContext(user, admin);
+  if (ctx.role === 'viewer') {
+    if (!ctx.clientIds || !ctx.clientIds.includes(clientId)) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
   }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 const createArtifactSchema = z.object({
   client_id: z.string().uuid().nullable().optional(),
@@ -27,9 +28,12 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
-  // Verify user is admin
-  const { data: userData } = await admin.from('users').select('role').eq('id', user.id).single();
-  if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
+  // Artifact writes are admin-only. Impersonating admins are intentionally
+  // downgraded to viewer by getEffectiveAccessContext, so they can't mint
+  // artifacts for the impersonated client — they'd have to exit
+  // impersonation first. That matches "see exactly what the client sees."
+  const ctx = await getEffectiveAccessContext(user, admin);
+  if (ctx.role !== 'admin') {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
   }
 
@@ -57,9 +61,7 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
-
-  const { data: userData } = await admin.from('users').select('role, organization_id').eq('id', user.id).single();
-  if (!userData) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  const ctx = await getEffectiveAccessContext(user, admin);
 
   const url = new URL(request.url);
   const clientId = url.searchParams.get('client_id');
@@ -72,20 +74,19 @@ export async function GET(request: Request) {
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  // Scope portal users to their org — fetch their client IDs first
-  if (userData.role === 'viewer' && userData.organization_id) {
-    const { data: orgClients } = await admin
-      .from('clients')
-      .select('id')
-      .eq('organization_id', userData.organization_id);
-    const orgClientIds = (orgClients ?? []).map((c) => c.id);
-    if (orgClientIds.length === 0) {
+  if (ctx.role === 'viewer') {
+    const scopedClientIds = ctx.clientIds ?? [];
+    if (scopedClientIds.length === 0) {
       return NextResponse.json([]);
     }
-    query = query.in('client_id', orgClientIds);
+    if (clientId && !scopedClientIds.includes(clientId)) {
+      return NextResponse.json([]);
+    }
+    query = clientId ? query.eq('client_id', clientId) : query.in('client_id', scopedClientIds);
+  } else if (clientId) {
+    query = query.eq('client_id', clientId);
   }
 
-  if (clientId) query = query.eq('client_id', clientId);
   if (type) query = query.eq('artifact_type', type);
 
   const { data, error } = await query;

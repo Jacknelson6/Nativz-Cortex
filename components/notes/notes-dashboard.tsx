@@ -36,9 +36,17 @@ const SCOPE_ICON: Record<BoardCard['scope'], React.ComponentType<{ size?: number
 export function NotesDashboard({
   clients,
   isAdmin,
+  portalClientId,
+  routePrefix = '/admin',
 }: {
   clients: { id: string; name: string; slug: string }[];
   isAdmin: boolean;
+  /** Portal viewer mode: filter the board list and pre-scope new notes to
+   *  this client id. Hides the scope picker in the create modal. */
+  portalClientId?: string;
+  /** Where board tiles link to — '/admin' for the admin surface,
+   *  '/portal' for the portal. */
+  routePrefix?: '/admin' | '/portal';
 }) {
   const router = useRouter();
   const [boards, setBoards] = useState<BoardCard[] | null>(null);
@@ -46,10 +54,11 @@ export function NotesDashboard({
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [portalClientId]);
 
   async function load() {
-    const res = await fetch('/api/moodboard/notes-boards');
+    const qs = portalClientId ? `?clientId=${encodeURIComponent(portalClientId)}` : '';
+    const res = await fetch(`/api/moodboard/notes-boards${qs}`);
     if (res.ok) {
       const d = await res.json();
       setBoards(d.boards ?? []);
@@ -110,7 +119,7 @@ export function NotesDashboard({
                   <span className="text-xs text-text-muted/70">{list.length}</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {list.map((b) => <BoardTile key={b.id} board={b} />)}
+                  {list.map((b) => <BoardTile key={b.id} board={b} routePrefix={routePrefix} />)}
                 </div>
               </section>
             );
@@ -123,21 +132,22 @@ export function NotesDashboard({
         onClose={() => setNewOpen(false)}
         clients={clients}
         isAdmin={isAdmin}
+        forcedClientId={portalClientId}
         onCreated={(id) => {
           setNewOpen(false);
-          router.push(`/admin/notes/${id}`);
+          router.push(`${routePrefix}/notes/${id}`);
         }}
       />
     </div>
   );
 }
 
-function BoardTile({ board }: { board: BoardCard }) {
+function BoardTile({ board, routePrefix }: { board: BoardCard; routePrefix: '/admin' | '/portal' }) {
   const Icon = SCOPE_ICON[board.scope];
   const previews = board.thumbnails.slice(0, 4);
   return (
     <Link
-      href={`/admin/notes/${board.id}`}
+      href={`${routePrefix}/notes/${board.id}`}
       className="group block overflow-hidden rounded-xl border border-nativz-border bg-surface transition-colors hover:border-accent/40"
     >
       <div className="aspect-video overflow-hidden bg-background grid grid-cols-2 grid-rows-2 gap-px">

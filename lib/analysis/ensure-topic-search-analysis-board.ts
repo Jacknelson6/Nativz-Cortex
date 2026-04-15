@@ -33,14 +33,24 @@ export async function ensureAnalysisBoardForTopicSearch(
   const q = (search.query as string) ?? 'Research';
   const name = `Analysis — ${q.length > 80 ? `${q.slice(0, 80)}…` : q}`;
 
+  // Topic searches are always tied to a client, so the analysis board is
+  // scope='client'. That's also what unlocks viewer access via
+  // requireBoardAccess — without the scope set, viewers can't reach it.
+  // If a search somehow has no client_id we fall back to 'team' scope so
+  // the insert doesn't fail the moodboard_boards_scope_ownership_chk.
+  const clientId = (search.client_id as string | null) ?? null;
+  const scope: 'client' | 'team' = clientId ? 'client' : 'team';
+
   const { data: board, error: boardErr } = await adminClient
     .from('moodboard_boards')
     .insert({
       name,
       description: 'Inline video analysis from topic search sources',
-      client_id: search.client_id as string | null,
+      client_id: clientId,
       created_by: userId,
       source_topic_search_id: topicSearchId,
+      scope,
+      is_personal: false,
     })
     .select('id')
     .single();

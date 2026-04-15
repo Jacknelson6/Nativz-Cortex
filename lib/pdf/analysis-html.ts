@@ -356,7 +356,9 @@ export function buildAnalysisHtml({ item, clientName, generatedTitle, logoBase64
       <span style="font-size:11px;color:${theme.textMuted}">${dateStr}</span>
     </div>
     <div style="margin-top:8px">
-      <a href="${esc(item.url)}" style="font-size:11px;color:${theme.accentText}">${esc(item.url.length > 80 ? item.url.slice(0, 80) + '...' : item.url)}</a>
+      ${item.url
+        ? `<a href="${esc(item.url)}" style="font-size:11px;color:${theme.accentText}">${esc(item.url.length > 80 ? item.url.slice(0, 80) + '...' : item.url)}</a>`
+        : ''}
     </div>
   </div>
 

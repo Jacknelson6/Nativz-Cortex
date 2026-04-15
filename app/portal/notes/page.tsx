@@ -1,25 +1,36 @@
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { getPortalClient } from '@/lib/portal/get-portal-client';
 import { NotesDashboard } from '@/components/notes/notes-dashboard';
+import { PageError } from '@/components/shared/page-error';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * /portal/notes — Notes dashboard for portal (viewer) users. Same component
- * as the admin dashboard, but the client list stays empty and isAdmin=false
- * so the create modal only offers Personal-scope boards.
+ * /portal/notes — viewer notes dashboard. Scoped to the currently active
+ * brand (from x-portal-active-client or impersonation). Every board listed
+ * here is a client-scope moodboard whose client_id matches the viewer's
+ * access list, and the "New note" modal creates more of the same.
  */
 export default async function PortalNotesDashboardPage() {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) redirect('/admin/login');
 
-  const admin = createAdminClient();
-  const { data: userRow } = await admin.from('users').select('role').eq('id', user.id).single();
-  // Portal uses the same dashboard component; non-admins just can't create
-  // team/client boards — the modal gates those options on isAdmin.
-  const isAdmin = userRow?.role === 'admin';
+    const portal = await getPortalClient();
+    if (!portal) redirect('/admin/login');
 
-  return <NotesDashboard clients={[]} isAdmin={isAdmin} />;
+    return (
+      <NotesDashboard
+        clients={[]}
+        isAdmin={false}
+        portalClientId={portal.client.id}
+        routePrefix="/portal"
+      />
+    );
+  } catch (error) {
+    console.error('PortalNotesDashboardPage error:', error);
+    return <PageError />;
+  }
 }

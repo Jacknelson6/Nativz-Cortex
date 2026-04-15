@@ -194,7 +194,7 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
 
           {/* Watch video + Export */}
           <div className="mt-3 flex items-center gap-3">
-            <a href={item.url} target="_blank" rel="noopener noreferrer"
+            <a href={item.url ?? undefined} target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-xs text-accent-text hover:underline">
               <Play size={12} /> Watch video
             </a>

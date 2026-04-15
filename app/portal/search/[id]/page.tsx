@@ -37,7 +37,7 @@ export default async function PortalSearchResultsPage({
   // Verify org scoping: search's client must belong to user's org
   const { data: clientData } = await adminClient
     .from('clients')
-    .select('id, organization_id, name')
+    .select('id, organization_id, name, slug, industry, topic_keywords')
     .eq('id', search.client_id)
     .single();
 
@@ -64,6 +64,14 @@ export default async function PortalSearchResultsPage({
       search={search as TopicSearch}
       clientName={clientData.name ?? null}
       scrapedVideoCount={scrapedVideoCount ?? 0}
+      clientInfo={{
+        id: clientData.id,
+        name: clientData.name,
+        slug: clientData.slug,
+        industry: clientData.industry ?? undefined,
+        topic_keywords: (clientData.topic_keywords as string[] | null) ?? null,
+      }}
+      canUseContentLab={Boolean(result.client.feature_flags?.can_use_nerd)}
     />
   );
 }

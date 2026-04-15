@@ -147,7 +147,7 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
             <img src={item.thumbnail_candidates?.selectedUrl || item.thumbnail_url!} alt={item.title ?? 'Video'} className="w-full h-full object-cover transition-opacity duration-200" />
             <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
               <a
-                href={item.url}
+                href={item.url ?? undefined}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}

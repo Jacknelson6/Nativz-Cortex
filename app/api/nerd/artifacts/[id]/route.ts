@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 /** GET — fetch a single artifact by ID */
 export async function GET(
@@ -24,15 +25,12 @@ export async function GET(
     return NextResponse.json({ error: 'Artifact not found' }, { status: 404 });
   }
 
-  // Scope check for portal users
-  const { data: userData } = await admin.from('users').select('role, organization_id').eq('id', user.id).single();
-  if (userData?.role === 'viewer' && userData.organization_id && data.client_id) {
-    const { data: client } = await admin
-      .from('clients')
-      .select('organization_id')
-      .eq('id', data.client_id)
-      .single();
-    if (client?.organization_id !== userData.organization_id) {
+  // Effective-access check — honors admin impersonation.
+  const ctx = await getEffectiveAccessContext(user, admin);
+  if (ctx.role === 'viewer' && data.client_id) {
+    const artifactClientId = data.client_id as string;
+    const inScope = (ctx.clientIds && ctx.clientIds.includes(artifactClientId)) || false;
+    if (!inScope) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
   }
@@ -52,9 +50,10 @@ export async function DELETE(
 
   const admin = createAdminClient();
 
-  // Verify admin
-  const { data: userData } = await admin.from('users').select('role').eq('id', user.id).single();
-  if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
+  // Admin-only deletes. Impersonating admins fall to viewer and are
+  // refused — exit impersonation to wield admin mutations.
+  const ctx = await getEffectiveAccessContext(user, admin);
+  if (ctx.role !== 'admin') {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
   }
 

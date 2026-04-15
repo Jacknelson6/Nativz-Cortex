@@ -23,6 +23,10 @@ interface SourceBrowserProps {
     topicKeywords?: string[];
   } | null;
   defaultClientId: string | null;
+  /** Portal viewers can't call the admin-only analysis endpoints —
+   *  suppress the "Analyze" affordance and the on-click analysis panel
+   *  for non-TikTok sources when false. Defaults to true (admin). */
+  allowAnalyze?: boolean;
 }
 
 export function SourceBrowser({
@@ -31,6 +35,7 @@ export function SourceBrowser({
   searchQuery,
   clientContext,
   defaultClientId,
+  allowAnalyze = true,
 }: SourceBrowserProps) {
   const [showAll, setShowAll] = useState(false);
   const [analysisSource, setAnalysisSource] = useState<PlatformSource | null>(null);
@@ -97,13 +102,13 @@ export function SourceBrowser({
                     if (isTikTok) {
                       // Clicking the card opens the TikTok embed carousel
                       openCarousel(source);
-                    } else if (isVideo) {
+                    } else if (isVideo && allowAnalyze) {
                       setAnalysisSource(source);
                     } else {
                       window.open(source.url, '_blank', 'noopener,noreferrer');
                     }
                   }}
-                  onAnalyze={isVideo ? () => setAnalysisSource(source) : undefined}
+                  onAnalyze={isVideo && allowAnalyze ? () => setAnalysisSource(source) : undefined}
                 />
               </div>
             );
@@ -134,17 +139,22 @@ export function SourceBrowser({
         open={carouselIndex != null}
         onClose={() => setCarouselIndex(null)}
         topicSearchId={searchId}
+        disableAnalysis={!allowAnalyze}
+        clientId={defaultClientId}
       />
 
-      {/* Video analysis panel */}
-      <VideoAnalysisPanel
-        open={analysisSource != null}
-        onClose={() => setAnalysisSource(null)}
-        sourceUrl={analysisSource?.url ?? ''}
-        topicSearchId={searchId}
-        clientId={defaultClientId}
-        clientName={clientContext?.name ?? null}
-      />
+      {/* Video analysis panel — admin-only (portal viewers hit 403 on
+          /api/analysis/items for topic_search_id routes). */}
+      {allowAnalyze && (
+        <VideoAnalysisPanel
+          open={analysisSource != null}
+          onClose={() => setAnalysisSource(null)}
+          sourceUrl={analysisSource?.url ?? ''}
+          topicSearchId={searchId}
+          clientId={defaultClientId}
+          clientName={clientContext?.name ?? null}
+        />
+      )}
     </section>
   );
 }

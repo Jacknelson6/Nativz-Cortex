@@ -265,7 +265,7 @@ export function AnalysisPdfDocument({ item, clientName, agency }: AnalysisPdfPro
                   Generated: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                 </Text>
               </View>
-              <Link src={item.url} style={s.link}>{item.url}</Link>
+              {item.url ? <Link src={item.url} style={s.link}>{item.url}</Link> : null}
             </View>
             {isAC ? <PdfImage src={AC_LOGO_PNG} style={{ width: 80, height: 20, objectFit: 'contain' as const }} /> : <NativzLogoPdf width={80} />}
           </View>

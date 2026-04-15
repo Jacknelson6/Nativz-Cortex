@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Clock, ClockIcon } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Clock, ClockIcon, FlaskConical } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -16,29 +17,64 @@ import { TrendingTopicsTable } from '@/components/results/trending-topics-table'
 import { ContentPillars } from '@/components/results/content-pillars';
 import { NicheInsights } from '@/components/results/niche-insights';
 import { SourcesPanel } from '@/components/results/sources-panel';
+import { SourceBrowser } from '@/components/results/source-browser';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { BigMovers } from '@/components/results/big-movers';
 import { CompetitiveAnalysis } from '@/components/results/competitive-analysis';
 import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
 import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
+import { strategyLabTopicSearchStorageKey } from '@/lib/strategy-lab/topic-search-selection-storage';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { searchHeaderQueryClassName } from '@/lib/clients/client-abbreviations';
 import { hasSerp } from '@/lib/types/search';
-import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic } from '@/lib/types/search';
+import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
+
+interface PortalClientInfo {
+  id: string;
+  name: string;
+  slug: string;
+  industry?: string;
+  topic_keywords?: string[] | null;
+}
 
 interface PortalResultsClientProps {
   search: TopicSearch;
   clientName: string | null;
   scrapedVideoCount: number;
+  clientInfo?: PortalClientInfo | null;
+  /** Portal-side feature flag mirror. When false, the "Open in Content Lab"
+   *  button is hidden even if a clientId is available. */
+  canUseContentLab?: boolean;
 }
 
 export function PortalResultsClient({
   search,
   clientName,
   scrapedVideoCount,
+  clientInfo,
+  canUseContentLab = false,
 }: PortalResultsClientProps) {
+  const router = useRouter();
   const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
   const trendingTopics = (search.trending_topics ?? []) as (TrendingTopic | LegacyTrendingTopic)[];
+
+  function openInContentLab() {
+    if (!clientInfo) return;
+    // Pre-pin this search so Content Lab auto-attaches it on mount.
+    // Mirrors the admin "Open in Content Lab" flow — same storage key,
+    // read by PortalContentLab.
+    try {
+      const key = strategyLabTopicSearchStorageKey(clientInfo.id);
+      window.localStorage.setItem(key, JSON.stringify([search.id]));
+    } catch {
+      /* quota / JSON — non-fatal, lab still opens without the chip */
+    }
+    router.push(`/portal/content-lab/${clientInfo.id}`);
+  }
+
+  const hasPlatformSources = Boolean(
+    search.platform_data && (search.platform_data as Record<string, unknown>).sources,
+  );
 
   return (
     <div className="min-h-full">
@@ -66,6 +102,17 @@ export function PortalResultsClient({
                 {formatRelativeTime(search.completed_at)}
               </span>
             )}
+            {canUseContentLab && clientInfo ? (
+              <button
+                type="button"
+                onClick={openInContentLab}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent/60 hover:bg-accent/20"
+                title={`Open this search in Content Lab with ${clientInfo.name}`}
+              >
+                <FlaskConical size={14} aria-hidden />
+                Open in Content Lab
+              </button>
+            ) : null}
             <Badge variant="success">Report ready</Badge>
           </div>
         </div>
@@ -150,6 +197,27 @@ export function PortalResultsClient({
         {/* Big movers — who's making noise in this space */}
         {Boolean(aiResponse?.big_movers?.length) ? (
           <BigMovers movers={aiResponse!.big_movers!} />
+        ) : null}
+
+        {/* Source browser — browse short-form video posts by platform.
+            Analyze actions are hidden for portal viewers because the
+            /api/analysis/items topic_search_id path is admin-only. */}
+        {hasPlatformSources ? (
+          <SourceBrowser
+            sources={(search.platform_data as Record<string, unknown>).sources as PlatformSource[]}
+            searchId={search.id}
+            searchQuery={search.query}
+            clientContext={
+              clientInfo
+                ? {
+                    name: clientInfo.name,
+                    industry: clientInfo.industry,
+                    topicKeywords: clientInfo.topic_keywords ?? undefined,
+                  }
+                : null
+            }
+            defaultClientId={search.client_id}
+          />
         ) : null}
 
         {/* Sources panel — only for new searches with SERP data */}

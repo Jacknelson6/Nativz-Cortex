@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,25 +12,40 @@ export const dynamic = 'force-dynamic';
  * dashboard, including personal boards they own, team boards, and client
  * boards they have access to. Grouped client-side by the `scope` field.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const supabase = await createServerSupabaseClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
-  const { data: userRow } = await admin.from('users').select('role').eq('id', user.id).single();
-  const isAdmin = userRow?.role === 'admin';
+  const ctx = await getEffectiveAccessContext(user, admin);
 
-  // Admins see all non-archived team + client boards, plus their own personal.
-  // Non-admins (future portal viewers) see only their own personal boards.
+  // Optional ?clientId= filter — the portal passes the active brand so
+  // the dashboard only lists notes for that client. Impersonating admins
+  // are treated as the impersonated viewer.
+  const filterClientId = request.nextUrl.searchParams.get('clientId');
+
   let query = admin
     .from('moodboard_boards')
     .select('id, name, description, scope, user_id, client_id, created_at, updated_at, clients(name, slug)')
     .is('archived_at', null)
     .order('updated_at', { ascending: false });
 
-  if (!isAdmin) {
-    query = query.eq('user_id', user.id).eq('is_personal', true);
+  if (ctx.role === 'viewer') {
+    // Real viewers + admins impersonating a viewer: scope to the effective
+    // clientIds. An out-of-scope ?clientId= returns empty rather than
+    // silently ignoring the filter.
+    const allowedClientIds = ctx.clientIds ?? [];
+    if (filterClientId && !allowedClientIds.includes(filterClientId)) {
+      return NextResponse.json({ boards: [] });
+    }
+    const scopeIds = filterClientId ? [filterClientId] : allowedClientIds;
+    if (scopeIds.length === 0) {
+      return NextResponse.json({ boards: [] });
+    }
+    query = query.eq('scope', 'client').in('client_id', scopeIds);
+  } else if (filterClientId) {
+    query = query.eq('client_id', filterClientId);
   }
 
   const { data: boards, error } = await query;
@@ -107,15 +123,21 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const { data: userRow } = await admin.from('users').select('role').eq('id', user.id).single();
-  const isAdmin = userRow?.role === 'admin';
-
-  if (!isAdmin && parsed.data.scope !== 'personal') {
-    return NextResponse.json({ error: 'Only admins can create team or client boards' }, { status: 403 });
-  }
+  const ctx = await getEffectiveAccessContext(user, admin);
 
   if (parsed.data.scope === 'client' && !parsed.data.client_id) {
     return NextResponse.json({ error: 'client_id is required for client-scope boards' }, { status: 400 });
+  }
+
+  if (ctx.role === 'viewer') {
+    // Real viewers + admins impersonating a viewer can only create client-
+    // scope boards, and only for a client in their effective scope.
+    if (parsed.data.scope !== 'client') {
+      return NextResponse.json({ error: 'Portal users can only create client notes' }, { status: 403 });
+    }
+    if (!ctx.clientIds || !ctx.clientIds.includes(parsed.data.client_id as string)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   }
 
   const row = {

@@ -23,6 +23,7 @@ import { formatCompactCount, formatRelativeTime } from '@/lib/utils/format';
 import { engagementRatePercent } from '@/lib/search/source-mention-utils';
 import { PlatformBadgeSearch } from '@/components/search/platform-icon';
 import { parseVisionClipBreakdown } from '@/components/moodboard/vision-clip-breakdown-panel';
+import { AddToNoteButton } from '@/components/results/add-to-note-button';
 
 /**
  * Extract TikTok video ID from a TikTok URL.
@@ -73,6 +74,11 @@ interface TikTokEmbedCarouselProps {
   onClose: () => void;
   topicSearchId: string;
   clientId?: string | null;
+  /** When true, skip the auto-analysis fetches (transcribe / extract-frames /
+   *  analyze / rescript) — used for portal viewers who don't have access to
+   *  the admin-only /api/analysis/items topic_search_id path. The carousel
+   *  still renders the TikTok embed + metadata. */
+  disableAnalysis?: boolean;
 }
 
 export function TikTokEmbedCarousel({
@@ -82,6 +88,7 @@ export function TikTokEmbedCarousel({
   onClose,
   topicSearchId,
   clientId,
+  disableAnalysis = false,
 }: TikTokEmbedCarouselProps) {
   const [index, setIndex] = useState(initialIndex);
   const [analysisItem, setAnalysisItem] = useState<MoodboardItem | null>(null);
@@ -108,6 +115,14 @@ export function TikTokEmbedCarousel({
   // Auto-trigger analysis when video changes
   useEffect(() => {
     if (!open || !source) return;
+    if (disableAnalysis) {
+      // Viewer mode — render the embed only, no analysis sidebar.
+      setAnalysisItem(null);
+      setAnalysisLoading(false);
+      setRescriptText(null);
+      setRescriptLoading(false);
+      return;
+    }
     let cancelled = false;
     setAnalysisItem(null);
     setAnalysisLoading(true);
@@ -183,7 +198,7 @@ export function TikTokEmbedCarousel({
 
     void loadAnalysis();
     return () => { cancelled = true; };
-  }, [open, index, source?.url, topicSearchId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, index, source?.url, topicSearchId, disableAnalysis]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard navigation
   useEffect(() => {
@@ -268,13 +283,20 @@ export function TikTokEmbedCarousel({
         <div className="absolute right-0 top-0 z-10 flex h-full w-[480px] flex-col border-l border-white/10 bg-surface/95 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between border-b border-nativz-border/60 px-5 py-4">
             <h3 className="text-sm font-semibold text-text-primary">Video details</h3>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg p-1 text-text-muted hover:bg-surface-hover hover:text-text-secondary"
-            >
-              <X size={16} />
-            </button>
+            <div className="flex items-center gap-2">
+              <AddToNoteButton
+                sourceUrl={source.url}
+                analysisItemId={analysisItem?.id ?? null}
+                clientId={clientId ?? null}
+              />
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg p-1 text-text-muted hover:bg-surface-hover hover:text-text-secondary"
+              >
+                <X size={16} />
+              </button>
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-5">

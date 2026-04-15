@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 /**
  * GET /api/nerd/mentions
@@ -21,21 +22,16 @@ export async function GET() {
 
     const admin = createAdminClient();
 
-    // Tenant isolation: viewers only see clients their org has access to.
-    // Admins see everything (needed for the Nerd @mention autocomplete).
-    const { data: userData } = await admin
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single();
+    // Tenant isolation honors admin impersonation: a real admin sees all,
+    // but a real admin currently impersonating is scoped exactly like the
+    // impersonated viewer would be. This keeps @mention autocomplete from
+    // exposing cross-org clients or team_members while the banner says
+    // "Viewing as ...".
+    const ctx = await getEffectiveAccessContext(user, admin);
 
     let accessibleClientIds: string[] | null = null;
-    if (userData?.role === 'viewer') {
-      const { data: accessRows } = await admin
-        .from('user_client_access')
-        .select('client_id')
-        .eq('user_id', user.id);
-      accessibleClientIds = (accessRows ?? []).map((r) => r.client_id as string);
+    if (ctx.role === 'viewer') {
+      accessibleClientIds = ctx.clientIds ?? [];
       if (accessibleClientIds.length === 0) {
         return NextResponse.json({ clients: [], team: [] });
       }
@@ -47,10 +43,10 @@ export async function GET() {
       .eq('is_active', true)
       .order('name');
 
-    // Viewers don't need team_members in the autocomplete — the portal
-    // @mention surfaces don't support team mentions — and returning them
-    // would leak the full agency contact directory. Admins still get it.
-    const isViewer = userData?.role === 'viewer';
+    // Viewers (and admins impersonating) don't get team_members in the
+    // autocomplete — the portal @mention surfaces don't support team
+    // mentions, and returning them would leak the agency contact directory.
+    const isViewer = ctx.role === 'viewer';
 
     const [clientsResult, teamResult] = await Promise.all([
       accessibleClientIds

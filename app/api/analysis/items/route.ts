@@ -14,9 +14,12 @@ const createItemSchema = z
     board_id: z.string().uuid('Invalid board ID').optional(),
     /** Inline analysis from topic search results — creates or reuses a board per search. */
     topic_search_id: z.string().uuid().optional(),
-    url: z.string().url('Invalid URL'),
-    type: z.enum(['video', 'image', 'website']),
+    /** Required for video/image/website; omitted for text. */
+    url: z.string().url('Invalid URL').optional(),
+    type: z.enum(['video', 'image', 'website', 'text']),
     title: z.string().max(500).optional().nullable(),
+    /** Required for text; ignored otherwise. Trimmed before insert. */
+    text_content: z.string().max(20_000).optional(),
     position_x: z.number().optional().default(0),
     position_y: z.number().optional().default(0),
     width: z.number().optional(),
@@ -26,6 +29,10 @@ const createItemSchema = z
     (d) =>
       (Boolean(d.board_id) && !d.topic_search_id) || (!d.board_id && Boolean(d.topic_search_id)),
     { message: 'Provide exactly one of board_id or topic_search_id', path: ['board_id'] },
+  )
+  .refine(
+    (d) => (d.type === 'text' ? Boolean(d.text_content?.trim()) : Boolean(d.url)),
+    { message: 'text_content is required for text items; url is required otherwise', path: ['type'] },
   );
 
 /**
@@ -75,17 +82,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Board-scoped routes: admins OK on any board; non-admins only on their
-    // own personal boards. topic_search_id flow ensures an analysis board
-    // exists first and is admin-only (handled below).
+    // Board-scoped routes delegate to requireBoardAccess (admins, personal-
+    // board owners, and portal viewers on their org's client-scoped boards).
+    //
+    // The topic_search_id path has its own gate: the caller must either be
+    // an admin OR a viewer whose org owns the search's client. We check the
+    // search row here so the ensureAnalysisBoardForTopicSearch call below
+    // can trust the caller has a legitimate reason to create/reuse the
+    // board.
     if (parsed.data.board_id) {
       const gate = await requireBoardAccess(parsed.data.board_id, user, adminClient);
       if (!gate.ok) return gate.response;
     } else {
-      // topic_search_id path — admin only
-      const { data: userData } = await adminClient.from('users').select('role').eq('id', user.id).single();
-      if (!userData || userData.role !== 'admin') {
-        return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+      const { data: userData } = await adminClient
+        .from('users')
+        .select('role, is_super_admin')
+        .eq('id', user.id)
+        .single();
+      const isAdmin =
+        userData?.is_super_admin === true ||
+        userData?.role === 'admin' ||
+        userData?.role === 'super_admin';
+
+      if (!isAdmin) {
+        if (userData?.role !== 'viewer') {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
+        const { data: search } = await adminClient
+          .from('topic_searches')
+          .select('client_id')
+          .eq('id', parsed.data.topic_search_id as string)
+          .maybeSingle();
+        const searchClientId = search?.client_id as string | null;
+
+        if (!searchClientId) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
+        const { data: access } = await adminClient
+          .from('user_client_access')
+          .select('client_id')
+          .eq('user_id', user.id)
+          .eq('client_id', searchClientId)
+          .maybeSingle();
+
+        if (!access) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
       }
     }
 
@@ -114,19 +158,23 @@ export async function POST(request: NextRequest) {
     }
 
     const url = parsed.data.url;
+    const isTextItem = parsed.data.type === 'text';
 
-    // Deduplicate: if an item with the same URL already exists on this board, return it
-    const { data: existingItem } = await adminClient
-      .from('moodboard_items')
-      .select('*')
-      .eq('board_id', resolvedBoardId as string)
-      .eq('url', url)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Deduplicate (URL-typed items only). Text items are never deduped —
+    // two separate text blocks on the same board are legitimate.
+    if (!isTextItem && url) {
+      const { data: existingItem } = await adminClient
+        .from('moodboard_items')
+        .select('*')
+        .eq('board_id', resolvedBoardId as string)
+        .eq('url', url)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    if (existingItem) {
-      return NextResponse.json(existingItem, { status: 200 });
+      if (existingItem) {
+        return NextResponse.json(existingItem, { status: 200 });
+      }
     }
 
     let quickTitle = parsed.data.title ?? null;
@@ -139,31 +187,36 @@ export async function POST(request: NextRequest) {
     let duration: number | null = null;
     let hashtags: string[] = [];
 
-    try {
-      const gathered = await gatherQuickMetadataForItemUrl(url, parsed.data.type);
-      quickTitle = quickTitle || gathered.quickTitle;
-      quickThumbnail = gathered.quickThumbnail;
-      detectedPlatform = gathered.detectedPlatform;
-      authorName = gathered.authorName;
-      authorHandle = gathered.authorHandle;
-      stats = gathered.stats;
-      music = gathered.music;
-      duration = gathered.duration;
-      hashtags = gathered.hashtags;
-    } catch {
-      // Metadata fetch failed — still create the item
+    if (!isTextItem && url) {
+      try {
+        const gathered = await gatherQuickMetadataForItemUrl(url, parsed.data.type as 'video' | 'image' | 'website');
+        quickTitle = quickTitle || gathered.quickTitle;
+        quickThumbnail = gathered.quickThumbnail;
+        detectedPlatform = gathered.detectedPlatform;
+        authorName = gathered.authorName;
+        authorHandle = gathered.authorHandle;
+        stats = gathered.stats;
+        music = gathered.music;
+        duration = gathered.duration;
+        hashtags = gathered.hashtags;
+      } catch {
+        // Metadata fetch failed — still create the item
+      }
     }
 
     const insertData: Record<string, unknown> = {
       board_id: resolvedBoardId,
-      url: parsed.data.url,
+      url: isTextItem ? null : parsed.data.url,
       type: parsed.data.type,
+      text_content: isTextItem ? parsed.data.text_content?.trim() ?? null : null,
       title:
         quickTitle ||
-        (parsed.data.type === 'website'
+        (isTextItem
+          ? 'Note'
+          : parsed.data.type === 'website' && url
           ? (() => {
               try {
-                return new URL(parsed.data.url).hostname;
+                return new URL(url).hostname;
               } catch {
                 return 'Untitled';
               }
@@ -201,7 +254,7 @@ export async function POST(request: NextRequest) {
       .update({ updated_at: new Date().toISOString() })
       .eq('id', resolvedBoardId as string);
 
-    if (item) {
+    if (item && !isTextItem) {
       const processType = parsed.data.type === 'website' ? 'insights' : 'transcribe';
       const processUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/analysis/items/${item.id}/${processType}`;
       fetch(processUrl, {

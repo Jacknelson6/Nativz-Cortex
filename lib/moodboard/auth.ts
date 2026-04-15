@@ -1,39 +1,55 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
+interface BoardAccessGrant {
+  ok: true;
+  isAdmin: boolean;
+  isPersonalOwner: boolean;
+  /** True when the caller is a portal viewer accessing a client-scoped
+   *  board whose client belongs to one of their `user_client_access` rows.
+   *  Routes may use this to permit reads/writes to analysis pipelines while
+   *  refusing admin-only mutations (e.g. reassigning a board's client). */
+  isClientViewer: boolean;
+}
+
 /**
  * Shared auth gate for moodboard routes.
  *
- * Non-admin callers can only touch personal boards they own.
- * Admins can touch any board.
+ * Access rules:
+ *   - `admin` / `super_admin`: any board.
+ *   - Personal-board owner: their own `is_personal=true` board.
+ *   - Portal viewer: any `scope='client'` board whose `client_id` appears in
+ *     the caller's `user_client_access` rows. This is what makes the portal
+ *     notes surface and viewer-driven topic-search analysis work without
+ *     exposing board content across organizations.
  *
  * Returns `{ ok: true }` when access is granted, or a ready-to-return
  * `NextResponse` with the appropriate 401/403/404 status when not.
- *
- * Usage:
- *   const gate = await requireBoardAccess(boardId, user, adminClient);
- *   if (!gate.ok) return gate.response;
  */
 export async function requireBoardAccess(
   boardId: string,
   user: User | null,
   adminClient: SupabaseClient,
-): Promise<{ ok: true; isAdmin: boolean; isPersonalOwner: boolean } | { ok: false; response: NextResponse }> {
+): Promise<BoardAccessGrant | { ok: false; response: NextResponse }> {
   if (!user) {
     return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
 
   const { data: userData } = await adminClient
     .from('users')
-    .select('role')
+    .select('role, is_super_admin')
     .eq('id', user.id)
     .single();
 
-  const isAdmin = userData?.role === 'admin';
+  const isAdmin =
+    userData?.is_super_admin === true ||
+    userData?.role === 'admin' ||
+    userData?.role === 'super_admin';
+  const isViewer = userData?.role === 'viewer';
 
   const { data: board } = await adminClient
     .from('moodboard_boards')
-    .select('id, user_id, is_personal')
+    .select('id, user_id, is_personal, scope, client_id')
     .eq('id', boardId)
     .maybeSingle();
 
@@ -44,7 +60,21 @@ export async function requireBoardAccess(
   const isPersonalOwner = board.is_personal === true && board.user_id === user.id;
 
   if (isAdmin || isPersonalOwner) {
-    return { ok: true, isAdmin, isPersonalOwner };
+    return { ok: true, isAdmin, isPersonalOwner, isClientViewer: false };
+  }
+
+  // Portal viewer path — client-scoped board, board's client in viewer's access list.
+  if (isViewer && board.scope === 'client' && board.client_id) {
+    const { data: access } = await adminClient
+      .from('user_client_access')
+      .select('client_id')
+      .eq('user_id', user.id)
+      .eq('client_id', board.client_id)
+      .maybeSingle();
+
+    if (access) {
+      return { ok: true, isAdmin: false, isPersonalOwner: false, isClientViewer: true };
+    }
   }
 
   return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };

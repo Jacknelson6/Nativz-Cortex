@@ -50,11 +50,16 @@ export async function getPortalClient(): Promise<PortalClientResult | null> {
   if (impersonateOrgId) {
     const { data: adminUser } = await adminClient
       .from('users')
-      .select('role')
+      .select('role, is_super_admin')
       .eq('id', user.id)
       .single();
 
-    if (adminUser?.role === 'admin') {
+    const canImpersonate =
+      adminUser?.is_super_admin === true ||
+      adminUser?.role === 'admin' ||
+      adminUser?.role === 'super_admin';
+
+    if (canImpersonate) {
       // One org can host multiple client rows (brands). Impersonation stores the slug to disambiguate.
       if (impersonateSlug) {
         const { data: client, error } = await adminClient

@@ -16,6 +16,10 @@ interface PortalSettingsFormProps {
   initialBrandVoice: string;
   initialTopicKeywords: string[];
   companyName: string;
+  /** Hide the Account card — used when an admin is impersonating so the
+   *  admin's own name/email doesn't show under a client-branded settings
+   *  page. Brand profile still renders for the resolved portal client. */
+  hideAccountCard?: boolean;
 }
 
 function ReadonlyField({ label, value }: { label: string; value: string }) {
@@ -109,6 +113,7 @@ export function PortalSettingsForm({
   initialBrandVoice,
   initialTopicKeywords,
   companyName,
+  hideAccountCard = false,
 }: PortalSettingsFormProps) {
   // Account
   const [editingAccount, setEditingAccount] = useState(false);
@@ -206,7 +211,9 @@ export function PortalSettingsForm({
 
   return (
     <>
-      {/* Account */}
+      {/* Account — hidden during admin impersonation so the real admin's
+          name/email doesn't sit next to an impersonated client's brand. */}
+      {!hideAccountCard && (
       <Card>
         <SectionHeader
           title="Account"
@@ -235,6 +242,7 @@ export function PortalSettingsForm({
           </div>
         )}
       </Card>
+      )}
 
       {/* Brand profile */}
       <Card>

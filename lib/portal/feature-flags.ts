@@ -26,7 +26,7 @@ export const PORTAL_FEATURE_FLAG_DEFAULTS: FeatureFlags = {
   can_view_calendar: false,
   can_view_analyze: false,
   can_view_knowledge: true,
-  can_use_nerd: false,
+  can_use_nerd: true,
   can_use_api: true,
 };
 

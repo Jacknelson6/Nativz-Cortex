@@ -80,6 +80,58 @@ async function getPortalBrands(userId: string): Promise<{
 }> {
   const adminClient = createAdminClient();
 
+  // Impersonation wins. When an admin is impersonating, the sidebar
+  // brand must match the banner / getPortalClient result — otherwise the
+  // BrandSwitcher visually points at a different client than the one
+  // actually serving data, which is what produced the "Viewing as
+  // Avondale" / "data is Landshark's" bug.
+  const cookieStore = await cookies();
+  const impersonateOrgId = cookieStore.get('x-impersonate-org')?.value || null;
+  const impersonateSlug = cookieStore.get('x-impersonate-slug')?.value?.trim() || null;
+
+  if (impersonateOrgId) {
+    const { data: userRow } = await adminClient
+      .from('users')
+      .select('role, is_super_admin')
+      .eq('id', userId)
+      .single();
+    const realIsAdmin =
+      userRow?.is_super_admin === true ||
+      userRow?.role === 'admin' ||
+      userRow?.role === 'super_admin';
+
+    if (realIsAdmin) {
+      let query = adminClient
+        .from('clients')
+        .select('id, name, slug, agency, logo_url, organization_id, feature_flags')
+        .eq('organization_id', impersonateOrgId)
+        .eq('is_active', true)
+        .order('name');
+      if (impersonateSlug) query = query.eq('slug', impersonateSlug);
+
+      const { data: impersonatedClients } = await query;
+      const clients = impersonatedClients ?? [];
+
+      if (clients.length > 0) {
+        const active = clients[0];
+        const brands: PortalBrand[] = clients.map((c) => ({
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          agency: (c.agency as string | null) ?? null,
+          logo_url: (c.logo_url as string | null) ?? null,
+          organization_id: c.organization_id,
+        }));
+        return {
+          brands,
+          activeBrandId: active.id,
+          activeAgency: (active.agency as string | null) ?? null,
+          activeFeatureFlags: buildPortalFeatureFlags(active.feature_flags),
+        };
+      }
+    }
+  }
+
   const { data: accessRows } = await adminClient
     .from('user_client_access')
     .select('client_id, organization_id')
@@ -107,8 +159,6 @@ async function getPortalBrands(userId: string): Promise<{
     organization_id: c.organization_id,
   }));
 
-  // Determine active brand from cookie
-  const cookieStore = await cookies();
   const activeClientCookie = cookieStore.get('x-portal-active-client')?.value;
 
   let activeBrand = brands.find((b) => b.id === activeClientCookie);

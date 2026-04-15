@@ -19,6 +19,7 @@ import {
   writeStrategyLabNerdConversationId,
   clearStrategyLabNerdConversationId,
 } from '@/lib/strategy-lab/nerd-conversation-storage';
+import { strategyLabTopicSearchStorageKey } from '@/lib/strategy-lab/topic-search-selection-storage';
 
 /**
  * Portal Content Lab — the client-facing variant of StrategyLabNerdChat.
@@ -92,6 +93,24 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
   const [attachedSearchIds, setAttachedSearchIds] = useState<string[]>([]);
   const [, setClientSearches] = useState<TopicSearchItem[]>([]);
   const [attachResearchOpen, setAttachResearchOpen] = useState(false);
+
+  // Hydrate pre-pinned topic searches from localStorage. The admin Strategy
+  // Lab "Open in Content Lab" button and the portal topic-search "Open in
+  // Content Lab" button both write to this key before navigating here.
+  useEffect(() => {
+    if (!clientId || typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(strategyLabTopicSearchStorageKey(clientId));
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        const ids = parsed.filter((x): x is string => typeof x === 'string');
+        if (ids.length > 0) setAttachedSearchIds(ids);
+      }
+    } catch {
+      /* quota / JSON — ignore, start with empty selection */
+    }
+  }, [clientId]);
 
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
   const { brandName: agencyName, brand: agencyBrand } = useAgencyBrand();

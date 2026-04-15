@@ -47,7 +47,7 @@ export const SharedVideoNode = memo(function SharedVideoNode({ data }: NodeProps
       <div className="relative aspect-video bg-surface-hover flex items-center justify-center overflow-hidden">
         <PlatformBadge platform={item.platform} />
         {item.thumbnail_url ? (
-          <a href={item.url} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
+          <a href={item.url ?? undefined} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={item.thumbnail_url} alt={item.title ?? 'Video'} className="w-full h-full object-cover" />
             <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -252,8 +252,8 @@ export function ClientAccessServicesPanel({ slug }: { slug: string }) {
               <Toggle
                 checked={flags.can_use_nerd}
                 onChange={(v) => setFlag('can_use_nerd', v)}
-                label="The Nerd"
-                description="AI assistant in the portal"
+                label="Content Lab"
+                description="AI assistant in the portal — gates both Content Lab and the legacy Nerd page"
               />
               <Toggle
                 checked={flags.can_use_api}

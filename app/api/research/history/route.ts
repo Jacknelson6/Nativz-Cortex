@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchHistory, type HistoryItemType } from '@/lib/research/history';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 /**
  * GET /api/research/history
@@ -28,27 +29,31 @@ export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl;
     const limit = Math.min(Number(searchParams.get('limit') ?? 20), 50);
     const type = (searchParams.get('type') as HistoryItemType) || null;
-    const clientId = searchParams.get('client_id') || null;
+    const requestedClientId = searchParams.get('client_id') || null;
     const cursor = searchParams.get('cursor') || null;
     const includeIdeasRaw = searchParams.get('include_ideas');
     const includeIdeas = includeIdeasRaw === null ? true : includeIdeasRaw !== 'false';
 
     const adminClient = createAdminClient();
-    const { data: userData } = await adminClient
-      .from('users')
-      .select('role, organization_id, is_super_admin')
-      .eq('id', user.id)
-      .single();
+    const ctx = await getEffectiveAccessContext(user, adminClient);
 
-    const isAdmin =
-      userData?.is_super_admin === true ||
-      userData?.role === 'admin' ||
-      userData?.role === 'super_admin';
+    // Real admins (no impersonation) get unrestricted history — optionally
+    // narrowed by the caller-supplied client_id. Everyone else (real
+    // viewers + admins impersonating) is scoped to their effective
+    // clientIds. An out-of-scope client_id returns empty rather than
+    // silently ignoring the filter.
+    let clientId: string | null = requestedClientId;
+    let organizationId: string | null = null;
 
-    const organizationId = isAdmin ? null : (userData?.organization_id as string | null) ?? null;
-
-    if (!isAdmin && !organizationId) {
-      return NextResponse.json({ items: [] });
+    if (ctx.role === 'viewer') {
+      if (!ctx.clientIds || ctx.clientIds.length === 0) {
+        return NextResponse.json({ items: [] });
+      }
+      if (requestedClientId && !ctx.clientIds.includes(requestedClientId)) {
+        return NextResponse.json({ items: [] });
+      }
+      clientId = requestedClientId;
+      organizationId = ctx.organizationId;
     }
 
     const items = await fetchHistory({ limit, type, clientId, cursor, includeIdeas, organizationId });

@@ -1,6 +1,6 @@
 import type { MediaPipeAnalysis, StoredThumbnailCandidates } from '@/lib/mediapipe/types';
 
-export type MoodboardItemType = 'video' | 'image' | 'website';
+export type MoodboardItemType = 'video' | 'image' | 'website' | 'text';
 export type MoodboardItemStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export type MoodboardPlatform = 'tiktok' | 'instagram' | 'youtube' | 'twitter' | 'facebook' | null;
 export type StickyNoteColor = 'yellow' | 'blue' | 'green' | 'pink' | 'white';
@@ -125,10 +125,14 @@ export interface MoodboardItem {
   id: string;
   board_id: string;
   type: MoodboardItemType;
-  url: string;
+  /** URL-backed items (video/image/website) have a source URL. Text items
+   *  leave this null and populate text_content instead. */
+  url: string | null;
   title: string | null;
   thumbnail_url: string | null;
   status: MoodboardItemStatus;
+  /** Plain-text notes stored directly on the board. Null for URL items. */
+  text_content: string | null;
 
   // video fields
   duration: number | null;

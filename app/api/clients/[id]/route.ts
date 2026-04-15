@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { syncClientProfileToVault, removeClientFromVault } from '@/lib/vault/sync';
 import { logActivity } from '@/lib/activity';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 import {
   normalizeAdminWorkspaceModules,
   parseFullAdminWorkspaceModulesForPatch,
@@ -33,12 +34,9 @@ export async function GET(
 
     const adminClient = createAdminClient();
 
-    // Role-based access control: viewers can only access their own org's clients
-    const { data: userData } = await adminClient
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single();
+    // Effective-access aware: real viewers are scoped to their own org;
+    // admins impersonating are scoped to the impersonated client's org.
+    const ctx = await getEffectiveAccessContext(user, adminClient);
 
     // Fetch client — support both UUID (id) and slug
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -54,9 +52,13 @@ export async function GET(
       return NextResponse.json({ error: 'Client not found' }, { status: 404 });
     }
 
-    // Enforce tenant isolation: viewers can only access clients in their org
-    if (userData?.role === 'viewer' && dbClient.organization_id !== userData.organization_id) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (ctx.role === 'viewer') {
+      const inScope =
+        (ctx.clientIds && ctx.clientIds.includes(dbClient.id as string)) ||
+        (ctx.organizationId && dbClient.organization_id === ctx.organizationId);
+      if (!inScope) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
     }
 
     const clientId = dbClient.id;
@@ -92,7 +94,10 @@ export async function GET(
         .maybeSingle(),
     ]);
 
-    const isAdmin = userData?.role === 'admin';
+    // "isAdmin" here means "allowed to see admin-only fields"; during
+    // impersonation we intentionally drop back to viewer-visibility so
+    // the admin experiences exactly what the client sees.
+    const isAdmin = ctx.role === 'admin';
     const row = dbClient as {
       uppromote_api_key?: string | null;
       affiliate_digest_email_enabled?: boolean | null;
@@ -192,19 +197,12 @@ export async function PATCH(
     }
 
     const adminClient = createAdminClient();
-    const { data: userData } = await adminClient
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single();
+    const ctx = await getEffectiveAccessContext(user, adminClient);
+    const isAdmin = ctx.role === 'admin';
 
-    if (!userData) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    const isAdmin = userData.role === 'admin';
-
-    // Portal users: verify org ownership
+    // Portal users + impersonating admins: verify org ownership. The
+    // impersonation path lands here too because ctx downgrades the admin
+    // role — they're limited to the impersonated client's org.
     if (!isAdmin) {
       const { data: clientRow } = await adminClient
         .from('clients')
@@ -212,7 +210,11 @@ export async function PATCH(
         .eq('id', id)
         .single();
 
-      if (!clientRow || clientRow.organization_id !== userData.organization_id) {
+      const inScope =
+        !!clientRow &&
+        ((ctx.clientIds && ctx.clientIds.includes(id)) ||
+          (ctx.organizationId && clientRow.organization_id === ctx.organizationId));
+      if (!inScope) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
     }

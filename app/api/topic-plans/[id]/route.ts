@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 export async function GET(
   _req: NextRequest,
@@ -20,12 +21,7 @@ export async function GET(
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
-  const { data: me } = await admin
-    .from('users')
-    .select('role, organization_id')
-    .eq('id', user.id)
-    .single();
-  if (!me) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  const ctx = await getEffectiveAccessContext(user, admin);
 
   const { data: plan } = await admin
     .from('topic_plans')
@@ -35,8 +31,13 @@ export async function GET(
 
   if (!plan) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  if (me.role !== 'admin' && plan.organization_id !== me.organization_id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (ctx.role !== 'admin') {
+    const inScope =
+      (ctx.clientIds && plan.client_id && ctx.clientIds.includes(plan.client_id as string)) ||
+      (ctx.organizationId && plan.organization_id === ctx.organizationId);
+    if (!inScope) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   }
 
   const clientName = Array.isArray(plan.clients)

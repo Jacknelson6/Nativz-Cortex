@@ -16,16 +16,21 @@ export function NewNoteModal({
   clients,
   isAdmin,
   onCreated,
+  forcedClientId,
 }: {
   open: boolean;
   onClose: () => void;
   clients: { id: string; name: string; slug: string }[];
   isAdmin: boolean;
   onCreated: (boardId: string) => void;
+  /** Portal viewers: scope and client are locked to this id — the scope
+   *  picker and client dropdown are hidden so the UX is a single "name
+   *  your note" field. */
+  forcedClientId?: string;
 }) {
   const [name, setName] = useState('');
-  const [scope, setScope] = useState<Scope>('personal');
-  const [clientId, setClientId] = useState<string>('');
+  const [scope, setScope] = useState<Scope>(forcedClientId ? 'client' : 'personal');
+  const [clientId, setClientId] = useState<string>(forcedClientId ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,12 +38,12 @@ export function NewNoteModal({
   useEffect(() => {
     if (open) {
       setName('');
-      setScope('personal');
-      setClientId('');
+      setScope(forcedClientId ? 'client' : 'personal');
+      setClientId(forcedClientId ?? '');
       setError(null);
       setSubmitting(false);
     }
-  }, [open]);
+  }, [open, forcedClientId]);
 
   useEffect(() => {
     if (!open) return;
@@ -124,6 +129,7 @@ export function NewNoteModal({
             />
           </div>
 
+          {!forcedClientId && (
           <div>
             <label className="block text-xs font-medium uppercase tracking-wide text-text-muted mb-2">
               Who can see it
@@ -154,8 +160,9 @@ export function NewNoteModal({
               })}
             </div>
           </div>
+          )}
 
-          {scope === 'client' && (
+          {!forcedClientId && scope === 'client' && (
             <div>
               <label className="block text-xs font-medium uppercase tracking-wide text-text-muted mb-1.5">
                 Client

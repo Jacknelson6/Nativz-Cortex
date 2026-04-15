@@ -19,6 +19,7 @@ export const WebsiteNode = memo(function WebsiteNode({ data }: NodeProps<Website
   const isProcessing = item.status === 'processing';
 
   const hostname = (() => {
+    if (!item.url) return '';
     try { return new URL(item.url).hostname.replace('www.', ''); } catch { return item.url; }
   })();
 
@@ -110,7 +111,7 @@ export const WebsiteNode = memo(function WebsiteNode({ data }: NodeProps<Website
             </button>
           )}
           <a
-            href={item.url}
+            href={item.url ?? undefined}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
