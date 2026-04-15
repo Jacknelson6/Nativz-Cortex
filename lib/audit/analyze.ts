@@ -291,8 +291,13 @@ export function estimatePostingFrequency(videos: ProspectVideo[]): string {
 function getTopHashtags(videos: ProspectVideo[], limit: number): string[] {
   const counts: Record<string, number> = {};
   for (const v of videos) {
-    for (const h of v.hashtags) {
-      counts[h.toLowerCase()] = (counts[h.toLowerCase()] ?? 0) + 1;
+    // Scrapers sometimes slip null/non-string entries into `hashtags` (e.g.
+    // when the source post's caption is missing). Guard before lowercasing so
+    // a single bad entry doesn't crash the whole audit pipeline.
+    for (const h of v.hashtags ?? []) {
+      if (typeof h !== 'string') continue;
+      const key = h.toLowerCase();
+      counts[key] = (counts[key] ?? 0) + 1;
     }
   }
   return Object.entries(counts)

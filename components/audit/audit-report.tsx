@@ -18,6 +18,7 @@ import {
   Globe,
   MapPin,
   Plus,
+  X,
   Heart,
   MessageCircle,
   Share2,
@@ -817,6 +818,10 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                   const picked = selectedCompetitorWebsites.has(c.website);
                   const atLimit = !picked && selectedCompetitorWebsites.size >= MAX_PICKED_COMPETITORS;
                   const isNational = c.scope === 'national';
+                  // Hide the scope badge entirely for DTC brands — every
+                  // candidate would be "National" and the badge just adds
+                  // visual noise.
+                  const showScopeBadge = websiteInfo?.scope !== 'national';
                   const ScopeIcon = isNational ? Globe : MapPin;
                   const scopeColor = isNational ? 'text-accent-text/80' : 'text-emerald-400/80';
                   const scopeLabel = isNational ? 'National' : 'Local';
@@ -826,53 +831,133 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                         type="button"
                         onClick={() => toggleCompetitorPick(c.website)}
                         disabled={atLimit}
-                        className={`w-full flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
+                        className={`w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
                           picked
-                            ? 'border-accent/40 bg-accent-surface/30'
+                            ? 'border-accent/60 bg-accent-surface/40'
                             : 'border-nativz-border bg-surface hover:bg-surface-hover'
                         } ${atLimit ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                         title={c.why || undefined}
                       >
-                        <span
-                          className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border transition-colors ${
-                            picked ? 'border-accent-text bg-accent text-white' : 'border-nativz-border'
-                          }`}
-                          aria-hidden
-                        >
-                          {picked && <Check size={12} />}
-                        </span>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={`https://www.google.com/s2/favicons?domain=${faviconDomain(c.website) ?? c.website}&sz=32`}
                           alt=""
-                          width={20}
-                          height={20}
-                          className="mt-0.5 rounded-sm object-contain shrink-0"
+                          width={22}
+                          height={22}
+                          className="rounded-sm object-contain shrink-0"
                           onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-base font-medium text-text-primary truncate">{c.name}</span>
-                            <span
-                              className={`inline-flex items-center gap-1 rounded-full border border-nativz-border/60 bg-background/50 px-2 py-0.5 text-[11px] font-medium ${scopeColor}`}
-                              aria-label={scopeLabel}
-                              title={scopeLabel}
-                            >
-                              <ScopeIcon size={11} aria-hidden />
-                              {scopeLabel}
-                            </span>
+                            {showScopeBadge && (
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full border border-nativz-border/60 bg-background/50 px-2 py-0.5 text-[11px] font-medium ${scopeColor}`}
+                                aria-label={scopeLabel}
+                                title={scopeLabel}
+                              >
+                                <ScopeIcon size={11} aria-hidden />
+                                {scopeLabel}
+                              </span>
+                            )}
                             <span className="text-sm text-text-muted truncate">{prettyUrl(c.website)}</span>
                           </div>
                           {c.why && (
                             <p className="text-sm text-text-muted mt-1 line-clamp-2">{c.why}</p>
                           )}
                         </div>
+                        {/* Clear, labeled select state — replaces the tiny
+                            18px checkbox that was easy to miss. */}
+                        <span
+                          className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            picked
+                              ? 'bg-accent text-white'
+                              : atLimit
+                              ? 'border border-nativz-border/50 text-text-muted'
+                              : 'border border-accent/40 text-accent-text'
+                          }`}
+                          aria-hidden
+                        >
+                          {picked ? (
+                            <>
+                              <Check size={12} /> Selected
+                            </>
+                          ) : atLimit ? (
+                            'Max 3 picked'
+                          ) : (
+                            <>
+                              <Plus size={12} /> Select
+                            </>
+                          )}
+                        </span>
                       </button>
                     </li>
                   );
                 })}
               </ul>
             )}
+
+            {/* Manual-entry row — for when the user already knows a
+                competitor that didn't show up in the auto-generated list.
+                Accepts a website URL or bare domain. */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-text-primary">
+                Add a competitor manually
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={manualCompetitorInput}
+                  onChange={(e) => setManualCompetitorInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addManualCompetitor();
+                    }
+                  }}
+                  placeholder="example.com"
+                  className="flex-1 rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent/50"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={addManualCompetitor}
+                  disabled={!manualCompetitorInput.trim()}
+                  className="text-sm"
+                >
+                  <Plus size={14} /> Add
+                </Button>
+              </div>
+              {manualCompetitorWebsites.length > 0 && (
+                <ul className="flex flex-wrap gap-1.5 pt-1">
+                  {manualCompetitorWebsites.map((w) => (
+                    <li
+                      key={w}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent-surface/40 px-2.5 py-1 text-xs text-text-primary"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`https://www.google.com/s2/favicons?domain=${w}&sz=32`}
+                        alt=""
+                        className="h-3.5 w-3.5 rounded-[2px] object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.visibility = 'hidden';
+                        }}
+                      />
+                      <span className="max-w-[180px] truncate">{w}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeManualCompetitor(w)}
+                        className="rounded-full p-0.5 text-text-muted hover:bg-accent/20 hover:text-text-primary transition-colors"
+                        aria-label={`Remove ${w}`}
+                      >
+                        <X size={10} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center justify-between">
@@ -896,17 +981,28 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           <div className="text-center mb-8">
             <h2 className="text-xl font-semibold text-text-primary">
               {(() => {
-                if (!audit.website_url) return 'Analyzing prospect socials';
-                // Derive a human brand label from the URL: toastique.com → Toastique, www.foo-bar.com → Foo-bar
+                // Prefer the LLM-extracted business name from the website
+                // scrape — already properly spaced + cased ("Ryse Supplements"
+                // instead of "Rysesupps", "Malai Kitchen" instead of
+                // "Malaikitchen"). Fall back to the domain label when the
+                // scrape hasn't landed yet.
+                const ctxTitle =
+                  websiteInfo?.title?.trim() ||
+                  (audit.prospect_data?.websiteContext as { title?: string } | undefined)?.title?.trim();
                 let brand: string;
-                try {
-                  const u = new URL(audit.website_url.startsWith('http') ? audit.website_url : `https://${audit.website_url}`);
-                  const firstLabel = u.hostname.replace(/^www\./, '').split('.')[0];
-                  brand = firstLabel.charAt(0).toUpperCase() + firstLabel.slice(1);
-                } catch {
-                  brand = 'this brand';
+                if (ctxTitle) {
+                  brand = ctxTitle;
+                } else if (audit.website_url) {
+                  try {
+                    const u = new URL(audit.website_url.startsWith('http') ? audit.website_url : `https://${audit.website_url}`);
+                    const firstLabel = u.hostname.replace(/^www\./, '').split('.')[0];
+                    brand = firstLabel.charAt(0).toUpperCase() + firstLabel.slice(1);
+                  } catch {
+                    brand = 'this brand';
+                  }
+                } else {
+                  return 'Analyzing prospect socials';
                 }
-                // Possessive: Toastique → Toastique's, James → James'
                 const possessive = brand.endsWith('s') ? `${brand}'` : `${brand}'s`;
                 return `Analyzing ${possessive} socials`;
               })()}

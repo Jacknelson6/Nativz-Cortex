@@ -380,7 +380,13 @@ You MUST return at least 3 real companies. If the industry is ambiguous, make yo
 function getTopHashtags(videos: ProspectVideo[], limit: number): string[] {
   const counts: Record<string, number> = {};
   for (const v of videos) {
-    for (const h of v.hashtags) counts[h.toLowerCase()] = (counts[h.toLowerCase()] ?? 0) + 1;
+    // Skip null/non-string hashtag entries — scrapers occasionally seed them
+    // when a caption is missing; `.toLowerCase()` on null crashes the run.
+    for (const h of v.hashtags ?? []) {
+      if (typeof h !== 'string') continue;
+      const key = h.toLowerCase();
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
   }
   return Object.entries(counts)
     .sort((a, b) => b[1] - a[1])
