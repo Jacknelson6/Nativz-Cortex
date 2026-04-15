@@ -66,6 +66,12 @@ interface TikTokChannel {
   followers?: number;
   following?: number;
   videos?: number;
+  // Lifetime heart count. `heartCount` is the current field name;
+  // `heart` / `likes` are older variants. Optional because some actor
+  // builds skip it.
+  heartCount?: number;
+  heart?: number;
+  likes?: number;
 }
 
 interface TikTokActorItem {
@@ -152,7 +158,7 @@ export async function scrapeTikTokProfile(profileUrl: string): Promise<TikTokPro
     bio: channel.bio ?? '',
     followers: channel.followers ?? 0,
     following: channel.following ?? 0,
-    likes: 0, // actor doesn't return lifetime heart count in this shape
+    likes: channel.heartCount ?? channel.heart ?? channel.likes ?? 0,
     postsCount: channel.videos ?? items.length,
     avatarUrl:
       channel.avatar ??

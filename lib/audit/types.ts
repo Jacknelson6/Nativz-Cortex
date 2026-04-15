@@ -8,11 +8,29 @@ export interface ProspectProfile {
   displayName: string;
   bio: string;
   followers: number;
+  /**
+   * Accounts the profile follows. TikTok + IG + FB report this directly;
+   * YouTube Data API doesn't expose it for non-owner channels (stays 0).
+   */
   following: number;
+  /**
+   * Lifetime "likes" — semantics differ by platform. TikTok = aggregate
+   * hearts across all videos; Facebook = page-likes (a soft-follower
+   * count); Instagram + YouTube don't expose a lifetime total and read
+   * as 0. Don't use this for cross-platform comparison — use per-video
+   * engagement math off the `videos` array instead.
+   */
   likes: number;
+  /** Lifetime post/video count on the profile. Not the scrape window. */
   postsCount: number;
   avatarUrl: string | null;
   profileUrl: string;
+  /**
+   * Verified / official-badge status when available. YouTube Data API
+   * doesn't expose a verification flag, so YouTube profiles always read
+   * `false` — prefer displaying the badge only when true rather than
+   * implying "unverified" on a platform that never tells us.
+   */
   verified: boolean;
   /**
    * External URLs in the profile. Populated from platform-specific fields
