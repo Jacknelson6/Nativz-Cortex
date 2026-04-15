@@ -454,10 +454,13 @@ function IdeaCard({ idea, num, theme }: { idea: TopicIdea; num: number; theme: A
   const statCells: Array<{ value: string; label: string; bg: string; color: string }> = [];
   const aud = formatAudience(idea.audience ?? undefined);
   if (aud) statCells.push({ value: aud, label: 'AUDIENCE', bg: c.surface, color: c.ink });
-  if (idea.positive_pct != null) statCells.push({
+  // Hide 0% sentiment cells entirely — they're noise, not data. When the
+  // search has no usable emotion breakdown AND no per-topic sentiment, we'd
+  // rather show nothing than a "0% POSITIVE" label that misreads as real.
+  if (idea.positive_pct != null && idea.positive_pct > 0) statCells.push({
     value: `${Math.round(idea.positive_pct)}%`, label: 'POSITIVE', bg: c.positiveBg, color: c.positive,
   });
-  if (idea.negative_pct != null) statCells.push({
+  if (idea.negative_pct != null && idea.negative_pct > 0) statCells.push({
     value: `${Math.round(idea.negative_pct)}%`, label: 'NEGATIVE', bg: c.negativeBg, color: c.negative,
   });
 

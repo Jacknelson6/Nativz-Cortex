@@ -428,10 +428,10 @@ function buildIdeaCard(idea: TopicIdea, num: number): (Paragraph | Table)[] {
   if (audienceLabel) {
     candidateCells.push({ value: audienceLabel, label: 'AUDIENCE', fill: COLOR_SURFACE, color: COLOR_INK });
   }
-  if (idea.positive_pct != null) {
+  if (idea.positive_pct != null && idea.positive_pct > 0) {
     candidateCells.push({ value: `${Math.round(idea.positive_pct)}%`, label: 'POSITIVE', fill: 'ECFDF5', color: COLOR_POSITIVE });
   }
-  if (idea.negative_pct != null) {
+  if (idea.negative_pct != null && idea.negative_pct > 0) {
     candidateCells.push({ value: `${Math.round(idea.negative_pct)}%`, label: 'NEGATIVE', fill: 'FEF3C7', color: COLOR_NEGATIVE });
   }
 

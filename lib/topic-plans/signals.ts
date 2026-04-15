@@ -85,18 +85,43 @@ export async function loadTopicSignals(searchIds: string[]): Promise<TopicSignal
     let positivePct: number | undefined;
     let negativePct: number | undefined;
     if (Array.isArray(emotions)) {
-      // Bucket the emotion list — anything rooted in joy/curiosity/interest
-      // counts as positive; anger/fear/disgust/sadness as negative. The
-      // search may also already have explicit "positive"/"negative" rows.
-      const POS = new Set(['joy', 'love', 'interest', 'curiosity', 'admiration', 'positive', 'happiness', 'excitement']);
-      const NEG = new Set(['anger', 'fear', 'sadness', 'disgust', 'frustration', 'anxiety', 'negative']);
+      // Bucket the emotion list. First pass uses exact-name matching against
+      // broad POS/NEG sets; second pass falls back to substring matching so
+      // variants like "joyful", "trust-positive", "anxious-negative" still
+      // land somewhere. Search rows may also carry explicit positive /
+      // negative rows which short-circuit all of this.
+      const POS = new Set([
+        'joy', 'love', 'interest', 'curiosity', 'admiration', 'positive', 'happiness',
+        'excitement', 'hope', 'pride', 'trust', 'gratitude', 'relief', 'enthusiasm',
+        'satisfaction', 'amusement', 'inspiration', 'confidence',
+      ]);
+      const NEG = new Set([
+        'anger', 'fear', 'sadness', 'disgust', 'frustration', 'anxiety', 'negative',
+        'disappointment', 'confusion', 'shame', 'regret', 'skepticism', 'contempt',
+        'embarrassment', 'grief', 'worry', 'stress',
+      ]);
       let pos = 0;
       let neg = 0;
       for (const e of emotions) {
-        const name = e.emotion?.toLowerCase() ?? '';
+        const name = (e.emotion ?? '').toLowerCase().trim();
         const pct = typeof e.percentage === 'number' ? e.percentage : 0;
-        if (POS.has(name)) pos += pct;
-        else if (NEG.has(name)) neg += pct;
+        if (!name || pct === 0) continue;
+        if (POS.has(name) || name.includes('positive')) {
+          pos += pct;
+        } else if (NEG.has(name) || name.includes('negative')) {
+          neg += pct;
+        } else {
+          // Substring fallback — catches "joy_excitement", "mild-anger", etc.
+          let matched = false;
+          for (const p of POS) {
+            if (name.includes(p)) { pos += pct; matched = true; break; }
+          }
+          if (!matched) {
+            for (const n of NEG) {
+              if (name.includes(n)) { neg += pct; break; }
+            }
+          }
+        }
       }
       if (pos > 0) positivePct = Math.round(pos);
       if (neg > 0) negativePct = Math.round(neg);
@@ -107,6 +132,23 @@ export async function loadTopicSignals(searchIds: string[]): Promise<TopicSignal
 
     for (const t of topics) {
       if (!t.name) continue;
+      // Per-topic sentiment fallback: when emotions didn't bucket to useful
+      // numbers, derive pos/neg pct from the topic's own sentiment score
+      // (-1..1). +0.6 sentiment → ~80% positive. Only overrides when the
+      // search-level bucketing produced zero, so the real emotion data
+      // still wins when available.
+      let topicPos = positivePct;
+      let topicNeg = negativePct;
+      if ((topicPos == null || topicPos === 0) && typeof t.sentiment === 'number') {
+        const clamped = Math.max(-1, Math.min(1, t.sentiment));
+        if (clamped > 0.1) {
+          topicPos = Math.round(50 + clamped * 50);
+          topicNeg = Math.round(50 - clamped * 50);
+        } else if (clamped < -0.1) {
+          topicNeg = Math.round(50 + Math.abs(clamped) * 50);
+          topicPos = Math.round(50 - Math.abs(clamped) * 50);
+        }
+      }
       signals.push({
         search_id: row.id,
         search_query: row.query,
@@ -115,8 +157,8 @@ export async function loadTopicSignals(searchIds: string[]): Promise<TopicSignal
         resonance: t.resonance,
         sentiment: t.sentiment,
         search_audience: searchAudience,
-        positive_pct: positivePct,
-        negative_pct: negativePct,
+        positive_pct: topicPos,
+        negative_pct: topicNeg,
       });
     }
   }
