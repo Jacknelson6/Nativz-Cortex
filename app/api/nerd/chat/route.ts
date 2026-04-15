@@ -848,7 +848,26 @@ export async function POST(req: NextRequest) {
       ? buildPortalSystemPrompt(portalClientName, brandName)
       : buildAdminSystemPrompt(brandName);
     const skillsContext = buildMarketingSkillsContext(lastUserMsg);
-    const dbSkillsContext = await buildDbSkillsContext(lastUserMsg);
+    // Harness-aware skill injection: portal chats never receive admin-only
+    // skills unless explicitly opted in; admin Content Lab vs admin Nerd
+    // can also carry different skill sets. Client-scoped skills only
+    // load when their client is the one pinned to the session.
+    const skillHarness: 'admin_nerd' | 'admin_content_lab' | 'portal_content_lab' =
+      isPortalUser
+        ? 'portal_content_lab'
+        : mode === 'content-lab'
+        ? 'admin_content_lab'
+        : 'admin_nerd';
+    // Admin Content Lab pins a client via @mention; use the first client
+    // mention so client-specific skills load for that brand. Admin Nerd
+    // with no mention stays null (agency-wide skills only).
+    const skillClientId = isPortalUser
+      ? portalClientId ?? null
+      : (mentions ?? []).find((m) => m.type === 'client')?.id ?? null;
+    const dbSkillsContext = await buildDbSkillsContext(lastUserMsg, {
+      harness: skillHarness,
+      clientId: skillClientId,
+    });
 
     // If guardrail matched in inject mode, add instruction to system prompt
     let guardrailInstruction = '';

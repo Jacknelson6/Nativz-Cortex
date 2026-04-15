@@ -40,16 +40,33 @@ const slugSchema = z
   .max(40)
   .regex(/^[a-z][a-z0-9-]{1,39}$/, 'Lowercase letters, digits, and dashes only — must start with a letter');
 
-const createSchema = z.object({
-  name: z.string().min(1).max(100),
-  description: z.string().max(500).default(''),
-  github_repo: z.string().min(3).max(200),
-  github_path: z.string().max(500).default('SKILL.md'),
-  github_branch: z.string().max(100).default('main'),
-  keywords: z.array(z.string()).default([]),
-  command_slug: slugSchema.optional().nullable(),
-  prompt_template: z.string().max(2000).optional().nullable(),
-});
+const harnessEnum = z.enum(['admin_nerd', 'admin_content_lab', 'portal_content_lab']);
+
+const createSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    description: z.string().max(500).default(''),
+    // GitHub-synced path (the existing flow). Optional when a direct-
+    // upload body is provided via `content`.
+    github_repo: z.string().min(3).max(200).optional(),
+    github_path: z.string().max(500).optional(),
+    github_branch: z.string().max(100).default('main'),
+    // Direct-upload markdown body. When present, we skip the GitHub fetch
+    // and store the body verbatim with source='upload'.
+    content: z.string().optional(),
+    keywords: z.array(z.string()).default([]),
+    command_slug: slugSchema.optional().nullable(),
+    prompt_template: z.string().max(2000).optional().nullable(),
+    // Per-harness scoping. Defaults to admin-only so brand-new skills can't
+    // accidentally leak into portal chats.
+    harnesses: z.array(harnessEnum).min(1).default(['admin_nerd', 'admin_content_lab']),
+    // When set, skill loads only when this client is pinned. Null = agency-wide.
+    client_id: z.string().uuid().nullable().optional(),
+  })
+  .refine(
+    (v) => !!v.content || (!!v.github_repo && !!v.github_path),
+    'Provide either `content` (direct upload) or `github_repo` + `github_path`.',
+  );
 
 /** POST /api/nerd/skills — create + sync from GitHub */
 export async function POST(req: NextRequest) {
@@ -62,16 +79,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { name, description, github_repo, github_path, github_branch, keywords, command_slug, prompt_template } = parsed.data;
+  const {
+    name,
+    description,
+    github_repo,
+    github_path,
+    github_branch,
+    content: uploadedContent,
+    keywords,
+    command_slug,
+    prompt_template,
+    harnesses,
+    client_id,
+  } = parsed.data;
 
-  // Fetch content from GitHub
+  // Two ingestion paths: direct-upload markdown OR pull from GitHub.
+  // The schema's refine guarantees we have one or the other.
   let content: string;
-  try {
-    content = await syncSkillFromGitHub(github_repo, github_path, github_branch);
-  } catch (err) {
-    return NextResponse.json({
-      error: `Failed to fetch from GitHub: ${(err as Error).message}`,
-    }, { status: 422 });
+  const source: 'github' | 'upload' = uploadedContent ? 'upload' : 'github';
+  if (uploadedContent) {
+    content = uploadedContent;
+  } else {
+    try {
+      content = await syncSkillFromGitHub(github_repo!, github_path!, github_branch);
+    } catch (err) {
+      return NextResponse.json({
+        error: `Failed to fetch from GitHub: ${(err as Error).message}`,
+      }, { status: 422 });
+    }
   }
 
   // Extract keywords from content + manual ones
@@ -83,14 +118,17 @@ export async function POST(req: NextRequest) {
     .insert({
       name,
       description: description || content.slice(0, 200),
-      github_repo,
-      github_path,
-      github_branch,
+      github_repo: github_repo ?? null,
+      github_path: github_path ?? null,
+      github_branch: source === 'github' ? github_branch : null,
       content,
       keywords: allKeywords,
       command_slug: command_slug ?? null,
       prompt_template: prompt_template ?? null,
-      last_synced_at: new Date().toISOString(),
+      harnesses,
+      client_id: client_id ?? null,
+      source,
+      last_synced_at: source === 'github' ? new Date().toISOString() : null,
       created_by: auth.user!.id,
     })
     .select()
@@ -116,6 +154,10 @@ const updateSchema = z.object({
   command_slug: slugSchema.optional().nullable(),
   prompt_template: z.string().max(2000).optional().nullable(),
   sync: z.boolean().optional(), // re-sync from GitHub
+  // Direct content edit for upload-sourced skills (no sync required).
+  content: z.string().optional(),
+  harnesses: z.array(harnessEnum).min(1).optional(),
+  client_id: z.string().uuid().nullable().optional(),
 });
 
 /** PATCH /api/nerd/skills — update a skill */
@@ -132,23 +174,37 @@ export async function PATCH(req: NextRequest) {
   const { id, sync, ...updates } = parsed.data;
   const admin = createAdminClient();
 
-  // If sync requested, re-fetch from GitHub
+  // If sync requested, re-fetch from GitHub (github-source skills only).
   if (sync) {
     const { data: existing } = await admin
       .from('nerd_skills')
-      .select('github_repo, github_path, github_branch')
+      .select('github_repo, github_path, github_branch, source')
       .eq('id', id)
       .single();
 
     if (!existing) return NextResponse.json({ error: 'Skill not found' }, { status: 404 });
+    if (existing.source === 'upload' || !existing.github_repo || !existing.github_path) {
+      return NextResponse.json(
+        { error: 'Sync is only available for GitHub-sourced skills.' },
+        { status: 400 },
+      );
+    }
 
     try {
-      const content = await syncSkillFromGitHub(existing.github_repo, existing.github_path, existing.github_branch);
+      const content = await syncSkillFromGitHub(
+        existing.github_repo,
+        existing.github_path,
+        existing.github_branch ?? 'main',
+      );
       const keywords = extractKeywords(content, updates.keywords ?? []);
       Object.assign(updates, { content, keywords, last_synced_at: new Date().toISOString() });
     } catch (err) {
       return NextResponse.json({ error: `Sync failed: ${(err as Error).message}` }, { status: 422 });
     }
+  } else if (updates.content) {
+    // Upload-source direct edit — re-derive keywords from the new body so
+    // the match scorer stays accurate after the edit.
+    updates.keywords = extractKeywords(updates.content, updates.keywords ?? []);
   }
 
   const { data, error } = await admin

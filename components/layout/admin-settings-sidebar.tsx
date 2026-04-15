@@ -8,6 +8,7 @@ import {
   Brain,
   Cpu,
   Code,
+  Sparkles,
   User as UserIcon,
   ChevronLeft,
 } from 'lucide-react';
@@ -46,6 +47,7 @@ const ITEMS: SettingsItem[] = [
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/knowledge', label: 'Brain', icon: Brain },
   { href: '/admin/settings/usage', label: 'AI settings', icon: Cpu },
+  { href: '/admin/settings/ai', label: 'AI skills', icon: Sparkles },
   { href: '/admin/nerd/api', label: 'API docs', icon: Code },
 ];
 

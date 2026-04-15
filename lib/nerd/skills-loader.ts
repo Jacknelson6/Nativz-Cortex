@@ -9,17 +9,23 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 
+export type SkillHarness = 'admin_nerd' | 'admin_content_lab' | 'portal_content_lab';
+
 interface DbSkill {
   id: string;
   name: string;
   description: string;
   content: string;
   keywords: string[];
-  github_repo: string;
-  github_path: string;
-  github_branch: string;
+  github_repo: string | null;
+  github_path: string | null;
+  github_branch: string | null;
   is_active: boolean;
   last_synced_at: string | null;
+  harnesses: SkillHarness[];
+  client_id: string | null;
+  source: 'github' | 'upload';
+  command_slug: string | null;
 }
 
 // In-memory cache with TTL
@@ -30,7 +36,8 @@ const MAX_SKILLS_IN_CONTEXT = 3;
 const MAX_SKILL_CHARS = 6000;
 
 /**
- * Load all active skills from DB, cached in memory.
+ * Load all active skills from DB, cached in memory. Caller filters by
+ * harness + client via `matchDbSkills` / `listSkillsForHarness`.
  */
 async function loadDbSkills(): Promise<DbSkill[]> {
   const now = Date.now();
@@ -41,7 +48,7 @@ async function loadDbSkills(): Promise<DbSkill[]> {
   const admin = createAdminClient();
   const { data } = await admin
     .from('nerd_skills')
-    .select('id, name, description, content, keywords, github_repo, github_path, github_branch, is_active, last_synced_at')
+    .select('id, name, description, content, keywords, github_repo, github_path, github_branch, is_active, last_synced_at, harnesses, client_id, source, command_slug')
     .eq('is_active', true);
 
   cachedSkills = (data ?? []) as DbSkill[];
@@ -50,11 +57,37 @@ async function loadDbSkills(): Promise<DbSkill[]> {
 }
 
 /**
+ * Skills applicable to the current harness + pinned client.
+ *
+ * Rules:
+ * - Skill must list the calling harness in its `harnesses` array.
+ * - If the skill has a `client_id`, it must match the pinned client.
+ *   Skills with null client_id are "agency-wide" and apply across every
+ *   client in the matching harness.
+ * - Admin-scope skills (admin_nerd / admin_content_lab) never leak into
+ *   portal_content_lab unless explicitly listed in the harness array.
+ */
+export async function listSkillsForHarness(opts: {
+  harness: SkillHarness;
+  clientId?: string | null;
+}): Promise<DbSkill[]> {
+  const all = await loadDbSkills();
+  return all.filter((s) => {
+    if (!s.harnesses?.includes(opts.harness)) return false;
+    if (s.client_id && s.client_id !== opts.clientId) return false;
+    return true;
+  });
+}
+
+/**
  * Match DB skills to a user message using keyword scoring.
  * Returns up to MAX_SKILLS_IN_CONTEXT skill content blocks.
  */
-export async function matchDbSkills(userMessage: string): Promise<string[]> {
-  const skills = await loadDbSkills();
+export async function matchDbSkills(
+  userMessage: string,
+  opts: { harness: SkillHarness; clientId?: string | null } = { harness: 'admin_nerd' },
+): Promise<string[]> {
+  const skills = await listSkillsForHarness(opts);
   if (skills.length === 0) return [];
 
   const queryLower = userMessage.toLowerCase();
@@ -98,9 +131,15 @@ export async function matchDbSkills(userMessage: string): Promise<string[]> {
 
 /**
  * Build context block from matched DB skills for injection into prompts.
+ *
+ * Harness-aware: portal chats never receive admin-only skill context unless
+ * the admin has explicitly opted-in that skill for `portal_content_lab`.
  */
-export async function buildDbSkillsContext(userMessage: string): Promise<string> {
-  const skills = await matchDbSkills(userMessage);
+export async function buildDbSkillsContext(
+  userMessage: string,
+  opts: { harness: SkillHarness; clientId?: string | null } = { harness: 'admin_nerd' },
+): Promise<string> {
+  const skills = await matchDbSkills(userMessage, opts);
   if (skills.length === 0) return '';
   return `\n\n---\n\nAGENCY SKILLS (use these frameworks to give expert advice):\n\n${skills.join('\n\n---\n\n')}`;
 }
