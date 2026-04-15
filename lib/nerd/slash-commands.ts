@@ -220,13 +220,14 @@ function buildTopicPlanPrompt(n: number): string {
 MANDATORY tool pipeline — do not skip any step:
   1. Call \`extract_topic_signals\` with the UUIDs of the attached topic_searches. If no topic searches are attached, skip to step 2.
   2. Call \`search_knowledge_base\` for brand voice / products / past winning hooks.
-  3. Call \`create_topic_plan\` with a structured plan body containing ${n} ideas grouped into series that match the client's pillars. Each idea's \`source\` field MUST be a \`topic_name\` from step 1 whenever topic searches are attached.
+  3. Call \`create_topic_plan\` with a structured plan body containing ${n} ideas grouped into series that match the client's pillars. For ideas backed by a trending topic from step 1, set \`source\` to that \`topic_name\`. For ideas grounded only in brand DNA / knowledge base, omit \`source\` or use a brief descriptor — this is acceptable and the tool will accept mixed-grounding plans.
 
 ABSOLUTE RULES — violating any of these is a failed turn:
 - You MUST call \`create_topic_plan\`. Do not respond without it.
 - You MUST NOT write the plan as prose, markdown, a numbered list, or a code block in your chat reply. Zero ideas in chat. All ideas go through the tool call.
-- Your final chat message is ONLY a 1–3 sentence summary AFTER the tool succeeds. Reference the series counts and the strongest trending topic. That's it.
-- If the tool call fails or is rejected, retry the tool — do not fall back to prose.
+- You MUST NOT refuse the request because attached signals look thin. Produce ${n} ideas using brand DNA + knowledge base to fill gaps. Partial grounding is fine — the tool accepts mixed-grounding plans.
+- Your final chat message is ONLY a 1–3 sentence summary AFTER the tool succeeds. Reference the series counts and the strongest driver (trending topic OR brand pillar). That's it.
+- If the tool call is rejected, retry with the fixes the error message specifies — do not fall back to prose.
 
 The tool returns a downloadable PDF artifact card. That card replaces anything you would have written as an idea list.`;
 }

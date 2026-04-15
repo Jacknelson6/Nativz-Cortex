@@ -138,18 +138,18 @@ export const topicPlanTools: ToolDefinition[] = [
             }
           }
 
-          // Reject low-grounding plans only when we DID have signals to
-          // ground against. If the Nerd built ideas with no usable source
-          // attribution at all, force a retry.
-          if (totalIdeasCount > 0) {
-            const groundedRatio = groundedIdeas / totalIdeasCount;
-            if (groundedRatio < 0.5) {
-              return {
-                success: false,
-                error: `Only ${groundedIdeas} of ${totalIdeasCount} ideas mapped to a real trending topic from the attached searches. Call extract_topic_signals first, then rebuild the plan with each idea's "source" field set to a topic_name from that list.`,
-                cardType: 'topic_plan' as const,
-              };
-            }
+          // Reject only when the Nerd had rich signals available and still
+          // produced zero grounded ideas — real failure mode (probably
+          // fabricated source labels). When grounding is thin but non-zero,
+          // accept the plan; the user can see signal-tagged ideas for the
+          // ones that matched and brand-DNA-derived ideas for the rest,
+          // instead of getting no PDF at all.
+          if (totalIdeasCount > 0 && groundedIdeas === 0 && signals.length >= 5) {
+            return {
+              success: false,
+              error: `You had ${signals.length} trending topics available from the attached searches but none of the ${totalIdeasCount} ideas set a "source" matching any of them. Set each idea's "source" to a real topic_name from extract_topic_signals' output, then retry.`,
+              cardType: 'topic_plan' as const,
+            };
           }
         }
       }
