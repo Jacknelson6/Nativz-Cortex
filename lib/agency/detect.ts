@@ -1,9 +1,16 @@
 /**
  * Agency detection from request hostname.
  * Single source of truth for domain → brand mapping.
+ *
+ * Branding tokens (colors, fonts, logo base64) live in `@/lib/branding`.
+ * This file is only about resolving which agency a request belongs to and
+ * projecting the small slice of legacy fields existing callers still import.
  */
 
-export type AgencyBrand = 'nativz' | 'anderson';
+import { nativzTheme, andersonTheme } from '@/lib/branding';
+import type { AgencySlug } from '@/lib/branding';
+
+export type AgencyBrand = AgencySlug;
 
 const AC_HOSTNAMES = [
   'cortex.andersoncollaborative.com',
@@ -23,7 +30,8 @@ export function detectAgencyFromHostname(hostname: string): AgencyBrand {
 }
 
 /**
- * Agency config for branding.
+ * Legacy agency config — kept for existing callers. New code should import
+ * the full theme from `@/lib/branding` via `getTheme(slug)` instead.
  */
 export const AGENCY_CONFIG: Record<AgencyBrand, {
   name: string;
@@ -35,21 +43,21 @@ export const AGENCY_CONFIG: Record<AgencyBrand, {
   primaryColor: string;
 }> = {
   nativz: {
-    name: 'Nativz',
-    shortName: 'Nativz',
-    domain: 'https://nativz.io',
-    logoPath: '/nativz-logo.svg',
-    logoDarkPath: '/nativz-logo.svg',
-    supportEmail: 'hello@nativz.io',
-    primaryColor: '#6366F1',
+    name: nativzTheme.name,
+    shortName: nativzTheme.shortName,
+    domain: nativzTheme.domain,
+    logoPath: nativzTheme.logos.svg,
+    logoDarkPath: nativzTheme.logos.svgOnDark,
+    supportEmail: nativzTheme.supportEmail,
+    primaryColor: nativzTheme.colors.primary,
   },
   anderson: {
-    name: 'Anderson Collaborative',
-    shortName: 'AC',
-    domain: 'https://andersoncollaborative.com',
-    logoPath: '/anderson-logo.svg',
-    logoDarkPath: '/anderson-logo-dark.svg',
-    supportEmail: 'hello@andersoncollaborative.com',
-    primaryColor: '#0EA5E9',
+    name: andersonTheme.name,
+    shortName: andersonTheme.shortName,
+    domain: andersonTheme.domain,
+    logoPath: andersonTheme.logos.svg,
+    logoDarkPath: andersonTheme.logos.svgOnDark,
+    supportEmail: andersonTheme.supportEmail,
+    primaryColor: andersonTheme.colors.primary,
   },
 };
