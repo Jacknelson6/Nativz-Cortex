@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { PortalNoteBoard } from '@/components/portal/portal-note-board';
+import { PersonalMoodboard } from '@/components/notes/personal-moodboard';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,5 +59,5 @@ export default async function PortalNotesBoardPage({
 
   if (!canSee) notFound();
 
-  return <PortalNoteBoard boardId={board.id} initialBoardName={board.name ?? 'Untitled note'} />;
+  return <PersonalMoodboard boardId={board.id} boardName={board.name ?? 'Untitled note'} />;
 }
