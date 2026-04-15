@@ -56,6 +56,11 @@ interface IGProfileItem {
   postsCount?: number;
   profilePicUrl?: string;
   profilePicUrlHD?: string;
+  // Snake-case variants some Apify Instagram actors return instead of the
+  // camelCase we expect. Kept optional so we can match either shape without
+  // a separate type per actor version.
+  profile_pic_url?: string;
+  profile_pic_url_hd?: string;
   verified?: boolean;
   private?: boolean;
   igtvVideoCount?: number;
@@ -75,7 +80,14 @@ interface IGPostItem {
   videoPlayCount?: number;
   videoDuration?: number;
   displayUrl?: string;
+  // Fallback thumbnail fields across different IG actor versions. Actors
+  // sometimes return the thumbnail in any one of these; pick the first
+  // non-empty when rendering.
+  thumbnailUrl?: string;
+  display_url?: string;
+  imageUrl?: string;
   timestamp?: string;
+  taken_at_timestamp?: number;
   ownerUsername?: string;
   ownerFullName?: string;
 }
@@ -154,7 +166,12 @@ export async function scrapeInstagramProfile(profileUrl: string): Promise<Instag
     following: profileData?.followsCount ?? 0,
     likes: 0,
     postsCount: profileData?.postsCount ?? postItems.length,
-    avatarUrl: profileData?.profilePicUrlHD ?? profileData?.profilePicUrl ?? null,
+    avatarUrl:
+      profileData?.profilePicUrlHD ??
+      profileData?.profilePicUrl ??
+      profileData?.profile_pic_url_hd ??
+      profileData?.profile_pic_url ??
+      null,
     profileUrl: `https://www.instagram.com/${canonicalUsername}/`,
     verified: profileData?.verified ?? false,
   };
@@ -179,10 +196,13 @@ export async function scrapeInstagramProfile(profileUrl: string): Promise<Instag
         shares: 0,
         bookmarks: 0,
         duration: p.videoDuration ? Math.round(p.videoDuration) : null,
-        publishDate: p.timestamp ?? null,
+        publishDate:
+          p.timestamp ??
+          (p.taken_at_timestamp ? new Date(p.taken_at_timestamp * 1000).toISOString() : null),
         hashtags: mergedTags,
         url: p.url ?? `https://www.instagram.com/p/${id}/`,
-        thumbnailUrl: p.displayUrl ?? null,
+        thumbnailUrl:
+          p.displayUrl ?? p.display_url ?? p.thumbnailUrl ?? p.imageUrl ?? null,
         authorUsername: p.ownerUsername ?? canonicalUsername,
         authorDisplayName: displayName,
         authorAvatar: profile.avatarUrl,
@@ -191,6 +211,16 @@ export async function scrapeInstagramProfile(profileUrl: string): Promise<Instag
     })
     .slice(0, 30);
 
+  const missingThumbs = videos.filter((v) => !v.thumbnailUrl).length;
+  const missingDates = videos.filter((v) => !v.publishDate).length;
+  if (!profile.avatarUrl || missingThumbs > 0 || missingDates > 0) {
+    console.warn(
+      `[audit] IG @${canonicalUsername} field-health: ` +
+        `avatar=${profile.avatarUrl ? 'ok' : 'MISSING'}, ` +
+        `thumbnails=${videos.length - missingThumbs}/${videos.length}, ` +
+        `publishDates=${videos.length - missingDates}/${videos.length}`,
+    );
+  }
   console.log(`[audit] Scraped IG @${canonicalUsername}: ${profile.followers} followers, ${videos.length} posts`);
   return { profile, videos };
 }

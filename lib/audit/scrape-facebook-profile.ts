@@ -238,6 +238,16 @@ export async function scrapeFacebookProfile(profileUrl: string): Promise<Faceboo
     };
   });
 
+  const missingThumbs = videos.filter((v) => !v.thumbnailUrl).length;
+  const missingDates = videos.filter((v) => !v.publishDate).length;
+  if (!profile.avatarUrl || missingThumbs > 0 || missingDates > 0) {
+    console.warn(
+      `[audit] FB ${displayName} field-health: ` +
+        `avatar=${profile.avatarUrl ? 'ok' : 'MISSING'}, ` +
+        `thumbnails=${videos.length - missingThumbs}/${videos.length}, ` +
+        `publishDates=${videos.length - missingDates}/${videos.length}`,
+    );
+  }
   console.log(`[audit] Scraped FB ${displayName}: ${profile.followers} followers, ${videos.length} reels`);
   return { profile, videos };
 }

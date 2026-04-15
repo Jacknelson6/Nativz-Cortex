@@ -117,7 +117,9 @@ function sortPlatforms<T extends { platform: string }>(list: T[]): T[] {
  * without needing a coloured tile behind it.
  */
 function AuditPlatformIcon({ platform, size = 'md' }: { platform: AuditPlatformKey; size?: 'sm' | 'md' }) {
-  const iconSize = size === 'sm' ? 24 : 28;
+  // Larger by default — the confirm-platforms row reads cramped at the old
+  // 28px. Keeps the small variant at 24px for any inline use.
+  const iconSize = size === 'sm' ? 24 : 36;
 
   if (platform === 'youtube') {
     return (
@@ -187,7 +189,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   // selected-websites set.
   const [manualCompetitorInput, setManualCompetitorInput] = useState('');
   const [manualCompetitorWebsites, setManualCompetitorWebsites] = useState<string[]>([]);
-  const MAX_PICKED_COMPETITORS = 3;
+  const MAX_PICKED_COMPETITORS = 2;
 
   // Pre-audit attach: optionally pair the audit with a client on the
   // confirm screen so the post-completion hook auto-creates the benchmark

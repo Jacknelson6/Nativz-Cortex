@@ -162,6 +162,16 @@ export async function scrapeYouTubeProfile(profileUrl: string): Promise<YouTubeP
     .filter(v => v.duration === null || v.duration <= 180)
     .slice(0, 30);
 
+  const missingThumbs = videos.filter((v) => !v.thumbnailUrl).length;
+  const missingDates = videos.filter((v) => !v.publishDate).length;
+  if (!profile.avatarUrl || missingThumbs > 0 || missingDates > 0) {
+    console.warn(
+      `[audit] YT ${channelInfo.value} field-health: ` +
+        `avatar=${profile.avatarUrl ? 'ok' : 'MISSING'}, ` +
+        `thumbnails=${videos.length - missingThumbs}/${videos.length}, ` +
+        `publishDates=${videos.length - missingDates}/${videos.length}`,
+    );
+  }
   console.log(`[audit] Scraped YT ${channelInfo.value}: ${profile.followers} subscribers, ${videos.length} shorts`);
   return { profile, videos };
 }

@@ -41,7 +41,10 @@ import type {
 } from './types';
 
 const MAX_CANDIDATES_REQUESTED = 6;
-const DEFAULT_TARGET_COMPETITORS = 3;
+// Two comparisons read better than three on the report — the head-to-head
+// grids stay scannable and the scorecard narrative has room to breathe.
+// Callers can override via `maxCompetitors` on `discoverCompetitorsByWebsite`.
+const DEFAULT_TARGET_COMPETITORS = 2;
 
 /**
  * Hard time budget for the whole discovery phase. The audit's process route

@@ -47,7 +47,14 @@ interface TikTokChannel {
   name?: string;
   username?: string;
   bio?: string;
+  // Apify TikTok actors have drifted across versions — `avatar`,
+  // `avatarThumb`, `avatarLarger`, `profilePicUrl` all appear in the wild.
+  // Optional-on-all so the pick-first fallback below stays robust.
   avatar?: string;
+  avatarThumb?: string;
+  avatarLarger?: string;
+  avatarMedium?: string;
+  profilePicUrl?: string;
   verified?: boolean;
   url?: string;
   followers?: number;
@@ -67,7 +74,18 @@ interface TikTokActorItem {
   channel?: TikTokChannel;
   uploadedAt?: number;
   uploadedAtFormatted?: string;
-  video?: { duration?: number; cover?: string; thumbnail?: string; url?: string };
+  createTime?: number; // some actor versions
+  // Thumbnail fallbacks — actor versions expose cover/thumbnail under
+  // several names; take whichever is first non-empty.
+  video?: {
+    duration?: number;
+    cover?: string;
+    thumbnail?: string;
+    originCover?: string;
+    dynamicCover?: string;
+    url?: string;
+  };
+  covers?: { default?: string; origin?: string };
   postPage?: string;
 }
 
@@ -130,7 +148,13 @@ export async function scrapeTikTokProfile(profileUrl: string): Promise<TikTokPro
     following: channel.following ?? 0,
     likes: 0, // actor doesn't return lifetime heart count in this shape
     postsCount: channel.videos ?? items.length,
-    avatarUrl: channel.avatar ?? null,
+    avatarUrl:
+      channel.avatar ??
+      channel.avatarLarger ??
+      channel.avatarMedium ??
+      channel.avatarThumb ??
+      channel.profilePicUrl ??
+      null,
     profileUrl: channel.url ?? `https://www.tiktok.com/@${canonicalUsername}`,
     verified: channel.verified ?? false,
   };
@@ -154,18 +178,39 @@ export async function scrapeTikTokProfile(profileUrl: string): Promise<TikTokPro
         duration: item.video?.duration ? Math.round(item.video.duration) : null,
         publishDate:
           item.uploadedAtFormatted ??
-          (item.uploadedAt ? new Date(item.uploadedAt * 1000).toISOString() : null),
+          (item.uploadedAt ? new Date(item.uploadedAt * 1000).toISOString() : null) ??
+          (item.createTime ? new Date(item.createTime * 1000).toISOString() : null),
         hashtags: mergedTags,
         url: item.postPage ?? `https://www.tiktok.com/@${canonicalUsername}/video/${item.id}`,
-        thumbnailUrl: item.video?.cover ?? item.video?.thumbnail ?? null,
+        thumbnailUrl:
+          item.video?.cover ??
+          item.video?.originCover ??
+          item.video?.dynamicCover ??
+          item.video?.thumbnail ??
+          item.covers?.default ??
+          item.covers?.origin ??
+          null,
         authorUsername: canonicalUsername,
         authorDisplayName: displayName,
-        authorAvatar: channel.avatar ?? null,
+        authorAvatar: profile.avatarUrl,
         authorFollowers: channel.followers ?? 0,
       };
     })
     .slice(0, 30);
 
+  // Field-health telemetry — spot silent actor-schema drift before it
+  // starts producing empty tiles on the report. Counts the video fields
+  // that came back null and flags the profile-level avatar.
+  const missingThumbs = videos.filter((v) => !v.thumbnailUrl).length;
+  const missingDates = videos.filter((v) => !v.publishDate).length;
+  if (!profile.avatarUrl || missingThumbs > 0 || missingDates > 0) {
+    console.warn(
+      `[audit] TikTok @${canonicalUsername} field-health: ` +
+        `avatar=${profile.avatarUrl ? 'ok' : 'MISSING'}, ` +
+        `thumbnails=${videos.length - missingThumbs}/${videos.length}, ` +
+        `publishDates=${videos.length - missingDates}/${videos.length}`,
+    );
+  }
   console.log(`[audit] Scraped TikTok @${canonicalUsername}: ${profile.followers} followers, ${videos.length} videos`);
   return { profile, videos };
 }
