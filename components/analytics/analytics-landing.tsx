@@ -16,6 +16,9 @@ const AffiliatesDashboard = dynamic(
 const BenchmarkingDashboard = dynamic(
   () => import('@/components/analytics/benchmarking-dashboard').then(m => ({ default: m.BenchmarkingDashboard })),
 );
+const AuditBenchmarksPanel = dynamic(
+  () => import('@/components/analytics/audit-benchmarks-panel').then(m => ({ default: m.AuditBenchmarksPanel })),
+);
 
 type TabId = 'social' | 'affiliates' | 'benchmarking';
 
@@ -124,7 +127,29 @@ export function AnalyticsLanding({ clients, initialClientId, initialTab }: Analy
         <AffiliatesDashboard />
       )}
       {activeTab === 'benchmarking' && (
-        <BenchmarkingDashboard clientId={selectedClientId} clientName={selectedClient?.name ?? 'Client'} />
+        <div className="space-y-8">
+          <BenchmarkingDashboard
+            clientId={selectedClientId}
+            clientName={selectedClient?.name ?? 'Client'}
+          />
+          {/* Audit-driven benchmarks — Phase 3: reads from the
+              client_benchmarks + benchmark_snapshots tables that
+              Analyze Social's "Attach to client" button writes to. */}
+          <section>
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="text-base font-semibold text-text-primary">
+                From Analyze Social audits
+              </h2>
+              <p className="text-xs text-text-muted/70">
+                Updated on the configured cadence per attached audit.
+              </p>
+            </div>
+            <AuditBenchmarksPanel
+              clientId={selectedClientId}
+              clientName={selectedClient?.name ?? 'Client'}
+            />
+          </section>
+        </div>
       )}
     </div>
   );
