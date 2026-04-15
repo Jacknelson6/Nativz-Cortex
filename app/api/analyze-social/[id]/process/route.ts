@@ -321,11 +321,69 @@ export async function POST(
         })
         .eq('id', id);
 
+      // Pre-attach: if the user picked a client on the confirm screen, auto-
+      // create the benchmark row now so the weekly cron immediately has a
+      // queued job. No-op when unattached — the post-report "Attach to
+      // client" button covers retroactive flows.
+      const attachedClientId = (audit as { attached_client_id?: string | null }).attached_client_id ?? null;
+      if (attachedClientId && competitors.length > 0) {
+        try {
+          const competitorsSnapshot = competitors.map((c) => ({
+            username: c.username,
+            displayName: c.displayName,
+            platform: c.platform,
+            profileUrl: c.profileUrl,
+            avatarUrl: c.avatarUrl,
+            baselineFollowers: c.followers,
+            baselineAvgViews: c.avgViews,
+            baselineEngagementRate: c.engagementRate,
+            baselinePostingFrequency: c.postingFrequency,
+          }));
+          const nextDue = new Date();
+          nextDue.setDate(nextDue.getDate() + 7); // weekly default
+          const { error: benchErr } = await adminClient
+            .from('client_benchmarks')
+            .insert({
+              client_id: attachedClientId,
+              audit_id: id,
+              competitors_snapshot: competitorsSnapshot,
+              cadence: 'weekly',
+              analytics_source: 'auto',
+              next_snapshot_due_at: nextDue.toISOString(),
+              created_by: (audit as { created_by?: string | null }).created_by ?? null,
+            });
+          if (benchErr) {
+            console.warn(`[audit:${id}] auto-benchmark insert failed (non-fatal):`, benchErr);
+          } else {
+            console.log(`[audit:${id}] auto-benchmark created for client ${attachedClientId}`);
+          }
+        } catch (err) {
+          console.warn(`[audit:${id}] auto-benchmark failed (non-fatal):`, err);
+        }
+      }
+
       console.log(`[audit:${id}] Audit completed: ${platformReports.length} platforms (${failedPlatforms.length} failed), ${competitors.length} competitors, ${allVideos.length} videos`);
       return NextResponse.json({ status: 'completed' });
     } catch (processError) {
       const msg = processError instanceof Error ? processError.message : 'Unknown error';
-      console.error(`[audit:${id}] Processing failed:`, msg);
+      const stack = processError instanceof Error ? processError.stack ?? null : null;
+      // Log the full stack so we can diagnose from Supabase logs without
+      // needing to repro. The `error_message` column is truncated to the
+      // message for UI display; raw stack goes to console + api_error_log.
+      console.error(`[audit:${id}] Processing failed: ${msg}\n${stack ?? ''}`);
+
+      try {
+        const { logApiError } = await import('@/lib/api/error-log');
+        await logApiError({
+          route: '/api/analyze-social/[id]/process',
+          statusCode: 500,
+          errorMessage: msg,
+          errorDetail: stack ?? undefined,
+          meta: { audit_id: id },
+        });
+      } catch (logErr) {
+        console.warn(`[audit:${id}] error-log write failed (non-fatal):`, logErr);
+      }
 
       await adminClient
         .from('prospect_audits')

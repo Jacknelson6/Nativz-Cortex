@@ -21,6 +21,10 @@ const ResumeSchema = z.object({
   social_urls: z.record(z.string(), z.string()),
   competitor_urls: z.array(domainOrUrl).max(3).optional(),
   social_goals: z.array(z.string()).max(10).optional(),
+  // Optional pre-attach — stamps the audit with a client so the post-
+  // completion step auto-creates a client_benchmarks row. Admin-only;
+  // viewers don't hit this route.
+  attached_client_id: z.string().uuid().nullable().optional(),
 });
 
 /**
@@ -79,6 +83,27 @@ export async function POST(
       ...(socialGoals.length > 0 ? { social_goals: socialGoals } : {}),
     };
 
+    // If an admin attached a client on the confirm screen, stamp it on
+    // the audit row so the post-completion hook can auto-create the
+    // benchmark without a second round-trip.
+    const attachedClientId = parsed.data.attached_client_id ?? null;
+    if (attachedClientId) {
+      // Verify the client exists + is active before stamping. A stale
+      // cached list on the client shouldn't be able to tombstone the audit
+      // with a bad FK.
+      const { data: client } = await adminClient
+        .from('clients')
+        .select('id, is_active')
+        .eq('id', attachedClientId)
+        .maybeSingle();
+      if (!client || !client.is_active) {
+        return NextResponse.json(
+          { error: 'Attached client is not accessible' },
+          { status: 400 },
+        );
+      }
+    }
+
     // Update audit with the manual social URLs and reset to pending for reprocessing
     await adminClient
       .from('prospect_audits')
@@ -86,6 +111,7 @@ export async function POST(
         social_urls: socialUrls,
         tiktok_url: socialUrls.tiktok ?? '',
         analysis_data: analysisData,
+        attached_client_id: attachedClientId,
         status: 'pending',
         updated_at: new Date().toISOString(),
       })
