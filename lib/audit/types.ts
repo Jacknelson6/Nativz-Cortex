@@ -89,6 +89,29 @@ export interface PlatformReport {
   engagementRate: number;
   avgViews: number;
   postingFrequency: string;
+  /**
+   * 30-day engagement aggregate + per-day timeline. Computed in the
+   * process route after video windowing — not populated by the scraper
+   * itself. Shape lives in `lib/audit/scrape-helpers.ts#ThirtyDayEngagement`
+   * (imported as a type only to avoid coupling this file to the helper).
+   */
+  thirtyDayEngagement?: {
+    totalLikes: number;
+    totalComments: number;
+    totalShares: number;
+    totalViews: number;
+    totalPosts: number;
+    byDay: Array<{
+      date: string;
+      likes: number;
+      comments: number;
+      shares: number;
+      views: number;
+      posts: number;
+      estimatedCarryover: number;
+      estimated: boolean;
+    }>;
+  };
   gemini_grades?: GeminiGrades;
 }
 
@@ -107,6 +130,24 @@ export interface CompetitorProfile {
   bio: string;
   /** External URLs from the bio or platform link slot. */
   bioLinks: string[];
+  /** 30-day engagement aggregate (same shape as `PlatformReport`). */
+  thirtyDayEngagement?: {
+    totalLikes: number;
+    totalComments: number;
+    totalShares: number;
+    totalViews: number;
+    totalPosts: number;
+    byDay: Array<{
+      date: string;
+      likes: number;
+      comments: number;
+      shares: number;
+      views: number;
+      posts: number;
+      estimatedCarryover: number;
+      estimated: boolean;
+    }>;
+  };
   gemini_grades?: GeminiGrades;
   /**
    * True when we surfaced this competitor as a known brand but the scrape

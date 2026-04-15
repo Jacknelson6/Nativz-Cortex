@@ -14,7 +14,7 @@ import {
 import { discoverCompetitorsByWebsite, scrapeProvidedCompetitors } from '@/lib/audit/discover-competitors';
 import type { PlatformReport, CompetitorProfile, WebsiteContext, SocialLink, AuditPlatform, FailedPlatform } from '@/lib/audit/types';
 import { persistAllScrapedImages, persistAllCompetitorImages } from '@/lib/audit/persist-scraped-images';
-import { filterLastNDays } from '@/lib/audit/scrape-helpers';
+import { filterLastNDays, aggregateEngagement } from '@/lib/audit/scrape-helpers';
 import { calculateEngagementRate, calculateAvgViews, estimatePostingFrequency } from '@/lib/audit/analyze';
 
 export const maxDuration = 300;
@@ -249,6 +249,11 @@ export async function POST(
         report.avgViews = calculateAvgViews(recent);
         report.engagementRate = calculateEngagementRate(recent, report.profile.followers);
         report.postingFrequency = estimatePostingFrequency(recent);
+        report.thirtyDayEngagement = aggregateEngagement(recent, WINDOW_DAYS);
+        // Overwrite `likes` on the profile with the 30-day aggregate since
+        // that's the semantic Jack asked for — lifetime likes aren't
+        // consistently available and weren't actually useful for briefs.
+        report.profile.likes = report.thirtyDayEngagement.totalLikes;
       }
 
       const { competitors, failures: competitorFailures } = competitorDiscoveryResult;
@@ -258,6 +263,7 @@ export async function POST(
         c.avgViews = calculateAvgViews(recent);
         c.engagementRate = calculateEngagementRate(recent, c.followers);
         c.postingFrequency = estimatePostingFrequency(recent);
+        c.thirtyDayEngagement = aggregateEngagement(recent, WINDOW_DAYS);
       }
 
       console.log(

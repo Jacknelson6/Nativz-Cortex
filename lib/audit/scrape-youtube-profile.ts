@@ -90,6 +90,13 @@ export async function scrapeYouTubeProfile(profileUrl: string): Promise<YouTubeP
   // truncate the bio string below, or we'd lose links that sit past 300 chars.
   const fullDescription = channel.snippet.description ?? '';
 
+  // YouTube Data API doesn't expose a verified flag for non-owner channels,
+  // so we sniff the public channel page HTML for one of a few markers the
+  // renderer sets on verified handles. Conservative: any failure defaults
+  // to false rather than claiming verification.
+  const channelUrl = `https://www.youtube.com/@${username}`;
+  const verified = await scrapeChannelVerifiedFlag(channelUrl);
+
   const profile: ProspectProfile = {
     platform: 'youtube',
     username,
@@ -97,11 +104,14 @@ export async function scrapeYouTubeProfile(profileUrl: string): Promise<YouTubeP
     bio: fullDescription.substring(0, 300),
     followers: parseInt(channel.statistics.subscriberCount ?? '0', 10),
     following: 0,
+    // Per-profile lifetime likes aren't exposed by the YouTube Data API.
+    // The process route overwrites this with the 30-day aggregate computed
+    // from the `videos` array after windowing, so leaving 0 here is fine.
     likes: 0,
     postsCount: parseInt(channel.statistics.videoCount ?? '0', 10),
     avatarUrl: channel.snippet.thumbnails.high?.url ?? channel.snippet.thumbnails.default?.url ?? null,
-    profileUrl: `https://www.youtube.com/@${username}`,
-    verified: false,
+    profileUrl: channelUrl,
+    verified,
     bioLinks: collectBioLinks(fullDescription, []),
   };
 
@@ -186,4 +196,38 @@ export async function scrapeYouTubeProfile(profileUrl: string): Promise<YouTubeP
 function extractHashtags(text?: string | null): string[] {
   if (!text) return [];
   return [...text.matchAll(/#(\w+)/g)].map(m => m[1].toLowerCase());
+}
+
+/**
+ * YouTube Data API doesn't expose a verified / official-artist badge for
+ * non-owner channels, so we fetch the public channel page HTML and sniff
+ * for markers the YouTube renderer sets on verified handles:
+ *
+ * - `"badges":[{"metadataBadgeRenderer":{"style":"BADGE_STYLE_TYPE_VERIFIED"...`
+ *   — the SSR state for the verified tick.
+ * - `"style":"BADGE_STYLE_TYPE_VERIFIED_ARTIST"` — official-artist variant
+ *   (still a form of verification).
+ *
+ * Conservative: any fetch error, non-200 response, or markup miss defaults
+ * to `false` rather than claiming verification we can't prove.
+ */
+async function scrapeChannelVerifiedFlag(channelUrl: string): Promise<boolean> {
+  try {
+    const res = await fetch(channelUrl, {
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+    if (!res.ok) return false;
+    const html = await res.text();
+    return (
+      html.includes('BADGE_STYLE_TYPE_VERIFIED') ||
+      html.includes('BADGE_STYLE_TYPE_VERIFIED_ARTIST')
+    );
+  } catch {
+    return false;
+  }
 }
