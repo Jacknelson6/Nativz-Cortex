@@ -73,7 +73,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Create',
     items: [
-      { href: '/admin/strategy-lab', label: 'Content Lab', icon: Compass },
+      { href: '/admin/content-lab', label: 'Content Lab', icon: Compass },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
       { href: '/admin/notes', label: 'Notes', icon: StickyNote },
     ],
@@ -149,12 +149,12 @@ const COMING_SOON_HREFS = new Set([
 
 /**
  * One-off href rewrites for portal viewers. Used when the portal route
- * doesn't share the admin path suffix (e.g. admin's /strategy-lab maps
+ * doesn't share the admin path suffix (e.g. admin's /content-lab maps
  * to portal's /content-lab). Keyed on the admin href so the lookup
  * lines up with NAV_SECTIONS.
  */
 const PORTAL_HREF_REWRITES: Record<string, string> = {
-  '/admin/strategy-lab': '/portal/content-lab',
+  '/admin/content-lab': '/portal/content-lab',
 };
 
 function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSection[] {
@@ -168,7 +168,7 @@ function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSec
       const isComingSoon = COMING_SOON_HREFS.has(item.href);
       const portalRewrite = PORTAL_HREF_REWRITES[item.href];
       // Remap /admin/ → portal prefix (with per-item override for paths
-      // that don't share the admin suffix, e.g. strategy-lab → content-lab)
+      // that don't share the admin suffix, e.g. content-lab → content-lab)
       const remapped: NavItem = {
         ...item,
         href: isComingSoon

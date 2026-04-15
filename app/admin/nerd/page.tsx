@@ -60,8 +60,8 @@ export default function NerdPage() {
   const pendingAttachmentsRef = useRef<ChatAttachment[]>([]);
   const strategyClientPrefilledRef = useRef(false);
   const strategySessionHintRef = useRef<string | null>(
-    strategySource === 'strategy-lab'
-      ? 'User opened this conversation from Strategy Lab. Prefer strategy, analytics, affiliate, and analysis-board tools where relevant.'
+    strategySource === 'content-lab'
+      ? 'User opened this conversation from Content Lab. Prefer strategy, analytics, affiliate, and analysis-board tools where relevant.'
       : null,
   );
 
@@ -98,7 +98,7 @@ export default function NerdPage() {
       .catch(() => {});
   }, []);
 
-  // Strategy Lab deep link: /admin/nerd?strategyClient=<uuid> — prefill input and client mention
+  // Content Lab deep link: /admin/nerd?strategyClient=<uuid> — prefill input and client mention
   useEffect(() => {
     if (strategyClientPrefilledRef.current) return;
     if (!strategyClientId || mentionOptions.length === 0) return;
@@ -489,7 +489,7 @@ export default function NerdPage() {
   }
 
   /**
-   * Chat input footer — styled to match the Strategy Lab version: wider
+   * Chat input footer — styled to match the Content Lab version: wider
    * rounded input with the "research" pill variant, larger mention chips,
    * and the max-w-3xl column so the composer sits centred under the
    * conversation instead of crammed against the edges.
@@ -523,7 +523,7 @@ export default function NerdPage() {
           )}
         </ChatComposer>
         {/* Active mention chips — larger text and softer surface to match the
-            Strategy Lab chip bar styling. */}
+            Content Lab chip bar styling. */}
         {activeMentions.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-1.5 px-1">
             {activeMentions.map((m) => (
@@ -561,7 +561,7 @@ export default function NerdPage() {
         onToggleSearch={handleToggleSearch}
       />
 
-      {/* Main chat card — matches the Strategy Lab Nerd shell: neutral header
+      {/* Main chat card — matches the Content Lab Nerd shell: neutral header
           with minimal controls, welcoming empty state with big copy, max-w-3xl
           message column. */}
       <div className="flex min-w-0 flex-1 flex-col p-3 md:p-4">

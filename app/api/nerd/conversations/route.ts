@@ -7,7 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
  *
  * Lists this user's Nerd conversations, newest first. Optional
  * ?clientId= filter scopes the list to conversations tagged with that
- * client — used by the Strategy Lab conversation picker so the header
+ * client — used by the Content Lab conversation picker so the header
  * dropdown only shows threads started for the currently-open client.
  *
  * The client_id column lives on nerd_conversations as of migration 096.

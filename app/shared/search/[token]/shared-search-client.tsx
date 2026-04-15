@@ -88,7 +88,7 @@ export function SharedSearchClient({
         </div>
       </div>
 
-      {/* Content — matches admin results page (minus Strategy Lab) */}
+      {/* Content — matches admin results page (minus Content Lab) */}
       <div className="w-full px-6 py-8 space-y-6 sm:space-y-8">
         {search.summary ? (
           <div className="rounded-xl border border-nativz-border bg-surface p-5 sm:p-6">

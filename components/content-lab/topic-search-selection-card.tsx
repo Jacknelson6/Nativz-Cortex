@@ -6,7 +6,7 @@ import { CheckCircle2, ExternalLink, Plus, Telescope } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { StrategyLabSection } from '@/components/strategy-lab/strategy-lab-section';
+import { ContentLabSection } from '@/components/content-lab/content-lab-section';
 import { cn } from '@/lib/utils/cn';
 
 export type TopicSearchRow = {
@@ -95,7 +95,7 @@ export function TopicSearchSelectionCard({
   };
 
   return (
-    <StrategyLabSection
+    <ContentLabSection
       icon={Telescope}
       title="Topic search source"
       description="Attach one topic search to seed this strategy workspace. This selection is saved only in this browser."
@@ -226,6 +226,6 @@ export function TopicSearchSelectionCard({
           </div>
         </div>
       </Dialog>
-    </StrategyLabSection>
+    </ContentLabSection>
   );
 }

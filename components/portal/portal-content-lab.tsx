@@ -3,26 +3,26 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { AgencyClientAvatar } from '@/components/strategy-lab/agency-client-avatar';
+import { AgencyClientAvatar } from '@/components/content-lab/agency-client-avatar';
 import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { ChatComposer, type ChatAttachment } from '@/components/ai/chat-composer';
 import { processAttachments } from '@/lib/chat/process-attachments';
 import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
-import { StrategyLabConversationHistoryRail } from '@/components/strategy-lab/strategy-lab-conversation-history-rail';
-import { StrategyLabTopicSearchChipBar } from '@/components/strategy-lab/strategy-lab-topic-search-chip-bar';
-import { StrategyLabAttachResearchDialog } from '@/components/strategy-lab/strategy-lab-attach-research-dialog';
+import { ContentLabConversationHistoryRail } from '@/components/content-lab/content-lab-conversation-history-rail';
+import { ContentLabTopicSearchChipBar } from '@/components/content-lab/content-lab-topic-search-chip-bar';
+import { ContentLabAttachResearchDialog } from '@/components/content-lab/content-lab-attach-research-dialog';
 import { getAllCommands, getCommand } from '@/lib/nerd/slash-commands';
 import {
-  readStrategyLabNerdConversationId,
-  writeStrategyLabNerdConversationId,
-  clearStrategyLabNerdConversationId,
-} from '@/lib/strategy-lab/nerd-conversation-storage';
-import { strategyLabTopicSearchStorageKey } from '@/lib/strategy-lab/topic-search-selection-storage';
+  readContentLabNerdConversationId,
+  writeContentLabNerdConversationId,
+  clearContentLabNerdConversationId,
+} from '@/lib/content-lab/nerd-conversation-storage';
+import { contentLabTopicSearchStorageKey } from '@/lib/content-lab/topic-search-selection-storage';
 
 /**
- * Portal Content Lab — the client-facing variant of StrategyLabNerdChat.
+ * Portal Content Lab — the client-facing variant of ContentLabNerdChat.
  *
  * Differences from the admin surface:
  * - No client picker (viewer is locked to their org-bound client)
@@ -30,7 +30,7 @@ import { strategyLabTopicSearchStorageKey } from '@/lib/strategy-lab/topic-searc
  *   same as admin, but there's no way to switch to another
  * - No header tabs (analytics / knowledge base views don't exist here)
  * - No export / share buttons in the header (v1 — revisit if asked)
- * - Sends `portalMode: true` alongside `mode: 'strategy-lab'` so the
+ * - Sends `portalMode: true` alongside `mode: 'content-lab'` so the
  *   chat route picks the portal-flavored addendum and enforces the
  *   PORTAL_ALLOWED_TOOLS allowlist
  *
@@ -100,7 +100,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
   useEffect(() => {
     if (!clientId || typeof window === 'undefined') return;
     try {
-      const raw = window.localStorage.getItem(strategyLabTopicSearchStorageKey(clientId));
+      const raw = window.localStorage.getItem(contentLabTopicSearchStorageKey(clientId));
       if (!raw) return;
       const parsed = JSON.parse(raw) as unknown;
       if (Array.isArray(parsed)) {
@@ -171,7 +171,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
 
   useEffect(() => {
     if (!clientId) return;
-    const storedId = readStrategyLabNerdConversationId(clientId);
+    const storedId = readContentLabNerdConversationId(clientId);
     if (!storedId) return;
 
     let cancelled = false;
@@ -179,7 +179,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
     fetch(`/api/nerd/conversations/${storedId}`)
       .then(async (res) => {
         if (!res.ok) {
-          clearStrategyLabNerdConversationId(clientId);
+          clearContentLabNerdConversationId(clientId);
           return null;
         }
         return res.json() as Promise<{
@@ -314,7 +314,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
             sessionHint: hint ?? undefined,
             searchContext: attachedSearchIds.length > 0 ? attachedSearchIds : undefined,
             conversationId: conversationId ?? undefined,
-            mode: 'strategy-lab' as const,
+            mode: 'content-lab' as const,
             portalMode: true,
             attachments: processed && processed.length > 0 ? processed : undefined,
           }),
@@ -371,7 +371,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
                 );
               } else if (chunk.type === 'conversation' && typeof chunk.conversationId === 'string') {
                 setConversationId(chunk.conversationId);
-                writeStrategyLabNerdConversationId(clientId, chunk.conversationId);
+                writeContentLabNerdConversationId(clientId, chunk.conversationId);
                 setConversationsRefreshToken((t) => t + 1);
               }
             } catch {
@@ -402,7 +402,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
     setConversationId(null);
     setConversationTitle(null);
     setConversationMessageCount(0);
-    clearStrategyLabNerdConversationId(clientId);
+    clearContentLabNerdConversationId(clientId);
     sessionHintRef.current =
       'User is in the portal Content Lab. You are scoped to this one client only. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Be concise and actionable.';
     setConversationsRefreshToken((t) => t + 1);
@@ -447,7 +447,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
         setConversationId(data.id);
         setConversationTitle(data.title?.trim() ? data.title : null);
         setConversationMessageCount(loaded.length);
-        writeStrategyLabNerdConversationId(clientId, data.id);
+        writeContentLabNerdConversationId(clientId, data.id);
         sessionHintRef.current = null;
       } catch {
         toast.error('Could not load that conversation');
@@ -460,10 +460,10 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
 
   // Composer rendered inline in the centered pre-chat state AND pinned as a
   // bottom footer once messages start streaming — same extract the admin
-  // Strategy Lab uses, so the two surfaces share the pattern.
+  // Content Lab uses, so the two surfaces share the pattern.
   const composer = (
     <div className="flex flex-col">
-      <StrategyLabTopicSearchChipBar
+      <ContentLabTopicSearchChipBar
         clientId={clientId}
         clientName={clientName}
         attachedSearchIds={attachedSearchIds}
@@ -500,7 +500,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
   const chatFooter = (
     <div className="shrink-0 px-4 pb-5 pt-3 md:px-8 md:pb-6">
       <div className="mx-auto flex max-w-3xl flex-col">{composer}</div>
-      <StrategyLabAttachResearchDialog
+      <ContentLabAttachResearchDialog
         open={attachResearchOpen}
         onClose={() => setAttachResearchOpen(false)}
         clientId={clientId}
@@ -519,7 +519,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
 
   return (
     <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-background">
-      <StrategyLabConversationHistoryRail
+      <ContentLabConversationHistoryRail
         clientId={clientId}
         activeConversationId={conversationId}
         onSelect={(id) => void handleSelectConversation(id)}
@@ -594,7 +594,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
               </div>
               <div className="w-full">{composer}</div>
             </div>
-            <StrategyLabAttachResearchDialog
+            <ContentLabAttachResearchDialog
               open={attachResearchOpen}
               onClose={() => setAttachResearchOpen(false)}
               clientId={clientId}

@@ -7,7 +7,7 @@
  *
  * Separate from `generate_video_rescript` — that tool rescripts an EXISTING
  * moodboard_item (you need hook_analysis + transcript already loaded). This
- * tool kicks off a fresh script from a raw idea, which is the Strategy Lab
+ * tool kicks off a fresh script from a raw idea, which is the Content Lab
  * primary flow: /ideas → pick one → /script on it.
  */
 
@@ -86,7 +86,7 @@ export const scriptTools: ToolDefinition[] = [
           userEmail: profile?.email ?? undefined,
         });
 
-        // Persist so the script is retrievable from /admin/strategy-lab and the
+        // Persist so the script is retrievable from /admin/content-lab and the
         // rest of the ideas pipeline, same shape the /api/ideas/generate-script
         // route saves.
         const { data: saved } = await admin
@@ -116,7 +116,7 @@ export const scriptTools: ToolDefinition[] = [
             scriptId: saved?.id ?? null,
             estimatedCost: result.estimatedCost,
           },
-          link: { href: '/admin/strategy-lab', label: 'Open Strategy Lab' },
+          link: { href: '/admin/content-lab', label: 'Open Content Lab' },
           cardType: 'script' as const,
         };
       } catch (err) {

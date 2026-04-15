@@ -2,7 +2,7 @@
 
 > **Status:** Approved — implementing phases 1–4 now; sources/auto-analysis deferred
 > **Priority:** High (QA blockers on shipped feature)
-> **Scope:** LLM pipeline prompts, results UI, ideas removal, Strategy Lab link
+> **Scope:** LLM pipeline prompts, results UI, ideas removal, Content Lab link
 
 ---
 
@@ -16,7 +16,7 @@ After QAing a Goldback topic search, four categories of issues were identified:
 4. **Sources are incomplete** — Reddit posts missing, web pages missing, TikTok volume too low (DEFERRED)
 
 Additionally:
-5. **Ideas feature removal** — Ideas pages and links stripped from admin + portal; ideas may live inside Strategy Lab later
+5. **Ideas feature removal** — Ideas pages and links stripped from admin + portal; ideas may live inside Content Lab later
 6. **Source card click unification + auto-analysis** (DEFERRED to next phase)
 
 ---
@@ -28,8 +28,8 @@ Additionally:
 | 1 | Date range in summary? | **Yes** — explicit date range (e.g., "January–March 2026") |
 | 2 | Pillar stats? | **Keep** % of content, ER, Your ER |
 | 3 | Pillar name format? | **Single clean line** — no headline/detail split. Name must be descriptive of the actual content type. |
-| 4 | Strategy Lab route? | `/admin/strategy-lab` exists. Should open as `/admin/strategy-lab/{clientName}` with search context. |
-| 5 | Ideas feature? | **Remove entirely.** Strip ideas pages + links from admin and portal. Ideas may surface inside Strategy Lab later. |
+| 4 | Content Lab route? | `/admin/content-lab` exists. Should open as `/admin/content-lab/{clientName}` with search context. |
+| 5 | Ideas feature? | **Remove entirely.** Strip ideas pages + links from admin and portal. Ideas may surface inside Content Lab later. |
 | 6 | Typography cards? | Not explicitly answered — keeping cards, just normalizing font sizes. |
 
 ---
@@ -70,13 +70,13 @@ Additionally:
 - Remove hook display block, `pickHookForCategory()`, `cleanHookQuotes()`, and `hook` from data structure.
 - Keep stats (% of content, ER, Your ER).
 
-### 2c. Ideation Pipeline → Strategy Lab Link
+### 2c. Ideation Pipeline → Content Lab Link
 
 **Replace the entire ideation pipeline panel** with a simpler card:
-- Title: "Strategy Lab" (with Sparkles or Brain icon)
+- Title: "Content Lab" (with Sparkles or Brain icon)
 - No subtext, no step indicators, no topic search echo
-- Single CTA button: "Open in Strategy Lab" → links to `/admin/strategy-lab/{clientSlug}?searchId={searchId}`
-- If no client is attached, link to `/admin/strategy-lab?searchId={searchId}`
+- Single CTA button: "Open in Content Lab" → links to `/admin/content-lab/{clientSlug}?searchId={searchId}`
+- If no client is attached, link to `/admin/content-lab?searchId={searchId}`
 
 ### 2d. Remove Ideas Feature
 
@@ -91,7 +91,7 @@ Additionally:
 - `lib/search/llm-pipeline/run-llm-topic-pipeline.ts` — prompt changes
 - `lib/search/format-pillar-label.ts` — simplify or remove
 - `components/results/ai-takeaways.tsx` — remove hooks, simplify pillar display
-- `components/ideation/ideation-pipeline-panel.tsx` — rewrite to Strategy Lab link
+- `components/ideation/ideation-pipeline-panel.tsx` — rewrite to Content Lab link
 - `app/admin/search/[id]/results-client.tsx` — remove ideas wizard, linked ideas banner
 - `app/portal/search/[id]/portal-results-client.tsx` — same
 - Ideas page routes (identify and remove UI)
@@ -132,6 +132,6 @@ These sections are documented but deferred to the next phase. See original PRD s
 
 1. **Temporal awareness** — inject dates into LLM prompts
 2. **Content pillar names** — prompt tweak + remove headline/detail split + remove hooks
-3. **Ideation pipeline → Strategy Lab link** — rewrite panel
+3. **Ideation pipeline → Content Lab link** — rewrite panel
 4. **Remove ideas feature** — strip UI entry points from admin + portal
 5. **Typography standardization** — surgical CSS normalization

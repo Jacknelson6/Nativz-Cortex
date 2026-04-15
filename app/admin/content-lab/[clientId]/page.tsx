@@ -3,11 +3,11 @@ import { notFound, redirect } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { StrategyLabWorkspace } from '@/components/strategy-lab/strategy-lab-workspace';
-import { loadPillarReferencePreviews } from '@/lib/strategy-lab/pillar-reference-previews';
+import { ContentLabWorkspace } from '@/components/content-lab/content-lab-workspace';
+import { loadPillarReferencePreviews } from '@/lib/content-lab/pillar-reference-previews';
 import { getKnowledgeEntries, getKnowledgeGraph } from '@/lib/knowledge/queries';
 
-export default async function StrategyLabClientPage({
+export default async function ContentLabClientPage({
   params,
 }: {
   params: Promise<{ clientId: string }>;
@@ -122,7 +122,7 @@ export default async function StrategyLabClientPage({
 
   return (
     <div className="h-[calc(100vh-3.5rem)] overflow-hidden">
-      <StrategyLabWorkspace
+      <ContentLabWorkspace
         clientId={client.id}
         clientSlug={client.slug ?? ''}
         clientName={client.name ?? ''}

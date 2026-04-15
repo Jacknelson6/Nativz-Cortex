@@ -15,8 +15,8 @@ export function IdeationPipelinePanel({
   clientId,
 }: IdeationPipelinePanelProps) {
   const labHref = clientId
-    ? `/admin/strategy-lab/${clientId}?searchId=${searchId}`
-    : `/admin/strategy-lab?searchId=${searchId}`;
+    ? `/admin/content-lab/${clientId}?searchId=${searchId}`
+    : `/admin/content-lab?searchId=${searchId}`;
 
   return (
     <Card className="overflow-hidden border-accent/20 bg-gradient-to-br from-accent/5 via-transparent to-accent2/5 p-0">

@@ -23,7 +23,7 @@ import { BigMovers } from '@/components/results/big-movers';
 import { CompetitiveAnalysis } from '@/components/results/competitive-analysis';
 import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
 import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
-import { strategyLabTopicSearchStorageKey } from '@/lib/strategy-lab/topic-search-selection-storage';
+import { contentLabTopicSearchStorageKey } from '@/lib/content-lab/topic-search-selection-storage';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { searchHeaderQueryClassName } from '@/lib/clients/client-abbreviations';
 import { hasSerp } from '@/lib/types/search';
@@ -64,7 +64,7 @@ export function PortalResultsClient({
     // Mirrors the admin "Open in Content Lab" flow — same storage key,
     // read by PortalContentLab.
     try {
-      const key = strategyLabTopicSearchStorageKey(clientInfo.id);
+      const key = contentLabTopicSearchStorageKey(clientInfo.id);
       window.localStorage.setItem(key, JSON.stringify([search.id]));
     } catch {
       /* quota / JSON — non-fatal, lab still opens without the chip */

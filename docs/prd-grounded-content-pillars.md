@@ -173,9 +173,9 @@ When user clicks "Show more" in the Source Browser:
 
 ---
 
-## Strategy Lab Redesign
+## Content Lab Redesign
 
-The Strategy Lab at `/admin/strategy-lab/[clientId]` becomes the central workspace for each client. Layout from Jack's wireframe:
+The Content Lab at `/admin/content-lab/[clientId]` becomes the central workspace for each client. Layout from Jack's wireframe:
 
 ### Layout
 - **Left sidebar:** Standard admin nav (NATIVZ logo + nav items)

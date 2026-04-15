@@ -30,7 +30,7 @@ export function ResearchHub({
 
   const [optimisticItems, setOptimisticItems] = useState<HistoryItem[]>([]);
   const [historyRailOpen, setHistoryRailOpen] = useTopicSearchHistoryRailOpen();
-  const [strategyLabBulkSelection, setStrategyLabBulkSelection] = useState<{
+  const [contentLabBulkSelection, setContentLabBulkSelection] = useState<{
     ids: string[];
     clientId: string | null;
   }>({ ids: [], clientId: null });
@@ -75,9 +75,9 @@ export function ResearchHub({
   const prevHistoryRef = useRef(historyItems);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const handleStrategyLabSelectionChange = useCallback(
+  const handleContentLabSelectionChange = useCallback(
     (payload: { ids: string[]; clientId: string | null }) => {
-      setStrategyLabBulkSelection(payload);
+      setContentLabBulkSelection(payload);
     },
     [],
   );
@@ -149,7 +149,7 @@ export function ResearchHub({
     };
   }, [optimisticItems, historyItems, router]);
 
-  /** Stable array identity when contents unchanged — avoids HistoryFeed strategy-lab sync loops. */
+  /** Stable array identity when contents unchanged — avoids HistoryFeed content-lab sync loops. */
   const allItems = useMemo(() => {
     const combined = [...optimisticItems, ...historyItems];
     if (!selectedClientId) return combined;
@@ -217,7 +217,7 @@ export function ResearchHub({
                 clients={clients}
                 initialQuery={prefillQuery}
                 userFirstName={userFirstName}
-                strategyLabBulkSelection={strategyLabBulkSelection}
+                contentLabBulkSelection={contentLabBulkSelection}
                 onStarted={handleResearchStarted}
                 onClientChange={setSelectedClientId}
                 initialClientId={selectedClientId}
@@ -240,8 +240,8 @@ export function ResearchHub({
               historyResetKey={historyItems.map((i) => i.id).join(',')}
               serverHistoryCount={historyItems.length}
               clients={clients.map((c) => ({ id: c.id, name: c.name }))}
-              enableStrategyLabBulkSelect
-              onStrategyLabSelectionChange={handleStrategyLabSelectionChange}
+              enableContentLabBulkSelect
+              onContentLabSelectionChange={handleContentLabSelectionChange}
               hideClientInSidebar
               filterClientId={selectedClientId}
             />

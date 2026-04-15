@@ -15,7 +15,7 @@ import {
 import { buildMarketingSkillsContext } from '@/lib/nerd/marketing-skills';
 import { checkGuardrails } from '@/lib/nerd/guardrails';
 import { buildDbSkillsContext } from '@/lib/nerd/skills-loader';
-import { buildStrategyLabSystemAddendum } from '@/lib/nerd/strategy-lab-scripting-context';
+import { buildContentLabSystemAddendum } from '@/lib/nerd/content-lab-scripting-context';
 import { logUsage, calculateCost } from '@/lib/ai/usage';
 import { logApiError } from '@/lib/api/error-log';
 import { getBrandFromRequest } from '@/lib/agency/brand-from-request';
@@ -63,17 +63,17 @@ const chatSchema = z.object({
   conversationId: z.string().uuid().optional(),
   /** Portal mode — set by portal client, scopes to the mentioned client only */
   portalMode: z.boolean().optional(),
-  /** Optional frontend context for first message (e.g. opened from Strategy Lab) */
+  /** Optional frontend context for first message (e.g. opened from Content Lab) */
   sessionHint: z.string().max(500).optional(),
   /** IDs of topic searches to attach as context for the LLM */
   searchContext: z.array(z.string().uuid()).max(5).optional(),
   /**
-   * Explicit Nerd surface mode. When 'strategy-lab', the chat route appends
-   * the Strategy Lab scripting addendum (behavioural rules + preloaded
+   * Explicit Nerd surface mode. When 'content-lab', the chat route appends
+   * the Content Lab scripting addendum (behavioural rules + preloaded
    * scripting skills from nerd_skills) to the base system prompt. Used by
-   * components/strategy-lab/strategy-lab-nerd-chat.tsx.
+   * components/content-lab/content-lab-nerd-chat.tsx.
    */
-  mode: z.enum(['strategy-lab']).optional(),
+  mode: z.enum(['content-lab']).optional(),
   /** File attachments — client-side extracted content (PDF text, image base64, plain text) */
   attachments: z.array(attachmentSchema).max(10).optional(),
 });
@@ -118,7 +118,7 @@ TOOL USAGE RULES:
 - After a tool call completes, summarize the result in natural language. Don't just dump JSON.
 - If a tool fails, explain the error clearly and suggest alternatives.
 - You can call multiple tools in sequence if the user's request requires it.
-- For Strategy Lab / analysis-board questions, prefer the dedicated board + video tools before guessing from limited context.
+- For Content Lab / analysis-board questions, prefer the dedicated board + video tools before guessing from limited context.
 
 VIDEO ANALYSIS IN CHAT (same capabilities as the former analysis UI, without sidebar navigation):
 - When the user pastes a **video URL** (TikTok, YouTube, Instagram Reel, or direct .mp4/.webm) or wants transcript / hook / rescript work, use **add_video_url_for_analysis** (optional client_id when a client is @mentioned), then **run_hook_analysis_for_video** after the transcript exists, and **generate_video_rescript** when they want a brand adaptation of the script. Use **transcribe_analysis_item** only to retry or refresh transcription.
@@ -582,10 +582,10 @@ export async function POST(req: NextRequest) {
 
     const strategyPackByClient = new Map<string, string>();
     if (mentionedClientIds.size > 0) {
-      const { buildStrategyLabContextPack } = await import('@/lib/nerd/strategy-lab-context-pack');
+      const { buildContentLabContextPack } = await import('@/lib/nerd/content-lab-context-pack');
       const packResults = await Promise.allSettled(
         [...mentionedClientIds].map(async (id) => {
-          const pack = await buildStrategyLabContextPack(admin, id);
+          const pack = await buildContentLabContextPack(admin, id);
           return { id, pack };
         }),
       );
@@ -739,7 +739,7 @@ export async function POST(req: NextRequest) {
 
       if (!activeConvoId) {
         // Create a new conversation. Tag with the first client @mention so
-        // the Strategy Lab conversation picker can list per-client threads.
+        // the Content Lab conversation picker can list per-client threads.
         // Falls back to an insert without client_id if the column isn't
         // present yet (pre-migration 096 deploy window) — ADD COLUMN IF NOT
         // EXISTS is idempotent so this path disappears once the migration
@@ -856,20 +856,20 @@ export async function POST(req: NextRequest) {
       guardrailInstruction = `\n\n---\n\nIMPORTANT INSTRUCTION: For this query, you MUST respond with exactly this message (do not deviate, do not add caveats):\n\n${guardrailResult.response}`;
     }
 
-    // Strategy Lab / Content Lab mode: append the research-grounded
+    // Content Lab / Content Lab mode: append the research-grounded
     // scripting workbench addendum + preloaded scripting skills from
     // nerd_skills. Admins get the cross-client framing; portal users get
     // a locked-to-their-one-client variant.
-    const strategyLabAddendum =
-      mode === 'strategy-lab'
-        ? await buildStrategyLabSystemAddendum(admin, {
+    const contentLabAddendum =
+      mode === 'content-lab'
+        ? await buildContentLabSystemAddendum(admin, {
             portalMode: isPortalUser,
             clientName: isPortalUser ? portalClientName : undefined,
           })
         : '';
 
     const systemPrompt =
-      basePrompt + skillsContext + dbSkillsContext + strategyLabAddendum + guardrailInstruction;
+      basePrompt + skillsContext + dbSkillsContext + contentLabAddendum + guardrailInstruction;
 
     // Build attachment context block if the user attached files
     const attachmentContextParts: string[] = [];

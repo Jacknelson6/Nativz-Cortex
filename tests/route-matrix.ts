@@ -56,7 +56,7 @@ export const PORTAL_E2E_MINIMAL_STATIC_ROUTES: string[] = ['/portal/search/new',
  */
 export const ADMIN_E2E_FULL_STATIC_ROUTES: string[] = [
   ...ADMIN_PROTECTED_ROUTES.filter((p) => p !== '/admin/analytics'),
-  '/admin/strategy-lab',
+  '/admin/content-lab',
 ];
 
 /** Full portal static shells for post-login crawl. */

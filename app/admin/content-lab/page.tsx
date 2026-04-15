@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
 import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 import { PageError } from '@/components/shared/page-error';
-import { StrategyLabGeneralChat } from '@/components/strategy-lab/strategy-lab-general-chat';
+import { ContentLabGeneralChat } from '@/components/content-lab/content-lab-general-chat';
 
 type ClientRow = {
   id: string;
@@ -14,7 +14,7 @@ type ClientRow = {
   agency: string | null;
 };
 
-export default async function StrategyLabIndexPage() {
+export default async function ContentLabIndexPage() {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -47,7 +47,7 @@ export default async function StrategyLabIndexPage() {
 
     return (
       <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col p-4 md:p-6">
-        <StrategyLabGeneralChat clients={clients} />
+        <ContentLabGeneralChat clients={clients} />
       </div>
     );
   } catch (err) {

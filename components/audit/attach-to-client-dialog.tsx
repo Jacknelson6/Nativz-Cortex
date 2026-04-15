@@ -25,7 +25,7 @@ type AnalyticsSource = 'auto' | 'scrape' | 'client_analytics';
 /**
  * Admin-only. Attaches a completed Analyze Social audit to a client so the
  * Phase 2 cron can scrape the audit's competitor list on a recurring
- * schedule. Matches the Topic Search "Send to Strategy Lab" pattern —
+ * schedule. Matches the Topic Search "Send to Content Lab" pattern —
  * modal, client picker, confirm.
  */
 export function AttachToClientDialog({ open, onClose, auditId }: AttachToClientDialogProps) {

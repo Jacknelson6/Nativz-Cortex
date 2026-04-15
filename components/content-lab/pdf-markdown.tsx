@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 import { Text, View, StyleSheet, Image } from '@react-pdf/renderer';
-import { hashMermaidBody } from '@/lib/strategy-lab/rasterize-mermaid';
-import { hashHtmlVisualBody } from '@/lib/strategy-lab/rasterize-html-visual';
+import { hashMermaidBody } from '@/lib/content-lab/rasterize-mermaid';
+import { hashHtmlVisualBody } from '@/lib/content-lab/rasterize-html-visual';
 
 /**
  * Lightweight markdown → @react-pdf/renderer node converter.
@@ -21,7 +21,7 @@ import { hashHtmlVisualBody } from '@/lib/strategy-lab/rasterize-html-visual';
  *   tokenizer that respects the order of delimiters, so `**bold _inner_**`
  *   produces nested runs.
  * - Everything is black-on-light — matches the light palette in
- *   strategy-lab-conversation-pdf.tsx. Callers pass their own colour only
+ *   content-lab-conversation-pdf.tsx. Callers pass their own colour only
  *   via the outer <View> if they need a different background.
  */
 

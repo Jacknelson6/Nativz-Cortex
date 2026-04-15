@@ -19,8 +19,8 @@ interface TopicSearchHistoryRailProps {
   onClose: () => void;
   /** Topic search rail lists topic runs only; idea generations are excluded by default */
   includeIdeas?: boolean;
-  enableStrategyLabBulkSelect?: boolean;
-  onStrategyLabSelectionChange?: (payload: { ids: string[]; clientId: string | null }) => void;
+  enableContentLabBulkSelect?: boolean;
+  onContentLabSelectionChange?: (payload: { ids: string[]; clientId: string | null }) => void;
   /** Hide client line in rows; show under ⋯ instead (research hub). */
   hideClientInSidebar?: boolean;
   /** Filter to only show items for this client ID. */
@@ -38,8 +38,8 @@ export function TopicSearchHistoryRail({
   onOpen,
   onClose,
   includeIdeas = false,
-  enableStrategyLabBulkSelect = false,
-  onStrategyLabSelectionChange,
+  enableContentLabBulkSelect = false,
+  onContentLabSelectionChange,
   hideClientInSidebar = false,
   filterClientId = null,
   enableFolders = false,
@@ -55,8 +55,8 @@ export function TopicSearchHistoryRail({
           historyResetKey={historyResetKey}
           serverHistoryCount={serverHistoryCount}
           clients={clients}
-          enableStrategyLabBulkSelect={enableStrategyLabBulkSelect}
-          onStrategyLabSelectionChange={onStrategyLabSelectionChange}
+          enableContentLabBulkSelect={enableContentLabBulkSelect}
+          onContentLabSelectionChange={onContentLabSelectionChange}
           hideClientInSidebar={hideClientInSidebar}
           filterClientId={filterClientId}
           enableFolders={enableFolders}
@@ -108,8 +108,8 @@ export function TopicSearchHistoryRail({
               historyResetKey={historyResetKey}
               serverHistoryCount={serverHistoryCount}
               clients={clients}
-              enableStrategyLabBulkSelect={enableStrategyLabBulkSelect}
-              onStrategyLabSelectionChange={onStrategyLabSelectionChange}
+              enableContentLabBulkSelect={enableContentLabBulkSelect}
+              onContentLabSelectionChange={onContentLabSelectionChange}
               hideClientInSidebar={hideClientInSidebar}
               filterClientId={filterClientId}
               enableFolders={enableFolders}

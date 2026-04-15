@@ -116,7 +116,7 @@ export function PortalResearchHub({
             serverHistoryCount={historyItems.length}
             clients={[{ id: client.id, name: client.name }]}
             includeIdeas={false}
-            enableStrategyLabBulkSelect={false}
+            enableContentLabBulkSelect={false}
             hideClientInSidebar
             enableFolders={false}
           />

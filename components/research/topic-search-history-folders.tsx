@@ -336,8 +336,8 @@ function FolderRowDroppable({
                     className={menuItemClass}
                     onSelect={() => {
                       window.location.href = item.clientId
-                        ? `/admin/strategy-lab/${item.clientId}`
-                        : '/admin/strategy-lab';
+                        ? `/admin/content-lab/${item.clientId}`
+                        : '/admin/content-lab';
                     }}
                   >
                     <Compass size={14} aria-hidden />

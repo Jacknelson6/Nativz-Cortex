@@ -52,7 +52,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { cn } from '@/lib/utils/cn';
-import { mergeTopicSearchSelectionIntoLocalStorage } from '@/lib/strategy-lab/topic-search-selection-storage';
+import { mergeTopicSearchSelectionIntoLocalStorage } from '@/lib/content-lab/topic-search-selection-storage';
 import {
   TOPIC_SEARCH_HUB_HISTORY_LIMIT,
   type HistoryItem,
@@ -77,8 +77,8 @@ interface HistoryFeedProps {
   /** When false, “Load more” requests omit idea generations (`include_ideas=false`). Default true. */
   includeIdeas?: boolean;
   /** Sidebar: checkboxes to pin topic searches for Strategy lab (client-linked rows only). */
-  enableStrategyLabBulkSelect?: boolean;
-  onStrategyLabSelectionChange?: (payload: { ids: string[]; clientId: string | null }) => void;
+  enableContentLabBulkSelect?: boolean;
+  onContentLabSelectionChange?: (payload: { ids: string[]; clientId: string | null }) => void;
   /** Research hub rail: hide client line in rows; show client in ⋯ menu instead. */
   hideClientInSidebar?: boolean;
   /** Filter history to only show items for this client. When set, load-more also filters server-side. */
@@ -173,7 +173,7 @@ function mergeHistoryRows(rows: HistoryItem[]): HistoryItem[] {
 }
 
 /** Topic / brand intel searches can be bulk-selected for Strategy lab (including unbranded). */
-function canSelectForStrategyLab(item: HistoryItem): boolean {
+function canSelectForContentLab(item: HistoryItem): boolean {
   return item.type === 'topic' || item.type === 'brand_intel';
 }
 
@@ -204,8 +204,8 @@ const DROPDOWN_MENU_PRIMITIVES: RowMenuPrimitives = {
 function HistoryRowMenuBody({
   M,
   isTopicLike,
-  showStrategyLabToggleItem,
-  strategyLabToggleDisabled,
+  showContentLabToggleItem,
+  contentLabToggleDisabled,
   showBulkSelectionSubmenu,
   checked,
   bulkCount,
@@ -213,8 +213,8 @@ function HistoryRowMenuBody({
   menuSurfaceClass,
   onOpen,
   onCopyLink,
-  onOpenStrategyLab,
-  onToggleStrategyLab,
+  onOpenContentLab,
+  onToggleContentLab,
   onDelete,
   onDeleteAllSelected,
   onCopyAllSelectedLinks,
@@ -222,8 +222,8 @@ function HistoryRowMenuBody({
 }: {
   M: RowMenuPrimitives;
   isTopicLike: boolean;
-  showStrategyLabToggleItem: boolean;
-  strategyLabToggleDisabled: boolean;
+  showContentLabToggleItem: boolean;
+  contentLabToggleDisabled: boolean;
   showBulkSelectionSubmenu: boolean;
   checked: boolean;
   bulkCount: number;
@@ -231,8 +231,8 @@ function HistoryRowMenuBody({
   menuSurfaceClass: string;
   onOpen: () => void;
   onCopyLink: () => void;
-  onOpenStrategyLab: () => void;
-  onToggleStrategyLab: () => void;
+  onOpenContentLab: () => void;
+  onToggleContentLab: () => void;
   onDelete: () => void;
   onDeleteAllSelected: () => void;
   onCopyAllSelectedLinks: () => void;
@@ -255,16 +255,16 @@ function HistoryRowMenuBody({
         Copy link to search
       </Item>
       {isTopicLike ? (
-        <Item className={menuItemClass} onSelect={onOpenStrategyLab}>
+        <Item className={menuItemClass} onSelect={onOpenContentLab}>
           <Compass size={14} aria-hidden />
           Open in Content lab
         </Item>
       ) : null}
-      {showStrategyLabToggleItem && isTopicLike ? (
+      {showContentLabToggleItem && isTopicLike ? (
         <Item
           className={menuItemClass}
-          disabled={strategyLabToggleDisabled}
-          onSelect={onToggleStrategyLab}
+          disabled={contentLabToggleDisabled}
+          onSelect={onToggleContentLab}
         >
           <Check size={14} aria-hidden />
           {checked ? 'Deselect' : 'Select'}
@@ -331,8 +331,8 @@ export function HistoryFeed({
   variant = 'default',
   embeddedInNerdRail = false,
   includeIdeas = true,
-  enableStrategyLabBulkSelect = false,
-  onStrategyLabSelectionChange,
+  enableContentLabBulkSelect = false,
+  onContentLabSelectionChange,
   hideClientInSidebar = false,
   filterClientId = null,
   enableFolders = false,
@@ -409,7 +409,7 @@ export function HistoryFeed({
   );
 
   useEffect(() => {
-    if (!enableStrategyLabBulkSelect) return;
+    if (!enableContentLabBulkSelect) return;
     setSelectedTopicSearchIds((prev) => {
       const valid = new Set(
         mergedItems.filter((i) => !hiddenIds.has(i.id)).map((i) => i.id),
@@ -417,13 +417,13 @@ export function HistoryFeed({
       const next = new Set([...prev].filter((id) => valid.has(id)));
       return next.size === prev.size ? prev : next;
     });
-  }, [mergedItems, hiddenIds, enableStrategyLabBulkSelect]);
+  }, [mergedItems, hiddenIds, enableContentLabBulkSelect]);
 
   useEffect(() => {
-    if (!enableStrategyLabBulkSelect) {
+    if (!enableContentLabBulkSelect) {
       setSelectionModeActive(false);
     }
-  }, [enableStrategyLabBulkSelect]);
+  }, [enableContentLabBulkSelect]);
 
   /** Stable list order for Strategy lab payload (same order as history list, newest first). */
   const orderedSelectedIds = useMemo(() => {
@@ -444,33 +444,33 @@ export function HistoryFeed({
     return null;
   }, [mergedItems, selectedTopicSearchIds, hiddenIds]);
 
-  const strategyLabPayload = useMemo(() => {
-    if (!enableStrategyLabBulkSelect) {
+  const contentLabPayload = useMemo(() => {
+    if (!enableContentLabBulkSelect) {
       return { ids: [] as string[], clientId: null as string | null };
     }
     if (orderedSelectedIds.length === 0) return { ids: [], clientId: null };
     const first = mergedItems.find((i) => i.id === orderedSelectedIds[0]);
     return { ids: orderedSelectedIds, clientId: first?.clientId ?? null };
-  }, [enableStrategyLabBulkSelect, orderedSelectedIds, mergedItems]);
+  }, [enableContentLabBulkSelect, orderedSelectedIds, mergedItems]);
 
-  const strategyLabNotifyKeyRef = useRef<string | null>(null);
+  const contentLabNotifyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!enableStrategyLabBulkSelect) {
-      strategyLabNotifyKeyRef.current = null;
+    if (!enableContentLabBulkSelect) {
+      contentLabNotifyKeyRef.current = null;
       return;
     }
-    if (!onStrategyLabSelectionChange) return;
-    const { ids, clientId } = strategyLabPayload;
+    if (!onContentLabSelectionChange) return;
+    const { ids, clientId } = contentLabPayload;
     const key = `${clientId ?? 'null'}|${[...ids].sort().join(',')}`;
-    if (strategyLabNotifyKeyRef.current === key) return;
-    strategyLabNotifyKeyRef.current = key;
-    onStrategyLabSelectionChange({ ids: [...ids], clientId });
-  }, [strategyLabPayload, enableStrategyLabBulkSelect, onStrategyLabSelectionChange]);
+    if (contentLabNotifyKeyRef.current === key) return;
+    contentLabNotifyKeyRef.current = key;
+    onContentLabSelectionChange({ ids: [...ids], clientId });
+  }, [contentLabPayload, enableContentLabBulkSelect, onContentLabSelectionChange]);
 
-  const handleStrategyLabToggle = useCallback(
+  const handleContentLabToggle = useCallback(
     (item: HistoryItem) => {
-      if (!canSelectForStrategyLab(item)) return;
+      if (!canSelectForContentLab(item)) return;
       setSelectedTopicSearchIds((prev) => {
         const next = new Set(prev);
         if (next.has(item.id)) {
@@ -591,22 +591,22 @@ export function HistoryFeed({
     }
   }, []);
 
-  const openInStrategyLab = useCallback(
+  const openInContentLab = useCallback(
     (item: HistoryItem) => {
       if (item.type === 'ideas') return;
       if (item.clientId) {
         mergeTopicSearchSelectionIntoLocalStorage(item.clientId, [item.id]);
-        router.push(`/admin/strategy-lab/${item.clientId}`);
+        router.push(`/admin/content-lab/${item.clientId}`);
       } else {
         toast.message('Pick a client in Content lab, then pin topic searches from your history.');
-        router.push('/admin/strategy-lab');
+        router.push('/admin/content-lab');
       }
     },
     [router],
   );
 
-  /** Bulk open in Strategy Lab — merges all selected search IDs into localStorage. */
-  const openAllSelectedInStrategyLab = useCallback(() => {
+  /** Bulk open in Content Lab — merges all selected search IDs into localStorage. */
+  const openAllSelectedInContentLab = useCallback(() => {
     const ids = orderedSelectedIds;
     if (ids.length === 0) return;
     // Resolve client from selection — all must share the same client
@@ -616,7 +616,7 @@ export function HistoryFeed({
     const clientIds = [...new Set(rows.map((r) => r.clientId).filter(Boolean))];
     if (clientIds.length === 0) {
       toast.message('Pick a client in Content Lab, then pin topic searches from your history.');
-      router.push('/admin/strategy-lab');
+      router.push('/admin/content-lab');
       return;
     }
     if (clientIds.length > 1) {
@@ -627,7 +627,7 @@ export function HistoryFeed({
     mergeTopicSearchSelectionIntoLocalStorage(clientId, ids);
     setSelectionModeActive(false);
     setSelectedTopicSearchIds(new Set());
-    router.push(`/admin/strategy-lab/${clientId}`);
+    router.push(`/admin/content-lab/${clientId}`);
   }, [orderedSelectedIds, mergedItems, router]);
 
   /**
@@ -845,25 +845,25 @@ export function HistoryFeed({
     const isActive =
       pathname === item.href || (item.href.length > 1 && pathname.startsWith(`${item.href}/`));
 
-    const showCheckboxColumn = enableStrategyLabBulkSelect && selectionModeActive;
+    const showCheckboxColumn = enableContentLabBulkSelect && selectionModeActive;
     const isTopicLike = item.type === 'topic' || item.type === 'brand_intel';
     const bulkCount = selectedTopicSearchIds.size;
 
     const anchorCompatible =
-      canSelectForStrategyLab(item) &&
+      canSelectForContentLab(item) &&
       (selectedTopicSearchIds.size === 0 ||
         (firstSelectedInOrder !== null && item.clientId === firstSelectedInOrder.clientId));
 
     const selectable = showCheckboxColumn && anchorCompatible;
     const showIncompatibleRow =
       showCheckboxColumn &&
-      canSelectForStrategyLab(item) &&
+      canSelectForContentLab(item) &&
       !anchorCompatible &&
       selectedTopicSearchIds.size > 0;
 
     const checked = selectedTopicSearchIds.has(item.id);
-    const strategyLabToggleDisabled =
-      enableStrategyLabBulkSelect && isTopicLike && canSelectForStrategyLab(item) && !anchorCompatible;
+    const contentLabToggleDisabled =
+      enableContentLabBulkSelect && isTopicLike && canSelectForContentLab(item) && !anchorCompatible;
 
     const selectionCell = showCheckboxColumn ? (
       <div
@@ -879,7 +879,7 @@ export function HistoryFeed({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              handleStrategyLabToggle(item);
+              handleContentLabToggle(item);
             }}
             className={cn(
               'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
@@ -911,9 +911,9 @@ export function HistoryFeed({
 
     const rowActionMenuProps = {
       isTopicLike,
-      showStrategyLabToggleItem: Boolean(enableStrategyLabBulkSelect),
-      strategyLabToggleDisabled,
-      showBulkSelectionSubmenu: Boolean(enableStrategyLabBulkSelect && selectionModeActive),
+      showContentLabToggleItem: Boolean(enableContentLabBulkSelect),
+      contentLabToggleDisabled,
+      showBulkSelectionSubmenu: Boolean(enableContentLabBulkSelect && selectionModeActive),
       checked,
       bulkCount,
       menuItemClass: ctxMenuItem,
@@ -924,15 +924,15 @@ export function HistoryFeed({
       onCopyLink: () => {
         void copyLinkToSearch(item);
       },
-      onOpenStrategyLab: () => {
-        openInStrategyLab(item);
+      onOpenContentLab: () => {
+        openInContentLab(item);
       },
-      onToggleStrategyLab: () => {
+      onToggleContentLab: () => {
         if (!selectionModeActive) {
           setSelectionModeActive(true);
           return;
         }
-        handleStrategyLabToggle(item);
+        handleContentLabToggle(item);
       },
       onDelete: () => {
         void deleteHistoryItem(item);
@@ -1017,7 +1017,7 @@ export function HistoryFeed({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              handleStrategyLabToggle(item);
+              handleContentLabToggle(item);
             }}
             className={cn(bodyClassName, 'cursor-pointer text-left')}
             aria-pressed={checked}
@@ -1165,12 +1165,12 @@ export function HistoryFeed({
    * there every row becomes click-to-toggle, and the panel exposes the two
    * bulk actions the user actually wants — copy all share links, delete all.
    *
-   * The old panel had an instructional paragraph, a "Bring to Strategy Lab"
+   * The old panel had an instructional paragraph, a "Bring to Content Lab"
    * primary CTA, and an "Open all in lab" button — all removed per the latest
    * product direction.
    */
-  const strategyLabSelectionPanel =
-    enableStrategyLabBulkSelect && selectionModeActive ? (
+  const contentLabSelectionPanel =
+    enableContentLabBulkSelect && selectionModeActive ? (
       <div
         className={cn(
           'shrink-0 space-y-3 border-b border-nativz-border/50 bg-surface/55',
@@ -1215,14 +1215,14 @@ export function HistoryFeed({
           <button
             type="button"
             disabled={selectedTopicSearchIds.size === 0}
-            onClick={openAllSelectedInStrategyLab}
+            onClick={openAllSelectedInContentLab}
             className={cn(
               'inline-flex min-h-[2.25rem] w-full items-center justify-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-2.5 py-1.5 font-medium text-accent-text transition hover:border-accent/50 hover:bg-accent/20 disabled:pointer-events-none disabled:opacity-40',
               sidebar ? 'text-xs' : 'text-xs',
             )}
           >
             <FlaskConical size={13} className="shrink-0" aria-hidden />
-            Open in Strategy Lab
+            Open in Content Lab
           </button>
           <button
             type="button"
@@ -1332,7 +1332,7 @@ export function HistoryFeed({
                 autoExpandFolderId={lastDropFolderId}
               />
             ) : null}
-            {strategyLabSelectionPanel}
+            {contentLabSelectionPanel}
             {enableFolders ? (
               <div className="shrink-0 border-t border-nativz-border/30 px-3 pb-0.5 pt-2">
                 <p className={researchHistorySidebarSectionTitleClass}>Your searches</p>
@@ -1348,7 +1348,7 @@ export function HistoryFeed({
               </h2>
             </div>
             <div className="shrink-0 border-b border-nativz-border/50 px-3 py-2">{searchInput}</div>
-            {strategyLabSelectionPanel}
+            {contentLabSelectionPanel}
           </>
         )
       ) : (
@@ -1360,7 +1360,7 @@ export function HistoryFeed({
             </h2>
             {searchInput}
           </div>
-          {strategyLabSelectionPanel}
+          {contentLabSelectionPanel}
         </>
       )}
 

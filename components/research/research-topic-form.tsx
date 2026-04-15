@@ -25,7 +25,7 @@ import { ClientPickerModal, type ClientOption } from '@/components/ui/client-pic
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils/cn';
 import { toast } from 'sonner';
-import { mergeTopicSearchSelectionIntoLocalStorage } from '@/lib/strategy-lab/topic-search-selection-storage';
+import { mergeTopicSearchSelectionIntoLocalStorage } from '@/lib/content-lab/topic-search-selection-storage';
 import { TIME_RANGE_OPTIONS } from '@/lib/types/search';
 import type { SearchPlatform, SearchVolume } from '@/lib/types/search';
 import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
@@ -45,7 +45,7 @@ interface ResearchTopicFormProps {
     needsSubtopics?: boolean;
   }) => void;
   /** Topic searches selected in the History rail to merge into Strategy lab for that client. */
-  strategyLabBulkSelection?: { ids: string[]; clientId: string | null };
+  contentLabBulkSelection?: { ids: string[]; clientId: string | null };
   /** Called when the selected client changes (for filtering history rail) */
   onClientChange?: (clientId: string | null) => void;
   /** Preselect a brand on mount — used to rehydrate from localStorage so the
@@ -102,7 +102,7 @@ export function ResearchTopicForm({
   initialQuery = '',
   userFirstName,
   onStarted,
-  strategyLabBulkSelection,
+  contentLabBulkSelection,
   onClientChange,
   initialClientId = null,
   portalMode = false,
@@ -288,13 +288,13 @@ export function ResearchTopicForm({
     const pillBtn =
       'inline-flex shrink-0 h-9 max-w-[min(100%,11rem)] items-center gap-2 rounded-full border border-nativz-border bg-surface-hover/80 px-3 text-left text-xs font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover';
 
-    const bulkIds = strategyLabBulkSelection?.ids ?? [];
-    const bulkClientId = strategyLabBulkSelection?.clientId ?? null;
+    const bulkIds = contentLabBulkSelection?.ids ?? [];
+    const bulkClientId = contentLabBulkSelection?.clientId ?? null;
     const bulkHasSelection = bulkIds.length > 0;
     const bulkReady = bulkHasSelection && bulkClientId != null;
-    const strategyLabHref = bulkReady
-      ? `/admin/strategy-lab/${bulkClientId}`
-      : '/admin/strategy-lab';
+    const contentLabHref = bulkReady
+      ? `/admin/content-lab/${bulkClientId}`
+      : '/admin/content-lab';
 
     return (
       <div className="w-full">

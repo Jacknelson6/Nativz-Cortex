@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, Building2, Clock, FlaskConical } from 'lucide-react';
-import { strategyLabTopicSearchStorageKey } from '@/lib/strategy-lab/topic-search-selection-storage';
-import { StrategyLabAttachClientDialog } from '@/components/strategy-lab/strategy-lab-attach-client-dialog';
+import { contentLabTopicSearchStorageKey } from '@/lib/content-lab/topic-search-selection-storage';
+import { ContentLabAttachClientDialog } from '@/components/content-lab/content-lab-attach-client-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
@@ -221,15 +221,15 @@ export function AdminResultsClient({
                 }
                 // Pre-pin this search as the ONLY selection so the Strategy
                 // Lab workspace auto-attaches it on mount. See the multi-pin
-                // hoisted state in strategy-lab-workspace.tsx.
+                // hoisted state in content-lab-workspace.tsx.
                 try {
-                  const key = strategyLabTopicSearchStorageKey(clientInfo.id);
+                  const key = contentLabTopicSearchStorageKey(clientInfo.id);
                   window.localStorage.setItem(key, JSON.stringify([search.id]));
                 } catch {
                   /* quota / JSON — non-fatal, user will see the lab but nothing pinned */
                 }
                 // Route param is the client UUID, not the slug.
-                router.push(`/admin/strategy-lab/${clientInfo.id}`);
+                router.push(`/admin/content-lab/${clientInfo.id}`);
               }}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent/60 hover:bg-accent/20"
               title={clientInfo ? `Open this search in Content Lab with ${clientInfo.name}` : 'Pick a client and open in Content Lab'}
@@ -237,7 +237,7 @@ export function AdminResultsClient({
               <FlaskConical size={14} aria-hidden />
               Open in Content Lab
             </button>
-            <StrategyLabAttachClientDialog
+            <ContentLabAttachClientDialog
               open={attachDialogOpen}
               onClose={() => setAttachDialogOpen(false)}
               searchId={search.id}

@@ -82,9 +82,9 @@ test.describe('Admin full journey', () => {
         `/admin/clients/${slug}/ideas/generate`,
         `/admin/clients/${slug}/ad-creatives`,
         `/admin/clients/${slug}/moodboard`,
-        `/admin/strategy-lab/${firstClient.id}`,
+        `/admin/content-lab/${firstClient.id}`,
         `/admin/analytics/social?clientId=${firstClient.id}`,
-        `/admin/nerd?strategySource=strategy-lab&strategyClient=${firstClient.id}`,
+        `/admin/nerd?strategySource=content-lab&strategyClient=${firstClient.id}`,
       ];
       for (const p of clientNested) {
         await visitPath(p);
