@@ -271,21 +271,53 @@ export function calculateAvgViews(videos: ProspectVideo[]): number {
   return Math.round(videos.reduce((sum, v) => sum + v.views, 0) / videos.length);
 }
 
+/**
+ * Estimate posting cadence as a short readable label ("3 posts/week",
+ * "6 posts/month", etc.).
+ *
+ * The prior implementation divided every scraped video (up to 30) by the
+ * full span between newest and oldest, then bucketed against thresholds
+ * pegged for weekly+ cadence. Accounts that post 2-3× a month but have
+ * back-catalog videos in the scrape (span = 300+ days) read as "infrequent"
+ * — which is technically correct at 0.08 posts/day but useless on the
+ * report, and wrong for comparison when the account is actually active now.
+ *
+ * Fix: measure from the window that matters, not the full scrape. Prefer
+ * the last 90 days of content; if an account has nothing in the last 90
+ * days, fall back to the full window but label the result as "dormant".
+ * Replace the "infrequent" bucket with a real "N posts/month" number down
+ * to 1, and surface "under 1/month" only when it's actually that sparse.
+ */
 export function estimatePostingFrequency(videos: ProspectVideo[]): string {
-  const dated = videos.filter(v => v.publishDate).sort((a, b) =>
-    new Date(b.publishDate!).getTime() - new Date(a.publishDate!).getTime()
-  );
-  if (dated.length < 2) return 'unknown';
+  const dated = videos
+    .filter((v) => v.publishDate)
+    .sort((a, b) => new Date(b.publishDate!).getTime() - new Date(a.publishDate!).getTime());
+  if (dated.length === 0) return 'unknown';
 
-  const newest = new Date(dated[0].publishDate!);
-  const oldest = new Date(dated[dated.length - 1].publishDate!);
+  const nowMs = Date.now();
+  const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
+  const recent = dated.filter((v) => nowMs - new Date(v.publishDate!).getTime() <= ninetyDaysMs);
+
+  // Dormant signal: account has nothing in the last 90 days. Surface that
+  // explicitly rather than burying it in a low-rate math result.
+  if (recent.length === 0) {
+    return dated[0].publishDate ? 'dormant' : 'unknown';
+  }
+
+  // Single recent post — not enough to average a cadence. Still better
+  // than "unknown" for the sales narrative.
+  if (recent.length === 1) return '1 post in last 90 days';
+
+  const newest = new Date(recent[0].publishDate!);
+  const oldest = new Date(recent[recent.length - 1].publishDate!);
   const daySpan = Math.max(1, (newest.getTime() - oldest.getTime()) / (1000 * 60 * 60 * 24));
-  const postsPerDay = dated.length / daySpan;
+  const postsPerDay = recent.length / daySpan;
 
   if (postsPerDay >= 1) return `${Math.round(postsPerDay)} posts/day`;
   if (postsPerDay >= 0.4) return `${Math.round(postsPerDay * 7)} posts/week`;
-  if (postsPerDay >= 0.1) return `${Math.round(postsPerDay * 30)} posts/month`;
-  return 'infrequent';
+  const perMonth = Math.round(postsPerDay * 30);
+  if (perMonth >= 1) return `${perMonth} post${perMonth === 1 ? '' : 's'}/month`;
+  return 'under 1 post/month';
 }
 
 function getTopHashtags(videos: ProspectVideo[], limit: number): string[] {

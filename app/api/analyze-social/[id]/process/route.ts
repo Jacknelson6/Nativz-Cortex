@@ -243,12 +243,25 @@ export async function POST(
         }
       }
 
-      // Step 2b image persistence: move to after() so it doesn't block scorecard
+      // Step 2b image persistence: copy each scraped avatar + thumbnail into
+      // Supabase Storage so the report still renders once the Apify CDN URLs
+      // expire (~hours for TikTok, ~days for IG). Runs in after() so it
+      // doesn't block scorecard generation.
+      //
+      // IMPORTANT: `persistAllScrapedImages` / `persistAllCompetitorImages`
+      // mutate their inputs in place with the new Storage URLs. The audit's
+      // initial DB write happens BEFORE this hook fires with the raw Apify
+      // URLs, so we must re-save `prospect_data` + `competitors_data` after
+      // the mutation or the report keeps the expired links and falls back
+      // to initials / broken thumbnails next session.
       after(async () => {
+        let prospectChanged = false;
+        let competitorsChanged = false;
         if (platformReports.length > 0) {
           console.log(`[audit:${id}] after(): persisting prospect images...`);
           try {
             await persistAllScrapedImages(adminClient, id, platformReports);
+            prospectChanged = true;
           } catch (err) {
             console.warn(`[audit:${id}] after(): prospect image persistence failed:`, err);
           }
@@ -257,8 +270,29 @@ export async function POST(
           console.log(`[audit:${id}] after(): persisting competitor images...`);
           try {
             await persistAllCompetitorImages(adminClient, id, competitors);
+            competitorsChanged = true;
           } catch (err) {
             console.warn(`[audit:${id}] after(): competitor image persistence failed:`, err);
+          }
+        }
+        if (prospectChanged || competitorsChanged) {
+          try {
+            await adminClient
+              .from('prospect_audits')
+              .update({
+                prospect_data: {
+                  websiteContext,
+                  platforms: platformReports,
+                  detectedSocialLinks: detectedLinks,
+                  failedPlatforms,
+                },
+                competitors_data: competitors,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', id);
+            console.log(`[audit:${id}] after(): re-saved DB with persisted image URLs`);
+          } catch (err) {
+            console.warn(`[audit:${id}] after(): re-save failed:`, err);
           }
         }
       });
