@@ -84,7 +84,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/clients', label: 'Clients', icon: Contact },
       { href: '/admin/pipeline', label: 'Edits', icon: Scissors },
       { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
-      { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
+      { href: '/admin/settings/ai', label: 'Settings', icon: SettingsIcon },
     ],
   },
 ];
