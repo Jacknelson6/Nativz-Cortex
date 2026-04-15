@@ -26,6 +26,7 @@ const SESSION_ACK_KEY = 'cortex:admin-in-portal-acknowledged';
  */
 export function AdminInPortalGuard({ isAdmin }: { isAdmin: boolean }) {
   const [showModal, setShowModal] = useState(false);
+  const [impersonating, setImpersonating] = useState<boolean | null>(null);
   const { brand: agencyBrand } = useAgencyBrand();
   const isAnderson = agencyBrand === 'anderson';
 
@@ -37,6 +38,25 @@ export function AdminInPortalGuard({ isAdmin }: { isAdmin: boolean }) {
     } catch {
       /* session storage unavailable — skip the modal gracefully */
     }
+  }, [isAdmin]);
+
+  // Detect impersonation so the pill doesn't sit on top of the banner's
+  // own "Exit impersonation" control. The banner component uses the same
+  // endpoint; we only need the boolean here.
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/impersonate/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setImpersonating(Boolean(data.impersonating));
+      } catch {
+        if (!cancelled) setImpersonating(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [isAdmin]);
 
   const dismiss = () => {
@@ -101,24 +121,27 @@ export function AdminInPortalGuard({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      {/* Persistent floating pill — centered at the top so it reads on
-          either brand. Below the modal (z-90) but above the page header.
-          Brand-colored so the AC light surface doesn't swallow it the way
-          the old amber-on-white version did. */}
-      <div className="pointer-events-none fixed left-1/2 top-3 z-40 -translate-x-1/2">
-        <Link
-          href="/admin/dashboard"
-          className={
-            isAnderson
-              ? 'pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-[#0a2340] px-3.5 py-1.5 text-xs font-semibold text-white ring-1 ring-[#0a2340]/30 shadow-md transition-colors hover:bg-[#143a63] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0a2340]'
-              : 'pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-3.5 py-1.5 text-xs font-semibold text-black shadow-md transition-colors hover:bg-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2'
-          }
-          title="Return to admin dashboard"
-        >
-          <LayoutDashboard size={12} aria-hidden />
-          Back to admin
-        </Link>
-      </div>
+      {/* Persistent floating pill — centered at the top for admins who
+          navigate directly to /portal without impersonating. During
+          impersonation the banner already shows "Exit impersonation", so
+          rendering this pill too stacks two "back to admin" controls on
+          the same horizontal band. We hide it in that case. */}
+      {impersonating === false ? (
+        <div className="pointer-events-none fixed left-1/2 top-3 z-40 -translate-x-1/2">
+          <Link
+            href="/admin/dashboard"
+            className={
+              isAnderson
+                ? 'pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-[#0a2340] px-3.5 py-1.5 text-xs font-semibold text-white ring-1 ring-[#0a2340]/30 shadow-md transition-colors hover:bg-[#143a63] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0a2340]'
+                : 'pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-3.5 py-1.5 text-xs font-semibold text-black shadow-md transition-colors hover:bg-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2'
+            }
+            title="Return to admin dashboard"
+          >
+            <LayoutDashboard size={12} aria-hidden />
+            Back to admin
+          </Link>
+        </div>
+      ) : null}
     </>
   );
 }
