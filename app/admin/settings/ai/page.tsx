@@ -1,19 +1,18 @@
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { AiRoutingSection } from '@/components/settings/ai-routing-section';
+import { LlmCredentialsSection } from '@/components/settings/llm-credentials-section';
+import { UsageDashboard } from '@/components/settings/usage-dashboard';
 import { AISettingsSkillsClient } from './skills-client';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Admin AI settings — skill management.
- *
- * Admin-only. Lists every row in `nerd_skills`, lets you toggle which
- * harnesses load each (admin Nerd / admin Content Lab / portal Content Lab),
- * edit the markdown body for upload-source skills, sync github-source ones,
- * and scope a skill to a single client. The chat route's
- * `buildDbSkillsContext` filters by harness + client at request time so the
- * portal never receives admin-only skill context unless explicitly shared.
+ * Unified AI settings — one page for model routing, credentials, skills,
+ * and usage. Admin-only. `buildDbSkillsContext` in the chat route filters
+ * skills by harness + client at request time so the portal never receives
+ * admin-only skill context unless explicitly shared.
  */
 export default async function AISettingsPage() {
   const supabase = await createServerSupabaseClient();
@@ -37,18 +36,50 @@ export default async function AISettingsPage() {
     .order('name');
 
   return (
-    <div className="cortex-page-gutter max-w-5xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-text-primary">AI skills</h1>
+    <div className="cortex-page-gutter max-w-5xl mx-auto space-y-10">
+      <div>
+        <h1 className="text-2xl font-semibold text-text-primary">AI settings</h1>
         <p className="mt-1 text-sm text-text-muted max-w-2xl">
-          Markdown context loaded into the Nerd's system prompt. Each skill
-          picks which harnesses it applies to — the admin Nerd, admin Content
-          Lab, and/or the portal Content Lab — and can be scoped to a single
-          client so brand-specific guidance only fires for that account.
+          Model routing, credentials, skills, and usage — everything the Nerd
+          and its harnesses read from.
         </p>
       </div>
 
-      <AISettingsSkillsClient clients={clients ?? []} />
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">Models</h2>
+          <p className="mt-1 text-xs text-text-muted">Active models for topic search, agents, and platform defaults.</p>
+        </div>
+        <AiRoutingSection />
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">Credentials</h2>
+          <p className="mt-1 text-xs text-text-muted">API keys when you don't want to rely on env vars only.</p>
+        </div>
+        <LlmCredentialsSection />
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">Skills</h2>
+          <p className="mt-1 text-xs text-text-muted max-w-2xl">
+            Markdown context loaded into the Nerd's system prompt. Each skill picks which
+            harnesses it applies to — the admin Nerd, admin Content Lab, and/or the portal
+            Content Lab — and can be scoped to a single client.
+          </p>
+        </div>
+        <AISettingsSkillsClient clients={clients ?? []} />
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">Usage</h2>
+          <p className="mt-1 text-xs text-text-muted">Model spend and token counts across the platform.</p>
+        </div>
+        <UsageDashboard />
+      </section>
     </div>
   );
 }

@@ -8,9 +8,6 @@ import {
   Brain,
   Cpu,
   Code,
-  Sparkles,
-  User as UserIcon,
-  ChevronLeft,
 } from 'lucide-react';
 import { useSidebar } from './sidebar';
 
@@ -19,7 +16,10 @@ import { useSidebar } from './sidebar';
 // ---------------------------------------------------------------------------
 
 const SETTINGS_PREFIXES = [
-  '/admin/settings',
+  // Account settings lives under /admin/settings and is reached only via the
+  // avatar popover — intentionally excluded so the secondary settings rail
+  // doesn't double up with the account page's own sub-nav.
+  '/admin/settings/ai',
   '/admin/users',
   '/admin/knowledge',
 ];
@@ -43,11 +43,9 @@ interface SettingsItem {
 }
 
 const ITEMS: SettingsItem[] = [
-  { href: '/admin/settings', label: 'Account', icon: UserIcon, exact: true },
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/knowledge', label: 'Brain', icon: Brain },
-  { href: '/admin/settings/usage', label: 'AI settings', icon: Cpu },
-  { href: '/admin/settings/ai', label: 'AI skills', icon: Sparkles },
+  { href: '/admin/settings/ai', label: 'AI settings', icon: Cpu },
   { href: '/admin/nerd/api', label: 'API docs', icon: Code },
 ];
 
@@ -79,13 +77,6 @@ export function AdminSettingsSidebar() {
       className="sticky top-0 h-screen hidden md:flex flex-col shrink-0 border-r border-nativz-border bg-surface w-56"
     >
       <div className="shrink-0 p-3 pb-2">
-        <Link
-          href="/admin/dashboard"
-          className="inline-flex items-center gap-1 text-[13px] font-medium text-text-muted hover:text-text-secondary transition-colors mb-3"
-        >
-          <ChevronLeft size={14} />
-          <span>Back to dashboard</span>
-        </Link>
         <h2 className="px-1 text-lg font-semibold text-text-primary">Settings</h2>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-1">

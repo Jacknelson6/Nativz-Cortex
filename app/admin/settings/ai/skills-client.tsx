@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Loader2,
@@ -14,10 +14,39 @@ import {
   X,
   Users as UsersIcon,
   Check,
+  Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils/cn';
+
+/**
+ * Parse a GitHub URL like `https://github.com/owner/repo/blob/branch/path/to/file.md`
+ * into { repo: "owner/repo", branch, path }. Returns null if the URL doesn't match.
+ * Handles `/blob/`, `/tree/`, raw URLs, and `?ref=` fallback for the branch.
+ */
+function parseGithubUrl(url: string): { repo: string; branch: string; path: string } | null {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  try {
+    const u = new URL(trimmed);
+    if (!/^(www\.)?github\.com$|^raw\.githubusercontent\.com$/.test(u.hostname)) return null;
+    const parts = u.pathname.split('/').filter(Boolean);
+    if (parts.length < 2) return null;
+    const [owner, repo, type, ...rest] = parts;
+    if (u.hostname === 'raw.githubusercontent.com') {
+      const [branch, ...path] = rest.length ? [type, ...rest] : [];
+      if (!branch || path.length === 0) return null;
+      return { repo: `${owner}/${repo}`, branch, path: path.join('/') };
+    }
+    if (type !== 'blob' && type !== 'tree') return null;
+    const [branch, ...path] = rest;
+    if (!branch || path.length === 0) return null;
+    return { repo: `${owner}/${repo}`, branch, path: path.join('/') };
+  } catch {
+    return null;
+  }
+}
 
 type Harness = 'admin_nerd' | 'admin_content_lab' | 'portal_content_lab';
 
@@ -147,12 +176,19 @@ export function AISettingsSkillsClient({ clients }: { clients: ClientOption[] })
       </div>
 
       {skills.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-nativz-border bg-surface/40 px-6 py-12 text-center">
-          <p className="text-sm text-text-muted">No skills yet.</p>
-          <p className="mt-1 text-xs text-text-muted/70">
-            Create one from a markdown upload or link a GitHub file.
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          className="w-full rounded-xl border border-dashed border-nativz-border bg-surface/40 px-6 py-16 text-center transition-colors hover:border-accent/40 hover:bg-surface/60"
+        >
+          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-accent-surface/40">
+            <Upload size={18} className="text-accent-text" />
+          </div>
+          <p className="mt-3 text-sm font-medium text-text-primary">No skills yet</p>
+          <p className="mt-1 text-xs text-text-muted">
+            Drop a markdown file, paste a GitHub link, or write one from scratch.
           </p>
-        </div>
+        </button>
       ) : (
         <ul className="space-y-2">
           {skills.map((s) => (
@@ -317,8 +353,39 @@ function SkillEditor({
   const [githubRepo, setGithubRepo] = useState(skill?.github_repo ?? '');
   const [githubPath, setGithubPath] = useState(skill?.github_path ?? '');
   const [githubBranch, setGithubBranch] = useState(skill?.github_branch ?? 'main');
+  const [githubUrl, setGithubUrl] = useState('');
   const [source, setSource] = useState<'upload' | 'github'>(skill?.source ?? 'upload');
   const [saving, setSaving] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const readMarkdownFile = useCallback(async (file: File) => {
+    if (!/\.(md|mdx|markdown|txt)$/i.test(file.name)) {
+      toast.error('Only markdown files (.md, .mdx, .markdown, .txt)');
+      return;
+    }
+    const text = await file.text();
+    setContent(text);
+    if (!name.trim()) {
+      const base = file.name.replace(/\.(md|mdx|markdown|txt)$/i, '').replace(/[-_]+/g, ' ').trim();
+      if (base) setName(base);
+    }
+    toast.success(`Loaded ${file.name}`);
+  }, [name]);
+
+  function handleGithubUrlChange(url: string) {
+    setGithubUrl(url);
+    const parsed = parseGithubUrl(url);
+    if (parsed) {
+      setGithubRepo(parsed.repo);
+      setGithubBranch(parsed.branch);
+      setGithubPath(parsed.path);
+      if (!name.trim()) {
+        const base = parsed.path.split('/').pop()?.replace(/\.(md|mdx|markdown|txt)$/i, '').replace(/[-_]+/g, ' ').trim();
+        if (base) setName(base);
+      }
+    }
+  }
 
   function toggleHarness(h: Harness) {
     setHarnesses((prev) =>
@@ -489,14 +556,55 @@ function SkillEditor({
         )}
 
         {(isEdit ? skill!.source === 'upload' : source === 'upload') && (
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-text-primary">
               Markdown body
             </label>
+            {!isEdit && (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) void readMarkdownFile(file);
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                className={cn(
+                  'cursor-pointer rounded-lg border border-dashed px-4 py-5 text-center transition-colors',
+                  dragging
+                    ? 'border-accent/60 bg-accent-surface/20'
+                    : 'border-nativz-border bg-surface/40 hover:border-accent/30 hover:bg-surface/60',
+                )}
+              >
+                <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-accent-surface/40">
+                  <Upload size={14} className="text-accent-text" />
+                </div>
+                <p className="mt-2 text-xs text-text-secondary">
+                  <span className="font-medium text-text-primary">Drop a .md file</span>{' '}
+                  or click to browse
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".md,.mdx,.markdown,.txt,text/markdown,text/plain"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void readMarkdownFile(file);
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+            )}
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="# Skill name\n\n..."
+              placeholder="# Skill name&#10;&#10;..."
               rows={14}
               className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 font-mono text-sm text-text-primary focus:outline-none focus:border-accent/50"
             />
@@ -506,7 +614,22 @@ function SkillEditor({
         {!isEdit && source === 'github' && (
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">GitHub repo</label>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                GitHub URL <span className="text-text-muted font-normal">(paste a blob link)</span>
+              </label>
+              <input
+                type="text"
+                value={githubUrl}
+                onChange={(e) => handleGithubUrlChange(e.target.value)}
+                placeholder="https://github.com/owner/repo/blob/main/skills/example.md"
+                className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/50"
+              />
+              <p className="mt-1 text-xs text-text-muted/80">
+                Pasting a GitHub file URL auto-fills repo, branch, and path below.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">Repo</label>
               <input
                 type="text"
                 value={githubRepo}

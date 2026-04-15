@@ -9,7 +9,6 @@ import {
   User,
   Link as LinkIcon,
   Bell,
-  Users,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
@@ -42,7 +41,6 @@ const SECTIONS = [
   { id: 'connections', label: 'Connections', icon: LinkIcon },
   { id: 'api-keys', label: 'API keys', icon: Key },
   { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'team', label: 'Team', icon: Users },
   { id: 'security', label: 'Security', icon: KeyRound },
 ] as const;
 
@@ -337,16 +335,6 @@ export default function AdminSettingsPage() {
         <div id="notifications" ref={(el) => { sectionRefs.current['notifications'] = el; }}>
           <h2 className="text-base font-semibold text-text-primary mb-4">Notifications</h2>
           <NotificationPreferencesSection />
-        </div>
-
-        {/* Team */}
-        <div id="team" ref={(el) => { sectionRefs.current['team'] = el; }}>
-          <h2 className="text-base font-semibold text-text-primary mb-4">Team</h2>
-          <Card>
-            <p className="text-sm text-text-muted">
-              Team management and invite links coming soon.
-            </p>
-          </Card>
         </div>
 
         {/* Security */}
