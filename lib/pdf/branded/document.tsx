@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import type { AgencyTheme } from '@/lib/branding';
 import type {
@@ -8,6 +10,8 @@ import type {
   BrandedDeliverableStat,
   BrandedDeliverableTopic,
 } from './types';
+
+// ── Helpers ────────────────────────────────────────────────────────
 
 const withAlpha = (hex: string, alpha: number): string => {
   const a = Math.max(0, Math.min(1, alpha));
@@ -21,6 +25,16 @@ const withAlpha = (hex: string, alpha: number): string => {
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 };
 
+/** Read a PNG from /public at render time and return as Buffer for <Image src>. */
+function readLogoBuffer(publicPath: string): Buffer | null {
+  try {
+    const abs = path.join(process.cwd(), 'public', publicPath.replace(/^\//, ''));
+    return fs.readFileSync(abs);
+  } catch {
+    return null;
+  }
+}
+
 function toneTileStyles(theme: AgencyTheme, tone: BrandedDeliverableMetric['tone']) {
   switch (tone) {
     case 'positive':
@@ -28,28 +42,30 @@ function toneTileStyles(theme: AgencyTheme, tone: BrandedDeliverableMetric['tone
     case 'negative':
       return { bg: '#FDF2DC', text: '#B06A13' };
     default:
-      return { bg: '#F3F4F6', text: theme.colors.textDark };
+      return { bg: '#F4F6F8', text: theme.colors.textDark };
   }
 }
+
+// ── Styles ─────────────────────────────────────────────────────────
 
 function buildStyles(theme: AgencyTheme) {
   return StyleSheet.create({
     page: {
-      paddingTop: 48,
-      paddingHorizontal: 48,
-      paddingBottom: 72,
+      paddingTop: 64,
+      paddingHorizontal: 56,
+      paddingBottom: 80,
       fontFamily: 'Helvetica',
       fontSize: 10,
       color: theme.colors.textBody,
       backgroundColor: theme.colors.white,
     },
 
-    // Running header (every non-cover page)
+    // Running header
     runningHeader: {
       position: 'absolute',
-      top: 24,
-      left: 48,
-      right: 48,
+      top: 28,
+      left: 56,
+      right: 56,
       flexDirection: 'row',
       justifyContent: 'flex-end',
       alignItems: 'center',
@@ -57,28 +73,35 @@ function buildStyles(theme: AgencyTheme) {
     runningHeaderText: {
       fontSize: 8,
       color: theme.colors.textMuted,
-      letterSpacing: 1,
+      letterSpacing: 1.2,
+      fontFamily: 'Helvetica',
     },
-    runningHeaderDivider: {
-      marginHorizontal: 6,
-      color: theme.colors.border,
+    runningHeaderStrong: {
+      fontSize: 8,
+      color: theme.colors.textDark,
+      letterSpacing: 1.2,
+      fontFamily: 'Helvetica-Bold',
     },
 
     // Footer
     footer: {
       position: 'absolute',
-      bottom: 28,
-      left: 48,
-      right: 48,
-      paddingTop: 10,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.border,
+      bottom: 36,
+      left: 56,
+      right: 56,
+    },
+    footerRule: {
+      height: 1,
+      backgroundColor: theme.colors.primary,
+      marginBottom: 10,
+    },
+    footerInner: {
       flexDirection: 'row',
       justifyContent: 'center',
       alignItems: 'center',
     },
-    footerText: { fontSize: 8, color: theme.colors.textMuted, letterSpacing: 0.3 },
-    footerDot: { fontSize: 8, color: theme.colors.textMuted, marginHorizontal: 6 },
+    footerText: { fontSize: 8.5, color: theme.colors.textMuted, letterSpacing: 0.5 },
+    footerSep: { fontSize: 8.5, color: theme.colors.border, marginHorizontal: 10 },
 
     // ── Cover ─────────────────────────────────────────────────────
     coverPage: {
@@ -88,199 +111,283 @@ function buildStyles(theme: AgencyTheme) {
       color: theme.colors.textBody,
       backgroundColor: theme.colors.white,
       flexDirection: 'column',
-      justifyContent: 'center',
     },
+    coverTopPad: { flexGrow: 1, minHeight: 80 },
     coverLogoWrap: {
       alignItems: 'center',
-      marginBottom: 40,
+      marginBottom: 56,
     },
-    coverLogo: { height: 48, objectFit: 'contain' },
-    coverEyebrow: {
-      fontSize: 11,
-      letterSpacing: 4,
+    coverLogo: { height: 64, objectFit: 'contain' },
+    coverRuleWrap: { alignItems: 'center', marginBottom: 22 },
+    coverRule: {
+      width: 220,
+      height: 1,
+      backgroundColor: theme.colors.primary,
+    },
+    coverKicker: {
+      fontSize: 13,
+      letterSpacing: 5,
       textAlign: 'center',
       fontFamily: 'Helvetica-Bold',
       color: theme.colors.textDark,
-      marginBottom: 18,
-    },
-    coverKicker: {
-      fontSize: 28,
-      textAlign: 'center',
-      fontFamily: 'Helvetica',
-      color: theme.colors.textDark,
-      marginBottom: 4,
+      marginBottom: 14,
     },
     coverTitle: {
       fontSize: 34,
       textAlign: 'center',
       fontFamily: 'Helvetica-Bold',
+      color: theme.colors.textDark,
+      lineHeight: 1.15,
+      marginBottom: 18,
+      letterSpacing: 0.5,
+    },
+    coverTitleAccent: {
+      fontSize: 34,
+      textAlign: 'center',
+      fontFamily: 'Helvetica-Bold',
       color: theme.colors.primary,
       lineHeight: 1.15,
-      marginBottom: 20,
+      marginBottom: 18,
+      letterSpacing: 0.5,
+    },
+    coverSubtitle: {
+      fontSize: 11,
+      textAlign: 'center',
+      color: theme.colors.primary,
+      fontFamily: 'Helvetica-Bold',
+      letterSpacing: 3,
+      marginBottom: 22,
     },
     coverSummary: {
       fontSize: 11.5,
       textAlign: 'center',
       color: theme.colors.textBody,
-      lineHeight: 1.5,
-      maxWidth: 460,
-      marginHorizontal: 'auto',
-      marginBottom: 32,
+      lineHeight: 1.55,
+      marginLeft: 40,
+      marginRight: 40,
+      marginBottom: 30,
     },
     coverStatsRow: {
       flexDirection: 'row',
-      gap: 24,
+      gap: 0,
       justifyContent: 'center',
-      marginBottom: 28,
+      marginBottom: 30,
     },
     coverStatCell: {
       alignItems: 'center',
-      paddingHorizontal: 24,
+      paddingHorizontal: 28,
+      paddingTop: 14,
       borderTopWidth: 1,
       borderTopColor: theme.colors.border,
-      paddingTop: 14,
-      minWidth: 120,
+      minWidth: 130,
     },
     coverStatValue: {
-      fontSize: 26,
+      fontSize: 30,
       fontFamily: 'Helvetica-Bold',
       color: theme.colors.primary,
-      marginBottom: 4,
+      marginBottom: 6,
     },
     coverStatLabel: {
       fontSize: 8.5,
-      letterSpacing: 2,
+      letterSpacing: 2.5,
       color: theme.colors.textMuted,
       fontFamily: 'Helvetica-Bold',
     },
     coverHighlightWrap: {
-      textAlign: 'center',
-      marginTop: 8,
+      alignItems: 'center',
+      marginTop: 2,
     },
     coverHighlightLabel: { fontSize: 11, color: theme.colors.textBody },
     coverHighlightValue: { fontSize: 11, color: theme.colors.primary, fontFamily: 'Helvetica-Bold' },
+    coverBottomRule: {
+      width: 100,
+      height: 1,
+      backgroundColor: theme.colors.primary,
+      alignSelf: 'center',
+      marginTop: 28,
+    },
+    coverBottomPad: { flexGrow: 1 },
 
-    // ── Legend page ───────────────────────────────────────────────
-    legendHeading: {
-      fontSize: 15,
+    // ── Section header (proposal-style) ──────────────────────────
+    sectionHeaderWrap: { marginBottom: 18 },
+    sectionTitle: {
+      fontSize: 24,
       fontFamily: 'Helvetica-Bold',
       color: theme.colors.textDark,
-      marginBottom: 6,
-      letterSpacing: 0.6,
+      letterSpacing: 0.8,
+      marginBottom: 12,
+    },
+    sectionRuleRow: {
+      flexDirection: 'row',
+      height: 1,
+      marginBottom: 14,
+    },
+    sectionRulePrimary: {
+      width: 80,
+      backgroundColor: theme.colors.primary,
+    },
+    sectionRuleRest: {
+      flex: 1,
+      backgroundColor: theme.colors.border,
+    },
+    sectionIntro: {
+      fontSize: 10.5,
+      color: theme.colors.textBody,
+      lineHeight: 1.55,
+      marginBottom: 14,
+    },
+
+    // ── Legend ────────────────────────────────────────────────────
+    legendHeading: {
+      fontSize: 16,
+      fontFamily: 'Helvetica-Bold',
+      color: theme.colors.textDark,
+      letterSpacing: 0.8,
+      marginBottom: 10,
+    },
+    legendRule: {
+      height: 1,
+      backgroundColor: theme.colors.primary,
+      width: 60,
+      marginBottom: 14,
     },
     legendIntro: {
       fontSize: 10.5,
       color: theme.colors.textBody,
-      marginBottom: 14,
-      lineHeight: 1.45,
+      marginBottom: 18,
+      lineHeight: 1.55,
     },
     legendRow: {
       flexDirection: 'row',
-      alignItems: 'stretch',
-      borderRadius: 4,
-      marginBottom: 6,
-      overflow: 'hidden',
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    legendRowLast: {
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
     },
     legendLabelCell: {
       width: 180,
       paddingHorizontal: 14,
-      paddingVertical: 10,
+      paddingVertical: 12,
       fontSize: 10,
       fontFamily: 'Helvetica-Bold',
+      letterSpacing: 1.2,
     },
     legendDescCell: {
       flex: 1,
       paddingHorizontal: 14,
-      paddingVertical: 10,
+      paddingVertical: 12,
       fontSize: 10,
       color: theme.colors.textBody,
-      backgroundColor: theme.colors.offwhite,
+      lineHeight: 1.45,
     },
     legendFootnote: {
       fontSize: 10,
       color: theme.colors.textBody,
-      marginTop: 16,
-      lineHeight: 1.45,
+      marginTop: 18,
+      lineHeight: 1.55,
+      fontFamily: 'Helvetica-Oblique',
     },
 
     // ── Series header ────────────────────────────────────────────
-    seriesHeader: {
-      marginBottom: 14,
-    },
+    seriesHeaderWrap: { marginBottom: 18, marginTop: 8 },
     seriesLabel: {
       fontSize: 9,
-      letterSpacing: 3,
+      letterSpacing: 3.5,
       color: theme.colors.textMuted,
       fontFamily: 'Helvetica-Bold',
-      marginBottom: 4,
+      marginBottom: 6,
     },
     seriesTitle: {
       fontSize: 22,
       fontFamily: 'Helvetica-Bold',
       color: theme.colors.textDark,
-      marginBottom: 4,
-      lineHeight: 1.15,
+      letterSpacing: 0.5,
+      marginBottom: 6,
+      lineHeight: 1.2,
     },
     seriesSubtitle: {
       fontSize: 11,
       color: theme.colors.textBody,
       marginBottom: 12,
     },
-    seriesAccent: {
-      height: 2,
-      backgroundColor: theme.colors.primary,
-      marginBottom: 12,
+    seriesSplitRule: {
+      flexDirection: 'row',
+      height: 1,
+      marginBottom: 16,
     },
+    seriesSplitPrimary: { width: 80, backgroundColor: theme.colors.primary },
+    seriesSplitRest: { flex: 1, backgroundColor: theme.colors.border },
     seriesStatsStrip: {
       flexDirection: 'row',
-      justifyContent: 'space-around',
+      justifyContent: 'center',
+      gap: 48,
+      paddingVertical: 14,
+      paddingHorizontal: 24,
       backgroundColor: theme.colors.offwhite,
-      paddingVertical: 10,
-      borderRadius: 4,
       marginBottom: 16,
     },
     seriesStatCell: { alignItems: 'center' },
     seriesStatValue: {
-      fontSize: 16,
+      fontSize: 18,
       fontFamily: 'Helvetica-Bold',
       color: theme.colors.textDark,
+      letterSpacing: 0.5,
     },
     seriesStatLabel: {
       fontSize: 8,
-      letterSpacing: 2,
+      letterSpacing: 2.5,
       color: theme.colors.textMuted,
       fontFamily: 'Helvetica-Bold',
-      marginTop: 2,
+      marginTop: 4,
     },
 
     // ── Topic card ───────────────────────────────────────────────
     topicCard: {
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: 6,
-      padding: 14,
-      marginBottom: 12,
+      flexDirection: 'row',
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      paddingVertical: 16,
+      paddingHorizontal: 2,
+      marginBottom: -1, // collapse borders between adjacent cards
     },
-    topicHeader: {
+    topicAccent: {
+      width: 3,
+      backgroundColor: theme.colors.primary,
+      marginRight: 14,
+    },
+    topicAccentInvisible: {
+      width: 3,
+      backgroundColor: 'transparent',
+      marginRight: 14,
+    },
+    topicBody: { flex: 1 },
+    topicHeaderRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'flex-start',
-      marginBottom: 8,
+      marginBottom: 6,
     },
+    topicTitleRow: { flexDirection: 'row', flex: 1, alignItems: 'flex-start' },
     topicNumber: {
       fontSize: 11,
       color: theme.colors.textMuted,
-      marginRight: 6,
-      fontFamily: 'Helvetica',
+      marginRight: 8,
+      fontFamily: 'Helvetica-Bold',
+      letterSpacing: 0.5,
     },
     topicTitle: {
-      fontSize: 13,
+      fontSize: 13.5,
       color: theme.colors.textDark,
       fontFamily: 'Helvetica-Bold',
       flex: 1,
-      flexWrap: 'wrap',
+      letterSpacing: 0.3,
+      lineHeight: 1.3,
     },
-    topicTags: { alignItems: 'flex-end', marginLeft: 8 },
+    topicTags: { alignItems: 'flex-end', marginLeft: 12 },
     topicTagPrimary: {
       fontSize: 8.5,
       letterSpacing: 1.5,
@@ -292,102 +399,126 @@ function buildStyles(theme: AgencyTheme) {
       letterSpacing: 1.5,
       color: '#B06A13',
       fontFamily: 'Helvetica-Bold',
-      marginTop: 2,
+      marginTop: 3,
     },
 
+    topicSourceRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
     topicSourceLabel: {
       fontSize: 7.5,
-      letterSpacing: 1.5,
+      letterSpacing: 1.8,
       color: theme.colors.textMuted,
       fontFamily: 'Helvetica-Bold',
-      marginBottom: 2,
+      marginRight: 8,
     },
     topicSource: {
       fontSize: 10,
       color: theme.colors.textBody,
-      marginBottom: 10,
+      flex: 1,
     },
 
-    metricsRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+    metricsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
     metricTile: {
       flex: 1,
-      borderRadius: 4,
-      paddingVertical: 12,
+      paddingVertical: 14,
       alignItems: 'center',
     },
     metricValue: {
-      fontSize: 16,
+      fontSize: 18,
       fontFamily: 'Helvetica-Bold',
-      marginBottom: 2,
+      marginBottom: 3,
+      letterSpacing: 0.5,
     },
     metricLabel: {
       fontSize: 7.5,
-      letterSpacing: 1.5,
+      letterSpacing: 1.8,
       fontFamily: 'Helvetica-Bold',
     },
 
     whyRow: { flexDirection: 'row', alignItems: 'flex-start' },
     whyLabel: {
       fontSize: 8.5,
-      letterSpacing: 1.5,
+      letterSpacing: 1.8,
       color: theme.colors.primary,
       fontFamily: 'Helvetica-Bold',
-      marginRight: 8,
+      marginRight: 10,
       marginTop: 2,
     },
     whyBody: {
-      fontSize: 10,
+      fontSize: 10.5,
       color: theme.colors.textBody,
       flex: 1,
-      lineHeight: 1.4,
+      lineHeight: 1.5,
     },
   });
 }
 
-// ─── Small render helpers ──────────────────────────────────────────
+// ─── Sub-components ──────────────────────────────────────────────
 
 function RunningHeader({
-  productName,
-  title,
+  agencyName,
+  docTitle,
   styles,
 }: {
-  productName: string;
-  title?: string;
+  agencyName: string;
+  docTitle?: string;
   styles: ReturnType<typeof buildStyles>;
 }) {
   return (
     <View style={styles.runningHeader} fixed>
-      <Text style={styles.runningHeaderText}>
-        {productName.toUpperCase()}
-        {title ? `  |  ${title.toUpperCase()}` : ''}
+      <Text>
+        <Text style={styles.runningHeaderStrong}>{agencyName.toUpperCase()}</Text>
+        {docTitle && (
+          <>
+            <Text style={styles.runningHeaderText}>{'  |  '}</Text>
+            <Text style={styles.runningHeaderText}>{docTitle.toUpperCase()}</Text>
+          </>
+        )}
       </Text>
     </View>
   );
 }
 
 function Footer({
-  productName,
-  title,
+  agencyName,
   styles,
 }: {
-  productName: string;
-  title?: string;
+  agencyName: string;
   styles: ReturnType<typeof buildStyles>;
 }) {
   return (
     <View style={styles.footer} fixed>
-      <Text style={styles.footerText}>{productName}</Text>
-      <Text style={styles.footerDot}>·</Text>
-      {title && (
-        <>
-          <Text style={styles.footerText}>{title}</Text>
-          <Text style={styles.footerDot}>·</Text>
-        </>
-      )}
-      <Text
-        style={styles.footerText}
-        render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
-      />
+      <View style={styles.footerRule} />
+      <View style={styles.footerInner}>
+        <Text style={styles.footerText}>{agencyName}</Text>
+        <Text style={styles.footerSep}>|</Text>
+        <Text
+          style={styles.footerText}
+          render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
+        />
+      </View>
+    </View>
+  );
+}
+
+function SplitRule({
+  variant,
+  styles,
+}: {
+  variant: 'series' | 'section';
+  styles: ReturnType<typeof buildStyles>;
+}) {
+  if (variant === 'section') {
+    return (
+      <View style={styles.sectionRuleRow}>
+        <View style={styles.sectionRulePrimary} />
+        <View style={styles.sectionRuleRest} />
+      </View>
+    );
+  }
+  return (
+    <View style={styles.seriesSplitRule}>
+      <View style={styles.seriesSplitPrimary} />
+      <View style={styles.seriesSplitRest} />
     </View>
   );
 }
@@ -420,49 +551,53 @@ function TopicCard({
   theme: AgencyTheme;
   styles: ReturnType<typeof buildStyles>;
 }) {
+  const isPriority = Boolean(topic.priorityLabel);
   return (
     <View style={styles.topicCard} wrap={false}>
-      <View style={styles.topicHeader}>
-        <View style={{ flexDirection: 'row', flex: 1, alignItems: 'flex-start' }}>
-          <Text style={styles.topicNumber}>{topic.number}</Text>
-          <Text style={styles.topicTitle}>{topic.title}</Text>
+      <View style={isPriority ? styles.topicAccent : styles.topicAccentInvisible} />
+      <View style={styles.topicBody}>
+        <View style={styles.topicHeaderRow}>
+          <View style={styles.topicTitleRow}>
+            <Text style={styles.topicNumber}>{topic.number}</Text>
+            <Text style={styles.topicTitle}>{topic.title}</Text>
+          </View>
+          <View style={styles.topicTags}>
+            {topic.resonanceLabel && <Text style={styles.topicTagPrimary}>{topic.resonanceLabel.toUpperCase()}</Text>}
+            {topic.priorityLabel && <Text style={styles.topicTagWarning}>{topic.priorityLabel.toUpperCase()}</Text>}
+          </View>
         </View>
-        <View style={styles.topicTags}>
-          {topic.resonanceLabel && <Text style={styles.topicTagPrimary}>{topic.resonanceLabel.toUpperCase()}</Text>}
-          {topic.priorityLabel && <Text style={styles.topicTagWarning}>{topic.priorityLabel.toUpperCase()}</Text>}
-        </View>
+
+        {topic.source && (
+          <View style={styles.topicSourceRow}>
+            <Text style={styles.topicSourceLabel}>{(topic.sourceLabel ?? 'SOURCE').toUpperCase()}</Text>
+            <Text style={styles.topicSource}>{topic.source}</Text>
+          </View>
+        )}
+
+        {topic.metrics.length > 0 && (
+          <View style={styles.metricsRow}>
+            {topic.metrics.map((metric, i) => {
+              const tone = toneTileStyles(theme, metric.tone);
+              return (
+                <View
+                  key={`${metric.label}-${i}`}
+                  style={[styles.metricTile, { backgroundColor: tone.bg }]}
+                >
+                  <Text style={[styles.metricValue, { color: tone.text }]}>{metric.value}</Text>
+                  <Text style={[styles.metricLabel, { color: tone.text }]}>{metric.label.toUpperCase()}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {topic.whyItWorks && (
+          <View style={styles.whyRow}>
+            <Text style={styles.whyLabel}>WHY IT WORKS</Text>
+            <Text style={styles.whyBody}>{topic.whyItWorks}</Text>
+          </View>
+        )}
       </View>
-
-      {topic.source && (
-        <>
-          <Text style={styles.topicSourceLabel}>{(topic.sourceLabel ?? 'SOURCE').toUpperCase()}</Text>
-          <Text style={styles.topicSource}>{topic.source}</Text>
-        </>
-      )}
-
-      {topic.metrics.length > 0 && (
-        <View style={styles.metricsRow}>
-          {topic.metrics.map((metric, i) => {
-            const tone = toneTileStyles(theme, metric.tone);
-            return (
-              <View
-                key={`${metric.label}-${i}`}
-                style={[styles.metricTile, { backgroundColor: tone.bg }]}
-              >
-                <Text style={[styles.metricValue, { color: tone.text }]}>{metric.value}</Text>
-                <Text style={[styles.metricLabel, { color: tone.text }]}>{metric.label.toUpperCase()}</Text>
-              </View>
-            );
-          })}
-        </View>
-      )}
-
-      {topic.whyItWorks && (
-        <View style={styles.whyRow}>
-          <Text style={styles.whyLabel}>WHY IT WORKS</Text>
-          <Text style={styles.whyBody}>{topic.whyItWorks}</Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -478,11 +613,11 @@ function Series({
 }) {
   return (
     <View>
-      <View style={styles.seriesHeader} wrap={false}>
+      <View style={styles.seriesHeaderWrap} wrap={false}>
         <Text style={styles.seriesLabel}>{series.label.toUpperCase()}</Text>
         <Text style={styles.seriesTitle}>{series.title}</Text>
         {series.subtitle && <Text style={styles.seriesSubtitle}>{series.subtitle}</Text>}
-        <View style={styles.seriesAccent} />
+        <SplitRule variant="series" styles={styles} />
         {series.stats && series.stats.length > 0 && (
           <View style={styles.seriesStatsStrip}>
             {series.stats.map((stat, i) => (
@@ -512,28 +647,32 @@ function LegendSection({
 }) {
   function toneColors(tone: BrandedDeliverableLegendItem['tone']) {
     switch (tone) {
-      case 'positive': return { label: '#1F8A4C', bg: '#E8F6EE' };
-      case 'warning': return { label: '#B06A13', bg: '#FDF2DC' };
-      case 'negative': return { label: '#B43E3E', bg: '#FDE3E3' };
-      case 'primary': return { label: theme.colors.primary, bg: theme.colors.primarySurface };
-      default: return { label: theme.colors.textDark, bg: theme.colors.offwhite };
+      case 'positive': return { label: '#1F8A4C' };
+      case 'warning': return { label: '#B06A13' };
+      case 'negative': return { label: '#B43E3E' };
+      case 'primary': return { label: theme.colors.primary };
+      default: return { label: theme.colors.textDark };
     }
   }
 
+  const items = legend.items ?? [];
   return (
     <View>
       {legend.heading && <Text style={styles.legendHeading}>{legend.heading.toUpperCase()}</Text>}
+      <View style={styles.legendRule} />
       {legend.intro && <Text style={styles.legendIntro}>{legend.intro}</Text>}
-      {legend.items && legend.items.length > 0 && (
+      {items.length > 0 && (
         <View>
-          {legend.items.map((item, i) => {
+          {items.map((item, i) => {
             const colors = toneColors(item.tone);
+            const isLast = i === items.length - 1;
             return (
-              <View key={`${item.label}-${i}`} style={styles.legendRow}>
-                <Text
-                  style={[styles.legendLabelCell, { color: colors.label, backgroundColor: withAlpha(colors.label, 0.08) }]}
-                >
-                  {item.label}
+              <View
+                key={`${item.label}-${i}`}
+                style={[styles.legendRow, isLast ? styles.legendRowLast : {}]}
+              >
+                <Text style={[styles.legendLabelCell, { color: colors.label }]}>
+                  {item.label.toUpperCase()}
                 </Text>
                 <Text style={styles.legendDescCell}>{item.description}</Text>
               </View>
@@ -556,21 +695,27 @@ export function BrandedDeliverableDocument({
   theme: AgencyTheme;
 }) {
   const styles = buildStyles(theme);
-  const productName = data.runningHeaderProduct ?? `${theme.name} Cortex`;
-  const runningTitle = data.runningHeaderTitle ?? data.eyebrow ?? data.title;
+  const agencyName = theme.name;
+  const docTitle = data.runningHeaderTitle ?? data.eyebrow ?? data.title;
+
+  const logoBuffer = readLogoBuffer(theme.logos.png);
 
   return (
     <Document>
-      {/* Cover page */}
+      {/* Cover */}
       <Page size="A4" style={styles.coverPage}>
-        {theme.logos.pngBase64 && (
+        <View style={styles.coverTopPad} />
+        {logoBuffer && (
           <View style={styles.coverLogoWrap}>
-            <Image src={theme.logos.pngBase64} style={styles.coverLogo} />
+            <Image src={logoBuffer} style={styles.coverLogo} />
           </View>
         )}
-        {data.eyebrow && <Text style={styles.coverEyebrow}>{data.eyebrow.toUpperCase()}</Text>}
-        {data.kicker && <Text style={styles.coverKicker}>{data.kicker}</Text>}
-        <Text style={styles.coverTitle}>{data.title}</Text>
+        <View style={styles.coverRuleWrap}>
+          <View style={styles.coverRule} />
+        </View>
+        {data.kicker && <Text style={styles.coverKicker}>{data.kicker.toUpperCase()}</Text>}
+        <Text style={styles.coverTitleAccent}>{data.title}</Text>
+        {data.eyebrow && <Text style={styles.coverSubtitle}>{data.eyebrow.toUpperCase()}</Text>}
         {data.summary && <Text style={styles.coverSummary}>{data.summary}</Text>}
         {data.stats && data.stats.length > 0 && <StatRow stats={data.stats} styles={styles} />}
         {data.highlight && (
@@ -581,25 +726,27 @@ export function BrandedDeliverableDocument({
             </Text>
           </View>
         )}
-        <Footer productName={productName} title={runningTitle} styles={styles} />
+        <View style={styles.coverBottomRule} />
+        <View style={styles.coverBottomPad} />
+        <Footer agencyName={agencyName} styles={styles} />
       </Page>
 
-      {/* Legend page (optional) */}
+      {/* Legend */}
       {data.legend && (
         <Page size="A4" style={styles.page}>
-          <RunningHeader productName={productName} title={runningTitle} styles={styles} />
+          <RunningHeader agencyName={agencyName} docTitle={docTitle} styles={styles} />
           <LegendSection legend={data.legend} theme={theme} styles={styles} />
-          <Footer productName={productName} title={runningTitle} styles={styles} />
+          <Footer agencyName={agencyName} styles={styles} />
         </Page>
       )}
 
-      {/* Body — series + topic cards */}
+      {/* Body */}
       <Page size="A4" style={styles.page}>
-        <RunningHeader productName={productName} title={runningTitle} styles={styles} />
+        <RunningHeader agencyName={agencyName} docTitle={docTitle} styles={styles} />
         {data.series.map((series, i) => (
           <Series key={series.label + i} series={series} theme={theme} styles={styles} />
         ))}
-        <Footer productName={productName} title={runningTitle} styles={styles} />
+        <Footer agencyName={agencyName} styles={styles} />
       </Page>
     </Document>
   );
