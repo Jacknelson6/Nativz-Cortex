@@ -353,5 +353,7 @@ export function buildCompetitorProfile(
     avgViews: calculateAvgViews(videos),
     postingFrequency: estimatePostingFrequency(videos),
     recentVideos: videos,
+    bio: profile.bio ?? '',
+    bioLinks: profile.bioLinks ?? [],
   };
 }

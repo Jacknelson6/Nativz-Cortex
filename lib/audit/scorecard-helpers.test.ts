@@ -99,7 +99,7 @@ describe('computeCadenceTrend', () => {
 describe('computePlatformFocus', () => {
   const mkPlatform = (platform: 'tiktok'|'instagram'|'facebook'|'youtube', views: number, followers: number): PlatformReport => ({
     platform,
-    profile: { platform, username: 'x', displayName: 'x', bio: '', followers, following: 0, likes: 0, postsCount: 0, avatarUrl: null, profileUrl: '', verified: false },
+    profile: { platform, username: 'x', displayName: 'x', bio: '', followers, following: 0, likes: 0, postsCount: 0, avatarUrl: null, profileUrl: '', verified: false, bioLinks: [] },
     videos: [], engagementRate: 0, avgViews: views, postingFrequency: '',
   });
   it('focused when one platform carries >60% of follower share', () => {

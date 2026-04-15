@@ -14,6 +14,15 @@ export interface ProspectProfile {
   avatarUrl: string | null;
   profileUrl: string;
   verified: boolean;
+  /**
+   * External URLs in the profile. Populated from platform-specific fields
+   * (IG `externalUrl` + `bio_links`, TikTok `bioLink`, FB `website`) and
+   * augmented with URL extraction from the bio text as a fallback so we
+   * catch accounts that inline their links rather than using the dedicated
+   * link slot. Empty array when the profile has none. Always present for
+   * shape consistency across platforms.
+   */
+  bioLinks: string[];
 }
 
 export interface ProspectVideo {
@@ -76,6 +85,10 @@ export interface CompetitorProfile {
   avgViews: number;
   postingFrequency: string;
   recentVideos: ProspectVideo[];
+  /** Bio text — feeds the 30-day brief and "what they stand for" prompts. */
+  bio: string;
+  /** External URLs from the bio or platform link slot. */
+  bioLinks: string[];
   gemini_grades?: GeminiGrades;
   /**
    * True when we surfaced this competitor as a known brand but the scrape

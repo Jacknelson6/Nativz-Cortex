@@ -20,6 +20,7 @@ import {
   getApifyRunFailureReason,
 } from '@/lib/tiktok/apify-run';
 import type { ProspectProfile, ProspectVideo } from './types';
+import { collectBioLinks } from './scrape-helpers';
 
 const PROFILE_ACTOR_ID = 'apify/instagram-profile-scraper';
 const POSTS_ACTOR_ID = 'apify/instagram-scraper';
@@ -61,6 +62,13 @@ interface IGProfileItem {
   // a separate type per actor version.
   profile_pic_url?: string;
   profile_pic_url_hd?: string;
+  // External link slot(s). Newer IG actors return a `bio_links` array;
+  // older ones still use the single `externalUrl` / `external_url` field.
+  externalUrl?: string;
+  external_url?: string;
+  externalUrlShimmed?: string;
+  bio_links?: Array<{ url?: string; title?: string }>;
+  bioLinks?: Array<{ url?: string; title?: string }>;
   verified?: boolean;
   private?: boolean;
   igtvVideoCount?: number;
@@ -174,6 +182,13 @@ export async function scrapeInstagramProfile(profileUrl: string): Promise<Instag
       null,
     profileUrl: `https://www.instagram.com/${canonicalUsername}/`,
     verified: profileData?.verified ?? false,
+    bioLinks: collectBioLinks(profileData?.biography, [
+      profileData?.externalUrl,
+      profileData?.external_url,
+      profileData?.externalUrlShimmed,
+      ...((profileData?.bio_links ?? []).map((l) => l.url)),
+      ...((profileData?.bioLinks ?? []).map((l) => l.url)),
+    ]),
   };
 
   // Map all post types — the scorecard needs captions from every post, including

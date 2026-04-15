@@ -4,6 +4,7 @@
  */
 
 import type { ProspectProfile, ProspectVideo } from './types';
+import { collectBioLinks } from './scrape-helpers';
 
 const SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search';
 const VIDEOS_URL = 'https://www.googleapis.com/youtube/v3/videos';
@@ -84,11 +85,16 @@ export async function scrapeYouTubeProfile(profileUrl: string): Promise<YouTubeP
   const rawUsername = channel.snippet.customUrl ?? channelInfo.value;
   const username = rawUsername.replace(/^@/, '');
 
+  // YouTube has no dedicated profile-link slot — channels put business links
+  // in the description. Extract them from the FULL description before we
+  // truncate the bio string below, or we'd lose links that sit past 300 chars.
+  const fullDescription = channel.snippet.description ?? '';
+
   const profile: ProspectProfile = {
     platform: 'youtube',
     username,
     displayName: channel.snippet.title,
-    bio: channel.snippet.description.substring(0, 300),
+    bio: fullDescription.substring(0, 300),
     followers: parseInt(channel.statistics.subscriberCount ?? '0', 10),
     following: 0,
     likes: 0,
@@ -96,6 +102,7 @@ export async function scrapeYouTubeProfile(profileUrl: string): Promise<YouTubeP
     avatarUrl: channel.snippet.thumbnails.high?.url ?? channel.snippet.thumbnails.default?.url ?? null,
     profileUrl: `https://www.youtube.com/@${username}`,
     verified: false,
+    bioLinks: collectBioLinks(fullDescription, []),
   };
 
   // Step 2: Get recent short-form videos from this channel

@@ -18,6 +18,7 @@ import {
   getApifyRunFailureReason,
 } from '@/lib/tiktok/apify-run';
 import type { ProspectProfile, ProspectVideo } from './types';
+import { collectBioLinks } from './scrape-helpers';
 
 const ACTOR_ID = 'apidojo/tiktok-profile-scraper';
 
@@ -55,6 +56,11 @@ interface TikTokChannel {
   avatarLarger?: string;
   avatarMedium?: string;
   profilePicUrl?: string;
+  // External link fields (bio link slot). Actors return one of these —
+  // `bioLink` is the newer shape, `webLink` / `shareLink` older variants.
+  bioLink?: string | { link?: string };
+  webLink?: string;
+  shareLink?: string;
   verified?: boolean;
   url?: string;
   followers?: number;
@@ -157,6 +163,13 @@ export async function scrapeTikTokProfile(profileUrl: string): Promise<TikTokPro
       null,
     profileUrl: channel.url ?? `https://www.tiktok.com/@${canonicalUsername}`,
     verified: channel.verified ?? false,
+    bioLinks: collectBioLinks(channel.bio, [
+      typeof channel.bioLink === 'string'
+        ? channel.bioLink
+        : channel.bioLink?.link,
+      channel.webLink,
+      channel.shareLink,
+    ]),
   };
 
   const videos: ProspectVideo[] = items

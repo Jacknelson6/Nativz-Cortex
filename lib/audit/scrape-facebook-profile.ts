@@ -26,6 +26,7 @@ import {
   getApifyRunFailureReason,
 } from '@/lib/tiktok/apify-run';
 import type { ProspectProfile, ProspectVideo } from './types';
+import { collectBioLinks } from './scrape-helpers';
 
 const PROFILE_ACTOR_ID = process.env.FACEBOOK_PAGES_SCRAPER_ACTOR ?? 'apify/facebook-pages-scraper';
 const REELS_ACTOR_ID = process.env.FACEBOOK_REELS_SCRAPER_ACTOR ?? 'apify/facebook-reels-scraper';
@@ -198,6 +199,10 @@ export async function scrapeFacebookProfile(profileUrl: string): Promise<Faceboo
     avatarUrl: pageItem?.profilePictureUrl ?? null,
     profileUrl: pageItem?.facebookUrl ?? pageItem?.pageUrl ?? fullUrl,
     verified: Boolean(pageItem?.confirmed_owner), // best proxy — pages-scraper doesn't return a verified flag
+    bioLinks: collectBioLinks(bio, [
+      pageItem?.website,
+      ...(pageItem?.websites ?? []),
+    ]),
   };
 
   const videos: ProspectVideo[] = reelItems.slice(0, 25).map((item) => {

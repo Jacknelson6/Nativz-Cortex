@@ -14,6 +14,8 @@ import {
 import { discoverCompetitorsByWebsite, scrapeProvidedCompetitors } from '@/lib/audit/discover-competitors';
 import type { PlatformReport, CompetitorProfile, WebsiteContext, SocialLink, AuditPlatform, FailedPlatform } from '@/lib/audit/types';
 import { persistAllScrapedImages, persistAllCompetitorImages } from '@/lib/audit/persist-scraped-images';
+import { filterLastNDays } from '@/lib/audit/scrape-helpers';
+import { calculateEngagementRate, calculateAvgViews, estimatePostingFrequency } from '@/lib/audit/analyze';
 
 export const maxDuration = 300;
 
@@ -233,7 +235,31 @@ export async function POST(
         }
       }
 
+      // 30-day window: trim prospect + competitor video arrays to the last
+      // 30 days and recompute the dependent metrics (avg views, ER, posting
+      // frequency) off the recent slice. The pre-30-day pipeline averaged
+      // across the full 30-item scrape window (sometimes 300+ days for
+      // back-catalog-heavy accounts), which diluted ER and misread cadence.
+      // We keep the full `postsCount` lifetime number on the profile so the
+      // report still knows total output.
+      const WINDOW_DAYS = 30;
+      for (const report of platformReports) {
+        const recent = filterLastNDays(report.videos, WINDOW_DAYS);
+        report.videos = recent;
+        report.avgViews = calculateAvgViews(recent);
+        report.engagementRate = calculateEngagementRate(recent, report.profile.followers);
+        report.postingFrequency = estimatePostingFrequency(recent);
+      }
+
       const { competitors, failures: competitorFailures } = competitorDiscoveryResult;
+      for (const c of competitors) {
+        const recent = filterLastNDays(c.recentVideos, WINDOW_DAYS);
+        c.recentVideos = recent;
+        c.avgViews = calculateAvgViews(recent);
+        c.engagementRate = calculateEngagementRate(recent, c.followers);
+        c.postingFrequency = estimatePostingFrequency(recent);
+      }
+
       console.log(
         `[audit:${id}] Competitors: ${competitors.length} kept, ${competitorFailures.length} dropped`,
       );

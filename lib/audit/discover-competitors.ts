@@ -447,6 +447,8 @@ async function scrapeOneCandidate(
       avgViews: 0,
       postingFrequency: 'unknown',
       recentVideos: [],
+      bio: '',
+      bioLinks: [],
       isStub: true,
     };
     return { type: 'success', competitor: stub };
@@ -468,6 +470,8 @@ async function scrapeOneCandidate(
       avgViews: 0,
       postingFrequency: 'unknown',
       recentVideos: [],
+      bio: '',
+      bioLinks: [],
       isStub: true,
     };
     return { type: 'success', competitor: stub };
@@ -512,6 +516,8 @@ async function scrapeOneCandidate(
       avgViews: 0,
       postingFrequency: 'unknown',
       recentVideos: [],
+      bio: '',
+      bioLinks: [],
       isStub: true,
     };
     return { type: 'success', competitor: stub };
