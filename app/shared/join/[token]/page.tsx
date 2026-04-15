@@ -7,10 +7,13 @@ import Link from 'next/link';
 import { CheckCircle2, AlertCircle, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 
 type InviteStatus = 'loading' | 'valid' | 'invalid' | 'expired' | 'used';
 
 export default function TeamJoinPage() {
+  const { brand, brandName } = useAgencyBrand();
+  const isAC = brand === 'anderson';
   const params = useParams<{ token: string }>();
   const router = useRouter();
 
@@ -106,14 +109,23 @@ export default function TeamJoinPage() {
         {/* Logo */}
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex items-center justify-center">
-            <Image
-              src="/nativz-logo.svg"
-              alt="Nativz"
-              width={140}
-              height={53}
-              className="h-12 w-auto"
-              priority
-            />
+            {isAC ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src="/anderson-logo-dark.svg"
+                alt="Anderson Collaborative"
+                className="h-12 w-auto"
+              />
+            ) : (
+              <Image
+                src="/nativz-logo.svg"
+                alt="Nativz"
+                width={140}
+                height={53}
+                className="h-12 w-auto"
+                priority
+              />
+            )}
           </div>
         </div>
 
@@ -165,7 +177,7 @@ export default function TeamJoinPage() {
           <>
             <div className="text-center mb-6">
               <p className="text-sm text-text-muted">
-                You&apos;ve been invited to join <span className="font-medium text-text-primary">Nativz Cortex</span>
+                You&apos;ve been invited to join <span className="font-medium text-text-primary">{brandName} Cortex</span>
                 {memberRole && (
                   <> as <span className="font-medium text-text-primary">{memberRole}</span></>
                 )}

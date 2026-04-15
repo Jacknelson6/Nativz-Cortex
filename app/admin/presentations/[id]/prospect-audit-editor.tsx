@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 import type { AuditData, PresentationData, ProspectAuditData } from './types';
 
 // ─── Platform config ────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ export function ProspectAuditEditor({
   onSave: () => void;
   onBack: () => void;
 }) {
+  const { brandName } = useAgencyBrand();
   const audit = (presentation.audit_data as unknown as ProspectAuditData) ?? {
     url: '',
     status: 'idle' as const,
@@ -430,7 +432,7 @@ export function ProspectAuditEditor({
                   <Lightbulb size={16} className="text-cyan-400" />
                 </div>
                 <h3 className="text-base font-semibold text-foreground">Recommendations</h3>
-                <span className="text-xs text-text-muted ml-auto">What Nativz can pitch</span>
+                <span className="text-xs text-text-muted ml-auto">What {brandName} can pitch</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {audit.recommendations.map((rec, i) => (

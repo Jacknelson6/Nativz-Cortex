@@ -1,6 +1,20 @@
 import Link from 'next/link';
+import { headers } from 'next/headers';
 
-export default function NotFound() {
+/**
+ * Brand-aware 404. Middleware stamps `x-agency` on every non-API response
+ * based on the request hostname, so we can branch the marketing-site link
+ * here without needing the client to know about theming. Defaults to Nativz
+ * for dev / localhost where the header isn't set.
+ */
+export default async function NotFound() {
+  const headerList = await headers();
+  const agency = headerList.get('x-agency') ?? 'nativz';
+  const isAC = agency === 'anderson';
+
+  const homeHref = isAC ? 'https://andersoncollaborative.com' : 'https://nativz.io';
+  const homeLabel = isAC ? 'Anderson home' : 'Nativz home';
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
       <div className="max-w-md space-y-4">
@@ -19,10 +33,10 @@ export default function NotFound() {
             Back to sign in
           </Link>
           <Link
-            href="https://nativz.io"
+            href={homeHref}
             className="inline-flex items-center rounded-lg border border-nativz-border bg-surface-hover/60 px-4 py-2 text-sm font-medium text-text-secondary transition hover:text-text-primary"
           >
-            Nativz home
+            {homeLabel}
           </Link>
         </div>
       </div>
