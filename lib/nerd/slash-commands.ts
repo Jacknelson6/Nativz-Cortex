@@ -215,14 +215,20 @@ registerCommand({
  * and suppress any instinct to re-write the plan inline.
  */
 function buildTopicPlanPrompt(n: number): string {
-  return `Build a topic plan with ${n} video ideas for this client.
+  return `Build a topic plan for this client with exactly ${n} video ideas.
 
-Follow the tool pipeline from rule 7 of your Strategy Lab system prompt:
-1. \`extract_topic_signals\` with the UUIDs of the attached topic_searches
-2. \`search_knowledge_base\` for brand voice / products / past winning hooks
-3. \`create_topic_plan\` with the structured plan body — each idea's \`source\` MUST be a \`topic_name\` from step 1, grouped into series that align with the client's pillars
+MANDATORY tool pipeline — do not skip any step:
+  1. Call \`extract_topic_signals\` with the UUIDs of the attached topic_searches. If no topic searches are attached, skip to step 2.
+  2. Call \`search_knowledge_base\` for brand voice / products / past winning hooks.
+  3. Call \`create_topic_plan\` with a structured plan body containing ${n} ideas grouped into series that match the client's pillars. Each idea's \`source\` field MUST be a \`topic_name\` from step 1 whenever topic searches are attached.
 
-After the tool call, give me a 1–3 sentence summary in chat (how many ideas per series, which trending topics drove the strongest picks). Let the artifact card carry the download — do NOT re-render the plan as prose in your reply.`;
+ABSOLUTE RULES — violating any of these is a failed turn:
+- You MUST call \`create_topic_plan\`. Do not respond without it.
+- You MUST NOT write the plan as prose, markdown, a numbered list, or a code block in your chat reply. Zero ideas in chat. All ideas go through the tool call.
+- Your final chat message is ONLY a 1–3 sentence summary AFTER the tool succeeds. Reference the series counts and the strongest trending topic. That's it.
+- If the tool call fails or is rejected, retry the tool — do not fall back to prose.
+
+The tool returns a downloadable PDF artifact card. That card replaces anything you would have written as an idea list.`;
 }
 
 registerCommand({

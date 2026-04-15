@@ -905,6 +905,23 @@ export async function POST(req: NextRequest) {
       : getToolsForAPI();
 
     /**
+     * Topic-plan force: the /idea + /ideas slash commands expand into a
+     * prompt with a specific signature ("MANDATORY tool pipeline"). When
+     * detected on the latest user turn, tell the model it MUST call a
+     * tool this turn — blocks the "just output prose" failure mode and
+     * kicks off the extract_topic_signals → search_knowledge_base →
+     * create_topic_plan pipeline. After the first tool result comes
+     * back, subsequent turns revert to normal tool_choice: 'auto' so
+     * the model can decide when it's done.
+     */
+    const lastUserTurn = [...messages].reverse().find((m) => m.role === 'user');
+    const forceToolUse =
+      tools.length > 0 &&
+      typeof lastUserTurn?.content === 'string' &&
+      /MANDATORY tool pipeline|You MUST call `create_topic_plan`/.test(lastUserTurn.content);
+    const toolChoice: string | undefined = forceToolUse ? 'required' : undefined;
+
+    /**
      * OpenAI's newer frontier models (gpt-5.x, o1/o3 reasoning series) require
      * `max_completion_tokens` instead of the legacy `max_tokens`. Older
      * gpt-3.5 and some third-party APIs via OpenRouter still want `max_tokens`.
@@ -939,6 +956,7 @@ export async function POST(req: NextRequest) {
         stream: true,
         ...tokenLimitField,
         tools: tools.length > 0 ? tools : undefined,
+        ...(toolChoice ? { tool_choice: toolChoice } : {}),
       }),
     });
 
