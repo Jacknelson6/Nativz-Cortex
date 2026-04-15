@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getBrandFromRequest } from '@/lib/agency/brand-from-request';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { syncIdeaToVault } from '@/lib/vault/sync';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 const ideaSubmissionSchema = z.object({
   client_id: z.string().uuid().optional().nullable(),
@@ -32,16 +34,7 @@ export async function GET(request: NextRequest) {
     }
 
     const adminClient = createAdminClient();
-
-    const { data: userData } = await adminClient
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single();
-
-    if (!userData) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    const ctx = await getEffectiveAccessContext(user, adminClient);
 
     const clientId = request.nextUrl.searchParams.get('client_id');
 
@@ -50,19 +43,16 @@ export async function GET(request: NextRequest) {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (userData.role !== 'admin') {
-      // Portal users: scope to their org's clients
-      const { data: clients } = await adminClient
-        .from('clients')
-        .select('id')
-        .eq('organization_id', userData.organization_id)
-        .eq('is_active', true);
-
-      const clientIds = (clients || []).map((c) => c.id);
+    if (ctx.role !== 'admin') {
+      // Real viewers + admins impersonating: scope to effective clientIds.
+      const clientIds = ctx.clientIds ?? [];
       if (clientIds.length === 0) {
         return NextResponse.json([]);
       }
-      query = query.in('client_id', clientIds);
+      if (clientId && !clientIds.includes(clientId)) {
+        return NextResponse.json([]);
+      }
+      query = clientId ? query.eq('client_id', clientId) : query.in('client_id', clientIds);
     } else if (clientId) {
       query = query.eq('client_id', clientId);
     }
@@ -99,6 +89,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const { brandName } = getBrandFromRequest(request);
     const supabase = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -107,16 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     const adminClient = createAdminClient();
-
-    const { data: userData } = await adminClient
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single();
-
-    if (!userData) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    const ctx = await getEffectiveAccessContext(user, adminClient);
 
     const body = await request.json();
     const parsed = ideaSubmissionSchema.safeParse(body);
@@ -130,22 +112,20 @@ export async function POST(request: NextRequest) {
 
     const { client_id, title, description, source_url, category } = parsed.data;
 
-    // If viewer, verify org scope and feature flag
-    if (userData.role !== 'admin') {
+    // Viewer + impersonating admin: enforce org scope + can_submit_ideas.
+    if (ctx.role !== 'admin') {
       if (!client_id) {
         return NextResponse.json({ error: 'Client is required' }, { status: 400 });
       }
-      const { data: client } = await adminClient
-        .from('clients')
-        .select('organization_id, feature_flags')
-        .eq('id', client_id)
-        .single();
-
-      if (!client || client.organization_id !== userData.organization_id) {
+      if (!ctx.clientIds || !ctx.clientIds.includes(client_id)) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
       }
-
-      const flags = (client.feature_flags as Record<string, boolean>) || {};
+      const { data: client } = await adminClient
+        .from('clients')
+        .select('feature_flags')
+        .eq('id', client_id)
+        .single();
+      const flags = (client?.feature_flags as Record<string, boolean>) || {};
       if (!flags.can_submit_ideas) {
         return NextResponse.json({ error: 'Idea submission is not enabled for your account' }, { status: 403 });
       }
@@ -184,9 +164,11 @@ export async function POST(request: NextRequest) {
       syncIdeaToVault(idea, vaultClientName).catch(() => {});
     }
 
-    // Create notifications for the other side
+    // Create notifications for the other side. "isAdmin" here mirrors the
+    // effective context — an impersonating admin takes the viewer branch so
+    // the notification lands with admins, not with other portal users.
     try {
-      const isAdmin = userData.role === 'admin';
+      const isAdmin = ctx.role === 'admin';
 
       if (isAdmin && client_id) {
         // Admin submitted idea → notify all portal users in the client's org
@@ -207,7 +189,7 @@ export async function POST(request: NextRequest) {
             recipient_user_id: u.id,
             organization_id: clientData.organization_id,
             type: 'idea_submitted' as const,
-            title: 'New idea from your Nativz team',
+            title: `New idea from your ${brandName} team`,
             body: title,
             link_path: '/portal/ideas',
           }));
@@ -231,7 +213,7 @@ export async function POST(request: NextRequest) {
 
         const notifications = (admins || []).map((u) => ({
           recipient_user_id: u.id,
-          organization_id: userData.organization_id,
+          organization_id: ctx.organizationId,
           type: 'idea_submitted' as const,
           title: `New idea from ${clientData?.name || 'a client'}`,
           body: title,

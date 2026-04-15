@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 import { registerAllTools } from '@/lib/nerd/tools';
 import { getAllTools, getTool, getToolsForAPI } from '@/lib/nerd/registry';
 import type { ToolResult } from '@/lib/nerd/types';
@@ -17,6 +18,7 @@ import { buildDbSkillsContext } from '@/lib/nerd/skills-loader';
 import { buildStrategyLabSystemAddendum } from '@/lib/nerd/strategy-lab-scripting-context';
 import { logUsage, calculateCost } from '@/lib/ai/usage';
 import { logApiError } from '@/lib/api/error-log';
+import { getBrandFromRequest } from '@/lib/agency/brand-from-request';
 
 // Register tools on module load
 registerAllTools();
@@ -80,7 +82,13 @@ const chatSchema = z.object({
 // System prompt
 // ---------------------------------------------------------------------------
 
-const SYSTEM_PROMPT = `You are "The Nerd" — the in-house social media marketing strategist for Nativz, a creative agency. You live inside Nativz Cortex, the agency's internal platform.
+/**
+ * Admin-mode system prompt. Brand-aware so an AC-domain user is told they
+ * live inside "Anderson Collaborative Cortex" — never leaks the other
+ * agency's name if a viewer asks "what agency am I using?".
+ */
+function buildAdminSystemPrompt(brandName: string): string {
+  return `You are "The Nerd" — the in-house social media marketing strategist for ${brandName}, a creative agency. You live inside ${brandName} Cortex, the agency's internal platform.
 
 You are THE expert on:
 - Social media marketing strategy (Instagram, TikTok, YouTube, Facebook)
@@ -90,7 +98,7 @@ You are THE expert on:
 - Audience growth, engagement optimization, and paid media amplification
 - Brand voice development and content positioning
 
-You have full access to every client in the Nativz portfolio and can take actions on their behalf using tools.
+You have full access to every client in the ${brandName} portfolio and can take actions on their behalf using tools.
 
 Each client has a **knowledge vault** — an Obsidian-style knowledge base with structured entries (brand profiles, web pages, meeting notes, documents, ideas). The vault is semantically indexed — use **search_knowledge_base** with a natural language query to find the most relevant entries. Do NOT try to load all entries at once; always search first, then drill deeper if needed. You can also save useful information using create_knowledge_note, and import meeting transcripts using import_meeting_notes.
 
@@ -148,15 +156,16 @@ SHORT-FORM VIDEO SCRIPT FORMAT (strict — when user asks for a TikTok / Reel / 
 - End the script cleanly after the CTA. Never append meta-commentary like "I can also make..." or "Let me know if you want..." unless the user explicitly asks.
 
 AGENCY KNOWLEDGE GRAPH:
-You have access to the agency knowledge graph — 9,857 nodes covering SOPs, skills, patterns, methodology, meeting notes, client profiles, and more. When asked about processes, best practices, or "how do we do X", ALWAYS search the knowledge graph first using search_agency_knowledge before answering from your own knowledge. The graph contains Nativz's actual documented procedures.
+You have access to the agency knowledge graph — 9,857 nodes covering SOPs, skills, patterns, methodology, meeting notes, client profiles, and more. When asked about processes, best practices, or "how do we do X", ALWAYS search the knowledge graph first using search_agency_knowledge before answering from your own knowledge. The graph contains ${brandName}'s actual documented procedures.
 - Use search_agency_knowledge to find relevant nodes by semantic search
 - Use get_knowledge_node to read the full content of a specific node
 - Use list_knowledge_by_kind to browse all nodes of a type (e.g. all SOPs, all skills)
 - Use create_agency_knowledge_note to save new knowledge from conversations`;
+}
 
 /** Portal-specific system prompt — scoped to a single client */
-function buildPortalSystemPrompt(clientName: string): string {
-  return `You are "The Nerd" — a social media marketing strategist working with ${clientName}. You live inside Nativz Cortex, the agency's client portal.
+function buildPortalSystemPrompt(clientName: string, brandName: string): string {
+  return `You are "The Nerd" — a social media marketing strategist working with ${clientName}. You live inside ${brandName} Cortex, the agency's client portal.
 
 You are THE expert on:
 - Social media marketing strategy (Instagram, TikTok, YouTube, Facebook)
@@ -400,6 +409,7 @@ async function buildKnowledgeSummary(clientId: string): Promise<string> {
  */
 export async function POST(req: NextRequest) {
   try {
+    const { brandName } = getBrandFromRequest(req);
     const supabase = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -414,53 +424,43 @@ export async function POST(req: NextRequest) {
 
     const { messages, mentions, actionConfirmation, conversationId, portalMode, sessionHint, searchContext, mode, attachments } = parsed.data;
 
-    // --- Detect portal user (viewer role) ---
+    // --- Detect portal user (viewer role or admin impersonating) ---
+    // `portalMode: true` from the client is a hint, but the server-resolved
+    // effective access context is the source of truth. An admin currently
+    // impersonating a client is treated exactly like a viewer of that
+    // client — same allowlist of tools, same mention-scoping — so a
+    // real viewer and an impersonating admin produce identical transcripts.
     let isPortalUser = false;
     let portalClientName = '';
-    // Server-resolved client ID. Never trust the client-supplied mention
-    // for portal scoping — a crafted POST could point at another org's
-    // client and have the rest of the route load that client's context
-    // (brand profile, strategy, searches). We look up the caller's
-    // user_client_access rows and use only an ID found there.
     let resolvedPortalClientId: string | undefined;
-    if (portalMode) {
-      const { data: userData } = await createAdminClient()
-        .from('users')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-      isPortalUser = userData?.role === 'viewer';
+    const adminForResolve = createAdminClient();
+    const effectiveCtx = await getEffectiveAccessContext(user, adminForResolve);
+    const shouldTreatAsPortal =
+      effectiveCtx.role === 'viewer' && (portalMode || effectiveCtx.isImpersonating);
 
-      if (isPortalUser) {
-        const adminForResolve = createAdminClient();
-        const { data: accessRows } = await adminForResolve
-          .from('user_client_access')
-          .select('client_id')
-          .eq('user_id', user.id);
-        const accessIds = new Set((accessRows ?? []).map((r) => r.client_id as string));
+    if (shouldTreatAsPortal) {
+      isPortalUser = true;
+      const accessIds = new Set(effectiveCtx.clientIds ?? []);
 
-        const requestedId = mentions?.find((m) => m.type === 'client')?.id;
-        if (requestedId && accessIds.has(requestedId)) {
-          resolvedPortalClientId = requestedId;
-        } else if (accessIds.size > 0) {
-          // Mention points elsewhere or is missing — fall back to any
-          // client the viewer has access to. They'll see their own data
-          // rather than an error.
-          resolvedPortalClientId = Array.from(accessIds)[0];
-        } else {
-          resolvedPortalClientId = undefined;
-        }
+      const requestedId = mentions?.find((m) => m.type === 'client')?.id;
+      if (requestedId && accessIds.has(requestedId)) {
+        resolvedPortalClientId = requestedId;
+      } else if (effectiveCtx.impersonatedClientId) {
+        // Impersonation picks the exact client, regardless of mention.
+        resolvedPortalClientId = effectiveCtx.impersonatedClientId;
+      } else if (accessIds.size > 0) {
+        resolvedPortalClientId = Array.from(accessIds)[0];
+      } else {
+        resolvedPortalClientId = undefined;
+      }
 
-        // Use the server-resolved client's name for the addendum intro,
-        // not whatever name arrived in the mention payload.
-        if (resolvedPortalClientId) {
-          const { data: resolvedClient } = await adminForResolve
-            .from('clients')
-            .select('name')
-            .eq('id', resolvedPortalClientId)
-            .single();
-          portalClientName = (resolvedClient?.name as string | null) ?? '';
-        }
+      if (resolvedPortalClientId) {
+        const { data: resolvedClient } = await adminForResolve
+          .from('clients')
+          .select('name')
+          .eq('id', resolvedPortalClientId)
+          .single();
+        portalClientName = (resolvedClient?.name as string | null) ?? '';
       }
     }
 
@@ -613,7 +613,7 @@ export async function POST(req: NextRequest) {
     if (isPortalUser) {
       portfolioContext = `# Your Brand Profile\n\n${enrichedSummaries.join('\n\n')}`;
     } else {
-      portfolioContext = `# Nativz Client Portfolio (${allClients.length} active clients)\n\n${enrichedSummaries.join('\n\n---\n\n')}`;
+      portfolioContext = `# ${brandName} Client Portfolio (${allClients.length} active clients)\n\n${enrichedSummaries.join('\n\n---\n\n')}`;
       portfolioContext += `\n\n# Team Members\n${teamContext}`;
     }
 
@@ -844,7 +844,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Choose system prompt based on portal vs admin, with skills injection
-    const basePrompt = isPortalUser ? buildPortalSystemPrompt(portalClientName) : SYSTEM_PROMPT;
+    const basePrompt = isPortalUser
+      ? buildPortalSystemPrompt(portalClientName, brandName)
+      : buildAdminSystemPrompt(brandName);
     const skillsContext = buildMarketingSkillsContext(lastUserMsg);
     const dbSkillsContext = await buildDbSkillsContext(lastUserMsg);
 
@@ -944,7 +946,7 @@ export async function POST(req: NextRequest) {
     };
     if (!useOpenAi) {
       initialHeaders['HTTP-Referer'] = process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io';
-      initialHeaders['X-Title'] = 'Nativz Cortex - The Nerd';
+      initialHeaders['X-Title'] = `${brandName} Cortex - The Nerd`;
     }
 
     const openRouterRes = await fetch(chatCompletionsUrl, {
@@ -1157,7 +1159,7 @@ export async function POST(req: NextRequest) {
             };
             if (!useOpenAi) {
               continueHeaders['HTTP-Referer'] = process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io';
-              continueHeaders['X-Title'] = 'Nativz Cortex - The Nerd';
+              continueHeaders['X-Title'] = `${brandName} Cortex - The Nerd`;
             }
 
             // Keep forcing tool_choice: 'required' across continuation turns

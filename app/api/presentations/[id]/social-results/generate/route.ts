@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getBrandFromRequest } from '@/lib/agency/brand-from-request';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -21,6 +22,7 @@ export async function POST(
   const { id } = await params;
 
   try {
+    const { brandName } = getBrandFromRequest(request);
     const supabase = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -84,6 +86,7 @@ export async function POST(
     const revisedBio = await generateRevisedBio(
       beforeProfile,
       timeline_months,
+      brandName,
       user.id,
       user.email ?? undefined,
     );
@@ -258,6 +261,7 @@ async function scrapePostsViaApify(handle: string): Promise<SocialResultsPost[]>
 async function generateRevisedBio(
   profile: SocialResultsProfile,
   months: number,
+  brandName: string,
   userId?: string,
   userEmail?: string,
 ): Promise<string> {
@@ -266,7 +270,7 @@ async function generateRevisedBio(
       messages: [
         {
           role: 'user',
-          content: `You are a social media strategist at Nativz, a video marketing agency. A prospect has this Instagram bio: "${profile.bio}" — Account: @${profile.handle} with ${profile.followers.toLocaleString()} followers. Write a concise, compelling new Instagram bio (max 150 characters) reflecting what their brand will look like after ${months} months of working with Nativz. Make it punchy, authentic, include relevant emojis. Return ONLY the bio text.`,
+          content: `You are a social media strategist at ${brandName}, a video marketing agency. A prospect has this Instagram bio: "${profile.bio}" — Account: @${profile.handle} with ${profile.followers.toLocaleString()} followers. Write a concise, compelling new Instagram bio (max 150 characters) reflecting what their brand will look like after ${months} months of working with ${brandName}. Make it punchy, authentic, include relevant emojis. Return ONLY the bio text.`,
         },
       ],
       maxTokens: 200,

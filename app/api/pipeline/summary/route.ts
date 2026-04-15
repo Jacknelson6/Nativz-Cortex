@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createCompletion } from '@/lib/ai/client';
+import { getBrandFromRequest } from '@/lib/agency/brand-from-request';
 import crypto from 'crypto';
 
 // In-memory cache — DB counts refresh every 5 min, AI insight persists for the day
@@ -26,8 +27,9 @@ let aiCache: {
  * @auth Required (any authenticated user)
  * @returns {{ total: number, doneCount: number, editingCounts: Record<string, { count: number, clients: string[] }>, approvalCounts: Record<string, { count: number, clients: string[] }>, aiBullets: string[], suggestedTasks: { title: string, description: string, priority: string }[], monthLabel: string }}
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const { brandName } = getBrandFromRequest(req);
     const supabase = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -115,12 +117,13 @@ export async function GET() {
           totalItems, doneCount, blocked, needsRevision,
           overdueShoots, noEditor, waitingApproval,
           editingCounts, approvalCounts,
+          brandName,
         });
 
         try {
           const aiPromise = createCompletion({
             messages: [
-              { role: 'system', content: PIPELINE_SYSTEM_PROMPT },
+              { role: 'system', content: buildPipelineSystemPrompt(brandName) },
               {
                 role: 'user',
                 content: `Today is ${now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}.\n\n${snapshot}`,
@@ -183,7 +186,8 @@ function buildStateHash(items: any[]): string {
 
 // ─── SOP-aware system prompt ─────────────────────────────────────────────────
 
-const PIPELINE_SYSTEM_PROMPT = `You are the pipeline manager for Nativz, a video content marketing agency. You understand the full video editing SOP and content pipeline workflow.
+function buildPipelineSystemPrompt(brandName: string): string {
+  return `You are the pipeline manager for ${brandName}, a video content marketing agency. You understand the full video editing SOP and content pipeline workflow.
 
 ## Pipeline stages (in order)
 
@@ -272,6 +276,7 @@ IMPORTANT for tasks:
 - Title must be SHORT — 3-6 words max, like you'd write on a sticky note. Examples: "Approve DSH edit", "Schedule CSS shoot", "Reassign Neo's overflow"
 - Description provides the context/reason — this goes into the task description, not shown prominently
 - Never put the description in the title`;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildSnapshotText(all: any[], ctx: any): string {
@@ -306,7 +311,7 @@ function buildSnapshotText(all: any[], ctx: any): string {
       item.videographer ? `videographer: ${item.videographer}` : '',
       item.shoot_date ? `shoot_date: ${item.shoot_date}` : '',
     ].filter(Boolean);
-    lines.push(`- ${item.client_name} (${item.agency ?? 'Nativz'}): ${parts.join(', ')}`);
+    lines.push(`- ${item.client_name} (${item.agency ?? ctx.brandName ?? 'Nativz'}): ${parts.join(', ')}`);
   }
   lines.push('');
 

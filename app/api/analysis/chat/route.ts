@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createOpenRouterTextStream } from '@/lib/ai/openrouter-rich';
 import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
+import { getBrandFromRequest } from '@/lib/agency/brand-from-request';
 
 const chatSchema = z.object({
   board_id: z.string(),
@@ -17,7 +18,8 @@ const chatSchema = z.object({
   model: z.string().optional(),
 });
 
-const SYSTEM_PROMPT = `You are Cortex AI — a creative strategist and viral content expert embedded in Nativz Cortex, a moodboard tool for content creators and agencies.
+function buildSystemPrompt(brandName: string): string {
+  return `You are Cortex AI — a creative strategist and viral content expert embedded in ${brandName} Cortex, a moodboard tool for content creators and agencies.
 
 You have deep context on the moodboard items including videos (transcripts, analysis, metadata, visual breakdowns) and websites (page insights, headlines, content themes). Use this context to:
 
@@ -31,6 +33,7 @@ You have deep context on the moodboard items including videos (transcripts, anal
 - Provide actionable creative strategy
 
 Be direct, insightful, and creative. Speak like a senior creative strategist — not generic AI. Reference specific details from the content when possible. Keep responses focused and scannable with headers/bullets when appropriate.`;
+}
 
 function buildItemContext(item: Record<string, unknown>): string {
   const parts: string[] = [];
@@ -118,6 +121,7 @@ function buildItemContext(item: Record<string, unknown>): string {
  */
 export async function POST(req: NextRequest) {
   try {
+    const { brandName } = getBrandFromRequest(req);
     const supabase = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -227,7 +231,7 @@ export async function POST(req: NextRequest) {
     const contextMessage = contextParts.join('\n');
 
     const apiMessages = [
-      { role: 'system' as const, content: SYSTEM_PROMPT },
+      { role: 'system' as const, content: buildSystemPrompt(brandName) },
       { role: 'user' as const, content: contextMessage },
       ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     ];
@@ -238,7 +242,7 @@ export async function POST(req: NextRequest) {
       messages: apiMessages,
       maxTokens: 4096,
       extraHeaders: {
-        'X-Title': 'Nativz Cortex AI Chat',
+        'X-Title': `${brandName} Cortex AI Chat`,
       },
     });
 
