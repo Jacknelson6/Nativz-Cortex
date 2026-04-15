@@ -59,242 +59,191 @@ export function matchCommands(query: string): SlashCommand[] {
 
 registerCommand({
   name: 'tasks',
-  description: 'Show your tasks for today',
+  description: "View your open tasks",
   type: 'direct',
   example: '/tasks',
-  async handler(_args, userId) {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const admin = createAdminClient();
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-    const { data: teamMember } = await admin
-      .from('team_members')
-      .select('id')
-      .eq('user_id', userId)
-      .single();
-
-    const { data: tasks } = await admin
-      .from('tasks')
-      .select('id, title, status, priority, due_date')
-      .eq('assignee_id', teamMember?.id ?? '')
-      .neq('status', 'done')
-      .lte('due_date', today)
-      .is('archived_at', null)
-      .order('priority', { ascending: false });
-
-    const list = (tasks ?? []).map((t) => `- **${t.title}** (${t.priority})`).join('\n');
+  handler: async (_args, userId) => {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/todos?user_id=${userId}&status=pending`, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      return { content: "Couldn't load your tasks right now — try the Tasks page directly." };
+    }
+    const data = await res.json();
+    const todos = (data.todos ?? []) as Array<{ id: string; content: string; project?: { name: string } }>;
+    if (todos.length === 0) {
+      return { content: "You're all clear — no open tasks." };
+    }
+    const lines = todos.slice(0, 10).map((t) => `- ${t.content}${t.project ? ` _(${t.project.name})_` : ''}`);
+    const more = todos.length > 10 ? `\n\n+ ${todos.length - 10} more at /admin/tasks` : '';
     return {
-      content: tasks?.length
-        ? `**${tasks.length} tasks for today:**\n\n${list}`
-        : 'No tasks due today. Enjoy the break!',
+      content: `**Your open tasks (${todos.length})**\n\n${lines.join('\n')}${more}`,
     };
   },
 });
 
 registerCommand({
   name: 'pipeline',
-  description: 'Show pipeline status summary',
+  description: 'Show posts in the content pipeline — grouped by stage',
   type: 'direct',
   example: '/pipeline',
-  async handler() {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const admin = createAdminClient();
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-
-    const { data: items } = await admin
-      .from('content_pipeline')
-      .select('client_name, editing_status, client_approval_status')
-      .eq('month_date', currentMonth);
-
-    const all = items ?? [];
-    const total = all.length;
-    const done = all.filter((i) => i.editing_status === 'done' || i.editing_status === 'scheduled').length;
-    const editing = all.filter((i) => i.editing_status === 'editing').length;
-    const edited = all.filter((i) => i.editing_status === 'edited').length;
-    const blocked = all.filter((i) => i.editing_status === 'blocked').length;
-
-    const lines = [
-      `**Pipeline — ${now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}**`,
-      `${done}/${total} complete`,
-      editing > 0 ? `${editing} currently editing` : null,
-      edited > 0 ? `${edited} edited, awaiting review` : null,
-      blocked > 0 ? `${blocked} blocked` : null,
-    ].filter(Boolean);
-
-    return { content: lines.join('\n') };
+  handler: async () => {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/pipeline/summary`);
+    if (!res.ok) {
+      return { content: "Couldn't load the pipeline right now — try /admin/pipeline directly." };
+    }
+    const data = await res.json();
+    const stages = (data.stages ?? []) as Array<{ stage: string; count: number }>;
+    if (stages.length === 0) {
+      return { content: 'No posts in the pipeline right now.' };
+    }
+    const lines = stages.map((s) => `- **${s.stage}** — ${s.count}`);
+    return {
+      content: `**Pipeline summary**\n\n${lines.join('\n')}\n\nOpen the full board: /admin/pipeline`,
+    };
   },
 });
 
 registerCommand({
   name: 'clients',
-  description: 'List all active clients',
+  description: 'List clients — with link to each workspace',
   type: 'direct',
   example: '/clients',
-  async handler() {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const admin = createAdminClient();
-
-    const { data: clients } = await admin
-      .from('clients')
-      .select('name, agency')
-      .eq('is_active', true)
-      .order('name');
-
-    const list = (clients ?? []).map((c) => `- ${c.name}${c.agency ? ` (${c.agency})` : ''}`).join('\n');
-    return { content: `**${clients?.length ?? 0} active clients:**\n\n${list}` };
+  handler: async () => {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/clients`);
+    if (!res.ok) {
+      return { content: "Couldn't load clients right now — /admin/clients." };
+    }
+    const data = await res.json();
+    const clients = (data.clients ?? []) as Array<{ id: string; name: string; slug: string }>;
+    const lines = clients.slice(0, 25).map((c) => `- [${c.name}](/admin/clients/${c.slug})`);
+    return { content: `**Clients (${clients.length})**\n\n${lines.join('\n')}` };
   },
 });
 
 registerCommand({
   name: 'team',
-  description: 'Show team members and roles',
+  description: 'Roster of your agency team',
   type: 'direct',
   example: '/team',
-  async handler() {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const admin = createAdminClient();
-
-    const { data: members } = await admin
-      .from('team_members')
-      .select('full_name, role')
-      .eq('is_active', true)
-      .order('full_name');
-
-    const list = (members ?? []).map((m) => `- **${m.full_name}** — ${m.role ?? 'team member'}`).join('\n');
-    return { content: `**Team (${members?.length ?? 0} members):**\n\n${list}` };
+  handler: async () => {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/team`);
+    if (!res.ok) {
+      return { content: "Couldn't load the team right now — /admin/team." };
+    }
+    const data = await res.json();
+    const members = (data.members ?? data ?? []) as Array<{ full_name: string; role?: string }>;
+    if (members.length === 0) {
+      return { content: 'No team members yet — invite some from /admin/team.' };
+    }
+    const lines = members.map((m) => `- ${m.full_name}${m.role ? ` _(${m.role})_` : ''}`);
+    return { content: `**Team (${members.length})**\n\n${lines.join('\n')}` };
   },
 });
 
-// ── AI-powered commands (expand to prompt for The Nerd) ──
+// ── AI commands (expand to a prompt and let the Nerd reason) ──
 
 registerCommand({
   name: 'analyze',
-  description: 'Run analytics review for a client',
+  description: 'Analyze a specific client',
   type: 'ai',
-  requiresMention: true,
   example: '/analyze @ClientName',
-  expandPrompt: (args) => `Run a full analytics review and performance breakdown for ${args || 'all clients'}. Include engagement rates, top performing content, and strategic recommendations.`,
+  requiresMention: true,
+  expandPrompt: (args: string) => `Run a full analytics review for ${args}. Pull their top performing posts, underperforming patterns, and benchmark vs industry. Call \`get_analytics_summary\`, \`get_top_posts\`, and \`compare_client_performance\` if relevant.`,
 });
 
 registerCommand({
   name: 'hooks',
-  description: 'Generate scroll-stopping hook ideas',
+  description: 'Pull high-performing hooks for a client',
   type: 'ai',
-  requiresMention: true,
   example: '/hooks @ClientName',
-  expandPrompt: (args) => `Give me 10 scroll-stopping hooks for ${args || 'a client'}. Mix negative hooks, curiosity gaps, hot takes, and story-based openers. Make them specific to the brand.`,
+  requiresMention: true,
+  expandPrompt: (args: string) => `Find ${args}'s best-performing hooks from their recent content. Use \`get_top_posts\` to find the top-engaging videos, then extract and analyze the opening hooks (first 3 seconds). Identify patterns across what works for them.`,
 });
 
 registerCommand({
   name: 'strategy',
-  description: 'Deep dive on content pillars',
+  description: "Review a client's content strategy",
   type: 'ai',
-  requiresMention: true,
   example: '/strategy @ClientName',
-  expandPrompt: (args) => `Do a deep content pillar analysis for ${args || 'a client'}. Review their current pillars, suggest improvements, and recommend posting frequency per pillar.`,
+  requiresMention: true,
+  expandPrompt: (args: string) => `Review ${args}'s current content strategy. Call \`get_client_strategy\` for their documented strategy, then \`get_analytics_summary\` for performance, and give me an honest assessment — what's working, what's not, and 3 concrete changes.`,
 });
 
 registerCommand({
   name: 'affiliates',
-  description: 'Review affiliate performance for a client',
+  description: 'Affiliate performance summary for a client',
   type: 'ai',
-  requiresMention: true,
   example: '/affiliates @ClientName',
-  expandPrompt: (args) => `Review affiliate performance for ${args || 'a client'}. Use affiliate tools to summarize revenue, referrals, active affiliates, and strategic opportunities.`,
+  requiresMention: true,
+  expandPrompt: (args: string) => `Pull ${args}'s affiliate performance: creator counts, top earners this month, conversion patterns. Use \`get_affiliate_summary\` or \`list_creators\` + \`get_analytics_summary\` as needed.`,
 });
 
 registerCommand({
   name: 'brief',
-  description: 'Generate a content brief',
+  description: 'Draft a creative brief for a content shoot',
   type: 'ai',
-  requiresMention: true,
   example: '/brief @ClientName',
-  expandPrompt: (args) => `Create a detailed content brief for ${args || 'a client'} for this week. Include video topics, hooks, key talking points, and CTAs.`,
+  requiresMention: true,
+  expandPrompt: (args: string) => `Draft a creative brief for an upcoming ${args} content shoot. Include brand voice, top hooks from their last 30 days, 3 video concepts, shot list ideas, and calls-to-action. Pull from \`get_client_strategy\` and \`get_top_posts\` first.`,
 });
 
 registerCommand({
   name: 'search',
-  description: 'Research a topic',
+  description: 'Search topic data by query',
   type: 'ai',
-  example: '/search trending fitness topics',
-  expandPrompt: (args) => `Research this topic and give me insights: ${args || 'trending topics'}. Look for what people are talking about, common questions, and content angles.`,
+  example: '/search best hooks for finance',
+  expandPrompt: (args: string) => `Run a knowledge-graph search for "${args}" using \`search_knowledge_base\`. Pull past research, strategies, and notes matching this topic. Summarize what I've already got, then highlight any blind spots worth researching next.`,
 });
 
 registerCommand({
   name: 'schedule',
-  description: 'Help schedule a shoot',
+  description: 'Check and manage schedules',
   type: 'ai',
-  requiresMention: true,
-  example: '/schedule @ClientName next week',
-  expandPrompt: (args) => `Help me schedule a shoot for ${args || 'a client'}. Check availability and suggest time slots.`,
+  example: '/schedule',
+  expandPrompt: (args: string) =>
+    args.trim()
+      ? `Look into scheduling: ${args}. Use \`get_schedule_summary\` or related calendar tools to answer.`
+      : `Give me a scheduling overview — today's meetings, content going live today, and anything overdue. Call \`get_schedule_summary\`.`,
 });
 
-// ── Strategy Lab commands (research-grounded scripting workbench) ──
+/**
+ * /ideas + /idea: both route through the topic-plan artifact flow. The
+ * Nerd MUST call create_topic_plan (not dump prose into chat). The
+ * Strategy Lab system prompt already owns the tool-ordering rules —
+ * these expansions just nudge the request with an explicit idea count
+ * and suppress any instinct to re-write the plan inline.
+ */
+function buildTopicPlanPrompt(n: number): string {
+  return `Build a topic plan with ${n} video ideas for this client.
+
+Follow the tool pipeline from rule 7 of your Strategy Lab system prompt:
+1. \`extract_topic_signals\` with the UUIDs of the attached topic_searches
+2. \`search_knowledge_base\` for brand voice / products / past winning hooks
+3. \`create_topic_plan\` with the structured plan body — each idea's \`source\` MUST be a \`topic_name\` from step 1, grouped into series that align with the client's pillars
+
+After the tool call, give me a 1–3 sentence summary in chat (how many ideas per series, which trending topics drove the strongest picks). Let the artifact card carry the download — do NOT re-render the plan as prose in your reply.`;
+}
 
 registerCommand({
   name: 'ideas',
-  description: 'Generate research-grounded video ideas',
+  description: 'Research-grounded topic plan PDF (default 10 ideas)',
   type: 'ai',
   example: '/ideas',
-  expandPrompt: () => `Generate 10 short-form video ideas for this client using ONLY signals from the topic searches I have attached in this chat plus the client's Brand DNA. No generic best practices — every idea must trace back to a specific trending topic, video idea, or sentiment from the attached research.
-
-Scripting frameworks are preloaded in your Strategy Lab system context (see "AGENCY SCRIPTING FRAMEWORKS"). Use them as scaffolding for every hook. For additional client-specific context — past winning hooks, brand voice notes, meeting takeaways — call \`search_knowledge_base\` before drafting.
-
-Output each idea in this exact format:
-
-**#N — [Title]**
-- **Hook**: [the exact first 3 seconds — opening words or visual beat, said verbatim the way the creator would say it]
-- **Angle**: [specific trending topic or sentiment from the attached research]
-- **Concept**: [one-sentence video description]
-- **Why it works**: [reference the research signal AND the brand positioning]
-
-Rules:
-- Mix hook types across the 10 — negative, curiosity gap, hot take, story, pattern interrupt. Do not lean on one type.
-- Specific beats generic. "My 7-year-old outsold my sales team" beats "sales tip that changed my life".
-- Respect the brand voice — do NOT drift into generic social media patter.
-- First three words of each hook should earn the fourth. No "Hey guys" / "So today" / "Here's the thing".
-- No hashtags, no stage directions, no camera notes.`,
+  expandPrompt: () => buildTopicPlanPrompt(10),
 });
 
 registerCommand({
   name: 'idea',
-  description: 'Interactive — generate N video ideas (auto-exports PDF)',
+  description: 'Interactive topic plan — N video ideas, rendered as a PDF artifact',
   type: 'ai',
-  example: '/idea 20  →  20 ideas',
+  example: '/idea 20',
   expandPrompt: (args: string) => {
-    // Parse a leading integer from args (`/idea 20`, `/idea 40 something`).
-    // Fall back to 10 when none is provided so /idea alone still works.
     const trimmed = (args ?? '').trim();
     const match = trimmed.match(/^\s*(\d{1,3})/);
     const requestedN = match ? parseInt(match[1], 10) : 10;
-    // Clamp to something sensible — huge N costs a lot of tokens without
-    // being useful, and zero/negative makes no sense.
     const n = Math.max(3, Math.min(50, Number.isFinite(requestedN) ? requestedN : 10));
-
-    return `Generate ${n} short-form video ideas for this client using ONLY signals from the topic searches attached in this chat plus the client's Brand DNA. No generic best practices — every idea must trace back to a specific trending topic, video idea, or sentiment from the attached research.
-
-Scripting frameworks are preloaded in your Strategy Lab system context (see "AGENCY SCRIPTING FRAMEWORKS"). Use them as scaffolding for every hook. For additional client-specific context — past winning hooks, brand voice notes, meeting takeaways — call \`search_knowledge_base\` before drafting.
-
-Start with a short heading: "${n} video ideas for [client name]".
-
-Output each idea in this exact format:
-
-**#N — [Title]**
-- **Hook**: [the exact first 3 seconds — opening words or visual beat, said verbatim the way the creator would say it]
-- **Angle**: [specific trending topic or sentiment from the attached research]
-- **Concept**: [one-sentence video description]
-- **Why it works**: [reference the research signal AND the brand positioning]
-
-Rules:
-- Mix hook types across all ${n} — negative, curiosity gap, hot take, story, pattern interrupt. Do not lean on one type.
-- Specific beats generic. "My 7-year-old outsold my sales team" beats "sales tip that changed my life".
-- Respect the brand voice — do NOT drift into generic social media patter.
-- First three words of each hook should earn the fourth. No "Hey guys" / "So today" / "Here's the thing".
-- No hashtags, no stage directions, no camera notes.
-
-The user will also receive this as a branded PDF automatically once you finish.`;
+    return buildTopicPlanPrompt(n);
   },
 });
 
@@ -303,36 +252,18 @@ registerCommand({
   description: 'Turn an idea into a full spoken-word script',
   type: 'ai',
   example: '/script <paste an idea or describe it>',
-  expandPrompt: (args) => `Write a full spoken-word script for this video idea${args?.trim() ? `:\n\n${args.trim()}` : ' (paste or describe the idea in your next message if needed)'}
+  expandPrompt: (args: string) => args.trim()
+    ? `Turn this idea into a full short-form video script. Ground the dialogue in the attached research + brand voice. Include: opening hook (verbatim first 3 seconds), body (spoken-word only — no stage directions, camera notes, or hashtags), CTA. Use the AGENCY SCRIPTING FRAMEWORKS in your system context for structure — pick the framework that fits the idea best (PHOS, Thesis-Turn-Takeaway, Story-Stakes-Surprise, or equivalents).
 
-Scripting frameworks are preloaded in your Strategy Lab system context. For client-specific reference scripts or past winners, call \`search_knowledge_base\`. Prefer calling the \`script_video_idea\` tool if the user wants a persisted, database-backed script rather than an inline draft.
-
-Output rules:
-- Numbered beats, one sentence per beat, written the way a person would actually say it on camera
-- Start with the hook VERBATIM as beat #1 — no narrator voice, no "in this video I will"
-- Include a pattern interrupt around 30-50% of the way through (new camera angle, cut to a prop, a line that contradicts what came before — call it out inline as *[pattern interrupt]*)
-- End with a CTA that fits this specific brand voice. Never "follow for more". Reference a specific piece of brand value instead.
-- Respect the client's Brand DNA: tone, vocabulary patterns, avoidance patterns, messaging pillars
-- Ground the angle in whichever attached topic search result inspired this idea — mention which one you drew from in a trailing "Research signal:" line
-- Do NOT include shot descriptions, camera directions, music cues, or hashtags unless I explicitly ask
-- Target length: 25-45 seconds of spoken content (roughly 8-14 beats)`,
+Idea: ${args}`
+    : `Paste an idea after /script and I'll turn it into a spoken-word script grounded in the attached research + brand voice.`,
 });
 
 registerCommand({
   name: 'pillars',
-  description: 'Draft content pillars from attached research',
+  description: 'Review or propose the 3–5 content pillars for a client',
   type: 'ai',
-  example: '/pillars',
-  expandPrompt: () => `Draft a set of 3-5 content pillars for this client, grounded in the attached topic searches and the client's Brand DNA. Do NOT fall back to generic pillar frameworks — every pillar must be traceable to either (a) trending topics surfacing in the attached research or (b) the client's own messaging pillars / positioning from the Brand DNA.
-
-Call \`search_knowledge_base\` for "content pillar framework" or "content strategy playbook" before drafting if you haven't already loaded those in this session.
-
-For each pillar:
-- **Name** (2-3 words, punchy)
-- **What** (one-sentence description of the pillar's purpose)
-- **Why this pillar for this brand** (reference the research signal or brand positioning that justifies it)
-- **Posting cadence** (how often per week, with reasoning)
-- **Example video concept** (one idea that would live under this pillar, with a hook)
-
-Close with a one-paragraph "How these pillars work together" summary that explains the portfolio effect.`,
+  example: '/pillars @ClientName',
+  requiresMention: true,
+  expandPrompt: (args: string) => `Review ${args}'s content pillars — the 3-5 buckets their short-form content should fit into. Pull from \`get_client_strategy\` and \`search_knowledge_base\`. If pillars are documented, read them out and give an honest read on whether they still fit the current research. If they aren't documented, propose 3-5 based on the attached research + brand DNA.`,
 });
