@@ -40,10 +40,8 @@ export const nativzTheme: AgencyTheme = {
   logos: {
     svg: '/nativz-logo.svg',
     svgOnDark: '/nativz-logo.svg',
-    png: '/nativz-logo.png',
-    // The shipped Nativz PNG is white-on-transparent — unreadable on white
-    // deliverable covers. Until a dark-on-light variant lands in /public,
-    // render the wordmark as styled Rubik type instead.
-    wordmark: 'nativz',
+    // /nativz-logo.png is white-on-transparent (for dark backgrounds).
+    // /nativz-logo-on-light.png is the dark-text variant for light covers.
+    png: '/nativz-logo-on-light.png',
   },
 };

@@ -9,9 +9,9 @@ import type { BrandedDeliverableData } from './types';
 export const BRANDED_PREVIEW_FIXTURE: BrandedDeliverableData = {
   eyebrow: 'Safe Stop',
   kicker: 'Content Strategy',
-  title: 'Safe Stop — 40 short-form video ideas grounded in truck parking safety research',
+  title: 'Video Ideas',
   summary:
-    'Built from the attached truck parking, secure fleet parking, and truck parking safety topic searches.',
+    '40 short-form video ideas grounded in truck parking safety research. Built from the attached truck parking, secure fleet parking, and truck parking safety topic searches.',
   stats: [
     { value: '3', label: 'Content pillars' },
     { value: '40', label: 'Video topics' },

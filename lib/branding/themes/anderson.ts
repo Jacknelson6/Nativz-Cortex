@@ -39,9 +39,8 @@ export const andersonTheme: AgencyTheme = {
   logos: {
     svg: '/anderson-logo.svg',
     svgOnDark: '/anderson-logo-dark.svg',
-    png: '/anderson-logo.png',
-    // Shipped AC PNG is also a light-on-dark variant — use a styled text
-    // wordmark on light backgrounds until a dark-on-light PNG lands.
-    wordmark: 'Anderson Collaborative',
+    // /anderson-logo.png is white-on-transparent. -on-light is the teal+navy
+    // variant that reads on light deliverable covers.
+    png: '/anderson-logo-on-light.png',
   },
 };

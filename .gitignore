@@ -77,6 +77,11 @@ supabase/.temp/
 !public/favicon.png
 !public/favicon-ac.png
 !app/apple-icon.png
+# Agency logo PNGs — dark-on-light variants used by branded PDFs
+!public/nativz-logo.png
+!public/nativz-logo-on-light.png
+!public/anderson-logo.png
+!public/anderson-logo-on-light.png
 !app/icon.png
 vectors.db
 vectors.db-shm
