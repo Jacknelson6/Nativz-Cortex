@@ -6,6 +6,39 @@
 
 ---
 
+## Branded deliverable PDFs — April 15
+
+Shared `@react-pdf` template at `lib/pdf/branded` — theme-swappable Nativz / AC, covers + series + topic cards + legend, driven by `BrandedDeliverableData`. See `project_branded_pdfs.md` in memory.
+
+**Shipped:**
+- [x] `lib/branding/` single-source agency tokens (colors, logos, fonts). Fixes the stale `#6366F1` indigo in `AGENCY_CONFIG`.
+- [x] `lib/pdf/branded/document.tsx` template with cover / legend / series / topic-card primitives. `AccentRule` = single full-width teal line under every section / series title.
+- [x] Admin preview route: `GET /api/admin/pdf/preview/branded-deliverable?theme=nativz|anderson&download=1`.
+- [x] Local render script: `npx tsx scripts/render-branded-preview.tsx` → writes both themes to `~/Desktop`.
+- [x] Font registration — Rubik + Roboto + Poppins TTFs in `/public/fonts`. Nativz uses Poppins everywhere (matches nativz.io); AC uses Rubik + Roboto (matches ac-docs). All `fontFamily` declarations read from `theme.fonts`, zero hardcoded families.
+- [x] Logos as JPGs flattened onto white in `/public/{nativz,anderson}-logo-on-light.jpg`. The base64 `AC_LOGO_PNG` in `lib/brand-logo.ts` produces a horizontal glitch when `@react-pdf` decodes it — no combination of PNG re-encoders fixes it. Workaround: rasterize directly from `/public/anderson-logo-dark.svg` via `@resvg/resvg-js`, flatten to JPG via `sharp`. Reusable via `npx tsx scripts/rasterize-logos.ts`.
+- [x] `.gitignore` allowlist for branded logo assets.
+- [x] **QA pass (April 15)** — both themes render cleanly. Nativz: blue "nativz" wordmark with arrow, Poppins throughout. AC: teal monogram + "ANDERSON COLLABORATIVE" wordmark, Rubik titles, Roboto body. All teal accent rules visible. Running header + footer correct on all pages.
+
+**Still open:**
+- [ ] **Wire `/generate` skills to `BrandedDeliverableData`.** `bad85ff` already auto-exports branded PDFs when the Nerd returns video ideas — re-point that pipeline at `BrandedDeliverableDocument` so the output is theme-swappable.
+- [ ] **Migrate the one-off `lib/pdf/*.tsx` templates** (ideas-template, report-template, analysis-template, affiliate-report-template, brief-template) onto the shared theme + primitives so every branded PDF in the app gets the same design language.
+- [ ] **Shorten deliverable titles per-skill** — fixture uses "Video Ideas". Different skill outputs need "Topic Ideas", "Video Scripts", "Audit", "Content Plan", etc. Template is already shape-agnostic.
+- [ ] **Phase 2b — Goodjin skill-improvement loop UI.** Schema `ai_skill_proposals` shipped in `8b23ce3`; admin-review UI not built. Tracks LLM-proposed skill edits from flagged bad sessions for admin accept/reject.
+- [ ] **Final QA once `/generate` is wired** — render real video-ideas + topic-plan + audit deliverables through the new template and sanity-check each against the Safe Stop reference.
+
+---
+
+## Audit report — Push B (data/scraper fixes — April 15)
+
+Layout pass shipped in commit `1c4b706` (Push A). These three remain.
+
+- [ ] **Competitor social-profile discovery** — many competitor cards land with no platform data even though the website resolved. Add a search-platform fallback: when the website scrape doesn't surface a brand's TikTok / IG / YT, hit SearXNG for `"<brand> tiktok"` etc., pick the first profile-shaped URL, then pass it through the existing scrape funcs. Without this the report is hollow for half the competitor set.
+- [ ] **Missing thumbnails** on top-performing posts AND the "your feed" section. Likely either (a) image-hotlink block at render time, or (b) `lib/audit/persist-scraped-images.ts` not actually persisting. Inspect what's in `videos_data` for a recent failed audit before assuming.
+- [ ] **Time-series charts too sparse** — engagement / views over time only plot 3-4 data points (the publish dates of the scraped videos). Either bucket by week with running totals, or interpolate between sample points. Check what's actually in `engagementData` first.
+
+---
+
 ## Deferred — visible UI fixes (paused April 14 in favor of personal-moodboards spec)
 
 Jack noticed these in the live admin shell and asked to come back to them after the personal-moodboards spec lands. Pick up next session.
