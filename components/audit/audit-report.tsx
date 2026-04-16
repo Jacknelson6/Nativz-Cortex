@@ -1540,6 +1540,12 @@ const METRIC_OPTIONS: { key: ChartMetric; label: string; format: (v: number) => 
   { key: 'comments', label: 'Comments', format: (v) => formatNumber(v) },
 ];
 
+type ChartRange = '7d' | '30d';
+const RANGE_OPTIONS: { key: ChartRange; label: string; days: number }[] = [
+  { key: '7d', label: 'Past 7 days', days: 7 },
+  { key: '30d', label: 'Past 30 days', days: 30 },
+];
+
 function DailyPerformanceChart({
   data,
   platform,
@@ -1550,17 +1556,43 @@ function DailyPerformanceChart({
   color: string;
 }) {
   const [metric, setMetric] = useState<ChartMetric>('views');
+  const [range, setRange] = useState<ChartRange>('30d');
   const opt = METRIC_OPTIONS.find((o) => o.key === metric) ?? METRIC_OPTIONS[0];
+  const rangeOpt = RANGE_OPTIONS.find((r) => r.key === range) ?? RANGE_OPTIONS[1];
 
   const hasEngagement = data.some((d) => d.er > 0);
   const availableMetrics = hasEngagement
     ? METRIC_OPTIONS
     : METRIC_OPTIONS.filter((o) => o.key !== 'er');
 
+  const filteredData = useMemo(() => {
+    const cutoff = Date.now() - rangeOpt.days * 86_400_000;
+    return data.filter((d) => d.dayMs >= cutoff);
+  }, [data, rangeOpt.days]);
+
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-5">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h4 className="text-sm font-semibold text-text-primary">Performance over time</h4>
+        <div className="flex items-center gap-3">
+          <h4 className="text-sm font-semibold text-text-primary">Performance over time</h4>
+          <div className="flex rounded-lg border border-nativz-border p-0.5">
+            {RANGE_OPTIONS.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => setRange(r.key)}
+                className={cn(
+                  'px-2 py-0.5 text-[11px] font-medium rounded-md transition-colors',
+                  range === r.key
+                    ? 'bg-surface-hover text-text-primary'
+                    : 'text-text-muted hover:text-text-secondary',
+                )}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex rounded-lg border border-nativz-border p-0.5">
           {availableMetrics.map((o) => (
             <button
@@ -1579,55 +1611,61 @@ function DailyPerformanceChart({
           ))}
         </div>
       </div>
-      <div className="h-56">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data}>
-            <defs>
-              <linearGradient id={`perfGrad-${platform}-${metric}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-                <stop offset="95%" stopColor={color} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--nativz-border)" />
-            <XAxis
-              dataKey="date"
-              tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
-              tickLine={false}
-              axisLine={false}
-              interval="preserveStartEnd"
-            />
-            <YAxis
-              tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(v) => opt.format(v)}
-              width={60}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'var(--surface)',
-                border: '1px solid var(--nativz-border)',
-                borderRadius: '8px',
-                fontSize: '12px',
-              }}
-              formatter={(value: number | undefined) => [opt.format(value ?? 0), opt.label]}
-              labelFormatter={(label) => String(label)}
-            />
-            <Area
-              type="monotone"
-              dataKey={metric}
-              stroke={color}
-              fillOpacity={1}
-              fill={`url(#perfGrad-${platform}-${metric})`}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4, fill: color, stroke: 'var(--surface)', strokeWidth: 2 }}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      {filteredData.length > 1 ? (
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={filteredData}>
+              <defs>
+                <linearGradient id={`perfGrad-${platform}-${metric}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={color} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--nativz-border)" />
+              <XAxis
+                dataKey="date"
+                tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                tickLine={false}
+                axisLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v) => opt.format(v)}
+                width={60}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--nativz-border)',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                }}
+                formatter={(value: number | undefined) => [opt.format(value ?? 0), opt.label]}
+                labelFormatter={(label) => String(label)}
+              />
+              <Area
+                type="monotone"
+                dataKey={metric}
+                stroke={color}
+                fillOpacity={1}
+                fill={`url(#perfGrad-${platform}-${metric})`}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, fill: color, stroke: 'var(--surface)', strokeWidth: 2 }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="flex h-56 items-center justify-center">
+          <p className="text-sm text-text-muted">No data in the {rangeOpt.label.toLowerCase()} window</p>
+        </div>
+      )}
       <p className="mt-2 text-[11px] text-text-muted">
-        Solid dots = real post data · interpolated line fills gaps between posting days
+        Showing {rangeOpt.label.toLowerCase()} · {filteredData.filter((d) => d.isReal).length} real data points · interpolated between posting days
       </p>
     </div>
   );
