@@ -83,14 +83,16 @@ export async function POST(
       ...(socialGoals.length > 0 ? { social_goals: socialGoals } : {}),
     };
 
-    // If an admin attached a client on the confirm screen, stamp it on
-    // the audit row so the post-completion hook can auto-create the
-    // benchmark without a second round-trip.
+    // attached_client_id is now picked on the entry screen and stamped at
+    // create time. Only touch the column here if the field was explicitly
+    // sent (e.g. a future "change client" path), so an absent field doesn't
+    // clobber the value chosen up-front.
+    const hasAttachedField = Object.prototype.hasOwnProperty.call(
+      parsed.data,
+      'attached_client_id',
+    );
     const attachedClientId = parsed.data.attached_client_id ?? null;
-    if (attachedClientId) {
-      // Verify the client exists + is active before stamping. A stale
-      // cached list on the client shouldn't be able to tombstone the audit
-      // with a bad FK.
+    if (hasAttachedField && attachedClientId) {
       const { data: client } = await adminClient
         .from('clients')
         .select('id, is_active')
@@ -104,17 +106,20 @@ export async function POST(
       }
     }
 
-    // Update audit with the manual social URLs and reset to pending for reprocessing
+    const updatePayload: Record<string, unknown> = {
+      social_urls: socialUrls,
+      tiktok_url: socialUrls.tiktok ?? '',
+      analysis_data: analysisData,
+      status: 'pending',
+      updated_at: new Date().toISOString(),
+    };
+    if (hasAttachedField) {
+      updatePayload.attached_client_id = attachedClientId;
+    }
+
     await adminClient
       .from('prospect_audits')
-      .update({
-        social_urls: socialUrls,
-        tiktok_url: socialUrls.tiktok ?? '',
-        analysis_data: analysisData,
-        attached_client_id: attachedClientId,
-        status: 'pending',
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', id);
 
     return NextResponse.json({ status: 'pending' });

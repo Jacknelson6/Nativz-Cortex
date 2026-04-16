@@ -9,6 +9,10 @@ const StartAuditSchema = z.object({
   website_url: z.string().min(1, 'Website URL is required'),
   social_urls: z.record(z.string(), z.string()).optional(),
   tiktok_url: z.string().optional(),
+  // Optional pre-attach — picker now lives on the entry screen so the
+  // post-completion step can auto-create a client_benchmarks row without
+  // a second confirm-platforms click.
+  attached_client_id: z.string().uuid().nullable().optional(),
 });
 
 /**
@@ -41,6 +45,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
+    const attachedClientId = parsed.data.attached_client_id ?? null;
+    if (attachedClientId) {
+      const { data: client } = await adminClient
+        .from('clients')
+        .select('id, is_active')
+        .eq('id', attachedClientId)
+        .maybeSingle();
+      if (!client || !client.is_active) {
+        return NextResponse.json(
+          { error: 'Selected client is not accessible' },
+          { status: 400 },
+        );
+      }
+    }
+
     const { data: audit, error } = await adminClient
       .from('prospect_audits')
       .insert({
@@ -48,6 +67,7 @@ export async function POST(request: NextRequest) {
         tiktok_url: parsed.data.tiktok_url ?? parsed.data.social_urls?.tiktok ?? '',
         social_urls: parsed.data.social_urls ?? {},
         status: 'pending',
+        attached_client_id: attachedClientId,
         created_by: user.id,
       })
       .select()

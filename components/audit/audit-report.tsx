@@ -34,6 +34,7 @@ import { toast } from 'sonner';
 import { AuditExportPdfButton } from '@/components/audit/audit-export-pdf-button';
 import { AuditShareButton } from '@/components/audit/audit-share-button';
 import { AttachToClientDialog } from '@/components/audit/attach-to-client-dialog';
+import { TrackCompetitorButton } from '@/components/audit/track-competitor-button';
 import { Users2 } from 'lucide-react';
 import { TikTokMark } from '@/components/integrations/tiktok-mark';
 import { InstagramMark } from '@/components/integrations/instagram-mark';
@@ -195,12 +196,6 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   // confirm screen so the post-completion hook auto-creates the benchmark
   // row (no second click on the report). Falls back to the retroactive
   // post-report dialog when left null.
-  const [attachedClientId, setAttachedClientId] = useState<string | null>(
-    (audit as { attached_client_id?: string | null }).attached_client_id ?? null,
-  );
-  const [clientPickerOptions, setClientPickerOptions] = useState<
-    { id: string; name: string; avatarUrl?: string | null }[]
-  >([]);
   const [submittingSocials, setSubmittingSocials] = useState(false);
   const [detectedPlatforms, setDetectedPlatforms] = useState<{ platform: string; url: string; username: string }[]>([]);
   const [detecting, setDetecting] = useState(false);
@@ -514,25 +509,6 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     }
   }
 
-  // Load accessible clients once for the pre-audit attach picker. Only
-  // fetches on the confirm screen so regular renders don't hit the API.
-  useEffect(() => {
-    if (audit.status !== 'confirming_platforms') return;
-    if (clientPickerOptions.length > 0) return;
-    let cancelled = false;
-    fetch('/api/nerd/mentions')
-      .then((r) => (r.ok ? r.json() : { clients: [] }))
-      .then((data: { clients?: { id: string; name: string; avatarUrl?: string | null }[] }) => {
-        if (!cancelled) setClientPickerOptions(data.clients ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setClientPickerOptions([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [audit.status, clientPickerOptions.length]);
-
   // Auto-run the first generate pass when the user lands on the confirm
   // screen — no more "Click Generate to see candidates" cold-start state.
   // Only fires when we have a websiteContext (otherwise the LLM has nothing
@@ -605,11 +581,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     const picked = Array.from(selectedCompetitorWebsites).map(normalize).filter(Boolean);
     const legacy = competitorUrls.map(normalize).filter(Boolean);
     const cleanedCompetitors = picked.length > 0 ? picked : legacy;
-    if (
-      Object.keys(filled).length > 0 ||
-      cleanedCompetitors.length > 0 ||
-      attachedClientId != null
-    ) {
+    if (Object.keys(filled).length > 0 || cleanedCompetitors.length > 0) {
       await fetch(`/api/analyze-social/${audit.id}/resume`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -617,7 +589,6 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           social_urls: filled,
           competitor_urls: cleanedCompetitors,
           social_goals: socialGoals,
-          attached_client_id: attachedClientId,
         }),
       });
     }
@@ -1005,48 +976,10 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             </div>
           </div>
 
-          {/* Pre-audit attach — optional. When set, the post-completion
-              step auto-creates a client_benchmarks row so the weekly cron
-              picks up tracking immediately. Clients with a connected
-              analytics feed let us compare our own data to the scraped
-              competitor numbers without waiting for snapshot history to
-              build up. */}
-          <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-3">
-            <div>
-              <h3 className="text-base font-semibold text-text-primary">
-                Attach this audit to a client <span className="text-text-muted font-normal">(optional)</span>
-              </h3>
-              <p className="text-sm text-text-muted mt-0.5">
-                We&apos;ll benchmark this audit&apos;s competitors against the client on a weekly
-                cadence. If the client already has analytics data, we use that instead of
-                re-scraping their own stats.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={attachedClientId ?? ''}
-                onChange={(e) => setAttachedClientId(e.target.value || null)}
-                className="flex-1 min-w-[240px] rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/50"
-              >
-                <option value="">— Not attached —</option>
-                {clientPickerOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              {attachedClientId && (
-                <button
-                  type="button"
-                  onClick={() => setAttachedClientId(null)}
-                  className="text-xs text-text-muted hover:text-text-primary transition-colors"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-          </div>
+          {/* Client attach is now picked on the entry screen and stamped at
+              create time — no second picker here. The post-completion
+              AttachToClientDialog still handles retroactive attaches for
+              audits started without a client. */}
 
           <div className="flex items-center justify-between">
             <Button variant="ghost" onClick={() => router.push('/admin/analyze-social')} className="text-base px-4 py-2.5">
@@ -1435,6 +1368,12 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
                         @{String(comp.username).replace(/^@+/, '')} <ExternalLink size={10} className="shrink-0" />
                       </a>
                     </div>
+                    <TrackCompetitorButton
+                      auditId={audit.id}
+                      competitor={comp}
+                      defaultClientId={(audit as { attached_client_id?: string | null }).attached_client_id ?? null}
+                      disabled={Boolean(comp.isStub)}
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div><span className="text-xs text-text-muted">Followers</span><p className="font-semibold text-text-primary">{followersNode}</p></div>
