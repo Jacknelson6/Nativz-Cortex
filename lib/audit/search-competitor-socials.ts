@@ -19,6 +19,31 @@ import {
 } from '@/lib/tiktok/apify-run';
 import type { AuditPlatform, SocialLink } from './types';
 
+export { diceCoefficient };
+
+export interface SocialCandidate {
+  platform: AuditPlatform;
+  username: string;
+  url: string;
+  displayName: string;
+  avatarUrl: string | null;
+  followers: number;
+  similarity: number;
+}
+
+export interface PlatformSearchResult {
+  candidates: SocialCandidate[];
+  autoSelected: SocialCandidate | null;
+  needsAttention: boolean;
+}
+
+export interface InteractiveSocialSearch {
+  brandName: string;
+  tiktok: PlatformSearchResult;
+  instagram: PlatformSearchResult;
+  youtube: PlatformSearchResult;
+}
+
 const TT_PROFILE_ACTOR = 'apidojo/tiktok-profile-scraper';
 const IG_PROFILE_ACTOR = 'apify/instagram-profile-scraper';
 
@@ -50,6 +75,100 @@ function guessHandles(brandName: string): string[] {
     if (h && !seen.has(h)) { seen.add(h); out.push(h); }
   }
   return out.slice(0, 3);
+}
+
+async function tryTikTokHandleDetailed(handle: string, brandName: string): Promise<SocialCandidate | null> {
+  const key = getApifyKey();
+  const url = `https://www.tiktok.com/@${handle}`;
+  const runId = await startApifyActorRun(TT_PROFILE_ACTOR, { startUrls: [url] }, key);
+  if (!runId) return null;
+  const ok = await waitForApifyRunSuccess(runId, key, 60_000, 3000);
+  if (!ok) return null;
+  const items = await fetchApifyDatasetItems(runId, key, 3);
+  if (items.length === 0) return null;
+  const first = items[0] as { channel?: { username?: string; name?: string; avatar?: string; followers?: number } };
+  const username = first?.channel?.username ?? handle;
+  const displayName = first?.channel?.name ?? username;
+  return {
+    platform: 'tiktok',
+    username,
+    url: `https://www.tiktok.com/@${username}`,
+    displayName,
+    avatarUrl: first?.channel?.avatar ?? null,
+    followers: first?.channel?.followers ?? 0,
+    similarity: diceCoefficient(brandName, displayName),
+  };
+}
+
+async function tryInstagramHandleDetailed(handle: string, brandName: string): Promise<SocialCandidate | null> {
+  const key = getApifyKey();
+  const runId = await startApifyActorRun(IG_PROFILE_ACTOR, { usernames: [handle] }, key);
+  if (!runId) return null;
+  const ok = await waitForApifyRunSuccess(runId, key, 60_000, 3000);
+  if (!ok) return null;
+  const items = await fetchApifyDatasetItems(runId, key, 1);
+  if (items.length === 0) return null;
+  const first = items[0] as { username?: string; fullName?: string; profilePicUrl?: string; followersCount?: number };
+  const username = first?.username ?? handle;
+  const displayName = first?.fullName ?? username;
+  return {
+    platform: 'instagram',
+    username,
+    url: `https://www.instagram.com/${username}/`,
+    displayName,
+    avatarUrl: first?.profilePicUrl ?? null,
+    followers: first?.followersCount ?? 0,
+    similarity: diceCoefficient(brandName, displayName),
+  };
+}
+
+async function searchYouTubeChannelDetailed(brandName: string): Promise<SocialCandidate[]> {
+  const key = getYouTubeKey();
+  if (!key) return [];
+  try {
+    const params = new URLSearchParams({ part: 'snippet', type: 'channel', q: brandName, maxResults: '5', key });
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const items = data?.items as { id?: { channelId?: string }; snippet?: { channelTitle?: string; customUrl?: string; thumbnails?: { default?: { url?: string } } } }[] | undefined;
+    if (!items || items.length === 0) return [];
+    const MIN_SIMILARITY = 0.3;
+    const scored = items
+      .filter((i) => i.id?.channelId && i.snippet?.channelTitle)
+      .map((i) => ({
+        channelId: i.id!.channelId!,
+        title: i.snippet!.channelTitle!,
+        customUrl: i.snippet!.customUrl ?? null,
+        avatarUrl: i.snippet!.thumbnails?.default?.url ?? null,
+        similarity: diceCoefficient(brandName, i.snippet!.channelTitle!),
+      }))
+      .filter((s) => s.similarity >= MIN_SIMILARITY)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 5);
+    if (scored.length === 0) return [];
+    const channelIds = scored.map((s) => s.channelId);
+    const statsParams = new URLSearchParams({ part: 'statistics', id: channelIds.join(','), key });
+    const statsRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?${statsParams}`, { signal: AbortSignal.timeout(10_000) });
+    const subsMap = new Map<string, number>();
+    if (statsRes.ok) {
+      const statsData = await statsRes.json();
+      for (const ch of statsData.items ?? []) subsMap.set(ch.id, parseInt(ch.statistics?.subscriberCount ?? '0', 10));
+    }
+    return scored.map((s) => {
+      const handle = s.customUrl?.replace(/^@/, '') ?? s.channelId;
+      return {
+        platform: 'youtube' as AuditPlatform,
+        username: handle,
+        url: s.customUrl ? `https://www.youtube.com/@${handle}` : `https://www.youtube.com/channel/${s.channelId}`,
+        displayName: s.title,
+        avatarUrl: s.avatarUrl,
+        followers: subsMap.get(s.channelId) ?? 0,
+        similarity: s.similarity,
+      };
+    });
+  } catch {
+    return [];
+  }
 }
 
 async function tryTikTokHandle(handle: string, brandName: string): Promise<SocialLink | null> {
@@ -262,4 +381,72 @@ export async function searchCompetitorSocials(
   }
 
   return results;
+}
+
+function makePlatformResult(candidates: SocialCandidate[]): PlatformSearchResult {
+  if (candidates.length === 0) return { candidates: [], autoSelected: null, needsAttention: false };
+  const sorted = [...candidates].sort((a, b) => b.similarity - a.similarity || b.followers - a.followers);
+  const top = sorted[0];
+  // Auto-select if there's ONE clear winner with high confidence
+  if (sorted.length === 1 && top.similarity >= 0.5) {
+    return { candidates: sorted, autoSelected: top, needsAttention: false };
+  }
+  // If top candidate is much better than the rest, auto-select it
+  if (sorted.length > 1 && top.similarity >= 0.6 && top.similarity - sorted[1].similarity >= 0.15) {
+    return { candidates: sorted, autoSelected: top, needsAttention: false };
+  }
+  // Multiple close candidates → needs user's attention
+  if (sorted.length > 1) {
+    return { candidates: sorted, autoSelected: null, needsAttention: true };
+  }
+  // Single candidate with lower confidence → still auto-select but flag
+  return { candidates: sorted, autoSelected: top, needsAttention: top.similarity < 0.5 };
+}
+
+/**
+ * Interactive search: returns ALL candidates per platform with confidence
+ * scoring so the confirm-platforms UI can show disambiguation pickers for
+ * ambiguous matches and auto-select clear winners.
+ */
+export async function searchCompetitorSocialsInteractive(
+  brandName: string,
+  platforms: AuditPlatform[],
+): Promise<InteractiveSocialSearch> {
+  const handles = guessHandles(brandName);
+  const empty: PlatformSearchResult = { candidates: [], autoSelected: null, needsAttention: false };
+  const result: InteractiveSocialSearch = { brandName, tiktok: { ...empty }, instagram: { ...empty }, youtube: { ...empty } };
+
+  const jobs: Promise<void>[] = [];
+
+  if (platforms.includes('tiktok') && handles.length > 0) {
+    jobs.push((async () => {
+      const candidates: SocialCandidate[] = [];
+      for (const h of handles) {
+        const found = await tryTikTokHandleDetailed(h, brandName);
+        if (found && !candidates.some((c) => c.username === found.username)) candidates.push(found);
+      }
+      result.tiktok = makePlatformResult(candidates);
+    })());
+  }
+
+  if (platforms.includes('instagram') && handles.length > 0) {
+    jobs.push((async () => {
+      const candidates: SocialCandidate[] = [];
+      for (const h of handles) {
+        const found = await tryInstagramHandleDetailed(h, brandName);
+        if (found && !candidates.some((c) => c.username === found.username)) candidates.push(found);
+      }
+      result.instagram = makePlatformResult(candidates);
+    })());
+  }
+
+  if (platforms.includes('youtube')) {
+    jobs.push((async () => {
+      const candidates = await searchYouTubeChannelDetailed(brandName);
+      result.youtube = makePlatformResult(candidates);
+    })());
+  }
+
+  await Promise.allSettled(jobs);
+  return result;
 }

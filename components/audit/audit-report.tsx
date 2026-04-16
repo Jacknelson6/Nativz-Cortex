@@ -37,6 +37,7 @@ import { TikTokMark } from '@/components/integrations/tiktok-mark';
 import { InstagramMark } from '@/components/integrations/instagram-mark';
 import { YouTubeMark } from '@/components/integrations/youtube-mark';
 import type { PlatformReport, CompetitorProfile, AuditScorecard, ScorecardItem, ScoreStatus, WebsiteContext, FailedPlatform } from '@/lib/audit/types';
+import type { InteractiveSocialSearch, SocialCandidate } from '@/lib/audit/search-competitor-socials';
 import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
 
 interface AuditRecord {
@@ -169,6 +170,12 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [manualCompetitorInput, setManualCompetitorInput] = useState('');
   const [manualCompetitorWebsites, setManualCompetitorWebsites] = useState<string[]>([]);
   const MAX_PICKED_COMPETITORS = 2;
+
+  // Interactive social-finding for selected competitors on the confirm screen
+  const [socialSearchResults, setSocialSearchResults] = useState<Map<string, InteractiveSocialSearch>>(new Map());
+  const [socialSearchLoading, setSocialSearchLoading] = useState(false);
+  // User-confirmed socials override auto-selected. Key: `${competitorName}:${platform}`, Value: SocialCandidate or null (explicitly cleared)
+  const [confirmedSocials, setConfirmedSocials] = useState<Map<string, SocialCandidate | null>>(new Map());
 
   // Pre-audit attach: optionally pair the audit with a client on the
   // confirm screen so the post-completion hook auto-creates the benchmark
@@ -497,6 +504,44 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     void generateCompetitors();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audit.status, websiteInfo]);
+
+  async function findCompetitorSocials() {
+    const selected = suggestedCandidates.filter((c) => selectedCompetitorWebsites.has(c.website));
+    const manual = manualCompetitorWebsites.map((w) => ({ name: w, website: w }));
+    const all = [...selected.map((c) => ({ name: c.name, website: c.website })), ...manual];
+    if (all.length === 0) return;
+    setSocialSearchLoading(true);
+    try {
+      const res = await fetch(`/api/analyze-social/${audit.id}/find-competitor-socials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ competitors: all, platforms: ['tiktok', 'instagram', 'youtube'] }),
+      });
+      if (!res.ok) { toast.error('Failed to search for socials'); return; }
+      const data = await res.json() as { results: InteractiveSocialSearch[] };
+      const map = new Map<string, InteractiveSocialSearch>();
+      for (const r of data.results ?? []) map.set(r.brandName.toLowerCase(), r);
+      setSocialSearchResults(map);
+    } catch { toast.error('Failed to search for socials'); }
+    finally { setSocialSearchLoading(false); }
+  }
+
+  function getResolvedSocial(brandName: string, platform: AuditPlatformKey): SocialCandidate | null | undefined {
+    const key = `${brandName.toLowerCase()}:${platform}`;
+    if (confirmedSocials.has(key)) return confirmedSocials.get(key) ?? null;
+    const search = socialSearchResults.get(brandName.toLowerCase());
+    if (!search) return undefined;
+    const result = search[platform];
+    return result?.autoSelected ?? null;
+  }
+
+  function confirmSocial(brandName: string, platform: AuditPlatformKey, candidate: SocialCandidate | null) {
+    setConfirmedSocials((prev) => {
+      const next = new Map(prev);
+      next.set(`${brandName.toLowerCase()}:${platform}`, candidate);
+      return next;
+    });
+  }
 
   function addManualCompetitor() {
     const raw = manualCompetitorInput.trim();
@@ -954,10 +999,108 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             </div>
           </div>
 
-          {/* Client attach is now picked on the entry screen and stamped at
-              create time — no second picker here. The post-completion
-              AttachToClientDialog still handles retroactive attaches for
-              audits started without a client. */}
+          {/* Social profile discovery — searches each platform for each
+              selected competitor. Shows disambiguation when ambiguous. */}
+          {(selectedCompetitorWebsites.size > 0 || manualCompetitorWebsites.length > 0) && (
+            <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-text-primary">Competitor social profiles</h3>
+                  <p className="text-sm text-text-muted mt-0.5">
+                    Find TikTok, Instagram, and YouTube for each competitor
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void findCompetitorSocials()}
+                  disabled={socialSearchLoading}
+                >
+                  {socialSearchLoading ? (
+                    <><Loader2 size={14} className="animate-spin" /> Searching...</>
+                  ) : socialSearchResults.size > 0 ? (
+                    <><RefreshCw size={14} /> Re-search</>
+                  ) : (
+                    <>Find socials</>
+                  )}
+                </Button>
+              </div>
+
+              {socialSearchResults.size > 0 && (
+                <div className="space-y-3">
+                  {[...socialSearchResults.entries()].map(([brandKey, search]) => {
+                    const platforms: AuditPlatformKey[] = ['tiktok', 'instagram', 'youtube'];
+                    return (
+                      <div key={brandKey} className="rounded-lg border border-nativz-border bg-background/50 p-4">
+                        <p className="text-sm font-medium text-text-primary mb-3">{search.brandName}</p>
+                        <div className="space-y-2">
+                          {platforms.map((p) => {
+                            const result = search[p];
+                            const resolved = getResolvedSocial(search.brandName, p);
+                            const hasResults = result.candidates.length > 0;
+                            const needsAttention = result.needsAttention && !confirmedSocials.has(`${brandKey}:${p}`);
+                            return (
+                              <div key={p} className="flex items-center gap-2 text-sm">
+                                <span className="w-20 shrink-0 text-text-muted">{PLATFORM_LABELS[p]}</span>
+                                {!hasResults ? (
+                                  <span className="text-xs text-text-muted/60">Not found</span>
+                                ) : needsAttention ? (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
+                                      <AlertCircle size={11} /> {result.candidates.length} options — pick one
+                                    </span>
+                                    {result.candidates.map((c) => (
+                                      <button
+                                        key={c.username}
+                                        type="button"
+                                        onClick={() => confirmSocial(search.brandName, p, c)}
+                                        className={cn(
+                                          'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
+                                          resolved?.username === c.username
+                                            ? 'border-accent bg-accent-surface text-accent-text'
+                                            : 'border-nativz-border bg-surface hover:border-accent/40',
+                                        )}
+                                        title={`${c.displayName} · ${formatNumber(c.followers)} followers · ${Math.round(c.similarity * 100)}% match`}
+                                      >
+                                        {c.avatarUrl && (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img src={c.avatarUrl} alt="" className="h-4 w-4 rounded-full object-cover" />
+                                        )}
+                                        <span className="truncate max-w-[120px]">{c.displayName}</span>
+                                        <span className="text-text-muted">{formatNumber(c.followers)}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : resolved ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-400">
+                                      <Check size={11} /> @{String(resolved.username).replace(/^@+/, '')}
+                                      {resolved.followers > 0 && <span className="text-emerald-400/70">· {formatNumber(resolved.followers)}</span>}
+                                    </span>
+                                    {result.candidates.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => confirmSocial(search.brandName, p, null)}
+                                        className="text-[11px] text-text-muted hover:text-text-secondary"
+                                      >
+                                        Change
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-text-muted/60">Not found</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center justify-between">
             <Button variant="ghost" onClick={() => router.push('/admin/analyze-social')} className="text-base px-4 py-2.5">
