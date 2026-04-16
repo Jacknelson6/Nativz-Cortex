@@ -295,6 +295,39 @@ function buildStyles(theme: AgencyTheme) {
     },
     coverBottomPad: { flexGrow: 1 },
 
+    // ── Endmark (closing flourish) ──────────────────────────────
+    endmarkWrap: {
+      alignItems: 'center',
+      marginTop: 48,
+      paddingTop: 32,
+    },
+    endmarkRule: {
+      width: 60,
+      height: 1,
+      backgroundColor: theme.colors.primary,
+      marginBottom: 24,
+    },
+    endmarkLogo: {
+      height: 36,
+      objectFit: 'contain' as const,
+      marginBottom: 12,
+    },
+    endmarkWordmark: {
+      fontFamily: theme.fonts.heading,
+      fontWeight: 700,
+      fontSize: 20,
+      color: theme.colors.primary,
+      letterSpacing: -0.3,
+      textAlign: 'center' as const,
+      marginBottom: 12,
+    },
+    endmarkTagline: {
+      fontSize: 9,
+      color: theme.colors.textMuted,
+      letterSpacing: 1.5,
+      textAlign: 'center' as const,
+    },
+
     // ── Section header (proposal-style) ──────────────────────────
     sectionHeaderWrap: { marginBottom: 18 },
     sectionTitle: {
@@ -762,6 +795,30 @@ function LegendSection({
   );
 }
 
+function Endmark({
+  theme,
+  logoBuffer,
+  wordmark,
+  styles,
+}: {
+  theme: AgencyTheme;
+  logoBuffer: Buffer | null;
+  wordmark: string | undefined;
+  styles: ReturnType<typeof buildStyles>;
+}) {
+  return (
+    <View style={styles.endmarkWrap} wrap={false}>
+      <View style={styles.endmarkRule} />
+      {wordmark ? (
+        <Text style={styles.endmarkWordmark}>{wordmark}</Text>
+      ) : logoBuffer ? (
+        <Image src={logoBuffer} style={styles.endmarkLogo} />
+      ) : null}
+      <Text style={styles.endmarkTagline}>{theme.domain.replace(/^https?:\/\//, '').toUpperCase()}</Text>
+    </View>
+  );
+}
+
 // ─── Main document ────────────────────────────────────────────────
 
 export function BrandedDeliverableDocument({
@@ -833,6 +890,7 @@ export function BrandedDeliverableDocument({
         {data.series.map((series, i) => (
           <Series key={series.label + i} series={series} theme={theme} styles={styles} />
         ))}
+        <Endmark theme={theme} logoBuffer={logoBuffer} wordmark={wordmark} styles={styles} />
         <Footer agencyName={agencyName} styles={styles} />
       </Page>
     </Document>
