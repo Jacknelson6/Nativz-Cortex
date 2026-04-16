@@ -39,8 +39,10 @@ export const andersonTheme: AgencyTheme = {
   logos: {
     svg: '/anderson-logo.svg',
     svgOnDark: '/anderson-logo-dark.svg',
-    // /anderson-logo.png is white-on-transparent. -on-light is the teal+navy
-    // variant that reads on light deliverable covers.
-    png: '/anderson-logo-on-light.png',
+    // /anderson-logo.png is white-on-transparent. -on-light.jpg is the
+    // teal+navy variant flattened onto white for @react-pdf — its PNG
+    // decoder silently renders a horizontal glitch for this particular
+    // alpha-channel PNG regardless of how it's re-encoded.
+    png: '/anderson-logo-on-light.jpg',
   },
 };

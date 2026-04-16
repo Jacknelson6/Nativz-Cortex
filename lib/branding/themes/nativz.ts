@@ -44,7 +44,9 @@ export const nativzTheme: AgencyTheme = {
     svg: '/nativz-logo.svg',
     svgOnDark: '/nativz-logo.svg',
     // /nativz-logo.png is white-on-transparent (for dark backgrounds).
-    // /nativz-logo-on-light.png is the dark-text variant for light covers.
-    png: '/nativz-logo-on-light.png',
+    // /nativz-logo-on-light.jpg is the dark-text variant flattened onto white
+    // for maximum @react-pdf compatibility (its PNG decoder chokes on some
+    // alpha-channel + metadata combinations).
+    png: '/nativz-logo-on-light.jpg',
   },
 };
