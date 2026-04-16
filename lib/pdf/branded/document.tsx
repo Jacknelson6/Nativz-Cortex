@@ -18,26 +18,61 @@ let fontsRegistered = false;
 function ensureFontsRegistered() {
   if (fontsRegistered) return;
   fontsRegistered = true;
-  if (!fs.existsSync(RUBIK) || !fs.existsSync(ROBOTO)) return;
-  Font.register({
-    family: 'Rubik',
-    fonts: [
-      { src: RUBIK, fontWeight: 400 },
-      { src: RUBIK, fontWeight: 500 },
-      { src: RUBIK, fontWeight: 700 },
-      { src: RUBIK, fontWeight: 800 },
-      { src: RUBIK_ITALIC, fontWeight: 400, fontStyle: 'italic' },
-    ],
-  });
-  Font.register({
-    family: 'Roboto',
-    fonts: [
-      { src: ROBOTO, fontWeight: 400 },
-      { src: ROBOTO, fontWeight: 500 },
-      { src: ROBOTO, fontWeight: 700 },
-      { src: ROBOTO_ITALIC, fontWeight: 400, fontStyle: 'italic' },
-    ],
-  });
+
+  // Rubik — used by AC (headings) and available as a fallback elsewhere.
+  if (fs.existsSync(RUBIK)) {
+    Font.register({
+      family: 'Rubik',
+      fonts: [
+        { src: RUBIK, fontWeight: 400 },
+        { src: RUBIK, fontWeight: 500 },
+        { src: RUBIK, fontWeight: 700 },
+        { src: RUBIK, fontWeight: 800 },
+        ...(fs.existsSync(RUBIK_ITALIC)
+          ? [{ src: RUBIK_ITALIC, fontWeight: 400, fontStyle: 'italic' as const }]
+          : []),
+      ],
+    });
+  }
+
+  // Roboto — used by AC for body copy.
+  if (fs.existsSync(ROBOTO)) {
+    Font.register({
+      family: 'Roboto',
+      fonts: [
+        { src: ROBOTO, fontWeight: 400 },
+        { src: ROBOTO, fontWeight: 500 },
+        { src: ROBOTO, fontWeight: 700 },
+        ...(fs.existsSync(ROBOTO_ITALIC)
+          ? [{ src: ROBOTO_ITALIC, fontWeight: 400, fontStyle: 'italic' as const }]
+          : []),
+      ],
+    });
+  }
+
+  // Poppins — Nativz brand font (used on nativz.io). Static weight TTFs
+  // from google/fonts, one per weight.
+  const poppinsWeights: Array<{ file: string; weight: 400 | 500 | 700 | 800 }> = [
+    { file: 'Poppins-Regular.ttf', weight: 400 },
+    { file: 'Poppins-Medium.ttf', weight: 500 },
+    { file: 'Poppins-Bold.ttf', weight: 700 },
+    { file: 'Poppins-ExtraBold.ttf', weight: 800 },
+  ];
+  const poppinsAvailable = poppinsWeights
+    .map((w) => ({ ...w, full: path.join(FONT_DIR, w.file) }))
+    .filter((w) => fs.existsSync(w.full));
+  if (poppinsAvailable.length > 0) {
+    const poppinsItalic = path.join(FONT_DIR, 'Poppins-Italic.ttf');
+    Font.register({
+      family: 'Poppins',
+      fonts: [
+        ...poppinsAvailable.map(({ full, weight }) => ({ src: full, fontWeight: weight })),
+        ...(fs.existsSync(poppinsItalic)
+          ? [{ src: poppinsItalic, fontWeight: 400 as const, fontStyle: 'italic' as const }]
+          : []),
+      ],
+    });
+  }
 }
 import type {
   BrandedDeliverableData,
@@ -91,7 +126,7 @@ function buildStyles(theme: AgencyTheme) {
       paddingTop: 64,
       paddingHorizontal: 56,
       paddingBottom: 80,
-      fontFamily: 'Roboto',
+      fontFamily: theme.fonts.body,
       fontSize: 10,
       color: theme.colors.textBody,
       backgroundColor: theme.colors.white,
@@ -111,13 +146,13 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 8,
       color: theme.colors.textMuted,
       letterSpacing: 1.2,
-      fontFamily: 'Roboto',
+      fontFamily: theme.fonts.body,
     },
     runningHeaderStrong: {
       fontSize: 8,
       color: theme.colors.textDark,
       letterSpacing: 1.2,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
     },
 
@@ -144,7 +179,7 @@ function buildStyles(theme: AgencyTheme) {
     // ── Cover ─────────────────────────────────────────────────────
     coverPage: {
       padding: 64,
-      fontFamily: 'Roboto',
+      fontFamily: theme.fonts.body,
       fontSize: 10,
       color: theme.colors.textBody,
       backgroundColor: theme.colors.white,
@@ -157,7 +192,7 @@ function buildStyles(theme: AgencyTheme) {
     },
     coverLogo: { height: 64, objectFit: 'contain' },
     coverWordmark: {
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 800,
       fontSize: 42,
       color: theme.colors.primary,
@@ -174,7 +209,7 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 13,
       letterSpacing: 5,
       textAlign: 'center',
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       color: theme.colors.textDark,
       marginBottom: 14,
@@ -182,7 +217,7 @@ function buildStyles(theme: AgencyTheme) {
     coverTitle: {
       fontSize: 34,
       textAlign: 'center',
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       color: theme.colors.textDark,
       lineHeight: 1.15,
@@ -192,7 +227,7 @@ function buildStyles(theme: AgencyTheme) {
     coverTitleAccent: {
       fontSize: 34,
       textAlign: 'center',
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       color: theme.colors.primary,
       lineHeight: 1.15,
@@ -203,7 +238,7 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 11,
       textAlign: 'center',
       color: theme.colors.primary,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       letterSpacing: 3,
       marginBottom: 22,
@@ -233,7 +268,7 @@ function buildStyles(theme: AgencyTheme) {
     },
     coverStatValue: {
       fontSize: 30,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       color: theme.colors.primary,
       marginBottom: 6,
@@ -242,7 +277,7 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 8.5,
       letterSpacing: 2.5,
       color: theme.colors.textMuted,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
     },
     coverHighlightWrap: {
@@ -250,7 +285,7 @@ function buildStyles(theme: AgencyTheme) {
       marginTop: 2,
     },
     coverHighlightLabel: { fontSize: 11, color: theme.colors.textBody },
-    coverHighlightValue: { fontSize: 11, color: theme.colors.primary, fontFamily: 'Rubik', fontWeight: 700 },
+    coverHighlightValue: { fontSize: 11, color: theme.colors.primary, fontFamily: theme.fonts.heading, fontWeight: 700 },
     coverBottomRule: {
       width: 100,
       height: 1,
@@ -264,7 +299,7 @@ function buildStyles(theme: AgencyTheme) {
     sectionHeaderWrap: { marginBottom: 18 },
     sectionTitle: {
       fontSize: 24,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       color: theme.colors.textDark,
       letterSpacing: 0.8,
@@ -285,7 +320,7 @@ function buildStyles(theme: AgencyTheme) {
     // ── Legend ────────────────────────────────────────────────────
     legendHeading: {
       fontSize: 16,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       color: theme.colors.textDark,
       letterSpacing: 0.8,
@@ -317,7 +352,7 @@ function buildStyles(theme: AgencyTheme) {
       paddingHorizontal: 14,
       paddingVertical: 12,
       fontSize: 10,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       letterSpacing: 1.2,
     },
@@ -334,7 +369,7 @@ function buildStyles(theme: AgencyTheme) {
       color: theme.colors.textBody,
       marginTop: 18,
       lineHeight: 1.55,
-      fontFamily: 'Roboto',
+      fontFamily: theme.fonts.body,
       fontStyle: 'italic',
     },
 
@@ -344,13 +379,13 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 9,
       letterSpacing: 3.5,
       color: theme.colors.textMuted,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       marginBottom: 6,
     },
     seriesTitle: {
       fontSize: 22,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       color: theme.colors.textDark,
       letterSpacing: 0.5,
@@ -379,7 +414,7 @@ function buildStyles(theme: AgencyTheme) {
     seriesStatCell: { alignItems: 'center' },
     seriesStatValue: {
       fontSize: 18,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       color: theme.colors.textDark,
       letterSpacing: 0.5,
@@ -388,7 +423,7 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 8,
       letterSpacing: 2.5,
       color: theme.colors.textMuted,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       marginTop: 4,
     },
@@ -426,14 +461,14 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 11,
       color: theme.colors.textMuted,
       marginRight: 8,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       letterSpacing: 0.5,
     },
     topicTitle: {
       fontSize: 13.5,
       color: theme.colors.textDark,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       flex: 1,
       letterSpacing: 0.3,
@@ -444,14 +479,14 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 8.5,
       letterSpacing: 1.5,
       color: theme.colors.primary,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
     },
     topicTagWarning: {
       fontSize: 8.5,
       letterSpacing: 1.5,
       color: '#B06A13',
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       marginTop: 3,
     },
@@ -461,7 +496,7 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 7.5,
       letterSpacing: 1.8,
       color: theme.colors.textMuted,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       marginRight: 8,
     },
@@ -479,7 +514,7 @@ function buildStyles(theme: AgencyTheme) {
     },
     metricValue: {
       fontSize: 18,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       marginBottom: 3,
       letterSpacing: 0.5,
@@ -487,7 +522,7 @@ function buildStyles(theme: AgencyTheme) {
     metricLabel: {
       fontSize: 7.5,
       letterSpacing: 1.8,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
     },
 
@@ -496,7 +531,7 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 8.5,
       letterSpacing: 1.8,
       color: theme.colors.primary,
-      fontFamily: 'Rubik',
+      fontFamily: theme.fonts.heading,
       fontWeight: 700,
       marginRight: 10,
       marginTop: 2,

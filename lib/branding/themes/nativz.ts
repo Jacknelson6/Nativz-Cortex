@@ -32,8 +32,11 @@ export const nativzTheme: AgencyTheme = {
   },
 
   fonts: {
-    heading: 'Rubik',
-    body: 'Roboto',
+    // Nativz site typography — Poppins is the primary brand sans, used
+    // everywhere on nativz.io for both headings and body. Keeps the PDF
+    // typographically consistent with the marketing site.
+    heading: 'Poppins',
+    body: 'Poppins',
     mono: 'Menlo',
   },
 
