@@ -107,6 +107,10 @@ function mapSeries(series: TopicSeries, index: number): BrandedDeliverableSeries
 export function mapTopicPlanToBranded(
   plan: TopicPlan,
   clientName: string,
+  /** The deliverable type label — "Video Ideas", "Scripts", "Topics", etc.
+   *  This becomes the big cover title. The plan's own title/subtitle feeds
+   *  into the summary paragraph instead. */
+  deliverableType: string = 'Video Ideas',
 ): BrandedDeliverableData {
   const total = totalIdeas(plan);
   const highRes = totalHighResonance(plan);
@@ -125,8 +129,8 @@ export function mapTopicPlanToBranded(
   return {
     eyebrow: clientName,
     kicker: 'Content Strategy',
-    title: plan.title,
-    summary: plan.subtitle ?? `${total} short-form video ideas grounded in topic research for ${clientName}.`,
+    title: deliverableType,
+    summary: plan.subtitle ?? `${total} short-form ${deliverableType.toLowerCase()} grounded in topic research for ${clientName}.`,
     stats: [
       { value: String(plan.series.length), label: 'Content pillars' },
       { value: String(total), label: 'Video topics' },

@@ -858,7 +858,7 @@ export function BrandedDeliverableDocument({
           <View style={styles.coverRule} />
         </View>
         {data.kicker && <Text style={styles.coverKicker}>{data.kicker.toUpperCase()}</Text>}
-        <Text style={styles.coverTitleAccent}>{data.title}</Text>
+        <Text style={styles.coverTitleAccent}>{data.title.toUpperCase()}</Text>
         {data.eyebrow && <Text style={styles.coverSubtitle}>{data.eyebrow.toUpperCase()}</Text>}
         {data.summary && <Text style={styles.coverSummary}>{data.summary}</Text>}
         {data.stats && data.stats.length > 0 && <StatRow stats={data.stats} styles={styles} />}
