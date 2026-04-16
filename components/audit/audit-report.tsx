@@ -1294,23 +1294,59 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
 // ── Platform detail with Recharts ───────────────────────────────────────
 
 function PlatformDetail({ platform }: { platform: PlatformReport }) {
+  /**
+   * Engagement-rate-over-time chart data. Two sources of sparsity we have
+   * to work around:
+   *  - Some scrapers don't return publishDate on every video. Previously we
+   *    filtered those out, leaving 3-4 dots from a 20-video scrape.
+   *  - When publishDates ARE present they often span 6+ months, so the
+   *    chart's X-axis is mostly gaps with a few clusters.
+   *
+   * Fix: use every video. If publishDate is present we plot by date (sorted
+   * chronologically). Otherwise we synthesize an order from the video's
+   * array index and label the point as "Post N" — same chart, more dots.
+   */
   const engagementData = useMemo(() => {
-    return platform.videos
-      .filter(v => v.publishDate)
-      .sort((a, b) => new Date(a.publishDate!).getTime() - new Date(b.publishDate!).getTime())
-      .map(v => {
-        const er = platform.profile.followers > 0
-          ? ((v.likes + v.comments + v.shares) / platform.profile.followers) * 100
-          : 0;
-        return {
-          date: new Date(v.publishDate!).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-          views: v.views,
-          likes: v.likes,
-          comments: v.comments,
-          er: parseFloat(er.toFixed(2)),
-          description: v.description.substring(0, 50),
-        };
-      });
+    type Row = {
+      sortKey: number;
+      date: string;
+      views: number;
+      likes: number;
+      comments: number;
+      er: number;
+      description: string;
+    };
+    const dated: Row[] = [];
+    const undated: Row[] = [];
+    platform.videos.forEach((v, i) => {
+      const er = platform.profile.followers > 0
+        ? ((v.likes + v.comments + v.shares) / platform.profile.followers) * 100
+        : 0;
+      const base = {
+        views: v.views,
+        likes: v.likes,
+        comments: v.comments,
+        er: parseFloat(er.toFixed(2)),
+        description: v.description.substring(0, 50),
+      };
+      if (v.publishDate) {
+        const t = new Date(v.publishDate).getTime();
+        if (!Number.isNaN(t)) {
+          dated.push({
+            sortKey: t,
+            date: new Date(v.publishDate).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+            ...base,
+          });
+          return;
+        }
+      }
+      // Undated: order by scrape index (most-recent-first comes back from
+      // most platform actors, so we render newest → oldest).
+      undated.push({ sortKey: -i, date: `Post ${i + 1}`, ...base });
+    });
+    dated.sort((a, b) => a.sortKey - b.sortKey);
+    undated.sort((a, b) => b.sortKey - a.sortKey);
+    return [...dated, ...undated];
   }, [platform]);
 
   const topPosts = useMemo(() => {
@@ -1756,9 +1792,26 @@ function PostThumbnail({
   );
 
   if (!src || failed) {
+    // Platform-tinted fallback so a row of missing thumbnails reads as a
+    // readable grid (TikTok pink, IG magenta, YouTube red) rather than a
+    // wall of grey eye icons. Triggered when the scraper didn't return a
+    // thumbnailUrl OR the persisted Storage URL 404s.
+    const tint = PLATFORM_COLORS[platform] ?? 'var(--accent)';
     return (
-      <div className={`bg-surface-hover flex items-center justify-center ${aspectClass}`}>
-        <Eye size={20} className="text-text-muted/30" />
+      <div
+        className={`relative flex items-center justify-center overflow-hidden ${aspectClass}`}
+        style={{
+          background: `radial-gradient(circle at 30% 30%, ${tint}33, ${tint}11 60%, var(--surface-hover) 100%)`,
+        }}
+      >
+        <span className="opacity-50">
+          {platform === 'tiktok' ? <TikTokMark size={28} /> : null}
+          {platform === 'instagram' ? <InstagramMark variant="full" size={28} /> : null}
+          {platform === 'youtube' ? <YouTubeMark variant="full" size={28} /> : null}
+          {platform !== 'tiktok' && platform !== 'instagram' && platform !== 'youtube' ? (
+            <Eye size={20} className="text-text-muted/40" />
+          ) : null}
+        </span>
       </div>
     );
   }

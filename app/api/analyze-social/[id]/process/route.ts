@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { scrapeWebsite } from '@/lib/audit/scrape-website';
@@ -41,7 +41,8 @@ const SUPPORTED_SCRAPE_PLATFORMS = new Set<AuditPlatform>([
  * 2a. Scrape each social platform in parallel (TikTok, Instagram, etc.)
  * 2b. Competitor discovery + scraping — runs in parallel with 2a
  * 3. AI generates the 6-card scorecard
- * 4. Store results; image persistence fires via after() off critical path
+ * 4. Persist scraped images to Supabase Storage (so report survives CDN expiry)
+ * 5. Store results
  */
 
 export async function POST(
@@ -279,57 +280,34 @@ export async function POST(
 
       // Step 2b image persistence: copy each scraped avatar + thumbnail into
       // Supabase Storage so the report still renders once the Apify CDN URLs
-      // expire (~hours for TikTok, ~days for IG). Runs in after() so it
-      // doesn't block scorecard generation.
+      // expire (~hours for TikTok, ~days for IG).
       //
-      // IMPORTANT: `persistAllScrapedImages` / `persistAllCompetitorImages`
-      // mutate their inputs in place with the new Storage URLs. The audit's
-      // initial DB write happens BEFORE this hook fires with the raw Apify
-      // URLs, so we must re-save `prospect_data` + `competitors_data` after
-      // the mutation or the report keeps the expired links and falls back
-      // to initials / broken thumbnails next session.
-      after(async () => {
-        let prospectChanged = false;
-        let competitorsChanged = false;
-        if (platformReports.length > 0) {
-          console.log(`[audit:${id}] after(): persisting prospect images...`);
-          try {
-            await persistAllScrapedImages(adminClient, id, platformReports);
-            prospectChanged = true;
-          } catch (err) {
-            console.warn(`[audit:${id}] after(): prospect image persistence failed:`, err);
-          }
-        }
-        if (competitors.length > 0) {
-          console.log(`[audit:${id}] after(): persisting competitor images...`);
-          try {
-            await persistAllCompetitorImages(adminClient, id, competitors);
-            competitorsChanged = true;
-          } catch (err) {
-            console.warn(`[audit:${id}] after(): competitor image persistence failed:`, err);
-          }
-        }
-        if (prospectChanged || competitorsChanged) {
-          try {
-            await adminClient
-              .from('prospect_audits')
-              .update({
-                prospect_data: {
-                  websiteContext,
-                  platforms: platformReports,
-                  detectedSocialLinks: detectedLinks,
-                  failedPlatforms,
-                },
-                competitors_data: competitors,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', id);
-            console.log(`[audit:${id}] after(): re-saved DB with persisted image URLs`);
-          } catch (err) {
-            console.warn(`[audit:${id}] after(): re-save failed:`, err);
-          }
-        }
-      });
+      // Was in after() previously — moved into the main flow so the data
+      // the user sees on completion already has Storage URLs. after() was
+      // unreliable on Vercel (didn't always complete), which left the
+      // report with raw Apify URLs that 403 within hours.
+      //
+      // `persistAllScrapedImages` / `persistAllCompetitorImages` mutate
+      // their inputs in place with the new Storage URLs, so the
+      // platformReports + competitors arrays we pass to the final DB
+      // write below already contain the persisted URLs.
+      console.log(`[audit:${id}] Step 2b: Persisting scraped images...`);
+      const persistStartMs = Date.now();
+      const [prospectPersistResult, competitorPersistResult] = await Promise.allSettled([
+        platformReports.length > 0
+          ? persistAllScrapedImages(adminClient, id, platformReports)
+          : Promise.resolve(),
+        competitors.length > 0
+          ? persistAllCompetitorImages(adminClient, id, competitors)
+          : Promise.resolve(),
+      ]);
+      if (prospectPersistResult.status === 'rejected') {
+        console.warn(`[audit:${id}] prospect image persistence failed (non-fatal):`, prospectPersistResult.reason);
+      }
+      if (competitorPersistResult.status === 'rejected') {
+        console.warn(`[audit:${id}] competitor image persistence failed (non-fatal):`, competitorPersistResult.reason);
+      }
+      console.log(`[audit:${id}] image persistence took ${Math.round((Date.now() - persistStartMs) / 1000)}s`);
 
       // Step 3: Generate the 6-card scorecard. The old Gemini per-video
       // pre-grading pipeline was retired along with the 13-category scorecard
