@@ -12,15 +12,14 @@ import { createElement } from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
 import { getTheme, type AgencySlug } from '../lib/branding';
 import { BrandedDeliverableDocument, type BrandedDeliverableData } from '../lib/pdf/branded';
-import { BRANDED_PREVIEW_FIXTURE } from '../lib/pdf/branded/_preview-fixture';
 import { mapTopicPlanToBranded, mapIdeasToBranded } from '../lib/pdf/branded/adapters';
 import type { TopicPlan } from '../lib/topic-plans/types';
 
 // ── Fixtures ─────────────────────────────────────────────────────
 
 const TOPIC_PLAN_FIXTURE: TopicPlan = {
-  title: 'Video Ideas',
-  subtitle: '40 short-form video ideas for truck parking safety, grounded in topic research.',
+  title: 'Truck Parking Safety',
+  subtitle: '12 short-form video ideas for truck parking safety, grounded in topic research.',
   north_star_metric: 'Reserved spot inquiries and qualified parking leads',
   series: [
     {
@@ -81,7 +80,6 @@ async function main() {
   const specs: DocSpec[] = [
     { label: 'Topic-Plan', data: mapTopicPlanToBranded(TOPIC_PLAN_FIXTURE, 'Safe Stop') },
     { label: 'Video-Ideas', data: mapIdeasToBranded(IDEAS_FIXTURE, 'Safe Stop', 'video', 'truck parking safety') },
-    { label: 'Fixture-Preview', data: BRANDED_PREVIEW_FIXTURE },
   ];
 
   for (const slug of slugs) {

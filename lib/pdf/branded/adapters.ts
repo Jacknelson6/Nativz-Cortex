@@ -125,7 +125,7 @@ export function mapTopicPlanToBranded(
   return {
     eyebrow: clientName,
     kicker: 'Content Strategy',
-    title: 'Video Ideas',
+    title: plan.title,
     summary: plan.subtitle ?? `${total} short-form video ideas grounded in topic research for ${clientName}.`,
     stats: [
       { value: String(plan.series.length), label: 'Content pillars' },
