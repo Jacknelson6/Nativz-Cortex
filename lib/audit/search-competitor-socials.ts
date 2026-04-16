@@ -52,7 +52,7 @@ function guessHandles(brandName: string): string[] {
   return out.slice(0, 3);
 }
 
-async function tryTikTokHandle(handle: string): Promise<SocialLink | null> {
+async function tryTikTokHandle(handle: string, brandName: string): Promise<SocialLink | null> {
   const key = getApifyKey();
   const url = `https://www.tiktok.com/@${handle}`;
   const runId = await startApifyActorRun(TT_PROFILE_ACTOR, { startUrls: [url] }, key);
@@ -61,12 +61,18 @@ async function tryTikTokHandle(handle: string): Promise<SocialLink | null> {
   if (!ok) return null;
   const items = await fetchApifyDatasetItems(runId, key, 3);
   if (items.length === 0) return null;
-  const first = items[0] as { channel?: { username?: string } };
+  const first = items[0] as { channel?: { username?: string; name?: string } };
   const username = first?.channel?.username ?? handle;
+  const displayName = first?.channel?.name ?? username;
+  const sim = diceCoefficient(brandName, displayName);
+  if (sim < 0.3) {
+    console.log(`[audit] TikTok @${handle}: display name "${displayName}" doesn't match brand "${brandName}" (sim=${sim.toFixed(2)}) — skipping`);
+    return null;
+  }
   return { platform: 'tiktok', username, url: `https://www.tiktok.com/@${username}` };
 }
 
-async function tryInstagramHandle(handle: string): Promise<SocialLink | null> {
+async function tryInstagramHandle(handle: string, brandName: string): Promise<SocialLink | null> {
   const key = getApifyKey();
   const runId = await startApifyActorRun(IG_PROFILE_ACTOR, { usernames: [handle] }, key);
   if (!runId) return null;
@@ -74,11 +80,48 @@ async function tryInstagramHandle(handle: string): Promise<SocialLink | null> {
   if (!ok) return null;
   const items = await fetchApifyDatasetItems(runId, key, 1);
   if (items.length === 0) return null;
-  const first = items[0] as { username?: string };
+  const first = items[0] as { username?: string; fullName?: string };
   const username = first?.username ?? handle;
+  const displayName = first?.fullName ?? username;
+  const sim = diceCoefficient(brandName, displayName);
+  if (sim < 0.3) {
+    console.log(`[audit] IG @${handle}: display name "${displayName}" doesn't match brand "${brandName}" (sim=${sim.toFixed(2)}) — skipping`);
+    return null;
+  }
   return { platform: 'instagram', username, url: `https://www.instagram.com/${username}/` };
 }
 
+/**
+ * Dice coefficient on character bigrams — quick string similarity without
+ * deps. Returns 0..1 where 1 = identical.
+ */
+function diceCoefficient(a: string, b: string): number {
+  const x = a.toLowerCase();
+  const y = b.toLowerCase();
+  if (x === y) return 1;
+  if (x.length < 2 || y.length < 2) return 0;
+  const bigramsA = new Map<string, number>();
+  for (let i = 0; i < x.length - 1; i++) {
+    const bi = x.slice(i, i + 2);
+    bigramsA.set(bi, (bigramsA.get(bi) ?? 0) + 1);
+  }
+  let overlap = 0;
+  for (let i = 0; i < y.length - 1; i++) {
+    const bi = y.slice(i, i + 2);
+    const count = bigramsA.get(bi) ?? 0;
+    if (count > 0) { overlap++; bigramsA.set(bi, count - 1); }
+  }
+  return (2 * overlap) / (x.length - 1 + y.length - 1);
+}
+
+/**
+ * YouTube channel search with verification. Searches by brand name, then
+ * ranks results by title similarity. Rejects channels whose title doesn't
+ * resemble the brand (prevents picking "2stiq" for "Toastique").
+ *
+ * Also fetches subscriber counts for the top matches and picks the one
+ * with the highest subs among those that pass the title-similarity check.
+ */
 async function searchYouTubeChannel(brandName: string): Promise<SocialLink | null> {
   const key = getYouTubeKey();
   if (!key) return null;
@@ -87,7 +130,7 @@ async function searchYouTubeChannel(brandName: string): Promise<SocialLink | nul
       part: 'snippet',
       type: 'channel',
       q: brandName,
-      maxResults: '3',
+      maxResults: '5',
       key,
     });
     const res = await fetch(
@@ -96,18 +139,64 @@ async function searchYouTubeChannel(brandName: string): Promise<SocialLink | nul
     );
     if (!res.ok) return null;
     const data = await res.json();
-    const items = data?.items as { id?: { channelId?: string }; snippet?: { channelTitle?: string; customUrl?: string } }[] | undefined;
+    const items = data?.items as {
+      id?: { channelId?: string };
+      snippet?: { channelTitle?: string; customUrl?: string; description?: string };
+    }[] | undefined;
     if (!items || items.length === 0) return null;
-    const best = items[0];
-    const channelId = best.id?.channelId;
-    if (!channelId) return null;
-    const handle = best.snippet?.customUrl?.replace(/^@/, '') ?? channelId;
+
+    // Score each result by title similarity to the brand name. Reject
+    // anything below 0.4 — that's a "barely resembles the brand" threshold.
+    const MIN_SIMILARITY = 0.4;
+    const scored = items
+      .filter((i) => i.id?.channelId && i.snippet?.channelTitle)
+      .map((i) => ({
+        channelId: i.id!.channelId!,
+        title: i.snippet!.channelTitle!,
+        customUrl: i.snippet!.customUrl ?? null,
+        similarity: diceCoefficient(brandName, i.snippet!.channelTitle!),
+      }))
+      .filter((s) => s.similarity >= MIN_SIMILARITY)
+      .sort((a, b) => b.similarity - a.similarity);
+
+    if (scored.length === 0) return null;
+
+    // Fetch subscriber counts for the top candidates so we can prefer the
+    // most-followed match (the official account, not a fan channel).
+    const channelIds = scored.slice(0, 3).map((s) => s.channelId);
+    const statsParams = new URLSearchParams({
+      part: 'statistics',
+      id: channelIds.join(','),
+      key,
+    });
+    const statsRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/channels?${statsParams}`,
+      { signal: AbortSignal.timeout(10_000) },
+    );
+    const subsMap = new Map<string, number>();
+    if (statsRes.ok) {
+      const statsData = await statsRes.json();
+      for (const ch of statsData.items ?? []) {
+        subsMap.set(ch.id, parseInt(ch.statistics?.subscriberCount ?? '0', 10));
+      }
+    }
+
+    // Pick the best: highest similarity first, then highest subs as tiebreaker
+    const best = scored
+      .map((s) => ({ ...s, subs: subsMap.get(s.channelId) ?? 0 }))
+      .sort((a, b) => b.similarity - a.similarity || b.subs - a.subs)[0];
+
+    if (!best) return null;
+    const handle = best.customUrl?.replace(/^@/, '') ?? best.channelId;
+    console.log(
+      `[audit] YouTube search for "${brandName}": picked "${best.title}" (similarity=${best.similarity.toFixed(2)}, subs=${best.subs})`,
+    );
     return {
       platform: 'youtube',
       username: handle,
-      url: best.snippet?.customUrl
+      url: best.customUrl
         ? `https://www.youtube.com/@${handle}`
-        : `https://www.youtube.com/channel/${channelId}`,
+        : `https://www.youtube.com/channel/${best.channelId}`,
     };
   } catch {
     return null;
@@ -135,7 +224,7 @@ export async function searchCompetitorSocials(
     jobs.push(
       (async () => {
         for (const h of handles) {
-          const found = await tryTikTokHandle(h);
+          const found = await tryTikTokHandle(h, brandName);
           if (found) { results.push(found); return; }
         }
       })(),
@@ -146,7 +235,7 @@ export async function searchCompetitorSocials(
     jobs.push(
       (async () => {
         for (const h of handles) {
-          const found = await tryInstagramHandle(h);
+          const found = await tryInstagramHandle(h, brandName);
           if (found) { results.push(found); return; }
         }
       })(),
