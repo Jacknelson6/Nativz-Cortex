@@ -1,5 +1,4 @@
 import type { AgencyTheme } from '../types';
-import { AC_LOGO_PNG } from '@/lib/brand-logo';
 
 /**
  * Anderson Collaborative brand tokens.
@@ -41,6 +40,8 @@ export const andersonTheme: AgencyTheme = {
     svg: '/anderson-logo.svg',
     svgOnDark: '/anderson-logo-dark.svg',
     png: '/anderson-logo.png',
-    pngBase64: AC_LOGO_PNG,
+    // Shipped AC PNG is also a light-on-dark variant — use a styled text
+    // wordmark on light backgrounds until a dark-on-light PNG lands.
+    wordmark: 'Anderson Collaborative',
   },
 };

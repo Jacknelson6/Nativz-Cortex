@@ -1,5 +1,4 @@
 import type { AgencyTheme } from '../types';
-import { NATIVZ_LOGO_ON_LIGHT_PNG } from '@/lib/brand-logo';
 
 /**
  * Nativz brand tokens.
@@ -42,6 +41,9 @@ export const nativzTheme: AgencyTheme = {
     svg: '/nativz-logo.svg',
     svgOnDark: '/nativz-logo.svg',
     png: '/nativz-logo.png',
-    pngBase64: NATIVZ_LOGO_ON_LIGHT_PNG,
+    // The shipped Nativz PNG is white-on-transparent — unreadable on white
+    // deliverable covers. Until a dark-on-light variant lands in /public,
+    // render the wordmark as styled Rubik type instead.
+    wordmark: 'nativz',
   },
 };

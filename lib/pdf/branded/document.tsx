@@ -156,6 +156,14 @@ function buildStyles(theme: AgencyTheme) {
       marginBottom: 56,
     },
     coverLogo: { height: 64, objectFit: 'contain' },
+    coverWordmark: {
+      fontFamily: 'Rubik',
+      fontWeight: 800,
+      fontSize: 42,
+      color: theme.colors.primary,
+      letterSpacing: -0.5,
+      textAlign: 'center',
+    },
     coverRuleWrap: { alignItems: 'center', marginBottom: 22 },
     coverRule: {
       width: 220,
@@ -262,18 +270,10 @@ function buildStyles(theme: AgencyTheme) {
       letterSpacing: 0.8,
       marginBottom: 12,
     },
-    sectionRuleRow: {
-      flexDirection: 'row',
+    sectionRule: {
       height: 1,
-      marginBottom: 14,
-    },
-    sectionRulePrimary: {
-      width: 80,
       backgroundColor: theme.colors.primary,
-    },
-    sectionRuleRest: {
-      flex: 1,
-      backgroundColor: theme.colors.border,
+      marginBottom: 14,
     },
     sectionIntro: {
       fontSize: 10.5,
@@ -362,13 +362,11 @@ function buildStyles(theme: AgencyTheme) {
       color: theme.colors.textBody,
       marginBottom: 12,
     },
-    seriesSplitRule: {
-      flexDirection: 'row',
+    seriesRule: {
       height: 1,
+      backgroundColor: theme.colors.primary,
       marginBottom: 16,
     },
-    seriesSplitPrimary: { width: 80, backgroundColor: theme.colors.primary },
-    seriesSplitRest: { flex: 1, backgroundColor: theme.colors.border },
     seriesStatsStrip: {
       flexDirection: 'row',
       justifyContent: 'center',
@@ -557,27 +555,14 @@ function Footer({
   );
 }
 
-function SplitRule({
+function AccentRule({
   variant,
   styles,
 }: {
   variant: 'series' | 'section';
   styles: ReturnType<typeof buildStyles>;
 }) {
-  if (variant === 'section') {
-    return (
-      <View style={styles.sectionRuleRow}>
-        <View style={styles.sectionRulePrimary} />
-        <View style={styles.sectionRuleRest} />
-      </View>
-    );
-  }
-  return (
-    <View style={styles.seriesSplitRule}>
-      <View style={styles.seriesSplitPrimary} />
-      <View style={styles.seriesSplitRest} />
-    </View>
-  );
+  return <View style={variant === 'section' ? styles.sectionRule : styles.seriesRule} />;
 }
 
 function StatRow({
@@ -674,7 +659,7 @@ function Series({
         <Text style={styles.seriesLabel}>{series.label.toUpperCase()}</Text>
         <Text style={styles.seriesTitle}>{series.title}</Text>
         {series.subtitle && <Text style={styles.seriesSubtitle}>{series.subtitle}</Text>}
-        <SplitRule variant="series" styles={styles} />
+        <AccentRule variant="series" styles={styles} />
         {series.stats && series.stats.length > 0 && (
           <View style={styles.seriesStatsStrip}>
             {series.stats.map((stat, i) => (
@@ -756,18 +741,27 @@ export function BrandedDeliverableDocument({
   const agencyName = theme.name;
   const docTitle = data.runningHeaderTitle ?? data.eyebrow ?? data.title;
 
-  const logoBuffer = readLogoBuffer(theme.logos.png);
+  // Prefer the text wordmark when the theme provides one — Nativz and AC
+  // ship white-on-transparent PNGs that vanish on white covers. Fall back
+  // to the PNG buffer when no wordmark is set (e.g. once a dark-on-light
+  // PNG lands in /public).
+  const wordmark = theme.logos.wordmark;
+  const logoBuffer = wordmark ? null : readLogoBuffer(theme.logos.png);
 
   return (
     <Document>
       {/* Cover */}
       <Page size="A4" style={styles.coverPage}>
         <View style={styles.coverTopPad} />
-        {logoBuffer && (
+        {wordmark ? (
+          <View style={styles.coverLogoWrap}>
+            <Text style={styles.coverWordmark}>{wordmark}</Text>
+          </View>
+        ) : logoBuffer ? (
           <View style={styles.coverLogoWrap}>
             <Image src={logoBuffer} style={styles.coverLogo} />
           </View>
-        )}
+        ) : null}
         <View style={styles.coverRuleWrap}>
           <View style={styles.coverRule} />
         </View>

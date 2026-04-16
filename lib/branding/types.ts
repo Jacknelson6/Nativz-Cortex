@@ -52,7 +52,7 @@ export interface AgencyTheme {
     mono: string;
   };
 
-  /** Logo asset paths. PNGs carry pre-encoded base64 for PDF use. */
+  /** Logo asset paths. PNGs are loaded from /public at render time. */
   logos: {
     /** Primary SVG — full-color, works on light backgrounds. */
     svg: string;
@@ -60,7 +60,12 @@ export interface AgencyTheme {
     svgOnDark: string;
     /** Raster fallback — path served from /public. */
     png: string;
-    /** Base64-encoded PNG for react-pdf <Image src={...}>. */
-    pngBase64: string;
+    /**
+     * Text wordmark fallback. When set, PDFs render this as styled type
+     * in place of the PNG on light backgrounds — useful when the only
+     * logo PNG we have is a light/white version that disappears on white.
+     * Leave undefined if the PNG itself works on light backgrounds.
+     */
+    wordmark?: string;
   };
 }
