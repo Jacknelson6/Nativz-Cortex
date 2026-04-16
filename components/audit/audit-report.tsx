@@ -1295,58 +1295,94 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
 
 function PlatformDetail({ platform }: { platform: PlatformReport }) {
   /**
-   * Engagement-rate-over-time chart data. Two sources of sparsity we have
-   * to work around:
-   *  - Some scrapers don't return publishDate on every video. Previously we
-   *    filtered those out, leaving 3-4 dots from a 20-video scrape.
-   *  - When publishDates ARE present they often span 6+ months, so the
-   *    chart's X-axis is mostly gaps with a few clusters.
-   *
-   * Fix: use every video. If publishDate is present we plot by date (sorted
-   * chronologically). Otherwise we synthesize an order from the video's
-   * array index and label the point as "Post N" — same chart, more dots.
+   * 30-day daily chart data. For each day in the range we either use the
+   * real per-video metrics (if a video was posted that day, averaged) or
+   * linearly interpolate from the nearest known data points. This gives a
+   * smooth, continuous line instead of 3-4 dots separated by multi-week gaps.
    */
-  const engagementData = useMemo(() => {
-    type Row = {
-      sortKey: number;
-      date: string;
-      views: number;
-      likes: number;
-      comments: number;
-      er: number;
-      description: string;
-    };
-    const dated: Row[] = [];
-    const undated: Row[] = [];
-    platform.videos.forEach((v, i) => {
-      const er = platform.profile.followers > 0
-        ? ((v.likes + v.comments + v.shares) / platform.profile.followers) * 100
-        : 0;
-      const base = {
-        views: v.views,
-        likes: v.likes,
-        comments: v.comments,
-        er: parseFloat(er.toFixed(2)),
-        description: v.description.substring(0, 50),
-      };
-      if (v.publishDate) {
-        const t = new Date(v.publishDate).getTime();
-        if (!Number.isNaN(t)) {
-          dated.push({
-            sortKey: t,
-            date: new Date(v.publishDate).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-            ...base,
-          });
-          return;
-        }
+  const dailyChartData = useMemo(() => {
+    type DayRow = { date: string; dayMs: number; views: number; likes: number; comments: number; er: number; isReal: boolean };
+    const followers = platform.profile.followers || 1;
+    const datedVideos = platform.videos
+      .filter((v) => v.publishDate)
+      .map((v) => {
+        const t = new Date(v.publishDate!);
+        const dayMs = new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
+        const er = ((v.likes + v.comments + v.shares) / followers) * 100;
+        return { dayMs, views: v.views, likes: v.likes, comments: v.comments, er };
+      })
+      .filter((v) => !Number.isNaN(v.dayMs));
+
+    if (datedVideos.length === 0) return [];
+
+    const byDay = new Map<number, { views: number[]; likes: number[]; comments: number[]; er: number[] }>();
+    for (const v of datedVideos) {
+      if (!byDay.has(v.dayMs)) byDay.set(v.dayMs, { views: [], likes: [], comments: [], er: [] });
+      const d = byDay.get(v.dayMs)!;
+      d.views.push(v.views); d.likes.push(v.likes); d.comments.push(v.comments); d.er.push(v.er);
+    }
+
+    const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
+
+    const realDays: DayRow[] = Array.from(byDay.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([dayMs, d]) => ({
+        dayMs,
+        date: new Date(dayMs).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+        views: Math.round(avg(d.views)),
+        likes: Math.round(avg(d.likes)),
+        comments: Math.round(avg(d.comments)),
+        er: parseFloat(avg(d.er).toFixed(2)),
+        isReal: true,
+      }));
+
+    const now = new Date();
+    const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const thirtyDaysAgoMs = todayMs - 30 * 86_400_000;
+
+    const startMs = Math.max(thirtyDaysAgoMs, realDays[0]?.dayMs ?? thirtyDaysAgoMs);
+    const endMs = Math.min(todayMs, Math.max(realDays[realDays.length - 1]?.dayMs ?? todayMs, startMs));
+
+    const realByMs = new Map(realDays.map((r) => [r.dayMs, r]));
+    const sortedRealMs = realDays.map((r) => r.dayMs);
+
+    function interpolate(dayMs: number, key: 'views' | 'likes' | 'comments' | 'er'): number {
+      let lo = -1;
+      let hi = -1;
+      for (let i = sortedRealMs.length - 1; i >= 0; i--) {
+        if (sortedRealMs[i] <= dayMs) { lo = i; break; }
       }
-      // Undated: order by scrape index (most-recent-first comes back from
-      // most platform actors, so we render newest → oldest).
-      undated.push({ sortKey: -i, date: `Post ${i + 1}`, ...base });
-    });
-    dated.sort((a, b) => a.sortKey - b.sortKey);
-    undated.sort((a, b) => b.sortKey - a.sortKey);
-    return [...dated, ...undated];
+      for (let i = 0; i < sortedRealMs.length; i++) {
+        if (sortedRealMs[i] >= dayMs) { hi = i; break; }
+      }
+      if (lo === -1 && hi === -1) return 0;
+      if (lo === -1) return realByMs.get(sortedRealMs[hi])![key];
+      if (hi === -1) return realByMs.get(sortedRealMs[lo])![key];
+      if (lo === hi) return realByMs.get(sortedRealMs[lo])![key];
+      const loRow = realByMs.get(sortedRealMs[lo])!;
+      const hiRow = realByMs.get(sortedRealMs[hi])!;
+      const frac = (dayMs - sortedRealMs[lo]) / (sortedRealMs[hi] - sortedRealMs[lo]);
+      return loRow[key] + (hiRow[key] - loRow[key]) * frac;
+    }
+
+    const result: DayRow[] = [];
+    for (let ms = startMs; ms <= endMs; ms += 86_400_000) {
+      const real = realByMs.get(ms);
+      if (real) {
+        result.push(real);
+      } else {
+        result.push({
+          dayMs: ms,
+          date: new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+          views: Math.round(interpolate(ms, 'views')),
+          likes: Math.round(interpolate(ms, 'likes')),
+          comments: Math.round(interpolate(ms, 'comments')),
+          er: parseFloat(interpolate(ms, 'er').toFixed(2)),
+          isReal: false,
+        });
+      }
+    }
+    return result;
   }, [platform]);
 
   const topPosts = useMemo(() => {
@@ -1399,60 +1435,12 @@ function PlatformDetail({ platform }: { platform: PlatformReport }) {
         </div>
       </div>
 
-      {/* Engagement rate over time chart — only render when there's actual
-          engagement data. Facebook Reels returns 0 for likes/comments/shares
-          (Meta blocks them), so a flat-zero line is misleading. */}
-      {engagementData.length > 2 && (
-        <div className="rounded-xl border border-nativz-border bg-surface p-5">
-          <h4 className="text-sm font-semibold text-text-primary mb-4">Engagement rate over time</h4>
-          {engagementData.some((d) => d.er > 0) ? (
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={engagementData}>
-                  <defs>
-                    <linearGradient id={`erGrad-${platform.platform}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-                      <stop offset="95%" stopColor={color} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--nativz-border)" />
-                  <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
-                  <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', border: '1px solid var(--nativz-border)', borderRadius: '8px', fontSize: '12px' }} formatter={(value: number | undefined) => [`${value ?? 0}%`, 'ER']} />
-                  <Area type="monotone" dataKey="er" stroke={color} fillOpacity={1} fill={`url(#erGrad-${platform.platform})`} strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="flex h-48 flex-col items-center justify-center text-center">
-              <AlertCircle size={28} className="text-text-muted/60 mb-3" />
-              <p className="text-sm text-text-muted">Engagement data unavailable</p>
-              <p className="mt-1 text-xs text-text-muted/70 max-w-sm">
-                {platform.platform === 'facebook'
-                  ? 'Meta blocks like/comment/share counts on Facebook Reels scraping.'
-                  : 'No engagement counts returned from the scraper for this account.'}
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Views per post bar chart */}
-      {engagementData.length > 2 && (
-        <div className="rounded-xl border border-nativz-border bg-surface p-5">
-          <h4 className="text-sm font-semibold text-text-primary mb-4">Views per post</h4>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={engagementData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--nativz-border)" />
-                <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => formatNumber(v)} />
-                <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', border: '1px solid var(--nativz-border)', borderRadius: '8px', fontSize: '12px' }} formatter={(value: number | undefined) => [formatNumber(value ?? 0), 'Views']} />
-                <Bar dataKey="views" fill={color} radius={[4, 4, 0, 0]} opacity={0.8} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+      {/* Performance chart — 30-day daily line with selectable metric.
+          Interpolates between known data points for days without posts so the
+          line is continuous and readable. Metric selector lets the user flip
+          between Views, Engagement Rate, Likes, and Comments on one chart. */}
+      {dailyChartData.length > 1 && (
+        <DailyPerformanceChart data={dailyChartData} platform={platform.platform} color={color} />
       )}
 
       {/* Top performing posts */}
@@ -1540,6 +1528,107 @@ function ScorecardCard({
       {item.status_reason && (
         <p className="text-xs italic text-text-muted leading-relaxed">{item.status_reason}</p>
       )}
+    </div>
+  );
+}
+
+type ChartMetric = 'views' | 'er' | 'likes' | 'comments';
+const METRIC_OPTIONS: { key: ChartMetric; label: string; format: (v: number) => string }[] = [
+  { key: 'views', label: 'Views', format: (v) => formatNumber(v) },
+  { key: 'er', label: 'Engagement', format: (v) => `${v.toFixed(2)}%` },
+  { key: 'likes', label: 'Likes', format: (v) => formatNumber(v) },
+  { key: 'comments', label: 'Comments', format: (v) => formatNumber(v) },
+];
+
+function DailyPerformanceChart({
+  data,
+  platform,
+  color,
+}: {
+  data: { date: string; dayMs: number; views: number; likes: number; comments: number; er: number; isReal: boolean }[];
+  platform: string;
+  color: string;
+}) {
+  const [metric, setMetric] = useState<ChartMetric>('views');
+  const opt = METRIC_OPTIONS.find((o) => o.key === metric) ?? METRIC_OPTIONS[0];
+
+  const hasEngagement = data.some((d) => d.er > 0);
+  const availableMetrics = hasEngagement
+    ? METRIC_OPTIONS
+    : METRIC_OPTIONS.filter((o) => o.key !== 'er');
+
+  return (
+    <div className="rounded-xl border border-nativz-border bg-surface p-5">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h4 className="text-sm font-semibold text-text-primary">Performance over time</h4>
+        <div className="flex rounded-lg border border-nativz-border p-0.5">
+          {availableMetrics.map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              onClick={() => setMetric(o.key)}
+              className={cn(
+                'px-2.5 py-1 text-xs font-medium rounded-md transition-colors',
+                metric === o.key
+                  ? 'bg-accent-surface text-accent-text'
+                  : 'text-text-muted hover:text-text-secondary',
+              )}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data}>
+            <defs>
+              <linearGradient id={`perfGrad-${platform}-${metric}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={color} stopOpacity={0.3} />
+                <stop offset="95%" stopColor={color} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--nativz-border)" />
+            <XAxis
+              dataKey="date"
+              tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+              tickLine={false}
+              axisLine={false}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v) => opt.format(v)}
+              width={60}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'var(--surface)',
+                border: '1px solid var(--nativz-border)',
+                borderRadius: '8px',
+                fontSize: '12px',
+              }}
+              formatter={(value: number | undefined) => [opt.format(value ?? 0), opt.label]}
+              labelFormatter={(label) => String(label)}
+            />
+            <Area
+              type="monotone"
+              dataKey={metric}
+              stroke={color}
+              fillOpacity={1}
+              fill={`url(#perfGrad-${platform}-${metric})`}
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 4, fill: color, stroke: 'var(--surface)', strokeWidth: 2 }}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="mt-2 text-[11px] text-text-muted">
+        Solid dots = real post data · interpolated line fills gaps between posting days
+      </p>
     </div>
   );
 }
