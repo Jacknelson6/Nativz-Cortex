@@ -24,10 +24,12 @@ export const maxDuration = 300;
  * surfaced on the report as "no scraper yet" rather than silently dropped.
  * Add a platform to this set the moment its scraper + `switch` case land.
  */
+// Facebook + LinkedIn intentionally excluded — Facebook scraping is too
+// flaky (Meta blocks engagement counts on Reels), LinkedIn isn't short-form.
+// Scraper code stays in place under lib/audit/ for easy re-add later.
 const SUPPORTED_SCRAPE_PLATFORMS = new Set<AuditPlatform>([
   'tiktok',
   'instagram',
-  'facebook',
   'youtube',
 ]);
 

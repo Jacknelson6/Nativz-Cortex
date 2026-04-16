@@ -219,6 +219,14 @@ For each item:
 - status_reason: one sentence (≤14 words) explaining WHY the prospect is at this status, ideally referencing a competitor.
 - description: one neutral sentence explaining what the category measures.
 
+EXPLICIT THRESHOLDS (apply uniformly to prospect AND every competitor):
+- posting_frequency: good if ≥8 posts/month, warning if 4–7 posts/month, poor if <4 posts/month.
+- engagement_rate: good if >3%, warning if 1–3%, poor if <1%.
+- avg_views: relative to category — judge against the competitor set, no absolute threshold.
+- hashtag_strategy, content_variety, bio_optimization: judge qualitatively from the data given.
+
+These thresholds OVERRIDE your judgment for posting_frequency and engagement_rate. Do not assign "good" to a brand posting 5/month or running 2% ER no matter how strong the rest of their presence is.
+
 Return ONLY JSON:
 {
   "overallScore": 0-100,

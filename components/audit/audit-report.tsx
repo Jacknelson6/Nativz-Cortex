@@ -31,14 +31,10 @@ import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/button';
 import { EncryptedText } from '@/components/ui/encrypted-text';
 import { toast } from 'sonner';
-import { AuditExportPdfButton } from '@/components/audit/audit-export-pdf-button';
 import { AuditShareButton } from '@/components/audit/audit-share-button';
-import { AttachToClientDialog } from '@/components/audit/attach-to-client-dialog';
 import { TrackCompetitorButton } from '@/components/audit/track-competitor-button';
-import { Users2 } from 'lucide-react';
 import { TikTokMark } from '@/components/integrations/tiktok-mark';
 import { InstagramMark } from '@/components/integrations/instagram-mark';
-import { FacebookMark } from '@/components/integrations/facebook-mark';
 import { YouTubeMark } from '@/components/integrations/youtube-mark';
 import type { PlatformReport, CompetitorProfile, AuditScorecard, ScorecardItem, ScoreStatus, WebsiteContext, FailedPlatform } from '@/lib/audit/types';
 import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
@@ -80,28 +76,19 @@ const STATUS_COLORS: Record<ScoreStatus, { dot: string; bg: string; text: string
 const PLATFORM_COLORS: Record<string, string> = {
   tiktok: '#FF0050',
   instagram: '#C13584',
-  facebook: '#1877F2',
   youtube: '#FF0000',
 };
 
 const PLATFORM_LABELS: Record<string, string> = {
   tiktok: 'TikTok',
   instagram: 'Instagram',
-  facebook: 'Facebook',
   youtube: 'YouTube',
 };
 
-/**
- * Canonical platform order across the audit UI. TikTok and Instagram
- * come first because they're richest for short-form video; YouTube next;
- * Facebook last because its API is the most restricted (limited engagement
- * data, fewer post fields, frequent auth blocks).
- */
 const PLATFORM_PRIORITY: Record<string, number> = {
   tiktok: 0,
   instagram: 1,
   youtube: 2,
-  facebook: 3,
 };
 
 function sortPlatforms<T extends { platform: string }>(list: T[]): T[] {
@@ -136,17 +123,10 @@ function AuditPlatformIcon({ platform, size = 'md' }: { platform: AuditPlatformK
       </span>
     );
   }
-  if (platform === 'instagram') {
-    return (
-      <span className="inline-flex shrink-0 items-center justify-center" aria-hidden>
-        <InstagramMark variant="full" size={iconSize} />
-      </span>
-    );
-  }
-  // facebook
+  // instagram
   return (
     <span className="inline-flex shrink-0 items-center justify-center" aria-hidden>
-      <FacebookMark variant="full" size={iconSize} />
+      <InstagramMark variant="full" size={iconSize} />
     </span>
   );
 }
@@ -163,7 +143,7 @@ const PROCESSING_STAGES = [
   'Generating analysis scorecard',
 ];
 
-type AuditPlatformKey = 'tiktok' | 'instagram' | 'facebook' | 'youtube';
+type AuditPlatformKey = 'tiktok' | 'instagram' | 'youtube';
 
 export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const router = useRouter();
@@ -172,8 +152,6 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [activePlatformTab, setActivePlatformTab] = useState<string | null>(null);
-  const [scorecardView, setScorecardView] = useState<'list' | 'matrix'>('list');
-  const [attachDialogOpen, setAttachDialogOpen] = useState(false);
   const [socialInputs, setSocialInputs] = useState<Partial<Record<AuditPlatformKey, string>>>({});
   const [competitorUrls, setCompetitorUrls] = useState<string[]>(['', '', '']);
   const [competitorFaviconErrors, setCompetitorFaviconErrors] = useState<boolean[]>([false, false, false]);
@@ -242,7 +220,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     setSocialInputs((current) => {
       if (Object.values(current).some((v) => v?.trim())) return current;
       const preset: Partial<Record<AuditPlatformKey, string>> = {};
-      const allowed = ['tiktok', 'instagram', 'facebook', 'youtube'] as const;
+      const allowed = ['tiktok', 'instagram', 'youtube'] as const;
 
       // First: user's own persisted URLs from the social_urls column
       const userUrls = (audit.social_urls ?? {}) as Partial<Record<string, string>>;
@@ -427,7 +405,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
         // Pre-fill social inputs with prettified URLs (scrapers re-add https:// on submit)
         const preset: Partial<Record<AuditPlatformKey, string>> = {};
         for (const d of data.detectedPlatforms ?? []) {
-          if (d.url && (['tiktok', 'instagram', 'facebook', 'youtube'] as const).includes(d.platform as AuditPlatformKey)) {
+          if (d.url && (['tiktok', 'instagram', 'youtube'] as const).includes(d.platform as AuditPlatformKey)) {
             preset[d.platform as AuditPlatformKey] = prettyUrl(d.url);
           }
         }
@@ -733,7 +711,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           </div>
 
           <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-4">
-            {(['tiktok', 'instagram', 'facebook', 'youtube'] as AuditPlatformKey[]).map(platform => {
+            {(['tiktok', 'instagram', 'youtube'] as AuditPlatformKey[]).map(platform => {
               const detected = detectedPlatforms.find(d => d.platform === platform);
               const typed = socialInputs[platform]?.trim();
               // Three states:
@@ -1087,7 +1065,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             </p>
           </div>
           <div className="rounded-xl border border-nativz-border bg-surface p-4 space-y-3">
-            {(['tiktok', 'instagram', 'facebook', 'youtube'] as AuditPlatformKey[]).map(platform => (
+            {(['tiktok', 'instagram', 'youtube'] as AuditPlatformKey[]).map(platform => (
               <div key={platform} className="flex items-center gap-3">
                 <span className="text-sm text-text-muted w-20 shrink-0">{PLATFORM_LABELS[platform]}</span>
                 <input type="text" value={socialInputs[platform] ?? ''} onChange={(e) => setSocialInputs(prev => ({ ...prev, [platform]: e.target.value }))}
@@ -1162,148 +1140,30 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <AuditExportPdfButton
-                websiteContext={websiteContext}
-                platforms={platforms}
-                competitors={competitors}
-                scorecard={scorecard}
-              />
               <AuditShareButton auditId={audit.id} />
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setAttachDialogOpen(true)}
-                title="Attach this audit to a client for recurring competitor tracking"
-              >
-                <Users2 size={14} aria-hidden /> Attach to client
-              </Button>
-              {scorecard && (
-                <div className="flex items-center gap-1 ml-2">
-                  <div className={`text-3xl font-bold ${scorecard.overallScore >= 70 ? 'text-emerald-400' : scorecard.overallScore >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
-                    {scorecard.overallScore}
-                  </div>
-                  <span className="text-xs text-text-muted">/100</span>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Failed platforms warning — surfaces silent scraper drops so they
-          stop hiding inside Vercel logs. */}
-      {(() => {
-        const failed = audit.prospect_data?.failedPlatforms ?? [];
-        if (failed.length === 0) return null;
-        return (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-400" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-amber-200">
-                  Couldn&apos;t scrape {failed.length} platform{failed.length === 1 ? '' : 's'}
-                </p>
-                <p className="mt-0.5 text-xs text-amber-200/70">
-                  The scorecard below is based only on the platforms that returned data.
-                </p>
-                <ul className="mt-2 space-y-1">
-                  {failed.map((f) => (
-                    <li key={`${f.platform}-${f.url}`} className="text-xs text-amber-100/90">
-                      <span className="font-medium capitalize">{f.platform}</span>
-                      {' — '}
-                      <span className="font-mono text-[11px] text-amber-100/70">{f.error}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </div>
           </div>
         );
       })()}
 
       {/* Website context */}
-      {websiteContext && (
-        <div className="rounded-xl border border-nativz-border bg-surface p-6">
-          <div className="flex items-center gap-2 mb-3">
-            <Globe size={18} className="text-text-muted" />
-            <h3 className="text-base font-semibold text-text-primary">Brand overview</h3>
-          </div>
-          <p className="text-base font-light leading-relaxed text-text-secondary">{websiteContext.description}</p>
-          <div className="flex flex-wrap gap-2 mt-4">
-            <span className="text-sm bg-accent-surface/30 text-white px-3 py-1 rounded-full">{websiteContext.industry}</span>
-            {websiteContext.keywords.slice(0, 5).map(kw => (
-              <span key={kw} className="text-sm bg-surface-hover text-white px-3 py-1 rounded-full">{kw}</span>
-            ))}
-          </div>
-        </div>
+      {/* Unified brand overview — prospect on top, then "Benchmarked against"
+          with each competitor stacked. Each row shows platform badges (TT /
+          IG / YT) that link to the brand's profile on that platform. */}
+      {(websiteContext || competitors.length > 0) && (
+        <BrandOverviewCard
+          websiteContext={websiteContext}
+          platforms={platforms}
+          competitors={competitors}
+        />
       )}
 
-      {/* Competitor preview — rendered early so when the scorecard below
-          shows green/red per-competitor dots, the reader already knows
-          who those competitors are. */}
-      {competitors.length > 0 && <CompetitorPreview competitors={competitors} />}
-
-      {/* Scorecard with view toggle — List (current) or Head-to-head matrix */}
-      {scorecard && scorecard.items.length > 0 && (
-        <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
-          <div className="px-6 py-5 border-b border-nativz-border flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <h3 className="text-base font-semibold text-text-primary">Analysis scorecard</h3>
-              <div className="flex items-center gap-4 mt-2">
-                {(['good', 'warning', 'poor'] as ScoreStatus[]).map(s => (
-                  <span key={s} className="flex items-center gap-1.5 text-sm text-text-muted">
-                    <span className={`h-2.5 w-2.5 rounded-full ${STATUS_COLORS[s].dot}`} />
-                    {STATUS_COLORS[s].label}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="flex rounded-lg border border-nativz-border p-0.5">
-              {(['list', 'matrix'] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setScorecardView(v)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
-                    scorecardView === v
-                      ? 'bg-accent-surface text-accent-text'
-                      : 'text-text-muted hover:text-text-secondary'
-                  }`}
-                >
-                  {v === 'list' ? 'List' : 'Head-to-head'}
-                </button>
-              ))}
-            </div>
-          </div>
-          {scorecardView === 'list' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-nativz-border">
-              {scorecard.items.map((item, i) => (
-                <ScorecardCard key={i} item={item} />
-              ))}
-            </div>
-          ) : (
-            <ScorecardComparisonMatrix
-              items={scorecard.items}
-              prospectLabel={websiteContext?.title ?? 'Your brand'}
-            />
-          )}
-        </div>
-      )}
-
-      {/* Summary */}
-      {scorecard?.summary && (
-        <div className="rounded-xl border border-nativz-border bg-surface p-6">
-          <h3 className="text-base font-semibold text-text-primary mb-3">Executive summary</h3>
-          <p className="text-base font-light leading-relaxed text-text-secondary">{scorecard.summary}</p>
-        </div>
-      )}
-
-      {/* Platform tabs + data */}
+      {/* Platform tabs + active platform detail. Tabs select which of the
+          prospect's platforms the analysis section below shows. */}
       {platforms.length > 0 && (
         <div className="space-y-4">
-          {/* Tab switcher */}
           {platforms.length > 1 && (
-            <div className="flex items-center rounded-lg border border-nativz-border bg-surface p-0.5">
+            <div className="flex items-center rounded-lg border border-nativz-border bg-surface p-0.5 w-fit">
               {platforms.map(p => (
                 <button key={p.platform} onClick={() => setActivePlatformTab(p.platform)}
                   className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -1315,9 +1175,34 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
               ))}
             </div>
           )}
-
-          {/* Active platform detail */}
           {activePlatform && <PlatformDetail platform={activePlatform} />}
+        </div>
+      )}
+
+      {/* Analysis scorecard — list view only, each item is a parent card
+          with sub-rows for prospect + each competitor and an R/Y/G dot. */}
+      {scorecard && scorecard.items.length > 0 && (
+        <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
+          <div className="px-6 py-5 border-b border-nativz-border">
+            <h3 className="text-base font-semibold text-text-primary">Analysis scorecard</h3>
+            <div className="flex items-center gap-4 mt-2">
+              {(['good', 'warning', 'poor'] as ScoreStatus[]).map(s => (
+                <span key={s} className="flex items-center gap-1.5 text-sm text-text-muted">
+                  <span className={`h-2.5 w-2.5 rounded-full ${STATUS_COLORS[s].dot}`} />
+                  {STATUS_COLORS[s].label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-nativz-border">
+            {scorecard.items.map((item, i) => (
+              <ScorecardCard
+                key={i}
+                item={item}
+                prospectLabel={websiteContext?.title ?? 'Your brand'}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -1390,61 +1275,10 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
             </div>
           </div>
 
-          {/* Side-by-side metric comparison table — the "checkboxes against
-              each other" view. Each row is a metric, each column is an
-              account, winning cell gets a trophy. */}
           <CompetitorComparisonTable
             activePlatform={activePlatform}
             competitors={competitors}
           />
-
-          {/* Competitor comparison charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Avg views comparison */}
-            <div className="rounded-xl border border-nativz-border bg-surface p-5">
-              <h4 className="text-sm font-semibold text-text-primary mb-4">Average views per post</h4>
-              <div className="h-52">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={[
-                    ...(activePlatform ? [{ name: `@${activePlatform.profile.username} (You)`, views: activePlatform.avgViews, fill: 'var(--accent)' }] : []),
-                    ...competitors.map((c, i) => ({ name: `@${c.username}`, views: c.avgViews, fill: ['#A78BFA', '#34D399', '#F97316', '#EC4899', '#14B8A6'][i % 5] })),
-                  ]} layout="vertical" margin={{ left: 10, right: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--nativz-border)" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => formatNumber(v)} />
-                    <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} width={120} />
-                    <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', border: '1px solid var(--nativz-border)', borderRadius: '8px', fontSize: '12px' }} formatter={(value: number | undefined) => [formatNumber(value ?? 0), 'Avg views']} />
-                    <Bar dataKey="views" radius={[0, 4, 4, 0]} barSize={24}>
-                      {[
-                        ...(activePlatform ? [{ fill: 'var(--accent)' }] : []),
-                        ...competitors.map((_, i) => ({ fill: ['#A78BFA', '#34D399', '#F97316', '#EC4899', '#14B8A6'][i % 5] })),
-                      ].map((entry, idx) => (
-                        <rect key={idx} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Engagement rate comparison */}
-            <div className="rounded-xl border border-nativz-border bg-surface p-5">
-              <h4 className="text-sm font-semibold text-text-primary mb-4">Engagement rate comparison</h4>
-              <div className="h-52">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={[
-                    ...(activePlatform ? [{ name: `@${activePlatform.profile.username} (You)`, er: parseFloat((activePlatform.engagementRate * 100).toFixed(2)) }] : []),
-                    ...competitors.map(c => ({ name: `@${c.username}`, er: parseFloat((c.engagementRate * 100).toFixed(2)) })),
-                  ]} layout="vertical" margin={{ left: 10, right: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--nativz-border)" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
-                    <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} width={120} />
-                    <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', border: '1px solid var(--nativz-border)', borderRadius: '8px', fontSize: '12px' }} formatter={(value: number | undefined) => [`${value ?? 0}%`, 'ER']} />
-                    <Bar dataKey="er" fill="var(--accent2)" radius={[0, 4, 4, 0]} barSize={24} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
@@ -1453,14 +1287,6 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
           platform filters) that don't line up cleanly for audit data. */}
       {videos.length > 0 && <AuditSourceBrowser videos={videos} />}
 
-      {/* Phase 1: attach the audit to a client so the cron can track its
-          competitors over time. Admin-only; /admin/* middleware already
-          gates access, but the API route re-checks on POST. */}
-      <AttachToClientDialog
-        open={attachDialogOpen}
-        onClose={() => setAttachDialogOpen(false)}
-        auditId={audit.id}
-      />
     </div>
   );
 }
@@ -1514,11 +1340,6 @@ function PlatformDetail({ platform }: { platform: PlatformReport }) {
             <a href={platform.profile.profileUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-text-muted hover:text-text-primary transition-colors flex items-center gap-1 mt-1">
               @{String(platform.profile.username).replace(/^@+/, '')} <ExternalLink size={12} />
             </a>
-            {/* min-h keeps the bio slot a fixed height even when the page has
-                no bio, so stat cards don't shift between tabs. */}
-            <p className="mt-3 min-h-[4.5rem] text-base font-light leading-relaxed text-text-secondary line-clamp-3">
-              {platform.profile.bio || <span className="text-text-muted/60">No bio set.</span>}
-            </p>
           </div>
         </div>
         <div className="mt-auto pt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1625,119 +1446,64 @@ function PlatformDetail({ platform }: { platform: PlatformReport }) {
 
 // ── Scorecard card ──────────────────────────────────────────────────────
 
-function ScorecardCard({ item }: { item: ScorecardItem }) {
-  const style = STATUS_COLORS[item.prospectStatus];
-  return (
-    <div className="bg-surface p-5">
-      <div className="flex items-center gap-2.5 mb-2">
-        <span className={`h-3 w-3 rounded-full shrink-0 ${style.dot}`} />
-        <h4 className="text-base font-medium text-text-primary">{item.label}</h4>
-      </div>
-      <p className="text-sm font-light leading-relaxed text-text-secondary ml-5.5 pl-0.5">{item.prospectValue}</p>
-      {item.competitors.length > 0 && (
-        <div className="mt-3 ml-5.5 pl-0.5 flex flex-wrap gap-1.5">
-          {item.competitors.map(comp => {
-            const compStyle = STATUS_COLORS[comp.status];
-            return (
-              <span key={comp.username} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${compStyle.bg} ${compStyle.text}`} title={comp.value}>
-                <span className={`h-1.5 w-1.5 rounded-full ${compStyle.dot}`} />
-                @{String(comp.username).replace(/^@+/, '')}
-              </span>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /**
- * Head-to-head scorecard matrix. Same data as the card grid, laid out as a
- * pricing-table-style comparison so you can scan one dimension across every
- * entity at once. Prospect column is highlighted; cells color-code by status.
- *
- * Columns: prospect + each competitor on the first item (scorecard items all
- * share the same competitor set upstream, so competitors[0] is canonical).
+ * Scorecard category card. Renders the dimension as a parent card with one
+ * sub-row per brand (prospect first, then each competitor). Each sub-row is
+ * a R/Y/G dot + the brand label + the dimension's value for that brand —
+ * the user reads "us vs each competitor on this dimension" at a glance.
  */
-function ScorecardComparisonMatrix({
-  items,
+function ScorecardCard({
+  item,
   prospectLabel,
 }: {
-  items: ScorecardItem[];
+  item: ScorecardItem;
   prospectLabel: string;
 }) {
-  // Collect the canonical competitor list across all items so the column
-  // order is stable even if some items lack a competitor entry.
-  const competitorMap = new Map<string, string>();
-  for (const item of items) {
-    for (const c of item.competitors) {
-      if (!competitorMap.has(c.username)) competitorMap.set(c.username, c.username);
-    }
-  }
-  const competitors = Array.from(competitorMap.keys());
-
+  const rows: { label: string; status: ScoreStatus; value: string; isProspect: boolean }[] = [
+    { label: prospectLabel, status: item.prospectStatus, value: item.prospectValue, isProspect: true },
+    ...item.competitors.map((c) => ({
+      label: `@${String(c.username).replace(/^@+/, '')}`,
+      status: c.status,
+      value: c.value,
+      isProspect: false,
+    })),
+  ];
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] border-collapse text-sm">
-        <thead>
-          <tr>
-            <th className="sticky left-0 z-10 bg-surface px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
-              Dimension
-            </th>
-            <th className="min-w-[160px] border-l border-nativz-border bg-accent-surface/15 px-4 py-3 text-left">
-              <p className="truncate text-sm font-semibold text-text-primary">{prospectLabel}</p>
-              <p className="truncate text-[10px] text-text-muted">You</p>
-            </th>
-            {competitors.map((username) => (
-              <th
-                key={username}
-                className="min-w-[160px] border-l border-nativz-border px-4 py-3 text-left"
+    <div className="bg-surface p-5 space-y-3">
+      <div>
+        <h4 className="text-base font-medium text-text-primary">{item.label}</h4>
+        <p className="mt-0.5 text-xs text-text-muted">{item.description}</p>
+      </div>
+      <div className="space-y-1.5">
+        {rows.map((row, i) => {
+          const s = STATUS_COLORS[row.status];
+          return (
+            <div
+              key={i}
+              className={cn(
+                'flex items-center gap-2.5 rounded-lg border px-3 py-2',
+                row.isProspect
+                  ? 'border-accent/30 bg-accent/5'
+                  : 'border-nativz-border/60 bg-background/50',
+              )}
+            >
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${s.dot}`} />
+              <span
+                className={cn(
+                  'min-w-0 flex-1 truncate text-sm',
+                  row.isProspect ? 'font-medium text-text-primary' : 'text-text-secondary',
+                )}
               >
-                <p className="truncate text-sm font-semibold text-text-primary">
-                  @{String(username).replace(/^@+/, '')}
-                </p>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item, idx) => {
-            const prospectStyle = STATUS_COLORS[item.prospectStatus];
-            return (
-              <tr key={idx} className={idx % 2 === 0 ? '' : 'bg-background/30'}>
-                <td className="sticky left-0 z-10 bg-surface px-4 py-3 text-sm font-medium text-text-secondary">
-                  {item.label}
-                </td>
-                <td className="border-l border-nativz-border bg-accent-surface/15 px-4 py-3 align-top">
-                  <div className="flex items-start gap-2">
-                    <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${prospectStyle.dot}`} />
-                    <p className={`text-sm leading-snug ${prospectStyle.text}`}>{item.prospectValue}</p>
-                  </div>
-                </td>
-                {competitors.map((username) => {
-                  const comp = item.competitors.find((c) => c.username === username);
-                  if (!comp) {
-                    return (
-                      <td key={username} className="border-l border-nativz-border px-4 py-3 text-xs text-text-muted/50">
-                        —
-                      </td>
-                    );
-                  }
-                  const style = STATUS_COLORS[comp.status];
-                  return (
-                    <td key={username} className="border-l border-nativz-border px-4 py-3 align-top">
-                      <div className="flex items-start gap-2">
-                        <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
-                        <p className={`text-sm leading-snug ${style.text}`}>{comp.value}</p>
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                {row.label}
+              </span>
+              <span className={`shrink-0 text-xs font-medium ${s.text}`}>{row.value}</span>
+            </div>
+          );
+        })}
+      </div>
+      {item.status_reason && (
+        <p className="text-xs italic text-text-muted leading-relaxed">{item.status_reason}</p>
+      )}
     </div>
   );
 }
@@ -1765,45 +1531,153 @@ function StatCard({
 }
 
 /**
- * Lightweight competitor preview strip shown near the top of the report so
- * the reader knows which accounts the scorecard's green/red per-competitor
- * badges are referring to. The full competitor card grid + comparison table
- * still renders further down.
+ * Unified brand overview. Stacks the prospect on top + each unique
+ * competitor under "Benchmarked against:". Each row carries TT/IG/YT
+ * badges that link out to the brand's profile on that platform — the
+ * reader gets one card with everyone in the comparison and can jump
+ * directly to any of their socials.
+ *
+ * Competitors live in `competitors` as one entry per (brand, platform).
+ * We group by displayName so a brand that we found on both TikTok and
+ * Instagram renders as one row with two active badges.
  */
-function CompetitorPreview({ competitors }: { competitors: CompetitorProfile[] }) {
-  if (competitors.length === 0) return null;
+function BrandOverviewCard({
+  websiteContext,
+  platforms,
+  competitors,
+}: {
+  websiteContext: WebsiteContext | null;
+  platforms: PlatformReport[];
+  competitors: CompetitorProfile[];
+}) {
+  const ALL_PLATFORMS: AuditPlatformKey[] = ['tiktok', 'instagram', 'youtube'];
+  const prospectPlatformSet = new Set(platforms.map((p) => p.platform));
+  const prospectProfileUrlByPlatform = new Map(
+    platforms.map((p) => [p.platform, p.profile.profileUrl] as const),
+  );
+
+  const competitorGroups = useMemo(() => {
+    const map = new Map<string, CompetitorProfile[]>();
+    for (const c of competitors) {
+      const key = c.displayName.trim().toLowerCase();
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(c);
+    }
+    return Array.from(map.values());
+  }, [competitors]);
+
+  function renderPlatformBadges(
+    presentSet: Set<string>,
+    urlByPlatform: Map<string, string>,
+  ) {
+    return (
+      <div className="flex items-center gap-1.5">
+        {ALL_PLATFORMS.map((p) => {
+          const present = presentSet.has(p);
+          const url = urlByPlatform.get(p);
+          if (!present || !url) {
+            return (
+              <span
+                key={p}
+                title={`No ${PLATFORM_LABELS[p]} profile found`}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-nativz-border/40 bg-background/40 opacity-30"
+              >
+                <AuditPlatformIcon platform={p} size="sm" />
+              </span>
+            );
+          }
+          return (
+            <a
+              key={p}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Open on ${PLATFORM_LABELS[p]}`}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-nativz-border bg-background transition-colors hover:border-accent/40 hover:bg-surface-hover"
+            >
+              <AuditPlatformIcon platform={p} size="sm" />
+            </a>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const prospectName = websiteContext?.title?.trim() || 'Your brand';
+  const prospectAvatar = platforms[0]?.profile.avatarUrl ?? null;
+
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-6">
-      <div className="mb-4">
-        <h3 className="text-base font-semibold text-text-primary">Benchmarked against</h3>
-        <p className="mt-0.5 text-sm font-light text-text-muted">
-          {competitors.length} competitor{competitors.length === 1 ? '' : 's'} at a similar scale —
-          these drive the green/red dots in the scorecard below.
-        </p>
+      {/* Prospect row */}
+      <div className="flex items-start gap-4">
+        <AvatarWithFallback
+          src={prospectAvatar}
+          name={prospectName}
+          className="h-14 w-14 text-base"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-lg font-semibold text-text-primary truncate">{prospectName}</h3>
+            {websiteContext?.industry && (
+              <span className="text-xs bg-accent-surface/30 text-white px-2.5 py-0.5 rounded-full">
+                {websiteContext.industry}
+              </span>
+            )}
+          </div>
+          {websiteContext?.description && (
+            <p className="mt-1.5 text-sm font-light leading-relaxed text-text-secondary line-clamp-3">
+              {websiteContext.description}
+            </p>
+          )}
+        </div>
+        {renderPlatformBadges(prospectPlatformSet, prospectProfileUrlByPlatform)}
       </div>
-      <div className="flex flex-wrap gap-3">
-        {competitors.map((comp) => (
-          <a
-            key={comp.username}
-            href={comp.profileUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex items-center gap-2.5 rounded-full border border-nativz-border bg-background px-2 pr-3.5 py-1.5 transition-colors hover:border-nativz-border/80 hover:bg-surface-hover"
-          >
-            <AvatarWithFallback
-              src={comp.avatarUrl}
-              name={comp.displayName}
-              className="h-7 w-7 text-[10px]"
-            />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-text-primary">{comp.displayName}</p>
-              <p className="truncate text-[11px] text-text-muted">
-                {formatNumber(comp.followers)} followers · {comp.platform}
-              </p>
-            </div>
-          </a>
-        ))}
-      </div>
+
+      {/* Competitor rows */}
+      {competitorGroups.length > 0 && (
+        <>
+          <div className="mt-5 mb-3 flex items-center gap-2">
+            <span className="h-px flex-1 bg-nativz-border/60" />
+            <span className="text-xs font-medium uppercase tracking-wide text-text-muted">
+              Benchmarked against
+            </span>
+            <span className="h-px flex-1 bg-nativz-border/60" />
+          </div>
+          <div className="space-y-2.5">
+            {competitorGroups.map((group) => {
+              const first = group[0];
+              const presentSet = new Set(group.map((c) => c.platform));
+              const urlByPlatform = new Map(group.map((c) => [c.platform, c.profileUrl] as const));
+              const totalFollowers = group.reduce((sum, c) => sum + (c.isStub ? 0 : c.followers), 0);
+              const allStub = group.every((c) => c.isStub);
+              return (
+                <div
+                  key={first.displayName}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg border bg-background/50 p-3',
+                    allStub ? 'border-nativz-border/40 opacity-70' : 'border-nativz-border/70',
+                  )}
+                >
+                  <AvatarWithFallback
+                    src={first.avatarUrl}
+                    name={first.displayName}
+                    className="h-10 w-10 text-xs"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-text-primary">{first.displayName}</p>
+                    <p className="truncate text-xs text-text-muted">
+                      {allStub
+                        ? 'Data unavailable'
+                        : `${formatNumber(totalFollowers)} followers · ${group.length} platform${group.length === 1 ? '' : 's'}`}
+                    </p>
+                  </div>
+                  {renderPlatformBadges(presentSet, urlByPlatform)}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
