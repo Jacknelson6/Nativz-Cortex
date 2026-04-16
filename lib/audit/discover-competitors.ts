@@ -30,6 +30,7 @@ import { scrapeInstagramProfile } from './scrape-instagram-profile';
 import { scrapeFacebookProfile } from './scrape-facebook-profile';
 import { scrapeYouTubeProfile } from './scrape-youtube-profile';
 import { buildCompetitorProfile } from './analyze';
+import { searchCompetitorSocials } from './search-competitor-socials';
 import type {
   WebsiteContext,
   PlatformReport,
@@ -144,113 +145,8 @@ function pickComparisonPlatform(
   return null;
 }
 
-/**
- * Profile URL pattern checks per platform. Used to filter web-search results
- * down to actual profile pages (not blog posts mentioning the brand,
- * subdomains, or unrelated handles).
- */
-function extractProfileUrl(rawUrl: string, platform: AuditPlatform): { url: string; username: string } | null {
-  try {
-    const u = new URL(rawUrl.trim());
-    const host = u.hostname.replace(/^www\./i, '').toLowerCase();
-    const segs = u.pathname.split('/').filter(Boolean);
-    if (segs.length === 0) return null;
-    if (platform === 'tiktok') {
-      // tiktok.com/@handle  (reject /@handle/video/123 — we want the profile)
-      if (host !== 'tiktok.com' && !host.endsWith('.tiktok.com')) return null;
-      const first = segs[0];
-      if (!first.startsWith('@') || segs.length > 1) return null;
-      return { url: `https://www.tiktok.com/${first}`, username: first.slice(1) };
-    }
-    if (platform === 'instagram') {
-      // instagram.com/handle  (reject /p/, /reel/, /stories/)
-      if (host !== 'instagram.com' && !host.endsWith('.instagram.com')) return null;
-      const first = segs[0];
-      const reserved = new Set(['p', 'reel', 'stories', 'tv', 'explore', 'accounts', 'about', 'developer']);
-      if (reserved.has(first.toLowerCase())) return null;
-      if (segs.length > 1) return null;
-      return { url: `https://www.instagram.com/${first}/`, username: first.replace(/^@+/, '') };
-    }
-    if (platform === 'youtube') {
-      // youtube.com/@handle  OR  youtube.com/channel/UCxxx  OR  youtube.com/c/name
-      if (host !== 'youtube.com' && !host.endsWith('.youtube.com')) return null;
-      const first = segs[0];
-      if (first.startsWith('@')) {
-        return { url: `https://www.youtube.com/${first}`, username: first.slice(1) };
-      }
-      if ((first === 'channel' || first === 'c' || first === 'user') && segs[1]) {
-        return { url: `https://www.youtube.com/${first}/${segs[1]}`, username: segs[1] };
-      }
-      return null;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Fallback: when the website scrape doesn't surface the brand's TikTok / IG
- * / YT, ask an OpenRouter web search to find them. Returns whichever
- * platforms it could confidently resolve. Hard-capped via timeout so a
- * stuck search can't blow the discovery budget.
- *
- * Why OpenRouter (not SearXNG): SearXNG runs only on the Mac mini and
- * isn't reachable from Vercel, so the prod audit pipeline needs a
- * provider-hosted search. OpenRouter's `:online` plugin returns real URLs
- * via the citations channel — exactly what we need to feed the scrapers.
- */
-async function findCompetitorSocialsViaSearch(
-  brandName: string,
-  missingPlatforms: AuditPlatform[],
-): Promise<SocialLink[]> {
-  if (missingPlatforms.length === 0) return [];
-  const platformsLine = missingPlatforms
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(', ');
-
-  const prompt = `Find the official social media profile URLs for the brand "${brandName}".
-Look for these platforms: ${platformsLine}.
-Use web search. Pick the verified or most-likely-official account when there are multiple.
-Return ONLY a JSON object with platform keys mapped to either the profile URL or null:
-{
-${missingPlatforms.map((p) => `  "${p}": "https://..." or null`).join(',\n')}
-}
-Use null when you cannot find a confident match. Do not invent URLs.`;
-
-  try {
-    const ai = await createCompletion({
-      messages: [{ role: 'user', content: prompt }],
-      maxTokens: 400,
-      jsonMode: true,
-      webSearch: true,
-      webSearchMaxResults: 8,
-      feature: 'audit_competitor_social_search',
-      timeoutMs: 25_000,
-    });
-    const parsed = parseAIResponseJSON<Record<string, string | null>>(ai.text);
-    if (!parsed || typeof parsed !== 'object') return [];
-
-    const found: SocialLink[] = [];
-    for (const platform of missingPlatforms) {
-      const raw = parsed[platform];
-      if (typeof raw !== 'string' || !raw.startsWith('http')) continue;
-      const profile = extractProfileUrl(raw, platform);
-      if (!profile) continue;
-      found.push({ platform, username: profile.username, url: profile.url });
-    }
-    if (found.length > 0) {
-      console.log(
-        `[audit] competitor "${brandName}" search-fallback found: ${found.map((f) => `${f.platform}=@${f.username}`).join(', ')}`,
-      );
-    }
-    return found;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[audit] competitor "${brandName}" search-fallback failed: ${msg}`);
-    return [];
-  }
-}
+// OpenRouter search fallback removed — replaced by Apify platform-native
+// search in search-competitor-socials.ts. No hallucination risk.
 
 /** Run the platform-specific scraper for the given social link. Returns
  *  profile + videos in the same shape target scrapes return so
@@ -539,10 +435,8 @@ async function scrapeOneCandidate(
     siteResult = await scrapeWebsite(website);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.log(`[audit] competitor "${candidate.name}" website scrape failed: ${msg} — trying search fallback`);
-    // Website is dead, but the brand might still have findable socials.
-    // Search the web for them and route through the normal scrape path.
-    const fromSearch = await findCompetitorSocialsViaSearch(candidate.name, targetPlatformNames);
+    console.log(`[audit] competitor "${candidate.name}" website scrape failed: ${msg} — trying Apify platform search`);
+    const fromSearch = await searchCompetitorSocials(candidate.name, targetPlatformNames);
     const matchingSocial = pickComparisonPlatform(targetPlatformNames, fromSearch);
     if (matchingSocial) {
       try {
@@ -579,17 +473,14 @@ async function scrapeOneCandidate(
   let socials = siteResult.socialLinks ?? [];
 
   // If the website surfaced nothing — or surfaced socials but none overlap
-  // with the target's platforms — fall back to a web search for this brand
-  // on the missing platforms. Half the LLM-suggested competitors don't
-  // expose social icons in their site footer, but their TikTok / IG is
-  // findable via search.
+  // with the target's platforms — fall back to Apify platform-native search.
+  // Half the LLM-suggested competitors don't expose social icons in their
+  // site footer, but their TikTok / IG / YT is findable via platform search.
   const presentPlatforms = new Set<AuditPlatform>(socials.map((s) => s.platform));
   const missingPlatforms = targetPlatformNames.filter((p) => !presentPlatforms.has(p));
   if (missingPlatforms.length > 0) {
-    const fromSearch = await findCompetitorSocialsViaSearch(candidate.name, missingPlatforms);
+    const fromSearch = await searchCompetitorSocials(candidate.name, missingPlatforms);
     if (fromSearch.length > 0) {
-      // Append search-found socials. Existing site-scrape socials win on
-      // duplicates so the website's self-declared profile is preferred.
       const knownKeys = new Set(socials.map((s) => `${s.platform}:${s.username}`));
       for (const s of fromSearch) {
         if (!knownKeys.has(`${s.platform}:${s.username}`)) socials.push(s);
