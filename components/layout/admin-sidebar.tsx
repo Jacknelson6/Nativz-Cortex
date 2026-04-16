@@ -108,6 +108,12 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
     return pathname === href || pathname.startsWith(href + '/');
   }
 
+  // Settings gear — active on any route that shows the settings secondary rail
+  if (href === '/admin/settings/ai') {
+    const SETTINGS_AREAS = ['/admin/users', '/admin/knowledge', '/admin/settings/ai', '/admin/nerd/api'];
+    if (SETTINGS_AREAS.some((p) => pathname === p || pathname.startsWith(p + '/'))) return true;
+  }
+
   // Handle hrefs with query params (e.g. /admin/pipeline?stage=editing)
   if (href.includes('?')) {
     const [hrefPath, hrefQuery] = href.split('?');
