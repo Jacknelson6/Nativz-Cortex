@@ -1,7 +1,44 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
+import React from 'react';
+import { Document, Font, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import type { AgencyTheme } from '@/lib/branding';
+
+// ── Font registration ─────────────────────────────────────────────
+// Rubik + Roboto variable TTFs live in /public/fonts. Registering the
+// same file under multiple weights lets react-pdf pick glyph styles
+// per fontWeight declaration in our StyleSheet.
+const FONT_DIR = path.join(process.cwd(), 'public', 'fonts');
+const RUBIK = path.join(FONT_DIR, 'Rubik.ttf');
+const RUBIK_ITALIC = path.join(FONT_DIR, 'Rubik-Italic.ttf');
+const ROBOTO = path.join(FONT_DIR, 'Roboto.ttf');
+const ROBOTO_ITALIC = path.join(FONT_DIR, 'Roboto-Italic.ttf');
+
+let fontsRegistered = false;
+function ensureFontsRegistered() {
+  if (fontsRegistered) return;
+  fontsRegistered = true;
+  if (!fs.existsSync(RUBIK) || !fs.existsSync(ROBOTO)) return;
+  Font.register({
+    family: 'Rubik',
+    fonts: [
+      { src: RUBIK, fontWeight: 400 },
+      { src: RUBIK, fontWeight: 500 },
+      { src: RUBIK, fontWeight: 700 },
+      { src: RUBIK, fontWeight: 800 },
+      { src: RUBIK_ITALIC, fontWeight: 400, fontStyle: 'italic' },
+    ],
+  });
+  Font.register({
+    family: 'Roboto',
+    fonts: [
+      { src: ROBOTO, fontWeight: 400 },
+      { src: ROBOTO, fontWeight: 500 },
+      { src: ROBOTO, fontWeight: 700 },
+      { src: ROBOTO_ITALIC, fontWeight: 400, fontStyle: 'italic' },
+    ],
+  });
+}
 import type {
   BrandedDeliverableData,
   BrandedDeliverableLegendItem,
@@ -54,7 +91,7 @@ function buildStyles(theme: AgencyTheme) {
       paddingTop: 64,
       paddingHorizontal: 56,
       paddingBottom: 80,
-      fontFamily: 'Helvetica',
+      fontFamily: 'Roboto',
       fontSize: 10,
       color: theme.colors.textBody,
       backgroundColor: theme.colors.white,
@@ -74,13 +111,14 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 8,
       color: theme.colors.textMuted,
       letterSpacing: 1.2,
-      fontFamily: 'Helvetica',
+      fontFamily: 'Roboto',
     },
     runningHeaderStrong: {
       fontSize: 8,
       color: theme.colors.textDark,
       letterSpacing: 1.2,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
     },
 
     // Footer
@@ -106,7 +144,7 @@ function buildStyles(theme: AgencyTheme) {
     // ── Cover ─────────────────────────────────────────────────────
     coverPage: {
       padding: 64,
-      fontFamily: 'Helvetica',
+      fontFamily: 'Roboto',
       fontSize: 10,
       color: theme.colors.textBody,
       backgroundColor: theme.colors.white,
@@ -128,14 +166,16 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 13,
       letterSpacing: 5,
       textAlign: 'center',
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       color: theme.colors.textDark,
       marginBottom: 14,
     },
     coverTitle: {
       fontSize: 34,
       textAlign: 'center',
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       color: theme.colors.textDark,
       lineHeight: 1.15,
       marginBottom: 18,
@@ -144,7 +184,8 @@ function buildStyles(theme: AgencyTheme) {
     coverTitleAccent: {
       fontSize: 34,
       textAlign: 'center',
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       color: theme.colors.primary,
       lineHeight: 1.15,
       marginBottom: 18,
@@ -154,7 +195,8 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 11,
       textAlign: 'center',
       color: theme.colors.primary,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       letterSpacing: 3,
       marginBottom: 22,
     },
@@ -183,7 +225,8 @@ function buildStyles(theme: AgencyTheme) {
     },
     coverStatValue: {
       fontSize: 30,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       color: theme.colors.primary,
       marginBottom: 6,
     },
@@ -191,14 +234,15 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 8.5,
       letterSpacing: 2.5,
       color: theme.colors.textMuted,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
     },
     coverHighlightWrap: {
       alignItems: 'center',
       marginTop: 2,
     },
     coverHighlightLabel: { fontSize: 11, color: theme.colors.textBody },
-    coverHighlightValue: { fontSize: 11, color: theme.colors.primary, fontFamily: 'Helvetica-Bold' },
+    coverHighlightValue: { fontSize: 11, color: theme.colors.primary, fontFamily: 'Rubik', fontWeight: 700 },
     coverBottomRule: {
       width: 100,
       height: 1,
@@ -212,7 +256,8 @@ function buildStyles(theme: AgencyTheme) {
     sectionHeaderWrap: { marginBottom: 18 },
     sectionTitle: {
       fontSize: 24,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       color: theme.colors.textDark,
       letterSpacing: 0.8,
       marginBottom: 12,
@@ -240,7 +285,8 @@ function buildStyles(theme: AgencyTheme) {
     // ── Legend ────────────────────────────────────────────────────
     legendHeading: {
       fontSize: 16,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       color: theme.colors.textDark,
       letterSpacing: 0.8,
       marginBottom: 10,
@@ -271,7 +317,8 @@ function buildStyles(theme: AgencyTheme) {
       paddingHorizontal: 14,
       paddingVertical: 12,
       fontSize: 10,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       letterSpacing: 1.2,
     },
     legendDescCell: {
@@ -287,7 +334,8 @@ function buildStyles(theme: AgencyTheme) {
       color: theme.colors.textBody,
       marginTop: 18,
       lineHeight: 1.55,
-      fontFamily: 'Helvetica-Oblique',
+      fontFamily: 'Roboto',
+      fontStyle: 'italic',
     },
 
     // ── Series header ────────────────────────────────────────────
@@ -296,12 +344,14 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 9,
       letterSpacing: 3.5,
       color: theme.colors.textMuted,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       marginBottom: 6,
     },
     seriesTitle: {
       fontSize: 22,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       color: theme.colors.textDark,
       letterSpacing: 0.5,
       marginBottom: 6,
@@ -331,7 +381,8 @@ function buildStyles(theme: AgencyTheme) {
     seriesStatCell: { alignItems: 'center' },
     seriesStatValue: {
       fontSize: 18,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       color: theme.colors.textDark,
       letterSpacing: 0.5,
     },
@@ -339,7 +390,8 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 8,
       letterSpacing: 2.5,
       color: theme.colors.textMuted,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       marginTop: 4,
     },
 
@@ -376,13 +428,15 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 11,
       color: theme.colors.textMuted,
       marginRight: 8,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       letterSpacing: 0.5,
     },
     topicTitle: {
       fontSize: 13.5,
       color: theme.colors.textDark,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       flex: 1,
       letterSpacing: 0.3,
       lineHeight: 1.3,
@@ -392,13 +446,15 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 8.5,
       letterSpacing: 1.5,
       color: theme.colors.primary,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
     },
     topicTagWarning: {
       fontSize: 8.5,
       letterSpacing: 1.5,
       color: '#B06A13',
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       marginTop: 3,
     },
 
@@ -407,7 +463,8 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 7.5,
       letterSpacing: 1.8,
       color: theme.colors.textMuted,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       marginRight: 8,
     },
     topicSource: {
@@ -424,14 +481,16 @@ function buildStyles(theme: AgencyTheme) {
     },
     metricValue: {
       fontSize: 18,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       marginBottom: 3,
       letterSpacing: 0.5,
     },
     metricLabel: {
       fontSize: 7.5,
       letterSpacing: 1.8,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
     },
 
     whyRow: { flexDirection: 'row', alignItems: 'flex-start' },
@@ -439,7 +498,8 @@ function buildStyles(theme: AgencyTheme) {
       fontSize: 8.5,
       letterSpacing: 1.8,
       color: theme.colors.primary,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'Rubik',
+      fontWeight: 700,
       marginRight: 10,
       marginTop: 2,
     },
@@ -465,14 +525,11 @@ function RunningHeader({
 }) {
   return (
     <View style={styles.runningHeader} fixed>
-      <Text>
-        <Text style={styles.runningHeaderStrong}>{agencyName.toUpperCase()}</Text>
-        {docTitle && (
-          <>
-            <Text style={styles.runningHeaderText}>{'  |  '}</Text>
-            <Text style={styles.runningHeaderText}>{docTitle.toUpperCase()}</Text>
-          </>
-        )}
+      <Text style={styles.runningHeaderStrong}>
+        {agencyName.toUpperCase()}
+        {docTitle ? (
+          <Text style={styles.runningHeaderText}>{'  |  ' + docTitle.toUpperCase()}</Text>
+        ) : null}
       </Text>
     </View>
   );
@@ -694,6 +751,7 @@ export function BrandedDeliverableDocument({
   data: BrandedDeliverableData;
   theme: AgencyTheme;
 }) {
+  ensureFontsRegistered();
   const styles = buildStyles(theme);
   const agencyName = theme.name;
   const docTitle = data.runningHeaderTitle ?? data.eyebrow ?? data.title;
