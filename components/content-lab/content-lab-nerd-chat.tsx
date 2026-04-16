@@ -126,6 +126,7 @@ export function ContentLabNerdChat({
   // they want. Their next input (parsed as an integer) gets rewritten
   // to "/idea N" and flows through normal slash-command expansion.
   const [pendingIdeaCount, setPendingIdeaCount] = useState(false);
+  const [pendingGenerateArgs, setPendingGenerateArgs] = useState(false);
   // Wide agency lockup (white-background, no boxed container) for the empty
   // state. Falls back to the tile logo for brands that don't ship a wide
   // variant yet.
@@ -268,10 +269,17 @@ export function ContentLabNerdChat({
 
   const handleSlashSelect = useCallback(
     (cmd: { name: string; type: string }) => {
-      // Built-in: expand immediately so the user can see the full prompt
-      // before hitting Enter. Skill-sourced: just put "/slug " in the input
-      // — handleSend expands the template client-side on submit using the
-      // skill content from the unified command list.
+      // /generate defers expansion — fill "/generate " and let the user
+      // type args (video ideas, scripts, topics, a count). The expansion
+      // happens at send time via the interactive flow in handleSend.
+      if (cmd.name === 'generate') {
+        setInput('/generate ');
+        setShowSlashMenu(false);
+        return;
+      }
+      // Other built-ins: expand immediately so the user can see the full
+      // prompt before hitting Enter. Skill-sourced: just put "/slug " in
+      // the input — handleSend expands the template client-side on submit.
       const builtin = getCommand(cmd.name);
       if (builtin) {
         if (builtin.type === 'ai' && builtin.expandPrompt) {
@@ -305,6 +313,15 @@ export function ContentLabNerdChat({
         setSlashActiveIndex((i) =>
           (i - 1 + filteredSlashCommands.length) % filteredSlashCommands.length,
         );
+      } else if (e.key === 'Tab') {
+        // Tab-complete: fill "/commandname " without expanding — let the
+        // user type args after. Works like Claude Code's skill tab-complete.
+        const cmd = filteredSlashCommands[slashActiveIndex] ?? filteredSlashCommands[0];
+        if (cmd) {
+          e.preventDefault();
+          setInput(`/${cmd.name} `);
+          setShowSlashMenu(false);
+        }
       } else if (e.key === 'Enter' && !e.shiftKey) {
         const cmd = filteredSlashCommands[slashActiveIndex];
         if (cmd) {
@@ -358,7 +375,49 @@ export function ContentLabNerdChat({
         }
       }
 
-      // ── Interactive /idea follow-up ────────────────────────────────────
+      // ── Interactive /generate flow ────────────────────────────────────
+      // Bare "/generate" → ask what type + how many. "/generate video ideas"
+      // or "/generate 20 scripts" → expand immediately. Like /idea but broader.
+      const generateMatch = content.match(/^\/generate\s*(.*)$/i);
+      if (generateMatch && !pendingGenerateArgs) {
+        const args = generateMatch[1].trim();
+        if (!args) {
+          // No args — ask the user what they want
+          setInput('');
+          setPendingGenerateArgs(true);
+          const userMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'user',
+            content: displayContent,
+            createdAt: Date.now(),
+          };
+          const promptMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: attachedSearchIds.length > 0
+              ? 'What would you like me to generate? Type something like `20 video ideas`, `10 scripts`, or `15 topics`.'
+              : 'What would you like me to generate? You can also attach a topic search first for research-grounded results.\n\nTry: `20 video ideas`, `10 scripts`, or `15 topics`.',
+            createdAt: Date.now(),
+          };
+          setMessages((prev) => [...prev, userMsg, promptMsg]);
+          return;
+        }
+        // Args present — expand via the built-in /generate command
+        const builtin = getCommand('generate');
+        if (builtin?.expandPrompt) {
+          content = builtin.expandPrompt(args);
+        }
+      }
+      // Step 2 — pendingGenerateArgs was set, user replied with type + count
+      if (pendingGenerateArgs) {
+        setPendingGenerateArgs(false);
+        const builtin = getCommand('generate');
+        if (builtin?.expandPrompt) {
+          content = builtin.expandPrompt(content);
+        }
+      }
+
+      // ── Interactive /idea follow-up (legacy alias) ─────────────────────
       // Step 1 — user sent bare "/idea" (or "/idea " with no number).
       // Don't call the AI: display a prompt message asking how many ideas
       // they want, flip pendingIdeaCount, and wait for their next input.
