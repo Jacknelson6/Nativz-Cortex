@@ -1,35 +1,35 @@
 /**
  * GET /api/topic-plans/[id]/pdf
  *
- * Stream a PDF rendering of a topic plan using @react-pdf/renderer.
- * Replaces the .docx route as the artifact download path — Word's DOCX
- * rendering was unreliable across Word versions and Google Docs imports;
- * the PDF path renders deterministically from the same plan_json.
+ * Renders a topic plan as a branded deliverable PDF. The plan_json is
+ * mapped through mapTopicPlanToBranded → BrandedDeliverableDocument
+ * with the agency theme resolved from the request hostname.
  */
 
 export const runtime = 'nodejs';
 
+import React from 'react';
 import { NextRequest, NextResponse } from 'next/server';
 import { renderToBuffer } from '@react-pdf/renderer';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { topicPlanSchema } from '@/lib/topic-plans/types';
-import { TopicPlanPdf } from '@/components/topic-plans/topic-plan-pdf';
 import { detectAgencyFromHostname } from '@/lib/agency/detect';
+import { getTheme } from '@/lib/branding';
+import { BrandedDeliverableDocument } from '@/lib/pdf/branded';
+import { mapTopicPlanToBranded } from '@/lib/pdf/branded/adapters';
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  // Detect which agency the request came from so the PDF wears the right
-  // brand. x-forwarded-host wins behind Vercel's proxy; fall back to the
-  // request URL hostname for local dev.
   const hostHeader =
     req.headers.get('x-forwarded-host') ??
     req.headers.get('host') ??
     new URL(req.url).hostname;
-  const agency = detectAgencyFromHostname(hostHeader);
+  const agencySlug = detectAgencyFromHostname(hostHeader);
+  const theme = getTheme(agencySlug);
 
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -64,8 +64,10 @@ export async function GET(
     ? row.clients[0]?.name ?? 'Client'
     : (row.clients as { name: string } | null)?.name ?? 'Client';
 
+  const data = mapTopicPlanToBranded(parsedPlan.data, clientName);
+
   const buffer = await renderToBuffer(
-    TopicPlanPdf({ plan: parsedPlan.data, clientName, agency }),
+    <BrandedDeliverableDocument data={data} theme={theme} />,
   );
 
   const safeClient = clientName.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '') || 'client';

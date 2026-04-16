@@ -233,8 +233,24 @@ The tool returns a downloadable PDF artifact card. That card replaces anything y
 }
 
 registerCommand({
+  name: 'generate',
+  description: 'Branded PDF deliverable — video ideas, scripts, topics, audits',
+  type: 'ai',
+  example: '/generate video ideas',
+  expandPrompt: (args: string) => {
+    const trimmed = (args ?? '').trim();
+    const match = trimmed.match(/^\s*(\d{1,3})/);
+    const requestedN = match ? parseInt(match[1], 10) : 10;
+    const n = Math.max(3, Math.min(50, Number.isFinite(requestedN) ? requestedN : 10));
+    const typeHint = trimmed.replace(/^\d+\s*/, '').trim();
+    return buildTopicPlanPrompt(n) + (typeHint ? `\n\nDeliverable type: ${typeHint}. Use this as the plan title (e.g. "${typeHint.charAt(0).toUpperCase() + typeHint.slice(1)}").` : '');
+  },
+});
+
+// Legacy aliases — route to the same flow as /generate
+registerCommand({
   name: 'ideas',
-  description: 'Research-grounded topic plan PDF (default 10 ideas)',
+  description: 'Alias for /generate — topic plan PDF (default 10 ideas)',
   type: 'ai',
   example: '/ideas',
   expandPrompt: () => buildTopicPlanPrompt(10),
@@ -242,7 +258,7 @@ registerCommand({
 
 registerCommand({
   name: 'idea',
-  description: 'Interactive topic plan — N video ideas, rendered as a PDF artifact',
+  description: 'Alias for /generate — N video ideas as a PDF',
   type: 'ai',
   example: '/idea 20',
   expandPrompt: (args: string) => {
