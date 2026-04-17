@@ -26,6 +26,16 @@ export async function GET(
 
     const adminClient = createAdminClient();
 
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     // Verify audit exists
     const { data: audit } = await adminClient
       .from('prospect_audits')
@@ -85,6 +95,16 @@ export async function POST(
     }
 
     const adminClient = createAdminClient();
+
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
 
     // Verify audit exists and is completed
     const { data: audit } = await adminClient
@@ -156,6 +176,16 @@ export async function DELETE(
     }
 
     const adminClient = createAdminClient();
+
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
 
     // Verify audit exists
     const { data: audit } = await adminClient

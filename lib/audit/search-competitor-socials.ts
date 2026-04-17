@@ -60,9 +60,27 @@ function getYouTubeKey(): string | null {
 /**
  * Turn a brand name like "Dr. Smoothie LLC" into 1-3 plausible social
  * handles: ["drsmoothie", "dr.smoothie", "dr_smoothie"].
+ *
+ * Defense-in-depth: if the input looks like a URL (has a scheme or a
+ * hostname with a TLD), peel it down to the second-level domain before
+ * handle generation. Otherwise "https://highnoonspirits.com" becomes
+ * "httpshighnoonspiritscom" and gets sent to Apify, which returns
+ * `C004. User: ... does not exist`.
  */
 function guessHandles(brandName: string): string[] {
-  const base = brandName
+  let input = brandName.trim();
+  if (/^https?:\/\//i.test(input) || /\.[a-z]{2,}(\/|$)/i.test(input)) {
+    try {
+      const withScheme = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+      const host = new URL(withScheme).hostname.replace(/^www\./i, '');
+      const parts = host.split('.');
+      input = parts.length >= 2 ? parts[parts.length - 2] : host;
+    } catch {
+      // fall through with original input
+    }
+  }
+
+  const base = input
     .toLowerCase()
     .replace(/\b(llc|inc|co|corp|ltd|group|brand|brands)\b/gi, '')
     .trim();

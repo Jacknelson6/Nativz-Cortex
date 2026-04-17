@@ -21,6 +21,17 @@ export async function GET(
     }
 
     const adminClient = createAdminClient();
+
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const { data: audit, error } = await adminClient
       .from('prospect_audits')
       .select('*')

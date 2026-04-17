@@ -132,6 +132,26 @@ function normaliseWebsite(raw: string): string {
   return `https://${trimmed}`;
 }
 
+/**
+ * Derive a plausible brand name from a website URL so downstream handle
+ * guessing doesn't receive the raw URL string. Without this, pasting
+ * "https://highnoonspirits.com" leaks through `guessHandles` as the
+ * literal handle "httpshighnoonspiritscom" and Apify 404s.
+ */
+function brandNameFromUrl(raw: string): string {
+  const trimmed = raw.trim();
+  try {
+    const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const host = new URL(withScheme).hostname.replace(/^www\./i, '');
+    const parts = host.split('.');
+    // highnoonspirits.com → highnoonspirits; sub.brand.co.uk → brand
+    if (parts.length >= 2) return parts[parts.length - 2];
+    return host || trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
 /** Pick the first platform the target AND the competitor both have.
  *  That's the one the comparison charts line up on. */
 function pickComparisonPlatform(
@@ -616,7 +636,9 @@ export async function scrapeProvidedCompetitors(
     }
 
     // Otherwise treat it as a website — same path as LLM-suggested candidates.
-    const candidate = { name: url, website: url };
+    // Use the SLD as the brand name so `searchCompetitorSocials` fallback
+    // (which calls `guessHandles`) sees "highnoonspirits" not the raw URL.
+    const candidate = { name: brandNameFromUrl(url), website: url };
     const result = await scrapeOneCandidate(candidate, targetPlatforms, discoveryStartMs);
     if (result.type === 'success') {
       competitors.push(result.competitor);

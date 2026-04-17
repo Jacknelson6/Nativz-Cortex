@@ -5,8 +5,33 @@ import { z } from 'zod';
 
 export const maxDuration = 60;
 
+const ADMIN_ROLES: string[] = ['admin', 'super_admin'];
+
+function normalizeWebsiteUrl(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const u = new URL(withScheme);
+    if (!u.hostname.includes('.')) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 const StartAuditSchema = z.object({
-  website_url: z.string().min(1, 'Website URL is required'),
+  website_url: z
+    .string()
+    .min(1, 'Website URL is required')
+    .transform((v, ctx) => {
+      const normalized = normalizeWebsiteUrl(v);
+      if (!normalized) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Enter a valid website URL' });
+        return z.NEVER;
+      }
+      return normalized;
+    }),
   social_urls: z.record(z.string(), z.string()).optional(),
   tiktok_url: z.string().optional(),
   // Optional pre-attach — picker now lives on the entry screen so the
@@ -41,7 +66,7 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
+    if (!userData || !ADMIN_ROLES.includes(userData.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
@@ -97,6 +122,17 @@ export async function GET() {
     }
 
     const adminClient = createAdminClient();
+
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || !ADMIN_ROLES.includes(userData.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const { data: audits } = await adminClient
       .from('prospect_audits')
       .select('id, website_url, tiktok_url, status, created_at, prospect_data, scorecard')
@@ -127,6 +163,17 @@ export async function DELETE(request: NextRequest) {
     }
 
     const adminClient = createAdminClient();
+
+    const { data: userData } = await adminClient
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || !ADMIN_ROLES.includes(userData.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     await adminClient.from('prospect_audits').delete().eq('id', auditId);
 
     return NextResponse.json({ success: true });
