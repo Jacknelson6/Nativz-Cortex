@@ -72,12 +72,93 @@ export async function generateEmbedding(text: string): Promise<number[] | null> 
   }
 }
 
-const GEMINI_MULTIMODAL_EMBEDDING_MODEL = 'gemini-embedding-exp-03-07';
+/**
+ * Describe-then-embed model. Google AI Studio retired
+ * `gemini-embedding-exp-03-07` (the only direct multimodal embedding
+ * path) so we use Gemini 2.5 Flash vision to produce a short visual
+ * description, concatenate it with the caller's text, and embed the
+ * combined string with `gemini-embedding-001`. Keeps 768 dims + the
+ * existing Google AI Studio key and still captures image content.
+ */
+const GEMINI_VISION_DESCRIBE_MODEL = 'gemini-2.5-flash';
+const VISION_DESCRIPTION_MAX_CHARS = 600;
+
+async function describeImageForEmbedding(
+  text: string,
+  imageUrl: string,
+  apiKey: string,
+): Promise<string | null> {
+  try {
+    const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(10_000) });
+    if (!imgRes.ok) return null;
+
+    const contentType = imgRes.headers.get('content-type') ?? 'image/png';
+    const buffer = await imgRes.arrayBuffer();
+    if (buffer.byteLength > 2 * 1024 * 1024) return null;
+    const base64 = Buffer.from(buffer).toString('base64');
+
+    const prompt =
+      'Describe this image for semantic search in 1–3 sentences. ' +
+      'Mention dominant colors, style (e.g. flat, photo, illustrated), subject, ' +
+      'layout, and any visible text or logos. Plain sentences, no bullet points, ' +
+      'no preamble.\n\nContext: ' +
+      text.slice(0, 500);
+
+    const res = await fetch(
+      `${GEMINI_API_URL}/${GEMINI_VISION_DESCRIBE_MODEL}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: prompt },
+                { inline_data: { mime_type: contentType, data: base64 } },
+              ],
+            },
+          ],
+          generationConfig: {
+            maxOutputTokens: 256,
+            temperature: 0.2,
+          },
+        }),
+      },
+    );
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const description: string | undefined =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!description) return null;
+
+    await logUsage({
+      service: 'gemini',
+      model: GEMINI_VISION_DESCRIBE_MODEL,
+      feature: 'knowledge_image_description',
+      inputTokens: Math.ceil(text.length / 4) + Math.ceil(buffer.byteLength / 1024),
+      outputTokens: Math.ceil(description.length / 4),
+      totalTokens:
+        Math.ceil(text.length / 4) +
+        Math.ceil(buffer.byteLength / 1024) +
+        Math.ceil(description.length / 4),
+      costUsd: 0,
+    }).catch(() => {});
+
+    return description.trim().slice(0, VISION_DESCRIPTION_MAX_CHARS);
+  } catch (error) {
+    console.warn('describeImageForEmbedding error:', error);
+    return null;
+  }
+}
 
 /**
  * Generate a multimodal embedding for text + image.
- * Uses Gemini's multimodal embedding model. Falls back to text-only if image fails.
- * Output MUST be 768 dimensions to match the existing embedding column.
+ * Describes the image with Gemini 2.5 Flash vision, concatenates the
+ * description with the caller's text, and embeds the combined string
+ * with gemini-embedding-001. Falls back to text-only if the image can't
+ * be fetched or described. Output is 768 dimensions.
  */
 export async function generateMultimodalEmbedding(
   text: string,
@@ -89,73 +170,13 @@ export async function generateMultimodalEmbedding(
     return null;
   }
 
-  try {
-    // Fetch image and convert to base64
-    const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(10_000) });
-    if (!imgRes.ok) {
-      console.warn(`Image fetch failed for ${imageUrl}, falling back to text-only`);
-      return generateEmbedding(text);
-    }
-
-    const contentType = imgRes.headers.get('content-type') ?? 'image/png';
-    const buffer = await imgRes.arrayBuffer();
-
-    // Skip images > 2MB to stay within serverless limits
-    if (buffer.byteLength > 2 * 1024 * 1024) {
-      console.warn(`Image too large (${Math.round(buffer.byteLength / 1024)}KB), falling back to text-only`);
-      return generateEmbedding(text);
-    }
-
-    const base64 = Buffer.from(buffer).toString('base64');
-
-    const res = await fetch(
-      `${GEMINI_API_URL}/${GEMINI_MULTIMODAL_EMBEDDING_MODEL}:embedContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: `models/${GEMINI_MULTIMODAL_EMBEDDING_MODEL}`,
-          content: {
-            parts: [
-              { text: text.slice(0, 5_000) },
-              { inline_data: { mime_type: contentType, data: base64 } },
-            ],
-          },
-          outputDimensionality: EMBEDDING_DIMS,
-        }),
-      },
-    );
-
-    if (!res.ok) {
-      const err = await res.text();
-      console.warn(`Multimodal embedding error ${res.status}: ${err.slice(0, 200)}, falling back to text-only`);
-      return generateEmbedding(text);
-    }
-
-    const data = await res.json();
-    const values: number[] = data?.embedding?.values;
-
-    // Dimension guard — must match existing text embeddings
-    if (!values || values.length !== EMBEDDING_DIMS) {
-      console.warn(`Multimodal embedding returned ${values?.length ?? 0} dims (need ${EMBEDDING_DIMS}), falling back to text-only`);
-      return generateEmbedding(text);
-    }
-
-    await logUsage({
-      service: 'gemini',
-      model: GEMINI_MULTIMODAL_EMBEDDING_MODEL,
-      feature: 'knowledge_multimodal_embedding',
-      inputTokens: Math.ceil(text.length / 4) + Math.ceil(buffer.byteLength / 1024),
-      outputTokens: 0,
-      totalTokens: Math.ceil(text.length / 4) + Math.ceil(buffer.byteLength / 1024),
-      costUsd: 0,
-    }).catch(() => {});
-
-    return values;
-  } catch (error) {
-    console.warn('generateMultimodalEmbedding error, falling back to text-only:', error);
+  const description = await describeImageForEmbedding(text, imageUrl, apiKey);
+  if (!description) {
     return generateEmbedding(text);
   }
+
+  const combined = `${text}\n\n[Visual description]: ${description}`;
+  return generateEmbedding(combined);
 }
 
 /**
