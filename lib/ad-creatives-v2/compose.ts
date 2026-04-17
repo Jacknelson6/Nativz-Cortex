@@ -12,7 +12,8 @@ import { createCanvas } from "@napi-rs/canvas";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildBrandContext } from "./brand-context";
 import { getLayout } from "./layouts/registry";
-import { CANVAS_1080 } from "./layouts/utils";
+import { CANVAS_1080, loadImageFromBuffer } from "./layouts/utils";
+import { chromaKeyRemoveBg } from "./layouts/chroma-key";
 import type { ConceptSpec, RenderResult } from "./types";
 
 export async function composeV2(concept: ConceptSpec): Promise<RenderResult> {
@@ -27,6 +28,20 @@ export async function composeV2(concept: ConceptSpec): Promise<RenderResult> {
       );
     }
     photo = await fetchPhotoBuffer(concept.photoSource, concept.photoStoragePath);
+
+    // Strip white studio background when requested, or when a CCC layout is
+    // about to drop a product shot on a non-white brand color. Keeps brand
+    // fidelity without a remove.bg API round-trip.
+    const nonWhiteBg =
+      typeof concept.background === "string" &&
+      concept.background !== "white" &&
+      concept.background !== "ivory";
+    const isCCC = concept.layoutSlug.startsWith("ccc-");
+    const shouldStrip =
+      concept.stripWhiteBg === true || (isCCC && nonWhiteBg && concept.stripWhiteBg !== false);
+    if (shouldStrip) {
+      photo = await stripWhiteBgToPngBuffer(photo);
+    }
   }
 
   const canvas = createCanvas(CANVAS_1080, CANVAS_1080);
@@ -42,6 +57,12 @@ export async function composeV2(concept: ConceptSpec): Promise<RenderResult> {
     layoutSlug: concept.layoutSlug,
     renderedAt: new Date().toISOString(),
   };
+}
+
+async function stripWhiteBgToPngBuffer(buf: Buffer): Promise<Buffer> {
+  const img = await loadImageFromBuffer(buf);
+  const canvas = chromaKeyRemoveBg(img);
+  return canvas.toBuffer("image/png");
 }
 
 async function fetchPhotoBuffer(

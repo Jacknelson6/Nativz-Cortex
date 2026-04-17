@@ -13,6 +13,8 @@ export interface BrandPalette {
   onAccent: string; // text color when rendered on `accent`
   ivory?: string;
   charcoal?: string;
+  /** De-emphasized color for secondary/competitor text (e.g. "grocery store" column in comparisons). */
+  muted?: string;
   [key: string]: string | undefined;
 }
 
@@ -135,6 +137,14 @@ export interface ConceptSpec {
   price?: string;
   /** Testimonial for testimonial-card layouts. */
   testimonial?: Testimonial;
+  /**
+   * If true, the compositor runs chroma-key white-background removal on
+   * the photo before handing it to the layout renderer. Use when a
+   * product is shot on a white studio background and the ad's background
+   * is non-white (cream, charcoal, red) — otherwise the white studio
+   * rectangle shows up around the subject.
+   */
+  stripWhiteBg?: boolean;
 }
 
 /** Result of a render — the PNG buffer + some metadata. */

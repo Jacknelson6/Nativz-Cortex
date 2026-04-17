@@ -287,7 +287,7 @@ export function wrapAndDrawBody(
   ctx: SKRSContext2D,
   text: string,
   opts: { x: number; y: number; maxWidth: number; lineHeight: number },
-): void {
+): number {
   const words = text.split(/\s+/);
   const lines: string[] = [];
   let current = "";
@@ -306,6 +306,7 @@ export function wrapAndDrawBody(
     ctx.fillText(line, opts.x, y);
     y += opts.lineHeight;
   }
+  return y;
 }
 
 export function wrapAndDrawBodyCentered(
@@ -313,7 +314,7 @@ export function wrapAndDrawBodyCentered(
   text: string,
   canvasWidth: number,
   opts: { y: number; maxWidth: number; lineHeight: number },
-): void {
+): number {
   const words = text.split(/\s+/);
   const lines: string[] = [];
   let current = "";
@@ -333,4 +334,5 @@ export function wrapAndDrawBodyCentered(
     ctx.fillText(line, (canvasWidth - w) / 2, y);
     y += opts.lineHeight;
   }
+  return y;
 }

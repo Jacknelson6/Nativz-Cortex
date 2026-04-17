@@ -16,6 +16,12 @@ import type { BrandRenderContext, ConceptSpec } from "../types";
 import { renderWestonNavyEditorial } from "./renderers/weston-navy-editorial";
 import { renderWestonStatHero } from "./renderers/weston-stat-hero";
 import { renderWestonPhotoHeroBottom } from "./renderers/weston-photo-hero-bottom";
+import { renderCCCPillarGrid } from "./renderers/ccc-pillar-grid";
+import { renderCCCStatWithPillars } from "./renderers/ccc-stat-with-pillars";
+import { renderCCCTestimonialCard } from "./renderers/ccc-testimonial-card";
+import { renderCCCPriceAndIncludes } from "./renderers/ccc-price-and-includes";
+import { renderCCCThreeReasons } from "./renderers/ccc-three-reasons";
+import { renderCCCComparison } from "./renderers/ccc-comparison";
 
 /** Renderer signature — photo is provided only when the layout needs it. */
 export type LayoutRenderer = (
@@ -52,6 +58,31 @@ const LAYOUTS: Record<string, LayoutRequirements> = {
       }
       return renderWestonPhotoHeroBottom(ctx, concept, brand, photo);
     },
+    needsPhoto: true,
+  },
+  // --- Crystal Creek Cattle info-dense layouts ---
+  "ccc-pillar-grid": {
+    renderer: (ctx, concept, brand, photo) => renderCCCPillarGrid(ctx, concept, brand, photo),
+    needsPhoto: true,
+  },
+  "ccc-stat-with-pillars": {
+    renderer: (ctx, concept, brand, photo) => renderCCCStatWithPillars(ctx, concept, brand, photo),
+    needsPhoto: true,
+  },
+  "ccc-testimonial-card": {
+    renderer: (ctx, concept, brand, photo) => renderCCCTestimonialCard(ctx, concept, brand, photo),
+    needsPhoto: true,
+  },
+  "ccc-price-and-includes": {
+    renderer: (ctx, concept, brand, photo) => renderCCCPriceAndIncludes(ctx, concept, brand, photo),
+    needsPhoto: true,
+  },
+  "ccc-three-reasons": {
+    renderer: (ctx, concept, brand, photo) => renderCCCThreeReasons(ctx, concept, brand, photo),
+    needsPhoto: true,
+  },
+  "ccc-comparison": {
+    renderer: (ctx, concept, brand, photo) => renderCCCComparison(ctx, concept, brand, photo),
     needsPhoto: true,
   },
 };

@@ -75,17 +75,31 @@ async function loadPalette(clientId: string): Promise<BrandPalette> {
 
   const primary = byRole("primary") ?? "#0B1E3F";
   const accent = byRole("accent") ?? "#C9A24A";
-  const ivory = byRole("neutral") ?? "#F5F1E8";
-  const charcoal = byRole("text") ?? "#1F2937";
+  const ivory = byRole("neutral") ?? byRole("ivory") ?? "#F5F1E8";
+  const charcoal = byRole("text") ?? byRole("charcoal") ?? "#1F2937";
+  const muted = byRole("muted") ?? "#8A7B60";
+  const onPrimary = byRole("on-primary") ?? "#FFFFFF";
+  const onAccent = byRole("on-accent") ?? "#0B1E3F";
 
-  return {
+  const palette: BrandPalette = {
     primary,
     accent,
-    onPrimary: "#FFFFFF",
-    onAccent: "#0B1E3F",
+    onPrimary,
+    onAccent,
     ivory,
     charcoal,
+    muted,
   };
+
+  // Pass-through any additional named roles (white, burgundy, red, warmGrey,
+  // etc.) so brand-specific layouts can reference them directly.
+  for (const entry of raw) {
+    if (entry.role && entry.hex && !(entry.role in palette)) {
+      palette[entry.role] = entry.hex;
+    }
+  }
+
+  return palette;
 }
 
 // ---------------------------------------------------------------------------
