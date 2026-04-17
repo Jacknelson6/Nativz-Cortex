@@ -85,16 +85,35 @@ export interface CreatorEnrichment {
 // Ranked creator (what the UI renders)
 // ---------------------------------------------------------------------------
 
+import type { AccountType } from './account-type';
+import type { CreatorCategory } from './taxonomy';
+
 export interface RankedCreator {
   username: string;
   nickname: string | null;
   avatarUrl: string | null;
   followers: number;
   region: string | null;
-  /** Composite 0-100 score (see score.ts). */
+  /** Overall 0-100 blend of Traffic + E-commerce Potential. */
   compositeScore: number;
+  /**
+   * Reach metric — 0-100. Tracks how many eyeballs this creator puts
+   * on each post (engagement × followers) combined with posting
+   * cadence. Mirrors FastMoss's "Traffic Index".
+   */
+  trafficIndex: number;
+  /**
+   * Conversion metric — 0-100. Tracks how effectively this creator
+   * turns reach into GMV (GMV × GPM × performance score × brand
+   * collabs). Mirrors FastMoss's "Ecommerce Potential Index".
+   */
+  ecommercePotentialIndex: number;
   /** How many products from this search the creator appears on. */
   categoryProductCount: number;
+  /** Derived label — creator / brand_store / agency_operated / unknown. */
+  accountType: AccountType;
+  /** Human-readable category labels from the lemur enrichment, if any. */
+  categories: CreatorCategory[];
   stats: CreatorStats | null;
   /** Products (from Phase 1) this creator promotes — name + price + sales. */
   products: {
@@ -110,4 +129,16 @@ export interface RankedCreator {
 export interface SearchResults {
   products: AffiliateProduct[];
   creators: RankedCreator[];
+  /**
+   * Regional GMV-share context for the top category observed in this
+   * search. Shown as a chip on the results page. Null when we don't
+   * have a benchmark for the market or none of the categories match.
+   */
+  primaryBenchmark?: {
+    countryCode: string;
+    category: CreatorCategory;
+    /** 0-1 share of regional TikTok Shop GMV. */
+    gmvShare: number;
+    note?: string;
+  } | null;
 }

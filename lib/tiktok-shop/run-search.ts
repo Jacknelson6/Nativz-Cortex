@@ -18,6 +18,7 @@ import {
   scrapeCreatorEnrichmentBatch,
 } from './scrape-creator-enrichment';
 import { buildRankedCreators } from './score';
+import { pickPrimaryBenchmark, type CreatorCategory } from './taxonomy';
 import type { CreatorEnrichment, SearchResults } from './types';
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -116,7 +117,34 @@ export async function runTikTokShopSearch(
     // Cache snapshots for the creator deep-dive page
     await persistCreatorSnapshots(admin, enrichments);
 
-    const results: SearchResults = { products, creators: ranked };
+    // Pick a regional benchmark to surface in the results header. We use
+    // the top-3 creators' most-frequent canonical category as the signal —
+    // if a plurality of high-rank creators are "Beauty & Personal Care",
+    // we show the beauty-specific regional stat.
+    const countryCode = options.marketCountryCode ?? 'US';
+    const categoryVotes = new Map<CreatorCategory, number>();
+    for (const c of ranked.slice(0, 5)) {
+      for (const cat of c.categories) {
+        categoryVotes.set(cat, (categoryVotes.get(cat) ?? 0) + 1);
+      }
+    }
+    const sortedCategories = Array.from(categoryVotes.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat]) => cat);
+    const benchmark = pickPrimaryBenchmark(countryCode, sortedCategories);
+
+    const results: SearchResults = {
+      products,
+      creators: ranked,
+      primaryBenchmark: benchmark
+        ? {
+            countryCode,
+            category: benchmark.category,
+            gmvShare: benchmark.gmvShare,
+            note: benchmark.note,
+          }
+        : null,
+    };
 
     await updateStatus({
       status: 'completed',

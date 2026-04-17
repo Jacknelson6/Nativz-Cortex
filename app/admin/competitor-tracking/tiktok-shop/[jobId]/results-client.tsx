@@ -11,10 +11,13 @@ import {
   Loader2,
   RefreshCw,
   ShoppingBag,
+  Store,
+  User,
   Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { RankedCreator, SearchResults } from '@/lib/tiktok-shop/types';
+import { accountTypeLabel, type AccountType } from '@/lib/tiktok-shop/account-type';
 
 interface SearchRow {
   id: string;
@@ -128,13 +131,31 @@ export function TikTokShopResultsClient({ initial }: { initial: SearchRow }) {
       return;
     }
     const rows = [
-      ['Rank', 'Username', 'Nickname', 'Followers', 'Composite Score', 'Products in Search', 'GMV Total', 'Performance', 'Profile URL'],
+      [
+        'Rank',
+        'Username',
+        'Nickname',
+        'Account Type',
+        'Primary Category',
+        'Followers',
+        'Composite Score',
+        'Traffic Index',
+        'E-commerce Potential',
+        'Products in Search',
+        'GMV Total',
+        'Performance',
+        'Profile URL',
+      ],
       ...creators.map((c, i) => [
         String(i + 1),
         `@${c.username}`,
         c.nickname ?? '',
+        accountTypeLabel(c.accountType),
+        c.categories[0] ?? '',
         String(c.followers),
         String(c.compositeScore),
+        String(c.trafficIndex),
+        String(c.ecommercePotentialIndex),
         String(c.categoryProductCount),
         String(c.stats?.gmv.total ?? 0),
         String(c.stats?.performanceScore ?? 0),
@@ -198,6 +219,20 @@ export function TikTokShopResultsClient({ initial }: { initial: SearchRow }) {
                 </span>
               )}
             </div>
+
+            {search.results?.primaryBenchmark && (
+              <p className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border border-accent/20 bg-accent/5 px-2.5 py-1 text-[11px] font-medium text-accent-text">
+                <BadgeCheck size={12} aria-hidden />
+                <span className="truncate">
+                  {search.results.primaryBenchmark.category} drives{' '}
+                  {Math.round(search.results.primaryBenchmark.gmvShare * 100)}% of{' '}
+                  {search.results.primaryBenchmark.countryCode} TikTok Shop GMV
+                  {search.results.primaryBenchmark.note
+                    ? ` · ${search.results.primaryBenchmark.note}`
+                    : ''}
+                </span>
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -285,8 +320,16 @@ export function TikTokShopResultsClient({ initial }: { initial: SearchRow }) {
                           <th className="w-10 px-3 py-2.5">#</th>
                           <th className="px-3 py-2.5">Creator</th>
                           <th className="px-3 py-2.5">Followers</th>
-                          <th className="px-3 py-2.5">Products</th>
+                          <th className="px-3 py-2.5" title="Products from this search the creator appears on">
+                            Products
+                          </th>
                           <th className="px-3 py-2.5">GMV</th>
+                          <th className="px-3 py-2.5" title="Reach signal — engagement × followers, avg views, posting cadence">
+                            Traffic
+                          </th>
+                          <th className="px-3 py-2.5" title="Conversion signal — GMV, GPM, performance, brand collabs, units sold">
+                            E-com
+                          </th>
                           <th className="px-3 py-2.5">Score</th>
                           <th className="w-20 px-3 py-2.5"></th>
                         </tr>
@@ -304,10 +347,21 @@ export function TikTokShopResultsClient({ initial }: { initial: SearchRow }) {
                                   ) : null}
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="truncate font-medium text-text-primary">
-                                    {c.nickname ?? c.username}
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="truncate font-medium text-text-primary">
+                                      {c.nickname ?? c.username}
+                                    </span>
+                                    <AccountTypeBadge type={c.accountType} compact />
                                   </div>
-                                  <div className="truncate text-xs text-text-muted">@{c.username}</div>
+                                  <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                                    <span className="truncate">@{c.username}</span>
+                                    {c.categories[0] && (
+                                      <>
+                                        <span>·</span>
+                                        <span className="truncate">{c.categories[0]}</span>
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </td>
@@ -319,6 +373,12 @@ export function TikTokShopResultsClient({ initial }: { initial: SearchRow }) {
                             </td>
                             <td className="px-3 py-2.5 text-text-secondary">
                               {c.stats ? formatUsd(c.stats.gmv.total) : '—'}
+                            </td>
+                            <td className="px-3 py-2.5 text-text-secondary tabular-nums">
+                              {c.trafficIndex}
+                            </td>
+                            <td className="px-3 py-2.5 text-text-secondary tabular-nums">
+                              {c.ecommercePotentialIndex}
                             </td>
                             <td className="px-3 py-2.5">
                               <ScorePill score={c.compositeScore} />
@@ -410,8 +470,12 @@ function TopCreatorCard({ creator, rank }: { creator: RankedCreator; rank: numbe
           {creator.stats?.brandCollabs && creator.stats.brandCollabs > 5 ? (
             <BadgeCheck size={14} className="text-accent-text" aria-hidden />
           ) : null}
+          <AccountTypeBadge type={creator.accountType} />
         </div>
-        <p className="truncate text-xs text-text-muted">@{creator.username}</p>
+        <p className="truncate text-xs text-text-muted">
+          @{creator.username}
+          {creator.categories[0] ? ` · ${creator.categories[0]}` : ''}
+        </p>
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-secondary">
           <span>{formatCompact(creator.followers)} followers</span>
           {creator.stats && creator.stats.gmv.total > 0 && (
@@ -419,9 +483,45 @@ function TopCreatorCard({ creator, rank }: { creator: RankedCreator; rank: numbe
           )}
           <span>{creator.categoryProductCount} products</span>
         </div>
+        <div className="mt-2 flex items-center gap-3 text-[11px] tabular-nums text-text-muted">
+          <span title="Traffic Index — reach + activity + engagement">
+            Traffic <span className="text-text-secondary">{creator.trafficIndex}</span>
+          </span>
+          <span title="E-commerce Potential — conversion + GMV + brand trust">
+            E-com <span className="text-text-secondary">{creator.ecommercePotentialIndex}</span>
+          </span>
+        </div>
       </div>
       <ScorePill score={creator.compositeScore} />
     </Link>
+  );
+}
+
+function AccountTypeBadge({
+  type,
+  compact = false,
+}: {
+  type: AccountType;
+  compact?: boolean;
+}) {
+  if (type === 'unknown') return null;
+  const Icon = type === 'brand_store' ? Store : type === 'agency_operated' ? Users : User;
+  const tone =
+    type === 'brand_store'
+      ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+      : type === 'agency_operated'
+        ? 'border-purple-500/30 bg-purple-500/10 text-purple-300'
+        : 'border-nativz-border bg-background text-text-muted';
+  return (
+    <span
+      title={`${accountTypeLabel(type)} account`}
+      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 ${
+        compact ? 'text-[9px]' : 'text-[10px]'
+      } font-medium uppercase tracking-wide ${tone}`}
+    >
+      <Icon size={compact ? 9 : 10} aria-hidden />
+      {accountTypeLabel(type)}
+    </span>
   );
 }
 
