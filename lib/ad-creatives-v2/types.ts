@@ -26,6 +26,29 @@ export interface HeadlineSpan {
   newline?: boolean;
 }
 
+/** A pillar callout — used by info-dense layouts (pillar-grid, stat-with-pillars). */
+export interface Pillar {
+  /** Short-form UPPERCASE label (e.g. "HAND-CUT", "NEVER FROZEN"). */
+  label: string;
+  /** Optional one-line body under the label. */
+  body?: string;
+}
+
+/** A single row in a comparison table. */
+export interface ComparisonRow {
+  label?: string;
+  /** Competitor / "them" copy. */
+  theirs: string;
+  /** This brand / "us" copy. */
+  ours: string;
+}
+
+/** A customer testimonial — used by testimonial-card layout. */
+export interface Testimonial {
+  quote: string;
+  author: string;
+}
+
 /** Canvas aspect. 1:1 is Meta feed native. */
 export type Aspect = "1:1" | "4:5" | "9:16";
 
@@ -94,6 +117,24 @@ export interface ConceptSpec {
   logoColorway: string;
   /** Optional background treatment ('dark', 'light', 'navy', 'ivory', etc.) — layout-specific. */
   background?: string;
+  // ---------------------------------------------------------------------------
+  // Info-density extras — optional because only some layouts use them.
+  // Added to the base ConceptSpec (not brand-specific) because these patterns
+  // (pillar callouts, testimonials, comparison tables, numbered reasons,
+  // "what's included" lists, hard prices) are generic across brands.
+  // ---------------------------------------------------------------------------
+  /** Pillar callouts for pillar-grid / stat-with-pillars layouts. Up to 4. */
+  pillars?: Pillar[];
+  /** Comparison table rows for comparison layouts. */
+  comparison?: ComparisonRow[];
+  /** Numbered reasons for three-reasons-style layouts. Up to 3. */
+  reasons?: string[];
+  /** "What's included" bullet list for price-and-includes layouts. */
+  included?: string[];
+  /** Hard price string (e.g. "$99.99") for price-forward layouts. */
+  price?: string;
+  /** Testimonial for testimonial-card layouts. */
+  testimonial?: Testimonial;
 }
 
 /** Result of a render — the PNG buffer + some metadata. */

@@ -24,6 +24,7 @@ const requireFromHere = createRequire(import.meta.url);
 
 const PACKAGED_MONTSERRAT_PKG = "@fontsource/montserrat/files";
 const PACKAGED_PLAYFAIR_PKG = "@fontsource/playfair-display/files";
+const PACKAGED_ARCHIVO_BLACK_PKG = "@fontsource/archivo-black/files";
 
 const TMP_FONT_DIR = "/tmp/ad-creatives-v2-fonts";
 
@@ -67,7 +68,28 @@ export function registerPackagedFonts(): void {
     );
   }
 
+  // Archivo Black (Crystal Creek display face — chunky slab-sans, single weight 900)
+  const archivoDir = resolvePackageDir(PACKAGED_ARCHIVO_BLACK_PKG);
+  const archivoFiles = readdirSync(archivoDir).filter(
+    (f) => f.endsWith(".woff") && f.startsWith("archivo-black-latin-"),
+  );
+  for (const file of archivoFiles) {
+    const match = file.match(/^archivo-black-latin-(\d{3})-(normal|italic)\.woff$/);
+    if (!match) continue;
+    const weight = parseInt(match[1], 10);
+    const italic = match[2] === "italic";
+    GlobalFonts.registerFromPath(
+      join(archivoDir, file),
+      buildFontAlias("ArchivoBlack", weight, italic),
+    );
+  }
+
   packagedRegistered = true;
+}
+
+/** ctx.font value for Archivo Black (Crystal Creek display — 900-only). */
+export function archivoBlackFont(sizePx: number): string {
+  return fontString("ArchivoBlack", sizePx, { weight: 900 });
 }
 
 /** Download + register all brand_fonts rows for a client. Idempotent. */
