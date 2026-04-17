@@ -27,7 +27,7 @@
 // Defaults for both env vars point at ~/Desktop/morning-ads so you can
 // skip them if you kept the morning-ads layout.
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createCanvas, loadImage, type Canvas } from "@napi-rs/canvas";
 import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
@@ -233,8 +233,10 @@ async function main(): Promise<void> {
 // Helpers
 // ---------------------------------------------------------------------------
 
+type AdminClient = SupabaseClient;
+
 async function uploadOrReplace(
-  admin: ReturnType<typeof createClient>,
+  admin: AdminClient,
   bucket: string,
   path: string,
   buf: Buffer,
