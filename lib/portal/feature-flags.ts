@@ -15,6 +15,8 @@ export interface FeatureFlags {
   can_use_nerd: boolean;
   /** When false, portal users for this client cannot create or use REST API keys (Bearer /api/v1). */
   can_use_api: boolean;
+  /** TikTok Shop creator insights — admin-gated per client (default false). */
+  can_view_tiktok_shop: boolean;
 }
 
 export const PORTAL_FEATURE_FLAG_DEFAULTS: FeatureFlags = {
@@ -28,7 +30,39 @@ export const PORTAL_FEATURE_FLAG_DEFAULTS: FeatureFlags = {
   can_view_knowledge: true,
   can_use_nerd: true,
   can_use_api: true,
+  can_view_tiktok_shop: false,
 };
+
+/**
+ * Portal-facing catalogue of "tools" — items that render in the portal
+ * sidebar and can be enabled/disabled per client. Items not in this list
+ * are unconditional (e.g. Research, Settings). Each entry's `tooltip`
+ * shows when the item is disabled: "coming_soon" = on the roadmap,
+ * "ask_team" = gated by per-client access. Admin is expected to flip
+ * the flag from the client's settings page when a brand is onboarded.
+ */
+export interface PortalTool {
+  key: keyof FeatureFlags;
+  label: string;
+  href: string;
+  /** Disabled-state copy variant. */
+  tooltip: 'coming_soon' | 'ask_team';
+}
+
+export const PORTAL_TOOLS: PortalTool[] = [
+  {
+    key: 'can_view_tiktok_shop',
+    label: 'TikTok Shop',
+    href: '/portal/competitor-tracking/tiktok-shop',
+    tooltip: 'ask_team',
+  },
+];
+
+export function portalToolTooltipText(variant: PortalTool['tooltip']): string {
+  return variant === 'coming_soon'
+    ? 'Coming soon'
+    : 'Ask your team to enable this feature for you';
+}
 
 export function buildPortalFeatureFlags(raw: unknown): FeatureFlags {
   return { ...PORTAL_FEATURE_FLAG_DEFAULTS, ...(raw as Partial<FeatureFlags> ?? {}) };

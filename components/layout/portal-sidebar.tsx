@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Search, Settings, PanelLeftClose } from 'lucide-react';
+import { Search, Settings, PanelLeftClose, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
@@ -20,11 +20,36 @@ import {
   useSidebar,
 } from './sidebar';
 import type { FeatureFlags } from '@/lib/portal/get-portal-client';
+import { portalToolTooltipText } from '@/lib/portal/feature-flags';
 import { PORTAL_HOME_PATH } from '@/lib/portal/client-surface';
 
-/** Client portal: research + settings only (other routes redirect in middleware). */
-const NAV_ITEMS: { href: string; label: string; icon: typeof Search; flag: string | null }[] = [
+/**
+ * Client portal sidebar.
+ * `flag` gates visibility:
+ *   - null      → always enabled (e.g. Settings)
+ *   - required  → strict filter, item is hidden when false
+ *   - optional  → shown grayed out when false, with `disabledTooltip`
+ *                 copy that tells the user why it's disabled
+ */
+interface PortalNavItem {
+  href: string;
+  label: string;
+  icon: typeof Search;
+  flag: keyof FeatureFlags | null;
+  /** When set on a flag-gated item, show the item even when disabled,
+   *  grayed out with this tooltip. */
+  disabledTooltip?: 'coming_soon' | 'ask_team';
+}
+
+const NAV_ITEMS: PortalNavItem[] = [
   { href: '/portal/search/new', label: 'Research', icon: Search, flag: 'can_search' },
+  {
+    href: '/portal/competitor-tracking/tiktok-shop',
+    label: 'TikTok Shop',
+    icon: ShoppingBag,
+    flag: 'can_view_tiktok_shop',
+    disabledTooltip: 'ask_team',
+  },
   { href: '/portal/settings', label: 'Settings', icon: Settings, flag: null },
 ];
 
@@ -50,9 +75,17 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
   const { open, toggleSidebar } = useSidebar();
 
   const flags = featureFlags as Record<string, boolean> | undefined;
-  const navItems = NAV_ITEMS.filter((item) => {
-    if (!item.flag) return true;
-    return flags?.[item.flag] !== false;
+
+  // Three states per item:
+  //   enabled    → render as a normal link
+  //   disabled   → render grayed-out with tooltip (item.disabledTooltip set)
+  //   hidden     → filtered out entirely
+  const navItems = NAV_ITEMS.flatMap((item) => {
+    if (!item.flag) return [{ item, disabled: false }];
+    const on = flags?.[item.flag] !== false;
+    if (on) return [{ item, disabled: false }];
+    if (item.disabledTooltip) return [{ item, disabled: true }];
+    return [];
   });
 
   const showBrandSwitcher = brands && brands.length > 1 && activeBrandId;
@@ -116,11 +149,42 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
       <SidebarContent className="px-2.5">
         <SidebarGroup>
           <SidebarMenu className="gap-1.5">
-            {navItems.map((item) => {
+            {navItems.map(({ item, disabled }) => {
               const active =
-                item.href === '/portal/search/new'
+                !disabled &&
+                (item.href === '/portal/search/new'
                   ? pathname.startsWith('/portal/search')
-                  : pathname === item.href || pathname.startsWith(item.href + '/');
+                  : pathname === item.href || pathname.startsWith(item.href + '/'));
+
+              if (disabled) {
+                const tooltipText = portalToolTooltipText(item.disabledTooltip ?? 'ask_team');
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <div
+                      title={tooltipText}
+                      aria-disabled="true"
+                      className="block w-full cursor-not-allowed"
+                    >
+                      <SidebarMenuButton
+                        isActive={false}
+                        tooltip={tooltipText}
+                        className="opacity-40 pointer-events-none"
+                      >
+                        <item.icon size={18} className="shrink-0 opacity-90" />
+                        {open && (
+                          <>
+                            <span className="truncate font-medium">{item.label}</span>
+                            <span className="ml-auto rounded-full border border-nativz-border bg-background px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-text-muted">
+                              {item.disabledTooltip === 'coming_soon' ? 'Soon' : 'Locked'}
+                            </span>
+                          </>
+                        )}
+                      </SidebarMenuButton>
+                    </div>
+                  </SidebarMenuItem>
+                );
+              }
+
               return (
                 <SidebarMenuItem key={item.href}>
                   <Link href={item.href} className="block w-full">

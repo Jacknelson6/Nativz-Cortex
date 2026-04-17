@@ -261,6 +261,12 @@ export function ClientAccessServicesPanel({ slug }: { slug: string }) {
                 label="REST API keys"
                 description="Allow portal users to create and use Bearer tokens for /api/v1 (automation integrations)"
               />
+              <Toggle
+                checked={flags.can_view_tiktok_shop}
+                onChange={(v) => setFlag('can_view_tiktok_shop', v)}
+                label="TikTok Shop"
+                description="Portal access to TikTok Shop creator insights. Off by default — shown grayed out in the portal sidebar with a tooltip until enabled."
+              />
             </div>
           </div>
         </div>

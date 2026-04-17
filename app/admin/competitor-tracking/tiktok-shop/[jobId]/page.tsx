@@ -1,9 +1,15 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { redirect } from 'next/navigation';
-import { TikTokShopSearchPage } from './search-client';
+import { redirect, notFound } from 'next/navigation';
+import { TikTokShopResultsClient } from './results-client';
 
-export default async function TikTokShopPage() {
+export default async function TikTokShopResultsPage({
+  params,
+}: {
+  params: Promise<{ jobId: string }>;
+}) {
+  const { jobId } = await params;
+
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/admin/login');
@@ -19,11 +25,13 @@ export default async function TikTokShopPage() {
     redirect('/admin/dashboard');
   }
 
-  const { data: recent } = await admin
+  const { data: search } = await admin
     .from('tiktok_shop_searches')
-    .select('id, query, status, products_found, creators_found, client_id, created_at, completed_at')
-    .order('created_at', { ascending: false })
-    .limit(20);
+    .select('*')
+    .eq('id', jobId)
+    .maybeSingle();
 
-  return <TikTokShopSearchPage recentSearches={recent ?? []} />;
+  if (!search) notFound();
+
+  return <TikTokShopResultsClient initial={search} />;
 }
