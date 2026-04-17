@@ -12,8 +12,8 @@
 // v2 compose() instead of the v1 image generation path.
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { composeV2 } from "./compose.js";
-import type { ConceptSpec } from "./types.js";
+import { composeV2 } from "./compose";
+import type { ConceptSpec } from "./types";
 
 const MAX_CONCURRENCY = 3;
 

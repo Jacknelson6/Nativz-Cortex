@@ -12,10 +12,10 @@
 //   3. Add a row to brand_ad_templates for any client that should see it
 
 import type { SKRSContext2D } from "@napi-rs/canvas";
-import type { BrandRenderContext, ConceptSpec } from "../types.js";
-import { renderWestonNavyEditorial } from "./renderers/weston-navy-editorial.js";
-import { renderWestonStatHero } from "./renderers/weston-stat-hero.js";
-import { renderWestonPhotoHeroBottom } from "./renderers/weston-photo-hero-bottom.js";
+import type { BrandRenderContext, ConceptSpec } from "../types";
+import { renderWestonNavyEditorial } from "./renderers/weston-navy-editorial";
+import { renderWestonStatHero } from "./renderers/weston-stat-hero";
+import { renderWestonPhotoHeroBottom } from "./renderers/weston-photo-hero-bottom";
 
 /** Renderer signature — photo is provided only when the layout needs it. */
 export type LayoutRenderer = (

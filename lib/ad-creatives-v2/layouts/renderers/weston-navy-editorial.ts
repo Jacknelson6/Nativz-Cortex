@@ -1,6 +1,6 @@
 import { type SKRSContext2D } from "@napi-rs/canvas";
-import { montFont, playfairFont } from "../../fonts.js";
-import type { BrandRenderContext, ConceptSpec } from "../../types.js";
+import { montFont, playfairFont } from "../../fonts";
+import type { BrandRenderContext, ConceptSpec } from "../../types";
 import {
   CANVAS_1080,
   buildWords,
@@ -11,7 +11,7 @@ import {
   fillSolid,
   wrapAndDrawBody,
   wrapWords,
-} from "../utils.js";
+} from "../utils";
 
 /**
  * weston-navy-editorial

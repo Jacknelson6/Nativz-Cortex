@@ -11,7 +11,7 @@ import type {
   BrandRenderContext,
   HeadlineSpan,
   LogoAnchor,
-} from "../types.js";
+} from "../types";
 
 /** 1080×1080 is the Meta feed native canvas for v2. */
 export const CANVAS_1080 = 1080;

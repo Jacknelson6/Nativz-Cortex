@@ -13,7 +13,14 @@
 import { GlobalFonts } from "@napi-rs/canvas";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+// createRequire gives us node-style resolution that works in both CJS and
+// ESM contexts, and (importantly) doesn't trip the webpack static
+// analyzer the way `new URL(".", import.meta.url)` does. Webpack was
+// parsing that URL call and trying to resolve "." as a module.
+const requireFromHere = createRequire(import.meta.url);
 
 const PACKAGED_MONTSERRAT_PKG = "@fontsource/montserrat/files";
 const PACKAGED_PLAYFAIR_PKG = "@fontsource/playfair-display/files";
@@ -140,14 +147,26 @@ function buildFontAlias(family: string, weight: number, italic: boolean): string
 }
 
 function resolvePackageDir(pkg: string): string {
-  const here = new URL(".", import.meta.url).pathname;
-  const candidates = [
-    join(process.cwd(), "node_modules", pkg),
-    join(here, "..", "..", "node_modules", pkg),
-    join(here, "..", "..", "..", "node_modules", pkg),
-  ];
-  for (const c of candidates) {
-    if (existsSync(c)) return c;
+  // pkg format examples:
+  //   "@fontsource/montserrat/files"         → package "@fontsource/montserrat", subdir "files"
+  //   "@fontsource/playfair-display/files"   → package "@fontsource/playfair-display", subdir "files"
+  const parts = pkg.split("/");
+  const packageName = parts[0].startsWith("@")
+    ? parts.slice(0, 2).join("/")
+    : parts[0];
+  const subPath = parts.slice(packageName.split("/").length).join("/");
+
+  // Resolve the package's package.json via Node's module resolver, which
+  // handles hoisting, workspaces, and Vercel's bundled layout without
+  // hardcoded node_modules lookups. Fall back to cwd on failure so the
+  // function still works in contexts where resolution is constrained.
+  try {
+    const pkgJsonPath = requireFromHere.resolve(`${packageName}/package.json`);
+    const pkgRoot = dirname(pkgJsonPath);
+    return subPath ? join(pkgRoot, subPath) : pkgRoot;
+  } catch {
+    const fallback = join(process.cwd(), "node_modules", pkg);
+    if (existsSync(fallback)) return fallback;
+    throw new Error(`Could not locate ${pkg}`);
   }
-  throw new Error(`Could not locate ${pkg}. Tried: ${candidates.join(", ")}`);
 }

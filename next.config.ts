@@ -81,6 +81,11 @@ const nextConfig: NextConfig = {
     '@react-pdf/pdfkit',
     '@react-pdf/font',
     '@react-pdf/textkit',
+    // @napi-rs/canvas ships platform-specific .node binaries that webpack
+    // can't parse. Used by lib/ad-creatives-v2/compose.ts for server-side
+    // rendering of composited ad frames. Externalize so it loads at
+    // runtime via plain require.
+    '@napi-rs/canvas',
   ],
   // ffmpeg-static resolves its binary via path.join(__dirname, <name from package.json>)
   // at runtime, which nft cannot trace statically. Explicitly include the binary file

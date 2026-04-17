@@ -10,10 +10,10 @@
 
 import { createCanvas } from "@napi-rs/canvas";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildBrandContext } from "./brand-context.js";
-import { getLayout } from "./layouts/registry.js";
-import { CANVAS_1080 } from "./layouts/utils.js";
-import type { ConceptSpec, RenderResult } from "./types.js";
+import { buildBrandContext } from "./brand-context";
+import { getLayout } from "./layouts/registry";
+import { CANVAS_1080 } from "./layouts/utils";
+import type { ConceptSpec, RenderResult } from "./types";
 
 export async function composeV2(concept: ConceptSpec): Promise<RenderResult> {
   const brand = await buildBrandContext(concept.clientId);

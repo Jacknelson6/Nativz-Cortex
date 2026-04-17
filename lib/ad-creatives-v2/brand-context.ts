@@ -13,8 +13,8 @@
 // DB. When v2 grows its own brand-dna tables, swap the inputs here.
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { registerClientBrandFonts, registerPackagedFonts } from "./fonts.js";
-import type { BrandPalette, BrandRenderContext } from "./types.js";
+import { registerClientBrandFonts, registerPackagedFonts } from "./fonts";
+import type { BrandPalette, BrandRenderContext } from "./types";
 
 /**
  * Build a BrandRenderContext by reading clients + v2 tables. Palette falls
