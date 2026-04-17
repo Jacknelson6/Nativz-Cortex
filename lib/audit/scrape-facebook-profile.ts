@@ -3,20 +3,22 @@
  * pattern Instagram uses because Meta blocks single-actor flows that try to
  * do both profile AND posts in one pass.
  *
- *   1. `apify/facebook-pages-scraper` — profile metadata (followers, bio,
- *      category, verified, avatar, cover photo, website, etc.). Verified
- *      working against Nike — returns rich data for public pages.
+ *   1. Profile metadata — default `cleansyntax/facebook-profile-posts-scraper`
+ *      with endpoint=`details_by_url`. Replaced the older
+ *      `apify/facebook-pages-scraper` which had degraded against Meta's
+ *      fingerprinting. Override with `FACEBOOK_PAGES_SCRAPER_ACTOR` env
+ *      var to swap back; the actor-shape detection below handles both
+ *      input/output formats.
  *   2. `apify/facebook-reels-scraper` — Reels (short-form video content).
  *      Audit is explicitly scoped to short-form video, so Reels is the
- *      content axis we care about; posts-scraper has been unreliable for
- *      months as Meta fingerprinting catches up.
+ *      content axis we care about.
  *
- * Both actors run in parallel. If the pages actor returns `not_available`
- * (restricted page, region-locked, deleted) we throw with the actor's own
- * errorDescription so the audit's failedPlatforms UI surfaces the real
- * reason. If Reels fails but pages succeeds, we still return the profile
- * with an empty videos array — the profile card renders, the content
- * section is empty.
+ * Both actors run in parallel. If the profile actor returns an error
+ * payload (restricted page, region-locked, deleted) we throw with the
+ * actor's own errorDescription so the audit's failedPlatforms UI surfaces
+ * the real reason. If Reels fails but the profile succeeds, we still
+ * return the profile with an empty videos array — the profile card
+ * renders, the content section is empty.
  */
 
 import {
@@ -28,8 +30,14 @@ import {
 import type { ProspectProfile, ProspectVideo } from './types';
 import { collectBioLinks } from './scrape-helpers';
 
-const PROFILE_ACTOR_ID = process.env.FACEBOOK_PAGES_SCRAPER_ACTOR ?? 'apify/facebook-pages-scraper';
+const PROFILE_ACTOR_ID =
+  process.env.FACEBOOK_PAGES_SCRAPER_ACTOR ?? 'cleansyntax/facebook-profile-posts-scraper';
 const REELS_ACTOR_ID = process.env.FACEBOOK_REELS_SCRAPER_ACTOR ?? 'apify/facebook-reels-scraper';
+
+/** Detect the cleansyntax actor's input shape (endpoint + urls_text). */
+function usesCleansyntaxInput(actorId: string): boolean {
+  return /cleansyntax\/facebook-profile-posts-scraper/i.test(actorId);
+}
 
 function getApiKey(): string {
   const token = process.env.APIFY_API_KEY;
@@ -45,50 +53,104 @@ export function extractFacebookPage(url: string): string {
   return `https://www.facebook.com/${cleaned}`;
 }
 
-// ── Pages actor (profile metadata) ──
+// ── Profile actor (metadata) ──
 
+/**
+ * Union of fields returned by both supported profile actors. Field-name
+ * conventions differ (camelCase for `apify/facebook-pages-scraper`,
+ * snake_case for `cleansyntax/facebook-profile-posts-scraper`), and the
+ * cleansyntax actor's output schema isn't exhaustively documented — so
+ * every common naming variant is listed optional and the mapping below
+ * picks the first non-empty match.
+ */
 interface FBPageItem {
-  // Success path (apify/facebook-pages-scraper shape)
+  // Display name variants
   title?: string;
+  name?: string;
+  display_name?: string;
+
+  // Username / vanity slug variants
   pageName?: string;
+  page_name?: string;
+  vanity?: string;
+  username?: string;
+
+  // Profile identifiers + URLs
   pageUrl?: string;
   facebookUrl?: string;
+  profile_url?: string;
+  url?: string;
   pageId?: string;
   facebookId?: string;
+  profile_id?: string;
+
+  // Categorisation + about
   categories?: string[];
   category?: string;
   info?: string[];
+  about?: string;
+  bio?: string;
+  description?: string;
+
+  // Counts — both casings
   likes?: number;
+  likes_count?: number;
   followers?: number;
+  followers_count?: number;
   followings?: number;
+  following?: number;
+  following_count?: number;
+
+  // Imagery
   profilePictureUrl?: string;
+  profile_picture_url?: string;
+  profile_pic_url?: string;
+  avatar?: string;
+  avatar_url?: string;
   coverPhotoUrl?: string;
+  cover_photo_url?: string;
+
+  // External links
   websites?: string[];
   website?: string;
-  phone?: string;
-  creation_date?: string;
-  ad_status?: string;
+
+  // Verification — multiple flag names
+  verified?: boolean;
+  is_verified?: boolean;
   confirmed_owner?: string;
-  // Error path
+
+  // Error path (both actors surface errors in-band)
   error?: string;
   errorDescription?: string;
+  error_description?: string;
 }
 
 async function fetchPageProfile(pageUrl: string, apiKey: string): Promise<FBPageItem | null> {
-  console.log(`[audit] FB pages actor → ${pageUrl}`);
-  const runId = await startApifyActorRun(
-    PROFILE_ACTOR_ID,
-    { startUrls: [{ url: pageUrl }] },
-    apiKey,
-  );
+  const useCleansyntax = usesCleansyntaxInput(PROFILE_ACTOR_ID);
+  console.log(`[audit] FB profile actor (${PROFILE_ACTOR_ID}) → ${pageUrl}`);
+
+  const input = useCleansyntax
+    ? { endpoint: 'details_by_url', urls_text: pageUrl }
+    : { startUrls: [{ url: pageUrl }] };
+
+  const runId = await startApifyActorRun(PROFILE_ACTOR_ID, input, apiKey);
   if (!runId) return null;
   const ok = await waitForApifyRunSuccess(runId, apiKey, 180_000, 3_000);
   if (!ok) {
     const reason = await getApifyRunFailureReason(runId, apiKey);
-    console.warn(`[audit] FB pages actor failed: ${reason}`);
+    console.warn(`[audit] FB profile actor failed: ${reason}`);
     return null;
   }
   const items = (await fetchApifyDatasetItems(runId, apiKey, 5)) as FBPageItem[];
+
+  // Field-drift telemetry — log raw top-level keys once per run so actor
+  // schema changes show up in logs before they silently produce empty cards.
+  if (items[0]) {
+    console.log(
+      `[audit] FB profile raw keys: ${Object.keys(items[0]).join(', ')}`,
+    );
+  }
+
   return items[0] ?? null;
 }
 
@@ -163,10 +225,13 @@ export async function scrapeFacebookProfile(profileUrl: string): Promise<Faceboo
     fetchPageReels(fullUrl, apiKey),
   ]);
 
-  // Pages actor came back with a meta-blocked error payload → surface it so
-  // the failedPlatforms UI renders a descriptive message.
+  // Profile actor came back with a meta-blocked error payload → surface it
+  // so the failedPlatforms UI renders a descriptive message.
   if (pageItem?.error) {
-    const desc = pageItem.errorDescription?.slice(0, 200) ?? pageItem.error;
+    const desc =
+      pageItem.errorDescription?.slice(0, 200) ??
+      pageItem.error_description?.slice(0, 200) ??
+      pageItem.error;
     throw new Error(`Facebook blocked the scrape: ${desc}`);
   }
 
@@ -175,16 +240,29 @@ export async function scrapeFacebookProfile(profileUrl: string): Promise<Faceboo
   }
 
   // Prefer the page's vanity name over the URL slug so capitalisation is
-  // preserved ("Toastique" not "toastiquedc").
-  const displayName = pageItem?.title ?? extractPageSlug(fullUrl);
-  const username = pageItem?.pageName ?? extractPageSlug(fullUrl);
+  // preserved ("Toastique" not "toastiquedc"). Field names differ between
+  // actors — check each naming variant in priority order.
+  const displayName =
+    pageItem?.name ??
+    pageItem?.title ??
+    pageItem?.display_name ??
+    extractPageSlug(fullUrl);
+  const username =
+    pageItem?.page_name ??
+    pageItem?.pageName ??
+    pageItem?.vanity ??
+    pageItem?.username ??
+    extractPageSlug(fullUrl);
 
-  // Bio: the pages actor's `info` array holds lines like "Nike. 39,638,452 likes",
-  // which is too noisy for a bio. Prefer the category label instead, falling
-  // back to the first info line if there's no category.
+  // Bio: the legacy pages actor's `info` array holds lines like "Nike.
+  // 39,638,452 likes", which is too noisy for a bio. Prefer category →
+  // about/bio/description → first info line.
   const bio =
     (pageItem?.categories && pageItem.categories.join(' · ')) ||
     pageItem?.category ||
+    pageItem?.about ||
+    pageItem?.bio ||
+    pageItem?.description ||
     (pageItem?.info?.[0] ?? '');
 
   const profile: ProspectProfile = {
@@ -192,13 +270,35 @@ export async function scrapeFacebookProfile(profileUrl: string): Promise<Faceboo
     username,
     displayName,
     bio,
-    followers: pageItem?.followers ?? pageItem?.likes ?? 0,
-    following: pageItem?.followings ?? 0,
-    likes: pageItem?.likes ?? 0,
+    followers:
+      pageItem?.followers_count ??
+      pageItem?.followers ??
+      pageItem?.likes_count ??
+      pageItem?.likes ??
+      0,
+    following:
+      pageItem?.following_count ??
+      pageItem?.following ??
+      pageItem?.followings ??
+      0,
+    likes: pageItem?.likes_count ?? pageItem?.likes ?? 0,
     postsCount: reelItems.length,
-    avatarUrl: pageItem?.profilePictureUrl ?? null,
-    profileUrl: pageItem?.facebookUrl ?? pageItem?.pageUrl ?? fullUrl,
-    verified: Boolean(pageItem?.confirmed_owner), // best proxy — pages-scraper doesn't return a verified flag
+    avatarUrl:
+      pageItem?.profile_picture_url ??
+      pageItem?.profilePictureUrl ??
+      pageItem?.profile_pic_url ??
+      pageItem?.avatar_url ??
+      pageItem?.avatar ??
+      null,
+    profileUrl:
+      pageItem?.profile_url ??
+      pageItem?.facebookUrl ??
+      pageItem?.pageUrl ??
+      pageItem?.url ??
+      fullUrl,
+    verified: Boolean(
+      pageItem?.is_verified ?? pageItem?.verified ?? pageItem?.confirmed_owner,
+    ),
     bioLinks: collectBioLinks(bio, [
       pageItem?.website,
       ...(pageItem?.websites ?? []),
