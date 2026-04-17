@@ -9,7 +9,6 @@ import {
   Search,
   BarChart3,
   CheckSquare,
-  Send,
   BotMessageSquare,
   ChevronRight,
   Contact,
@@ -17,7 +16,7 @@ import {
   StickyNote,
   Scissors,
   Compass,
-  ClipboardCheck,
+  Radar,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
@@ -55,6 +54,11 @@ interface NavSection {
   items: NavItem[];
 }
 
+// Competitor Tracking behaves like Settings/Edits: the top-level nav item
+// routes to its default child (Organic Social = /admin/analyze-social), and
+// a secondary rail (AdminCompetitorTrackingSidebar) takes over to show the
+// Organic Social / Social Ads / TikTok Shop children. Route kept at
+// /admin/analyze-social to avoid breaking outbound share links.
 const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Dashboard',
@@ -67,13 +71,8 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Intelligence',
     items: [
       { href: '/admin/search/new', label: 'Topic Search', icon: Search },
-      { href: '/admin/analyze-social', label: 'Analyze Social', icon: ClipboardCheck },
-    ],
-  },
-  {
-    label: 'Create',
-    items: [
       { href: '/admin/content-lab', label: 'Content Lab', icon: Compass },
+      { href: '/admin/analyze-social', label: 'Competitor Tracking', icon: Radar },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
       { href: '/admin/notes', label: 'Notes', icon: StickyNote },
     ],
@@ -114,6 +113,12 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
     if (SETTINGS_AREAS.some((p) => pathname === p || pathname.startsWith(p + '/'))) return true;
   }
 
+  // Competitor Tracking — active on any route that shows the CT secondary rail
+  if (href === '/admin/analyze-social') {
+    const CT_AREAS = ['/admin/analyze-social', '/admin/competitor-tracking'];
+    if (CT_AREAS.some((p) => pathname === p || pathname.startsWith(p + '/'))) return true;
+  }
+
   // Handle hrefs with query params (e.g. /admin/pipeline?stage=editing)
   if (href.includes('?')) {
     const [hrefPath, hrefQuery] = href.split('?');
@@ -146,6 +151,10 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/shoots',
   '/admin/knowledge',
   '/admin/analyze-social',
+  // Competitor Tracking secondary rail — all children are admin-only.
+  '/admin/competitor-tracking',
+  '/admin/competitor-tracking/social-ads',
+  '/admin/competitor-tracking/tiktok-shop',
 ]);
 
 /** Items shown but grayed out with "Coming soon" tooltip for viewers */

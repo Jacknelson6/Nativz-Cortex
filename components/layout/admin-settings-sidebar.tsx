@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -9,7 +8,6 @@ import {
   Cpu,
   Code,
 } from 'lucide-react';
-import { useSidebar } from './sidebar';
 
 // ---------------------------------------------------------------------------
 // Route matcher — which admin routes show the Settings secondary rail
@@ -60,14 +58,7 @@ function isItemActive(pathname: string, item: SettingsItem): boolean {
 
 export function AdminSettingsSidebar() {
   const pathname = usePathname();
-  const { setForceCollapsed } = useSidebar();
   const active = isAdminSettingsRoute(pathname);
-
-  // Collapse the main rail while inside Settings.
-  useEffect(() => {
-    setForceCollapsed(active);
-    return () => setForceCollapsed(false);
-  }, [active, setForceCollapsed]);
 
   if (!active) return null;
 

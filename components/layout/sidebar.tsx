@@ -120,17 +120,21 @@ export function SidebarProvider({ defaultOpen = true, children }: SidebarProvide
   }, []);
 
   // Derived "effective open" — what the UI actually renders at.
-  // expanded → always open (unless forceCollapsed overrides)
+  // expanded → always open
   // collapsed → always icon-rail
   // hover → icon-rail when cursor is away, full width when hovered
+  // `forceCollapsed` is retained as a no-op for API compatibility with
+  // secondary rails that still call setForceCollapsed; it intentionally
+  // does NOT override the user's sidebar mode anymore. Previously a
+  // secondary rail would lock the main rail closed even in hover/expanded
+  // mode, which broke hover-to-expand while inside Settings or Edits.
+  void forceCollapsed;
   const effectiveOpen =
-    forceCollapsed
-      ? false
-      : mode === 'expanded'
-        ? true
-        : mode === 'collapsed'
-          ? false
-          : hovered;
+    mode === 'expanded'
+      ? true
+      : mode === 'collapsed'
+        ? false
+        : hovered;
 
   const toggleSidebar = useCallback(() => {
     setMode(effectiveOpen ? 'collapsed' : 'expanded');

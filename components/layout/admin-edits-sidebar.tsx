@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
@@ -12,7 +11,6 @@ import {
   Calendar,
   ChevronLeft,
 } from 'lucide-react';
-import { useSidebar } from './sidebar';
 
 // ---------------------------------------------------------------------------
 // Route matcher — which admin routes show the Edits secondary rail
@@ -70,14 +68,7 @@ export function AdminEditsSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchStage = searchParams.get('stage');
-  const { setForceCollapsed } = useSidebar();
   const active = isAdminEditsRoute(pathname);
-
-  // Collapse the main rail while inside Edits, matching Settings behavior.
-  useEffect(() => {
-    setForceCollapsed(active);
-    return () => setForceCollapsed(false);
-  }, [active, setForceCollapsed]);
 
   if (!active) return null;
 
