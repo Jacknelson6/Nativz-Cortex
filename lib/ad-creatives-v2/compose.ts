@@ -29,16 +29,19 @@ export async function composeV2(concept: ConceptSpec): Promise<RenderResult> {
     }
     photo = await fetchPhotoBuffer(concept.photoSource, concept.photoStoragePath);
 
-    // Strip white studio background when requested, or when a CCC layout is
-    // about to drop a product shot on a non-white brand color. Keeps brand
-    // fidelity without a remove.bg API round-trip.
+    // Strip white studio background when requested, or when a CCC
+    // cutout-photo layout is about to drop a product shot on a non-white
+    // brand color. Scene-based layouts (ccc-scene-*) use full-bleed Gemini
+    // imagery that should never be chroma-keyed.
     const nonWhiteBg =
       typeof concept.background === "string" &&
       concept.background !== "white" &&
       concept.background !== "ivory";
     const isCCC = concept.layoutSlug.startsWith("ccc-");
+    const isScene = concept.layoutSlug.startsWith("ccc-scene-");
     const shouldStrip =
-      concept.stripWhiteBg === true || (isCCC && nonWhiteBg && concept.stripWhiteBg !== false);
+      concept.stripWhiteBg === true ||
+      (isCCC && !isScene && nonWhiteBg && concept.stripWhiteBg !== false);
     if (shouldStrip) {
       photo = await stripWhiteBgToPngBuffer(photo);
     }

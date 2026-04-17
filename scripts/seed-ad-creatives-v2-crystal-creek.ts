@@ -74,6 +74,12 @@ const TEMPLATES: Array<{ layout_slug: string; display_name: string }> = [
   { layout_slug: "ccc-price-and-includes", display_name: "Price & Includes — hard price + what's included" },
   { layout_slug: "ccc-three-reasons", display_name: "Three Reasons — numbered carousel-ready list" },
   { layout_slug: "ccc-comparison", display_name: "Comparison — Them vs Us table with ✗/✓" },
+  // Scene-based layouts — use Gemini hero imagery (butcher block, ranch,
+  // grill, etc.) with text + logo composited on top. Drive product photos
+  // via the /api/ad-creatives-v2/generate-scene endpoint.
+  { layout_slug: "ccc-scene-pillar-bottom", display_name: "Scene + Pillar Bottom — Gemini hero + bottom dark band pillars" },
+  { layout_slug: "ccc-scene-stat-overlay", display_name: "Scene + Stat Overlay — Gemini hero + red left slab with massive stat" },
+  { layout_slug: "ccc-scene-testimonial-overlay", display_name: "Scene + Testimonial Overlay — Gemini hero + centered vignette + 5-star quote" },
 ];
 
 const PALETTE = [

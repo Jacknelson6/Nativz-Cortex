@@ -22,6 +22,9 @@ import { renderCCCTestimonialCard } from "./renderers/ccc-testimonial-card";
 import { renderCCCPriceAndIncludes } from "./renderers/ccc-price-and-includes";
 import { renderCCCThreeReasons } from "./renderers/ccc-three-reasons";
 import { renderCCCComparison } from "./renderers/ccc-comparison";
+import { renderCCCScenePillarBottom } from "./renderers/ccc-scene-pillar-bottom";
+import { renderCCCSceneStatOverlay } from "./renderers/ccc-scene-stat-overlay";
+import { renderCCCSceneTestimonialOverlay } from "./renderers/ccc-scene-testimonial-overlay";
 
 /** Renderer signature — photo is provided only when the layout needs it. */
 export type LayoutRenderer = (
@@ -83,6 +86,20 @@ const LAYOUTS: Record<string, LayoutRequirements> = {
   },
   "ccc-comparison": {
     renderer: (ctx, concept, brand, photo) => renderCCCComparison(ctx, concept, brand, photo),
+    needsPhoto: true,
+  },
+  // --- CCC scene-based layouts (Gemini hero imagery + text/logo composited) ---
+  "ccc-scene-pillar-bottom": {
+    renderer: (ctx, concept, brand, photo) => renderCCCScenePillarBottom(ctx, concept, brand, photo),
+    needsPhoto: true,
+  },
+  "ccc-scene-stat-overlay": {
+    renderer: (ctx, concept, brand, photo) => renderCCCSceneStatOverlay(ctx, concept, brand, photo),
+    needsPhoto: true,
+  },
+  "ccc-scene-testimonial-overlay": {
+    renderer: (ctx, concept, brand, photo) =>
+      renderCCCSceneTestimonialOverlay(ctx, concept, brand, photo),
     needsPhoto: true,
   },
 };
