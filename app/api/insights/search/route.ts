@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runTikTokShopSearch } from '@/lib/tiktok-shop/run-search';
+import { rateLimitByUser } from '@/lib/security/rate-limit';
 
 export const maxDuration = 300;
 
@@ -46,6 +47,21 @@ export async function POST(request: NextRequest) {
       .single();
     if (!userData || !ADMIN_ROLES.includes(userData.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
+    // Each search spawns 2 Apify runs and ~$0.20 in spend — throttle so
+    // nobody can accidentally chain dozens of searches in a minute.
+    const rl = rateLimitByUser(user.id, '/api/insights/search', 'ai');
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded — try again in a minute.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+          },
+        },
+      );
     }
 
     const body = await request.json().catch(() => null);
