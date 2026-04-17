@@ -7,7 +7,6 @@ import {
   Building2,
   Loader2,
   Search,
-  ShoppingBag,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -258,13 +257,8 @@ export function TikTokShopHub({ initialSearches, userFirstName, clients }: Props
             </div>
           </div>
 
-          <p className="mt-3 text-center text-[11px] text-text-muted">
-            <ShoppingBag size={11} className="mr-1 inline -translate-y-[1px]" aria-hidden />
-            ~1–3 minutes · ≈ $0.20 per search
-          </p>
-
           {error && (
-            <p className="mt-3 text-center text-sm text-red-400">{error}</p>
+            <p className="mt-4 text-center text-sm text-red-400">{error}</p>
           )}
         </div>
       </div>
