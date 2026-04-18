@@ -10,6 +10,10 @@ const AddCompetitorSchema = z.object({
   client_id: z.string().uuid(),
   profile_url: z.string().min(1),
   platform: z.enum(['tiktok', 'instagram', 'facebook', 'youtube']).default('tiktok'),
+  // When the caller already knows the handle (e.g. resolved via /resolve), pass
+  // it through so we don't re-parse the URL — fixes non-TikTok adds which were
+  // failing extractTikTokUsername.
+  username: z.string().min(1).max(120).optional(),
 });
 
 /**
@@ -85,8 +89,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
     }
 
-    // Extract username from URL
-    const username = extractTikTokUsername(parsed.data.profile_url);
+    // Extract username from URL (TikTok) or use the one the caller passed in.
+    const username = parsed.data.username ?? extractTikTokUsername(parsed.data.profile_url);
     if (!username) {
       return NextResponse.json({ error: 'Could not extract username from the URL' }, { status: 400 });
     }

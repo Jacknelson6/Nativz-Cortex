@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { RefreshCw, Download } from 'lucide-react';
+import { RefreshCw, Download, Flame } from 'lucide-react';
 import { ComboSelect } from '@/components/ui/combo-select';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,6 +11,8 @@ import { DateRangePicker } from './date-range-picker';
 import { SummaryView } from './summary-view';
 import { GrowthChart } from './growth-chart';
 import { PlatformSection } from './platform-section';
+import { TopPostsView } from './top-posts-view';
+import type { TopPostItem } from '@/lib/types/reporting';
 
 const ReportBuilder = dynamic(() => import('./report-builder').then(m => ({ default: m.ReportBuilder })));
 
@@ -34,6 +36,29 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
   } = useReportingData(initialClientId);
 
   const [reportOpen, setReportOpen] = useState(false);
+
+  // Dedicated top-performers fetch so the panel is always visible under the
+  // summary cards, independent of whatever tab the rest of the dashboard
+  // (SummaryView / TopPostsView) is on.
+  const [topPosts, setTopPosts] = useState<TopPostItem[]>([]);
+  const [topPostsLoading, setTopPostsLoading] = useState(false);
+  const [topPostsLimit, setTopPostsLimit] = useState(3);
+
+  useEffect(() => {
+    if (!selectedClientId || !dateRange) return;
+    setTopPostsLoading(true);
+    const params = new URLSearchParams({
+      clientId: selectedClientId,
+      startDate: dateRange.start,
+      endDate: dateRange.end,
+      limit: String(topPostsLimit),
+    });
+    fetch(`/api/reporting/top-posts?${params}`)
+      .then((res) => (res.ok ? res.json() : { posts: [] }))
+      .then((data) => setTopPosts(data.posts ?? []))
+      .catch(() => setTopPosts([]))
+      .finally(() => setTopPostsLoading(false));
+  }, [selectedClientId, dateRange?.start, dateRange?.end, topPostsLimit]);
 
   if (loading) {
     return (
@@ -111,6 +136,20 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
 
           {/* Aggregate summary cards */}
           <SummaryView data={summary} loading={dataLoading} />
+
+          {/* Top performers — always visible under the summary. */}
+          <div className="space-y-3 rounded-xl border border-nativz-border bg-surface p-5">
+            <div className="flex items-center gap-2">
+              <Flame size={16} className="text-orange-400" />
+              <h2 className="text-sm font-semibold text-text-primary">Top performing posts</h2>
+            </div>
+            <TopPostsView
+              posts={topPosts}
+              loading={topPostsLoading}
+              limit={topPostsLimit}
+              onLimitChange={setTopPostsLimit}
+            />
+          </div>
 
           {/* Aggregate growth chart */}
           <GrowthChart data={summary?.chart ?? []} loading={dataLoading} />

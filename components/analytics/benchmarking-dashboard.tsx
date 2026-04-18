@@ -13,7 +13,11 @@ import {
   Loader2,
   X,
   BarChart3,
+  Globe,
+  Check,
 } from 'lucide-react';
+import { PlatformBadge } from '@/components/reporting/platform-badge';
+import type { SocialPlatform } from '@/lib/types/reporting';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -47,6 +51,13 @@ interface Competitor {
   snapshots: Snapshot[];
 }
 
+interface ResolvedSocials {
+  kind: 'socials';
+  domain: string;
+  website_url: string;
+  socials: Array<{ platform: string; username: string; profile_url: string }>;
+}
+
 interface BenchmarkingDashboardProps {
   clientId: string;
   clientName: string;
@@ -57,8 +68,10 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
   const [loading, setLoading] = useState(true);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addUrl, setAddUrl] = useState('');
+  const [addInput, setAddInput] = useState('');
   const [adding, setAdding] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [resolved, setResolved] = useState<ResolvedSocials | null>(null);
   const [discovering, setDiscovering] = useState(false);
   const [suggestions, setSuggestions] = useState<{ username: string; reason: string }[] | null>(null);
 
@@ -77,38 +90,52 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
     fetchCompetitors();
   }, [fetchCompetitors]);
 
-  async function handleAdd() {
-    if (!addUrl.trim()) return;
-    setAdding(true);
+  async function handleResolve() {
+    const raw = addInput.trim();
+    if (!raw) return;
+    setResolving(true);
+    setResolved(null);
     try {
-      const res = await fetch('/api/analytics/competitors', {
+      const res = await fetch('/api/analytics/competitors/resolve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: clientId, profile_url: addUrl.trim() }),
+        body: JSON.stringify({ client_id: clientId, input: raw }),
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error ?? 'Failed to add');
+        toast.error(data.error ?? 'Could not parse that input');
         return;
       }
-      toast.success('Competitor added');
-      setAddUrl('');
-      setShowAddForm(false);
-      await fetchCompetitors();
+      if (data.kind === 'profile') {
+        // Direct social URL — skip the picker and add straight away.
+        await addProfile(data.platform, data.username, data.profile_url);
+        setAddInput('');
+        setShowAddForm(false);
+      } else {
+        setResolved(data);
+        if ((data.socials ?? []).length === 0) {
+          toast.message('No social profiles found on that site.');
+        }
+      }
     } catch {
-      toast.error('Failed to add competitor');
+      toast.error('Failed to resolve input');
     } finally {
-      setAdding(false);
+      setResolving(false);
     }
   }
 
-  async function handleAddFromSuggestion(username: string) {
+  async function addProfile(platform: string, username: string, profileUrl: string) {
     setAdding(true);
     try {
       const res = await fetch('/api/analytics/competitors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: clientId, profile_url: `https://www.tiktok.com/@${username}` }),
+        body: JSON.stringify({
+          client_id: clientId,
+          profile_url: profileUrl,
+          platform,
+          username,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -116,13 +143,17 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
         return;
       }
       toast.success(`@${username} added`);
-      setSuggestions(prev => prev?.filter(s => s.username !== username) ?? null);
       await fetchCompetitors();
     } catch {
       toast.error('Failed to add');
     } finally {
       setAdding(false);
     }
+  }
+
+  async function handleAddFromSuggestion(username: string) {
+    await addProfile('tiktok', username, `https://www.tiktok.com/@${username}`);
+    setSuggestions(prev => prev?.filter(s => s.username !== username) ?? null);
   }
 
   async function handleRefresh(competitorId: string) {
@@ -202,26 +233,65 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
         </Button>
       </div>
 
-      {/* Add form */}
+      {/* Unified add form — accepts a social URL OR a website domain.
+          A website gets crawled for socials, then the user picks. */}
       {showAddForm && (
-        <div className="rounded-xl border border-nativz-border bg-surface p-4">
+        <div className="rounded-xl border border-nativz-border bg-surface p-4 space-y-3">
           <div className="flex items-center gap-2">
+            <Globe size={14} className="text-text-muted shrink-0" />
             <input
               type="text"
-              value={addUrl}
-              onChange={(e) => setAddUrl(e.target.value)}
-              placeholder="TikTok profile URL (e.g. tiktok.com/@brand)"
+              value={addInput}
+              onChange={(e) => setAddInput(e.target.value)}
+              placeholder="Website (acme.com) or social URL (tiktok.com/@brand)"
               className="flex-1 rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
               autoFocus
-              onKeyDown={(e) => { if (e.key === 'Enter') void handleAdd(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !resolving) void handleResolve(); }}
             />
-            <Button size="sm" onClick={handleAdd} disabled={adding || !addUrl.trim()}>
-              {adding ? <Loader2 size={14} className="animate-spin" /> : 'Add'}
+            <Button size="sm" onClick={handleResolve} disabled={resolving || !addInput.trim()}>
+              {resolving ? <Loader2 size={14} className="animate-spin" /> : 'Find'}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => { setShowAddForm(false); setAddUrl(''); }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setShowAddForm(false); setAddInput(''); setResolved(null); }}
+            >
               <X size={14} />
             </Button>
           </div>
+
+          {resolved && resolved.kind === 'socials' && (
+            <div className="space-y-2">
+              <p className="text-xs text-text-muted">
+                Found on <span className="text-text-secondary">{resolved.domain}</span>:
+              </p>
+              {resolved.socials.length === 0 ? (
+                <p className="text-xs text-text-muted">No social profiles on that page.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {resolved.socials.map((s) => (
+                    <div
+                      key={`${s.platform}-${s.username}`}
+                      className="flex items-center justify-between rounded-lg border border-nativz-border bg-background px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <PlatformBadge platform={s.platform as SocialPlatform} size="sm" showLabel={false} />
+                        <span className="text-sm text-text-primary">@{s.username}</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={adding}
+                        onClick={() => addProfile(s.platform, s.username, s.profile_url)}
+                      >
+                        <Check size={12} /> Add
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -365,8 +435,13 @@ function CompetitorCard({
             </div>
           )}
           <div>
-            <p className="text-sm font-medium text-text-primary">
+            <p className="text-sm font-medium text-text-primary flex items-center gap-2">
               {competitor.display_name ?? competitor.username}
+              <PlatformBadge
+                platform={(competitor.platform ?? 'tiktok') as SocialPlatform}
+                size="sm"
+                showLabel={false}
+              />
             </p>
             <a
               href={competitor.profile_url}
@@ -410,9 +485,16 @@ function CompetitorCard({
             </div>
           )}
 
-          <p className="text-[10px] text-text-muted">
-            Last updated: {new Date(snap.scraped_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-          </p>
+          {(() => {
+            const ageMs = Date.now() - new Date(snap.scraped_at).getTime();
+            const stale = ageMs > 7 * 24 * 60 * 60 * 1000;
+            return (
+              <p className={`text-[10px] ${stale ? 'text-amber-400' : 'text-text-muted'}`}>
+                Last updated: {new Date(snap.scraped_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                {stale && <span className="ml-1.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 font-medium">stale</span>}
+              </p>
+            );
+          })()}
         </>
       ) : (
         <div className="py-4 text-center">

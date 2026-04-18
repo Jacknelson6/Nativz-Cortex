@@ -17,6 +17,7 @@ import {
   TrendingUp,
   MessagesSquare,
   ScanSearch,
+  Receipt,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
@@ -80,6 +81,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Manage',
     items: [
+      { href: '/admin/accounting', label: 'Accounting', icon: Receipt },
       { href: '/admin/clients', label: 'Clients', icon: Contact },
       { href: '/admin/pipeline', label: 'Edits', icon: Scissors },
       { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
@@ -141,6 +143,7 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
 /** Items completely hidden from portal (viewer) users */
 const ADMIN_ONLY_HREFS = new Set([
   '/admin/dashboard',
+  '/admin/accounting',
   '/admin/tasks',
   '/admin/pipeline',
   '/admin/scheduler',

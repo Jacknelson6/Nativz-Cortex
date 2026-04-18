@@ -31,6 +31,16 @@ function formatDate(dateStr: string | null): string {
 
 const limitOptions = [3, 5, 10];
 
+function platformTint(platform: string): string {
+  switch (platform) {
+    case 'tiktok': return 'linear-gradient(135deg, #25F4EE 0%, #000000 50%, #FE2C55 100%)';
+    case 'instagram': return 'linear-gradient(135deg, #FDC830 0%, #F37335 50%, #C13584 100%)';
+    case 'facebook': return '#1877F2';
+    case 'youtube': return '#FF0300';
+    default: return '#2a2a2a';
+  }
+}
+
 interface TopPostsViewProps {
   posts: TopPostItem[];
   loading: boolean;
@@ -100,8 +110,14 @@ export function TopPostsView({
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-text-muted">
-                      <Eye size={32} />
+                    <div
+                      className="flex h-full w-full items-center justify-center"
+                      style={{
+                        background:
+                          platformTint(post.platform),
+                      }}
+                    >
+                      <Eye size={28} className="text-white/70" />
                     </div>
                   )}
                 </div>

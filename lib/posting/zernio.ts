@@ -105,6 +105,24 @@ function pickNum(obj: Record<string, unknown> | null, key: string): number {
   return typeof v === 'number' && !Number.isNaN(v) ? v : 0;
 }
 
+/** Normalise an audience-insights bucket array across the shapes Zernio may return. */
+function toBuckets(
+  raw: unknown,
+  nameKey: string,
+): Array<{ name: string; percent: number }> {
+  if (!Array.isArray(raw)) return [];
+  const out: Array<{ name: string; percent: number }> = [];
+  for (const item of raw) {
+    const r = asRecord(item);
+    if (!r) continue;
+    const name = pickString(r, nameKey, 'label', 'name');
+    if (!name) continue;
+    const percent = pickNum(r, 'percent') || pickNum(r, 'percentage') || pickNum(r, 'share');
+    out.push({ name, percent });
+  }
+  return out;
+}
+
 /** Create a Zernio profile for a client (stored as clients.late_profile_id). */
 export async function createZernioProfile(name: string): Promise<string> {
   const data = await zernioRequest<Record<string, unknown>>('/profiles', {
@@ -695,6 +713,93 @@ export class ZernioPostingService implements PostingService {
       saves: p.analytics?.saves ?? 0,
       views: p.analytics?.views ?? 0,
     }));
+  }
+
+  /**
+   * Fetch audience insights (demographics, reach, impressions) for an account.
+   * Returns `null` when the endpoint 404s — some Zernio plans / platforms don't
+   * expose this data. Callers should treat null as "unavailable", not as an
+   * error.
+   */
+  async getAudienceInsights(accountId: string): Promise<{
+    followersTotal: number | null;
+    followersCountry: Array<{ name: string; percent: number }>;
+    followersCity: Array<{ name: string; percent: number }>;
+    followersAge: Array<{ name: string; percent: number }>;
+    followersGender: Array<{ name: string; percent: number }>;
+    reach: number | null;
+    impressions: number | null;
+  } | null> {
+    const paths = [
+      `/accounts/${accountId}/audience`,
+      `/insights/account?accountId=${encodeURIComponent(accountId)}`,
+    ];
+
+    for (const path of paths) {
+      try {
+        const raw = await zernioRequest<unknown>(path);
+        const root = asRecord(raw);
+        if (!root) continue;
+        const data = asRecord(root.audience) ?? asRecord(root.data) ?? root;
+
+        return {
+          followersTotal:
+            pickNum(data, 'followersTotal') || pickNum(data, 'followers') || null,
+          followersCountry: toBuckets(data.countries ?? data.country, 'code'),
+          followersCity: toBuckets(data.cities ?? data.city, 'name'),
+          followersAge: toBuckets(data.ageBuckets ?? data.age, 'bucket'),
+          followersGender: toBuckets(data.gender, 'gender'),
+          reach: pickNum(data, 'reach') || null,
+          impressions: pickNum(data, 'impressions') || null,
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('404') || msg.includes('501')) {
+          continue; // try next path
+        }
+        console.warn(`[zernio] audience insights failed for ${accountId}:`, msg);
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Daily follower counts for the last N days. Falls back to `null` when
+   * Zernio doesn't expose this endpoint — the caller can synthesize the series
+   * from our own platform_snapshots history.
+   */
+  async getFollowerTimeSeries(
+    accountId: string,
+    days = 30,
+  ): Promise<Array<{ date: string; followers: number }> | null> {
+    try {
+      const raw = await zernioRequest<unknown>(
+        `/accounts/${accountId}/followers?days=${days}`,
+      );
+      const root = asRecord(raw);
+      const list =
+        (root?.series as unknown[] | undefined) ??
+        (root?.data as unknown[] | undefined) ??
+        (Array.isArray(raw) ? (raw as unknown[]) : []);
+      if (!Array.isArray(list) || list.length === 0) return null;
+      return list
+        .map((item) => {
+          const r = asRecord(item);
+          if (!r) return null;
+          const date = pickString(r, 'date', 'day', 'timestamp');
+          if (!date) return null;
+          const followers = pickNum(r, 'followers') || pickNum(r, 'count');
+          return { date: date.split('T')[0], followers };
+        })
+        .filter((x): x is { date: string; followers: number } => x !== null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404') && !msg.includes('501')) {
+        console.warn(`[zernio] follower series failed for ${accountId}:`, msg);
+      }
+      return null;
+    }
   }
 
   async retryPost(externalPostId: string): Promise<PublishResult> {

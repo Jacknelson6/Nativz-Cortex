@@ -1,0 +1,140 @@
+import { redirect } from 'next/navigation';
+import Link from 'next/link';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { currentPeriod, labelFor, centsToDollars } from '@/lib/accounting/periods';
+
+interface PeriodRow {
+  id: string;
+  start_date: string;
+  end_date: string;
+  half: 'first-half' | 'second-half';
+  status: 'draft' | 'locked' | 'paid';
+  notes: string | null;
+  locked_at: string | null;
+  paid_at: string | null;
+}
+
+interface EntryRow {
+  period_id: string;
+  amount_cents: number;
+  margin_cents: number;
+}
+
+export default async function AccountingIndexPage() {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/admin/login');
+  const adminClient = createAdminClient();
+  const { data: userRow } = await adminClient
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+  if (userRow?.role !== 'admin') redirect('/admin/dashboard');
+
+  // Ensure the current period exists so a fresh install isn't empty.
+  const cur = currentPeriod();
+  await adminClient
+    .from('payroll_periods')
+    .upsert(
+      { start_date: cur.startDate, end_date: cur.endDate, half: cur.half, status: 'draft', created_by: user.id },
+      { onConflict: 'start_date,end_date', ignoreDuplicates: true },
+    );
+
+  const { data: periods } = await adminClient
+    .from('payroll_periods')
+    .select('id, start_date, end_date, half, status, notes, locked_at, paid_at')
+    .order('start_date', { ascending: false })
+    .limit(24);
+
+  const periodRows = (periods ?? []) as PeriodRow[];
+  const ids = periodRows.map((p) => p.id);
+  const totals: Record<string, { amount: number; margin: number; count: number }> = {};
+  if (ids.length > 0) {
+    const { data: entries } = await adminClient
+      .from('payroll_entries')
+      .select('period_id, amount_cents, margin_cents')
+      .in('period_id', ids);
+    for (const e of (entries ?? []) as EntryRow[]) {
+      const row = (totals[e.period_id] ??= { amount: 0, margin: 0, count: 0 });
+      row.amount += e.amount_cents ?? 0;
+      row.margin += e.margin_cents ?? 0;
+      row.count += 1;
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-5xl p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-text-primary">Accounting</h1>
+        <p className="text-sm text-text-muted mt-1">
+          Bi-monthly payroll periods. First half (1–15) and second half (16–end of month).
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-background/50 text-text-muted">
+            <tr>
+              <th className="text-left font-medium px-4 py-3">Period</th>
+              <th className="text-left font-medium px-4 py-3">Status</th>
+              <th className="text-right font-medium px-4 py-3">Entries</th>
+              <th className="text-right font-medium px-4 py-3">Payouts</th>
+              <th className="text-right font-medium px-4 py-3">Margin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {periodRows.map((p) => {
+              const t = totals[p.id] ?? { amount: 0, margin: 0, count: 0 };
+              return (
+                <tr key={p.id} className="border-t border-nativz-border hover:bg-surface-hover/50">
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/admin/accounting/${p.id}`}
+                      className="text-text-primary font-medium hover:text-accent-text"
+                    >
+                      {labelFor(p.start_date, p.half)}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusPill status={p.status} />
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
+                    {t.count}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-text-primary">
+                    {centsToDollars(t.amount)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
+                    {centsToDollars(t.margin)}
+                  </td>
+                </tr>
+              );
+            })}
+            {periodRows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-text-muted">
+                  No periods yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ status }: { status: 'draft' | 'locked' | 'paid' }) {
+  const config = {
+    draft: 'bg-surface-hover text-text-secondary',
+    locked: 'bg-amber-500/15 text-amber-400',
+    paid: 'bg-emerald-500/15 text-emerald-400',
+  }[status];
+  return (
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${config}`}>
+      {status}
+    </span>
+  );
+}

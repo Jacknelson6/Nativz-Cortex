@@ -3,20 +3,14 @@
 import { Eye, UserPlus, Heart, TrendingUp, FileText } from 'lucide-react';
 import { StatCard } from '@/components/shared/stat-card';
 import { GrowthChart } from './growth-chart';
-import type { PlatformSummary, ChartDataPoint } from '@/lib/types/reporting';
+import { PlatformBadge } from './platform-badge';
+import type { PlatformSummary, ChartDataPoint, SocialPlatform } from '@/lib/types/reporting';
 
 const PLATFORM_LABELS: Record<string, string> = {
   facebook: 'Facebook',
   instagram: 'Instagram',
   tiktok: 'TikTok',
   youtube: 'YouTube',
-};
-
-const PLATFORM_COLORS: Record<string, string> = {
-  facebook: '#1877F2',
-  instagram: '#E4405F',
-  tiktok: '#000000',
-  youtube: '#FF0000',
 };
 
 function formatNumber(n: number): string {
@@ -36,9 +30,10 @@ export function PlatformSection({ summary, chartData }: PlatformSectionProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <div
-          className="h-3 w-3 rounded-full"
-          style={{ backgroundColor: PLATFORM_COLORS[summary.platform] ?? '#6366f1' }}
+        <PlatformBadge
+          platform={summary.platform as SocialPlatform}
+          showLabel={false}
+          size="sm"
         />
         <h3 className="text-lg font-semibold text-text-primary">{label}</h3>
         {summary.username && (

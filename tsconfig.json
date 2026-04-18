@@ -41,6 +41,8 @@
     "scripts",
     "playwright.config.ts",
     "app/playwright.config.ts",
-    "scripts/assets/playwright.config.ts"
+    "scripts/assets/playwright.config.ts",
+    "OpenCassava",
+    "hyperframes-explainer"
   ]
 }

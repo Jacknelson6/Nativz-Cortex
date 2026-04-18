@@ -48,13 +48,16 @@ export interface NotificationPreferences {
   };
 }
 
+// Automatic performance notifications default to OFF until the detection
+// pipeline is QA'd end-to-end. Turn them on per-user from Settings →
+// Notifications once you've verified the velocity + milestone jobs.
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   inApp: true,
   email: true,
-  engagementOutlier: { enabled: true, threshold: 2 },
-  followerMilestone: { enabled: true, interval: 1000 },
+  engagementOutlier: { enabled: false, threshold: 2 },
+  followerMilestone: { enabled: false, interval: 1000 },
   viewsThreshold: { enabled: false, minViews: 10000 },
   likesThreshold: { enabled: false, minLikes: 500 },
-  engagementSpike: { enabled: true, percentIncrease: 50 },
-  trendingPost: { enabled: true, viewsPercentIncrease: 100, minViewGain: 500 },
+  engagementSpike: { enabled: false, percentIncrease: 50 },
+  trendingPost: { enabled: false, viewsPercentIncrease: 100, minViewGain: 500 },
 };
