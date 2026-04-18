@@ -12,6 +12,7 @@ import { SummaryView } from './summary-view';
 import { GrowthChart } from './growth-chart';
 import { PlatformSection } from './platform-section';
 import { TopPostsView } from './top-posts-view';
+import { AudienceInsightsCard } from './audience-insights-card';
 import type { TopPostItem } from '@/lib/types/reporting';
 
 const ReportBuilder = dynamic(() => import('./report-builder').then(m => ({ default: m.ReportBuilder })));
@@ -150,6 +151,9 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
               onLimitChange={setTopPostsLimit}
             />
           </div>
+
+          {/* Audience insights — auto-hides when Zernio doesn't return data. */}
+          {selectedClientId && <AudienceInsightsCard clientId={selectedClientId} />}
 
           {/* Aggregate growth chart */}
           <GrowthChart data={summary?.chart ?? []} loading={dataLoading} />
