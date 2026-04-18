@@ -8,12 +8,18 @@ import {
   MessageSquare,
   Send,
   Sparkles,
-  Wrench,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/ai/markdown';
+import { ToolCard, type ToolResultData } from '@/components/ai/tool-card';
 import { cn } from '@/lib/utils/cn';
+
+interface ToolResultEntry {
+  toolCallId: string;
+  toolName: string;
+  result: ToolResultData;
+}
 
 export type AnalysisScopeType = 'audit' | 'tiktok_shop_search' | 'topic_search';
 
@@ -30,8 +36,8 @@ interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  /** Loose list of tools the assistant called this turn, for a small indicator chip. */
-  toolsUsed?: string[];
+  /** Rich tool-call results — same shape Strategy Lab uses via <ToolCard />. */
+  toolResults?: ToolResultEntry[];
   /** True while this assistant message is still streaming. */
   streaming?: boolean;
 }
@@ -166,7 +172,7 @@ export function AnalysisChatDrawer({
         const decoder = new TextDecoder();
         let buffer = '';
         let accText = '';
-        const toolsUsed: string[] = [];
+        const toolResults: ToolResultEntry[] = [];
 
         while (true) {
           const { done, value } = await reader.read();
@@ -184,16 +190,20 @@ export function AnalysisChatDrawer({
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantMsg.id
-                      ? { ...m, content: accText, toolsUsed: [...toolsUsed], streaming: true }
+                      ? { ...m, content: accText, toolResults: [...toolResults], streaming: true }
                       : m,
                   ),
                 );
               } else if (chunk.type === 'tool_result' && typeof chunk.toolName === 'string') {
-                if (!toolsUsed.includes(chunk.toolName)) toolsUsed.push(chunk.toolName);
+                toolResults.push({
+                  toolCallId: String(chunk.toolCallId ?? `${chunk.toolName}-${toolResults.length}`),
+                  toolName: chunk.toolName,
+                  result: (chunk.result ?? { success: true }) as ToolResultData,
+                });
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantMsg.id
-                      ? { ...m, content: accText, toolsUsed: [...toolsUsed], streaming: true }
+                      ? { ...m, content: accText, toolResults: [...toolResults], streaming: true }
                       : m,
                   ),
                 );
@@ -209,7 +219,7 @@ export function AnalysisChatDrawer({
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsg.id
-              ? { ...m, content: accText || '(no response)', toolsUsed, streaming: false }
+              ? { ...m, content: accText || '(no response)', toolResults, streaming: false }
               : m,
           ),
         );
@@ -336,16 +346,10 @@ export function AnalysisChatDrawer({
                   <Loader2 size={12} className="ml-1 inline animate-spin text-accent-text" aria-hidden />
                 )}
               </div>
-              {m.role === 'assistant' && m.toolsUsed && m.toolsUsed.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {m.toolsUsed.map((t) => (
-                    <span
-                      key={t}
-                      className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-background px-2 py-0.5 text-[10px] font-medium text-text-muted"
-                    >
-                      <Wrench size={9} aria-hidden />
-                      {t}
-                    </span>
+              {m.role === 'assistant' && m.toolResults && m.toolResults.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  {m.toolResults.map((tr) => (
+                    <ToolCard key={tr.toolCallId} toolName={tr.toolName} result={tr.result} />
                   ))}
                 </div>
               )}
