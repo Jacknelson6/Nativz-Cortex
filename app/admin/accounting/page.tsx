@@ -66,11 +66,19 @@ export default async function AccountingIndexPage() {
 
   return (
     <div className="mx-auto max-w-5xl p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Accounting</h1>
-        <p className="text-sm text-text-muted mt-1">
-          Bi-monthly payroll periods. First half (1–15) and second half (16–end of month).
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-text-primary">Accounting</h1>
+          <p className="text-sm text-text-muted mt-1">
+            Bi-monthly payroll periods. First half (1–15) and second half (16–end of month).
+          </p>
+        </div>
+        <Link
+          href="/admin/accounting/year"
+          className="rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-hover"
+        >
+          Year view
+        </Link>
       </div>
 
       <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
