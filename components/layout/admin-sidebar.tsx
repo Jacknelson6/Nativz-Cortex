@@ -48,6 +48,10 @@ interface NavItem {
   children?: { href: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[];
   /** When true, item is grayed out and non-clickable with "Coming soon" tooltip */
   comingSoon?: boolean;
+  /** Stable identifier for hide-preferences and tests — survives portal
+   *  href remapping. Defaults to the admin href, carried through when a
+   *  viewer renders the same item at a different URL. */
+  navKey?: string;
 }
 
 interface NavSection {
@@ -154,6 +158,10 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/shoots',
   '/admin/knowledge',
   '/admin/analyze-social',
+  // Settings is reachable from the avatar popover — it doesn't need its
+  // own nav row on the portal. Keeping it on the admin side where the gear
+  // is the primary entry point to the agency settings secondary rail.
+  '/admin/settings/ai',
   // Competitor Tracking secondary rail — all children are admin-only.
   '/admin/competitor-tracking',
   '/admin/competitor-tracking/social-ads',
@@ -193,6 +201,10 @@ function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSec
           ? '#'
           : (portalRewrite ?? item.href.replace('/admin/', `${prefix}/`)),
         comingSoon: isComingSoon,
+        // Preserve the admin href as navKey so sidebar-hide preferences
+        // stay stable whether the user is looking at the admin or portal
+        // shell.
+        navKey: item.href,
         children: isComingSoon ? undefined : item.children?.filter(c => !ADMIN_ONLY_HREFS.has(c.href)).map(c => ({
           ...c,
           href: PORTAL_HREF_REWRITES[c.href] ?? c.href.replace('/admin/', `${prefix}/`),
@@ -339,7 +351,7 @@ export function AdminSidebar({
         {getNavSectionsForRole(role, routePrefix)
           .map((section) => ({
             ...section,
-            items: section.items.filter((item) => !hiddenSet.has(item.href)),
+            items: section.items.filter((item) => !hiddenSet.has(item.navKey ?? item.href)),
           }))
           .filter((section) => section.items.length > 0)
           .map((section, idx) => (

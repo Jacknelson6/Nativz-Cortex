@@ -35,12 +35,16 @@ const ADMIN_SIDEBAR_ITEMS = [
   ] },
 ] as const;
 
+// Portal catalog stores ADMIN-side hrefs as the stable navKey (that's
+// what the sidebar filter checks against). The portal shell remaps them
+// to /portal/* at render time. Settings is reachable from the avatar
+// popover on the portal so it doesn't appear in this list.
 const PORTAL_SIDEBAR_ITEMS = [
   { section: '', items: [
-    { href: '/portal/search/new', label: 'Research' },
-    { href: '/portal/competitor-tracking/tiktok-shop', label: 'TikTok Shop' },
-    { href: '/portal/strategy-lab', label: 'Strategy Lab' },
-    { href: '/portal/settings', label: 'Settings', unhidable: true },
+    { href: '/admin/analytics', label: 'Analytics' },
+    { href: '/admin/search/new', label: 'Trend Finder' },
+    { href: '/admin/strategy-lab', label: 'Strategy Lab' },
+    { href: '/admin/notes', label: 'Notes' },
   ] },
 ] as const;
 

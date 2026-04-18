@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Settings, LogOut, User, Eye } from 'lucide-react';
+import { ClientViewPicker } from './client-view-picker';
 
 interface SidebarAccountProps {
   userName?: string;
@@ -29,6 +30,7 @@ export function SidebarAccount({
 }: SidebarAccountProps) {
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -123,14 +125,17 @@ export function SidebarAccount({
         Account settings
       </Link>
       {clientViewHref && (
-        <Link
-          href={clientViewHref}
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors whitespace-nowrap"
+        <button
+          type="button"
+          onClick={() => {
+            setClientPickerOpen(true);
+            setOpen(false);
+          }}
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors whitespace-nowrap cursor-pointer"
         >
           <Eye size={15} />
           Client view
-        </Link>
+        </button>
       )}
       <button
         onClick={handleLogout}
@@ -146,6 +151,12 @@ export function SidebarAccount({
   return (
     <div ref={containerRef} className="relative">
       {popoverNode && createPortal(popoverNode, document.body)}
+      {clientViewHref && (
+        <ClientViewPicker
+          open={clientPickerOpen}
+          onClose={() => setClientPickerOpen(false)}
+        />
+      )}
 
       <button
         ref={buttonRef}
