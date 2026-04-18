@@ -220,6 +220,18 @@ export default async function PortalLayout({
   const userName = cached?.fullName || user.email || '';
   const avatarUrl = cached?.avatarUrl || null;
 
+  // Read sidebar preferences uncached so toggles apply on next page load.
+  let hiddenSidebarItems: string[] = [];
+  try {
+    const adminClient = createAdminClient();
+    const { data: prefs } = await adminClient
+      .from('users')
+      .select('hidden_sidebar_items')
+      .eq('id', user.id)
+      .single();
+    hiddenSidebarItems = (prefs?.hidden_sidebar_items as string[] | null) ?? [];
+  } catch { /* silent */ }
+
   // Lock brand mode: domain ALWAYS wins — Nativz domain = Nativz brand, AC domain = AC brand.
   // Never fall back to the client's agency field; a Nativz-domain user must never see AC branding.
   const domainAgency = headersList.get('x-agency') as 'anderson' | 'nativz' | null;
@@ -244,6 +256,7 @@ export default async function PortalLayout({
           settingsPath="/portal/settings"
           brands={brandData.brands}
           activeBrandId={brandData.activeBrandId}
+          hiddenSidebarItems={hiddenSidebarItems}
         />
         <SidebarInset>
           <AdminHeader />

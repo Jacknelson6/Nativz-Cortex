@@ -231,7 +231,17 @@ interface AdminSidebarProps {
   brands?: PortalBrand[];
   /** Portal multi-brand: currently active brand ID */
   activeBrandId?: string | null;
+  /** Per-user hidden nav items (hrefs). Settings + Dashboard can't be hidden
+   *  — they're filtered out of the hidden list to keep an escape hatch. */
+  hiddenSidebarItems?: string[];
 }
+
+/** Items that can never be hidden — there'd be no way back to Settings otherwise. */
+const UNHIDABLE_HREFS = new Set([
+  '/admin/settings/ai',
+  '/admin/dashboard',
+  '/portal/settings',
+]);
 
 export function AdminSidebar({
   userName,
@@ -242,7 +252,11 @@ export function AdminSidebar({
   settingsPath = '/admin/settings',
   brands,
   activeBrandId,
+  hiddenSidebarItems = [],
 }: AdminSidebarProps) {
+  const hiddenSet = new Set(
+    hiddenSidebarItems.filter((href) => !UNHIDABLE_HREFS.has(href)),
+  );
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -322,7 +336,13 @@ export function AdminSidebar({
 
       {/* Navigation — Supabase-style: thin dividers between groups, no labels */}
       <SidebarContent>
-        {getNavSectionsForRole(role, routePrefix).map((section, idx) => (
+        {getNavSectionsForRole(role, routePrefix)
+          .map((section) => ({
+            ...section,
+            items: section.items.filter((item) => !hiddenSet.has(item.href)),
+          }))
+          .filter((section) => section.items.length > 0)
+          .map((section, idx) => (
           <SidebarGroup key={section.label}>
             {idx > 0 && <SidebarSeparator />}
             <SidebarMenu>

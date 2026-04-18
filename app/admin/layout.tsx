@@ -56,12 +56,25 @@ export default async function AdminLayout({
       avatarUrl = null;
     }
 
+    // Read sidebar preferences uncached — the 5-min cache on `getCachedUser`
+    // would mask toggle changes until it expires.
+    let hiddenSidebarItems: string[] = [];
+    try {
+      const adminClient = createAdminClient();
+      const { data: prefs } = await adminClient
+        .from('users')
+        .select('hidden_sidebar_items')
+        .eq('id', user.id)
+        .single();
+      hiddenSidebarItems = (prefs?.hidden_sidebar_items as string[] | null) ?? [];
+    } catch { /* silent — ship without filtering */ }
+
     return (
       <BackgroundSearchProvider>
         <SidebarProvider>
           <EasterEgg />
           <CommandPalette />
-          <AdminSidebar userName={userName} avatarUrl={avatarUrl} />
+          <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} />
           <AdminSettingsSidebar />
           <AdminEditsSidebar />
           <AdminCompetitorTrackingSidebar />

@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { PasswordChangeForm } from '@/components/portal/password-change-form';
 import { PortalSettingsForm } from '@/components/portal/portal-settings-form';
+import { SidebarPreferencesSection } from '@/components/settings/sidebar-preferences';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -70,6 +71,11 @@ export default async function PortalSettingsPage() {
             <PasswordChangeForm />
           </Card>
         )}
+
+        <div>
+          <h2 className="text-base font-semibold text-text-primary mb-4">Sidebar</h2>
+          <SidebarPreferencesSection role="viewer" />
+        </div>
       </div>
     );
   } catch (error) {
