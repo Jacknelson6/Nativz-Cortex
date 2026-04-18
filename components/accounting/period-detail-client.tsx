@@ -15,6 +15,7 @@ import {
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { centsToDollars, dollarsToCents } from '@/lib/accounting/periods';
+import { EmployeeDrawer } from './employee-drawer';
 
 // DB still accepts 'override' and 'misc' (schema unchanged). They're
 // just not exposed as tabs in the UI per product call — every payroll
@@ -236,6 +237,7 @@ export function PeriodDetailClient({
           onOpenAdd={() => setAddOpenFor(activeTab)}
           onCloseAdd={() => setAddOpenFor(null)}
           periodId={period.id}
+          periodLabel={period.label}
           onDelete={handleDelete}
           onCreated={(e) => {
             setEntries((prev) => [...prev, e]);
@@ -312,6 +314,7 @@ function ServicePane({
   onOpenAdd,
   onCloseAdd,
   periodId,
+  periodLabel,
   onDelete,
   onCreated,
   payeeFor,
@@ -327,21 +330,41 @@ function ServicePane({
   onOpenAdd: () => void;
   onCloseAdd: () => void;
   periodId: string;
+  periodLabel: string;
   onDelete: (id: string) => void;
   onCreated: (entry: Entry) => void;
   payeeFor: (e: Entry) => string;
 }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [drilledKey, setDrilledKey] = useState<string | null>(null);
+  const [prefillPayee, setPrefillPayee] = useState<
+    { teamMemberId: string | null; payeeLabel: string | null } | null
+  >(null);
 
   // Group entries by payee (team_member_id or payee_label). A null/empty
   // payee still gets its own bucket keyed "unassigned" so nothing gets
   // hidden.
   const groups = useMemo(() => {
-    const map = new Map<string, { key: string; label: string; entries: Entry[]; total: number; videos: number }>();
+    const map = new Map<string, {
+      key: string;
+      label: string;
+      entries: Entry[];
+      total: number;
+      videos: number;
+      teamMemberId: string | null;
+      payeeLabel: string | null;
+    }>();
     for (const e of entries) {
       const key = e.team_member_id ?? `label:${e.payee_label ?? 'unassigned'}`;
       const label = payeeFor(e);
-      const g = map.get(key) ?? { key, label, entries: [], total: 0, videos: 0 };
+      const g = map.get(key) ?? {
+        key,
+        label,
+        entries: [],
+        total: 0,
+        videos: 0,
+        teamMemberId: e.team_member_id,
+        payeeLabel: e.payee_label,
+      };
       g.entries.push(e);
       g.total += e.amount_cents ?? 0;
       g.videos += e.video_count ?? 0;
@@ -350,14 +373,7 @@ function ServicePane({
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [entries, payeeFor]);
 
-  function toggle(k: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
-      return next;
-    });
-  }
+  const drilledGroup = drilledKey ? groups.find((g) => g.key === drilledKey) : null;
 
   return (
     <div className="space-y-3">
@@ -374,87 +390,50 @@ function ServicePane({
         </div>
       )}
 
-      {groups.map((g) => {
-        const isOpen = expanded.has(g.key);
-        return (
-          <div key={g.key} className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
-            <button
-              type="button"
-              onClick={() => toggle(g.key)}
-              className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-surface-hover transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-3">
-                <ChevronRight
-                  size={16}
-                  className={`text-text-secondary transition-transform ${isOpen ? 'rotate-90' : ''}`}
-                />
-                <div>
-                  <p className="text-base font-semibold text-text-primary">{g.label}</p>
-                  <p className="text-sm text-text-secondary mt-0.5">
-                    {g.entries.length} {g.entries.length === 1 ? 'entry' : 'entries'}
-                    {g.videos > 0 && ` · ${g.videos} videos`}
-                  </p>
-                </div>
-              </div>
-              <p className="text-lg font-bold text-text-primary tabular-nums">
-                {centsToDollars(g.total)}
+      {groups.map((g) => (
+        <button
+          key={g.key}
+          type="button"
+          onClick={() => setDrilledKey(g.key)}
+          className="flex w-full items-center justify-between rounded-xl border border-nativz-border bg-surface px-5 py-4 text-left hover:bg-surface-hover transition-colors cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <ChevronRight size={16} className="text-text-secondary" />
+            <div>
+              <p className="text-base font-semibold text-text-primary">{g.label}</p>
+              <p className="text-sm text-text-secondary mt-0.5">
+                {g.entries.length} {g.entries.length === 1 ? 'entry' : 'entries'}
+                {g.videos > 0 && ` · ${g.videos} videos`}
               </p>
-            </button>
-            {isOpen && (
-              <div className="border-t border-nativz-border">
-                <table className="w-full text-sm">
-                  <thead className="bg-background/40 text-text-muted">
-                    <tr>
-                      <th className="text-left font-medium px-4 py-2">Client</th>
-                      <th className="text-right font-medium px-4 py-2">Videos</th>
-                      <th className="text-right font-medium px-4 py-2">Rate</th>
-                      <th className="text-right font-medium px-4 py-2">Amount</th>
-                      <th className="text-right font-medium px-4 py-2">Margin</th>
-                      <th className="text-left font-medium px-4 py-2">Description</th>
-                      <th className="w-8" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {g.entries.map((e) => (
-                      <tr key={e.id} className="border-t border-nativz-border">
-                        <td className="px-4 py-2 text-text-secondary">
-                          {e.client_id ? clientById.get(e.client_id)?.name ?? '—' : '—'}
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-text-secondary">
-                          {e.video_count || '—'}
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-text-secondary">
-                          {e.rate_cents ? centsToDollars(e.rate_cents) : '—'}
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums font-medium text-text-primary">
-                          {centsToDollars(e.amount_cents)}
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-text-secondary">
-                          {e.margin_cents ? centsToDollars(e.margin_cents) : '—'}
-                        </td>
-                        <td className="px-4 py-2 text-text-muted truncate max-w-[240px]">
-                          {e.description ?? ''}
-                        </td>
-                        <td className="px-4 py-2">
-                          {!readonly && (
-                            <button
-                              onClick={() => onDelete(e.id)}
-                              className="text-text-muted hover:text-red-400 cursor-pointer"
-                              title="Delete entry"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            </div>
           </div>
-        );
-      })}
+          <p className="text-lg font-bold text-text-primary tabular-nums">
+            {centsToDollars(g.total)}
+          </p>
+        </button>
+      ))}
+
+      {drilledGroup && (
+        <EmployeeDrawer
+          open
+          onClose={() => setDrilledKey(null)}
+          payeeLabel={drilledGroup.label}
+          serviceLabel={ENTRY_TYPE_LABELS[service]}
+          periodLabel={periodLabel}
+          entries={drilledGroup.entries}
+          clientNameById={new Map(Array.from(clientById.entries()).map(([id, c]) => [id, c.name]))}
+          readonly={readonly}
+          onDelete={onDelete}
+          onAdd={() => {
+            setPrefillPayee({
+              teamMemberId: drilledGroup.teamMemberId,
+              payeeLabel: drilledGroup.payeeLabel,
+            });
+            setDrilledKey(null);
+            onOpenAdd();
+          }}
+        />
+      )}
 
       {!readonly && (
         addOpen ? (
@@ -463,11 +442,19 @@ function ServicePane({
             teamMembers={teamMembers}
             clients={clients}
             fixedType={service}
-            onCreated={onCreated}
-            onCancel={onCloseAdd}
+            initialTeamMemberId={prefillPayee?.teamMemberId ?? null}
+            initialPayeeLabel={prefillPayee?.payeeLabel ?? null}
+            onCreated={(e) => {
+              setPrefillPayee(null);
+              onCreated(e);
+            }}
+            onCancel={() => {
+              setPrefillPayee(null);
+              onCloseAdd();
+            }}
           />
         ) : groups.length > 0 ? (
-          <Button variant="outline" size="sm" onClick={onOpenAdd}>
+          <Button variant="outline" onClick={onOpenAdd}>
             <Plus size={14} /> Add {ENTRY_TYPE_LABELS[service].toLowerCase()} entry
           </Button>
         ) : null
@@ -483,6 +470,8 @@ function AddEntryForm({
   teamMembers,
   clients,
   fixedType,
+  initialTeamMemberId,
+  initialPayeeLabel,
   onCreated,
   onCancel,
 }: {
@@ -490,11 +479,13 @@ function AddEntryForm({
   teamMembers: TeamMember[];
   clients: Client[];
   fixedType: EntryType;
+  initialTeamMemberId?: string | null;
+  initialPayeeLabel?: string | null;
   onCreated: (entry: Entry) => void;
   onCancel: () => void;
 }) {
-  const [teamMemberId, setTeamMemberId] = useState<string>('');
-  const [payeeLabel, setPayeeLabel] = useState('');
+  const [teamMemberId, setTeamMemberId] = useState<string>(initialTeamMemberId ?? '');
+  const [payeeLabel, setPayeeLabel] = useState(initialPayeeLabel ?? '');
   const [clientId, setClientId] = useState<string>('');
   const [videoCount, setVideoCount] = useState('');
   const [rateDollars, setRateDollars] = useState('');
