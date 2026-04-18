@@ -249,6 +249,13 @@ const PORTAL_ALLOWED_TOOLS = new Set([
   'generate_video_ideas',
   'extract_topic_signals',
   'create_topic_plan',
+  // Portal drawer + Strategy Lab — portal users can summarize their own
+  // topic searches (ownership enforced at scopeContext filter + already in
+  // get_search_results by RLS). `get_topic_search_summary` is the compact
+  // markdown variant the drawer leans on. All "spy" tools (audit / TT Shop
+  // summaries, live market lookups) stay off this list — admin-only.
+  'get_topic_search_summary',
+  'get_search_results',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -761,12 +768,50 @@ export async function POST(req: NextRequest) {
     // detail on demand. Keeps the base context lean and lets one chat
     // span many analyses without blowing past the token budget.
     //
-    // Portal users don't have a surface that populates this field yet —
-    // silently ignore to avoid leaking cross-org analyses.
-    if (!isPortalUser && scopeContext && scopeContext.length > 0) {
-      const topicIds = scopeContext.filter((s) => s.type === 'topic_search').map((s) => s.id);
-      const auditIds = scopeContext.filter((s) => s.type === 'audit').map((s) => s.id);
-      const tiktokIds = scopeContext.filter((s) => s.type === 'tiktok_shop_search').map((s) => s.id);
+    // Portal scoping: portal users CAN attach a `topic_search` they own
+    // (org-verified below); audit + tiktok_shop_search types are admin-
+    // only and filtered out. The spy tools are already blocked from
+    // portal via PORTAL_ALLOWED_TOOLS, but filtering here gives the
+    // model a clean picture of what's actually attached.
+    let effectiveScope: typeof scopeContext = scopeContext;
+    if (isPortalUser && effectiveScope) {
+      effectiveScope = effectiveScope.filter((s) => s.type === 'topic_search');
+      if (effectiveScope.length > 0) {
+        // Verify every attached topic_search belongs to the caller's
+        // organization (mirrors the searchContext ownership check above).
+        const { data: callerUser } = await admin
+          .from('users')
+          .select('organization_id')
+          .eq('id', user.id)
+          .single();
+        const callerOrg = callerUser?.organization_id as string | null;
+        if (!callerOrg) {
+          effectiveScope = [];
+        } else {
+          const ids = effectiveScope.map((s) => s.id);
+          const { data: rows } = await admin
+            .from('topic_searches')
+            .select('id, clients!inner(organization_id)')
+            .in('id', ids);
+          const okIds = new Set(
+            (rows ?? [])
+              .filter((r) => {
+                const org = Array.isArray(r.clients)
+                  ? r.clients[0]?.organization_id
+                  : (r.clients as { organization_id: string } | null)?.organization_id;
+                return org === callerOrg;
+              })
+              .map((r) => r.id as string),
+          );
+          effectiveScope = effectiveScope.filter((s) => okIds.has(s.id));
+        }
+      }
+    }
+
+    if (effectiveScope && effectiveScope.length > 0) {
+      const topicIds = effectiveScope.filter((s) => s.type === 'topic_search').map((s) => s.id);
+      const auditIds = effectiveScope.filter((s) => s.type === 'audit').map((s) => s.id);
+      const tiktokIds = effectiveScope.filter((s) => s.type === 'tiktok_shop_search').map((s) => s.id);
 
       const [topicRows, auditRows, tiktokRows] = await Promise.all([
         topicIds.length > 0

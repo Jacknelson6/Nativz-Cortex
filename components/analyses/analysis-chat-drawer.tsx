@@ -30,6 +30,14 @@ interface Props {
   scopeLabel: string;
   /** Optional href for "Continue in Strategy Lab" handoff. Hidden when not provided. */
   strategyLabHref?: string;
+  /**
+   * When true, the drawer runs under portal scoping — chat payload
+   * carries `portalMode: true` so the Nerd route enforces read-only
+   * tools, allowlisted against PORTAL_ALLOWED_TOOLS. Only applies when
+   * the underlying route + feature flags permit it (currently
+   * topic_search only, per product decision).
+   */
+  portalMode?: boolean;
 }
 
 interface ChatMessage {
@@ -71,6 +79,7 @@ export function AnalysisChatDrawer({
   scopeId,
   scopeLabel,
   strategyLabHref,
+  portalMode = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -152,6 +161,7 @@ export function AnalysisChatDrawer({
             mode: 'strategy-lab' as const,
             conversationId: conversationId ?? undefined,
             scopeContext: [{ type: scopeType, id: scopeId }],
+            portalMode: portalMode ? true : undefined,
           }),
           signal: controller.signal,
         });

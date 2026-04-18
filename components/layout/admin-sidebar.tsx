@@ -72,7 +72,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/admin/search/new', label: 'Topic Search', icon: Search },
       { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: Compass },
-      { href: '/admin/analyze-social', label: 'Competitor Tracking', icon: Radar },
+      { href: '/admin/analyze-social', label: 'Competitor Spying', icon: Radar },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
       { href: '/admin/notes', label: 'Notes', icon: StickyNote },
     ],

@@ -30,12 +30,15 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
     const { data: userData } = await admin
       .from('users')
-      .select('role')
+      .select('role, organization_id')
       .eq('id', user.id)
       .single();
 
-    if (!userData || !ADMIN_ROLES.includes(userData.role)) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    const isAdmin = Boolean(userData && ADMIN_ROLES.includes(userData.role));
+    const isPortalViewer = userData?.role === 'viewer';
+
+    if (!isAdmin && !isPortalViewer) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     const body = await request.json().catch(() => null);
@@ -48,6 +51,36 @@ export async function POST(request: NextRequest) {
     }
 
     const { scopeType, scopeId } = parsed.data;
+
+    // Portal users: only allowed to open drawer chats on their own
+    // topic searches. Audits + TikTok Shop searches stay admin-only
+    // per product decision ("no spying in the portal").
+    if (isPortalViewer) {
+      if (scopeType !== 'topic_search') {
+        return NextResponse.json(
+          { error: 'This analysis type is not available in the portal' },
+          { status: 403 },
+        );
+      }
+      const callerOrg = userData?.organization_id as string | null;
+      if (!callerOrg) {
+        return NextResponse.json({ error: 'Portal user missing organization' }, { status: 403 });
+      }
+      const { data: ownership } = await admin
+        .from('topic_searches')
+        .select('id, clients!inner(organization_id)')
+        .eq('id', scopeId)
+        .maybeSingle();
+      const clients = ownership?.clients as
+        | { organization_id: string }
+        | { organization_id: string }[]
+        | null
+        | undefined;
+      const ownerOrg = Array.isArray(clients) ? clients[0]?.organization_id : clients?.organization_id;
+      if (!ownership || ownerOrg !== callerOrg) {
+        return NextResponse.json({ error: 'Topic search not found' }, { status: 404 });
+      }
+    }
 
     // Try to find an existing thread for this user × scope.
     const { data: existing } = await admin

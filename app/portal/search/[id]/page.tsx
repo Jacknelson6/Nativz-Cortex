@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 import type { TopicSearch } from '@/lib/types/search';
 import { PortalResultsClient, PortalResultsPending } from './portal-results-client';
+import { AnalysisChatDrawer } from '@/components/analyses/analysis-chat-drawer';
 
 export default async function PortalSearchResultsPage({
   params,
@@ -59,19 +60,35 @@ export default async function PortalSearchResultsPage({
     .select('id', { count: 'exact', head: true })
     .eq('search_id', id);
 
+  // Portal drawer: only mounts when the client has the Nerd / Strategy
+  // Lab flag on. Portal drawer is scoped to this single topic search;
+  // all cross-client tools are gated off via PORTAL_ALLOWED_TOOLS.
+  const canUseNerd = Boolean(result.client.feature_flags?.can_use_nerd);
+
   return (
-    <PortalResultsClient
-      search={search as TopicSearch}
-      clientName={clientData.name ?? null}
-      scrapedVideoCount={scrapedVideoCount ?? 0}
-      clientInfo={{
-        id: clientData.id,
-        name: clientData.name,
-        slug: clientData.slug,
-        industry: clientData.industry ?? undefined,
-        topic_keywords: (clientData.topic_keywords as string[] | null) ?? null,
-      }}
-      canUseContentLab={Boolean(result.client.feature_flags?.can_use_nerd)}
-    />
+    <>
+      <PortalResultsClient
+        search={search as TopicSearch}
+        clientName={clientData.name ?? null}
+        scrapedVideoCount={scrapedVideoCount ?? 0}
+        clientInfo={{
+          id: clientData.id,
+          name: clientData.name,
+          slug: clientData.slug,
+          industry: clientData.industry ?? undefined,
+          topic_keywords: (clientData.topic_keywords as string[] | null) ?? null,
+        }}
+        canUseContentLab={canUseNerd}
+      />
+      {canUseNerd && search.status === 'completed' && (
+        <AnalysisChatDrawer
+          scopeType="topic_search"
+          scopeId={search.id}
+          scopeLabel={search.query}
+          strategyLabHref={`/portal/strategy-lab?attach=topic_search:${search.id}`}
+          portalMode
+        />
+      )}
+    </>
   );
 }

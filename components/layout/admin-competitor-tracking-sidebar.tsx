@@ -52,7 +52,7 @@ export function AdminCompetitorTrackingSidebar() {
 
   return (
     <aside
-      aria-label="Competitor Tracking navigation"
+      aria-label="Competitor Spying navigation"
       className="sticky top-0 h-screen hidden md:flex flex-col shrink-0 border-r border-nativz-border bg-surface w-56"
     >
       <div className="shrink-0 p-3 pb-2">
@@ -63,7 +63,7 @@ export function AdminCompetitorTrackingSidebar() {
           <ChevronLeft size={14} />
           <span>Back to dashboard</span>
         </Link>
-        <h2 className="px-1 text-lg font-semibold text-text-primary">Competitor Tracking</h2>
+        <h2 className="px-1 text-lg font-semibold text-text-primary">Competitor Spying</h2>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-1">
         <ul className="flex flex-col gap-0.5">
