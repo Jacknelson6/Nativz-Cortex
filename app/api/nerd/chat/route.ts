@@ -68,6 +68,28 @@ const chatSchema = z.object({
   /** IDs of topic searches to attach as context for the LLM */
   searchContext: z.array(z.string().uuid()).max(5).optional(),
   /**
+   * Mixed-type analyses attached to this chat session. Unlike
+   * `searchContext` (which dumps full topic-search blocks into the
+   * system prompt), `scopeContext` injects only a compact index of
+   * what's available and lets the agent pull detail on demand via
+   * tools like `get_audit_summary`, `get_tiktok_shop_search_summary`,
+   * `get_topic_search_summary`. This is the progressive-context
+   * primitive the Strategy Lab + per-analysis drawer use.
+   *
+   * Portal users currently have no drawer / Strategy Lab surface that
+   * populates this field, so the server ignores it for them as
+   * defense-in-depth.
+   */
+  scopeContext: z
+    .array(
+      z.object({
+        type: z.enum(['topic_search', 'audit', 'tiktok_shop_search']),
+        id: z.string().uuid(),
+      }),
+    )
+    .max(10)
+    .optional(),
+  /**
    * Explicit Nerd surface mode. When 'strategy-lab' (or the legacy alias
    * 'content-lab'), the chat route appends the Strategy Lab scripting
    * addendum (behavioural rules + preloaded scripting skills from
@@ -423,7 +445,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Invalid request', details: parsed.error.flatten() }), { status: 400 });
     }
 
-    const { messages, mentions, actionConfirmation, conversationId, portalMode, sessionHint, searchContext, mode, attachments } = parsed.data;
+    const { messages, mentions, actionConfirmation, conversationId, portalMode, sessionHint, searchContext, scopeContext, mode, attachments } = parsed.data;
 
     // --- Detect portal user (viewer role or admin impersonating) ---
     // `portalMode: true` from the client is a hint, but the server-resolved
@@ -728,6 +750,59 @@ export async function POST(req: NextRequest) {
           return lines.join('\n');
         });
         portfolioContext += `\n\n# Attached Topic Search Results\nThe user has attached the following completed topic search results for reference. Use this data to inform your responses.\n\n${searchBlocks.join('\n\n---\n\n')}`;
+      }
+    }
+
+    // --- Progressive scope index ---
+    // Unlike `searchContext` above (which inlines full topic-search
+    // blocks), `scopeContext` injects only a compact "what's attached"
+    // index. The agent calls `get_audit_summary`, `get_topic_search_summary`,
+    // `get_tiktok_shop_search_summary`, and related tools to pull
+    // detail on demand. Keeps the base context lean and lets one chat
+    // span many analyses without blowing past the token budget.
+    //
+    // Portal users don't have a surface that populates this field yet —
+    // silently ignore to avoid leaking cross-org analyses.
+    if (!isPortalUser && scopeContext && scopeContext.length > 0) {
+      const topicIds = scopeContext.filter((s) => s.type === 'topic_search').map((s) => s.id);
+      const auditIds = scopeContext.filter((s) => s.type === 'audit').map((s) => s.id);
+      const tiktokIds = scopeContext.filter((s) => s.type === 'tiktok_shop_search').map((s) => s.id);
+
+      const [topicRows, auditRows, tiktokRows] = await Promise.all([
+        topicIds.length > 0
+          ? admin.from('topic_searches').select('id, query, status').in('id', topicIds)
+          : Promise.resolve({ data: [] as { id: string; query: string; status: string }[] }),
+        auditIds.length > 0
+          ? admin
+              .from('prospect_audits')
+              .select('id, website_url, status, prospect_data')
+              .in('id', auditIds)
+          : Promise.resolve({ data: [] as { id: string; website_url: string | null; status: string; prospect_data: Record<string, unknown> | null }[] }),
+        tiktokIds.length > 0
+          ? admin
+              .from('tiktok_shop_searches')
+              .select('id, query, status')
+              .in('id', tiktokIds)
+          : Promise.resolve({ data: [] as { id: string; query: string; status: string }[] }),
+      ]);
+
+      const indexLines: string[] = [];
+      for (const row of topicRows.data ?? []) {
+        indexLines.push(`- **Topic search** · "${row.query}" · id \`${row.id}\` · status: ${row.status}`);
+      }
+      for (const row of auditRows.data ?? []) {
+        const pd = row.prospect_data as { websiteContext?: { title?: string | null } } | null;
+        const label =
+          pd?.websiteContext?.title?.trim() ||
+          (row.website_url ? new URL(row.website_url.startsWith('http') ? row.website_url : `https://${row.website_url}`).hostname.replace(/^www\./, '') : 'unknown');
+        indexLines.push(`- **Organic Social audit** · ${label} · id \`${row.id}\` · status: ${row.status}`);
+      }
+      for (const row of tiktokRows.data ?? []) {
+        indexLines.push(`- **TikTok Shop search** · "${row.query}" · id \`${row.id}\` · status: ${row.status}`);
+      }
+
+      if (indexLines.length > 0) {
+        portfolioContext += `\n\n# Attached analyses (${indexLines.length})\n\nThe user attached these analyses to the current chat. Don't assume details — call the matching tool when you need content: \`get_topic_search_summary\`, \`get_audit_summary\`, or \`get_tiktok_shop_search_summary\` with the id. Drill deeper with \`search_audit_findings\`, \`get_tiktok_shop_creator_details\`, etc. when the user asks about specifics.\n\n${indexLines.join('\n')}`;
       }
     }
 
