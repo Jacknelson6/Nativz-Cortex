@@ -503,3 +503,94 @@ Ship a template-driven email composer on `/admin/users` that sends now or schedu
 - `npx tsc --noEmit` — clean
 
 Portal Content Lab is code-ready to ship. Remaining blockers are human-only: log in as a real viewer and do a hands-on smoke; flip `feature_flags.can_use_nerd=true` on pilot clients.
+
+---
+
+## Goal 8 (set 2026-04-18) — Overnight build polish loop
+
+Jack kicked off a massive overnight build at 2 a.m. (Zernio coverage, accounting module, competitor UX, top performers, platform icons). Iteration 0 shipped in commit `cdb0072`. This goal runs polish iterations until the overnight build is end-to-end usable by morning — migrations live, sync wired, cross-links working, gaps closed.
+
+### Acceptance criteria
+- [ ] Migrations 116 (accounting) + 117 (platform_follower_daily) applied to prod Supabase
+- [ ] Follower time-series sync wired in `lib/reporting/sync.ts` — writes to `platform_follower_daily` from Zernio series or snapshot rollup
+- [ ] Cross-link from Competitor Spying → `/admin/analytics?tab=benchmarking` so Jack doesn't have to remember two paths
+- [ ] Audience-insights card on analytics dashboard (gracefully hides when Zernio returns null)
+- [ ] Accounting CSV export per paid period
+- [ ] `npx tsc --noEmit` stays clean across every iteration
+- [ ] Each iteration ships one coherent commit + push
+
+### Scope boundaries
+- IN: Polish on tonight's commit `cdb0072`. Plumb what was scaffolded. Fill gaps listed in `docs/overnight-build-2026-04-18.md` "Follow-ups".
+- OUT: New features Jack didn't ask for. Touching his pre-existing uncommitted WIP (`TODO.md`, `scripts/test-scrapers.ts`, `docs/trustgraph-context-layer.md`).
+
+
+## Goal 8 Iterations
+
+### Iteration 8.1 — 2026-04-18
+
+**Focus:** Plumb what was scaffolded in commit `cdb0072` — migrations live, follower sync wired, cross-link between Competitor Spying and Analytics.
+
+**Shipped:**
+- Migrations 116 (accounting) + 117 (platform_follower_daily) applied to prod Supabase via MCP
+- `feat(reporting): follower series sync + audit → benchmarks cross-link` (f0a70b3)
+
+**Design decisions:**
+- platform_follower_daily is a dual-source table — today's row always gets written as 'snapshot-rollup' from the existing platform_snapshots flow; when Zernio's series endpoint answers, we overwrite days with 'zernio'. One canonical table, one chart codepath.
+- "View in benchmarks" cross-link only appears when the audit is attached to a client. Unattached audits have nowhere useful to link to yet.
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Migrations applied | done |
+| Follower series sync wired | done |
+| Cross-link to /admin/analytics | done |
+| Audience insights card | not started |
+| Accounting CSV export | not started |
+| tsc clean | yes |
+
+**Next iteration:** 8.2 — audience insights card.
+
+### Iteration 8.2 — 2026-04-18
+
+**Shipped:**
+- `feat(analytics): audience insights card` (7c39502)
+
+**Design decisions:**
+- Card auto-hides when `insights` is empty, which is Zernio's normal 404 behaviour for plans/platforms without insights. Keeps the analytics page clean for clients whose connections don't support it.
+- Buckets are truncated to top 4 per category to keep the card scannable.
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Migrations applied | done |
+| Follower series sync wired | done |
+| Cross-link to /admin/analytics | done |
+| Audience insights card | done |
+| Accounting CSV export | not started |
+| tsc clean | yes |
+
+### Iteration 8.3 — 2026-04-18
+
+**Shipped:**
+- `feat(accounting): CSV export per payroll period` (cd17a24)
+
+**Design decisions:**
+- CSV uses dollar-formatted strings (via centsToDollars) rather than raw cents. This matches the "paste into a spreadsheet" workflow — the tax person doesn't want to divide by 100.
+- Export button hides when the period has zero entries, so you can't accidentally download an empty file.
+
+**State vs goal — all criteria met:**
+| Criterion | Status |
+|-----------|--------|
+| Migrations applied | done |
+| Follower series sync wired | done |
+| Cross-link to /admin/analytics | done |
+| Audience insights card | done |
+| Accounting CSV export | done |
+| tsc clean | yes |
+
+**SRL Goal 8 complete.** The overnight build is now end-to-end usable — migrations are live, follower series persists, competitors and benchmarks are cross-linked, audience insights render when Zernio provides them, and payroll periods export to CSV.
+
+**Human QA in the morning:**
+- `/admin/accounting` — create a period, add entries, lock, export CSV
+- `/admin/analytics` with a Zernio-connected client — audience insights card renders (or gracefully hides)
+- `/admin/analyze-social/<id>` on an attached audit → "View in benchmarks" link works
