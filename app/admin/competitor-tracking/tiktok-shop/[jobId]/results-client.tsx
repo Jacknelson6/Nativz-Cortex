@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import type { RankedCreator, SearchResults } from '@/lib/tiktok-shop/types';
 import { accountTypeLabel, type AccountType } from '@/lib/tiktok-shop/account-type';
+import { AnalysisChatDrawer } from '@/components/analyses/analysis-chat-drawer';
 
 interface SearchRow {
   id: string;
@@ -264,6 +265,12 @@ export function TikTokShopResultsClient({ initial }: { initial: SearchRow }) {
           </div>
         </div>
       </header>
+
+      <AnalysisChatDrawer
+        scopeType="tiktok_shop_search"
+        scopeId={search.id}
+        scopeLabel={search.query}
+      />
 
       <div className="flex-1 px-6 py-8 md:px-10">
         <div className="mx-auto max-w-5xl">
