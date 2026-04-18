@@ -11,11 +11,13 @@ import {
   Loader2,
   Download,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { centsToDollars, dollarsToCents } from '@/lib/accounting/periods';
 import { EmployeeDrawer } from './employee-drawer';
+import { ImportDialog } from './import-dialog';
 
 // DB still accepts 'override' and 'misc' (schema unchanged). They're
 // just not exposed as tabs in the UI per product call — every payroll
@@ -84,6 +86,7 @@ export function PeriodDetailClient({
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [addOpenFor, setAddOpenFor] = useState<EntryType | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const readonly = period.status !== 'draft';
@@ -154,12 +157,17 @@ export function PeriodDetailClient({
           </p>
         </div>
         <div className="flex gap-2">
+          {!readonly && (
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <Sparkles size={14} /> Import
+            </Button>
+          )}
           {entries.length > 0 && (
             <a
               href={`/api/accounting/periods/${period.id}/export`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-sm font-medium text-text-primary hover:bg-surface-hover"
             >
-              <Download size={13} /> Export CSV
+              <Download size={14} /> Export CSV
             </a>
           )}
           {period.status === 'draft' && (
@@ -246,6 +254,16 @@ export function PeriodDetailClient({
           payeeFor={payeeFor}
         />
       )}
+
+      <ImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        periodId={period.id}
+        periodLabel={period.label}
+        teamMembers={teamMembers}
+        clients={clients}
+        onImported={() => router.refresh()}
+      />
     </div>
   );
 }
