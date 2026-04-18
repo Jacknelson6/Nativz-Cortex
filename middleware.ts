@@ -111,6 +111,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/social/') ||
     pathname.startsWith('/shared/') ||
     pathname.startsWith('/api/shared/') ||
+    pathname.startsWith('/submit-payroll/') ||
+    pathname.startsWith('/api/submit-payroll/') ||
     pathname.startsWith('/api/cron/') ||
     pathname.startsWith('/api/scheduler/webhooks') ||
     pathname.startsWith('/api/scheduler/connect/callback') ||

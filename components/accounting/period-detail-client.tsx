@@ -12,12 +12,14 @@ import {
   Download,
   ChevronRight,
   Sparkles,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { centsToDollars, dollarsToCents } from '@/lib/accounting/periods';
 import { EmployeeDrawer } from './employee-drawer';
 import { ImportDialog } from './import-dialog';
+import { SubmitTokensDialog } from './submit-tokens-dialog';
 
 // DB still accepts 'override' and 'misc' (schema unchanged). They're
 // just not exposed as tabs in the UI per product call — every payroll
@@ -87,6 +89,7 @@ export function PeriodDetailClient({
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [addOpenFor, setAddOpenFor] = useState<EntryType | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [linksOpen, setLinksOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const readonly = period.status !== 'draft';
@@ -158,9 +161,14 @@ export function PeriodDetailClient({
         </div>
         <div className="flex gap-2">
           {!readonly && (
-            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
-              <Sparkles size={14} /> Import
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={() => setLinksOpen(true)}>
+                <LinkIcon size={14} /> Submit links
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+                <Sparkles size={14} /> Import
+              </Button>
+            </>
           )}
           {entries.length > 0 && (
             <a
@@ -263,6 +271,14 @@ export function PeriodDetailClient({
         teamMembers={teamMembers}
         clients={clients}
         onImported={() => router.refresh()}
+      />
+
+      <SubmitTokensDialog
+        open={linksOpen}
+        onClose={() => setLinksOpen(false)}
+        periodId={period.id}
+        periodLabel={period.label}
+        teamMembers={teamMembers}
       />
     </div>
   );
