@@ -68,28 +68,28 @@ export default async function AccountingIndexPage() {
     <div className="mx-auto max-w-5xl p-6 space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Accounting</h1>
-          <p className="text-sm text-text-muted mt-1">
+          <h1 className="text-3xl font-bold text-text-primary">Accounting</h1>
+          <p className="text-base text-text-secondary mt-2">
             Bi-monthly payroll periods. First half (1–15) and second half (16–end of month).
           </p>
         </div>
         <Link
           href="/admin/accounting/year"
-          className="rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-hover"
+          className="rounded-lg border border-nativz-border bg-surface px-4 py-2 text-base font-medium text-text-primary hover:bg-surface-hover"
         >
           Year view
         </Link>
       </div>
 
       <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-background/50 text-text-muted">
+        <table className="w-full text-base">
+          <thead className="bg-background/50 text-text-secondary">
             <tr>
-              <th className="text-left font-medium px-4 py-3">Period</th>
-              <th className="text-left font-medium px-4 py-3">Status</th>
-              <th className="text-right font-medium px-4 py-3">Entries</th>
-              <th className="text-right font-medium px-4 py-3">Payouts</th>
-              <th className="text-right font-medium px-4 py-3">Margin</th>
+              <th className="text-left font-semibold px-5 py-3">Period</th>
+              <th className="text-left font-semibold px-5 py-3">Status</th>
+              <th className="text-right font-semibold px-5 py-3">Entries</th>
+              <th className="text-right font-semibold px-5 py-3">Payouts</th>
+              <th className="text-right font-semibold px-5 py-3">Margin</th>
             </tr>
           </thead>
           <tbody>
@@ -97,24 +97,24 @@ export default async function AccountingIndexPage() {
               const t = totals[p.id] ?? { amount: 0, margin: 0, count: 0 };
               return (
                 <tr key={p.id} className="border-t border-nativz-border hover:bg-surface-hover/50">
-                  <td className="px-4 py-3">
+                  <td className="px-5 py-3.5">
                     <Link
                       href={`/admin/accounting/${p.id}`}
-                      className="text-text-primary font-medium hover:text-accent-text"
+                      className="text-text-primary font-semibold hover:text-accent-text"
                     >
                       {labelFor(p.start_date, p.half)}
                     </Link>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-5 py-3.5">
                     <StatusPill status={p.status} />
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
+                  <td className="px-5 py-3.5 text-right tabular-nums text-text-primary">
                     {t.count}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-text-primary">
+                  <td className="px-5 py-3.5 text-right tabular-nums text-text-primary font-semibold">
                     {centsToDollars(t.amount)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
+                  <td className="px-5 py-3.5 text-right tabular-nums text-text-secondary">
                     {centsToDollars(t.margin)}
                   </td>
                 </tr>
@@ -122,7 +122,7 @@ export default async function AccountingIndexPage() {
             })}
             {periodRows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-text-muted">
+                <td colSpan={5} className="px-4 py-10 text-center text-text-secondary">
                   No periods yet.
                 </td>
               </tr>
@@ -136,12 +136,12 @@ export default async function AccountingIndexPage() {
 
 function StatusPill({ status }: { status: 'draft' | 'locked' | 'paid' }) {
   const config = {
-    draft: 'bg-surface-hover text-text-secondary',
+    draft: 'bg-surface-hover text-text-primary',
     locked: 'bg-amber-500/15 text-amber-400',
     paid: 'bg-emerald-500/15 text-emerald-400',
   }[status];
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${config}`}>
+    <span className={`inline-flex rounded-full px-2.5 py-1 text-sm font-medium ${config}`}>
       {status}
     </span>
   );

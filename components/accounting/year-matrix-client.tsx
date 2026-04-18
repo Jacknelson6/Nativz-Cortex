@@ -4,12 +4,14 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { centsToDollars } from '@/lib/accounting/periods';
 
-type EntryType = 'editing' | 'smm' | 'affiliate' | 'blogging' | 'override' | 'misc';
+// 'override' / 'misc' still exist in the DB for legacy rows but aren't
+// surfaced as filters here.
+type EntryType = 'editing' | 'smm' | 'affiliate' | 'blogging';
 type ServiceFilter = 'all' | EntryType;
 
 interface Entry {
   id: string;
-  entry_type: EntryType;
+  entry_type: EntryType | 'override' | 'misc';
   team_member_id: string | null;
   payee_label: string | null;
   amount_cents: number;
@@ -35,8 +37,6 @@ const SERVICES: Array<{ key: ServiceFilter; label: string }> = [
   { key: 'smm', label: 'SMM' },
   { key: 'affiliate', label: 'Affiliate' },
   { key: 'blogging', label: 'Blogging' },
-  { key: 'override', label: 'Overrides' },
-  { key: 'misc', label: 'Misc' },
 ];
 
 const MONTHS = [
@@ -68,6 +68,8 @@ export function YearMatrixClient({ year, periods, members, entries }: YearMatrix
     }
 
     for (const e of entries) {
+      // Skip legacy override/misc rows entirely — they no longer surface.
+      if (e.entry_type === 'override' || e.entry_type === 'misc') continue;
       if (service !== 'all' && e.entry_type !== service) continue;
       const period = periodById.get(e.period_id);
       if (!period) continue;

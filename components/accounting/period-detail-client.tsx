@@ -16,7 +16,10 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { centsToDollars, dollarsToCents } from '@/lib/accounting/periods';
 
-type EntryType = 'editing' | 'smm' | 'affiliate' | 'blogging' | 'override' | 'misc';
+// DB still accepts 'override' and 'misc' (schema unchanged). They're
+// just not exposed as tabs in the UI per product call — every payroll
+// entry today fits Editing / SMM / Affiliate / Blogging.
+type EntryType = 'editing' | 'smm' | 'affiliate' | 'blogging';
 type TabKey = 'overview' | EntryType;
 
 interface TeamMember { id: string; full_name: string | null; role: string | null }
@@ -24,7 +27,9 @@ interface Client { id: string; name: string }
 
 interface Entry {
   id: string;
-  entry_type: EntryType;
+  // DB allows wider union for legacy rows; UI only renders the four
+  // current types via entriesByService guard above.
+  entry_type: EntryType | 'override' | 'misc';
   team_member_id: string | null;
   payee_label: string | null;
   client_id: string | null;
@@ -58,8 +63,6 @@ const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
   smm: 'SMM',
   affiliate: 'Affiliate',
   blogging: 'Blogging',
-  override: 'Jack override',
-  misc: 'Misc',
 };
 
 const SERVICE_TABS: Array<{ key: TabKey; label: string }> = [
@@ -68,8 +71,6 @@ const SERVICE_TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'smm', label: 'SMM' },
   { key: 'affiliate', label: 'Affiliate' },
   { key: 'blogging', label: 'Blogging' },
-  { key: 'override', label: 'Overrides' },
-  { key: 'misc', label: 'Misc' },
 ];
 
 export function PeriodDetailClient({
@@ -99,9 +100,13 @@ export function PeriodDetailClient({
 
   const entriesByService = useMemo(() => {
     const out: Record<EntryType, Entry[]> = {
-      editing: [], smm: [], affiliate: [], blogging: [], override: [], misc: [],
+      editing: [], smm: [], affiliate: [], blogging: [],
     };
-    for (const e of entries) out[e.entry_type].push(e);
+    for (const e of entries) {
+      // Ignore legacy 'override' / 'misc' entries — they stay in the DB
+      // but aren't surfaced in the UI.
+      if (e.entry_type in out) out[e.entry_type as EntryType].push(e);
+    }
     return out;
   }, [entries]);
 
@@ -140,11 +145,11 @@ export function PeriodDetailClient({
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary">{period.label}</h1>
-          <p className="text-sm text-text-muted mt-1">
+          <h1 className="text-3xl font-bold text-text-primary">{period.label}</h1>
+          <p className="text-base text-text-secondary mt-2">
             {entries.length} {entries.length === 1 ? 'entry' : 'entries'} ·{' '}
-            <span className="text-text-primary tabular-nums">{centsToDollars(grandTotal)}</span> payouts ·{' '}
-            <span className="text-text-secondary tabular-nums">{centsToDollars(totalMargin)}</span> margin
+            <span className="text-text-primary font-semibold tabular-nums">{centsToDollars(grandTotal)}</span> payouts ·{' '}
+            <span className="text-text-primary tabular-nums">{centsToDollars(totalMargin)}</span> margin
           </p>
         </div>
         <div className="flex gap-2">
@@ -189,16 +194,16 @@ export function PeriodDetailClient({
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`relative inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
+              className={`relative inline-flex items-center gap-1.5 px-4 py-2.5 text-base font-medium transition-colors cursor-pointer ${
                 active
                   ? 'text-text-primary'
-                  : 'text-text-muted hover:text-text-secondary'
+                  : 'text-text-secondary hover:text-text-primary'
               }`}
             >
               {tab.label}
               {count > 0 && (
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${
-                  active ? 'bg-accent text-white' : 'bg-surface-hover text-text-muted'
+                <span className={`rounded-full px-2 py-0.5 text-xs tabular-nums ${
+                  active ? 'bg-accent text-white' : 'bg-surface-hover text-text-secondary'
                 }`}>
                   {count}
                 </span>
@@ -254,7 +259,7 @@ function OverviewPane({
   entriesByService: Record<EntryType, Entry[]>;
   onDrillIn: (t: EntryType) => void;
 }) {
-  const services: EntryType[] = ['editing', 'smm', 'affiliate', 'blogging', 'override', 'misc'];
+  const services: EntryType[] = ['editing', 'smm', 'affiliate', 'blogging'];
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
       {services.map((s) => {
@@ -266,26 +271,26 @@ function OverviewPane({
             key={s}
             type="button"
             onClick={() => onDrillIn(s)}
-            className="group flex items-start justify-between rounded-xl border border-nativz-border bg-surface px-4 py-3 text-left hover:bg-surface-hover transition-colors cursor-pointer"
+            className="group flex items-start justify-between rounded-xl border border-nativz-border bg-surface px-5 py-4 text-left hover:bg-surface-hover transition-colors cursor-pointer"
           >
             <div>
-              <p className="text-[10px] uppercase tracking-wide text-text-muted">
+              <p className="text-xs uppercase tracking-wide text-text-secondary font-medium">
                 {ENTRY_TYPE_LABELS[s]}
               </p>
-              <p className="text-lg font-semibold text-text-primary tabular-nums mt-0.5">
+              <p className="text-2xl font-bold text-text-primary tabular-nums mt-1">
                 {centsToDollars(total)}
               </p>
-              <p className="text-xs text-text-muted mt-0.5">
+              <p className="text-sm text-text-secondary mt-1">
                 {rows.length} {rows.length === 1 ? 'entry' : 'entries'}
                 {videos > 0 && ` · ${videos} videos`}
               </p>
             </div>
-            <ChevronRight size={14} className="text-text-muted group-hover:text-text-secondary mt-1 shrink-0" />
+            <ChevronRight size={16} className="text-text-secondary group-hover:text-text-primary mt-1 shrink-0" />
           </button>
         );
       })}
       {entries.length === 0 && (
-        <div className="md:col-span-2 lg:col-span-3 rounded-xl border border-dashed border-nativz-border bg-surface px-4 py-12 text-center text-sm text-text-muted">
+        <div className="md:col-span-2 lg:col-span-3 rounded-xl border border-dashed border-nativz-border bg-surface px-4 py-12 text-center text-base text-text-secondary">
           No entries yet. Pick a service tab above to add entries.
         </div>
       )}
@@ -358,11 +363,11 @@ function ServicePane({
     <div className="space-y-3">
       {groups.length === 0 && !addOpen && (
         <div className="rounded-xl border border-dashed border-nativz-border bg-surface px-4 py-12 text-center">
-          <p className="text-sm text-text-muted mb-3">
+          <p className="text-base text-text-secondary mb-4">
             No {ENTRY_TYPE_LABELS[service].toLowerCase()} entries yet.
           </p>
           {!readonly && (
-            <Button variant="outline" size="sm" onClick={onOpenAdd}>
+            <Button variant="outline" onClick={onOpenAdd}>
               <Plus size={14} /> Add {ENTRY_TYPE_LABELS[service].toLowerCase()} entry
             </Button>
           )}
@@ -376,22 +381,22 @@ function ServicePane({
             <button
               type="button"
               onClick={() => toggle(g.key)}
-              className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-surface-hover transition-colors cursor-pointer"
+              className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-surface-hover transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <ChevronRight
-                  size={14}
-                  className={`text-text-muted transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                  size={16}
+                  className={`text-text-secondary transition-transform ${isOpen ? 'rotate-90' : ''}`}
                 />
                 <div>
-                  <p className="text-sm font-medium text-text-primary">{g.label}</p>
-                  <p className="text-[11px] text-text-muted">
+                  <p className="text-base font-semibold text-text-primary">{g.label}</p>
+                  <p className="text-sm text-text-secondary mt-0.5">
                     {g.entries.length} {g.entries.length === 1 ? 'entry' : 'entries'}
                     {g.videos > 0 && ` · ${g.videos} videos`}
                   </p>
                 </div>
               </div>
-              <p className="text-sm font-semibold text-text-primary tabular-nums">
+              <p className="text-lg font-bold text-text-primary tabular-nums">
                 {centsToDollars(g.total)}
               </p>
             </button>
