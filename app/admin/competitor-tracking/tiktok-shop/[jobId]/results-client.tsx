@@ -270,6 +270,7 @@ export function TikTokShopResultsClient({ initial }: { initial: SearchRow }) {
         scopeType="tiktok_shop_search"
         scopeId={search.id}
         scopeLabel={search.query}
+        strategyLabHref={`/admin/strategy-lab?attach=tiktok_shop_search:${search.id}`}
       />
 
       <div className="flex-1 px-6 py-8 md:px-10">

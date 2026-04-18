@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { notFound, redirect } from 'next/navigation';
 import type { TopicSearch } from '@/lib/types/search';
 import { AdminResultsClient } from './results-client';
+import { AnalysisChatDrawer } from '@/components/analyses/analysis-chat-drawer';
 
 export default async function AdminSearchResultsPage({
   params,
@@ -62,6 +63,14 @@ export default async function AdminSearchResultsPage({
         clientInfo={clientInfo}
         scrapedVideoCount={scrapedVideoCount ?? 0}
       />
+      {search.status === 'completed' && (
+        <AnalysisChatDrawer
+          scopeType="topic_search"
+          scopeId={search.id}
+          scopeLabel={search.query}
+          strategyLabHref={`/admin/strategy-lab?attach=topic_search:${search.id}`}
+        />
+      )}
     </>
   );
 }
