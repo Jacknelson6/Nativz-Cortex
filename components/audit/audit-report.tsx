@@ -1353,7 +1353,17 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
       {competitors.length > 0 && (
         <div className="space-y-4">
           <div className="rounded-xl border border-nativz-border bg-surface p-6">
-            <h3 className="text-base font-semibold text-text-primary mb-4">Competitors</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-text-primary">Competitors</h3>
+              {(audit as { attached_client_id?: string | null }).attached_client_id && (
+                <a
+                  href={`/admin/analytics?clientId=${(audit as { attached_client_id?: string | null }).attached_client_id}&tab=benchmarking`}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-accent-text hover:underline"
+                >
+                  View in benchmarks <ExternalLink size={10} />
+                </a>
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {competitors.map(comp => {
                 const emDash = <span className="text-text-muted">—</span>;

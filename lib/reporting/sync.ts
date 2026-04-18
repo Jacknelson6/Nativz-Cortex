@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getPostingService } from '@/lib/posting';
+import { getPostingService, ZernioPostingService } from '@/lib/posting';
 import type { DateRange } from '@/lib/types/reporting';
 import type { SocialPlatform } from '@/lib/posting/types';
 
@@ -105,6 +105,46 @@ export async function syncClientReporting(
         result.errors.push(
           `Failed to upsert snapshot for ${platform}: ${snapshotError.message}`,
         );
+      }
+
+      // Write today's follower count to platform_follower_daily (source
+      // 'snapshot-rollup'). If Zernio exposes a richer series endpoint we
+      // backfill historical days below with source 'zernio', overwriting
+      // the rollup row for overlap days.
+      await adminClient.from('platform_follower_daily').upsert(
+        {
+          social_profile_id: profile.id,
+          client_id: clientId,
+          platform,
+          day: snapshotDate,
+          followers: followerStats.followers,
+          source: 'snapshot-rollup',
+        },
+        { onConflict: 'social_profile_id,day' },
+      );
+
+      // Ask Zernio for the real 30-day series; null means the plan/platform
+      // doesn't support it and we stick with the rollup.
+      try {
+        const zernio = new ZernioPostingService();
+        const series = await zernio.getFollowerTimeSeries(lateAccountId, 30);
+        if (series && series.length > 0) {
+          const rows = series.map((p) => ({
+            social_profile_id: profile.id,
+            client_id: clientId,
+            platform,
+            day: p.date,
+            followers: p.followers,
+            source: 'zernio' as const,
+          }));
+          await adminClient
+            .from('platform_follower_daily')
+            .upsert(rows, { onConflict: 'social_profile_id,day' });
+        }
+      } catch (err) {
+        // Silent — follower series is a nice-to-have.
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[reporting] follower series skipped for ${platform}: ${message}`);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
