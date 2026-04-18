@@ -17,6 +17,7 @@ import { topicSignalTools } from './topic-signals';
 // and the RPCs error out in production. Re-enable once the graph is ready.
 // import { agencyKnowledgeTools } from './agency-knowledge';
 import { fyxerTools } from './fyxer';
+import { analysisTools } from './analyses';
 
 /** Register all tool domains. Call once at startup. */
 export function registerAllTools() {
@@ -36,4 +37,6 @@ export function registerAllTools() {
   registerTools(topicSignalTools);
   // registerTools(agencyKnowledgeTools);  // disabled — KG not ready
   registerTools(fyxerTools);
+  // Progressive-context tools for Strategy Lab + per-analysis drawer.
+  registerTools(analysisTools);
 }
