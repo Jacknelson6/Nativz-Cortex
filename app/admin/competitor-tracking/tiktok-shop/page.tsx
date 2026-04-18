@@ -32,7 +32,7 @@ export default async function TikTokShopPage() {
   const [{ data: searches }, vaultClients, rosterResult] = await Promise.all([
     admin
       .from('tiktok_shop_searches')
-      .select('id, query, status, products_found, creators_found, created_at, completed_at')
+      .select('id, query, status, products_found, creators_found, client_id, created_at, completed_at')
       .order('created_at', { ascending: false })
       .limit(50),
     getVaultClients(),
