@@ -111,7 +111,7 @@ export interface OnboardFormData {
   agency: string;
 }
 
-export type OnboardStep = 'input' | 'analyze' | 'provision' | 'strategy' | 'review';
+export type OnboardStep = 'input' | 'analyze' | 'strategy' | 'review';
 
 export interface ProvisionResult {
   cortex: { success: boolean; clientId?: string; error?: string };

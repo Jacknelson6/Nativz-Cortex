@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { toast } from 'sonner';
 import { OnboardProgress } from '@/components/onboard/onboard-progress';
 import { OnboardInput } from '@/components/onboard/onboard-input';
 import { OnboardAnalyze } from '@/components/onboard/onboard-analyze';
-import { OnboardProvision } from '@/components/onboard/onboard-provision';
 import { OnboardStrategy } from '@/components/onboard/onboard-strategy';
 import { OnboardReview } from '@/components/onboard/onboard-review';
-import type { OnboardStep, OnboardFormData, ProvisionResult } from '@/lib/types/strategy';
+import type { OnboardStep, OnboardFormData } from '@/lib/types/strategy';
 
 export default function OnboardWizardPage() {
   const [currentStep, setCurrentStep] = useState<OnboardStep>('input');
@@ -33,21 +33,45 @@ export default function OnboardWizardPage() {
     setCurrentStep('analyze');
   }
 
-  // Step 2 → Step 3
-  function handleAnalyzeNext(data: OnboardFormData) {
+  // Step 2 → Step 3 (analyze → strategy).
+  // Provisioning (Cortex insert + knowledge-graph sync + Monday board)
+  // runs silently here instead of as its own stepper step so the user
+  // doesn't sit through a redundant "creating records" screen. Errors
+  // surface as a toast and keep the user on the analyze step.
+  const handleAnalyzeNext = useCallback(async (data: OnboardFormData) => {
     setFormData(data);
-    completeStep('analyze');
-    setCurrentStep('provision');
-  }
+    try {
+      const res = await fetch('/api/clients/onboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const payload = await res.json().catch(() => null);
 
-  // Step 3 → Step 4
-  const handleProvisionNext = useCallback((result: ProvisionResult & { clientId: string }) => {
-    setClientId(result.clientId);
-    completeStep('provision');
-    setCurrentStep('strategy');
+      if (!res.ok || !payload?.cortex?.success || !payload?.cortex?.clientId) {
+        const msg = payload?.error ?? payload?.cortex?.error ?? 'Failed to create client';
+        toast.error(msg);
+        return;
+      }
+
+      // Non-fatal: surface vault / monday failures as a warning but
+      // keep going — the client record exists and strategy can proceed.
+      if (payload.vault && payload.vault.success === false) {
+        toast.warning(`Knowledge-graph sync skipped: ${payload.vault.error ?? 'unknown error'}`);
+      }
+      if (payload.monday && payload.monday.success === false) {
+        toast.warning(`Monday.com board skipped: ${payload.monday.error ?? 'unknown error'}`);
+      }
+
+      setClientId(payload.cortex.clientId);
+      completeStep('analyze');
+      setCurrentStep('strategy');
+    } catch {
+      toast.error('Something went wrong creating the client — try again.');
+    }
   }, []);
 
-  // Step 4 → Step 5
+  // Step 3 → Step 4
   const handleStrategyNext = useCallback((id: string) => {
     setStrategyId(id);
     completeStep('strategy');
@@ -83,20 +107,12 @@ export default function OnboardWizardPage() {
         />
       )}
 
-      {currentStep === 'provision' && formData && (
-        <OnboardProvision
-          formData={formData}
-          onNext={handleProvisionNext}
-          onBack={() => setCurrentStep('analyze')}
-        />
-      )}
-
       {currentStep === 'strategy' && (
         <OnboardStrategy
           clientId={clientId}
           clientName={formData?.name ?? ''}
           onNext={handleStrategyNext}
-          onBack={() => setCurrentStep('provision')}
+          onBack={() => setCurrentStep('analyze')}
         />
       )}
 

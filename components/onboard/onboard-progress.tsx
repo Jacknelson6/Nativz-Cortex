@@ -3,12 +3,15 @@
 import { Check } from 'lucide-react';
 import type { OnboardStep } from '@/lib/types/strategy';
 
+// Provisioning (Cortex insert + knowledge-graph sync + Monday board) used
+// to be its own "Set up" step. We now run it silently during the Analyze
+// → Strategy transition so the user doesn't sit through a redundant
+// "creating records" screen.
 const STEPS: { key: OnboardStep; label: string; number: number }[] = [
   { key: 'input', label: 'Client info', number: 1 },
   { key: 'analyze', label: 'AI analysis', number: 2 },
-  { key: 'provision', label: 'Set up', number: 3 },
-  { key: 'strategy', label: 'Strategy', number: 4 },
-  { key: 'review', label: 'Review', number: 5 },
+  { key: 'strategy', label: 'Strategy', number: 3 },
+  { key: 'review', label: 'Review', number: 4 },
 ];
 
 interface OnboardProgressProps {
