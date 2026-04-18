@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, Lock, Check, Save, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Lock, Check, Save, Loader2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { centsToDollars, dollarsToCents } from '@/lib/accounting/periods';
@@ -129,6 +129,14 @@ export function PeriodDetailClient({
           </p>
         </div>
         <div className="flex gap-2">
+          {entries.length > 0 && (
+            <a
+              href={`/api/accounting/periods/${period.id}/export`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover"
+            >
+              <Download size={13} /> Export CSV
+            </a>
+          )}
           {period.status === 'draft' && (
             <Button variant="outline" size="sm" onClick={() => handleStatus('locked')} disabled={isPending}>
               <Lock size={14} /> Lock
