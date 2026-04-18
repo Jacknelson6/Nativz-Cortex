@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, Sparkles, Building2 } from 'lucide-react';
+import { Loader2, Sparkles, Building2, Paperclip, X } from 'lucide-react';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { ChatComposer, type ChatAttachment } from '@/components/ai/chat-composer';
@@ -13,6 +13,20 @@ interface RoutableClient extends ClientOption {
 }
 import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 import { useRouter } from 'next/navigation';
+
+type AttachedScopeType = 'audit' | 'tiktok_shop_search' | 'topic_search';
+
+interface AttachedScope {
+  type: AttachedScopeType;
+  id: string;
+  label: string;
+}
+
+const SCOPE_TYPE_LABEL: Record<AttachedScopeType, string> = {
+  audit: 'Audit',
+  tiktok_shop_search: 'TikTok Shop',
+  topic_search: 'Topic',
+};
 import {
   readGeneralContentLabConversationId,
   writeGeneralContentLabConversationId,
@@ -22,6 +36,13 @@ import {
 interface ContentLabGeneralChatProps {
   /** Full client roster used for the picker. Routing happens client-side. */
   clients: RoutableClient[];
+  /**
+   * Pre-pinned analysis from a drawer handoff (e.g. user clicked
+   * "Continue in Strategy Lab" on a TikTok Shop results page). The
+   * parent page resolves the label server-side from `?attach=` so the
+   * chip can render without a roundtrip.
+   */
+  initialScope?: AttachedScope | null;
 }
 
 const SUGGESTIONS = [
@@ -38,7 +59,7 @@ const SUGGESTIONS = [
  * client routes into the per-client workspace at /admin/strategy-lab/[slug]
  * which spins up an isolated thread.
  */
-export function ContentLabGeneralChat({ clients }: ContentLabGeneralChatProps) {
+export function ContentLabGeneralChat({ clients, initialScope = null }: ContentLabGeneralChatProps) {
   const router = useRouter();
   const { config: agencyConfig, brandName: agencyName } = useAgencyBrand();
 
@@ -48,6 +69,12 @@ export function ContentLabGeneralChat({ clients }: ContentLabGeneralChatProps) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Attached analyses (drawer handoff seed + future user-added attachments).
+  // Sent to the Nerd as `scopeContext` — the compact-index variant where the
+  // agent pulls detail on demand via tools, not a full-blob dump.
+  const [attachedScope, setAttachedScope] = useState<AttachedScope[]>(
+    initialScope ? [initialScope] : [],
+  );
   const abortRef = useRef<AbortController | null>(null);
   const pendingAttachmentsRef = useRef<ChatAttachment[]>([]);
 
@@ -126,6 +153,15 @@ export function ContentLabGeneralChat({ clients }: ContentLabGeneralChatProps) {
             sessionHint: hint ?? undefined,
             conversationId: conversationId ?? undefined,
             attachments: processed && processed.length > 0 ? processed : undefined,
+            // Progressive-context attachments from drawer handoffs or
+            // future Strategy Lab attach actions. Paired with
+            // mode='strategy-lab' so the Nerd gets the scripting addendum
+            // + the compact attached-analyses index.
+            mode: attachedScope.length > 0 ? 'strategy-lab' : undefined,
+            scopeContext:
+              attachedScope.length > 0
+                ? attachedScope.map((s) => ({ type: s.type, id: s.id }))
+                : undefined,
           }),
           signal: controller.signal,
         });
@@ -310,7 +346,34 @@ export function ContentLabGeneralChat({ clients }: ContentLabGeneralChatProps) {
 
       {/* Composer */}
       <div className="shrink-0 px-4 pb-5 pt-3 md:px-8 md:pb-6">
-        <div className="mx-auto flex max-w-3xl flex-col">
+        <div className="mx-auto flex max-w-3xl flex-col gap-2">
+          {attachedScope.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                <Paperclip size={11} aria-hidden />
+                Attached
+              </span>
+              {attachedScope.map((s) => (
+                <span
+                  key={`${s.type}:${s.id}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent-text"
+                >
+                  <span className="opacity-70">{SCOPE_TYPE_LABEL[s.type]}</span>
+                  <span className="truncate max-w-[18rem]">{s.label}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAttachedScope((prev) => prev.filter((x) => !(x.type === s.type && x.id === s.id)))
+                    }
+                    className="rounded-full p-0.5 text-accent-text transition hover:bg-accent/15"
+                    aria-label="Remove attachment"
+                  >
+                    <X size={11} aria-hidden />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           <ChatComposer
             variant="research"
             value={input}
@@ -320,7 +383,11 @@ export function ContentLabGeneralChat({ clients }: ContentLabGeneralChatProps) {
               handleSend();
             }}
             disabled={streaming}
-            placeholder="Ask the Nerd anything — agency-wide…"
+            placeholder={
+              attachedScope.length > 0
+                ? 'Ask about the attached analysis…'
+                : 'Ask the Nerd anything — agency-wide…'
+            }
           />
         </div>
       </div>

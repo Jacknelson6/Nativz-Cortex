@@ -14,7 +14,63 @@ type ClientRow = {
   agency: string | null;
 };
 
-export default async function ContentLabIndexPage() {
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+type AttachedScopeType = 'audit' | 'tiktok_shop_search' | 'topic_search';
+
+interface InitialScope {
+  type: AttachedScopeType;
+  id: string;
+  label: string;
+}
+
+/**
+ * Resolve `?attach={type}:{id}` into an InitialScope (server-side so the
+ * chat component gets a human-readable label to render without a fetch
+ * round-trip). Drops silently when the payload is malformed or the row
+ * doesn't exist — the URL is a deep-link convenience, not a requirement.
+ */
+async function resolveAttach(
+  adminClient: AdminClient,
+  raw: string | undefined,
+): Promise<InitialScope | null> {
+  if (!raw) return null;
+  const [type, id] = raw.split(':');
+  if (!id || !['audit', 'tiktok_shop_search', 'topic_search'].includes(type)) return null;
+
+  try {
+    if (type === 'tiktok_shop_search') {
+      const { data } = await adminClient.from('tiktok_shop_searches').select('query').eq('id', id).maybeSingle();
+      if (!data) return null;
+      return { type: 'tiktok_shop_search', id, label: data.query || 'TikTok Shop search' };
+    }
+    if (type === 'topic_search') {
+      const { data } = await adminClient.from('topic_searches').select('query').eq('id', id).maybeSingle();
+      if (!data) return null;
+      return { type: 'topic_search', id, label: data.query || 'Topic search' };
+    }
+    if (type === 'audit') {
+      const { data } = await adminClient
+        .from('prospect_audits')
+        .select('website_url, prospect_data')
+        .eq('id', id)
+        .maybeSingle();
+      if (!data) return null;
+      const pd = data.prospect_data as { websiteContext?: { title?: string | null } } | null;
+      const label = pd?.websiteContext?.title?.trim() || data.website_url || 'Organic Social audit';
+      return { type: 'audit', id, label };
+    }
+  } catch {
+    /* Silent drop — URL attach is best-effort */
+  }
+  return null;
+}
+
+export default async function ContentLabIndexPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ attach?: string }>;
+}) {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -25,13 +81,13 @@ export default async function ContentLabIndexPage() {
 
   try {
     const adminClient = createAdminClient();
-    const { data: dbClients, error: dbError } = await selectClientsWithRosterVisibility<ClientRow>(
-      adminClient,
-      {
+    const [{ data: dbClients, error: dbError }, { attach: attachParam }] = await Promise.all([
+      selectClientsWithRosterVisibility<ClientRow>(adminClient, {
         select: 'id, name, slug, is_active, logo_url, agency',
         orderBy: { column: 'name' },
-      },
-    );
+      }),
+      searchParams,
+    ]);
 
     if (dbError) throw dbError;
 
@@ -45,9 +101,11 @@ export default async function ContentLabIndexPage() {
         agency: c.agency,
       }));
 
+    const initialScope = await resolveAttach(adminClient, attachParam);
+
     return (
       <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col p-4 md:p-6">
-        <ContentLabGeneralChat clients={clients} />
+        <ContentLabGeneralChat clients={clients} initialScope={initialScope} />
       </div>
     );
   } catch (err) {
