@@ -15,7 +15,7 @@ type ContentLabSectionProps = {
 };
 
 /**
- * Shared shell for Content Lab cards — consistent border, surface, padding, and header rhythm.
+ * Shared shell for Strategy Lab cards — consistent border, surface, padding, and header rhythm.
  */
 export function ContentLabSection({
   icon: Icon,

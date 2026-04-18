@@ -1,7 +1,7 @@
 /**
- * Client-side persistence of the Content Lab Nerd conversation ID per client.
+ * Client-side persistence of the Strategy Lab Nerd conversation ID per client.
  *
- * Each client has one "current" Content Lab chat — when the user reopens the
+ * Each client has one "current" Strategy Lab chat — when the user reopens the
  * lab for the same client, we resume the same conversation instead of starting
  * fresh. The conversation itself lives in `nerd_conversations` / `nerd_messages`
  * (server-owned). This file only tracks the pointer in localStorage.
@@ -10,7 +10,7 @@
  */
 
 export const STRATEGY_LAB_NERD_CONVERSATION_PREFIX = 'content-lab:nerd-conversation:';
-/** Sentinel used for the no-client (general) Content Lab chat. */
+/** Sentinel used for the no-client (general) Strategy Lab chat. */
 export const STRATEGY_LAB_GENERAL_KEY = 'content-lab:nerd-conversation:__general__';
 
 export function readGeneralContentLabConversationId(): string | null {

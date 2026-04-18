@@ -32,10 +32,10 @@ const SUGGESTIONS = [
 ];
 
 /**
- * General Content Lab chat — no client scope. Used at /admin/content-lab
+ * General Strategy Lab chat — no client scope. Used at /admin/strategy-lab
  * when the admin wants to ideate freely, work on a prospect that isn't
  * onboarded, or get the Nerd's take across the whole portfolio. Picking a
- * client routes into the per-client workspace at /admin/content-lab/[slug]
+ * client routes into the per-client workspace at /admin/strategy-lab/[slug]
  * which spins up an isolated thread.
  */
 export function ContentLabGeneralChat({ clients }: ContentLabGeneralChatProps) {
@@ -52,7 +52,7 @@ export function ContentLabGeneralChat({ clients }: ContentLabGeneralChatProps) {
   const pendingAttachmentsRef = useRef<ChatAttachment[]>([]);
 
   const sessionHintRef = useRef<string | null>(
-    'User is in the general Content Lab — no client is scoped. Reason across the whole agency portfolio. Reach for cross-client patterns, brand voice frameworks, and high-level positioning. Reference specific clients only when the user asks. Keep replies concise and tactical.',
+    'User is in the general Strategy Lab — no client is scoped. Reason across the whole agency portfolio. Reach for cross-client patterns, brand voice frameworks, and high-level positioning. Reference specific clients only when the user asks. Keep replies concise and tactical.',
   );
 
   // Resume the persisted general conversation on mount.
@@ -208,15 +208,15 @@ export function ContentLabGeneralChat({ clients }: ContentLabGeneralChatProps) {
     setConversationId(null);
     clearGeneralContentLabConversationId();
     sessionHintRef.current =
-      'User is in the general Content Lab — no client is scoped. Reason across the whole agency portfolio.';
+      'User is in the general Strategy Lab — no client is scoped. Reason across the whole agency portfolio.';
   }
 
   function handlePickClient(id: string) {
     setPickerOpen(false);
-    // The Content Lab dynamic route loads by client UUID (param name is
+    // The Strategy Lab dynamic route loads by client UUID (param name is
     // `clientId` and the page filters `clients.id`). Routing with the
     // slug 404s.
-    if (id) router.push(`/admin/content-lab/${id}`);
+    if (id) router.push(`/admin/strategy-lab/${id}`);
   }
 
   return (
@@ -225,7 +225,7 @@ export function ContentLabGeneralChat({ clients }: ContentLabGeneralChatProps) {
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
         <div className="flex items-center gap-2 text-sm text-text-muted">
           <Sparkles size={14} className="text-accent-text" aria-hidden />
-          <span>Content Lab — general</span>
+          <span>Strategy Lab — general</span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -262,7 +262,7 @@ export function ContentLabGeneralChat({ clients }: ContentLabGeneralChatProps) {
               className="h-10 w-auto max-w-[260px] object-contain"
             />
             <span className="text-2xl font-light text-text-muted/60" aria-hidden>×</span>
-            <span className="text-2xl font-semibold text-text-primary">Content Lab</span>
+            <span className="text-2xl font-semibold text-text-primary">Strategy Lab</span>
           </div>
           <h2 className="mb-2 text-2xl font-semibold tracking-tight text-text-primary">
             What are we thinking about?

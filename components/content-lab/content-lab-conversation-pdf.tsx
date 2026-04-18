@@ -267,7 +267,7 @@ export function ContentLabConversationPdf({
             <Text style={s.kicker}>Strategy session</Text>
             <Text style={s.title}>{conversationTitle || clientName}</Text>
             <Text style={s.subtitle}>
-              Research-grounded strategy, video ideas, and scripts produced with {clientName} in the Content Lab.
+              Research-grounded strategy, video ideas, and scripts produced with {clientName} in the Strategy Lab.
             </Text>
           </View>
 

@@ -20,17 +20,17 @@ interface ContentLabClientPickerPillProps {
   clientName: string;
   clientSlug: string;
   /** When the user picks a different client, the pill navigates to its
-   *  Content Lab route. The parent doesn't need to react. */
+   *  Strategy Lab route. The parent doesn't need to react. */
 }
 
 /**
- * Content Lab header client picker — same logo-grid UX the Research page
+ * Strategy Lab header client picker — same logo-grid UX the Research page
  * Brand popover uses. Opens a dropdown listing every active client as a
- * clickable ClientLogo tile; picking one routes to /admin/content-lab/<slug>.
+ * clickable ClientLogo tile; picking one routes to /admin/strategy-lab/<slug>.
  *
  * Pulls the full client list lazily from /api/nerd/mentions (already returns
  * every active client with avatarUrl: c.logo_url) so we don't have to plumb
- * the client roster down through the Content Lab workspace props.
+ * the client roster down through the Strategy Lab workspace props.
  */
 export function ContentLabClientPickerPill({
   clientId,
@@ -103,8 +103,8 @@ export function ContentLabClientPickerPill({
     (client: MentionClient) => {
       setOpen(false);
       if (client.id === clientId) return;
-      // /admin/content-lab/[clientId] loads by UUID, not slug.
-      router.push(`/admin/content-lab/${client.id}`);
+      // /admin/strategy-lab/[clientId] loads by UUID, not slug.
+      router.push(`/admin/strategy-lab/${client.id}`);
     },
     [clientId, router],
   );

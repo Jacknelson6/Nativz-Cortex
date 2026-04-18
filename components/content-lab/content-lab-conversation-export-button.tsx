@@ -56,7 +56,7 @@ export function ContentLabConversationExportButton({
       });
       toast.success('Strategy PDF exported');
     } catch (err) {
-      console.error('Content Lab PDF export error:', err);
+      console.error('Strategy Lab PDF export error:', err);
       toast.error('Failed to export PDF');
     } finally {
       setExporting(false);

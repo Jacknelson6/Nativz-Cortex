@@ -10,6 +10,13 @@ const nextConfig: NextConfig = {
       { source: '/admin/audit', destination: '/admin/analyze-social', permanent: false },
       { source: '/admin/audit/:path*', destination: '/admin/analyze-social/:path*', permanent: false },
       { source: '/shared/audit/:path*', destination: '/shared/analyze-social/:path*', permanent: false },
+      // Content Lab → Strategy Lab (April 2026 rename). Internal file /
+      // folder names (components/content-lab/*, lib/content-lab/*) kept as-is
+      // to avoid churn on git blame and imports; only the public URL moved.
+      { source: '/admin/content-lab', destination: '/admin/strategy-lab', permanent: false },
+      { source: '/admin/content-lab/:path*', destination: '/admin/strategy-lab/:path*', permanent: false },
+      { source: '/portal/content-lab', destination: '/portal/strategy-lab', permanent: false },
+      { source: '/portal/content-lab/:path*', destination: '/portal/strategy-lab/:path*', permanent: false },
     ];
   },
   compiler: {

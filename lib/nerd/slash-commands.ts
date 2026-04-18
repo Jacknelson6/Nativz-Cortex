@@ -210,7 +210,7 @@ registerCommand({
 /**
  * /ideas + /idea: both route through the topic-plan artifact flow. The
  * Nerd MUST call create_topic_plan (not dump prose into chat). The
- * Content Lab system prompt already owns the tool-ordering rules —
+ * Strategy Lab system prompt already owns the tool-ordering rules —
  * these expansions just nudge the request with an explicit idea count
  * and suppress any instinct to re-write the plan inline.
  */

@@ -5,7 +5,7 @@ import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 import { cn } from '@/lib/utils/cn';
 
 /**
- * Per-message assistant avatar for Content Lab. Earlier attempts to
+ * Per-message assistant avatar for Strategy Lab. Earlier attempts to
  * crush the agency lockup or an "agency × client" combo into a 32px
  * tile read as an unreadable blob. The Nerd needs its own mark — a
  * sparkles glyph in the agency accent color, on a tinted accent tile.

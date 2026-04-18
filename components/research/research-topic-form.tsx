@@ -293,8 +293,8 @@ export function ResearchTopicForm({
     const bulkHasSelection = bulkIds.length > 0;
     const bulkReady = bulkHasSelection && bulkClientId != null;
     const contentLabHref = bulkReady
-      ? `/admin/content-lab/${bulkClientId}`
-      : '/admin/content-lab';
+      ? `/admin/strategy-lab/${bulkClientId}`
+      : '/admin/strategy-lab';
 
     return (
       <div className="w-full">

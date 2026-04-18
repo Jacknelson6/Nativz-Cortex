@@ -8,13 +8,13 @@ import { PortalContentLab } from '@/components/portal/portal-content-lab';
 export const dynamic = 'force-dynamic';
 
 /**
- * Portal Content Lab page, keyed by clientId. We enforce that the :clientId
+ * Portal Strategy Lab page, keyed by clientId. We enforce that the :clientId
  * in the URL MUST match the user's org-bound client — anything else 404s so
  * a viewer can't navigate sideways into a different client's workspace even
  * if they guess a UUID.
  *
  * The content-lab feature rides the same `can_use_nerd` flag as the portal
- * Nerd — if an org has the Nerd off, Content Lab is off too. If that turns
+ * Nerd — if an org has the Nerd off, Strategy Lab is off too. If that turns
  * out to be wrong we can split it into its own flag later.
  */
 export default async function PortalContentLabPage({
@@ -34,7 +34,7 @@ export default async function PortalContentLabPage({
         <div className="cortex-page-gutter">
           <EmptyState
             icon={<Lock size={24} />}
-            title="Content Lab is not enabled"
+            title="Strategy Lab is not enabled"
             description="Contact your team to enable AI content tools."
           />
         </div>

@@ -596,16 +596,16 @@ export function HistoryFeed({
       if (item.type === 'ideas') return;
       if (item.clientId) {
         mergeTopicSearchSelectionIntoLocalStorage(item.clientId, [item.id]);
-        router.push(`/admin/content-lab/${item.clientId}`);
+        router.push(`/admin/strategy-lab/${item.clientId}`);
       } else {
         toast.message('Pick a client in Content lab, then pin topic searches from your history.');
-        router.push('/admin/content-lab');
+        router.push('/admin/strategy-lab');
       }
     },
     [router],
   );
 
-  /** Bulk open in Content Lab — merges all selected search IDs into localStorage. */
+  /** Bulk open in Strategy Lab — merges all selected search IDs into localStorage. */
   const openAllSelectedInContentLab = useCallback(() => {
     const ids = orderedSelectedIds;
     if (ids.length === 0) return;
@@ -615,8 +615,8 @@ export function HistoryFeed({
       .filter((r): r is HistoryItem => Boolean(r));
     const clientIds = [...new Set(rows.map((r) => r.clientId).filter(Boolean))];
     if (clientIds.length === 0) {
-      toast.message('Pick a client in Content Lab, then pin topic searches from your history.');
-      router.push('/admin/content-lab');
+      toast.message('Pick a client in Strategy Lab, then pin topic searches from your history.');
+      router.push('/admin/strategy-lab');
       return;
     }
     if (clientIds.length > 1) {
@@ -627,7 +627,7 @@ export function HistoryFeed({
     mergeTopicSearchSelectionIntoLocalStorage(clientId, ids);
     setSelectionModeActive(false);
     setSelectedTopicSearchIds(new Set());
-    router.push(`/admin/content-lab/${clientId}`);
+    router.push(`/admin/strategy-lab/${clientId}`);
   }, [orderedSelectedIds, mergedItems, router]);
 
   /**
@@ -1165,7 +1165,7 @@ export function HistoryFeed({
    * there every row becomes click-to-toggle, and the panel exposes the two
    * bulk actions the user actually wants — copy all share links, delete all.
    *
-   * The old panel had an instructional paragraph, a "Bring to Content Lab"
+   * The old panel had an instructional paragraph, a "Bring to Strategy Lab"
    * primary CTA, and an "Open all in lab" button — all removed per the latest
    * product direction.
    */
@@ -1222,7 +1222,7 @@ export function HistoryFeed({
             )}
           >
             <FlaskConical size={13} className="shrink-0" aria-hidden />
-            Open in Content Lab
+            Open in Strategy Lab
           </button>
           <button
             type="button"

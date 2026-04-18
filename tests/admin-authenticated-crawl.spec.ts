@@ -82,7 +82,7 @@ test.describe('Admin full journey', () => {
         `/admin/clients/${slug}/ideas/generate`,
         `/admin/clients/${slug}/ad-creatives`,
         `/admin/clients/${slug}/moodboard`,
-        `/admin/content-lab/${firstClient.id}`,
+        `/admin/strategy-lab/${firstClient.id}`,
         `/admin/analytics/social?clientId=${firstClient.id}`,
         `/admin/nerd?strategySource=content-lab&strategyClient=${firstClient.id}`,
       ];

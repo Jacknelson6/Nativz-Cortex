@@ -22,7 +22,7 @@ import {
 import { contentLabTopicSearchStorageKey } from '@/lib/content-lab/topic-search-selection-storage';
 
 /**
- * Portal Content Lab — the client-facing variant of ContentLabNerdChat.
+ * Portal Strategy Lab — the client-facing variant of ContentLabNerdChat.
  *
  * Differences from the admin surface:
  * - No client picker (viewer is locked to their org-bound client)
@@ -95,8 +95,8 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
   const [attachResearchOpen, setAttachResearchOpen] = useState(false);
 
   // Hydrate pre-pinned topic searches from localStorage. The admin Strategy
-  // Lab "Open in Content Lab" button and the portal topic-search "Open in
-  // Content Lab" button both write to this key before navigating here.
+  // Lab "Open in Strategy Lab" button and the portal topic-search "Open in
+  // Strategy Lab" button both write to this key before navigating here.
   useEffect(() => {
     if (!clientId || typeof window === 'undefined') return;
     try {
@@ -164,7 +164,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
   );
 
   const sessionHintRef = useRef<string | null>(
-    'User is in the portal Content Lab. You are scoped to this one client only. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Be concise and actionable.',
+    'User is in the portal Strategy Lab. You are scoped to this one client only. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Be concise and actionable.',
   );
   const abortRef = useRef<AbortController | null>(null);
   const pendingAttachmentsRef = useRef<ChatAttachment[]>([]);
@@ -314,7 +314,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
             sessionHint: hint ?? undefined,
             searchContext: attachedSearchIds.length > 0 ? attachedSearchIds : undefined,
             conversationId: conversationId ?? undefined,
-            mode: 'content-lab' as const,
+            mode: 'strategy-lab' as const,
             portalMode: true,
             attachments: processed && processed.length > 0 ? processed : undefined,
           }),
@@ -404,7 +404,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
     setConversationMessageCount(0);
     clearContentLabNerdConversationId(clientId);
     sessionHintRef.current =
-      'User is in the portal Content Lab. You are scoped to this one client only. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Be concise and actionable.';
+      'User is in the portal Strategy Lab. You are scoped to this one client only. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Be concise and actionable.';
     setConversationsRefreshToken((t) => t + 1);
   }, [streaming, clientId]);
 
@@ -460,7 +460,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
 
   // Composer rendered inline in the centered pre-chat state AND pinned as a
   // bottom footer once messages start streaming — same extract the admin
-  // Content Lab uses, so the two surfaces share the pattern.
+  // Strategy Lab uses, so the two surfaces share the pattern.
   const composer = (
     <div className="flex flex-col">
       <ContentLabTopicSearchChipBar
@@ -539,7 +539,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
             />
             <div className="flex min-w-0 flex-col">
               <span className="truncate text-sm font-semibold text-text-primary">{clientName}</span>
-              <span className="text-xs text-text-muted">Content Lab</span>
+              <span className="text-xs text-text-muted">Strategy Lab</span>
             </div>
           </div>
         </header>
@@ -551,7 +551,7 @@ export function PortalContentLab({ clientId, clientName, clientSlug }: PortalCon
               <p className="mt-3 text-base font-medium text-text-primary">
                 {conversationTitle && conversationTitle !== 'New conversation'
                   ? `Resuming: ${conversationTitle}`
-                  : 'Resuming your Content Lab chat'}
+                  : 'Resuming your Strategy Lab chat'}
               </p>
               {conversationMessageCount > 0 && (
                 <p className="mt-1 text-sm text-text-muted">

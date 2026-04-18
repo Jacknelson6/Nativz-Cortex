@@ -112,8 +112,8 @@ test.describe('Deep — route matrix sanity', () => {
     expect(set.size).toBe(ADMIN_PROTECTED_ROUTES.length);
   });
 
-  test('full static crawl list includes /admin/content-lab', () => {
-    expect(ADMIN_E2E_FULL_STATIC_ROUTES).toContain('/admin/content-lab');
+  test('full static crawl list includes /admin/strategy-lab', () => {
+    expect(ADMIN_E2E_FULL_STATIC_ROUTES).toContain('/admin/strategy-lab');
   });
 
   test('full static crawl omits bare /admin/analytics (redirect-only)', () => {

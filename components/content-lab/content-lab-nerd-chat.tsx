@@ -54,7 +54,7 @@ type ContentLabNerdChatProps = {
   clientId: string;
   clientName: string;
   clientSlug: string;
-  /** Topic search IDs the user pinned in Content Lab — the initial attached set for the chat context. */
+  /** Topic search IDs the user pinned in Strategy Lab — the initial attached set for the chat context. */
   pinnedTopicSearchIds: string[];
 };
 
@@ -71,11 +71,11 @@ interface TopicSearchItem {
 }
 
 /**
- * Admin Nerd chat embedded in Content Lab — full tool access, client scoped via
+ * Admin Nerd chat embedded in Strategy Lab — full tool access, client scoped via
  * @mention resolution, and topic-search attachment so Cortex can reason over the
  * actual research findings (not just IDs).
  *
- * Content Lab is the primary Nerd surface; the chat is where strategy, content
+ * Strategy Lab is the primary Nerd surface; the chat is where strategy, content
  * pillar, video idea, and scripting work lives. Attached topic searches flow into
  * the `searchContext` field on `/api/nerd/chat`, which injects the full topic
  * search content (summary, trending topics, metrics, video ideas, emotions) into
@@ -191,7 +191,7 @@ export function ContentLabNerdChat({
   );
 
   const sessionHintRef = useRef<string | null>(
-    'User is in Content Lab with this client pinned. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Prefer topic search, pillar, knowledge, and content tools. Be concise and actionable.',
+    'User is in Strategy Lab with this client pinned. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Prefer topic search, pillar, knowledge, and content tools. Be concise and actionable.',
   );
   const abortRef = useRef<AbortController | null>(null);
   const pendingAttachmentsRef = useRef<ChatAttachment[]>([]);
@@ -515,7 +515,7 @@ export function ContentLabNerdChat({
             sessionHint: hint ?? undefined,
             searchContext: attachedSearchIds.length > 0 ? attachedSearchIds : undefined,
             conversationId: conversationId ?? undefined,
-            mode: 'content-lab' as const,
+            mode: 'strategy-lab' as const,
             attachments: processed && processed.length > 0 ? processed : undefined,
           }),
           signal: controller.signal,
@@ -608,7 +608,7 @@ export function ContentLabNerdChat({
     setConversationMessageCount(0);
     clearContentLabNerdConversationId(clientId);
     sessionHintRef.current =
-      'User is in Content Lab with this client pinned. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Prefer topic search, pillar, knowledge, and content tools. Be concise and actionable.';
+      'User is in Strategy Lab with this client pinned. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Prefer topic search, pillar, knowledge, and content tools. Be concise and actionable.';
     // Ask the picker to refetch the list — the current thread may no longer
     // be the latest, and a brand-new one is about to start.
     setConversationsRefreshToken((t) => t + 1);

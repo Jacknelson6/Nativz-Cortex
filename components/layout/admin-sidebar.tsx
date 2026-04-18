@@ -71,7 +71,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Intelligence',
     items: [
       { href: '/admin/search/new', label: 'Topic Search', icon: Search },
-      { href: '/admin/content-lab', label: 'Content Lab', icon: Compass },
+      { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: Compass },
       { href: '/admin/analyze-social', label: 'Competitor Tracking', icon: Radar },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
       { href: '/admin/notes', label: 'Notes', icon: StickyNote },
@@ -169,7 +169,7 @@ const COMING_SOON_HREFS = new Set([
  * lines up with NAV_SECTIONS.
  */
 const PORTAL_HREF_REWRITES: Record<string, string> = {
-  '/admin/content-lab': '/portal/content-lab',
+  '/admin/strategy-lab': '/portal/strategy-lab',
 };
 
 function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSection[] {

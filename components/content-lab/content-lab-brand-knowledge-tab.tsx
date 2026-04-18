@@ -34,7 +34,7 @@ type ContentLabBrandKnowledgeTabProps = {
 };
 
 /**
- * Full knowledge surface for Content Lab: vault (docs, graph, meetings) and brand DNA bento.
+ * Full knowledge surface for Strategy Lab: vault (docs, graph, meetings) and brand DNA bento.
  */
 export function ContentLabBrandKnowledgeTab({
   clientId,

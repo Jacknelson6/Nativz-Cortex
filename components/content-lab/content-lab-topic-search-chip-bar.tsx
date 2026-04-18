@@ -21,9 +21,9 @@ interface ContentLabTopicSearchChipBarProps {
   attachedSearchIds: string[];
   onToggle: (searchId: string) => void;
   /**
-   * Initial attached set from the Content Lab selection storage — on mount
+   * Initial attached set from the Strategy Lab selection storage — on mount
    * we merge this into attachedSearchIds if the user hasn't manually picked
-   * anything yet. Lets the Research page's "Bring to Content Lab" flow
+   * anything yet. Lets the Research page's "Bring to Strategy Lab" flow
    * pre-attach the pinned searches.
    */
   pinnedTopicSearchIds: string[];

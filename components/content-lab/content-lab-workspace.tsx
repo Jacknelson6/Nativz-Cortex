@@ -23,7 +23,7 @@ type BrandGuidelinePayload = {
 } | null;
 
 /**
- * Content Lab workspace — after the April 2026 refactor this is a thin shell
+ * Strategy Lab workspace — after the April 2026 refactor this is a thin shell
  * that hydrates the pinned-topic-search state from localStorage and hands off
  * to the chat. The old Knowledge Base / Analytics / Artifacts tab nav was
  * removed; artifacts now live in the left rail, knowledge and analytics live

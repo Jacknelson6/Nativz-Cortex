@@ -1,5 +1,5 @@
 /**
- * Marketing skills loader for The Nerd and Content Lab agents.
+ * Marketing skills loader for The Nerd and Strategy Lab agents.
  * Reads SKILL.md files from .agents/skills/ and matches relevant ones
  * based on the user's query keywords.
  */

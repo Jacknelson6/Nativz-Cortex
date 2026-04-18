@@ -63,17 +63,18 @@ const chatSchema = z.object({
   conversationId: z.string().uuid().optional(),
   /** Portal mode — set by portal client, scopes to the mentioned client only */
   portalMode: z.boolean().optional(),
-  /** Optional frontend context for first message (e.g. opened from Content Lab) */
+  /** Optional frontend context for first message (e.g. opened from Strategy Lab) */
   sessionHint: z.string().max(500).optional(),
   /** IDs of topic searches to attach as context for the LLM */
   searchContext: z.array(z.string().uuid()).max(5).optional(),
   /**
-   * Explicit Nerd surface mode. When 'content-lab', the chat route appends
-   * the Content Lab scripting addendum (behavioural rules + preloaded
-   * scripting skills from nerd_skills) to the base system prompt. Used by
-   * components/content-lab/content-lab-nerd-chat.tsx.
+   * Explicit Nerd surface mode. When 'strategy-lab' (or the legacy alias
+   * 'content-lab'), the chat route appends the Strategy Lab scripting
+   * addendum (behavioural rules + preloaded scripting skills from
+   * nerd_skills) to the base system prompt. Used by
+   * components/content-lab/content-lab-nerd-chat.tsx and the portal.
    */
-  mode: z.enum(['content-lab']).optional(),
+  mode: z.enum(['content-lab', 'strategy-lab']).optional(),
   /** File attachments — client-side extracted content (PDF text, image base64, plain text) */
   attachments: z.array(attachmentSchema).max(10).optional(),
 });
@@ -118,7 +119,7 @@ TOOL USAGE RULES:
 - After a tool call completes, summarize the result in natural language. Don't just dump JSON.
 - If a tool fails, explain the error clearly and suggest alternatives.
 - You can call multiple tools in sequence if the user's request requires it.
-- For Content Lab / analysis-board questions, prefer the dedicated board + video tools before guessing from limited context.
+- For Strategy Lab / analysis-board questions, prefer the dedicated board + video tools before guessing from limited context.
 
 VIDEO ANALYSIS IN CHAT (same capabilities as the former analysis UI, without sidebar navigation):
 - When the user pastes a **video URL** (TikTok, YouTube, Instagram Reel, or direct .mp4/.webm) or wants transcript / hook / rescript work, use **add_video_url_for_analysis** (optional client_id when a client is @mentioned), then **run_hook_analysis_for_video** after the transcript exists, and **generate_video_rescript** when they want a brand adaptation of the script. Use **transcribe_analysis_item** only to retry or refresh transcription.
@@ -739,7 +740,7 @@ export async function POST(req: NextRequest) {
 
       if (!activeConvoId) {
         // Create a new conversation. Tag with the first client @mention so
-        // the Content Lab conversation picker can list per-client threads.
+        // the Strategy Lab conversation picker can list per-client threads.
         // Falls back to an insert without client_id if the column isn't
         // present yet (pre-migration 096 deploy window) — ADD COLUMN IF NOT
         // EXISTS is idempotent so this path disappears once the migration
@@ -849,16 +850,16 @@ export async function POST(req: NextRequest) {
       : buildAdminSystemPrompt(brandName);
     const skillsContext = buildMarketingSkillsContext(lastUserMsg);
     // Harness-aware skill injection: portal chats never receive admin-only
-    // skills unless explicitly opted in; admin Content Lab vs admin Nerd
+    // skills unless explicitly opted in; admin Strategy Lab vs admin Nerd
     // can also carry different skill sets. Client-scoped skills only
     // load when their client is the one pinned to the session.
     const skillHarness: 'admin_nerd' | 'admin_content_lab' | 'portal_content_lab' =
       isPortalUser
         ? 'portal_content_lab'
-        : mode === 'content-lab'
+        : mode === 'content-lab' || mode === 'strategy-lab'
         ? 'admin_content_lab'
         : 'admin_nerd';
-    // Admin Content Lab pins a client via @mention; use the first client
+    // Admin Strategy Lab pins a client via @mention; use the first client
     // mention so client-specific skills load for that brand. Admin Nerd
     // with no mention stays null (agency-wide skills only).
     const skillClientId = isPortalUser
@@ -875,12 +876,12 @@ export async function POST(req: NextRequest) {
       guardrailInstruction = `\n\n---\n\nIMPORTANT INSTRUCTION: For this query, you MUST respond with exactly this message (do not deviate, do not add caveats):\n\n${guardrailResult.response}`;
     }
 
-    // Content Lab / Content Lab mode: append the research-grounded
+    // Strategy Lab / Strategy Lab mode: append the research-grounded
     // scripting workbench addendum + preloaded scripting skills from
     // nerd_skills. Admins get the cross-client framing; portal users get
     // a locked-to-their-one-client variant.
     const contentLabAddendum =
-      mode === 'content-lab'
+      mode === 'content-lab' || mode === 'strategy-lab'
         ? await buildContentLabSystemAddendum(admin, {
             portalMode: isPortalUser,
             clientName: isPortalUser ? portalClientName : undefined,

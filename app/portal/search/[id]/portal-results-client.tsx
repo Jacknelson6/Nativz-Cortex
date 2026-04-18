@@ -42,7 +42,7 @@ interface PortalResultsClientProps {
   clientName: string | null;
   scrapedVideoCount: number;
   clientInfo?: PortalClientInfo | null;
-  /** Portal-side feature flag mirror. When false, the "Open in Content Lab"
+  /** Portal-side feature flag mirror. When false, the "Open in Strategy Lab"
    *  button is hidden even if a clientId is available. */
   canUseContentLab?: boolean;
 }
@@ -60,8 +60,8 @@ export function PortalResultsClient({
 
   function openInContentLab() {
     if (!clientInfo) return;
-    // Pre-pin this search so Content Lab auto-attaches it on mount.
-    // Mirrors the admin "Open in Content Lab" flow — same storage key,
+    // Pre-pin this search so Strategy Lab auto-attaches it on mount.
+    // Mirrors the admin "Open in Strategy Lab" flow — same storage key,
     // read by PortalContentLab.
     try {
       const key = contentLabTopicSearchStorageKey(clientInfo.id);
@@ -69,7 +69,7 @@ export function PortalResultsClient({
     } catch {
       /* quota / JSON — non-fatal, lab still opens without the chip */
     }
-    router.push(`/portal/content-lab/${clientInfo.id}`);
+    router.push(`/portal/strategy-lab/${clientInfo.id}`);
   }
 
   const hasPlatformSources = Boolean(
@@ -107,10 +107,10 @@ export function PortalResultsClient({
                 type="button"
                 onClick={openInContentLab}
                 className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent/60 hover:bg-accent/20"
-                title={`Open this search in Content Lab with ${clientInfo.name}`}
+                title={`Open this search in Strategy Lab with ${clientInfo.name}`}
               >
                 <FlaskConical size={14} aria-hidden />
-                Open in Content Lab
+                Open in Strategy Lab
               </button>
             ) : null}
             <Badge variant="success">Report ready</Badge>

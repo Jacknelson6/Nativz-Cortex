@@ -1,7 +1,7 @@
 /**
- * Content Lab mode system-prompt addendum for the Nerd.
+ * Strategy Lab mode system-prompt addendum for the Nerd.
  *
- * When the Nerd is running in Content Lab mode (client pinned, topic searches
+ * When the Nerd is running in Strategy Lab mode (client pinned, topic searches
  * attached), its job changes from "generic strategist + tool user" to
  * "research-grounded script + idea factory for this specific client". This file
  * builds the extra context block we append to the base system prompt.
@@ -18,29 +18,29 @@
  *    "script" in the user's message, we unconditionally pull any
  *    `nerd_skills` row whose name or keywords look script/hook/video-idea
  *    related and inject it. The scripting frameworks are always relevant in
- *    Content Lab mode.
+ *    Strategy Lab mode.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Intro paragraph for the admin Content Lab surface. Admin users may
+ * Intro paragraph for the admin Strategy Lab surface. Admin users may
  * reason across clients when helpful, so the framing doesn't lock them
  * to a single one.
  */
-const ADMIN_INTRO = `You are running inside the Content Lab with a specific client pinned and one or
+const ADMIN_INTRO = `You are running inside the Strategy Lab with a specific client pinned and one or
 more completed topic searches attached. Your job shifts from generalist
 strategist to **research-grounded short-form video script factory** for this
 client.`;
 
 /**
- * Intro paragraph for the portal Content Lab surface. Portal users are
+ * Intro paragraph for the portal Strategy Lab surface. Portal users are
  * strictly scoped to their own org-bound client — never reference any
  * other client's work, strategy, or data.
  */
 function portalIntro(clientName: string | undefined): string {
   const who = clientName ? `${clientName}'s` : "this client's";
-  return `You are working inside ${who} portal Content Lab. You are scoped to this one client only — you have no visibility into any other client in the agency, and every reference in this session is about THIS client. Your job is **research-grounded short-form video script factory** for them.`;
+  return `You are working inside ${who} portal Strategy Lab. You are scoped to this one client only — you have no visibility into any other client in the agency, and every reference in this session is about THIS client. Your job is **research-grounded short-form video script factory** for them.`;
 }
 
 const STRATEGY_LAB_ADDENDUM_BODY = `
@@ -227,7 +227,7 @@ fenced diagram may break the export.
 
 /**
  * Pull the scripting-related skills from `nerd_skills` and format them as a
- * context block. Unconditional — runs every time Content Lab mode is on, so
+ * context block. Unconditional — runs every time Strategy Lab mode is on, so
  * the model always has the scripting frameworks in front of it without
  * relying on keyword matching against the user's prompt.
  *
@@ -293,7 +293,7 @@ async function loadScriptingSkillsBlock(admin: SupabaseClient): Promise<string> 
     }
     if (parts.length === 0) return '';
 
-    return `\n\n---\n\n# AGENCY SCRIPTING FRAMEWORKS (preloaded for Content Lab)\n\nThese are Nativz's house frameworks for hooks, scripting, and short-form video. Use them as scaffolding for every script and idea you output in this session. Do not invent frameworks when these are available.\n\n${parts.join('\n\n---\n\n')}`;
+    return `\n\n---\n\n# AGENCY SCRIPTING FRAMEWORKS (preloaded for Strategy Lab)\n\nThese are Nativz's house frameworks for hooks, scripting, and short-form video. Use them as scaffolding for every script and idea you output in this session. Do not invent frameworks when these are available.\n\n${parts.join('\n\n---\n\n')}`;
   } catch (err) {
     console.warn('[content-lab-scripting-context] preload failed:', err);
     return '';
@@ -301,7 +301,7 @@ async function loadScriptingSkillsBlock(admin: SupabaseClient): Promise<string> 
 }
 
 /**
- * Build the full Content Lab / Content Lab addendum (behavioural rules +
+ * Build the full Strategy Lab / Strategy Lab addendum (behavioural rules +
  * preloaded scripting skills) to append to the base Nerd system prompt.
  *
  * @param admin Supabase admin client, used to load scripting skills

@@ -56,7 +56,7 @@ const ARTIFACT_ICON: Record<ArtifactType, React.ReactNode> = {
 };
 
 /**
- * Content Lab left rail — unified conversation history + artifacts list for
+ * Strategy Lab left rail — unified conversation history + artifacts list for
  * the active client. Mirrors the Topic Search history rail styling so the two
  * feel like sister surfaces. Artifacts moved in here from the old top-nav tab.
  */

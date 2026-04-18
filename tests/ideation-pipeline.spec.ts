@@ -50,7 +50,7 @@ test.describe('Ideation pipeline', () => {
   });
 
   test('strategy lab loads', async ({ page }) => {
-    await page.goto('/admin/content-lab', { waitUntil: 'domcontentloaded' });
+    await page.goto('/admin/strategy-lab', { waitUntil: 'domcontentloaded' });
     expect(page.url()).not.toMatch(/\/admin\/login(\?|$)/);
     await expect(page.locator('body')).toBeVisible();
   });

@@ -19,7 +19,7 @@ export function ContentLabAssistantCard({ clientId, clientName }: ContentLabAssi
     <ContentLabSection
       icon={BotMessageSquare}
       title="Strategy assistant"
-      description="Chat with Cortex (The Nerd) about this client. When you @mention the client, the server injects a Content Lab snapshot (pillars, recent topic searches, brand tone, idea run counts) plus the usual knowledge vault summary — use tools for live analytics."
+      description="Chat with Cortex (The Nerd) about this client. When you @mention the client, the server injects a Strategy Lab snapshot (pillars, recent topic searches, brand tone, idea run counts) plus the usual knowledge vault summary — use tools for live analytics."
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <Link
@@ -42,8 +42,8 @@ export function ContentLabAssistantCard({ clientId, clientName }: ContentLabAssi
       }
     >
       <p className="text-sm text-text-secondary">
-        Roadmap: performance rollups, affiliates, and video understanding (tracked in the Content Lab brain PRD).
-        Today: Content Lab snapshot + knowledge vault + Nerd tools for {clientName.trim() || 'this client'}.
+        Roadmap: performance rollups, affiliates, and video understanding (tracked in the Strategy Lab brain PRD).
+        Today: Strategy Lab snapshot + knowledge vault + Nerd tools for {clientName.trim() || 'this client'}.
       </p>
     </ContentLabSection>
   );

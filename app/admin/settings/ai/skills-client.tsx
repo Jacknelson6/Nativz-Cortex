@@ -52,14 +52,14 @@ type Harness = 'admin_nerd' | 'admin_content_lab' | 'portal_content_lab';
 
 const HARNESS_LABELS: Record<Harness, string> = {
   admin_nerd: 'Admin Nerd',
-  admin_content_lab: 'Admin Content Lab',
-  portal_content_lab: 'Portal Content Lab',
+  admin_content_lab: 'Admin Strategy Lab',
+  portal_content_lab: 'Portal Strategy Lab',
 };
 
 const HARNESS_DESCRIPTIONS: Record<Harness, string> = {
   admin_nerd: 'The admin-wide Nerd chat at /admin/nerd',
-  admin_content_lab: 'Admin Content Lab for any client',
-  portal_content_lab: 'Client-facing Content Lab in the portal',
+  admin_content_lab: 'Admin Strategy Lab for any client',
+  portal_content_lab: 'Client-facing Strategy Lab in the portal',
 };
 
 interface Skill {

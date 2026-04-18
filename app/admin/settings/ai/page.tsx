@@ -66,8 +66,8 @@ export default async function AISettingsPage() {
           <h2 className="text-base font-semibold text-text-primary">Skills</h2>
           <p className="mt-1 text-xs text-text-muted max-w-2xl">
             Markdown context loaded into the Nerd's system prompt. Each skill picks which
-            harnesses it applies to — the admin Nerd, admin Content Lab, and/or the portal
-            Content Lab — and can be scoped to a single client.
+            harnesses it applies to — the admin Nerd, admin Strategy Lab, and/or the portal
+            Strategy Lab — and can be scoped to a single client.
           </p>
         </div>
         <AISettingsSkillsClient clients={clients ?? []} />

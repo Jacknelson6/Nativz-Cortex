@@ -3,7 +3,7 @@ import type { AgencyBrand } from '@/lib/agency/detect';
 import type { PdfAttachedSearch, PdfConversationMessage } from '@/components/content-lab/content-lab-conversation-pdf';
 
 /**
- * Shared PDF export logic for the Content Lab / Content Lab conversation.
+ * Shared PDF export logic for the Strategy Lab / Strategy Lab conversation.
  * Used by the manual export button and the auto-export heuristic — keeps
  * both paths identical so a "video ideas" auto-fire produces the same
  * branded PDF the user would get by clicking the button themselves.

@@ -45,7 +45,7 @@ export function truncateContentLabContextPack(text: string, maxChars = MAX_PACK_
 
 function buildPillarsBlock(pillars: PillarRow[]): string[] {
   if (pillars.length === 0) {
-    return ['**Content pillars:** none yet — run pillar strategy from the Ideas hub or Content Lab.'];
+    return ['**Content pillars:** none yet — run pillar strategy from the Ideas hub or Strategy Lab.'];
   }
 
   return [
@@ -137,7 +137,7 @@ function buildAffiliateBlock(params: {
 }
 
 /**
- * Compact, deterministic “Content Lab” snapshot for Nerd when a client is @mentioned.
+ * Compact, deterministic “Strategy Lab” snapshot for Nerd when a client is @mentioned.
  * Appended to portfolio context (admin) — keep reasonably small for token budget.
  */
 export async function buildContentLabContextPack(
@@ -145,7 +145,7 @@ export async function buildContentLabContextPack(
   clientId: string,
 ): Promise<string> {
   try {
-    const parts: string[] = ['### Content Lab snapshot (live)'];
+    const parts: string[] = ['### Strategy Lab snapshot (live)'];
 
     const today = new Date();
     const sevenDaysAgo = new Date(today);

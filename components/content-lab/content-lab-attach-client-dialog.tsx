@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Inline client picker for the "Open in Content Lab" button on an
+ * Inline client picker for the "Open in Strategy Lab" button on an
  * unattached topic search. Lets the user attach the search to one of
  * their clients, then navigates into the lab with the search pre-pinned.
  *
@@ -88,7 +88,7 @@ export function ContentLabAttachClientDialog({
         toast.error(data.error ?? 'Could not attach this search to that client');
         return;
       }
-      // Pre-pin as the ONLY selection so Content Lab auto-attaches it
+      // Pre-pin as the ONLY selection so Strategy Lab auto-attaches it
       // on mount, matching the attached-case behavior in results-client.tsx.
       try {
         const key = contentLabTopicSearchStorageKey(client.id);
@@ -97,7 +97,7 @@ export function ContentLabAttachClientDialog({
         /* quota / JSON — non-fatal */
       }
       toast.success(`Attached to ${client.name}`);
-      router.push(`/admin/content-lab/${client.id}`);
+      router.push(`/admin/strategy-lab/${client.id}`);
     } finally {
       setAttaching(false);
     }
@@ -113,7 +113,7 @@ export function ContentLabAttachClientDialog({
     >
       <div className="border-b border-white/[0.06] px-5 py-4">
         <p className="text-sm text-text-muted">
-          Content Lab sessions are scoped to a client. Pick the brand this research
+          Strategy Lab sessions are scoped to a client. Pick the brand this research
           belongs to and we&apos;ll attach the search and jump you into the lab.
         </p>
       </div>

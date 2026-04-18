@@ -229,13 +229,13 @@ export function AdminResultsClient({
                   /* quota / JSON — non-fatal, user will see the lab but nothing pinned */
                 }
                 // Route param is the client UUID, not the slug.
-                router.push(`/admin/content-lab/${clientInfo.id}`);
+                router.push(`/admin/strategy-lab/${clientInfo.id}`);
               }}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent/60 hover:bg-accent/20"
-              title={clientInfo ? `Open this search in Content Lab with ${clientInfo.name}` : 'Pick a client and open in Content Lab'}
+              title={clientInfo ? `Open this search in Strategy Lab with ${clientInfo.name}` : 'Pick a client and open in Strategy Lab'}
             >
               <FlaskConical size={14} aria-hidden />
-              Open in Content Lab
+              Open in Strategy Lab
             </button>
             <ContentLabAttachClientDialog
               open={attachDialogOpen}
