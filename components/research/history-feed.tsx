@@ -93,7 +93,7 @@ const LOAD_MORE_PAGE = 20;
 
 function typeKindLabel(type: HistoryItemType): string {
   if (type === 'ideas') return 'Ideas';
-  return 'Topic search';
+  return 'Trend search';
 }
 
 const TYPE_ICON_TOOLTIP_W = 140;

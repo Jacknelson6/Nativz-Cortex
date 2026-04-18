@@ -18,8 +18,8 @@ export default async function PortalNewSearchPage() {
       <div className="flex flex-col items-center justify-center p-6 pt-24">
         <EmptyState
           icon={<SearchX size={32} />}
-          title="Topic search is not enabled"
-          description="Topic search is not enabled for your account. Contact your team for access."
+          title="Trend Finder is not enabled"
+          description="Trend Finder is not enabled for your account. Contact your team for access."
         />
       </div>
     );

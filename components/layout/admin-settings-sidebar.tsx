@@ -7,6 +7,7 @@ import {
   Brain,
   Cpu,
   Code,
+  Megaphone,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -18,6 +19,7 @@ const SETTINGS_PREFIXES = [
   // avatar popover — intentionally excluded so the secondary settings rail
   // doesn't double up with the account page's own sub-nav.
   '/admin/settings/ai',
+  '/admin/settings/production-updates',
   '/admin/users',
   '/admin/knowledge',
 ];
@@ -44,6 +46,7 @@ const ITEMS: SettingsItem[] = [
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/knowledge', label: 'Brain', icon: Brain },
   { href: '/admin/settings/ai', label: 'AI settings', icon: Cpu },
+  { href: '/admin/settings/production-updates', label: 'Production updates', icon: Megaphone },
   { href: '/admin/nerd/api', label: 'API docs', icon: Code },
 ];
 

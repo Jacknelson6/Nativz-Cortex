@@ -146,6 +146,23 @@ export function ResearchTopicForm({
       if (initialQuery) setTopicQuery(initialQuery);
     }, [initialQuery]);
 
+    // Parent (ResearchHub) reads the persisted brand from localStorage in a
+    // useEffect, so `initialClientId` can arrive AFTER this form's first render.
+    // Without this sync the rail would filter to that brand while the pill
+    // still showed "Brand", making it look like a brand is selected when it
+    // isn't. Only hydrate when we don't already have a user-picked client —
+    // never override an active clear or a new pick.
+    useEffect(() => {
+      if (portalMode) return;
+      if (!initialClientId) return;
+      if (clientId) return;
+      const c = clients.find((x) => x.id === initialClientId);
+      if (!c) return;
+      setClientId(c.id);
+      setContextMode('client');
+      setContextSearch(c.name);
+    }, [initialClientId, portalMode, clients, clientId]);
+
     const selectedClient = clients.find((c) => c.id === clientId);
 
     const clientsForDropdown = useMemo(() => {
@@ -299,10 +316,37 @@ export function ResearchTopicForm({
     return (
       <div className="w-full">
         <div className="text-center">
-          <p className="text-sm font-medium text-text-muted">Hello, {greetingName}</p>
-          <p className="mt-1.5 text-xl font-semibold tracking-tight text-text-primary md:text-2xl">
-            Discover trending topics
-          </p>
+          <p className="text-sm font-medium text-text-muted">Hey, {greetingName}</p>
+          <div className="mt-1.5 flex items-center justify-center gap-2">
+            <p className="text-xl font-semibold tracking-tight text-text-primary md:text-2xl">
+              What&apos;s trending?
+            </p>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="About Trend Finder"
+                  className="rounded-full p-1 text-text-muted transition hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                >
+                  <HelpCircle size={15} aria-hidden />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="center"
+                sideOffset={6}
+                matchAnchorWidth={false}
+                className="w-[min(22rem,calc(100vw-2rem))] border-nativz-border bg-surface p-4 text-sm leading-relaxed text-text-secondary shadow-[var(--shadow-dropdown)]"
+              >
+                <p className="mb-1.5 text-sm font-semibold text-text-primary">Trend Finder</p>
+                <p className="text-xs text-text-muted">
+                  Search any topic or brand and Cortex scans the web, Reddit, YouTube, and TikTok to surface what&apos;s resonating right now — so your shoots are built around topics people already care about.
+                </p>
+                <p className="mt-2 text-xs text-text-muted">
+                  Attach a brand to frame results around that client&apos;s audience, or leave it open for general discovery.
+                </p>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
 
           <div className="mx-auto mt-4 w-full max-w-xl overflow-hidden rounded-[1.75rem] border border-nativz-border bg-surface-hover/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_32px_-12px_rgba(0,0,0,0.45)] transition-colors focus-within:border-accent/35 focus-within:bg-surface-hover/50 focus-within:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(91,163,230,0.12),0_12px_40px_-16px_rgba(0,0,0,0.5)] md:mt-5">

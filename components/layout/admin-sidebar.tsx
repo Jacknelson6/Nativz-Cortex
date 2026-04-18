@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
-  Search,
   BarChart3,
   CheckSquare,
   BotMessageSquare,
@@ -15,8 +14,9 @@ import {
   ImagePlus,
   StickyNote,
   Scissors,
-  Compass,
-  Radar,
+  TrendingUp,
+  MessagesSquare,
+  ScanSearch,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
@@ -70,9 +70,9 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Intelligence',
     items: [
-      { href: '/admin/search/new', label: 'Topic Search', icon: Search },
-      { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: Compass },
-      { href: '/admin/analyze-social', label: 'Competitor Spying', icon: Radar },
+      { href: '/admin/search/new', label: 'Trend Finder', icon: TrendingUp },
+      { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: MessagesSquare },
+      { href: '/admin/analyze-social', label: 'Competitor Spying', icon: ScanSearch },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
       { href: '/admin/notes', label: 'Notes', icon: StickyNote },
     ],
@@ -109,7 +109,7 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
 
   // Settings gear — active on any route that shows the settings secondary rail
   if (href === '/admin/settings/ai') {
-    const SETTINGS_AREAS = ['/admin/users', '/admin/knowledge', '/admin/settings/ai', '/admin/nerd/api'];
+    const SETTINGS_AREAS = ['/admin/users', '/admin/knowledge', '/admin/settings/ai', '/admin/settings/production-updates', '/admin/nerd/api'];
     if (SETTINGS_AREAS.some((p) => pathname === p || pathname.startsWith(p + '/'))) return true;
   }
 

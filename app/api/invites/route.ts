@@ -14,8 +14,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { sendClientInviteEmail } from '@/lib/email/resend';
+import { getBrandFromAgency } from '@/lib/agency/use-agency-brand';
+
+const createInviteSchema = z.object({
+  client_id: z.string().uuid(),
+  // Optional: email the invite directly rather than just returning the URL.
+  email: z.string().email().optional(),
+  contact_name: z.string().min(1).max(120).optional(),
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -111,15 +121,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { client_id } = await request.json();
-    if (!client_id) {
-      return NextResponse.json({ error: 'client_id is required' }, { status: 400 });
+    const body = await request.json();
+    const parsed = createInviteSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
+        { status: 400 },
+      );
     }
+    const { client_id, email, contact_name } = parsed.data;
 
-    // Get client + organization_id
+    // Get client + organization_id + agency (for email branding)
     const { data: client } = await adminClient
       .from('clients')
-      .select('id, name, organization_id')
+      .select('id, name, organization_id, agency')
       .eq('id', client_id)
       .single();
 
@@ -148,11 +163,49 @@ export async function POST(request: NextRequest) {
     const baseUrl = request.nextUrl.origin;
     const inviteUrl = `${baseUrl}/portal/join/${invite.token}`;
 
+    // If the admin supplied an email, send the branded invite directly.
+    // Agency is resolved from the client's `agency` text field — new brands
+    // get added to `getBrandFromAgency` rather than this route.
+    let emailStatus: 'sent' | 'failed' | 'skipped' = 'skipped';
+    let emailError: string | null = null;
+    if (email) {
+      const { data: senderRow } = await adminClient
+        .from('users')
+        .select('full_name, email')
+        .eq('id', user.id)
+        .single();
+      const invitedBy = senderRow?.full_name?.trim() || senderRow?.email || 'your team';
+      const agency = getBrandFromAgency(client.agency);
+      try {
+        const res = await sendClientInviteEmail({
+          to: email,
+          contactName: (contact_name?.trim() || email.split('@')[0]) ?? email,
+          clientName: client.name,
+          inviteUrl,
+          invitedBy,
+          agency,
+        });
+        if (res.error) {
+          emailStatus = 'failed';
+          emailError = res.error.message ?? 'resend error';
+          console.warn('[invites] send failed:', emailError);
+        } else {
+          emailStatus = 'sent';
+        }
+      } catch (err) {
+        emailStatus = 'failed';
+        emailError = err instanceof Error ? err.message : 'unknown send error';
+        console.warn('[invites] send threw:', emailError);
+      }
+    }
+
     return NextResponse.json({
       token: invite.token,
       invite_url: inviteUrl,
       expires_at: invite.expires_at,
       client_name: client.name,
+      email_status: emailStatus,
+      email_error: emailError,
     });
   } catch (error) {
     console.error('POST /api/invites error:', error);
