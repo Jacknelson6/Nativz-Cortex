@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import {
-  UserPlus, Building2, Shield, Loader2, Copy, Check, Send, Minus, Plus,
+  UserPlus, Building2, Shield, Loader2, Copy, Check, Send, Minus, Plus, Mail,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
@@ -19,11 +19,18 @@ interface InviteUsersDialogProps {
   onClose: () => void;
   /** Called after any invite(s) were successfully created, so the parent can refresh. */
   onInvited?: () => void;
+  /**
+   * Per-client trigger mode: lock the dialog to portal-invites for this
+   * specific client. Hides the Portal/Admin tab switcher and the client
+   * picker. Used by the onboard-review "Invite to portal" card so both
+   * entry points share a single form.
+   */
+  lockedClient?: { id: string; name: string } | null;
 }
 
 type Tab = 'portal' | 'admin';
 
-export function InviteUsersDialog({ open, onClose, onInvited }: InviteUsersDialogProps) {
+export function InviteUsersDialog({ open, onClose, onInvited, lockedClient = null }: InviteUsersDialogProps) {
   const [tab, setTab] = useState<Tab>('portal');
   const [generated, setGenerated] = useState<GeneratedInvite[]>([]);
   const [generatedHeading, setGeneratedHeading] = useState<string>('');
@@ -43,38 +50,46 @@ export function InviteUsersDialog({ open, onClose, onInvited }: InviteUsersDialo
   }
 
   return (
-    <Dialog open={open} onClose={handleClose} title="Invite users" maxWidth="lg">
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      title={lockedClient ? `Invite to ${lockedClient.name}` : 'Invite users'}
+      maxWidth="lg"
+    >
       <div className="space-y-5">
-        {/* Tab switcher — centered, larger hit area */}
-        <div className="flex justify-center">
-          <div className="flex gap-1 rounded-lg border border-nativz-border p-1">
-            <button
-              onClick={() => { setTab('portal'); setGenerated([]); }}
-              className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-colors cursor-pointer ${
-                tab === 'portal'
-                  ? 'bg-accent text-white'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
-            >
-              <Building2 size={14} />
-              Portal user
-            </button>
-            <button
-              onClick={() => { setTab('admin'); setGenerated([]); }}
-              className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-colors cursor-pointer ${
-                tab === 'admin'
-                  ? 'bg-accent text-white'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
-            >
-              <Shield size={14} />
-              Admin / team
-            </button>
+        {/* Per-client trigger mode: hide the tab switcher; we only ever invite
+            portal users for that one client. */}
+        {!lockedClient && (
+          <div className="flex justify-center">
+            <div className="flex gap-1 rounded-lg border border-nativz-border p-1">
+              <button
+                onClick={() => { setTab('portal'); setGenerated([]); }}
+                className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-colors cursor-pointer ${
+                  tab === 'portal'
+                    ? 'bg-accent text-white'
+                    : 'text-text-muted hover:text-text-secondary'
+                }`}
+              >
+                <Building2 size={14} />
+                Portal user
+              </button>
+              <button
+                onClick={() => { setTab('admin'); setGenerated([]); }}
+                className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-colors cursor-pointer ${
+                  tab === 'admin'
+                    ? 'bg-accent text-white'
+                    : 'text-text-muted hover:text-text-secondary'
+                }`}
+              >
+                <Shield size={14} />
+                Admin / team
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        {tab === 'portal' ? (
-          <PortalInviteForm onInvitesCreated={handleInvitesCreated} />
+        {tab === 'portal' || lockedClient ? (
+          <PortalInviteForm onInvitesCreated={handleInvitesCreated} lockedClient={lockedClient} />
         ) : (
           <AdminInviteForm onInvitesCreated={handleInvitesCreated} />
         )}
@@ -93,16 +108,23 @@ export function InviteUsersDialog({ open, onClose, onInvited }: InviteUsersDialo
 
 function PortalInviteForm({
   onInvitesCreated,
+  lockedClient = null,
 }: {
   onInvitesCreated: (heading: string, invites: GeneratedInvite[]) => void;
+  lockedClient?: { id: string; name: string } | null;
 }) {
   const [clients, setClients] = useState<PickerClientOption[]>([]);
-  const [loadingClients, setLoadingClients] = useState(true);
-  const [clientId, setClientId] = useState<string | null>(null);
+  const [loadingClients, setLoadingClients] = useState(!lockedClient);
+  const [clientId, setClientId] = useState<string | null>(lockedClient?.id ?? null);
   const [count, setCount] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+  const [email, setEmail] = useState('');
+  const [contactName, setContactName] = useState('');
 
   useEffect(() => {
+    // Locked-client mode skips the client list fetch — the parent already
+    // knows which client we're inviting to.
+    if (lockedClient) return;
     (async () => {
       try {
         const res = await fetch('/api/clients');
@@ -120,7 +142,7 @@ function PortalInviteForm({
         setLoadingClients(false);
       }
     })();
-  }, []);
+  }, [lockedClient]);
 
   function clampCount(n: number) {
     if (Number.isNaN(n)) return 1;
@@ -133,9 +155,50 @@ function PortalInviteForm({
       return;
     }
     const desired = clampCount(count);
+    const trimmedEmail = email.trim();
+    const trimmedName = contactName.trim();
+
+    // When an email is provided, route through the single-invite endpoint so
+    // we send the branded invite email. Multi-invite batches stay link-only —
+    // sending N emails to the same address is rarely what the user wants, and
+    // if it is, they can just generate a second single invite.
+    if (trimmedEmail && desired > 1) {
+      toast.error('Emailed invites are one at a time. Set quantity to 1 or clear the email.');
+      return;
+    }
 
     setSubmitting(true);
     try {
+      if (trimmedEmail) {
+        const res = await fetch('/api/invites', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_id: clientId,
+            email: trimmedEmail,
+            contact_name: trimmedName || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          toast.error(data.error ?? 'Failed to create invite');
+          return;
+        }
+        onInvitesCreated(`Invite for ${data.client_name}`, [
+          { invite_url: data.invite_url, expires_at: data.expires_at },
+        ]);
+        if (data.email_status === 'sent') {
+          toast.success(`Invite emailed to ${trimmedEmail}`);
+          setEmail('');
+          setContactName('');
+        } else if (data.email_status === 'failed') {
+          toast.error(`Could not send email: ${data.email_error ?? 'unknown error'}`);
+        } else {
+          toast.success('Invite generated');
+        }
+        return;
+      }
+
       const res = await fetch('/api/invites/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -167,21 +230,53 @@ function PortalInviteForm({
 
   return (
     <div className="space-y-4">
-      {/* Client picker — uses the same bento modal as the rest of the app */}
-      <div>
-        <label className="block text-[11px] font-medium text-text-muted uppercase tracking-wide mb-1.5">
-          Client
-        </label>
-        {loadingClients ? (
-          <div className="h-11 rounded-xl bg-surface-hover animate-pulse" />
-        ) : (
-          <ClientPickerButton
-            clients={clients}
-            value={clientId}
-            onChange={setClientId}
-            placeholder="Select a client"
+      {/* Client picker — hidden when locked to a specific client (onboard flow). */}
+      {!lockedClient && (
+        <div>
+          <label className="block text-[11px] font-medium text-text-muted uppercase tracking-wide mb-1.5">
+            Client
+          </label>
+          {loadingClients ? (
+            <div className="h-11 rounded-xl bg-surface-hover animate-pulse" />
+          ) : (
+            <ClientPickerButton
+              clients={clients}
+              value={clientId}
+              onChange={setClientId}
+              placeholder="Select a client"
+            />
+          )}
+        </div>
+      )}
+
+      {/* Email (optional) — when set, sends the branded invite email.
+          When empty, the flow falls back to link-only batch generation. */}
+      <div className="rounded-xl border border-nativz-border/70 bg-surface-hover/30 p-3 space-y-3">
+        <div className="flex items-center gap-2 text-[11px] font-medium text-text-secondary">
+          <Mail size={12} className="text-accent-text" />
+          Email the invite (optional — leave blank for link-only)
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <input
+            type="text"
+            value={contactName}
+            onChange={(e) => setContactName(e.target.value)}
+            placeholder="Contact name"
+            className="rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text transition-colors"
+            disabled={submitting}
           />
-        )}
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@company.com"
+            className="rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text transition-colors"
+            disabled={submitting}
+          />
+        </div>
+        <p className="text-[11px] text-text-muted/75">
+          Agency theming (Nativz or Anderson Collaborative) is auto-resolved from the client.
+        </p>
       </div>
 
       {/* Number of invites — always visible, default 1, +/- or type */}
@@ -229,7 +324,9 @@ function PortalInviteForm({
           className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {submitting ? (
-            <><Loader2 size={13} className="animate-spin" /> Generating…</>
+            <><Loader2 size={13} className="animate-spin" /> {email.trim() ? 'Sending…' : 'Generating…'}</>
+          ) : email.trim() ? (
+            <><Mail size={13} /> Send invite</>
           ) : (
             <><UserPlus size={13} /> Generate {count > 1 ? `${count} invites` : 'invite'}</>
           )}
