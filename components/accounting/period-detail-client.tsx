@@ -297,36 +297,39 @@ function OverviewPane({
 }) {
   const services: EntryType[] = ['editing', 'smm', 'affiliate', 'blogging'];
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-      {services.map((s) => {
-        const rows = entriesByService[s];
-        const total = rows.reduce((sum, e) => sum + e.amount_cents, 0);
-        const videos = rows.reduce((sum, e) => sum + (e.video_count ?? 0), 0);
-        return (
-          <button
-            key={s}
-            type="button"
-            onClick={() => onDrillIn(s)}
-            className="group flex items-start justify-between rounded-xl border border-nativz-border bg-surface px-5 py-4 text-left hover:bg-surface-hover transition-colors cursor-pointer"
-          >
-            <div>
-              <p className="text-xs uppercase tracking-wide text-text-secondary font-medium">
-                {ENTRY_TYPE_LABELS[s]}
-              </p>
-              <p className="text-2xl font-bold text-text-primary tabular-nums mt-1">
-                {centsToDollars(total)}
-              </p>
-              <p className="text-sm text-text-secondary mt-1">
-                {rows.length} {rows.length === 1 ? 'entry' : 'entries'}
-                {videos > 0 && ` · ${videos} videos`}
-              </p>
-            </div>
-            <ChevronRight size={16} className="text-text-secondary group-hover:text-text-primary mt-1 shrink-0" />
-          </button>
-        );
-      })}
+    <div className="space-y-4">
+      {/* 2×2 quad bento — four services, balanced grid, no orphan row. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {services.map((s) => {
+          const rows = entriesByService[s];
+          const total = rows.reduce((sum, e) => sum + e.amount_cents, 0);
+          const videos = rows.reduce((sum, e) => sum + (e.video_count ?? 0), 0);
+          return (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onDrillIn(s)}
+              className="group flex items-start justify-between rounded-2xl border border-nativz-border bg-surface px-6 py-5 text-left hover:bg-surface-hover transition-colors cursor-pointer"
+            >
+              <div>
+                <p className="text-sm uppercase tracking-wide text-text-secondary font-semibold">
+                  {ENTRY_TYPE_LABELS[s]}
+                </p>
+                <p className="text-3xl font-bold text-text-primary tabular-nums mt-2">
+                  {centsToDollars(total)}
+                </p>
+                <p className="text-base text-text-secondary mt-1.5">
+                  {rows.length} {rows.length === 1 ? 'entry' : 'entries'}
+                  {videos > 0 && ` · ${videos} videos`}
+                </p>
+              </div>
+              <ChevronRight size={18} className="text-text-secondary group-hover:text-text-primary mt-1 shrink-0" />
+            </button>
+          );
+        })}
+      </div>
       {entries.length === 0 && (
-        <div className="md:col-span-2 lg:col-span-3 rounded-xl border border-dashed border-nativz-border bg-surface px-4 py-12 text-center text-base text-text-secondary">
+        <div className="rounded-2xl border border-dashed border-nativz-border bg-surface px-4 py-12 text-center text-base text-text-secondary">
           No entries yet. Pick a service tab above to add entries.
         </div>
       )}

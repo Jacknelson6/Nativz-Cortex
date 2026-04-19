@@ -20,6 +20,7 @@ import type {
   DailyMetricsQuery,
   DailyMetric,
   FollowerStats,
+  InstagramInsights,
   PostAnalyticsQuery,
   PostAnalyticsItem,
   LateAnalyticsResponse,
@@ -622,70 +623,169 @@ export class ZernioPostingService implements PostingService {
     }));
   }
 
+  /**
+   * GET /v1/analytics/daily-metrics — real daily aggregates per account.
+   * Replaces the previous implementation that synthesized daily rows by
+   * grouping post-level analytics by publish date (which only yielded data
+   * on days a post shipped and double-counted lifetime impressions).
+   */
   async getDailyMetrics(query: DailyMetricsQuery): Promise<DailyMetric[]> {
-    const data = await this.getFullAnalytics();
-    const posts = (data.posts ?? []).filter((p) => {
-      const matchesAccount = p.platforms?.some((pl) => pl.accountId === query.accountId);
-      if (!matchesAccount) return false;
-      const pubDate = (p.publishedAt ?? '').split('T')[0];
-      return pubDate >= query.startDate && pubDate <= query.endDate;
+    const params = new URLSearchParams({
+      accountId: query.accountId,
+      fromDate: query.startDate,
+      toDate: query.endDate,
     });
+    const raw = await zernioRequest<unknown>(`/analytics/daily-metrics?${params}`);
+    const root = asRecord(raw) ?? {};
+    const dailyData = Array.isArray(root.dailyData) ? root.dailyData : [];
 
-    const byDay = new Map<string, DailyMetric>();
-    for (const p of posts) {
-      const day = (p.publishedAt ?? '').split('T')[0];
-      if (!day) continue;
-      const existing = byDay.get(day) ?? {
-        date: day,
-        impressions: 0,
-        reach: 0,
-        likes: 0,
-        comments: 0,
-        shares: 0,
-        views: 0,
-        engagement: 0,
-        engagementRate: 0,
-        postsCount: 0,
-      };
-      const a = p.analytics ?? {
-        impressions: 0,
-        reach: 0,
-        likes: 0,
-        comments: 0,
-        shares: 0,
-        saves: 0,
-        clicks: 0,
-        views: 0,
-        engagementRate: 0,
-        lastUpdated: null,
-      };
-      existing.impressions += a.impressions ?? 0;
-      existing.reach += a.reach ?? 0;
-      existing.likes += a.likes ?? 0;
-      existing.comments += a.comments ?? 0;
-      existing.shares += a.shares ?? 0;
-      existing.views += a.views ?? 0;
-      existing.engagement +=
-        (a.likes ?? 0) + (a.comments ?? 0) + (a.shares ?? 0) + (a.saves ?? 0);
-      existing.postsCount += 1;
-      byDay.set(day, existing);
+    const out: DailyMetric[] = [];
+    for (const item of dailyData) {
+      const r = asRecord(item);
+      if (!r) continue;
+      const date = (pickString(r, 'date', 'day') ?? '').split('T')[0];
+      if (!date) continue;
+
+      const m = asRecord(r.metrics) ?? r;
+      const impressions = pickNum(m, 'impressions');
+      const reach = pickNum(m, 'reach');
+      const likes = pickNum(m, 'likes');
+      const comments = pickNum(m, 'comments');
+      const shares = pickNum(m, 'shares');
+      const saves = pickNum(m, 'saves');
+      const clicks = pickNum(m, 'clicks');
+      const views = pickNum(m, 'views');
+      const engagement = likes + comments + shares + saves;
+      const postsCount = pickNum(r, 'postCount') || pickNum(r, 'postsCount');
+
+      out.push({
+        date,
+        impressions,
+        reach,
+        likes,
+        comments,
+        shares,
+        saves,
+        clicks,
+        views,
+        engagement,
+        engagementRate: impressions > 0 ? (engagement / impressions) * 100 : 0,
+        postsCount,
+      });
     }
-
-    for (const metric of byDay.values()) {
-      metric.engagementRate =
-        metric.impressions > 0 ? (metric.engagement / metric.impressions) * 100 : 0;
-    }
-
-    return Array.from(byDay.values()).sort((a, b) => a.date.localeCompare(b.date));
+    return out.sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  async getFollowerStats(accountId: string): Promise<FollowerStats> {
-    const data = await this.getFullAnalytics();
-    const account = (data.accounts ?? []).find((a) => a._id === accountId);
-    return {
-      followers: account?.followersCount ?? 0,
-      followerChange: 0,
-    };
+  /**
+   * GET /v1/accounts/follower-stats — real follower counts + daily series.
+   * Supplies currentFollowers, absolute growth, growth%, and per-day series
+   * for charting. Replaces the old implementation that pulled followers off
+   * the post-analytics `/analytics` response (which often omits accounts).
+   */
+  async getFollowerStats(
+    accountId: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<FollowerStats> {
+    const params = new URLSearchParams({
+      accountIds: accountId,
+      granularity: 'daily',
+    });
+    if (startDate) params.set('fromDate', startDate);
+    if (endDate) params.set('toDate', endDate);
+
+    try {
+      const raw = await zernioRequest<unknown>(`/accounts/follower-stats?${params}`);
+      const root = asRecord(raw) ?? {};
+      const accounts = Array.isArray(root.accounts) ? root.accounts : [];
+      const account: Record<string, unknown> | null = accounts
+        .map((a) => asRecord(a))
+        .find((a) => a && (a._id === accountId || a.accountId === accountId)) ?? null;
+
+      const statsRoot = asRecord(root.stats) ?? {};
+      const rawSeries = statsRoot[accountId];
+      const series = Array.isArray(rawSeries)
+        ? rawSeries
+            .map((p) => {
+              const r = asRecord(p);
+              if (!r) return null;
+              const date = (pickString(r, 'date', 'day') ?? '').split('T')[0];
+              if (!date) return null;
+              return { date, followers: pickNum(r, 'followers') || pickNum(r, 'count') };
+            })
+            .filter((x): x is { date: string; followers: number } => x !== null)
+        : [];
+
+      return {
+        followers:
+          pickNum(account, 'currentFollowers') ||
+          pickNum(account, 'followersCount') ||
+          pickNum(account, 'followers'),
+        followerChange: pickNum(account, 'growth') || pickNum(account, 'followerChange'),
+        growthPercent:
+          pickNum(account, 'growthPercentage') || pickNum(account, 'growthPercent'),
+        series,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // 402 = analytics add-on required, 404 = unsupported — degrade gracefully.
+      if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
+        console.warn(`[zernio] follower-stats failed for ${accountId}: ${msg}`);
+      }
+      return { followers: 0, followerChange: 0, growthPercent: 0, series: [] };
+    }
+  }
+
+  /**
+   * GET /v1/analytics/instagram-account-insights — IG-only metrics that don't
+   * surface via /daily-metrics. We request time_series so reach + profile
+   * link taps come back as per-day arrays.
+   */
+  async getInstagramInsights(
+    accountId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<InstagramInsights> {
+    const params = new URLSearchParams({
+      accountId,
+      metrics: 'reach,profile_links_taps',
+      since: startDate,
+      until: endDate,
+      metricType: 'time_series',
+    });
+    try {
+      const raw = await zernioRequest<unknown>(
+        `/analytics/instagram-account-insights?${params}`,
+      );
+      const root = asRecord(raw) ?? {};
+      const metrics = asRecord(root.metrics) ?? {};
+
+      const toSeries = (key: string) => {
+        const entry = asRecord(metrics[key]);
+        if (!entry) return [];
+        const values = Array.isArray(entry.values) ? entry.values : [];
+        return values
+          .map((v) => {
+            const r = asRecord(v);
+            if (!r) return null;
+            const date = (pickString(r, 'date') ?? '').split('T')[0];
+            if (!date) return null;
+            return { date, value: pickNum(r, 'value') };
+          })
+          .filter((x): x is { date: string; value: number } => x !== null);
+      };
+
+      return {
+        profileVisits: toSeries('profile_links_taps'),
+        reachSeries: toSeries('reach'),
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
+        console.warn(`[zernio] IG insights failed for ${accountId}: ${msg}`);
+      }
+      return { profileVisits: [], reachSeries: [] };
+    }
   }
 
   async getPostAnalytics(query: PostAnalyticsQuery): Promise<PostAnalyticsItem[]> {
