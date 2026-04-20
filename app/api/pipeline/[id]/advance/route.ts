@@ -7,6 +7,7 @@ import {
   TRACK_FIELD,
   TRANSITIONS,
   validateTransition,
+  stampStageChange,
   type PipelineItemSnapshot,
   type PipelineTrack,
 } from '@/lib/pipeline/transitions';
@@ -87,9 +88,23 @@ export async function POST(
       return NextResponse.json({ error: check.reason }, { status: 422 });
     }
 
+    const now = new Date();
+    const nextStageChangedAt =
+      currentStatus !== nextStatus
+        ? stampStageChange(
+            (item.stage_changed_at as Record<string, unknown> | null) ?? {},
+            field,
+            now,
+          )
+        : undefined;
+
     const { data: updated, error: updateError } = await admin
       .from('content_pipeline')
-      .update({ [field]: nextStatus, updated_at: new Date().toISOString() })
+      .update({
+        [field]: nextStatus,
+        ...(nextStageChangedAt ? { stage_changed_at: nextStageChangedAt } : {}),
+        updated_at: now.toISOString(),
+      })
       .eq('id', id)
       .select('*')
       .single();

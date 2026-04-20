@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createCompletion } from '@/lib/ai/client';
 import { getBrandFromRequest } from '@/lib/agency/brand-from-request';
+import { STALL_DAYS, isStalled } from '@/lib/pipeline/transitions';
 import crypto from 'crypto';
 
 // In-memory cache — DB counts refresh every 5 min, AI insight persists for the day
@@ -82,6 +83,45 @@ export async function GET(req: NextRequest) {
     const totalItems = all.length;
     const doneCount = all.filter((i) => i.editing_status === 'done' || i.editing_status === 'scheduled').length;
 
+    // Stalled bucket — per-track items that haven't moved in > threshold days.
+    // Source of truth is stage_changed_at (migration 123); falls back to
+    // updated_at for rows that haven't been touched since the migration.
+    const STALL_TRACKS = [
+      'assignment_status',
+      'raws_status',
+      'editing_status',
+      'client_approval_status',
+      'boosting_status',
+    ] as const;
+    const TERMINAL_STATUSES: Record<string, Set<string>> = {
+      editing_status: new Set(['done']),
+      client_approval_status: new Set(['sent_to_paid_media']),
+      boosting_status: new Set(['done']),
+    };
+    const stalled: Record<string, { count: number; clients: string[]; days: number }> = {};
+    for (const field of STALL_TRACKS) {
+      const bucket: string[] = [];
+      for (const item of all) {
+        if (TERMINAL_STATUSES[field]?.has(item[field])) continue;
+        if (
+          isStalled(
+            field,
+            item.stage_changed_at as Record<string, unknown> | null,
+            item.updated_at,
+          )
+        ) {
+          bucket.push(`${item.client_name} (${item[field]})`);
+        }
+      }
+      if (bucket.length > 0) {
+        stalled[field] = {
+          count: bucket.length,
+          clients: bucket,
+          days: STALL_DAYS[field] ?? 3,
+        };
+      }
+    }
+
     // Build pipeline snapshot for AI
     const blocked = all.filter((i) => i.editing_status === 'blocked');
     const needsRevision = all.filter((i) => i.client_approval_status === 'needs_revision');
@@ -160,6 +200,7 @@ export async function GET(req: NextRequest) {
       doneCount,
       editingCounts,
       approvalCounts,
+      stalled,
       aiBullets,
       suggestedTasks,
       monthLabel: now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),

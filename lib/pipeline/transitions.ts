@@ -63,6 +63,60 @@ export interface PipelineItemSnapshot {
   boosting_status: string;
 }
 
+/**
+ * Default stall thresholds (days) per track. Used by the summary endpoint
+ * to mark items as "stalled" so they surface as a dedicated bucket.
+ * Exported so both the summary API and any admin UI can use the same
+ * numbers without drifting.
+ */
+export const STALL_DAYS: Record<string, number> = {
+  assignment_status: 1,
+  raws_status: 7,
+  editing_status: 3,
+  client_approval_status: 2,
+  boosting_status: 3,
+};
+
+/** Merge a per-field stamp into the jsonb blob stored on content_pipeline. */
+export function stampStageChange(
+  current: Record<string, unknown> | null | undefined,
+  field: string,
+  at: Date = new Date(),
+): Record<string, unknown> {
+  return { ...(current ?? {}), [field]: at.toISOString() };
+}
+
+/** Read the last-change timestamp for a field, falling back to `updated_at`. */
+export function getStageChangedAt(
+  stageChangedAt: Record<string, unknown> | null | undefined,
+  field: string,
+  updatedAt: string | null | undefined,
+): Date | null {
+  const raw = stageChangedAt?.[field];
+  if (typeof raw === 'string') {
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  if (updatedAt) {
+    const d = new Date(updatedAt);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
+/** True when the item has been on the given status for longer than the stall threshold. */
+export function isStalled(
+  field: string,
+  stageChangedAt: Record<string, unknown> | null | undefined,
+  updatedAt: string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  const lastChange = getStageChangedAt(stageChangedAt, field, updatedAt);
+  if (!lastChange) return false;
+  const days = (now.getTime() - lastChange.getTime()) / (24 * 60 * 60 * 1000);
+  return days >= (STALL_DAYS[field] ?? 3);
+}
+
 export interface TransitionCheck {
   ok: boolean;
   reason?: string;

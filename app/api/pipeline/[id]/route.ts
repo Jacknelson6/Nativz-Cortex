@@ -5,6 +5,7 @@ import { z } from 'zod';
 import {
   FIELD_TRACK,
   validateTransition,
+  stampStageChange,
   type PipelineItemSnapshot,
 } from '@/lib/pipeline/transitions';
 
@@ -97,16 +98,22 @@ export async function PATCH(
     // by jumping past intermediate stages (e.g. dragging "not_started" straight
     // to "em_approved" without anyone editing the video).
     const statusChanges = STATUS_FIELDS.filter((f) => parsed.data[f] !== undefined);
+    let stageChangedAtUpdate: Record<string, unknown> | undefined;
     if (statusChanges.length > 0) {
       const { data: current, error: currentErr } = await adminClient
         .from('content_pipeline')
-        .select('assignment_status, raws_status, editing_status, client_approval_status, boosting_status')
+        .select(
+          'assignment_status, raws_status, editing_status, client_approval_status, boosting_status, stage_changed_at',
+        )
         .eq('id', id)
         .single();
       if (currentErr || !current) {
         return NextResponse.json({ error: 'Pipeline item not found' }, { status: 404 });
       }
       const snapshot = current as unknown as PipelineItemSnapshot;
+      const now = new Date();
+      let nextStageChangedAt =
+        (current.stage_changed_at as Record<string, unknown> | null) ?? {};
       for (const field of statusChanges) {
         const from = snapshot[field];
         const to = parsed.data[field] as string;
@@ -114,12 +121,20 @@ export async function PATCH(
         if (!check.ok) {
           return NextResponse.json({ error: check.reason }, { status: 422 });
         }
+        if (from !== to) {
+          nextStageChangedAt = stampStageChange(nextStageChangedAt, field, now);
+        }
       }
+      stageChangedAtUpdate = nextStageChangedAt;
     }
 
     const { data, error } = await adminClient
       .from('content_pipeline')
-      .update({ ...parsed.data, updated_at: new Date().toISOString() })
+      .update({
+        ...parsed.data,
+        ...(stageChangedAtUpdate ? { stage_changed_at: stageChangedAtUpdate } : {}),
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', id)
       .select()
       .single();
