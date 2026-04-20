@@ -1,4 +1,4 @@
-export type SocialPlatform = 'facebook' | 'instagram' | 'tiktok' | 'youtube';
+export type SocialPlatform = 'facebook' | 'instagram' | 'tiktok' | 'youtube' | 'linkedin';
 
 export type DateRangePreset = '7d' | '30d' | 'mtd' | 'last_month' | 'ytd' | 'custom' | 'last_quarter';
 

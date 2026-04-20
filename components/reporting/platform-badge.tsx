@@ -11,6 +11,7 @@ const BADGE_SOCIAL_TILE_FB = 'bg-[#1877F2] ring-1 ring-black/15';
 const BADGE_SOCIAL_TILE_YT = 'bg-[#FF0300] ring-1 ring-black/15';
 const BADGE_SOCIAL_TILE_IG =
   'bg-gradient-to-r from-[#FDC830] via-[#F37335] to-[#C13584] ring-1 ring-black/15';
+const BADGE_SOCIAL_TILE_LI = 'bg-[#0A66C2] ring-1 ring-black/15';
 
 const platformConfig: Record<
   SocialPlatform,
@@ -39,6 +40,12 @@ const platformConfig: Record<
     bg: BADGE_SOCIAL_TILE_YT,
     label: 'YouTube',
     icon: <YouTubeMark variant="onBrand" size={12} />,
+  },
+  linkedin: {
+    color: 'text-white',
+    bg: BADGE_SOCIAL_TILE_LI,
+    label: 'LinkedIn',
+    icon: <span className="text-[10px] font-bold">in</span>,
   },
 };
 

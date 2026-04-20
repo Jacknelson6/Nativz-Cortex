@@ -1,6 +1,6 @@
 // Posting service abstraction — default provider is Zernio (POSTING_PROVIDER=zernio or late alias)
 
-export type SocialPlatform = 'facebook' | 'instagram' | 'tiktok' | 'youtube';
+export type SocialPlatform = 'facebook' | 'instagram' | 'tiktok' | 'youtube' | 'linkedin';
 
 export interface SocialProfile {
   id: string;

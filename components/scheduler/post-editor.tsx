@@ -294,6 +294,7 @@ export function PostEditor({
     facebook: 63206,
     tiktok: 2200,
     youtube: 5000,
+    linkedin: 3000,
   };
   const activeLimit = Math.min(
     ...profiles

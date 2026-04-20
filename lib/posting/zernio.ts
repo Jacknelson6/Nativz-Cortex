@@ -35,6 +35,7 @@ const ANALYTICS_PLATFORMS: SocialPlatform[] = [
   'tiktok',
   'facebook',
   'youtube',
+  'linkedin',
 ];
 
 export function getZernioApiBase(): string {
@@ -953,6 +954,237 @@ export class ZernioPostingService implements PostingService {
       externalPostId: id,
       platforms: rows.map(mapPlatformRow),
     };
+  }
+
+  /**
+   * GET /v1/analytics/content-decay — engagement accumulation buckets
+   * (0-6h / 6-12h / 12-24h / 1-2d / 2-7d / 7d+). Lets us show how fast a
+   * post reaches its final engagement so creators know their half-life.
+   */
+  async getContentDecay(filters?: {
+    platform?: SocialPlatform;
+    profileId?: string;
+    source?: 'all' | 'late' | 'external';
+  }): Promise<Array<{ label: string; order: number; avgPctOfFinal: number; postCount: number }>> {
+    const params = new URLSearchParams();
+    if (filters?.platform) params.set('platform', filters.platform);
+    if (filters?.profileId) params.set('profileId', filters.profileId);
+    if (filters?.source) params.set('source', filters.source);
+    const qs = params.toString();
+    try {
+      const raw = await zernioRequest<unknown>(`/analytics/content-decay${qs ? `?${qs}` : ''}`);
+      const root = asRecord(raw) ?? {};
+      const buckets = Array.isArray(root.buckets) ? root.buckets : [];
+      return buckets
+        .map((b) => {
+          const r = asRecord(b);
+          if (!r) return null;
+          return {
+            order: pickNum(r, 'bucket_order'),
+            label: pickString(r, 'bucket_label') ?? '',
+            avgPctOfFinal: pickNum(r, 'avg_pct_of_final'),
+            postCount: pickNum(r, 'post_count'),
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null)
+        .sort((a, b) => a.order - b.order);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('402') && !msg.includes('404')) {
+        console.warn('[zernio] content-decay failed:', msg);
+      }
+      return [];
+    }
+  }
+
+  /**
+   * GET /v1/analytics/posting-frequency — correlation between posts-per-week
+   * and engagement-rate. Each row = {platform, posts_per_week, avg engagement,
+   * weeks_count}. Used to find the optimal cadence for a client.
+   */
+  async getPostingFrequency(filters?: {
+    platform?: SocialPlatform;
+    profileId?: string;
+    source?: 'all' | 'late' | 'external';
+  }): Promise<
+    Array<{
+      platform: string;
+      postsPerWeek: number;
+      avgEngagementRate: number;
+      avgEngagement: number;
+      weeksCount: number;
+    }>
+  > {
+    const params = new URLSearchParams();
+    if (filters?.platform) params.set('platform', filters.platform);
+    if (filters?.profileId) params.set('profileId', filters.profileId);
+    if (filters?.source) params.set('source', filters.source);
+    const qs = params.toString();
+    try {
+      const raw = await zernioRequest<unknown>(`/analytics/posting-frequency${qs ? `?${qs}` : ''}`);
+      const root = asRecord(raw) ?? {};
+      const rows = Array.isArray(root.frequency)
+        ? root.frequency
+        : Array.isArray(root.data)
+          ? root.data
+          : [];
+      return rows
+        .map((r) => {
+          const o = asRecord(r);
+          if (!o) return null;
+          return {
+            platform: pickString(o, 'platform') ?? 'unknown',
+            postsPerWeek: pickNum(o, 'posts_per_week'),
+            avgEngagementRate: pickNum(o, 'avg_engagement_rate'),
+            avgEngagement: pickNum(o, 'avg_engagement'),
+            weeksCount: pickNum(o, 'weeks_count'),
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null)
+        .sort((a, b) => a.postsPerWeek - b.postsPerWeek);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('402') && !msg.includes('404')) {
+        console.warn('[zernio] posting-frequency failed:', msg);
+      }
+      return [];
+    }
+  }
+
+  /**
+   * GET /v1/accounts/{id}/health — per-account health (token validity,
+   * permissions, recommended actions).
+   */
+  async getAccountHealth(accountId: string): Promise<{
+    status: string;
+    platform: string;
+    username: string | null;
+    tokenValid: boolean;
+    tokenExpiresAt: string | null;
+    tokenExpiresIn: string | null;
+    needsRefresh: boolean;
+    raw: Record<string, unknown>;
+  } | null> {
+    try {
+      const raw = await zernioRequest<unknown>(`/accounts/${accountId}/health`);
+      const root = asRecord(raw);
+      if (!root) return null;
+      const token = asRecord(root.tokenStatus) ?? {};
+      return {
+        status: pickString(root, 'status') ?? 'unknown',
+        platform: pickString(root, 'platform') ?? '',
+        username: pickString(root, 'username') ?? null,
+        tokenValid: token.valid === true,
+        tokenExpiresAt: pickString(token, 'expiresAt') ?? null,
+        tokenExpiresIn: pickString(token, 'expiresIn') ?? null,
+        needsRefresh: token.needsRefresh === true,
+        raw: root,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404')) console.warn(`[zernio] health ${accountId}:`, msg);
+      return null;
+    }
+  }
+
+  /**
+   * GET /v1/accounts/health — workspace-wide account-health summary. Lets
+   * us surface "N accounts need reconnect" at the workspace level before
+   * a cron run goes sideways.
+   */
+  async getWorkspaceHealth(): Promise<{
+    summary: { total: number; healthy: number; warning: number; error: number; needsReconnect: number };
+    accounts: Array<{
+      accountId: string;
+      platform: string;
+      username: string | null;
+      displayName: string | null;
+      profileId: string | null;
+      status: string;
+      canPost: boolean;
+      canFetchAnalytics: boolean;
+      analyticsSupported: boolean;
+      tokenValid: boolean;
+      tokenExpiresAt: string | null;
+    }>;
+  }> {
+    try {
+      const raw = await zernioRequest<unknown>(`/accounts/health`);
+      const root = asRecord(raw) ?? {};
+      const s = asRecord(root.summary) ?? {};
+      const accounts = Array.isArray(root.accounts) ? root.accounts : [];
+      return {
+        summary: {
+          total: pickNum(s, 'total'),
+          healthy: pickNum(s, 'healthy'),
+          warning: pickNum(s, 'warning'),
+          error: pickNum(s, 'error'),
+          needsReconnect: pickNum(s, 'needsReconnect'),
+        },
+        accounts: accounts
+          .map((a) => {
+            const o = asRecord(a);
+            if (!o) return null;
+            return {
+              accountId: pickString(o, 'accountId') ?? '',
+              platform: pickString(o, 'platform') ?? '',
+              username: pickString(o, 'username') ?? null,
+              displayName: pickString(o, 'displayName') ?? null,
+              profileId: pickString(o, 'profileId') ?? null,
+              status: pickString(o, 'status') ?? 'unknown',
+              canPost: o.canPost === true,
+              canFetchAnalytics: o.canFetchAnalytics === true,
+              analyticsSupported: o.analyticsSupported === true,
+              tokenValid: o.tokenValid === true,
+              tokenExpiresAt: pickString(o, 'tokenExpiresAt') ?? null,
+            };
+          })
+          .filter((x): x is NonNullable<typeof x> => x !== null),
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('[zernio] workspace health failed:', msg);
+      return {
+        summary: { total: 0, healthy: 0, warning: 0, error: 0, needsReconnect: 0 },
+        accounts: [],
+      };
+    }
+  }
+
+  /**
+   * GET /v1/analytics/post-timeline?postId=… — per-post engagement timeline
+   * (hourly engagement accumulation). Returns null when the post isn't
+   * indexed yet. Used for drill-down on a single high-performing post.
+   */
+  async getPostTimeline(
+    postId: string,
+  ): Promise<Array<{ timestamp: string; impressions: number; engagement: number }>> {
+    try {
+      const raw = await zernioRequest<unknown>(
+        `/analytics/post-timeline?postId=${encodeURIComponent(postId)}`,
+      );
+      const root = asRecord(raw) ?? {};
+      const tl = Array.isArray(root.timeline)
+        ? root.timeline
+        : Array.isArray(root.data)
+          ? root.data
+          : [];
+      return tl
+        .map((p) => {
+          const r = asRecord(p);
+          if (!r) return null;
+          return {
+            timestamp: pickString(r, 'timestamp', 'date', 'time') ?? '',
+            impressions: pickNum(r, 'impressions'),
+            engagement: pickNum(r, 'engagement'),
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null && x.timestamp !== '');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404')) console.warn(`[zernio] post-timeline ${postId}:`, msg);
+      return [];
+    }
   }
 }
 

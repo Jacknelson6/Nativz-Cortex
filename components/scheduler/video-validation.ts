@@ -12,6 +12,7 @@ const PLATFORM_LIMITS: Record<SocialPlatform, { maxDuration: number; maxSizeMB: 
   tiktok: { maxDuration: 600, maxSizeMB: 287, preferredAspect: '9:16' },
   youtube: { maxDuration: 60, maxSizeMB: 256000, preferredAspect: '9:16' },
   facebook: { maxDuration: 14400, maxSizeMB: 4096, preferredAspect: '9:16' },
+  linkedin: { maxDuration: 600, maxSizeMB: 5120, preferredAspect: '9:16' },
 };
 
 const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'];
