@@ -466,10 +466,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    // Get the client name before deleting (needed for vault cleanup)
+    // Get the client name + organization_id before deleting. The org row is
+    // 1:1 with the client (onboard creates one per client) and must be
+    // deleted too — otherwise its `slug` stays reserved and re-onboarding
+    // under the same name fails with a unique-violation.
     const { data: client } = await adminClient
       .from('clients')
-      .select('name')
+      .select('name, organization_id')
       .eq('id', id)
       .single();
 
@@ -516,6 +519,28 @@ export async function DELETE(
         },
         { status: 500 },
       );
+    }
+
+    // Delete the organization row too — only if it's not shared with another
+    // client (multi-brand orgs like Avondale/Landshark do exist). Best-effort;
+    // log but don't fail the DELETE if this step errors.
+    if (client?.organization_id) {
+      const { count } = await adminClient
+        .from('clients')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', client.organization_id);
+      if ((count ?? 0) === 0) {
+        const { error: orgDeleteError } = await adminClient
+          .from('organizations')
+          .delete()
+          .eq('id', client.organization_id);
+        if (orgDeleteError) {
+          console.error(
+            '[DELETE client] organization cleanup failed (non-fatal):',
+            orgDeleteError,
+          );
+        }
+      }
     }
 
     // Audit log: client deletion

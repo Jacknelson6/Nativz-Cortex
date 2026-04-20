@@ -82,14 +82,16 @@ export async function POST(request: NextRequest) {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
 
-    // Check for slug collision and append suffix if needed
-    const { data: existing } = await adminClient
-      .from('clients')
-      .select('slug')
-      .eq('slug', slug)
-      .maybeSingle();
-
-    if (existing) {
+    // Slug collision check. Must cover BOTH `clients` and `organizations`
+    // since onboard creates one of each with the same slug. A deleted client
+    // can leave its org row behind (pre-fix), and a freshly picked slug
+    // needs to clear both before we insert — otherwise the org insert below
+    // unique-violates and the whole onboard bails with "already exists".
+    const [existingClient, existingOrg] = await Promise.all([
+      adminClient.from('clients').select('slug').eq('slug', slug).maybeSingle(),
+      adminClient.from('organizations').select('slug').eq('slug', slug).maybeSingle(),
+    ]);
+    if (existingClient.data || existingOrg.data) {
       slug = `${slug}-${Date.now().toString(36)}`;
     }
 
