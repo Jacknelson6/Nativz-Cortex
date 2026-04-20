@@ -33,7 +33,6 @@ type NavItem = {
 // ad creatives) live at their own top-level routes. Brand DNA data is folded
 // into Brand profile and generated during onboarding in the background.
 const NAV: NavItem[] = [
-  { key: 'general', label: 'General', path: '/settings/general', icon: Building2 },
   { key: 'brand', label: 'Brand profile', path: '/settings/brand', icon: Palette },
   { key: 'contacts', label: 'Contacts', path: '/settings/contacts', icon: Users },
   { key: 'integrations', label: 'Integrations', path: '/settings/integrations', icon: Plug },
