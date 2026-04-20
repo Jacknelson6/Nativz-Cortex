@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import {
   UserPlus, Building2, Shield, Loader2, Copy, Check, Send, Minus, Plus, Mail,
+  ClipboardList, Upload, X, AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
 import { ClientPickerButton, type ClientOption as PickerClientOption } from '@/components/ui/client-picker';
+import { parseContactList, type ParsedContact } from '@/lib/invites/parse-contacts';
 
 interface GeneratedInvite {
   invite_url: string;
@@ -106,6 +108,8 @@ export function InviteUsersDialog({ open, onClose, onInvited, lockedClient = nul
  * Portal invite form
  * ─────────────────────────────────────────────────────────────── */
 
+type PortalMode = 'single' | 'bulk';
+
 function PortalInviteForm({
   onInvitesCreated,
   lockedClient = null,
@@ -116,6 +120,7 @@ function PortalInviteForm({
   const [clients, setClients] = useState<PickerClientOption[]>([]);
   const [loadingClients, setLoadingClients] = useState(!lockedClient);
   const [clientId, setClientId] = useState<string | null>(lockedClient?.id ?? null);
+  const [mode, setMode] = useState<PortalMode>('single');
   const [count, setCount] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [email, setEmail] = useState('');
@@ -249,6 +254,37 @@ function PortalInviteForm({
         </div>
       )}
 
+      {/* Mode switcher — single vs paste/upload list */}
+      <div className="flex gap-1 rounded-lg border border-nativz-border p-1 text-xs">
+        <button
+          type="button"
+          onClick={() => setMode('single')}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
+            mode === 'single' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-secondary'
+          }`}
+        >
+          <Mail size={12} />
+          One at a time
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('bulk')}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
+            mode === 'bulk' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-secondary'
+          }`}
+        >
+          <ClipboardList size={12} />
+          Paste / upload list
+        </button>
+      </div>
+
+      {mode === 'bulk' ? (
+        <BulkEmailInviteForm
+          clientId={clientId}
+          onInvitesCreated={onInvitesCreated}
+        />
+      ) : (
+      <>
       {/* Email (optional) — when set, sends the branded invite email.
           When empty, the flow falls back to link-only batch generation. */}
       <div className="rounded-xl border border-nativz-border/70 bg-surface-hover/30 p-3 space-y-3">
@@ -329,6 +365,210 @@ function PortalInviteForm({
             <><Mail size={13} /> Send invite</>
           ) : (
             <><UserPlus size={13} /> Generate {count > 1 ? `${count} invites` : 'invite'}</>
+          )}
+        </button>
+      </div>
+      </>
+      )}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────
+ * Bulk-email (paste/upload) invite form
+ * ─────────────────────────────────────────────────────────────── */
+
+function BulkEmailInviteForm({
+  clientId,
+  onInvitesCreated,
+}: {
+  clientId: string | null;
+  onInvitesCreated: (heading: string, invites: GeneratedInvite[]) => void;
+}) {
+  const [rawInput, setRawInput] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [removedEmails, setRemovedEmails] = useState<Set<string>>(new Set());
+
+  const parsed = rawInput.trim() ? parseContactList(rawInput) : null;
+  const liveContacts: ParsedContact[] = (parsed?.contacts ?? []).filter(
+    (c) => !removedEmails.has(c.email),
+  );
+  const totalParsed = parsed?.contacts.length ?? 0;
+  const hasErrors = (parsed?.errors.length ?? 0) > 0;
+  const hasDuplicates = (parsed?.duplicates.length ?? 0) > 0;
+
+  function handleFile(file: File) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result;
+      if (typeof text === 'string') {
+        setRawInput((prev) => (prev.trim() ? `${prev.trim()}\n${text}` : text));
+      }
+    };
+    reader.onerror = () => toast.error(`Could not read ${file.name}`);
+    reader.readAsText(file);
+  }
+
+  function onDrop(e: React.DragEvent<HTMLTextAreaElement>) {
+    const file = e.dataTransfer.files?.[0];
+    if (file && /\.(csv|tsv|txt)$/i.test(file.name)) {
+      e.preventDefault();
+      handleFile(file);
+    }
+  }
+
+  function removeContact(email: string) {
+    setRemovedEmails((prev) => {
+      const next = new Set(prev);
+      next.add(email);
+      return next;
+    });
+  }
+
+  async function handleSend() {
+    if (!clientId) { toast.error('Select a client'); return; }
+    if (liveContacts.length === 0) { toast.error('Paste at least one email'); return; }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/invites/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: clientId,
+          contacts: liveContacts.map((c) => ({ email: c.email, name: c.name })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? 'Failed to send invites');
+        return;
+      }
+
+      const sent = (data.results as Array<{ status: string; invite_url?: string; email: string }>).filter(
+        (r) => r.status === 'sent',
+      );
+      const invites: GeneratedInvite[] = sent
+        .map((r) => ({
+          invite_url: r.invite_url ?? '',
+          expires_at: '',
+          label: r.email,
+        }))
+        .filter((inv) => inv.invite_url);
+
+      onInvitesCreated(
+        data.sent === 1
+          ? `1 invite sent for ${data.client_name}`
+          : `${data.sent} invites sent for ${data.client_name}${data.failed ? ` (${data.failed} failed)` : ''}`,
+        invites,
+      );
+
+      if (data.failed > 0) {
+        toast.warning(`${data.sent} sent, ${data.failed} failed — see list below`);
+      } else {
+        toast.success(`${data.sent} invite${data.sent === 1 ? '' : 's'} emailed`);
+        setRawInput('');
+        setRemovedEmails(new Set());
+      }
+    } catch {
+      toast.error('Something went wrong');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-[11px] font-medium text-text-muted uppercase tracking-wide mb-1.5">
+          Paste emails or drop a CSV
+        </label>
+        <textarea
+          value={rawInput}
+          onChange={(e) => { setRawInput(e.target.value); setRemovedEmails(new Set()); }}
+          onDrop={onDrop}
+          onDragOver={(e) => e.preventDefault()}
+          rows={6}
+          placeholder={'jane@company.com\nJohn Smith <john@company.com>\nname,email\nSam Lee,sam@company.com'}
+          className="w-full rounded-lg border border-nativz-border bg-surface-hover/30 px-3 py-2 text-xs font-mono text-text-primary placeholder:text-text-muted/60 focus:outline-none focus:ring-1 focus:ring-accent-text transition-colors"
+          disabled={submitting}
+        />
+        <div className="flex items-center justify-between mt-1.5">
+          <label className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-text-secondary cursor-pointer">
+            <Upload size={11} />
+            Upload .csv
+            <input
+              type="file"
+              accept=".csv,.tsv,.txt,text/csv,text/plain"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFile(file);
+                e.currentTarget.value = '';
+              }}
+            />
+          </label>
+          <span className="text-[11px] text-text-muted/70">
+            Name + email, any column order. Headers optional.
+          </span>
+        </div>
+      </div>
+
+      {/* Preview */}
+      {parsed && (liveContacts.length > 0 || hasErrors) && (
+        <div className="rounded-xl border border-nativz-border bg-surface-hover/20 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-nativz-border/60">
+            <span className="text-[11px] font-medium text-text-secondary">
+              {liveContacts.length} ready
+              {totalParsed !== liveContacts.length && ` · ${totalParsed - liveContacts.length} removed`}
+              {hasDuplicates && ` · ${parsed.duplicates.length} dup`}
+              {hasErrors && ` · ${parsed.errors.length} skipped`}
+            </span>
+            {liveContacts.length > 0 && (
+              <span className="text-[11px] text-text-muted">Agency theming auto-resolved from client.</span>
+            )}
+          </div>
+          <div className="max-h-56 overflow-y-auto divide-y divide-nativz-border/50">
+            {liveContacts.map((c) => (
+              <div key={c.email} className="group flex items-center gap-2 px-3 py-1.5 text-xs">
+                <div className="min-w-0 flex-1">
+                  <p className="text-text-primary truncate">
+                    {c.name ? <span>{c.name} <span className="text-text-muted">&middot; {c.email}</span></span> : c.email}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeContact(c.email)}
+                  className="shrink-0 rounded-md p-1 text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100"
+                  aria-label={`Remove ${c.email}`}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            {parsed.errors.map((e) => (
+              <div key={`err-${e.line}`} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+                <AlertTriangle size={11} className="text-amber-400 shrink-0" />
+                <span className="text-text-muted truncate">
+                  <span className="text-amber-400/80">Line {e.line}:</span> {e.source || '(blank)'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end">
+        <button
+          onClick={handleSend}
+          disabled={submitting || !clientId || liveContacts.length === 0}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {submitting ? (
+            <><Loader2 size={13} className="animate-spin" /> Sending…</>
+          ) : (
+            <><Send size={13} /> Send {liveContacts.length || ''} branded invite{liveContacts.length === 1 ? '' : 's'}</>
           )}
         </button>
       </div>
