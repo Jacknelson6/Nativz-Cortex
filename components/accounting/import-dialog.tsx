@@ -36,16 +36,11 @@ interface ImportDialogProps {
 
 type Stage = 'paste' | 'preview' | 'submitting';
 
-// Editing + blogging are priced per unit (per video, per post) — amount
-// auto-computes from rate × count and locks. SMM + affiliate are flat
-// payouts; amount is the only numeric field that matters.
+// Only editing is priced per unit — amount auto-computes from rate ×
+// video_count and locks. SMM, affiliate, and blogging are flat payouts;
+// Amount is the only numeric field that matters for those.
 function hasPerUnitPricing(type: EntryType): boolean {
-  return type === 'editing' || type === 'blogging';
-}
-
-function unitLabel(type: EntryType): string {
-  if (type === 'blogging') return 'Posts';
-  return 'Videos';
+  return type === 'editing';
 }
 
 /**
@@ -284,7 +279,7 @@ Affiliate payout: Cole @ Rockpower, $1200
                     <th className="text-left font-semibold px-3 py-2">Service</th>
                     <th className="text-left font-semibold px-3 py-2">Payee</th>
                     <th className="text-left font-semibold px-3 py-2">Client</th>
-                    <th className="text-left font-semibold px-3 py-2">Units</th>
+                    <th className="text-left font-semibold px-3 py-2">Videos</th>
                     <th className="text-left font-semibold px-3 py-2">Rate</th>
                     <th className="text-left font-semibold px-3 py-2">Amount</th>
                     <th className="w-8" />
@@ -358,7 +353,7 @@ Affiliate payout: Cole @ Rockpower, $1200
                             <input
                               type="number"
                               min="0"
-                              aria-label={unitLabel(p.entry_type)}
+                              aria-label="Videos"
                               value={p.video_count}
                               onChange={(e) => updateRow(i, { video_count: parseInt(e.target.value, 10) || 0 })}
                               className="w-full rounded border border-nativz-border bg-background px-2 py-1 text-sm tabular-nums text-text-primary"

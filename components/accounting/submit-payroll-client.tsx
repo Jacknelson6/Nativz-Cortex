@@ -30,7 +30,7 @@ interface SubmitPayrollClientProps {
 type Stage = 'paste' | 'preview' | 'submitting' | 'done';
 
 function hasPerUnitPricing(type: EntryType): boolean {
-  return type === 'editing' || type === 'blogging';
+  return type === 'editing';
 }
 
 /**
@@ -234,7 +234,7 @@ Rockpower: 3 revisions, $25 each
                   <tr>
                     <th className="text-left font-semibold px-3 py-2">Service</th>
                     <th className="text-left font-semibold px-3 py-2">Client</th>
-                    <th className="text-left font-semibold px-3 py-2">Units</th>
+                    <th className="text-left font-semibold px-3 py-2">Videos</th>
                     <th className="text-left font-semibold px-3 py-2">Rate</th>
                     <th className="text-left font-semibold px-3 py-2">Amount</th>
                     <th className="text-left font-semibold px-3 py-2">Notes</th>

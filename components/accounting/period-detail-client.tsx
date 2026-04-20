@@ -574,8 +574,8 @@ function AddEntryForm({
     }
   }
 
-  const perUnit = fixedType === 'editing' || fixedType === 'blogging';
-  const unitLabel = fixedType === 'blogging' ? 'Posts' : 'Videos';
+  const perUnit = fixedType === 'editing';
+  const unitLabel = 'Videos';
 
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-4 space-y-3">
