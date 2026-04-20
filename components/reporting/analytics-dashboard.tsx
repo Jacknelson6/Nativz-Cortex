@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useReportingData } from './hooks/use-reporting-data';
 import { DateRangePicker } from './date-range-picker';
-import { SummaryView } from './summary-view';
+import { OverviewKpiRow } from './overview-kpi-row';
+import { OverviewGrowthChart } from './overview-growth-chart';
 import { PlatformSection } from './platform-section';
 import { TopPostsView } from './top-posts-view';
 import { AudienceInsightsCard } from './audience-insights-card';
@@ -141,8 +142,15 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
             )}
           </div>
 
-          {/* Aggregate summary cards */}
-          <SummaryView data={summary} loading={dataLoading} />
+          {/* NAT-54 — 4 KPI tiles replace the old SummaryView hero. */}
+          <OverviewKpiRow
+            data={summary}
+            loading={dataLoading}
+            posts={summary?.platforms.flatMap((p) => p.posts ?? []) ?? []}
+          />
+
+          {/* NAT-54 — full-width growth chart with metric toggle + post markers. */}
+          <OverviewGrowthChart data={summary} loading={dataLoading} />
 
           {/* Top performers — always visible under the summary. */}
           <div className="space-y-4 rounded-xl border border-nativz-border bg-surface p-5">
