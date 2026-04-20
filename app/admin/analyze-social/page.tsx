@@ -20,10 +20,12 @@ export default async function AuditPage() {
 
   const adminClient = createAdminClient();
 
-  const [{ data: audits }, { data: userRow }, vaultClients, rosterResult] = await Promise.all([
+  const [{ data: auditRows }, { data: userRow }, vaultClients, rosterResult] = await Promise.all([
     adminClient
       .from('prospect_audits')
-      .select('id, tiktok_url, website_url, status, created_at, prospect_data, scorecard')
+      .select(
+        'id, tiktok_url, website_url, status, created_at, prospect_data, scorecard, attached_client:attached_client_id(name)',
+      )
       .order('created_at', { ascending: false })
       .limit(20),
     adminClient.from('users').select('full_name').eq('id', user.id).single(),
@@ -55,9 +57,24 @@ export default async function AuditPage() {
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // Flatten the nested `attached_client.name` onto the row so the rail can
+  // render the brand label without learning the DB shape. Supabase hands the
+  // nested row back as an object (or array of one) depending on the FK — we
+  // accept both shapes defensively.
+  const audits = (auditRows ?? []).map((row) => {
+    const { attached_client, ...rest } = row as typeof row & {
+      attached_client?: { name: string | null } | { name: string | null }[] | null;
+    };
+    const attached = Array.isArray(attached_client) ? attached_client[0] : attached_client;
+    return {
+      ...rest,
+      attached_client_name: attached?.name ?? null,
+    };
+  });
+
   return (
     <AuditHub
-      audits={audits ?? []}
+      audits={audits}
       userFirstName={firstName}
       clients={clients}
     />

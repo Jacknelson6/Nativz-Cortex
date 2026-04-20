@@ -32,15 +32,23 @@ export async function GET(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const { data: audit, error } = await adminClient
+    const { data: auditRow, error } = await adminClient
       .from('prospect_audits')
-      .select('*')
+      .select('*, attached_client:attached_client_id(name)')
       .eq('id', id)
       .single();
 
-    if (error || !audit) {
+    if (error || !auditRow) {
       return NextResponse.json({ error: 'Audit not found' }, { status: 404 });
     }
+
+    // Flatten the nested FK row onto the top level so clients get
+    // `attached_client_name` directly (matches the list endpoint shape).
+    const { attached_client, ...audit } = auditRow as typeof auditRow & {
+      attached_client?: { name: string | null } | { name: string | null }[] | null;
+    };
+    const attached = Array.isArray(attached_client) ? attached_client[0] : attached_client;
+    (audit as { attached_client_name?: string | null }).attached_client_name = attached?.name ?? null;
 
     // Stale-audit self-heal: if an audit has been stuck in `processing` for
     // longer than the Vercel function hard limit + a safety margin, the

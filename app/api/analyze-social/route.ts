@@ -133,13 +133,26 @@ export async function GET() {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const { data: audits } = await adminClient
+    const { data: auditRows } = await adminClient
       .from('prospect_audits')
-      .select('id, website_url, tiktok_url, status, created_at, prospect_data, scorecard')
+      .select(
+        'id, website_url, tiktok_url, status, created_at, prospect_data, scorecard, attached_client:attached_client_id(name)',
+      )
       .order('created_at', { ascending: false })
       .limit(50);
 
-    return NextResponse.json({ audits: audits ?? [] });
+    const audits = (auditRows ?? []).map((row) => {
+      const { attached_client, ...rest } = row as typeof row & {
+        attached_client?: { name: string | null } | { name: string | null }[] | null;
+      };
+      const attached = Array.isArray(attached_client) ? attached_client[0] : attached_client;
+      return {
+        ...rest,
+        attached_client_name: attached?.name ?? null,
+      };
+    });
+
+    return NextResponse.json({ audits });
   } catch (error) {
     console.error('GET /api/analyze-social error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

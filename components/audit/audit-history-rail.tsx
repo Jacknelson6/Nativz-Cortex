@@ -37,9 +37,13 @@ export interface AuditSummary {
   status: string;
   created_at: string;
   scorecard: Record<string, unknown> | null;
-  /** Subset of the stored prospect_data we actually render in the rail.
-   *  `websiteContext.title` is the LLM-parsed business name (e.g.
-   *  "Kayser Fitness") — the reliable source for the row label. */
+  /** Set when the audit has been attached to an existing client. When present
+   *  we show the client's real brand name in the history rail instead of the
+   *  LLM-extracted page title (which is often a long marketing tagline). */
+  attached_client_name?: string | null;
+  /** Subset of the stored prospect_data we use as a fallback label for
+   *  unattached prospects. `websiteContext.title` is the LLM-parsed business
+   *  name (e.g. "Kayser Fitness"). */
   prospect_data?: {
     websiteContext?: { title?: string | null } | null;
   } | null;
@@ -89,13 +93,18 @@ function cleanExtractedTitle(raw: string): string {
 
 /**
  * Label for a row. Preference order:
- *   1. `websiteContext.title` (LLM-extracted business name, already properly
- *      spaced — "Kayser Fitness", "Anderson Collaborative")
- *   2. Hyphen/underscore split of the first domain label — "anderson-
+ *   1. `attached_client_name` (client's real brand name — if the audit has
+ *      been attached to an existing client, always use that)
+ *   2. `websiteContext.title` (LLM-extracted business name for unattached
+ *      prospects — "Kayser Fitness", "Anderson Collaborative")
+ *   3. Hyphen/underscore split of the first domain label — "anderson-
  *      collaborative.com" → "Anderson collaborative"
- *   3. The hostname itself (fallback for multi-segment hosts we can't clean)
+ *   4. The hostname itself (fallback for multi-segment hosts we can't clean)
  */
 function formatCompanyLabel(audit: AuditSummary): string {
+  const attached = audit.attached_client_name?.trim();
+  if (attached) return attached;
+
   const title = audit.prospect_data?.websiteContext?.title ?? null;
   if (title && title.trim()) {
     return cleanExtractedTitle(title);
@@ -177,12 +186,17 @@ export function AuditHistoryRail({ audits, onAuditsChange }: AuditHistoryRailPro
               ...a,
               status: data.audit.status ?? a.status,
               scorecard: data.audit.scorecard ?? a.scorecard,
-              // Refresh prospect_data too — the rail label depends on
-              // `websiteContext.title`, which only lands after Step 1
-              // (website scrape) completes.
+              // Refresh prospect_data too — the rail label falls back to
+              // `websiteContext.title` for unattached prospects, which only
+              // lands after Step 1 (website scrape) completes.
               prospect_data:
                 (data.audit as { prospect_data?: AuditSummary['prospect_data'] }).prospect_data ??
                 a.prospect_data,
+              // If the audit got attached to a client mid-session, capture
+              // the name so the rail re-renders with the real brand label.
+              attached_client_name:
+                (data.audit as { attached_client_name?: string | null }).attached_client_name ??
+                a.attached_client_name,
             });
           } catch {
             /* ignore transient poll errors */
