@@ -4,7 +4,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getActiveModel } from '@/lib/ai/client';
 import { getLlmProviderKeysForAdmin, getNerdModelFromDb } from '@/lib/ai/provider-keys';
 import { getTopicSearchModelsFromDb } from '@/lib/ai/topic-search-models';
-import { toOpenAiChatModelId } from '@/lib/ai/openai-model-id';
 
 async function requireAdmin() {
   const supabase = await createServerSupabaseClient();
@@ -57,17 +56,17 @@ export async function GET() {
       getLlmProviderKeysForAdmin(),
     ]);
 
-    const openAi = keys.openai ?? {};
     const openRouter = keys.openrouter ?? {};
-    const hasOpenAiKey = hasConfiguredKey(openAi.default) || hasConfiguredKey(openAi.nerd) || hasConfiguredKey(process.env.OPENAI_API_KEY);
     const hasOpenRouterKey =
       hasConfiguredKey(openRouter.default) ||
       hasConfiguredKey(openRouter.nerd) ||
       hasConfiguredKey(process.env.OPENROUTER_API_KEY);
 
-    const nerdUsesOpenAi = Boolean(toOpenAiChatModelId(nerdModel)) && hasOpenAiKey;
-    const nerdProvider =
-      nerdUsesOpenAi ? 'openai' : hasOpenRouterKey ? 'openrouter' : 'unconfigured';
+    // Cortex routes every call through OpenRouter — single provider for the
+    // whole pipeline. The `prefersOpenAi` / `hasOpenAiKey` fields stay in the
+    // payload as `false` so existing UI consumers don't crash, but they will
+    // always be false now and can be removed in a follow-up cleanup.
+    const nerdProvider = hasOpenRouterKey ? 'openrouter' : 'unconfigured';
 
     return NextResponse.json({
       configured: {
@@ -80,8 +79,8 @@ export async function GET() {
         agents: {
           model: nerdModel || activeModel,
           provider: nerdProvider,
-          prefersOpenAi: nerdUsesOpenAi,
-          hasOpenAiKey,
+          prefersOpenAi: false,
+          hasOpenAiKey: false,
         },
       },
     });

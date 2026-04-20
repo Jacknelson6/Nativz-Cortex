@@ -2,8 +2,7 @@ import { calculateCost, logUsage } from './usage';
 import { checkCostBudget } from './cost-guard';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_OPENROUTER_MODEL } from './openrouter-default-model';
-import { resolveOpenAiApiKeyForFeature, resolveOpenRouterApiKeyForFeature, resolveDashscopeApiKeyForFeature } from './provider-keys';
-import { openAiChatCompletionTokenFields, toOpenAiChatModelId } from './openai-model-id';
+import { resolveOpenRouterApiKeyForFeature, resolveDashscopeApiKeyForFeature } from './provider-keys';
 import {
   extractOpenRouterWebCitations,
   extractUrlsFromPlainText,
@@ -158,58 +157,6 @@ async function callOpenRouter(
   return { data, response };
 }
 
-async function callOpenAI(
-  model: string,
-  options: CompletionOptions,
-  apiKey: string,
-): Promise<{ data: Record<string, unknown>; response: Response }> {
-  const body: Record<string, unknown> = {
-    model,
-    messages: options.messages,
-    ...openAiChatCompletionTokenFields(model, options.maxTokens),
-  };
-
-  const timeoutMs = options.timeoutMs ?? 0;
-  const controller = timeoutMs > 0 ? new AbortController() : null;
-  const timeoutId =
-    controller && timeoutMs > 0
-      ? setTimeout(() => controller.abort(), timeoutMs)
-      : null;
-
-  let response: Response;
-  try {
-    response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: controller?.signal,
-    });
-  } catch (err) {
-    if (timeoutId) clearTimeout(timeoutId);
-    const aborted =
-      err instanceof Error &&
-      (err.name === 'AbortError' || err.message.toLowerCase().includes('abort'));
-    if (aborted) {
-      throw new Error(
-        `OpenAI request timed out after ${timeoutMs}ms. Try again or switch model in admin settings.`,
-      );
-    }
-    throw err;
-  }
-  if (timeoutId) clearTimeout(timeoutId);
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`OpenAI API error (${response.status}): ${errorBody.substring(0, 300)}`);
-  }
-
-  const data = await response.json();
-  return { data, response };
-}
-
 async function callDashscope(
   model: string,
   options: CompletionOptions,
@@ -348,14 +295,11 @@ export async function createCompletion(options: CompletionOptions): Promise<AICo
     return buildCompletionResult(data, model, options);
   }
 
-  const resolvedOpenAiKey = await resolveOpenAiApiKeyForFeature(options.feature);
-  const oaModel = toOpenAiChatModelId(model);
-  if (oaModel && resolvedOpenAiKey) {
-    const { data } = await callOpenAI(oaModel, options, resolvedOpenAiKey);
-    return buildCompletionResult(data, model, options);
-  }
-
-  // Default: OpenRouter (handles all model prefixes)
+  // Always route through OpenRouter — single provider for the whole pipeline.
+  // OpenRouter proxies to OpenAI / Anthropic / Google / etc. based on the slug
+  // prefix (`openai/…`, `anthropic/…`, …). Direct-OpenAI used to short-circuit
+  // here when an `openai/…` slug coincided with a saved OpenAI key; that path
+  // was removed so configuration is unambiguous.
   const { data } = await callOpenRouter(model, options);
   return buildCompletionResult(data, model, options);
 }

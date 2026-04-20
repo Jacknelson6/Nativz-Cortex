@@ -1,18 +1,27 @@
-import { toOpenAiChatModelId } from '@/lib/ai/openai-model-id';
+/**
+ * Backend selection used to be runtime-inferred from the model id (e.g. an
+ * `openai/…` slug + an OpenAI key would short-circuit to OpenAI's native API).
+ * That ambiguity is gone — every Cortex feature now goes through OpenRouter so
+ * a single key + slug controls the whole pipeline. These helpers are kept as
+ * shims so legacy callers don't need to be refactored, but the result is
+ * always `'openrouter'`.
+ */
 
-export type ModelBackend = 'openrouter' | 'openai';
+export type ModelBackend = 'openrouter';
 
-/** Infer whether a stored model id is intended for OpenAI’s native API vs OpenRouter. */
-export function inferModelBackend(modelId: string): ModelBackend {
-  const m = modelId.trim();
-  if (!m) return 'openrouter';
-  return toOpenAiChatModelId(m) ? 'openai' : 'openrouter';
+/** Always returns `'openrouter'`. The codebase no longer routes to OpenAI direct. */
+export function inferModelBackend(_modelId: string): ModelBackend {
+  return 'openrouter';
 }
 
-/** Normalize a user-picked OpenAI chat model to Cortex style (`openai/gpt-4o-mini`). */
+/**
+ * Normalizes a stored or user-typed OpenAI chat model id to the `openai/…`
+ * form OpenRouter expects. Pass-through for already-prefixed values and for
+ * non-OpenAI slugs (`anthropic/…`, `google/…`, etc.).
+ */
 export function toOpenAiPrefixedModel(nativeOrPrefixed: string): string {
   const t = nativeOrPrefixed.trim();
   if (!t) return '';
-  if (t.startsWith('openai/')) return t;
+  if (t.includes('/')) return t;
   return `openai/${t}`;
 }

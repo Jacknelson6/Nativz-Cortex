@@ -6,10 +6,8 @@ import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 import { registerAllTools } from '@/lib/nerd/tools';
 import { getAllTools, getTool, getToolsForAPI } from '@/lib/nerd/registry';
 import type { ToolResult } from '@/lib/nerd/types';
-import { toOpenAiChatModelId } from '@/lib/ai/openai-model-id';
 import {
   getNerdModelFromDb,
-  resolveOpenAiApiKeyForFeature,
   resolveOpenRouterApiKeyForFeature,
 } from '@/lib/ai/provider-keys';
 import { buildMarketingSkillsContext } from '@/lib/nerd/marketing-skills';
@@ -911,25 +909,21 @@ export async function POST(req: NextRequest) {
     }
 
     // --- Build API messages ---
-    const openAiKey = await resolveOpenAiApiKeyForFeature('nerd');
-    const orKey = await resolveOpenRouterApiKeyForFeature('nerd');
+    // Cortex routes every call through OpenRouter — one key, one model. Paste
+    // an `openai/…` slug if you want OpenAI; OpenRouter proxies it.
+    const apiKey = await resolveOpenRouterApiKeyForFeature('nerd');
     const nerdModel = await getNerdModelFromDb();
-    const openAiModelId = toOpenAiChatModelId(nerdModel);
-    const useOpenAi = Boolean(openAiKey && openAiModelId);
-    const apiKey = useOpenAi ? openAiKey : orKey;
     if (!apiKey) {
       return new Response(
         JSON.stringify({
           error:
-            'No API key configured. Add an OpenAI or OpenRouter key in admin → AI models (or set OPENAI_API_KEY / OPENROUTER_API_KEY).',
+            'No OpenRouter API key configured. Add one in admin → AI settings (or set OPENROUTER_API_KEY).',
         }),
         { status: 500 },
       );
     }
-    const chatCompletionsUrl = useOpenAi
-      ? 'https://api.openai.com/v1/chat/completions'
-      : 'https://openrouter.ai/api/v1/chat/completions';
-    const requestModel = useOpenAi ? openAiModelId! : nerdModel;
+    const chatCompletionsUrl = 'https://openrouter.ai/api/v1/chat/completions';
+    const requestModel = nerdModel;
 
     // --- Guardrails check (before LLM call) ---
     const lastUserMsg = messages.filter((m) => m.role === 'user').pop()?.content ?? '';
@@ -1064,17 +1058,16 @@ export async function POST(req: NextRequest) {
     const toolChoice: string | undefined = forceToolUse ? 'required' : undefined;
 
     /**
-     * OpenAI's newer frontier models (gpt-5.x, o1/o3 reasoning series) require
-     * `max_completion_tokens` instead of the legacy `max_tokens`. Older
-     * gpt-3.5 and some third-party APIs via OpenRouter still want `max_tokens`.
-     * Build the right body-shape per-provider-per-model so we don't break one
-     * while fixing the other.
+     * OpenAI's frontier models (gpt-5.x, o1/o3 reasoning, gpt-4.1) require
+     * `max_completion_tokens` instead of the legacy `max_tokens`. OpenRouter
+     * passes the body through largely unchanged, so we still need the right
+     * shape per upstream model — detect by slug suffix regardless of prefix.
      */
+    const modelLeaf = requestModel.includes('/') ? requestModel.split('/').pop()! : requestModel;
     const modelPrefersCompletionTokens =
-      useOpenAi &&
-      (/^o\d/.test(requestModel) ||
-        /^gpt-5/.test(requestModel) ||
-        /^gpt-4\.1/.test(requestModel));
+      /^o\d/.test(modelLeaf) ||
+      /^gpt-5/.test(modelLeaf) ||
+      /^gpt-4\.1/.test(modelLeaf);
     const tokenLimitField: Record<string, number> = modelPrefersCompletionTokens
       ? { max_completion_tokens: 8192 }
       : { max_tokens: 8192 };
@@ -1083,11 +1076,9 @@ export async function POST(req: NextRequest) {
     const initialHeaders: Record<string, string> = {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
+      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io',
+      'X-Title': `${brandName} Cortex - The Nerd`,
     };
-    if (!useOpenAi) {
-      initialHeaders['HTTP-Referer'] = process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io';
-      initialHeaders['X-Title'] = `${brandName} Cortex - The Nerd`;
-    }
 
     const openRouterRes = await fetch(chatCompletionsUrl, {
       method: 'POST',
@@ -1112,7 +1103,7 @@ export async function POST(req: NextRequest) {
         errorDetail: errText.slice(0, 1000),
         userId: user.id,
         userEmail: user.email ?? undefined,
-        meta: { model: requestModel, provider: useOpenAi ? 'openai' : 'openrouter' },
+        meta: { model: requestModel, provider: 'openrouter' },
       }).catch(() => {});
       // Return the actual error details to help debug
       let detail = 'AI service error';
@@ -1296,11 +1287,9 @@ export async function POST(req: NextRequest) {
             const continueHeaders: Record<string, string> = {
               Authorization: `Bearer ${apiKey}`,
               'Content-Type': 'application/json',
+              'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io',
+              'X-Title': `${brandName} Cortex - The Nerd`,
             };
-            if (!useOpenAi) {
-              continueHeaders['HTTP-Referer'] = process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io';
-              continueHeaders['X-Title'] = `${brandName} Cortex - The Nerd`;
-            }
 
             // Keep forcing tool_choice: 'required' across continuation turns
             // until create_topic_plan has actually fired. Otherwise the model
@@ -1369,7 +1358,7 @@ export async function POST(req: NextRequest) {
           const estimatedInputTokens = Math.ceil((systemPrompt.length + portfolioContext.length + lastUserMsg.length) / 4);
           const estimatedOutputTokens = Math.ceil((fullAssistantText?.length ?? 0) / 4);
           logUsage({
-            service: useOpenAi ? 'openai' : 'openrouter',
+            service: 'openrouter',
             model: requestModel,
             feature: 'nerd_chat',
             inputTokens: estimatedInputTokens,
