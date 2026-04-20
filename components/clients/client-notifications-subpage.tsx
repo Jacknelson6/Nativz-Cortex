@@ -5,6 +5,7 @@ import { Loader2, Bell } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { AffiliateWeeklyDigestSettings } from '@/components/clients/affiliate-weekly-digest-settings';
 import { SocialWeeklyDigestSettings } from '@/components/clients/social-weekly-digest-settings';
+import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
 
 type ClientPayload = {
   id: string;
@@ -75,15 +76,11 @@ export function ClientNotificationsSubpage({ slug }: { slug: string }) {
 
   return (
     <div className="space-y-8">
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <Bell size={18} className="text-text-muted" />
-          <h2 className="text-lg font-semibold text-text-primary">Notifications</h2>
-        </div>
-        <p className="text-sm text-text-muted">
-          Email digests and reporting for {client.name}. Additional channels can be added here later.
-        </p>
-      </div>
+      <SettingsPageHeader
+        icon={Bell}
+        title="Notifications"
+        subtitle={`Email digests and reporting for ${client.name}. Additional channels can be added here later.`}
+      />
 
       <SocialWeeklyDigestSettings
         clientId={client.id}

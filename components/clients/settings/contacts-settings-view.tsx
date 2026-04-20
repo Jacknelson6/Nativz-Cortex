@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Users, ShieldCheck } from 'lucide-react';
 import { ClientContactsCard } from '@/components/clients/client-contacts-card';
 import { PortalAccessCard } from '@/components/clients/client-settings-section';
+import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
 
 type ContactsPayload = {
   id: string;
@@ -67,12 +68,11 @@ export function ContactsSettingsView({ slug }: { slug: string }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-text-primary">Contacts</h2>
-        <p className="text-sm text-text-muted mt-0.5">
-          Company contacts and people with portal access for {client.name}.
-        </p>
-      </div>
+      <SettingsPageHeader
+        icon={Users}
+        title="Contacts"
+        subtitle={`Company contacts and people with portal access for ${client.name}.`}
+      />
 
       <ClientContactsCard
         clientId={client.id}
@@ -80,10 +80,16 @@ export function ContactsSettingsView({ slug }: { slug: string }) {
         portalContacts={portalContacts}
       />
 
-      <div>
-        <h3 className="text-base font-semibold text-text-primary mt-4 mb-2">Portal invites & users</h3>
-        <PortalAccessCard clientId={client.id} />
+      <div className="flex items-center gap-3 pt-2">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-surface border border-nativz-border">
+          <ShieldCheck size={16} className="text-accent-text" />
+        </div>
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">Portal invites & users</h2>
+          <p className="text-xs text-text-muted">People from this client who can sign in to the portal.</p>
+        </div>
       </div>
+      <PortalAccessCard clientId={client.id} />
     </div>
   );
 }

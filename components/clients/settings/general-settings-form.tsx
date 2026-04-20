@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ImageUpload } from '@/components/ui/image-upload';
+import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
 
 type GeneralPayload = {
   id: string;
@@ -114,10 +115,11 @@ export function GeneralSettingsForm({ slug }: { slug: string }) {
 
   return (
     <form onSubmit={handleSave} noValidate className="space-y-6">
-      <SectionHeading
+      <SettingsPageHeader
+        icon={Building2}
         title="General"
-        description="Core identity, website, and agency assignment for this client."
-        right={
+        subtitle="Core identity, website, and agency assignment for this client."
+        action={
           editing ? (
             <div className="flex items-center gap-2">
               <Button type="button" variant="ghost" size="sm" onClick={() => {
@@ -228,26 +230,6 @@ export function GeneralSettingsForm({ slug }: { slug: string }) {
         </div>
       </Card>
     </form>
-  );
-}
-
-function SectionHeading({
-  title,
-  description,
-  right,
-}: {
-  title: string;
-  description?: string;
-  right?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-end justify-between gap-3 flex-wrap">
-      <div>
-        <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
-        {description && <p className="text-sm text-text-muted mt-0.5">{description}</p>}
-      </div>
-      {right}
-    </div>
   );
 }
 

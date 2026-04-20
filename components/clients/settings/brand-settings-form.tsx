@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Save, Loader2, Pencil, X, Sparkles, DollarSign, ExternalLink } from 'lucide-react';
+import { Save, Loader2, Pencil, X, Sparkles, DollarSign, ExternalLink, Palette } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input, Textarea } from '@/components/ui/input';
 import { ProfileField } from '@/components/clients/client-profile-fields';
+import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
 
 type BrandPayload = {
   id: string;
@@ -147,46 +148,45 @@ export function BrandSettingsForm({ slug }: { slug: string }) {
 
   return (
     <form onSubmit={handleSave} noValidate className="space-y-6">
-      <div className="flex items-end justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-lg font-semibold text-text-primary">Brand profile</h2>
-          <p className="text-sm text-text-muted mt-0.5">
-            Audience, voice, keywords — the context every AI flow in Cortex uses for this client.
-          </p>
-        </div>
-        {editing ? (
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => {
-              setTargetAudience(client.target_audience ?? '');
-              setBrandVoice(client.brand_voice ?? '');
-              setTopicKeywords((client.topic_keywords ?? []).join(', '));
-              setDescription(client.description ?? '');
-              setBoostingBudget(client.monthly_boosting_budget != null ? String(client.monthly_boosting_budget) : '');
-              setBrandingUrl(client.google_drive_branding_url ?? '');
-              setCalendarsUrl(client.google_drive_calendars_url ?? '');
-              setEditing(false);
-            }}>
-              <X size={14} />
-              Cancel
-            </Button>
-            {client.website_url && (
-              <Button type="button" variant="outline" size="sm" onClick={handleGenerateAI} disabled={analyzing}>
-                {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                {analyzing ? 'Analyzing…' : 'Generate with AI'}
+      <SettingsPageHeader
+        icon={Palette}
+        title="Brand profile"
+        subtitle="Audience, voice, keywords — the context every AI flow in Cortex uses for this client."
+        action={
+          editing ? (
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => {
+                setTargetAudience(client.target_audience ?? '');
+                setBrandVoice(client.brand_voice ?? '');
+                setTopicKeywords((client.topic_keywords ?? []).join(', '));
+                setDescription(client.description ?? '');
+                setBoostingBudget(client.monthly_boosting_budget != null ? String(client.monthly_boosting_budget) : '');
+                setBrandingUrl(client.google_drive_branding_url ?? '');
+                setCalendarsUrl(client.google_drive_calendars_url ?? '');
+                setEditing(false);
+              }}>
+                <X size={14} />
+                Cancel
               </Button>
-            )}
-            <Button type="submit" size="sm" disabled={saving}>
-              <Save size={14} />
-              {saving ? 'Saving…' : 'Save'}
+              {client.website_url && (
+                <Button type="button" variant="outline" size="sm" onClick={handleGenerateAI} disabled={analyzing}>
+                  {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  {analyzing ? 'Analyzing…' : 'Generate with AI'}
+                </Button>
+              )}
+              <Button type="submit" size="sm" disabled={saving}>
+                <Save size={14} />
+                {saving ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
+          ) : (
+            <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>
+              <Pencil size={14} />
+              Edit
             </Button>
-          </div>
-        ) : (
-          <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>
-            <Pencil size={14} />
-            Edit
-          </Button>
-        )}
-      </div>
+          )
+        }
+      />
 
       <Card>
         {editing ? (

@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
+import { Plug } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { IntegrationsTable } from '@/components/clients/settings/integrations-table';
+import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
 
 export default async function ClientSettingsIntegrationsPage({
   params,
@@ -18,12 +20,11 @@ export default async function ClientSettingsIntegrationsPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-text-primary">Integrations</h2>
-        <p className="text-sm text-text-muted mt-0.5">
-          Connected accounts for reporting, analytics, and affiliate tracking.
-        </p>
-      </div>
+      <SettingsPageHeader
+        icon={Plug}
+        title="Integrations"
+        subtitle="Connected accounts for reporting, analytics, and affiliate tracking."
+      />
       <IntegrationsTable
         clientId={client.id}
         hasAffiliateIntegration={Boolean((client as { uppromote_api_key?: string | null }).uppromote_api_key)}

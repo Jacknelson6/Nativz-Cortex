@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import { DangerZone } from '@/components/clients/client-settings-section';
+import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
 
 type DangerPayload = {
   id: string;
@@ -55,12 +56,11 @@ export function DangerSettingsView({ slug }: { slug: string }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-text-primary">Archive / delete</h2>
-        <p className="text-sm text-text-muted mt-0.5">
-          Deactivate hides the client from portal and lists. Delete is permanent.
-        </p>
-      </div>
+      <SettingsPageHeader
+        icon={AlertTriangle}
+        title="Archive / delete"
+        subtitle="Deactivate hides the client from portal and lists. Delete is permanent."
+      />
       <DangerZone
         clientId={client.id}
         clientName={client.name}

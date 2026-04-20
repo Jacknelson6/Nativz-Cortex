@@ -1,7 +1,9 @@
+import { ShieldCheck } from 'lucide-react';
 import { ClientAccessServicesPanel } from '@/components/clients/client-access-services-panel';
 import { RevisionWebhookSettings } from '@/components/clients/revision-webhook-settings';
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
 
 export default async function ClientSettingsAccessPage({
   params,
@@ -15,12 +17,11 @@ export default async function ClientSettingsAccessPage({
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-text-primary">Access & services</h2>
-        <p className="text-sm text-text-muted mt-0.5">
-          Contracted services, team workspace modules, and portal feature flags.
-        </p>
-      </div>
+      <SettingsPageHeader
+        icon={ShieldCheck}
+        title="Access & services"
+        subtitle="Contracted services, team workspace modules, and portal feature flags."
+      />
 
       <ClientAccessServicesPanel slug={slug} />
 
