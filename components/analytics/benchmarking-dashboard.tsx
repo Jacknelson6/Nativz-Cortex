@@ -75,6 +75,11 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
   const [selectedProfiles, setSelectedProfiles] = useState<Set<string>>(new Set());
   const [discovering, setDiscovering] = useState(false);
   const [suggestions, setSuggestions] = useState<{ username: string; reason: string }[] | null>(null);
+  // Client's own daily follower series (summed across platforms) — overlaid
+  // on the chart as "Your account" so the benchmarking view answers
+  // "how are we doing relative to them?", not just "how are they doing
+  // relative to each other?".
+  const [clientSeries, setClientSeries] = useState<Array<{ day: string; followers: number }>>([]);
 
   const fetchCompetitors = useCallback(async () => {
     try {
@@ -90,6 +95,29 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
   useEffect(() => {
     fetchCompetitors();
   }, [fetchCompetitors]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    let cancelled = false;
+    fetch(`/api/analytics/client-series?clientId=${clientId}`)
+      .then((res) => (res.ok ? res.json() : { series: [] }))
+      .then((data) => {
+        if (cancelled) return;
+        // Sum followers across platforms per day so the overlay matches the
+        // competitor axis (whole-account followers, not per-platform).
+        const perDay = new Map<string, number>();
+        for (const row of (data.series ?? []) as Array<{ day: string; followers: number }>) {
+          perDay.set(row.day, (perDay.get(row.day) ?? 0) + (row.followers ?? 0));
+        }
+        setClientSeries(
+          Array.from(perDay.entries())
+            .map(([day, followers]) => ({ day, followers }))
+            .sort((a, b) => a.day.localeCompare(b.day)),
+        );
+      })
+      .catch(() => { if (!cancelled) setClientSeries([]); });
+    return () => { cancelled = true; };
+  }, [clientId]);
 
   async function handleResolve() {
     const raw = addInput.trim();
@@ -295,8 +323,10 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
     );
   }
 
-  // Build historical chart data from all snapshots
-  const chartData = buildChartData(competitors);
+  // Build historical chart data from all snapshots (client series is
+  // prepended so every date bucket knows whether we're looking at them or at
+  // us).
+  const chartData = buildChartData(competitors, clientSeries);
 
   return (
     <div className="space-y-6">
@@ -455,6 +485,10 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs>
+                  <linearGradient id="color-client" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.5} />
+                    <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
+                  </linearGradient>
                   {competitors.map((comp, i) => (
                     <linearGradient key={comp.id} id={`color-${i}`} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={0.3} />
@@ -485,6 +519,16 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
                   labelStyle={{ color: 'var(--text-primary)' }}
                   formatter={(value: number | undefined) => [formatNumber(value ?? 0), '']}
                 />
+                {clientSeries.length > 0 && (
+                  <Area
+                    type="monotone"
+                    dataKey={CLIENT_SERIES_KEY}
+                    stroke="var(--accent)"
+                    fillOpacity={1}
+                    fill="url(#color-client)"
+                    strokeWidth={3}
+                  />
+                )}
                 {competitors.map((comp, i) => (
                   <Area
                     key={comp.id}
@@ -641,7 +685,12 @@ function MiniStat({ icon: Icon, label, value }: { icon: typeof Users; label: str
   );
 }
 
-function buildChartData(competitors: Competitor[]): Record<string, unknown>[] {
+export const CLIENT_SERIES_KEY = 'Your account';
+
+function buildChartData(
+  competitors: Competitor[],
+  clientSeries: Array<{ day: string; followers: number }>,
+): Record<string, unknown>[] {
   // Collect all snapshot dates across all competitors
   const dateMap: Record<string, Record<string, number>> = {};
 
@@ -651,6 +700,17 @@ function buildChartData(competitors: Competitor[]): Record<string, unknown>[] {
       if (!dateMap[date]) dateMap[date] = {};
       dateMap[date][comp.username] = snap.followers;
     }
+  }
+
+  // Inject the client's own daily follower total under a stable key so the
+  // legend + tooltip can flag it distinctly.
+  for (const row of clientSeries) {
+    const date = new Date(row.day).toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+    });
+    if (!dateMap[date]) dateMap[date] = {};
+    dateMap[date][CLIENT_SERIES_KEY] = row.followers;
   }
 
   return Object.entries(dateMap)

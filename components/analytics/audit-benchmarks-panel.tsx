@@ -87,6 +87,9 @@ export function AuditBenchmarksPanel({ clientId, clientName }: Props) {
   const [rows, setRows] = useState<BenchmarkRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clientSeries, setClientSeries] = useState<
+    Array<{ day: string; followers: number }>
+  >([]);
 
   useEffect(() => {
     if (!clientId) {
@@ -110,6 +113,25 @@ export function AuditBenchmarksPanel({ clientId, clientName }: Props) {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
+    // Fetch the client's own follower series so the per-benchmark chart can
+    // overlay "Your account" next to the tracked competitors.
+    fetch(`/api/analytics/client-series?clientId=${clientId}`)
+      .then((r) => (r.ok ? r.json() : { series: [] }))
+      .then((data) => {
+        if (cancelled) return;
+        const perDay = new Map<string, number>();
+        for (const row of (data.series ?? []) as Array<{ day: string; followers: number }>) {
+          perDay.set(row.day, (perDay.get(row.day) ?? 0) + (row.followers ?? 0));
+        }
+        setClientSeries(
+          Array.from(perDay.entries())
+            .map(([day, followers]) => ({ day, followers }))
+            .sort((a, b) => a.day.localeCompare(b.day)),
+        );
+      })
+      .catch(() => { if (!cancelled) setClientSeries([]); });
+
     return () => {
       cancelled = true;
     };
@@ -159,15 +181,23 @@ export function AuditBenchmarksPanel({ clientId, clientName }: Props) {
   return (
     <div className="space-y-6">
       {rows.map((b) => (
-        <BenchmarkCard key={b.id} benchmark={b} />
+        <BenchmarkCard key={b.id} benchmark={b} clientSeries={clientSeries} />
       ))}
     </div>
   );
 }
 
+const CLIENT_SERIES_KEY = 'Your account';
+
 // ── Internal components ────────────────────────────────────────────────
 
-function BenchmarkCard({ benchmark }: { benchmark: BenchmarkRow }) {
+function BenchmarkCard({
+  benchmark,
+  clientSeries,
+}: {
+  benchmark: BenchmarkRow;
+  clientSeries: Array<{ day: string; followers: number }>;
+}) {
   // Group snapshots by (platform, username) so each competitor gets its own
   // series on the chart and its own posts column below.
   const byHandle = useMemo(() => {
@@ -181,7 +211,9 @@ function BenchmarkCard({ benchmark }: { benchmark: BenchmarkRow }) {
     return map;
   }, [benchmark.snapshots]);
 
-  // Followers chart — one point per snapshot, one series per handle.
+  // Followers chart — one point per snapshot, one series per handle. Client
+  // follower total gets overlaid under a stable key so the tooltip/legend can
+  // flag it.
   const chartData = useMemo(() => {
     const dateMap = new Map<string, Record<string, number | string>>();
     for (const s of benchmark.snapshots) {
@@ -193,8 +225,17 @@ function BenchmarkCard({ benchmark }: { benchmark: BenchmarkRow }) {
       row[`${s.platform}/${s.username}`] = s.followers ?? 0;
       dateMap.set(date, row);
     }
+    for (const row of clientSeries) {
+      const date = new Date(row.day).toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric',
+      });
+      const bucket = dateMap.get(date) ?? { date };
+      bucket[CLIENT_SERIES_KEY] = row.followers;
+      dateMap.set(date, bucket);
+    }
     return Array.from(dateMap.values());
-  }, [benchmark.snapshots]);
+  }, [benchmark.snapshots, clientSeries]);
 
   const seriesKeys = Array.from(byHandle.keys());
 
