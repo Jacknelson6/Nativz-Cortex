@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { OnboardProgress } from '@/components/onboard/onboard-progress';
 import { OnboardInput } from '@/components/onboard/onboard-input';
@@ -21,6 +21,12 @@ export default function OnboardWizardPage() {
   const [formData, setFormData] = useState<OnboardFormData | null>(null);
   const [clientId, setClientId] = useState('');
   const [strategyId, setStrategyId] = useState('');
+  // Guard against double-submission: React state updates are async so a
+  // fast double-click on "Looks good — continue" can fire two POSTs to
+  // /api/clients/onboard before `clientId` is set. A ref is synchronous
+  // so the second call short-circuits immediately. Left dangling on error
+  // so the user can retry manually.
+  const onboardInFlight = useRef(false);
 
   function completeStep(step: OnboardStep) {
     setCompletedSteps((prev) => (prev.includes(step) ? prev : [...prev, step]));
@@ -39,6 +45,8 @@ export default function OnboardWizardPage() {
   // doesn't sit through a redundant "creating records" screen. Errors
   // surface as a toast and keep the user on the analyze step.
   const handleAnalyzeNext = useCallback(async (data: OnboardFormData) => {
+    if (onboardInFlight.current) return;
+    onboardInFlight.current = true;
     setFormData(data);
     try {
       const res = await fetch('/api/clients/onboard', {
@@ -51,6 +59,7 @@ export default function OnboardWizardPage() {
       if (!res.ok || !payload?.cortex?.success || !payload?.cortex?.clientId) {
         const msg = payload?.error ?? payload?.cortex?.error ?? 'Failed to create client';
         toast.error(msg);
+        onboardInFlight.current = false;
         return;
       }
 
@@ -68,6 +77,7 @@ export default function OnboardWizardPage() {
       setCurrentStep('strategy');
     } catch {
       toast.error('Something went wrong creating the client — try again.');
+      onboardInFlight.current = false;
     }
   }, []);
 

@@ -105,8 +105,6 @@ export interface OnboardFormData {
   brand_voice: string;
   topic_keywords: string[];
   logo_url: string | null;
-  poc_name: string;
-  poc_email: string;
   services: string[];
   agency: string;
 }

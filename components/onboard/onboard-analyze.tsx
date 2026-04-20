@@ -26,8 +26,6 @@ export function OnboardAnalyze({ name, websiteUrl, onNext, onBack }: OnboardAnal
     brand_voice: '',
     topic_keywords: [],
     logo_url: null,
-    poc_name: '',
-    poc_email: '',
     services: [],
     agency: '',
   });
@@ -239,32 +237,8 @@ export function OnboardAnalyze({ name, websiteUrl, onNext, onBack }: OnboardAnal
           <div className="border-t border-nativz-border pt-4 mt-2">
             <p className="text-xs font-medium text-text-muted mb-3">Account details</p>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Input
-                id="poc_name"
-                label="Point of contact name"
-                value={formData.poc_name}
-                onChange={(e) => {
-                  setFormData((prev) => ({ ...prev, poc_name: e.target.value }));
-                  setFieldsEdited(true);
-                }}
-                placeholder="e.g. Jane Smith"
-              />
-              <Input
-                id="poc_email"
-                label="Point of contact email"
-                type="email"
-                value={formData.poc_email}
-                onChange={(e) => {
-                  setFormData((prev) => ({ ...prev, poc_email: e.target.value }));
-                  setFieldsEdited(true);
-                }}
-                placeholder="e.g. jane@company.com"
-              />
-            </div>
-
             {/* Services checkboxes */}
-            <div className="mt-4">
+            <div>
               <label className="block text-xs font-medium text-text-muted mb-2">Services</label>
               <div className="flex flex-wrap gap-3">
                 {['SMM', 'Paid Media', 'Affiliates', 'Editing'].map((service) => (

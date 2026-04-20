@@ -17,8 +17,6 @@ const onboardSchema = z.object({
   brand_voice: z.string().optional().default(''),
   topic_keywords: z.array(z.string()).optional().default([]),
   logo_url: z.string().nullable().optional().default(null),
-  poc_name: z.string().optional().default(''),
-  poc_email: z.string().optional().default(''),
   services: z.array(z.string()).optional().default([]),
   agency: z.string().optional().default(''),
 });
@@ -42,8 +40,6 @@ const onboardSchema = z.object({
  * @body brand_voice - Brand voice description
  * @body topic_keywords - Array of content topic keywords
  * @body logo_url - Logo image URL (nullable)
- * @body poc_name - Point of contact name
- * @body poc_email - Point of contact email
  * @body services - Array of service strings (e.g. ['SMM', 'Paid Media', 'Editing', 'Affiliates'])
  * @body agency - Agency name override
  * @returns {{ cortex: SystemResult, vault: SystemResult, monday: SystemResult, late: SystemResult }}
@@ -126,6 +122,10 @@ export async function POST(request: NextRequest) {
             topic_keywords: data.topic_keywords,
             logo_url: data.logo_url,
             services: data.services,
+            // Persist the agency picked in the onboard wizard so the client
+            // detail page, branded PDF, and email digests all resolve to
+            // the right brand (Nativz vs Anderson Collaborative).
+            agency: data.agency || null,
             is_active: true,
           })
           .select('id')
@@ -145,8 +145,6 @@ export async function POST(request: NextRequest) {
           brand_voice: data.brand_voice,
           topic_keywords: data.topic_keywords,
           logo_url: data.logo_url,
-          poc_name: data.poc_name,
-          poc_email: data.poc_email,
           services: data.services,
           agency: data.agency,
         });
@@ -155,25 +153,17 @@ export async function POST(request: NextRequest) {
 
       // 3. Create in Monday.com with column values
       (async () => {
-        // Build Monday.com column values for services, agency, POC
+        // Build Monday.com column values for services + agency. POC was
+        // dropped from the onboard wizard — contacts are managed on the
+        // client detail page now, not collected at onboard time.
         const columnValues: Record<string, unknown> = {};
 
-        // Service columns (status columns: "Yes" to enable)
         if (data.services.includes('SMM')) columnValues.color_mktsd6y7 = { label: 'Yes' };
         if (data.services.includes('Paid Media')) columnValues.color_mkwz9cwd = { label: 'Yes' };
         if (data.services.includes('Affiliates')) columnValues.color_mktsmz4y = { label: 'Yes' };
         if (data.services.includes('Editing')) columnValues.color_mkwqhwx = { label: 'Yes' };
 
-        // Agency column (status column)
         if (data.agency) columnValues.color_mkrw743r = { label: data.agency };
-
-        // POC column (long text: "Name <email>")
-        if (data.poc_name || data.poc_email) {
-          const pocText = data.poc_email
-            ? `${data.poc_name} <${data.poc_email}>`
-            : data.poc_name;
-          columnValues.long_text_mkxm4whr = { text: pocText };
-        }
 
         const result = await createMondayItem(
           data.name,
