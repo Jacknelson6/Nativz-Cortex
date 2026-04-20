@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import type { DateRangePreset, DateRange } from '@/lib/types/reporting';
+import type { DateRangePreset, DateRange, ComparePreset } from '@/lib/types/reporting';
+import { resolvePresetRange } from '@/lib/reporting/date-presets';
 
 interface ClientOption {
   id: string;
@@ -75,53 +76,17 @@ export interface PendingPayout {
   paid: number;
 }
 
-function getDateRange(preset: DateRangePreset, customRange?: DateRange): DateRange {
-  const today = new Date();
-  const end = today.toISOString().split('T')[0];
-
-  switch (preset) {
-    case '7d': {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 7);
-      return { start: start.toISOString().split('T')[0], end };
-    }
-    case '30d': {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 30);
-      return { start: start.toISOString().split('T')[0], end };
-    }
-    case 'mtd': {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      return { start: start.toISOString().split('T')[0], end };
-    }
-    case 'last_month': {
-      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
-      return { start: start.toISOString().split('T')[0], end: lastDay.toISOString().split('T')[0] };
-    }
-    case 'ytd': {
-      const start = new Date(today.getFullYear(), 0, 1);
-      return { start: start.toISOString().split('T')[0], end };
-    }
-    case 'custom': {
-      if (customRange) return customRange;
-      const start = new Date(today);
-      start.setDate(start.getDate() - 30);
-      return { start: start.toISOString().split('T')[0], end };
-    }
-    default: {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 30);
-      return { start: start.toISOString().split('T')[0], end };
-    }
-  }
-}
+// Preset → DateRange resolution lives in lib/reporting/date-presets.ts so
+// the picker, reporting hook, and affiliates hook can't drift.
 
 export function useAffiliatesData() {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [selectedClientId, setSelectedClientId] = useState('');
-  const [datePreset, setDatePreset] = useState<DateRangePreset>('30d');
+  const [datePreset, setDatePreset] = useState<DateRangePreset>('last_28d');
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
+  const [compareEnabled, setCompareEnabled] = useState(false);
+  const [comparePreset, setComparePreset] = useState<ComparePreset>('previous_period');
+  const [compareRange, setCompareRange] = useState<DateRange | null>(null);
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -176,7 +141,7 @@ export function useAffiliatesData() {
     refreshClients();
   }, [refreshClients]);
 
-  const dateRange = getDateRange(datePreset, customRange);
+  const dateRange = resolvePresetRange(datePreset, customRange);
 
   const fetchData = useCallback(async () => {
     if (!selectedClientId) return;
@@ -235,6 +200,12 @@ export function useAffiliatesData() {
     customRange,
     setCustomRange,
     dateRange,
+    compareEnabled,
+    setCompareEnabled,
+    comparePreset,
+    setComparePreset,
+    compareRange,
+    setCompareRange,
     kpis,
     snapshots,
     topAffiliates,

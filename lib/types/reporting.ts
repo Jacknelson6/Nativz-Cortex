@@ -6,7 +6,28 @@ export type SocialPlatform =
   | 'linkedin'
   | 'googlebusiness';
 
-export type DateRangePreset = '7d' | '30d' | 'mtd' | 'last_month' | 'ytd' | 'custom' | 'last_quarter';
+// Meta-style presets. Legacy values (`7d`, `30d`, `mtd`, `ytd`,
+// `last_quarter`) are kept so old URL state and saved reports still resolve;
+// the picker UI only surfaces the canonical set.
+export type DateRangePreset =
+  | 'yesterday'
+  | 'last_7d'
+  | 'last_28d'
+  | 'last_30d'
+  | 'last_90d'
+  | 'this_week'
+  | 'this_month'
+  | 'this_year'
+  | 'last_week'
+  | 'last_month'
+  | 'custom'
+  | '7d'          // legacy → last_7d
+  | '30d'         // legacy → last_30d
+  | 'mtd'         // legacy → this_month
+  | 'ytd'         // legacy → this_year
+  | 'last_quarter';
+
+export type ComparePreset = 'previous_period' | 'previous_year' | 'custom';
 
 export interface DateRange {
   start: string;

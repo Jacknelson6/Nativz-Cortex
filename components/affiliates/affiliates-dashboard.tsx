@@ -51,6 +51,11 @@ export function AffiliatesDashboard() {
     customRange,
     setCustomRange,
     dateRange,
+    compareEnabled,
+    setCompareEnabled,
+    comparePreset,
+    setComparePreset,
+    setCompareRange,
     kpis,
     snapshots,
     topAffiliates,
@@ -157,6 +162,11 @@ export function AffiliatesDashboard() {
             onChange={setDatePreset}
             customRange={customRange}
             onCustomRangeChange={setCustomRange}
+            compareEnabled={compareEnabled}
+            onCompareEnabledChange={setCompareEnabled}
+            comparePreset={comparePreset}
+            onComparePresetChange={setComparePreset}
+            onCompareRangeChange={setCompareRange}
           />
 
           {/* KPI cards */}

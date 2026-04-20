@@ -1,24 +1,39 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { DateRangePreset, DateRange } from '@/lib/types/reporting';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import type { DateRangePreset, DateRange, ComparePreset } from '@/lib/types/reporting';
+import { resolvePresetRange, presetLabel } from '@/lib/reporting/date-presets';
 
-const presets: { value: DateRangePreset; label: string }[] = [
-  { value: '7d', label: '7d' },
-  { value: '30d', label: '30d' },
-  { value: 'last_quarter', label: '90d' },
-  { value: 'ytd', label: 'YTD' },
+// ─── Preset sidebar ─────────────────────────────────────────────────────────
+
+const SIDEBAR_PRESETS: { value: DateRangePreset; label: string }[] = [
+  { value: 'yesterday',  label: 'Yesterday'    },
+  { value: 'last_7d',    label: 'Last 7 days'  },
+  { value: 'last_28d',   label: 'Last 28 days' },
+  { value: 'last_90d',   label: 'Last 90 days' },
+  { value: 'this_week',  label: 'This week'    },
+  { value: 'this_month', label: 'This month'   },
+  { value: 'this_year',  label: 'This year'    },
+  { value: 'last_week',  label: 'Last week'    },
+  { value: 'last_month', label: 'Last month'   },
+  { value: 'custom',     label: 'Custom'       },
 ];
 
-const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const COMPARE_PRESETS: { value: ComparePreset; label: string }[] = [
+  { value: 'previous_period', label: 'Previous period' },
+  { value: 'previous_year',   label: 'Previous year'   },
+  { value: 'custom',          label: 'Custom'          },
+];
+
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
 function toDateStr(d: Date): string {
-  return d.toISOString().split('T')[0];
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function parseDate(s: string): Date {
@@ -30,21 +45,38 @@ function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-function isBetween(d: Date, start: Date, end: Date): boolean {
-  return d > start && d < end;
+function fmtShort(s: string): string {
+  const d = parseDate(s);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function formatDisplay(range: DateRange | undefined): string {
-  if (!range?.start) return 'Select dates';
-  const fmt = (s: string) => {
-    const d = parseDate(s);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-  if (!range.end || range.start === range.end) return fmt(range.start);
-  return `${fmt(range.start)} – ${fmt(range.end)}`;
+function daysBetween(startStr: string, endStr: string): number {
+  const start = parseDate(startStr);
+  const end = parseDate(endStr);
+  return Math.round((end.getTime() - start.getTime()) / 86400000);
 }
 
-// ─── Calendar grid ─────────────────────────────────────────────────────────────
+function resolveCompareRange(
+  primary: DateRange,
+  preset: ComparePreset,
+  customCompare?: DateRange,
+): DateRange {
+  if (preset === 'custom' && customCompare) return customCompare;
+  const start = parseDate(primary.start);
+  const end = parseDate(primary.end);
+  if (preset === 'previous_year') {
+    const s = new Date(start); s.setFullYear(s.getFullYear() - 1);
+    const e = new Date(end);   e.setFullYear(e.getFullYear() - 1);
+    return { start: toDateStr(s), end: toDateStr(e) };
+  }
+  // previous_period: same length, ending the day before primary.start
+  const len = daysBetween(primary.start, primary.end);
+  const prevEnd = new Date(start); prevEnd.setDate(prevEnd.getDate() - 1);
+  const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - len);
+  return { start: toDateStr(prevStart), end: toDateStr(prevEnd) };
+}
+
+// ─── Calendar month ────────────────────────────────────────────────────────
 
 function CalendarMonth({
   year,
@@ -70,11 +102,10 @@ function CalendarMonth({
   const cells: (number | null)[] = Array(firstDay).fill(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
-  // Determine the effective end for highlight range (use hoverDate if still picking)
   const effectiveEnd = rangeEnd ?? hoverDate;
 
   return (
-    <div>
+    <div className="flex-1">
       <div className="grid grid-cols-7 mb-1">
         {DAYS.map((d) => (
           <div key={d} className="text-center text-[10px] font-medium text-text-muted py-1">
@@ -92,7 +123,7 @@ function CalendarMonth({
           const isEnd = effectiveEnd && rangeStart && isSameDay(date, effectiveEnd);
           const isInRange =
             rangeStart && effectiveEnd && effectiveEnd > rangeStart
-              ? isBetween(date, rangeStart, effectiveEnd)
+              ? date > rangeStart && date < effectiveEnd
               : false;
           const isToday = isSameDay(date, new Date());
           const isSelected = isStart || isEnd;
@@ -100,6 +131,7 @@ function CalendarMonth({
           return (
             <button
               key={day}
+              type="button"
               disabled={isDisabled}
               onClick={() => onDateClick(date)}
               onMouseEnter={() => onDateHover(date)}
@@ -125,171 +157,266 @@ function CalendarMonth({
   );
 }
 
-// ─── Popover ───────────────────────────────────────────────────────────────────
+// ─── Popover ────────────────────────────────────────────────────────────────
 
-function CalendarPopover({
-  customRange,
-  onCustomRangeChange,
-  onClose,
-}: {
-  customRange: DateRange | undefined;
-  onCustomRangeChange: (range: DateRange) => void;
-  onClose: () => void;
-}) {
+interface PopoverProps {
+  initialPreset: DateRangePreset;
+  initialRange: DateRange;
+  initialCompareEnabled: boolean;
+  initialComparePreset: ComparePreset;
+  onApply: (state: {
+    preset: DateRangePreset;
+    range: DateRange;
+    compareEnabled: boolean;
+    comparePreset: ComparePreset;
+    compareRange: DateRange | null;
+  }) => void;
+  onCancel: () => void;
+}
+
+function DateRangePopover({
+  initialPreset,
+  initialRange,
+  initialCompareEnabled,
+  initialComparePreset,
+  onApply,
+  onCancel,
+}: PopoverProps) {
   const today = new Date();
   const maxDate = today;
 
-  // Two months: current view and previous
-  const [viewDate, setViewDate] = useState(() => {
-    if (customRange?.end) {
-      const d = parseDate(customRange.end);
-      return new Date(d.getFullYear(), d.getMonth(), 1);
-    }
-    return new Date(today.getFullYear(), today.getMonth(), 1);
-  });
-
-  const [rangeStart, setRangeStart] = useState<Date | null>(
-    customRange?.start ? parseDate(customRange.start) : null,
-  );
-  const [rangeEnd, setRangeEnd] = useState<Date | null>(
-    customRange?.end ? parseDate(customRange.end) : null,
-  );
-  const [picking, setPicking] = useState<'start' | 'end'>(
-    customRange?.start && customRange?.end ? 'start' : 'start',
-  );
+  // Draft state — only committed on "Update"
+  const [preset, setPreset] = useState<DateRangePreset>(initialPreset);
+  const [rangeStart, setRangeStart] = useState<Date | null>(parseDate(initialRange.start));
+  const [rangeEnd, setRangeEnd] = useState<Date | null>(parseDate(initialRange.end));
+  const [picking, setPicking] = useState<'start' | 'end'>('start');
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
+  const [compareEnabled, setCompareEnabled] = useState(initialCompareEnabled);
+  const [comparePreset, setComparePreset] = useState<ComparePreset>(initialComparePreset);
 
+  // Right-hand calendar shows the month containing the range end (or today)
+  const [viewDate, setViewDate] = useState(() => {
+    const anchor = rangeEnd ?? today;
+    return new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  });
   const prevMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1);
 
+  // Whenever the preset changes (via sidebar), recompute the range.
+  function handlePresetClick(nextPreset: DateRangePreset) {
+    setPreset(nextPreset);
+    if (nextPreset === 'custom') return;
+    const range = resolvePresetRange(nextPreset);
+    setRangeStart(parseDate(range.start));
+    setRangeEnd(parseDate(range.end));
+    setPicking('start');
+    // Re-anchor calendar on the new range end
+    const anchor = parseDate(range.end);
+    setViewDate(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
+  }
+
   function handleDateClick(d: Date) {
+    // Calendar clicks always switch to custom
+    setPreset('custom');
     if (picking === 'start') {
       setRangeStart(d);
       setRangeEnd(null);
       setPicking('end');
-    } else {
-      if (rangeStart && d < rangeStart) {
-        // Clicked before start — restart
-        setRangeStart(d);
-        setRangeEnd(null);
-        setPicking('end');
-      } else {
-        setRangeEnd(d);
-        setPicking('start');
-        // Commit
-        if (rangeStart) {
-          onCustomRangeChange({ start: toDateStr(rangeStart), end: toDateStr(d) });
-        }
-      }
+      return;
     }
+    if (rangeStart && d < rangeStart) {
+      setRangeStart(d);
+      setRangeEnd(null);
+      setPicking('end');
+      return;
+    }
+    setRangeEnd(d);
+    setPicking('start');
   }
 
   function goBack() {
     setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
   }
-
   function goForward() {
     const next = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1);
-    if (next <= new Date(today.getFullYear(), today.getMonth(), 1) || next.getMonth() === today.getMonth()) {
-      setViewDate(next);
-    }
+    // Don't scroll past the current month
+    const capped = new Date(today.getFullYear(), today.getMonth(), 1);
+    if (next > capped) return;
+    setViewDate(next);
   }
 
-  // Quick presets inside the popover
-  const quickRanges = [
-    { label: 'Last 7 days', days: 7 },
-    { label: 'Last 14 days', days: 14 },
-    { label: 'Last 30 days', days: 30 },
-    { label: 'Last 90 days', days: 90 },
-  ];
+  const committedRange: DateRange | null = useMemo(() => {
+    if (!rangeStart || !rangeEnd) return null;
+    return { start: toDateStr(rangeStart), end: toDateStr(rangeEnd) };
+  }, [rangeStart, rangeEnd]);
 
-  function applyQuick(days: number) {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - days);
-    setRangeStart(start);
-    setRangeEnd(end);
-    onCustomRangeChange({ start: toDateStr(start), end: toDateStr(end) });
+  const compareRange = useMemo(() => {
+    if (!compareEnabled || !committedRange) return null;
+    return resolveCompareRange(committedRange, comparePreset);
+  }, [compareEnabled, committedRange, comparePreset]);
+
+  const canApply = Boolean(committedRange);
+
+  function handleUpdate() {
+    if (!committedRange) return;
+    onApply({
+      preset,
+      range: committedRange,
+      compareEnabled,
+      comparePreset,
+      compareRange,
+    });
   }
 
   return (
-    <div className="rounded-xl border border-nativz-border bg-surface shadow-elevated p-4 w-[540px]">
-      <div className="flex gap-4">
-        {/* Quick ranges sidebar */}
-        <div className="w-28 shrink-0 space-y-1 border-r border-nativz-border pr-3">
-          {quickRanges.map((q) => (
+    <div className="rounded-xl border border-nativz-border bg-surface shadow-elevated w-[720px] overflow-hidden flex">
+      {/* Sidebar */}
+      <div className="w-44 shrink-0 border-r border-nativz-border py-3 px-2 space-y-0.5 bg-surface-hover/20">
+        {SIDEBAR_PRESETS.map((p) => {
+          const active = preset === p.value;
+          return (
             <button
-              key={q.days}
-              onClick={() => applyQuick(q.days)}
-              className="w-full rounded-md px-2 py-1.5 text-left text-xs text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
+              key={p.value}
+              type="button"
+              onClick={() => handlePresetClick(p.value)}
+              className={`flex items-center gap-2 w-full rounded-md px-2.5 py-1.5 text-left text-xs transition-colors cursor-pointer ${
+                active
+                  ? 'bg-accent/15 text-accent-text font-medium'
+                  : 'text-text-muted hover:text-text-primary hover:bg-surface-hover'
+              }`}
             >
-              {q.label}
+              <span className={`h-3.5 w-3.5 shrink-0 rounded-full border transition-colors ${
+                active ? 'border-accent bg-accent ring-[3px] ring-accent/20' : 'border-nativz-border'
+              }`} />
+              {p.label}
             </button>
-          ))}
+          );
+        })}
+      </div>
+
+      {/* Calendar + compare */}
+      <div className="flex-1 p-4">
+        {/* Month navigation */}
+        <div className="flex items-center justify-between mb-3">
+          <button
+            type="button"
+            onClick={goBack}
+            className="rounded-md p-1 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
+            aria-label="Previous month"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <div className="flex gap-8 text-sm font-medium text-text-primary">
+            <span>{MONTHS[prevMonth.getMonth()]} {prevMonth.getFullYear()}</span>
+            <span>{MONTHS[viewDate.getMonth()]} {viewDate.getFullYear()}</span>
+          </div>
+          <button
+            type="button"
+            onClick={goForward}
+            className="rounded-md p-1 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
+            aria-label="Next month"
+          >
+            <ChevronRight size={16} />
+          </button>
         </div>
 
-        {/* Calendar grids */}
-        <div className="flex-1">
-          {/* Navigation */}
-          <div className="flex items-center justify-between mb-3">
-            <button
-              onClick={goBack}
-              className="rounded-md p-1 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
+        {/* Two month grids */}
+        <div className="flex gap-4 mb-4">
+          <CalendarMonth
+            year={prevMonth.getFullYear()}
+            month={prevMonth.getMonth()}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEnd}
+            hoverDate={picking === 'end' ? hoverDate : null}
+            onDateClick={handleDateClick}
+            onDateHover={setHoverDate}
+            maxDate={maxDate}
+          />
+          <CalendarMonth
+            year={viewDate.getFullYear()}
+            month={viewDate.getMonth()}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEnd}
+            hoverDate={picking === 'end' ? hoverDate : null}
+            onDateClick={handleDateClick}
+            onDateHover={setHoverDate}
+            maxDate={maxDate}
+          />
+        </div>
+
+        {/* Compare toggle */}
+        <label className="flex items-center gap-2 mb-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={compareEnabled}
+            onChange={(e) => setCompareEnabled(e.target.checked)}
+            className="accent-accent h-3.5 w-3.5"
+          />
+          <span className="text-xs text-text-secondary">Compare</span>
+        </label>
+
+        {/* Compare preset + start/end inputs */}
+        <div className="flex items-center gap-2 text-xs">
+          <div className="relative">
+            <select
+              value={comparePreset}
+              onChange={(e) => setComparePreset(e.target.value as ComparePreset)}
+              disabled={!compareEnabled}
+              className="appearance-none rounded-md border border-nativz-border bg-surface-hover/30 pl-3 pr-7 py-1.5 text-xs text-text-primary cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-accent-text"
             >
-              <ChevronLeft size={16} />
+              {COMPARE_PRESETS.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+            <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+          </div>
+          <span className="rounded-md border border-nativz-border bg-surface-hover/30 px-2 py-1.5 text-text-primary min-w-[112px] text-center">
+            {rangeStart ? fmtShort(toDateStr(rangeStart)) : '—'}
+          </span>
+          <span className="text-text-muted">-</span>
+          <span className="rounded-md border border-nativz-border bg-surface-hover/30 px-2 py-1.5 text-text-primary min-w-[112px] text-center">
+            {rangeEnd ? fmtShort(toDateStr(rangeEnd)) : '—'}
+          </span>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-4 mt-4 border-t border-nativz-border">
+          <p className="text-[10px] text-text-muted">Dates are shown in your local time</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-md border border-nativz-border bg-surface px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors cursor-pointer"
+            >
+              Cancel
             </button>
-            <div className="flex gap-8 text-sm font-medium text-text-primary">
-              <span>{MONTHS[prevMonth.getMonth()]} {prevMonth.getFullYear()}</span>
-              <span>{MONTHS[viewDate.getMonth()]} {viewDate.getFullYear()}</span>
-            </div>
             <button
-              onClick={goForward}
-              className="rounded-md p-1 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
+              type="button"
+              onClick={handleUpdate}
+              disabled={!canApply}
+              className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <ChevronRight size={16} />
+              Update
             </button>
           </div>
-
-          {/* Two month grids */}
-          <div className="grid grid-cols-2 gap-4">
-            <CalendarMonth
-              year={prevMonth.getFullYear()}
-              month={prevMonth.getMonth()}
-              rangeStart={rangeStart}
-              rangeEnd={rangeEnd}
-              hoverDate={picking === 'end' ? hoverDate : null}
-              onDateClick={handleDateClick}
-              onDateHover={setHoverDate}
-              maxDate={maxDate}
-            />
-            <CalendarMonth
-              year={viewDate.getFullYear()}
-              month={viewDate.getMonth()}
-              rangeStart={rangeStart}
-              rangeEnd={rangeEnd}
-              hoverDate={picking === 'end' ? hoverDate : null}
-              onDateClick={handleDateClick}
-              onDateHover={setHoverDate}
-              maxDate={maxDate}
-            />
-          </div>
-
-          {/* Footer hint */}
-          <p className="text-[10px] text-text-muted mt-3 text-center">
-            {picking === 'start' ? 'Click to set start date' : 'Click to set end date'}
-          </p>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Main component ────────────────────────────────────────────────────────────
+// ─── Main component ────────────────────────────────────────────────────────
 
 interface DateRangePickerProps {
   value: DateRangePreset;
   onChange: (preset: DateRangePreset) => void;
   customRange?: DateRange;
   onCustomRangeChange?: (range: DateRange) => void;
+  /** When true, parent is tracking a comparison range. */
+  compareEnabled?: boolean;
+  onCompareEnabledChange?: (enabled: boolean) => void;
+  comparePreset?: ComparePreset;
+  onComparePresetChange?: (preset: ComparePreset) => void;
+  onCompareRangeChange?: (range: DateRange | null) => void;
 }
 
 export function DateRangePicker({
@@ -297,74 +424,73 @@ export function DateRangePicker({
   onChange,
   customRange,
   onCustomRangeChange,
+  compareEnabled = false,
+  onCompareEnabledChange,
+  comparePreset = 'previous_period',
+  onComparePresetChange,
+  onCompareRangeChange,
 }: DateRangePickerProps) {
-  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
+  // Resolve the current range for display — uses the parent's stored
+  // customRange when the preset is `custom`, otherwise computes from preset.
+  const displayRange: DateRange = useMemo(() => {
+    if (value === 'custom' && customRange) return customRange;
+    return resolvePresetRange(value);
+  }, [value, customRange]);
+
   useEffect(() => {
-    if (!popoverOpen) return;
+    if (!open) return;
     function handleClick(e: MouseEvent) {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setPopoverOpen(false);
+        setOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [popoverOpen]);
+  }, [open]);
 
-  function handlePresetChange(preset: DateRangePreset) {
-    onChange(preset);
-    if (preset === 'custom') {
-      setPopoverOpen(true);
-    } else {
-      setPopoverOpen(false);
-    }
+  function handleApply(state: {
+    preset: DateRangePreset;
+    range: DateRange;
+    compareEnabled: boolean;
+    comparePreset: ComparePreset;
+    compareRange: DateRange | null;
+  }) {
+    onChange(state.preset);
+    onCustomRangeChange?.(state.range);
+    onCompareEnabledChange?.(state.compareEnabled);
+    onComparePresetChange?.(state.comparePreset);
+    onCompareRangeChange?.(state.compareRange);
+    setOpen(false);
   }
 
+  const label = presetLabel(value);
+  const rangeLabel = `${fmtShort(displayRange.start)} – ${fmtShort(displayRange.end)}`;
+
   return (
-    <div className="relative" ref={popoverRef}>
-      <div className="flex items-center gap-2">
-        <div className="inline-flex rounded-lg bg-surface-hover/50 p-1">
-          {presets.map((preset) => {
-            const isActive = value === preset.value;
-            return (
-              <button
-                key={preset.value}
-                onClick={() => handlePresetChange(preset.value)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
-                  isActive
-                    ? 'bg-accent text-white shadow-sm'
-                    : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
-                }`}
-              >
-                {preset.label}
-              </button>
-            );
-          })}
-        </div>
+    <div className="relative inline-block" ref={popoverRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-2 rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary hover:border-accent-border/40 transition-colors cursor-pointer"
+      >
+        <CalendarDays size={14} className="text-text-muted" />
+        <span className="font-medium">{label}:</span>
+        <span className="text-text-secondary">{rangeLabel}</span>
+        <ChevronDown size={14} className="text-text-muted" />
+      </button>
 
-        {value === 'custom' && (
-          <button
-            onClick={() => setPopoverOpen((o) => !o)}
-            className="flex items-center gap-2 rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-sm text-text-primary hover:border-accent-border/40 transition-colors cursor-pointer"
-          >
-            <CalendarDays size={14} className="text-text-muted" />
-            <span>{formatDisplay(customRange)}</span>
-          </button>
-        )}
-      </div>
-
-      {/* Popover */}
-      {popoverOpen && value === 'custom' && (
+      {open && (
         <div className="absolute left-0 top-full mt-2 z-50">
-          <CalendarPopover
-            customRange={customRange}
-            onCustomRangeChange={(range) => {
-              onCustomRangeChange?.(range);
-              setPopoverOpen(false);
-            }}
-            onClose={() => setPopoverOpen(false)}
+          <DateRangePopover
+            initialPreset={value}
+            initialRange={displayRange}
+            initialCompareEnabled={compareEnabled}
+            initialComparePreset={comparePreset}
+            onApply={handleApply}
+            onCancel={() => setOpen(false)}
           />
         </div>
       )}

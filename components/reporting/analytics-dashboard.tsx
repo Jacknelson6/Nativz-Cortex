@@ -35,6 +35,11 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
     customRange,
     setCustomRange,
     dateRange,
+    compareEnabled,
+    setCompareEnabled,
+    comparePreset,
+    setComparePreset,
+    setCompareRange,
     summary,
     loading,
     dataLoading,
@@ -125,21 +130,21 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
         </p>
       ) : (
         <>
-          {/* Date range selector */}
+          {/* Date range selector — the Meta-style picker bakes the resolved
+              range into its own trigger label so we drop the legacy sibling
+              span that used to echo the date range. */}
           <div className="flex items-center gap-3">
             <DateRangePicker
               value={datePreset}
               onChange={setDatePreset}
               customRange={customRange}
               onCustomRangeChange={setCustomRange}
+              compareEnabled={compareEnabled}
+              onCompareEnabledChange={setCompareEnabled}
+              comparePreset={comparePreset}
+              onComparePresetChange={setComparePreset}
+              onCompareRangeChange={setCompareRange}
             />
-            {dateRange && (
-              <span className="text-sm text-text-muted">
-                {new Date(dateRange.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                {' – '}
-                {new Date(dateRange.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </span>
-            )}
           </div>
 
           {/* NAT-54 — 4 KPI tiles replace the old SummaryView hero. */}

@@ -5,9 +5,11 @@ import { toast } from 'sonner';
 import type {
   DateRangePreset,
   DateRange,
+  ComparePreset,
   SummaryReport,
   TopPostItem,
 } from '@/lib/types/reporting';
+import { resolvePresetRange } from '@/lib/reporting/date-presets';
 
 interface ClientOption {
   id: string;
@@ -17,70 +19,14 @@ interface ClientOption {
   agency?: string | null;
 }
 
-function getDateRange(preset: DateRangePreset, customRange?: DateRange): DateRange {
-  const today = new Date();
-  const end = today.toISOString().split('T')[0];
-
-  switch (preset) {
-    case '7d': {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 7);
-      return { start: start.toISOString().split('T')[0], end };
-    }
-    case '30d': {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 30);
-      return { start: start.toISOString().split('T')[0], end };
-    }
-    case 'mtd': {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      return { start: start.toISOString().split('T')[0], end };
-    }
-    case 'last_month': {
-      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
-      return {
-        start: start.toISOString().split('T')[0],
-        end: lastDay.toISOString().split('T')[0],
-      };
-    }
-    case 'ytd': {
-      const start = new Date(today.getFullYear(), 0, 1);
-      return { start: start.toISOString().split('T')[0], end };
-    }
-    case 'last_quarter': {
-      // Previous calendar quarter
-      const currentQ = Math.floor(today.getMonth() / 3);
-      const qStart = currentQ === 0
-        ? new Date(today.getFullYear() - 1, 9, 1)  // Q4 of prev year
-        : new Date(today.getFullYear(), (currentQ - 1) * 3, 1);
-      const qEnd = currentQ === 0
-        ? new Date(today.getFullYear() - 1, 11, 31)
-        : new Date(today.getFullYear(), currentQ * 3, 0); // last day of prev quarter
-      return {
-        start: qStart.toISOString().split('T')[0],
-        end: qEnd.toISOString().split('T')[0],
-      };
-    }
-    case 'custom': {
-      if (customRange) return customRange;
-      const start = new Date(today);
-      start.setDate(start.getDate() - 30);
-      return { start: start.toISOString().split('T')[0], end };
-    }
-    default: {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 30);
-      return { start: start.toISOString().split('T')[0], end };
-    }
-  }
-}
-
 export function useReportingData(initialClientId?: string | null) {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
-  const [datePreset, setDatePreset] = useState<DateRangePreset>('30d');
+  const [datePreset, setDatePreset] = useState<DateRangePreset>('last_28d');
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
+  const [compareEnabled, setCompareEnabled] = useState(false);
+  const [comparePreset, setComparePreset] = useState<ComparePreset>('previous_period');
+  const [compareRange, setCompareRange] = useState<DateRange | null>(null);
   const [activeView, setActiveView] = useState<'summary' | 'top-posts'>('summary');
   const [topPostsLimit, setTopPostsLimit] = useState(3);
   const [summary, setSummary] = useState<SummaryReport | null>(null);
@@ -121,7 +67,7 @@ export function useReportingData(initialClientId?: string | null) {
     fetchClients();
   }, [initialClientId]);
 
-  const dateRange = getDateRange(datePreset, customRange);
+  const dateRange = resolvePresetRange(datePreset, customRange);
 
   // Fetch data when dependencies change
   const fetchData = useCallback(async () => {
@@ -213,6 +159,12 @@ export function useReportingData(initialClientId?: string | null) {
     customRange,
     setCustomRange,
     dateRange,
+    compareEnabled,
+    setCompareEnabled,
+    comparePreset,
+    setComparePreset,
+    compareRange,
+    setCompareRange,
     activeView,
     setActiveView,
     topPostsLimit,
