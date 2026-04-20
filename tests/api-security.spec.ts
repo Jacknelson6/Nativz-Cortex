@@ -78,6 +78,32 @@ test.describe('API without session', () => {
     const res = await request.get('/api/cron/check-velocity');
     expect(res.status()).toBe(401);
   });
+
+  // NAT-21 — ecom competitor tracker
+  test('GET /api/ecom-competitors without session returns 401', async ({ request }) => {
+    const res = await request.get(
+      '/api/ecom-competitors?client_id=00000000-0000-0000-0000-000000000000',
+    );
+    expect(res.status()).toBe(401);
+  });
+
+  test('POST /api/ecom-competitors without session returns 401', async ({ request }) => {
+    const res = await request.post('/api/ecom-competitors', {
+      data: { client_id: '00000000-0000-0000-0000-000000000000', domain: 'example.com' },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test('GET /api/cron/ecom-snapshots without bearer returns 401', async ({ request }) => {
+    const res = await request.get('/api/cron/ecom-snapshots');
+    expect(res.status()).toBe(401);
+  });
+
+  test('GET /api/cron/weekly-social-report without bearer returns 401', async ({ request }) => {
+    // Cron-style endpoint but accepts admin session too — no session = 401
+    const res = await request.get('/api/cron/weekly-social-report');
+    expect(res.status()).toBe(401);
+  });
 });
 
 test.describe('Public surfaces', () => {
