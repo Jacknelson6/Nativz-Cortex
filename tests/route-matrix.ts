@@ -35,6 +35,7 @@ export const ADMIN_PROTECTED_ROUTES: string[] = [
   '/admin/tools/email',
   '/admin/competitor-tracking/social-ads',
   '/admin/competitor-tracking/ecom',
+  '/admin/competitor-tracking/meta-ads',
 ];
 
 /** Expect unauthenticated session → final URL matches /portal/login */
