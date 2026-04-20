@@ -334,6 +334,46 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Profiles with zero window activity still need a section so the user
+    // sees the account exists. Fill in with the latest known follower count
+    // from platform_follower_daily (outside the window is fine) and an
+    // empty metrics block. The UI will render a "no activity" card grid.
+    const profileIdsWithSummary = new Set(platformSummaries.map((p) => {
+      const match = [...profileMap.entries()].find(([, v]) => v.platform === p.platform && (v.username ?? '') === p.username);
+      return match?.[0];
+    }));
+    const missingProfiles = (profiles ?? []).filter((p) => !profileIdsWithSummary.has(p.id));
+    if (missingProfiles.length > 0) {
+      const { data: latestFollowers } = await supabase
+        .from('platform_follower_daily')
+        .select('social_profile_id, followers, day')
+        .in('social_profile_id', missingProfiles.map((p) => p.id))
+        .order('day', { ascending: false });
+
+      const latestByProfile = new Map<string, number>();
+      for (const row of latestFollowers ?? []) {
+        if (!latestByProfile.has(row.social_profile_id)) {
+          latestByProfile.set(row.social_profile_id, row.followers ?? 0);
+        }
+      }
+
+      for (const p of missingProfiles) {
+        platformSummaries.push({
+          platform: p.platform,
+          username: p.username ?? '',
+          avatarUrl: p.avatar_url ?? null,
+          followers: latestByProfile.get(p.id) ?? 0,
+          followerChange: 0,
+          totalViews: 0,
+          totalEngagement: 0,
+          engagementRate: 0,
+          postsCount: 0,
+          metrics: {},
+          posts: postsByProfile.get(p.id) ?? [],
+        });
+      }
+    }
+
     const avgEngagementRate =
       platformCount > 0
         ? Math.round((combinedEngRate / platformCount) * 100) / 100

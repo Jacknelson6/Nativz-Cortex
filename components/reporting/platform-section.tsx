@@ -9,6 +9,18 @@ const PLATFORM_LABELS: Record<string, string> = {
   instagram: 'Instagram',
   tiktok: 'TikTok',
   youtube: 'YouTube',
+  linkedin: 'LinkedIn',
+};
+
+// One brand colour per platform — every card in a platform's grid uses
+// this same colour so the eye can scan down a client's page and tell
+// which network it's looking at without reading labels.
+const PLATFORM_COLORS: Record<string, string> = {
+  facebook: '#1877f2',
+  instagram: '#e1306c',
+  tiktok: '#22d3ee',
+  youtube: '#ef4444',
+  linkedin: '#0a66c2',
 };
 
 interface PlatformSectionProps {
@@ -20,31 +32,27 @@ interface PlatformSectionProps {
 
 export function PlatformSection({ summary }: PlatformSectionProps) {
   const label = PLATFORM_LABELS[summary.platform] ?? summary.platform;
+  const color = PLATFORM_COLORS[summary.platform] ?? '#60a5fa';
   const m = summary.metrics ?? {};
 
-  // Order matches the screenshot the user sent. Cards with no data
-  // (undefined) are filtered out so platforms like Facebook don't show
-  // zeroed-out "Profile visits" cards that Zernio can't fill.
+  // Cards with no data (undefined) are filtered out so platforms like
+  // Facebook don't show zeroed-out "Profile visits" cards that Zernio
+  // can't fill. All surviving cards share one platform-brand colour so
+  // the eye can scan a client page and tell networks apart without
+  // reading every label.
   const cards: Array<{
     key: string;
     label: string;
     card: NonNullable<PlatformSummary['metrics']>[keyof NonNullable<PlatformSummary['metrics']>];
     format?: 'number' | 'percent';
-    color: string;
   }> = [
-    { key: 'views', label: 'Views', card: m.views, color: '#60a5fa' },
-    { key: 'engagement', label: 'Engagement', card: m.engagement, color: '#f472b6' },
-    {
-      key: 'engagementRate',
-      label: 'Engagement rate',
-      card: m.engagementRate,
-      format: 'percent',
-      color: '#a78bfa',
-    },
-    { key: 'followersGained', label: 'Followers gained', card: m.followersGained, color: '#34d399' },
-    { key: 'reach', label: 'Reach', card: m.reach, color: '#fbbf24' },
-    { key: 'impressions', label: 'Impressions', card: m.impressions, color: '#fb7185' },
-    { key: 'profileVisits', label: 'Profile visits', card: m.profileVisits, color: '#22d3ee' },
+    { key: 'views', label: 'Views', card: m.views },
+    { key: 'engagement', label: 'Engagement', card: m.engagement },
+    { key: 'engagementRate', label: 'Engagement rate', card: m.engagementRate, format: 'percent' },
+    { key: 'followersGained', label: 'Followers gained', card: m.followersGained },
+    { key: 'reach', label: 'Reach', card: m.reach },
+    { key: 'impressions', label: 'Impressions', card: m.impressions },
+    { key: 'profileVisits', label: 'Profile visits', card: m.profileVisits },
   ];
 
   const visible = cards.filter((c) => c.card !== undefined);
@@ -71,7 +79,7 @@ export function PlatformSection({ summary }: PlatformSectionProps) {
               label={c.label}
               card={c.card!}
               format={c.format ?? 'number'}
-              colorClass={c.color}
+              colorClass={color}
               posts={summary.posts ?? []}
             />
           ))}
