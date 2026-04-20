@@ -20,6 +20,7 @@ import { centsToDollars, dollarsToCents } from '@/lib/accounting/periods';
 import { EmployeeDrawer } from './employee-drawer';
 import { ImportDialog } from './import-dialog';
 import { SubmitTokensDialog } from './submit-tokens-dialog';
+import { ComptrollerShareDialog } from './comptroller-share-dialog';
 
 // DB still accepts 'override' and 'misc' (schema unchanged). They're
 // just not exposed as tabs in the UI per product call — every payroll
@@ -90,6 +91,7 @@ export function PeriodDetailClient({
   const [addOpenFor, setAddOpenFor] = useState<EntryType | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [linksOpen, setLinksOpen] = useState(false);
+  const [comptrollerOpen, setComptrollerOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const readonly = period.status !== 'draft';
@@ -198,6 +200,9 @@ export function PeriodDetailClient({
               <Check size={12} /> Paid
             </span>
           )}
+          <Button variant="outline" size="sm" onClick={() => setComptrollerOpen(true)}>
+            <LinkIcon size={14} /> Share read-only
+          </Button>
         </div>
       </div>
 
@@ -279,6 +284,13 @@ export function PeriodDetailClient({
         periodId={period.id}
         periodLabel={period.label}
         teamMembers={teamMembers}
+      />
+
+      <ComptrollerShareDialog
+        open={comptrollerOpen}
+        onClose={() => setComptrollerOpen(false)}
+        periodId={period.id}
+        periodLabel={period.label}
       />
     </div>
   );
