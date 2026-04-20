@@ -26,7 +26,7 @@ const getCachedPortalUser = unstable_cache(
     const adminClient = createAdminClient();
     const { data: userData } = await adminClient
       .from('users')
-      .select('full_name, avatar_url, organization_id, role')
+      .select('full_name, avatar_url, organization_id, role, is_owner')
       .eq('id', userId)
       .single();
     if (!userData) return null;
@@ -53,6 +53,7 @@ const getCachedPortalUser = unstable_cache(
         featureFlags,
         agency,
         role: (userData.role as string | null) ?? null,
+        isOwner: (userData.is_owner as boolean | null) ?? false,
       };
     }
 
@@ -62,6 +63,7 @@ const getCachedPortalUser = unstable_cache(
       featureFlags,
       agency: null,
       role: (userData.role as string | null) ?? null,
+      isOwner: (userData.is_owner as boolean | null) ?? false,
     };
   },
   ['portal-layout-user'],
@@ -240,7 +242,12 @@ export default async function PortalLayout({
 
   // Admin viewing portal gets a safety net — one-time modal + persistent
   // "back to admin" pill. Viewers see nothing.
-  const isAdminInPortal = cached?.role === 'admin';
+  //
+  // The Client View picker in the avatar popover is ALSO gated by this flag
+  // (via AdminSidebar's `isAdmin` prop). The server-side /api/impersonate
+  // endpoint requires `is_owner=true`, so we mirror that here to avoid
+  // showing admins a button that will 403 on click.
+  const isAdminInPortal = cached?.role === 'admin' && cached?.isOwner === true;
 
   return (
     <BrandModeProvider forcedMode={forcedBrandMode}>

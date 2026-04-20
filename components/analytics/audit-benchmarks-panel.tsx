@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { cn } from '@/lib/utils/cn';
+import { PlatformBadge } from '@/components/reporting/platform-badge';
+import type { SocialPlatform } from '@/lib/types/reporting';
 
 interface CompetitorRef {
   username: string;
@@ -335,9 +337,10 @@ function CompetitorRow({ latest }: { latest: Snapshot }) {
           <p className="truncate text-sm font-medium text-text-primary">
             {latest.display_name ?? latest.username}
           </p>
-          <p className="text-[11px] text-text-muted capitalize">
-            {latest.platform} · @{latest.username}
-          </p>
+          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-text-muted">
+            <PlatformBadge platform={latest.platform as SocialPlatform} size="sm" showLabel={false} />
+            <span>@{latest.username}</span>
+          </div>
         </div>
         {latest.followers != null && (
           <span className="shrink-0 text-sm font-semibold text-text-primary">

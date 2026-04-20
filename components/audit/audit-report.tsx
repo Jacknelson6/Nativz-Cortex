@@ -1357,7 +1357,7 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
               <h3 className="text-base font-semibold text-text-primary">Competitors</h3>
               {(audit as { attached_client_id?: string | null }).attached_client_id && (
                 <a
-                  href={`/admin/analytics?clientId=${(audit as { attached_client_id?: string | null }).attached_client_id}&tab=benchmarking`}
+                  href={`/admin/analytics?clientId=${(audit as { attached_client_id?: string | null }).attached_client_id}&tab=social&sub=benchmarking`}
                   className="inline-flex items-center gap-1 text-xs font-medium text-accent-text hover:underline"
                 >
                   View in benchmarks <ExternalLink size={10} />
