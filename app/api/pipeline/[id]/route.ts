@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
+import {
+  FIELD_TRACK,
+  validateTransition,
+  type PipelineItemSnapshot,
+} from '@/lib/pipeline/transitions';
+
+const STATUS_FIELDS = [
+  'assignment_status',
+  'raws_status',
+  'editing_status',
+  'client_approval_status',
+  'boosting_status',
+] as const;
 
 const UpdateSchema = z.object({
   assignment_status: z.enum(['can_assign', 'assigned', 'need_shoot']).optional(),
@@ -78,6 +91,32 @@ export async function PATCH(
     }
 
     const adminClient = createAdminClient();
+
+    // Status fields have to pass the transition matrix — matches the advance
+    // endpoint so drag-drop on the Kanban board can't silently corrupt state
+    // by jumping past intermediate stages (e.g. dragging "not_started" straight
+    // to "em_approved" without anyone editing the video).
+    const statusChanges = STATUS_FIELDS.filter((f) => parsed.data[f] !== undefined);
+    if (statusChanges.length > 0) {
+      const { data: current, error: currentErr } = await adminClient
+        .from('content_pipeline')
+        .select('assignment_status, raws_status, editing_status, client_approval_status, boosting_status')
+        .eq('id', id)
+        .single();
+      if (currentErr || !current) {
+        return NextResponse.json({ error: 'Pipeline item not found' }, { status: 404 });
+      }
+      const snapshot = current as unknown as PipelineItemSnapshot;
+      for (const field of statusChanges) {
+        const from = snapshot[field];
+        const to = parsed.data[field] as string;
+        const check = validateTransition(FIELD_TRACK[field], from, to, snapshot);
+        if (!check.ok) {
+          return NextResponse.json({ error: check.reason }, { status: 422 });
+        }
+      }
+    }
+
     const { data, error } = await adminClient
       .from('content_pipeline')
       .update({ ...parsed.data, updated_at: new Date().toISOString() })
