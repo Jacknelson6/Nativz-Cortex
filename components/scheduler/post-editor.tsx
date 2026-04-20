@@ -295,6 +295,7 @@ export function PostEditor({
     tiktok: 2200,
     youtube: 5000,
     linkedin: 3000,
+    googlebusiness: 1500,
   };
   const activeLimit = Math.min(
     ...profiles

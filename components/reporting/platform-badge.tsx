@@ -47,6 +47,12 @@ const platformConfig: Record<
     label: 'LinkedIn',
     icon: <span className="text-[10px] font-bold">in</span>,
   },
+  googlebusiness: {
+    color: 'text-white',
+    bg: 'bg-[#4285F4] ring-1 ring-black/15',
+    label: 'Google Business',
+    icon: <span className="text-[10px] font-bold">G</span>,
+  },
 };
 
 interface PlatformBadgeProps {

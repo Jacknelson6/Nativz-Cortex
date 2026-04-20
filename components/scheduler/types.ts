@@ -64,6 +64,7 @@ export const PLATFORM_ICONS: Record<SocialPlatform, string> = {
   tiktok: 'TikTok',
   youtube: 'YouTube',
   linkedin: 'LinkedIn',
+  googlebusiness: 'Google Business',
 };
 
 export const DEFAULT_POSTING_TIME = '12:00';

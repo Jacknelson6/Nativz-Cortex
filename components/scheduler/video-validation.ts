@@ -13,6 +13,7 @@ const PLATFORM_LIMITS: Record<SocialPlatform, { maxDuration: number; maxSizeMB: 
   youtube: { maxDuration: 60, maxSizeMB: 256000, preferredAspect: '9:16' },
   facebook: { maxDuration: 14400, maxSizeMB: 4096, preferredAspect: '9:16' },
   linkedin: { maxDuration: 600, maxSizeMB: 5120, preferredAspect: '9:16' },
+  googlebusiness: { maxDuration: 30, maxSizeMB: 75, preferredAspect: '16:9' },
 };
 
 const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'];

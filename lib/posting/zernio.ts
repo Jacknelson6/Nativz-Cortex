@@ -738,27 +738,38 @@ export class ZernioPostingService implements PostingService {
   }
 
   /**
-   * GET /v1/analytics/instagram-account-insights — IG-only metrics that don't
-   * surface via /daily-metrics. We request time_series so reach + profile
-   * link taps come back as per-day arrays.
+   * GET /v1/analytics/instagram/account-insights — IG-only metrics that don't
+   * surface via /daily-metrics. Reach supports time_series so we pull it
+   * as per-day arrays; profile_links_taps only returns total_value so we
+   * fetch that separately and synthesize a single-bucket series. Path
+   * uses a slash (`instagram/account-insights`) — the hyphenated form
+   * from the docs' llms.txt is wrong and silently 404s.
    */
   async getInstagramInsights(
     accountId: string,
     startDate: string,
     endDate: string,
   ): Promise<InstagramInsights> {
-    const params = new URLSearchParams({
+    const reachParams = new URLSearchParams({
       accountId,
-      metrics: 'reach,profile_links_taps',
+      metrics: 'reach',
       since: startDate,
       until: endDate,
       metricType: 'time_series',
     });
+    const linksParams = new URLSearchParams({
+      accountId,
+      metrics: 'profile_links_taps',
+      since: startDate,
+      until: endDate,
+      metricType: 'total_value',
+    });
     try {
-      const raw = await zernioRequest<unknown>(
-        `/analytics/instagram-account-insights?${params}`,
-      );
-      const root = asRecord(raw) ?? {};
+      const [rawReach, rawLinks] = await Promise.all([
+        zernioRequest<unknown>(`/analytics/instagram/account-insights?${reachParams}`).catch(() => null),
+        zernioRequest<unknown>(`/analytics/instagram/account-insights?${linksParams}`).catch(() => null),
+      ]);
+      const root = asRecord(rawReach) ?? {};
       const metrics = asRecord(root.metrics) ?? {};
 
       const toSeries = (key: string) => {
@@ -776,8 +787,17 @@ export class ZernioPostingService implements PostingService {
           .filter((x): x is { date: string; value: number } => x !== null);
       };
 
+      // profile_links_taps only supports total_value, not time_series.
+      // Synthesise a single-bucket series on the end date so the UI
+      // still has a data point to render.
+      const linksRoot = asRecord(rawLinks) ?? {};
+      const linksMetrics = asRecord(linksRoot.metrics) ?? {};
+      const taps = asRecord(linksMetrics.profile_links_taps);
+      const totalTaps = pickNum(taps, 'total') || pickNum(taps, 'value');
+      const profileVisits = totalTaps > 0 ? [{ date: endDate, value: totalTaps }] : [];
+
       return {
-        profileVisits: toSeries('profile_links_taps'),
+        profileVisits,
         reachSeries: toSeries('reach'),
       };
     } catch (err) {
@@ -1184,6 +1204,375 @@ export class ZernioPostingService implements PostingService {
       const msg = err instanceof Error ? err.message : String(err);
       if (!msg.includes('404')) console.warn(`[zernio] post-timeline ${postId}:`, msg);
       return [];
+    }
+  }
+
+  /**
+   * GET /v1/analytics/instagram/demographics — follower age/city/country/
+   * gender distribution (requires ≥100 followers).
+   */
+  async getInstagramDemographics(
+    accountId: string,
+  ): Promise<{
+    age: Array<{ dimension: string; value: number }>;
+    country: Array<{ dimension: string; value: number }>;
+    city: Array<{ dimension: string; value: number }>;
+    gender: Array<{ dimension: string; value: number }>;
+  }> {
+    const breakdowns = ['age', 'country', 'city', 'gender'] as const;
+    const result: Record<string, Array<{ dimension: string; value: number }>> = {
+      age: [], country: [], city: [], gender: [],
+    };
+    await Promise.all(
+      breakdowns.map(async (bd) => {
+        try {
+          const qs = new URLSearchParams({ accountId, breakdown: bd });
+          const raw = await zernioRequest<unknown>(`/analytics/instagram/demographics?${qs}`);
+          const root = asRecord(raw) ?? {};
+          const demo = asRecord(root.demographics) ?? {};
+          const bucket = Array.isArray(demo[bd]) ? demo[bd] : [];
+          result[bd] = bucket
+            .map((b) => {
+              const r = asRecord(b);
+              if (!r) return null;
+              return {
+                dimension: pickString(r, 'dimension') ?? '',
+                value: pickNum(r, 'value'),
+              };
+            })
+            .filter((x): x is { dimension: string; value: number } => x !== null && x.dimension !== '');
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!msg.includes('404') && !msg.includes('402')) {
+            console.warn(`[zernio] IG demographics ${bd} for ${accountId}:`, msg);
+          }
+        }
+      }),
+    );
+    return { age: result.age, country: result.country, city: result.city, gender: result.gender };
+  }
+
+  /** GET /v1/analytics/youtube/demographics — age / gender / country distributions. */
+  async getYoutubeDemographics(
+    accountId: string,
+  ): Promise<{
+    age: Array<{ dimension: string; value: number }>;
+    gender: Array<{ dimension: string; value: number }>;
+    country: Array<{ dimension: string; value: number }>;
+  }> {
+    try {
+      const qs = new URLSearchParams({ accountId });
+      const raw = await zernioRequest<unknown>(`/analytics/youtube/demographics?${qs}`);
+      const root = asRecord(raw) ?? {};
+      const demo = asRecord(root.demographics) ?? {};
+      const toRows = (arr: unknown) => {
+        if (!Array.isArray(arr)) return [];
+        return arr
+          .map((a) => {
+            const r = asRecord(a);
+            if (!r) return null;
+            return { dimension: pickString(r, 'dimension') ?? '', value: pickNum(r, 'value') };
+          })
+          .filter((x): x is { dimension: string; value: number } => x !== null && x.dimension !== '');
+      };
+      return { age: toRows(demo.age), gender: toRows(demo.gender), country: toRows(demo.country) };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404') && !msg.includes('402')) {
+        console.warn(`[zernio] YT demographics ${accountId}:`, msg);
+      }
+      return { age: [], gender: [], country: [] };
+    }
+  }
+
+  /**
+   * GET /v1/analytics/youtube/daily-views — per-video daily view counts
+   * with watch time + subs gained/lost. Requires a videoId.
+   */
+  async getYoutubeDailyViews(
+    accountId: string,
+    videoId: string,
+  ): Promise<Array<{
+    date: string;
+    views: number;
+    estimatedMinutesWatched: number;
+    averageViewDuration: number;
+    subscribersGained: number;
+    subscribersLost: number;
+  }>> {
+    try {
+      const qs = new URLSearchParams({ accountId, videoId });
+      const raw = await zernioRequest<unknown>(`/analytics/youtube/daily-views?${qs}`);
+      const root = asRecord(raw) ?? {};
+      const rows = Array.isArray(root.dailyViews) ? root.dailyViews : [];
+      return rows
+        .map((r) => {
+          const o = asRecord(r);
+          if (!o) return null;
+          return {
+            date: (pickString(o, 'date') ?? '').split('T')[0],
+            views: pickNum(o, 'views'),
+            estimatedMinutesWatched: pickNum(o, 'estimatedMinutesWatched'),
+            averageViewDuration: pickNum(o, 'averageViewDuration'),
+            subscribersGained: pickNum(o, 'subscribersGained'),
+            subscribersLost: pickNum(o, 'subscribersLost'),
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null && x.date !== '')
+        .sort((a, b) => a.date.localeCompare(b.date));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404')) console.warn(`[zernio] YT daily-views ${videoId}:`, msg);
+      return [];
+    }
+  }
+
+  /** GET /v1/accounts/{id}/linkedin-organizations — orgs the account can post to. */
+  async getLinkedInOrganizations(
+    accountId: string,
+  ): Promise<Array<{ id: string; urn: string; name: string; vanityName: string; logoUrl: string | null }>> {
+    try {
+      const raw = await zernioRequest<unknown>(`/accounts/${accountId}/linkedin-organizations`);
+      const root = asRecord(raw) ?? {};
+      const orgs = Array.isArray(root.organizations) ? root.organizations : [];
+      return orgs
+        .map((o) => {
+          const r = asRecord(o);
+          if (!r) return null;
+          return {
+            id: pickString(r, 'id') ?? '',
+            urn: pickString(r, 'urn') ?? '',
+            name: pickString(r, 'name') ?? '',
+            vanityName: pickString(r, 'vanityName') ?? '',
+            logoUrl: pickString(r, 'logoUrl'),
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null && x.id !== '');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404')) console.warn(`[zernio] LI orgs ${accountId}:`, msg);
+      return [];
+    }
+  }
+
+  /** GET /v1/accounts/{id}/linkedin-post-analytics?urn=… — per-post LinkedIn analytics. */
+  async getLinkedInPostAnalytics(
+    accountId: string,
+    urn: string,
+  ): Promise<Record<string, unknown> | null> {
+    try {
+      const qs = new URLSearchParams({ urn });
+      const raw = await zernioRequest<unknown>(
+        `/accounts/${accountId}/linkedin-post-analytics?${qs}`,
+      );
+      return asRecord(raw);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404')) console.warn(`[zernio] LI post-analytics:`, msg);
+      return null;
+    }
+  }
+
+  /** GET /v1/accounts/{id}/linkedin-post-reactions?urn=… — reaction breakdown. */
+  async getLinkedInPostReactions(
+    accountId: string,
+    urn: string,
+  ): Promise<Record<string, unknown> | null> {
+    try {
+      const qs = new URLSearchParams({ urn });
+      const raw = await zernioRequest<unknown>(
+        `/accounts/${accountId}/linkedin-post-reactions?${qs}`,
+      );
+      return asRecord(raw);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404')) console.warn(`[zernio] LI post-reactions:`, msg);
+      return null;
+    }
+  }
+
+  /**
+   * GET /v1/accounts/{id}/tiktok/creator-info — handle, avatar, verification,
+   * canPostMore flag, allowed privacy levels. Path uses a slash, not hyphen.
+   */
+  async getTikTokCreatorInfo(
+    accountId: string,
+  ): Promise<{
+    nickname: string;
+    avatarUrl: string | null;
+    isVerified: boolean;
+    canPostMore: boolean;
+    privacyLevels: Array<{ value: string; label: string }>;
+  } | null> {
+    try {
+      const raw = await zernioRequest<unknown>(`/accounts/${accountId}/tiktok/creator-info`);
+      const root = asRecord(raw) ?? {};
+      const creator = asRecord(root.creator);
+      if (!creator) return null;
+      const levels = Array.isArray(root.privacyLevels) ? root.privacyLevels : [];
+      return {
+        nickname: pickString(creator, 'nickname') ?? '',
+        avatarUrl: pickString(creator, 'avatarUrl'),
+        isVerified: creator.isVerified === true,
+        canPostMore: creator.canPostMore === true,
+        privacyLevels: levels
+          .map((l) => {
+            const o = asRecord(l);
+            if (!o) return null;
+            return { value: pickString(o, 'value') ?? '', label: pickString(o, 'label') ?? '' };
+          })
+          .filter((x): x is { value: string; label: string } => x !== null && x.value !== ''),
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404')) console.warn(`[zernio] TT creator-info ${accountId}:`, msg);
+      return null;
+    }
+  }
+
+  /** GET /v1/analytics/best-time — day-of-week × hour slots ranked by engagement. */
+  async getBestTime(filters?: {
+    platform?: SocialPlatform;
+    profileId?: string;
+    accountId?: string;
+  }): Promise<Array<{ dayOfWeek: number; hour: number; avgEngagement: number; postCount: number }>> {
+    const params = new URLSearchParams();
+    if (filters?.platform) params.set('platform', filters.platform);
+    if (filters?.profileId) params.set('profileId', filters.profileId);
+    if (filters?.accountId) params.set('accountId', filters.accountId);
+    const qs = params.toString();
+    try {
+      const raw = await zernioRequest<unknown>(`/analytics/best-time${qs ? `?${qs}` : ''}`);
+      const root = asRecord(raw) ?? {};
+      const slots = Array.isArray(root.slots) ? root.slots : [];
+      return slots
+        .map((s) => {
+          const r = asRecord(s);
+          if (!r) return null;
+          return {
+            dayOfWeek: pickNum(r, 'day_of_week'),
+            hour: pickNum(r, 'hour'),
+            avgEngagement: pickNum(r, 'avg_engagement'),
+            postCount: pickNum(r, 'post_count'),
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404')) console.warn('[zernio] best-time:', msg);
+      return [];
+    }
+  }
+
+  /** GET /v1/analytics/googlebusiness/performance — views/calls/directions by day. */
+  async getGoogleBusinessPerformance(
+    accountId: string,
+    fromDate?: string,
+    toDate?: string,
+  ): Promise<Record<string, unknown> | null> {
+    const params = new URLSearchParams({ accountId });
+    if (fromDate) params.set('fromDate', fromDate);
+    if (toDate) params.set('toDate', toDate);
+    try {
+      const raw = await zernioRequest<unknown>(`/analytics/googlebusiness/performance?${params}`);
+      return asRecord(raw);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404')) console.warn('[zernio] GMB performance:', msg);
+      return null;
+    }
+  }
+
+  /** GET /v1/analytics/googlebusiness/search-keywords — search queries driving the listing. */
+  async getGoogleBusinessSearchKeywords(
+    accountId: string,
+    fromDate?: string,
+    toDate?: string,
+  ): Promise<Array<{ keyword: string; count: number }>> {
+    const params = new URLSearchParams({ accountId });
+    if (fromDate) params.set('fromDate', fromDate);
+    if (toDate) params.set('toDate', toDate);
+    try {
+      const raw = await zernioRequest<unknown>(`/analytics/googlebusiness/search-keywords?${params}`);
+      const root = asRecord(raw) ?? {};
+      const rows = Array.isArray(root.keywords)
+        ? root.keywords
+        : Array.isArray(root.data)
+          ? root.data
+          : [];
+      return rows
+        .map((r) => {
+          const o = asRecord(r);
+          if (!o) return null;
+          return {
+            keyword: pickString(o, 'keyword', 'query', 'term') ?? '',
+            count: pickNum(o, 'count') || pickNum(o, 'value'),
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null && x.keyword !== '');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404')) console.warn('[zernio] GMB keywords:', msg);
+      return [];
+    }
+  }
+
+  /** GET /v1/accounts/{id}/facebook-page — available FB pages for this connection. */
+  async getFacebookPages(
+    accountId: string,
+  ): Promise<Array<{ id: string; name: string; category: string; fanCount: number }>> {
+    try {
+      const raw = await zernioRequest<unknown>(`/accounts/${accountId}/facebook-page`);
+      const root = asRecord(raw) ?? {};
+      const pages = Array.isArray(root.pages) ? root.pages : [];
+      return pages
+        .map((p) => {
+          const r = asRecord(p);
+          if (!r) return null;
+          return {
+            id: pickString(r, 'id') ?? '',
+            name: pickString(r, 'name') ?? '',
+            category: pickString(r, 'category') ?? '',
+            fanCount: pickNum(r, 'fan_count'),
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null && x.id !== '');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404')) console.warn('[zernio] FB pages:', msg);
+      return [];
+    }
+  }
+
+  /** GET /v1/usage-stats — current plan + limits (profiles used vs limit). */
+  async getUsageStats(): Promise<{
+    planName: string;
+    billingPeriod: string;
+    limits: { uploads: number; profiles: number };
+    usage: { uploads: number; profiles: number; lastReset: string | null };
+    hasAccess: boolean;
+  } | null> {
+    try {
+      const raw = await zernioRequest<unknown>(`/usage-stats`);
+      const root = asRecord(raw);
+      if (!root) return null;
+      const limits = asRecord(root.limits) ?? {};
+      const usage = asRecord(root.usage) ?? {};
+      return {
+        planName: pickString(root, 'planName') ?? 'unknown',
+        billingPeriod: pickString(root, 'billingPeriod') ?? 'unknown',
+        limits: { uploads: pickNum(limits, 'uploads'), profiles: pickNum(limits, 'profiles') },
+        usage: {
+          uploads: pickNum(usage, 'uploads'),
+          profiles: pickNum(usage, 'profiles'),
+          lastReset: pickString(usage, 'lastReset') ?? null,
+        },
+        hasAccess: root.hasAccess === true,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('404')) console.warn('[zernio] usage-stats:', msg);
+      return null;
     }
   }
 }

@@ -19,6 +19,9 @@ import { PostingCadenceHeatmap } from './posting-cadence-heatmap';
 import { ContentDecayCard } from './content-decay-card';
 import { PostingFrequencyChart } from './posting-frequency-chart';
 import { PostDetailsGrid } from './post-details-grid';
+import { DemographicsCard } from './demographics-card';
+import { BestTimeHeatmap } from './best-time-heatmap';
+import { GoogleBusinessCard } from './google-business-card';
 import type { TopPostItem } from '@/lib/types/reporting';
 
 const ReportBuilder = dynamic(() => import('./report-builder').then(m => ({ default: m.ReportBuilder })));
@@ -185,6 +188,26 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {selectedClientId && <ContentDecayCard clientId={selectedClientId} />}
             {selectedClientId && <PostingFrequencyChart clientId={selectedClientId} />}
+          </div>
+
+          {/* Best time to post — Zernio's historical engagement heatmap. */}
+          {selectedClientId && <BestTimeHeatmap clientId={selectedClientId} />}
+
+          {/* Google Business Profile — renders a connect-CTA empty state
+              when the client has no GMB account linked. */}
+          {selectedClientId && dateRange && (
+            <GoogleBusinessCard
+              clientId={selectedClientId}
+              start={dateRange.start}
+              end={dateRange.end}
+            />
+          )}
+
+          {/* Audience demographics — only visible when the relevant
+              platform has Zernio insights for this client. */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {selectedClientId && <DemographicsCard clientId={selectedClientId} platform="instagram" />}
+            {selectedClientId && <DemographicsCard clientId={selectedClientId} platform="youtube" />}
           </div>
 
           {/* Per-platform sections */}
