@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -9,6 +10,7 @@ import {
   type PipelineItemSnapshot,
   type PipelineTrack,
 } from '@/lib/pipeline/transitions';
+import { autoLinkEditingDoneToPayroll } from '@/lib/pipeline/accounting-hook';
 
 /**
  * POST /api/pipeline/[id]/advance
@@ -94,6 +96,21 @@ export async function POST(
 
     if (updateError) {
       return NextResponse.json({ error: 'Failed to update pipeline' }, { status: 500 });
+    }
+
+    // Pipeline → accounting auto-link (NAT-25). When the editing track lands
+    // on "done" with an assigned editor, pre-create a zero-dollar payroll
+    // entry so the EM can fill in the amount at period close. Runs after the
+    // response so a slow team-member lookup doesn't stall the UI.
+    if (track === 'editing' && nextStatus === 'done') {
+      after(() =>
+        autoLinkEditingDoneToPayroll({
+          pipelineId: id,
+          editorName: (updated.editor as string | null) ?? (item.editor as string | null),
+          clientId: (updated.client_id as string | null) ?? (item.client_id as string | null),
+          clientName: (updated.client_name as string | null) ?? (item.client_name as string | null),
+        }),
+      );
     }
 
     return NextResponse.json({
