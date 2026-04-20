@@ -77,12 +77,12 @@ export function PostingCadenceHeatmap({ clientId, start, end }: PostingCadenceHe
     <Card className="p-5">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="text-sm font-semibold text-text-primary">Posting cadence</h3>
-          <p className="text-xs text-text-muted mt-0.5">
+          <h3 className="text-base font-semibold text-text-primary">Posting cadence</h3>
+          <p className="text-sm text-text-muted mt-0.5">
             {totalPosts} posts · {grid.length} week{grid.length === 1 ? '' : 's'}
           </p>
         </div>
-        <div className="flex items-center gap-1 text-[10px] text-text-muted">
+        <div className="flex items-center gap-1 text-xs text-text-muted">
           <span>Less</span>
           <div className="flex gap-0.5">
             <div className="h-2.5 w-2.5 rounded-sm bg-white/5" />
@@ -98,7 +98,7 @@ export function PostingCadenceHeatmap({ clientId, start, end }: PostingCadenceHe
         <Skeleton className="h-24" />
       ) : (
         <div className="flex gap-2">
-          <div className="flex flex-col justify-around text-[10px] text-text-muted pr-1">
+          <div className="flex flex-col justify-around text-xs text-text-muted pr-1">
             {WEEK_DAYS.map((d) => (
               <span key={d} className="h-3 leading-3">{d}</span>
             ))}

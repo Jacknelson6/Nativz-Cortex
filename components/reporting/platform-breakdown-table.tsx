@@ -21,13 +21,13 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3 border-b border-nativz-border/70">
-        <h3 className="text-sm font-semibold text-text-primary">Platform breakdown</h3>
+        <h3 className="text-base font-semibold text-text-primary">Platform breakdown</h3>
         <span className="text-xs text-text-muted">{rows.length} network{rows.length === 1 ? '' : 's'}</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-[11px] uppercase tracking-wide text-text-muted/70 border-b border-nativz-border/50">
+            <tr className="text-xs uppercase tracking-wide text-text-muted/70 border-b border-nativz-border/50">
               <th className="text-left font-medium px-5 py-2">Platform</th>
               <th className="text-right font-medium px-3 py-2">Followers</th>
               <th className="text-right font-medium px-3 py-2">Gained</th>

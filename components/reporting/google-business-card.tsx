@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, Eye, Phone, Navigation, Globe } from 'lucide-react';
+import { GoogleBusinessMark } from '@/components/integrations/google-business-mark';
 
 interface Keyword { keyword: string; count: number }
 interface GmbResponse {
@@ -54,10 +55,10 @@ export function GoogleBusinessCard({ clientId, start, end }: GoogleBusinessCardP
     return (
       <Card className="p-5">
         <div className="flex items-center gap-2 mb-2">
-          <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-[#4285F4] text-white text-[10px] font-bold">G</span>
-          <h3 className="text-sm font-semibold text-text-primary">Google Business Profile</h3>
+          <GoogleBusinessMark size={18} />
+          <h3 className="text-base font-semibold text-text-primary">Google Business Profile</h3>
         </div>
-        <p className="text-xs text-text-muted">
+        <p className="text-sm text-text-muted">
           No Google Business Profile connected to Zernio for this client yet.
           Connect one in Zernio to see map views, website clicks, call buttons,
           direction requests, and the search keywords driving the listing.
@@ -96,11 +97,11 @@ export function GoogleBusinessCard({ clientId, start, end }: GoogleBusinessCardP
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           {stats.map((s) => (
             <div key={s.label} className="rounded-lg border border-nativz-border/50 bg-surface p-3">
-              <div className="flex items-center gap-1.5 text-[11px] text-text-muted">
+              <div className="flex items-center gap-1.5 text-xs text-text-muted">
                 {s.icon}
                 {s.label}
               </div>
-              <p className="mt-1 text-lg font-semibold text-text-primary tabular-nums">
+              <p className="mt-1 text-xl font-semibold text-text-primary tabular-nums">
                 {formatNumber(s.value)}
               </p>
             </div>
@@ -110,14 +111,14 @@ export function GoogleBusinessCard({ clientId, start, end }: GoogleBusinessCardP
 
       {keywords.length > 0 && (
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-text-muted mb-2">
             Top search keywords
           </p>
           <div className="flex flex-wrap gap-1.5">
             {keywords.map((k) => (
               <span
                 key={k.keyword}
-                className="inline-flex items-center gap-1 rounded-full bg-[#4285F4]/10 border border-[#4285F4]/30 text-[#4285F4] px-2 py-0.5 text-[11px]"
+                className="inline-flex items-center gap-1 rounded-full bg-[#4285F4]/10 border border-[#4285F4]/30 text-[#4285F4] px-2.5 py-1 text-xs"
               >
                 {k.keyword}
                 <span className="text-text-muted">·</span>

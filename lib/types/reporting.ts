@@ -63,6 +63,10 @@ export interface MetricSeriesPoint {
 /** Headline number + prior-period delta % + daily sparkline for one metric. */
 export interface MetricCard {
   total: number;
+  /** Raw prior-period total; lets the UI suppress misleading deltas when
+   *  the baseline was zero (change chip would otherwise read as +100% or
+   *  worse from a 0 → N jump on a 2-day-old account). */
+  previousTotal: number;
   changePercent: number;
   series: MetricSeriesPoint[];
 }

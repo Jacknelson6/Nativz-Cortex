@@ -2,22 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { RefreshCw, Download, Flame } from 'lucide-react';
+import { RefreshCw, Download, Flame, Users } from 'lucide-react';
 import { ComboSelect } from '@/components/ui/combo-select';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useReportingData } from './hooks/use-reporting-data';
 import { DateRangePicker } from './date-range-picker';
 import { SummaryView } from './summary-view';
-import { GrowthChart } from './growth-chart';
 import { PlatformSection } from './platform-section';
 import { TopPostsView } from './top-posts-view';
 import { AudienceInsightsCard } from './audience-insights-card';
-import { TotalFollowersChart } from './total-followers-chart';
 import { PlatformBreakdownTable } from './platform-breakdown-table';
 import { PostingCadenceHeatmap } from './posting-cadence-heatmap';
-import { ContentDecayCard } from './content-decay-card';
-import { PostingFrequencyChart } from './posting-frequency-chart';
 import { PostDetailsGrid } from './post-details-grid';
 import { DemographicsCard } from './demographics-card';
 import { BestTimeHeatmap } from './best-time-heatmap';
@@ -46,13 +42,13 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
   } = useReportingData(initialClientId);
 
   const [reportOpen, setReportOpen] = useState(false);
+  const [showDemographics, setShowDemographics] = useState(false);
 
-  // Dedicated top-performers fetch so the panel is always visible under the
-  // summary cards, independent of whatever tab the rest of the dashboard
-  // (SummaryView / TopPostsView) is on.
+  // Top-performers fetch lives here so the panel is always under the summary,
+  // independent of whatever tab the rest of the dashboard is on.
   const [topPosts, setTopPosts] = useState<TopPostItem[]>([]);
   const [topPostsLoading, setTopPostsLoading] = useState(false);
-  const [topPostsLimit, setTopPostsLimit] = useState(3);
+  const [topPostsLimit, setTopPostsLimit] = useState(5);
 
   useEffect(() => {
     if (!selectedClientId || !dateRange) return;
@@ -148,10 +144,10 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
           <SummaryView data={summary} loading={dataLoading} />
 
           {/* Top performers — always visible under the summary. */}
-          <div className="space-y-3 rounded-xl border border-nativz-border bg-surface p-5">
+          <div className="space-y-4 rounded-xl border border-nativz-border bg-surface p-5">
             <div className="flex items-center gap-2">
-              <Flame size={16} className="text-orange-400" />
-              <h2 className="text-sm font-semibold text-text-primary">Top performing posts</h2>
+              <Flame size={18} className="text-orange-400" />
+              <h2 className="text-base font-semibold text-text-primary">Top performing posts</h2>
             </div>
             <TopPostsView
               posts={topPosts}
@@ -161,33 +157,18 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
             />
           </div>
 
-          {/* Audience insights — auto-hides when Zernio doesn't return data. */}
-          {selectedClientId && <AudienceInsightsCard clientId={selectedClientId} />}
-
-          {/* Stacked multi-line follower chart + platform breakdown row. */}
-          {summary?.followerChart && summary.followerChart.length > 0 && (
-            <TotalFollowersChart data={summary.followerChart} loading={dataLoading} />
-          )}
-          {summary?.platformBreakdown && summary.platformBreakdown.length > 0 && (
-            <PlatformBreakdownTable rows={summary.platformBreakdown} />
-          )}
-
-          {/* Posting cadence heatmap — when did posts go out? */}
-          {selectedClientId && dateRange && (
-            <PostingCadenceHeatmap
-              clientId={selectedClientId}
-              start={dateRange.start}
-              end={dateRange.end}
-            />
-          )}
-
-          {/* Aggregate growth chart */}
-          <GrowthChart data={summary?.chart ?? []} loading={dataLoading} />
-
-          {/* Content decay + posting-frequency (Zernio-only insights). */}
+          {/* Platform breakdown + posting cadence — side by side on lg+. */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {selectedClientId && <ContentDecayCard clientId={selectedClientId} />}
-            {selectedClientId && <PostingFrequencyChart clientId={selectedClientId} />}
+            {summary?.platformBreakdown && summary.platformBreakdown.length > 0 && (
+              <PlatformBreakdownTable rows={summary.platformBreakdown} />
+            )}
+            {selectedClientId && dateRange && (
+              <PostingCadenceHeatmap
+                clientId={selectedClientId}
+                start={dateRange.start}
+                end={dateRange.end}
+              />
+            )}
           </div>
 
           {/* Best time to post — Zernio's historical engagement heatmap. */}
@@ -202,13 +183,6 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
               end={dateRange.end}
             />
           )}
-
-          {/* Audience demographics — only visible when the relevant
-              platform has Zernio insights for this client. */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {selectedClientId && <DemographicsCard clientId={selectedClientId} platform="instagram" />}
-            {selectedClientId && <DemographicsCard clientId={selectedClientId} platform="youtube" />}
-          </div>
 
           {/* Per-platform sections */}
           {summary?.platforms && summary.platforms.length > 0 && (
@@ -229,6 +203,35 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
                     />
                   );
                 })}
+            </div>
+          )}
+
+          {/* Audience insights — auto-hides when Zernio doesn't return data. */}
+          {selectedClientId && <AudienceInsightsCard clientId={selectedClientId} />}
+
+          {/* Audience demographics — behind an explicit toggle. Default off so
+              the main page reads as platform performance, not audience breakdown. */}
+          {selectedClientId && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users size={16} className="text-text-muted" />
+                  <h2 className="text-base font-semibold text-text-primary">Audience demographics</h2>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDemographics((v) => !v)}
+                >
+                  {showDemographics ? 'Hide' : 'Show demographics'}
+                </Button>
+              </div>
+              {showDemographics && (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <DemographicsCard clientId={selectedClientId} platform="instagram" />
+                  <DemographicsCard clientId={selectedClientId} platform="youtube" />
+                </div>
+              )}
             </div>
           )}
 

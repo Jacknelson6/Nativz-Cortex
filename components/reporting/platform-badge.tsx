@@ -5,6 +5,8 @@ import { TikTokMark } from '@/components/integrations/tiktok-mark';
 import { InstagramMark } from '@/components/integrations/instagram-mark';
 import { FacebookMark } from '@/components/integrations/facebook-mark';
 import { YouTubeMark } from '@/components/integrations/youtube-mark';
+import { LinkedInMark } from '@/components/integrations/linkedin-mark';
+import { GoogleBusinessMark } from '@/components/integrations/google-business-mark';
 
 const BADGE_SOCIAL_TILE_DARK = 'bg-black/65 ring-1 ring-white/12';
 const BADGE_SOCIAL_TILE_FB = 'bg-[#1877F2] ring-1 ring-black/15';
@@ -12,6 +14,7 @@ const BADGE_SOCIAL_TILE_YT = 'bg-[#FF0300] ring-1 ring-black/15';
 const BADGE_SOCIAL_TILE_IG =
   'bg-gradient-to-r from-[#FDC830] via-[#F37335] to-[#C13584] ring-1 ring-black/15';
 const BADGE_SOCIAL_TILE_LI = 'bg-[#0A66C2] ring-1 ring-black/15';
+const BADGE_SOCIAL_TILE_GMB = 'bg-white ring-1 ring-black/15';
 
 const platformConfig: Record<
   SocialPlatform,
@@ -45,13 +48,13 @@ const platformConfig: Record<
     color: 'text-white',
     bg: BADGE_SOCIAL_TILE_LI,
     label: 'LinkedIn',
-    icon: <span className="text-[10px] font-bold">in</span>,
+    icon: <LinkedInMark variant="onBrand" size={12} />,
   },
   googlebusiness: {
-    color: 'text-white',
-    bg: 'bg-[#4285F4] ring-1 ring-black/15',
+    color: 'text-[#4285F4]',
+    bg: BADGE_SOCIAL_TILE_GMB,
     label: 'Google Business',
-    icon: <span className="text-[10px] font-bold">G</span>,
+    icon: <GoogleBusinessMark size={12} />,
   },
 };
 

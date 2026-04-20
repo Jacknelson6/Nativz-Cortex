@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -16,6 +16,7 @@ interface BestTimeHeatmapProps {
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 function formatHour(h: number): string {
   if (h === 0) return '12a';
@@ -48,23 +49,23 @@ export function BestTimeHeatmap({ clientId }: BestTimeHeatmapProps) {
     return { map: m, maxEng: max, topSlots: top };
   }, [slots]);
 
-  if (loading) return <Skeleton className="h-64" />;
+  if (loading) return <Skeleton className="h-72" />;
 
   return (
     <Card className="p-5">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-text-primary">Best time to post</h3>
-          <p className="text-xs text-text-muted mt-0.5">
-            Average engagement by day × hour, from Zernio's posting history.
+          <h3 className="text-base font-semibold text-text-primary">Best time to post</h3>
+          <p className="text-sm text-text-muted mt-0.5">
+            Average engagement by day × hour, from posting history.
           </p>
         </div>
         {topSlots.length > 0 && (
-          <div className="flex gap-1.5 text-[10px]">
+          <div className="flex flex-wrap gap-1.5">
             {topSlots.map((s, i) => (
               <span
                 key={i}
-                className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-300 border border-emerald-500/25"
+                className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-300 border border-emerald-500/25 tabular-nums"
               >
                 {DAYS[s.dayOfWeek]} {formatHour(s.hour)}
               </span>
@@ -74,28 +75,34 @@ export function BestTimeHeatmap({ clientId }: BestTimeHeatmapProps) {
       </div>
 
       {slots.length === 0 ? (
-        <p className="text-xs text-text-muted py-6 text-center">
+        <p className="text-sm text-text-muted py-10 text-center">
           Not enough posting history yet.
         </p>
       ) : (
-        <div className="flex gap-2">
-          <div className="flex flex-col justify-between text-[9px] text-text-muted pt-4 pb-1">
-            {DAYS.map((d) => (
-              <span key={d} className="h-3 leading-3">{d}</span>
+        <div className="space-y-1">
+          {/* Grid with a 40px day-label column + 24 hour columns. Using CSS
+              grid on the whole block so the hour-label row aligns to every cell. */}
+          <div
+            className="grid items-center gap-1 text-xs text-text-muted"
+            style={{ gridTemplateColumns: '40px repeat(24, minmax(0, 1fr))' }}
+          >
+            {/* Hour labels — every hour labeled (24h row) */}
+            <span aria-hidden />
+            {HOURS.map((h) => (
+              <span
+                key={`hdr-${h}`}
+                className="text-center text-[10px] tabular-nums text-text-muted"
+              >
+                {formatHour(h)}
+              </span>
             ))}
-          </div>
-          <div className="flex-1">
-            <div className="grid grid-cols-24 gap-0.5" style={{ gridTemplateColumns: 'repeat(24, minmax(0, 1fr))' }}>
-              {Array.from({ length: 24 }, (_, h) => (
-                <div
-                  key={`label-${h}`}
-                  className="h-3 text-center text-[8px] text-text-muted leading-3"
-                >
-                  {h % 3 === 0 ? formatHour(h) : ''}
-                </div>
-              ))}
-              {DAYS.map((_day, d) =>
-                Array.from({ length: 24 }, (_, h) => {
+
+            {DAYS.map((day, d) => (
+              <Fragment key={`row-${d}`}>
+                <span className="pr-1 text-right text-xs font-medium text-text-secondary">
+                  {day}
+                </span>
+                {HOURS.map((h) => {
                   const slot = map.get(`${d}-${h}`);
                   const intensity = slot && maxEng > 0 ? slot.avgEngagement / maxEng : 0;
                   let cls = 'bg-white/5';
@@ -106,13 +113,29 @@ export function BestTimeHeatmap({ clientId }: BestTimeHeatmapProps) {
                   return (
                     <div
                       key={`${d}-${h}`}
-                      title={slot ? `${DAYS[d]} ${formatHour(h)} · ${slot.avgEngagement.toFixed(1)} avg engagement (${slot.postCount} posts)` : ''}
-                      className={`h-3 rounded-sm ${cls}`}
+                      title={
+                        slot
+                          ? `${DAYS[d]} ${formatHour(h)} · ${slot.avgEngagement.toFixed(1)} avg engagement (${slot.postCount} posts)`
+                          : `${DAYS[d]} ${formatHour(h)} · no data`
+                      }
+                      className={`h-5 rounded-sm ${cls}`}
                     />
                   );
-                }),
-              )}
+                })}
+              </Fragment>
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center justify-end gap-2 pt-3 text-xs text-text-muted">
+            <span>Low</span>
+            <div className="flex items-center gap-0.5">
+              <span className="h-3 w-3 rounded-sm bg-emerald-500/25" />
+              <span className="h-3 w-3 rounded-sm bg-emerald-500/50" />
+              <span className="h-3 w-3 rounded-sm bg-emerald-500/75" />
+              <span className="h-3 w-3 rounded-sm bg-emerald-400" />
             </div>
+            <span>High</span>
           </div>
         </div>
       )}

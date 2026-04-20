@@ -37,6 +37,12 @@ export function MetricSparklineCard({
   const suffix = format === 'percent' ? '%' : '';
   const change = card.changePercent;
   const hasSeries = card.series.length > 1;
+  // Suppress the delta chip when the comparison is meaningless: either the
+  // prior period had zero (so any current value reads as "+∞%", displayed
+  // as a misleading capped number) or we just don't have enough points for
+  // a week-over-week read (<4 days of series).
+  const showDelta =
+    change !== 0 && card.previousTotal !== 0 && card.series.length >= 4;
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
   // date → first post on that day. Multiple posts/day collapse so markers
@@ -82,21 +88,21 @@ export function MetricSparklineCard({
 
   return (
     <Card className="flex h-full flex-col gap-3 p-4">
-      <div className="flex items-start justify-between">
-        <p className="text-xs font-medium text-text-muted">{label}</p>
-        {change !== 0 && (
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-medium text-text-muted">{label}</p>
+        {showDelta && (
           <span
-            className={`inline-flex items-center gap-0.5 text-[11px] font-medium ${
+            className={`inline-flex items-center gap-0.5 text-xs font-medium tabular-nums ${
               change >= 0 ? 'text-emerald-400' : 'text-red-400'
             }`}
           >
-            {change >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+            {change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
             {change >= 0 ? '+' : ''}
-            {change.toFixed(2)}%
+            {change.toFixed(1)}%
           </span>
         )}
       </div>
-      <p className="text-2xl font-semibold text-text-primary">
+      <p className="text-2xl font-semibold text-text-primary tabular-nums">
         {formatNumber(card.total, suffix)}
       </p>
       {hasSeries && (
@@ -133,24 +139,24 @@ export function MetricSparklineCard({
                         background: 'rgba(15,17,22,0.97)',
                         border: '1px solid rgba(255,255,255,0.08)',
                         borderRadius: 10,
-                        padding: post ? 8 : '6px 8px',
-                        fontSize: 11,
-                        maxWidth: 200,
+                        padding: post ? 10 : '8px 10px',
+                        fontSize: 13,
+                        maxWidth: 260,
                         boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
                       }}
                     >
-                      <div style={{ color: 'rgba(255,255,255,0.55)', marginBottom: 2 }}>
+                      <div style={{ color: 'rgba(255,255,255,0.6)', marginBottom: 3, fontSize: 12 }}>
                         {formatDate(date)}
                       </div>
-                      <div style={{ color: '#fff', fontWeight: 600 }}>
+                      <div style={{ color: '#fff', fontWeight: 600, fontSize: 14 }}>
                         {formatNumber(value, suffix)} {label.toLowerCase()}
                       </div>
                       {post && (
                         <div
                           style={{
-                            marginTop: 6,
+                            marginTop: 8,
                             display: 'flex',
-                            gap: 8,
+                            gap: 10,
                             alignItems: 'flex-start',
                           }}
                         >
@@ -159,24 +165,24 @@ export function MetricSparklineCard({
                               src={post.thumbnailUrl}
                               alt=""
                               style={{
-                                width: 36,
-                                height: 64,
-                                borderRadius: 4,
+                                width: 44,
+                                height: 78,
+                                borderRadius: 6,
                                 objectFit: 'cover',
                                 flexShrink: 0,
                                 border: `1px solid ${colorClass}`,
                               }}
                             />
                           )}
-                          <div style={{ color: 'rgba(255,255,255,0.75)', lineHeight: 1.3 }}>
-                            <div style={{ color: colorClass, fontWeight: 600, marginBottom: 2 }}>
+                          <div style={{ color: 'rgba(255,255,255,0.8)', lineHeight: 1.4, fontSize: 13 }}>
+                            <div style={{ color: colorClass, fontWeight: 600, marginBottom: 3 }}>
                               Post published
                             </div>
                             {post.caption && (
                               <div
                                 style={{
                                   display: '-webkit-box',
-                                  WebkitLineClamp: 3,
+                                  WebkitLineClamp: 4,
                                   WebkitBoxOrient: 'vertical',
                                   overflow: 'hidden',
                                 }}

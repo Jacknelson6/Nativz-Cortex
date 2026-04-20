@@ -37,6 +37,7 @@ function platformTint(platform: string): string {
     case 'instagram': return 'linear-gradient(135deg, #FDC830 0%, #F37335 50%, #C13584 100%)';
     case 'facebook': return '#1877F2';
     case 'youtube': return '#FF0300';
+    case 'linkedin': return '#0A66C2';
     default: return '#2a2a2a';
   }
 }
@@ -76,9 +77,9 @@ export function TopPostsView({
       </div>
 
       {loading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: limit }).map((_, i) => (
-            <Skeleton key={i} className="h-72" />
+            <Skeleton key={i} className="aspect-[9/16]" />
           ))}
         </div>
       ) : (posts ?? []).length === 0 ? (
@@ -88,7 +89,7 @@ export function TopPostsView({
           </p>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
           {(posts ?? []).map((post) => (
             <Card
               key={post.id}
@@ -101,27 +102,27 @@ export function TopPostsView({
               }}
             >
               <div className="relative">
-                <div className="aspect-video bg-surface-hover overflow-hidden rounded-t-xl">
+                <div className="aspect-[9/16] bg-surface-hover overflow-hidden rounded-t-xl">
                   {post.thumbnailUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={post.thumbnailUrl}
                       alt={post.caption ?? 'Post thumbnail'}
                       className="h-full w-full object-cover"
+                      loading="lazy"
                     />
                   ) : (
                     <div
                       className="flex h-full w-full items-center justify-center"
-                      style={{
-                        background:
-                          platformTint(post.platform),
-                      }}
+                      style={{ background: platformTint(post.platform) }}
                     >
-                      <Eye size={28} className="text-white/70" />
+                      <Eye size={32} className="text-white/70" />
                     </div>
                   )}
+                  {/* Bottom-fade so caption + metrics sit on a legible ground */}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
                 </div>
-                <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-accent text-white text-xs font-bold">
+                <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-accent text-white text-sm font-bold shadow-md">
                   {post.rank}
                 </span>
                 <span className="absolute right-2 top-2">
@@ -131,32 +132,35 @@ export function TopPostsView({
                     size="sm"
                   />
                 </span>
+                {post.postUrl && (
+                  <ExternalLink
+                    size={14}
+                    className="absolute right-2 bottom-2 text-white/70"
+                    aria-hidden
+                  />
+                )}
               </div>
 
-              <div className="p-4 space-y-3">
-                <p className="line-clamp-2 text-sm text-text-secondary min-h-[2.5rem]">
-                  {post.caption ?? ''}
+              <div className="p-3 space-y-2">
+                <p className="line-clamp-2 text-sm text-text-secondary min-h-[2.5rem] leading-snug">
+                  {post.caption ?? '—'}
                 </p>
+                <p className="text-xs text-text-muted">{formatDate(post.publishedAt)}</p>
 
-                <div className="flex items-center justify-between text-xs text-text-muted">
-                  <span>{formatDate(post.publishedAt)}</span>
-                  {post.postUrl && <ExternalLink size={12} />}
-                </div>
-
-                <div className="grid grid-cols-5 gap-1">
+                <div className="grid grid-cols-5 gap-1 pt-1">
                   {[
-                    { icon: <Eye size={12} />, value: post.views ?? 0 },
-                    { icon: <Heart size={12} />, value: post.likes ?? 0 },
-                    { icon: <MessageCircle size={12} />, value: post.comments ?? 0 },
-                    { icon: <Share2 size={12} />, value: post.shares ?? 0 },
-                    { icon: <Bookmark size={12} />, value: post.saves ?? 0 },
+                    { icon: <Eye size={14} />, value: post.views ?? 0 },
+                    { icon: <Heart size={14} />, value: post.likes ?? 0 },
+                    { icon: <MessageCircle size={14} />, value: post.comments ?? 0 },
+                    { icon: <Share2 size={14} />, value: post.shares ?? 0 },
+                    { icon: <Bookmark size={14} />, value: post.saves ?? 0 },
                   ].map((metric, i) => (
                     <div
                       key={i}
-                      className="flex flex-col items-center gap-0.5 rounded-md bg-surface-hover/50 px-1 py-1.5 text-text-muted"
+                      className="flex flex-col items-center gap-0.5 rounded-md bg-surface-hover/50 px-1 py-1.5 text-text-secondary"
                     >
                       {metric.icon}
-                      <span className="text-[10px] font-medium">
+                      <span className="text-xs font-semibold tabular-nums">
                         {formatNumber(metric.value)}
                       </span>
                     </div>

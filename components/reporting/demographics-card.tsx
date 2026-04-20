@@ -37,8 +37,8 @@ function BarRow({ label, value, pct, color }: { label: string; value: number; pc
   return (
     <div className="group">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs text-text-primary truncate">{label}</span>
-        <span className="text-[11px] text-text-muted tabular-nums flex-shrink-0">
+        <span className="text-sm text-text-primary truncate">{label}</span>
+        <span className="text-xs text-text-muted tabular-nums flex-shrink-0">
           {value.toLocaleString()} · {pct.toFixed(1)}%
         </span>
       </div>
@@ -120,7 +120,7 @@ export function DemographicsCard({ clientId, platform }: DemographicsCardProps) 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         {age.length > 0 && (
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted mb-2">Age</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-text-muted mb-2">Age</p>
             <div className="space-y-2">
               {age.map((r) => (
                 <BarRow

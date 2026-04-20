@@ -42,6 +42,7 @@ function buildMetricCard(
     .map(([date, value]) => ({ date, value }));
   return {
     total,
+    previousTotal: prevTotal,
     changePercent: calcChange(total, prevTotal),
     series,
   };
@@ -311,6 +312,7 @@ export async function GET(request: NextRequest) {
           for (const s of snaps) byDay.set(s.snapshot_date, s.engagement_rate ?? 0);
           return {
             total: Math.round(cur * 100) / 100,
+            previousTotal: Math.round(prev * 100) / 100,
             changePercent: calcChange(cur, prev),
             series: [...byDay.entries()]
               .sort(([a], [b]) => a.localeCompare(b))
