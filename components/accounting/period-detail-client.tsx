@@ -574,13 +574,16 @@ function AddEntryForm({
     }
   }
 
+  const perUnit = fixedType === 'editing' || fixedType === 'blogging';
+  const unitLabel = fixedType === 'blogging' ? 'Posts' : 'Videos';
+
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-4 space-y-3">
       <p className="text-[10px] uppercase tracking-wide text-text-muted">
         New {ENTRY_TYPE_LABELS[fixedType].toLowerCase()} entry
       </p>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <LabeledField label="Team member">
           <select
             value={teamMemberId}
@@ -618,51 +621,77 @@ function AddEntryForm({
             ))}
           </select>
         </LabeledField>
-
-        <LabeledField label="Videos">
-          <input
-            type="number"
-            min="0"
-            value={videoCount}
-            onChange={(e) => setVideoCount(e.target.value)}
-            className="w-full rounded-lg border border-nativz-border bg-background px-2 py-1.5 text-sm text-text-primary"
-          />
-        </LabeledField>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <LabeledField label="Rate ($)">
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={rateDollars}
-            onChange={(e) => setRateDollars(e.target.value)}
-            className="w-full rounded-lg border border-nativz-border bg-background px-2 py-1.5 text-sm text-text-primary"
-          />
-        </LabeledField>
-        <LabeledField label="Amount ($)">
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={effectiveAmount}
-            onChange={(e) => setAmountDollars(e.target.value)}
-            placeholder={computedAmount || '0.00'}
-            className="w-full rounded-lg border border-nativz-border bg-background px-2 py-1.5 text-sm text-text-primary"
-          />
-        </LabeledField>
-        <LabeledField label="Margin ($)">
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={marginDollars}
-            onChange={(e) => setMarginDollars(e.target.value)}
-            className="w-full rounded-lg border border-nativz-border bg-background px-2 py-1.5 text-sm text-text-primary"
-          />
-        </LabeledField>
-      </div>
+      {/* Per-unit pricing (editing / blogging) shows Units × Rate → auto
+          Amount. SMM + affiliate skip straight to a single Amount field. */}
+      {perUnit ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <LabeledField label={unitLabel}>
+            <input
+              type="number"
+              min="0"
+              value={videoCount}
+              onChange={(e) => setVideoCount(e.target.value)}
+              className="w-full rounded-lg border border-nativz-border bg-background px-2 py-1.5 text-sm tabular-nums text-text-primary"
+            />
+          </LabeledField>
+          <LabeledField label="Rate per unit ($)">
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={rateDollars}
+              onChange={(e) => setRateDollars(e.target.value)}
+              className="w-full rounded-lg border border-nativz-border bg-background px-2 py-1.5 text-sm tabular-nums text-text-primary"
+            />
+          </LabeledField>
+          <LabeledField label="Amount ($)">
+            <input
+              type="text"
+              readOnly
+              disabled
+              value={effectiveAmount ? `$${effectiveAmount}` : '—'}
+              className="w-full rounded-lg border border-nativz-border bg-background/50 px-2 py-1.5 text-sm font-semibold tabular-nums text-text-secondary cursor-not-allowed"
+              title="Auto-computed from units × rate"
+            />
+          </LabeledField>
+          <LabeledField label="Margin ($)">
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={marginDollars}
+              onChange={(e) => setMarginDollars(e.target.value)}
+              className="w-full rounded-lg border border-nativz-border bg-background px-2 py-1.5 text-sm tabular-nums text-text-primary"
+            />
+          </LabeledField>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
+          <LabeledField label="Amount ($)">
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={amountDollars}
+              onChange={(e) => setAmountDollars(e.target.value)}
+              placeholder="0.00"
+              className="w-full rounded-lg border border-nativz-border bg-background px-2 py-1.5 text-sm font-semibold tabular-nums text-text-primary"
+            />
+          </LabeledField>
+          <LabeledField label="Margin ($)">
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={marginDollars}
+              onChange={(e) => setMarginDollars(e.target.value)}
+              className="w-full rounded-lg border border-nativz-border bg-background px-2 py-1.5 text-sm tabular-nums text-text-primary"
+            />
+          </LabeledField>
+        </div>
+      )}
 
       <LabeledField label="Description">
         <input

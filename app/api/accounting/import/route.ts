@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createOpenRouterRichCompletion } from '@/lib/ai/openrouter-rich';
+import { selectPayrollTeamMembers } from '@/lib/accounting/team-directory';
 
 export const maxDuration = 60;
 
@@ -63,17 +64,18 @@ export async function POST(request: NextRequest) {
 
   // Pull the directory of known payees + clients so we can feed the LLM a
   // closed list (it hallucinates names less when it has to pick from one).
-  const [{ data: members }, { data: clients }] = await Promise.all([
+  const [{ data: rawMembers }, { data: clients }] = await Promise.all([
     ctx.adminClient
       .from('team_members')
-      .select('id, full_name')
+      .select('id, full_name, role, is_active, user_id, created_at')
       .eq('is_active', true),
     ctx.adminClient
       .from('clients')
       .select('id, name'),
   ]);
 
-  const memberNames = (members ?? []).map((m) => m.full_name).filter(Boolean) as string[];
+  const members = selectPayrollTeamMembers(rawMembers ?? []);
+  const memberNames = members.map((m) => m.full_name);
   const clientNames = (clients ?? []).map((c) => c.name);
 
   const defaultType = parsed.data.default_entry_type ?? 'editing';
@@ -138,9 +140,7 @@ Rules:
   }
 
   const memberByName = new Map(
-    (members ?? [])
-      .filter((m) => m.full_name)
-      .map((m) => [normaliseName(m.full_name as string), m.id]),
+    members.map((m) => [normaliseName(m.full_name), m.id]),
   );
   const clientByName = new Map(
     (clients ?? []).map((c) => [normaliseName(c.name), c.id]),

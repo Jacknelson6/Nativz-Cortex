@@ -29,6 +29,10 @@ interface SubmitPayrollClientProps {
 
 type Stage = 'paste' | 'preview' | 'submitting' | 'done';
 
+function hasPerUnitPricing(type: EntryType): boolean {
+  return type === 'editing' || type === 'blogging';
+}
+
 /**
  * Public submission page for a team member. No login required — the URL
  * token is the credential. Same paste-parse-confirm UX as the admin
@@ -83,7 +87,16 @@ export function SubmitPayrollClient({
   }
 
   function updateRow(idx: number, patch: Partial<ProposedEntry>) {
-    setProposals((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
+    setProposals((prev) =>
+      prev.map((p, i) => {
+        if (i !== idx) return p;
+        const next = { ...p, ...patch };
+        if (hasPerUnitPricing(next.entry_type)) {
+          next.amount_cents = next.video_count * next.rate_cents;
+        }
+        return next;
+      }),
+    );
   }
   function removeRow(idx: number) {
     setProposals((prev) => prev.filter((_, i) => i !== idx));
@@ -207,100 +220,127 @@ Rockpower: 3 revisions, $25 each
               </Button>
             </div>
             <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm table-fixed">
+                <colgroup>
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '22%' }} />
+                  <col style={{ width: '9%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '28%' }} />
+                  <col style={{ width: '5%' }} />
+                </colgroup>
                 <thead className="text-text-secondary bg-background/50">
                   <tr>
                     <th className="text-left font-semibold px-3 py-2">Service</th>
                     <th className="text-left font-semibold px-3 py-2">Client</th>
-                    <th className="text-right font-semibold px-3 py-2">Videos</th>
-                    <th className="text-right font-semibold px-3 py-2">Rate</th>
-                    <th className="text-right font-semibold px-3 py-2">Amount</th>
+                    <th className="text-left font-semibold px-3 py-2">Units</th>
+                    <th className="text-left font-semibold px-3 py-2">Rate</th>
+                    <th className="text-left font-semibold px-3 py-2">Amount</th>
                     <th className="text-left font-semibold px-3 py-2">Notes</th>
                     <th className="w-8" />
                   </tr>
                 </thead>
                 <tbody>
-                  {proposals.map((p, i) => (
-                    <tr key={i} className="border-t border-nativz-border align-top">
-                      <td className="px-3 py-2">
-                        <select
-                          value={p.entry_type}
-                          onChange={(e) => updateRow(i, { entry_type: e.target.value as EntryType })}
-                          className="rounded border border-nativz-border bg-background px-2 py-1 text-sm text-text-primary"
-                        >
-                          <option value="editing">Editing</option>
-                          <option value="smm">SMM</option>
-                          <option value="affiliate">Affiliate</option>
-                          <option value="blogging">Blogging</option>
-                        </select>
-                      </td>
-                      <td className="px-3 py-2 min-w-[160px]">
-                        <select
-                          value={p.client_id ?? ''}
-                          onChange={(e) => updateRow(i, { client_id: e.target.value || null })}
-                          className="w-full rounded border border-nativz-border bg-background px-2 py-1 text-sm text-text-primary"
-                        >
-                          <option value="">
-                            {p.client_name_raw ? `"${p.client_name_raw}" (unmatched)` : '— pick client —'}
-                          </option>
-                          {clients.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <input
-                          type="number"
-                          min="0"
-                          value={p.video_count}
-                          onChange={(e) => updateRow(i, { video_count: parseInt(e.target.value, 10) || 0 })}
-                          className="w-16 rounded border border-nativz-border bg-background px-2 py-1 text-sm text-right tabular-nums text-text-primary"
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={(p.rate_cents / 100).toFixed(2)}
-                          onChange={(e) =>
-                            updateRow(i, { rate_cents: Math.round((parseFloat(e.target.value) || 0) * 100) })
-                          }
-                          className="w-20 rounded border border-nativz-border bg-background px-2 py-1 text-sm text-right tabular-nums text-text-primary"
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={(p.amount_cents / 100).toFixed(2)}
-                          onChange={(e) =>
-                            updateRow(i, { amount_cents: Math.round((parseFloat(e.target.value) || 0) * 100) })
-                          }
-                          className="w-24 rounded border border-nativz-border bg-background px-2 py-1 text-sm text-right tabular-nums font-semibold text-text-primary"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="text"
-                          value={p.description ?? ''}
-                          onChange={(e) => updateRow(i, { description: e.target.value || null })}
-                          placeholder="Notes"
-                          className="w-full rounded border border-nativz-border bg-background px-2 py-1 text-sm text-text-primary"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <button
-                          onClick={() => removeRow(i)}
-                          className="text-text-secondary hover:text-red-400 cursor-pointer"
-                          title="Remove row"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {proposals.map((p, i) => {
+                    const perUnit = hasPerUnitPricing(p.entry_type);
+                    return (
+                      <tr key={i} className="border-t border-nativz-border align-top">
+                        <td className="px-3 py-2">
+                          <select
+                            value={p.entry_type}
+                            onChange={(e) => updateRow(i, { entry_type: e.target.value as EntryType })}
+                            className="w-full rounded border border-nativz-border bg-background px-2 py-1 text-sm text-text-primary"
+                          >
+                            <option value="editing">Editing</option>
+                            <option value="smm">SMM</option>
+                            <option value="affiliate">Affiliate</option>
+                            <option value="blogging">Blogging</option>
+                          </select>
+                        </td>
+                        <td className="px-3 py-2">
+                          <select
+                            value={p.client_id ?? ''}
+                            onChange={(e) => updateRow(i, { client_id: e.target.value || null })}
+                            className="w-full rounded border border-nativz-border bg-background px-2 py-1 text-sm text-text-primary"
+                          >
+                            <option value="">
+                              {p.client_name_raw ? `"${p.client_name_raw}" (unmatched)` : '— pick client —'}
+                            </option>
+                            {clients.map((c) => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-2">
+                          {perUnit ? (
+                            <input
+                              type="number"
+                              min="0"
+                              value={p.video_count}
+                              onChange={(e) => updateRow(i, { video_count: parseInt(e.target.value, 10) || 0 })}
+                              className="w-full rounded border border-nativz-border bg-background px-2 py-1 text-sm tabular-nums text-text-primary"
+                            />
+                          ) : (
+                            <span className="text-text-secondary text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {perUnit ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={(p.rate_cents / 100).toFixed(2)}
+                              onChange={(e) =>
+                                updateRow(i, { rate_cents: Math.round((parseFloat(e.target.value) || 0) * 100) })
+                              }
+                              className="w-full rounded border border-nativz-border bg-background px-2 py-1 text-sm tabular-nums text-text-primary"
+                            />
+                          ) : (
+                            <span className="text-text-secondary text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            readOnly={perUnit}
+                            disabled={perUnit}
+                            value={(p.amount_cents / 100).toFixed(2)}
+                            onChange={(e) =>
+                              updateRow(i, { amount_cents: Math.round((parseFloat(e.target.value) || 0) * 100) })
+                            }
+                            className={`w-full rounded border bg-background px-2 py-1 text-sm tabular-nums font-semibold ${
+                              perUnit
+                                ? 'border-nativz-border text-text-secondary cursor-not-allowed'
+                                : 'border-nativz-border text-text-primary'
+                            }`}
+                            title={perUnit ? 'Auto-computed from units × rate' : undefined}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            value={p.description ?? ''}
+                            onChange={(e) => updateRow(i, { description: e.target.value || null })}
+                            placeholder="Notes"
+                            className="w-full rounded border border-nativz-border bg-background px-2 py-1 text-sm text-text-primary"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <button
+                            onClick={() => removeRow(i)}
+                            className="text-text-secondary hover:text-red-400 cursor-pointer"
+                            title="Remove row"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

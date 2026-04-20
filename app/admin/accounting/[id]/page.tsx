@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { labelFor } from '@/lib/accounting/periods';
+import { selectPayrollTeamMembers } from '@/lib/accounting/team-directory';
 import { PeriodDetailClient } from '@/components/accounting/period-detail-client';
 
 export default async function AccountingPeriodPage({ params }: { params: Promise<{ id: string }> }) {
@@ -34,7 +35,7 @@ export default async function AccountingPeriodPage({ params }: { params: Promise
       .order('created_at', { ascending: true }),
     adminClient
       .from('team_members')
-      .select('id, full_name, role')
+      .select('id, full_name, role, is_active, user_id, created_at')
       .eq('is_active', true)
       .order('full_name'),
     adminClient
@@ -58,7 +59,7 @@ export default async function AccountingPeriodPage({ params }: { params: Promise
           label: labelFor(period.start_date, period.half as 'first-half' | 'second-half'),
         }}
         initialEntries={entries ?? []}
-        teamMembers={team ?? []}
+        teamMembers={selectPayrollTeamMembers(team ?? [])}
         clients={clients ?? []}
       />
     </div>
