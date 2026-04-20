@@ -8,6 +8,7 @@ import { AdminSidebar } from '@/components/layout/admin-sidebar';
 import { AdminSettingsSidebar } from '@/components/layout/admin-settings-sidebar';
 import { AdminEditsSidebar } from '@/components/layout/admin-edits-sidebar';
 import { AdminCompetitorTrackingSidebar } from '@/components/layout/admin-competitor-tracking-sidebar';
+import { AdminToolsSidebar } from '@/components/layout/admin-tools-sidebar';
 // AgencyLogo lives inside the sidebar header now (admin-sidebar.tsx) so it
 // scales with collapse state and doesn't overlap the secondary rails.
 import { AdminHeader } from '@/components/layout/admin-header';
@@ -78,6 +79,7 @@ export default async function AdminLayout({
           <AdminSettingsSidebar />
           <AdminEditsSidebar />
           <AdminCompetitorTrackingSidebar />
+          <AdminToolsSidebar />
           <SidebarInset>
             <AdminHeader />
             <PageTransition>{children}</PageTransition>

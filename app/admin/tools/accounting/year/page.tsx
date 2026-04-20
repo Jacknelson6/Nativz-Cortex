@@ -78,7 +78,7 @@ export default async function AccountingYearPage({
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href="/admin/accounting"
+            href="/admin/tools/accounting"
             className="rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover"
           >
             Period list
@@ -104,7 +104,7 @@ function YearPicker({ currentYear }: { currentYear: number }) {
       {years.map((y) => (
         <Link
           key={y}
-          href={`/admin/accounting/year?year=${y}`}
+          href={`/admin/tools/accounting/year?year=${y}`}
           className={`rounded-md px-2.5 py-1 text-xs font-medium ${
             y === currentYear
               ? 'bg-accent text-white'

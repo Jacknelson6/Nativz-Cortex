@@ -74,7 +74,7 @@ export default async function AccountingIndexPage() {
           </p>
         </div>
         <Link
-          href="/admin/accounting/year"
+          href="/admin/tools/accounting/year"
           className="rounded-lg border border-nativz-border bg-surface px-4 py-2 text-base font-medium text-text-primary hover:bg-surface-hover"
         >
           Year view
@@ -99,7 +99,7 @@ export default async function AccountingIndexPage() {
                 <tr key={p.id} className="border-t border-nativz-border hover:bg-surface-hover/50">
                   <td className="px-5 py-3.5">
                     <Link
-                      href={`/admin/accounting/${p.id}`}
+                      href={`/admin/tools/accounting/${p.id}`}
                       className="text-text-primary font-semibold hover:text-accent-text"
                     >
                       {labelFor(p.start_date, p.half)}

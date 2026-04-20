@@ -4,8 +4,7 @@ import {
   ArrowRight,
   Users as UsersIcon,
   Receipt,
-  Megaphone,
-  Shield,
+  Mail,
   Clock3,
 } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
@@ -14,12 +13,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export const dynamic = 'force-dynamic';
 
 /**
- * Admin Tools hub — one place for every admin-only internal surface. First
- * increment of NAT-5: unified entry point while individual URLs keep
- * working. Secondary-rail layout, page moves, and the Comptroller/CEO
- * read-only payroll view are scoped as follow-ups.
+ * Tools overview — landing grid that sits alongside the secondary rail. Rail
+ * handles day-to-day navigation; the grid is the entry point on first visit
+ * and a place to surface "soon" stubs for future internal surfaces.
  */
-export default async function AdminToolsPage() {
+export default async function ToolsOverviewPage() {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -40,37 +38,31 @@ export default async function AdminToolsPage() {
     <div className="mx-auto max-w-5xl p-6 md:p-10">
       <header className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight text-text-primary md:text-3xl">
-          Admin tools
+          Tools
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Internal-only surfaces. Individual URLs still work, this is just the unified hub.
+          Internal-only surfaces.
         </p>
       </header>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <ToolCard
-          href="/admin/users"
+          href="/admin/tools/users"
           icon={UsersIcon}
           title="Users"
           blurb="Team members, roles, and portal access"
         />
         <ToolCard
-          href="/admin/accounting"
+          href="/admin/tools/accounting"
           icon={Receipt}
           title="Accounting"
-          blurb="Payroll periods, entries, and CSV export"
+          blurb="Payroll periods, entries, CSV export, and Comptroller view"
         />
         <ToolCard
-          href="/admin/settings/production-updates"
-          icon={Megaphone}
-          title="Production updates"
-          blurb="Mass branded email broadcasts, agency-aware"
-        />
-        <ToolCard
-          title="Comptroller view"
-          icon={Shield}
-          blurb="Read-only payroll summary via link-token (coming soon)"
-          comingSoon
+          href="/admin/tools/email"
+          icon={Mail}
+          title="Email"
+          blurb="Mass branded correspondence — launches, bug alerts, announcements"
         />
         <ToolCard
           title="Audit log"

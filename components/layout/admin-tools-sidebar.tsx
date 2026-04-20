@@ -3,48 +3,39 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Brain,
-  Cpu,
-  Code,
+  LayoutGrid,
+  Users as UsersIcon,
+  Receipt,
+  Mail,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
-// Route matcher — which admin routes show the Settings secondary rail
+// Route matcher — /admin/tools and everything under it
 // ---------------------------------------------------------------------------
 
-const SETTINGS_PREFIXES = [
-  // Account settings lives under /admin/settings and is reached only via the
-  // avatar popover — intentionally excluded so the secondary settings rail
-  // doesn't double up with the account page's own sub-nav.
-  '/admin/settings/ai',
-  '/admin/knowledge',
-];
-
-export function isAdminSettingsRoute(pathname: string): boolean {
-  if (pathname === '/admin/nerd/api' || pathname.startsWith('/admin/nerd/api/')) return true;
-  return SETTINGS_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'));
+export function isAdminToolsRoute(pathname: string): boolean {
+  return pathname === '/admin/tools' || pathname.startsWith('/admin/tools/');
 }
 
 // ---------------------------------------------------------------------------
 // Items
 // ---------------------------------------------------------------------------
 
-interface SettingsItem {
+interface ToolsItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
-  /** When href is a prefix of other items (e.g. /admin/settings is the prefix
-   *  of /admin/settings/usage), use exact match instead of startsWith. */
   exact?: boolean;
 }
 
-const ITEMS: SettingsItem[] = [
-  { href: '/admin/knowledge', label: 'Brain', icon: Brain },
-  { href: '/admin/settings/ai', label: 'AI settings', icon: Cpu },
-  { href: '/admin/nerd/api', label: 'API docs', icon: Code },
+const ITEMS: ToolsItem[] = [
+  { href: '/admin/tools', label: 'Overview', icon: LayoutGrid, exact: true },
+  { href: '/admin/tools/users', label: 'Users', icon: UsersIcon },
+  { href: '/admin/tools/accounting', label: 'Accounting', icon: Receipt },
+  { href: '/admin/tools/email', label: 'Email', icon: Mail },
 ];
 
-function isItemActive(pathname: string, item: SettingsItem): boolean {
+function isItemActive(pathname: string, item: ToolsItem): boolean {
   if (item.exact) return pathname === item.href;
   return pathname === item.href || pathname.startsWith(item.href + '/');
 }
@@ -53,19 +44,17 @@ function isItemActive(pathname: string, item: SettingsItem): boolean {
 // Component
 // ---------------------------------------------------------------------------
 
-export function AdminSettingsSidebar() {
+export function AdminToolsSidebar() {
   const pathname = usePathname();
-  const active = isAdminSettingsRoute(pathname);
-
-  if (!active) return null;
+  if (!isAdminToolsRoute(pathname)) return null;
 
   return (
     <aside
-      aria-label="Settings navigation"
+      aria-label="Tools navigation"
       className="sticky top-0 h-screen hidden md:flex flex-col shrink-0 border-r border-nativz-border bg-surface w-56"
     >
       <div className="shrink-0 p-3 pb-2">
-        <h2 className="px-1 text-lg font-semibold text-text-primary">Settings</h2>
+        <h2 className="px-1 text-lg font-semibold text-text-primary">Tools</h2>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-1">
         <ul className="flex flex-col gap-0.5">

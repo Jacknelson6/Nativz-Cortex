@@ -216,7 +216,7 @@ export function YearMatrixClient({ year, periods, members, entries }: YearMatrix
                     {row.half === 'first-half' ? '1–15' : '16–EOM'}
                     {row.periodId ? (
                       <Link
-                        href={`/admin/accounting/${row.periodId}`}
+                        href={`/admin/tools/accounting/${row.periodId}`}
                         className="ml-2 text-accent-text hover:underline"
                       >
                         open
@@ -236,7 +236,7 @@ export function YearMatrixClient({ year, periods, members, entries }: YearMatrix
                       >
                         {row.periodId && v > 0 ? (
                           <Link
-                            href={`/admin/accounting/${row.periodId}`}
+                            href={`/admin/tools/accounting/${row.periodId}`}
                             className="hover:text-accent-text"
                           >
                             {content}

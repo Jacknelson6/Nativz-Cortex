@@ -86,11 +86,10 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Manage',
     items: [
-      { href: '/admin/accounting', label: 'Accounting', icon: Receipt },
       { href: '/admin/clients', label: 'Clients', icon: Contact },
       { href: '/admin/pipeline', label: 'Edits', icon: Scissors },
       { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
-      { href: '/admin/tools', label: 'Admin tools', icon: Wrench },
+      { href: '/admin/tools', label: 'Tools', icon: Wrench },
       { href: '/admin/settings/ai', label: 'Settings', icon: SettingsIcon },
     ],
   },
@@ -117,8 +116,13 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
 
   // Settings gear — active on any route that shows the settings secondary rail
   if (href === '/admin/settings/ai') {
-    const SETTINGS_AREAS = ['/admin/users', '/admin/knowledge', '/admin/settings/ai', '/admin/settings/production-updates', '/admin/nerd/api'];
+    const SETTINGS_AREAS = ['/admin/knowledge', '/admin/settings/ai', '/admin/nerd/api'];
     if (SETTINGS_AREAS.some((p) => pathname === p || pathname.startsWith(p + '/'))) return true;
+  }
+
+  // Tools hub — stay active on every /admin/tools/* child (Users, Accounting, Email).
+  if (href === '/admin/tools') {
+    if (pathname === '/admin/tools' || pathname.startsWith('/admin/tools/')) return true;
   }
 
   // Competitor Tracking — active on any route that shows the CT secondary rail
