@@ -257,6 +257,12 @@ export async function PATCH(
           'affiliate_digest_send_day_of_week',
           'affiliate_digest_send_hour',
           'affiliate_digest_send_minute',
+          'social_digest_email_enabled',
+          'social_digest_recipients',
+          'social_digest_timezone',
+          'social_digest_send_day_of_week',
+          'social_digest_send_hour',
+          'social_digest_send_minute',
           'admin_workspace_modules',
         ]
       : portalAllowedFields;
@@ -327,6 +333,48 @@ export async function PATCH(
         );
       }
       updates.affiliate_digest_send_minute = m;
+    }
+
+    // NAT-43 — same schedule validation rules for the branded social digest
+    if ('social_digest_timezone' in updates) {
+      const tz = String(updates.social_digest_timezone ?? '').trim();
+      if (!isValidIanaTimeZone(tz)) {
+        return NextResponse.json(
+          { error: 'social_digest_timezone must be a valid IANA time zone' },
+          { status: 400 },
+        );
+      }
+      updates.social_digest_timezone = tz;
+    }
+    if ('social_digest_send_day_of_week' in updates) {
+      const d = Number(updates.social_digest_send_day_of_week);
+      if (!Number.isInteger(d) || d < 0 || d > 6) {
+        return NextResponse.json(
+          { error: 'social_digest_send_day_of_week must be an integer 0–6 (Sunday–Saturday)' },
+          { status: 400 },
+        );
+      }
+      updates.social_digest_send_day_of_week = d;
+    }
+    if ('social_digest_send_hour' in updates) {
+      const h = Number(updates.social_digest_send_hour);
+      if (!Number.isInteger(h) || h < 0 || h > 23) {
+        return NextResponse.json(
+          { error: 'social_digest_send_hour must be an integer 0–23' },
+          { status: 400 },
+        );
+      }
+      updates.social_digest_send_hour = h;
+    }
+    if ('social_digest_send_minute' in updates) {
+      const m = Number(updates.social_digest_send_minute);
+      if (!Number.isInteger(m) || m < 0 || m > 59) {
+        return NextResponse.json(
+          { error: 'social_digest_send_minute must be an integer 0–59' },
+          { status: 400 },
+        );
+      }
+      updates.social_digest_send_minute = m;
     }
 
     if (Object.keys(updates).length === 0) {

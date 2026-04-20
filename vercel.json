@@ -43,6 +43,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/weekly-social-report",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/topic-search-notify",
       "schedule": "*/5 * * * *"
     },

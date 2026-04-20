@@ -2,6 +2,8 @@ import { Resend } from 'resend';
 import { logUsage } from '@/lib/ai/usage';
 import { getEmailBrand, getEmailLogoUrl } from '@/lib/email/brand-tokens';
 import { buildAffiliateWeeklyReportCardHtml } from '@/lib/email/templates/affiliate-weekly-report-html';
+import { buildWeeklySocialReportCardHtml } from '@/lib/email/templates/weekly-social-report-html';
+import type { WeeklySocialReport } from '@/lib/reporting/weekly-social-report';
 import type { AgencyBrand } from '@/lib/agency/detect';
 
 let _resend: Resend | null = null;
@@ -300,6 +302,46 @@ export async function sendAffiliateWeeklyReportEmail(opts: {
   const result = await getResend().emails.send({
     from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
+    to: opts.to,
+    subject,
+    html: layout(cardHtml, agency),
+  });
+
+  logUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  }).catch(() => {});
+
+  return result;
+}
+
+// ── Weekly branded social report ──────────────────────────────────────────
+
+export async function sendWeeklySocialReportEmail(opts: {
+  to: string[];
+  report: WeeklySocialReport;
+  rangeLabel: string;
+  isTestOverride: boolean;
+  agency?: AgencyBrand;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const subjectPrefix = opts.isTestOverride ? '[Test] ' : '';
+  const subject = `${subjectPrefix}Weekly recap — ${opts.report.clientName} (${opts.rangeLabel})`;
+
+  const cardHtml = buildWeeklySocialReportCardHtml({
+    report: opts.report,
+    rangeLabel: opts.rangeLabel,
+    agency,
+  });
+
+  const result = await getResend().emails.send({
+    from: getFromAddress(agency),
+    replyTo: getReplyTo(agency),
     to: opts.to,
     subject,
     html: layout(cardHtml, agency),
