@@ -19,6 +19,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendClientInviteEmail } from '@/lib/email/resend';
 import { getBrandFromAgency } from '@/lib/agency/use-agency-brand';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 const createInviteSchema = z.object({
   client_id: z.string().uuid(),
@@ -51,6 +52,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'client_id is required' }, { status: 400 });
     }
 
+    // Need the client's agency so the URLs we return point at the matching
+    // Cortex host (AC invites on the AC host, Nativz on nativz.io).
+    const { data: clientRow } = await adminClient
+      .from('clients')
+      .select('agency')
+      .eq('id', clientId)
+      .maybeSingle();
+    const clientAgency = getBrandFromAgency(clientRow?.agency ?? null);
+    const baseUrl = getCortexAppUrl(clientAgency);
+
     const { data: invites, error } = await adminClient
       .from('invite_tokens')
       .select('id, token, expires_at, used_at, used_by, created_at, created_by')
@@ -74,8 +85,6 @@ export async function GET(request: NextRequest) {
         usedByMap[u.id] = { email: u.email, full_name: u.full_name };
       }
     }
-
-    const baseUrl = request.nextUrl.origin;
 
     const enriched = (invites ?? []).map(inv => {
       const now = new Date();
@@ -158,9 +167,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create invite' }, { status: 500 });
     }
 
-    // Use request origin so invite URLs match the domain the admin is on
-    // (cortex.nativz.io or cortex.andersoncollaborative.com)
-    const baseUrl = request.nextUrl.origin;
+    // Resolve agency first, then pick the matching Cortex host so the
+    // invite link in the email points at cortex.andersoncollaborative.com
+    // for AC-themed emails and cortex.nativz.io for Nativz emails —
+    // regardless of which host the admin fired the request from.
+    const agency = getBrandFromAgency(client.agency);
+    const baseUrl = getCortexAppUrl(agency);
     const inviteUrl = `${baseUrl}/portal/join/${invite.token}`;
 
     // If the admin supplied an email, send the branded invite directly.
@@ -175,7 +187,6 @@ export async function POST(request: NextRequest) {
         .eq('id', user.id)
         .single();
       const invitedBy = senderRow?.full_name?.trim() || senderRow?.email || 'your team';
-      const agency = getBrandFromAgency(client.agency);
       try {
         const res = await sendClientInviteEmail({
           to: email,

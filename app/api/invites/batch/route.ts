@@ -14,6 +14,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getBrandFromAgency } from '@/lib/agency/use-agency-brand';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 const schema = z.object({
   client_id: z.string().uuid(),
@@ -52,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     const { data: client } = await adminClient
       .from('clients')
-      .select('id, name, organization_id')
+      .select('id, name, organization_id, agency')
       .eq('id', client_id)
       .single();
 
@@ -76,7 +78,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create invites' }, { status: 500 });
     }
 
-    const baseUrl = request.nextUrl.origin;
+    // Match the email/brand: AC-branded clients get AC-host invite URLs
+    // regardless of which cortex host the admin is on.
+    const baseUrl = getCortexAppUrl(getBrandFromAgency(client.agency));
     const enriched = (invites ?? []).map(inv => ({
       token: inv.token,
       invite_url: `${baseUrl}/portal/join/${inv.token}`,

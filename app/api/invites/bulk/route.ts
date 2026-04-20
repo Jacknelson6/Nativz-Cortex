@@ -17,6 +17,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendClientInviteEmail } from '@/lib/email/resend';
 import { getBrandFromAgency } from '@/lib/agency/use-agency-brand';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 export const maxDuration = 60;
 
@@ -90,7 +91,11 @@ export async function POST(request: NextRequest) {
 
     const invitedBy = userData?.full_name?.trim() || userData?.email || 'your team';
     const agency = getBrandFromAgency(client.agency);
-    const baseUrl = request.nextUrl.origin;
+    // The invite link must live on the host that matches the email branding
+    // (an AC-themed email on a cortex.nativz.io link breaks the brand
+    // experience). Admins can hit this route from either host, so we ignore
+    // `request.nextUrl.origin` here and resolve per-agency.
+    const baseUrl = getCortexAppUrl(agency);
 
     // Create all invite tokens in one insert — we associate each token with a
     // contact by array index rather than running N round-trips.
