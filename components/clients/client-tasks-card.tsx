@@ -60,8 +60,10 @@ export function ClientTasksCard({
     try {
       const res = await fetch(`/api/tasks?client_id=${clientId}`);
       if (!res.ok) throw new Error('Failed to fetch');
-      const data = await res.json();
-      setTasks(data);
+      const data = (await res.json()) as { tasks?: Task[] } | Task[];
+      // Endpoint returns { tasks, is_owner, ... } — tolerate a bare array too
+      // for robustness if callers ever wrap the route differently.
+      setTasks(Array.isArray(data) ? data : Array.isArray(data.tasks) ? data.tasks : []);
     } catch {
       // Silently fail
     } finally {
