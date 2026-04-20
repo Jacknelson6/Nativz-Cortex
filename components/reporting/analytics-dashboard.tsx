@@ -50,8 +50,8 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
     setTopPostsLoading(true);
     const params = new URLSearchParams({
       clientId: selectedClientId,
-      startDate: dateRange.start,
-      endDate: dateRange.end,
+      start: dateRange.start,
+      end: dateRange.end,
       limit: String(topPostsLimit),
     });
     fetch(`/api/reporting/top-posts?${params}`)
