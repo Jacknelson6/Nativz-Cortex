@@ -6,9 +6,11 @@ import { recomputeClientServices } from '@/lib/contracts/recompute-services';
 
 export const dynamic = 'force-dynamic';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function guard(
-  slug: string,
-  id: string,
+  slugOrId: string,
+  contractId: string,
   userId: string,
 ): Promise<{ status: number; error?: string; clientId?: string }> {
   const admin = createAdminClient();
@@ -16,12 +18,17 @@ async function guard(
   if (me?.role !== 'admin' && me?.role !== 'super_admin') {
     return { status: 403, error: 'Forbidden' };
   }
-  const { data: client } = await admin.from('clients').select('id').eq('slug', slug).single();
+  const column = UUID_RE.test(slugOrId) ? 'id' : 'slug';
+  const { data: client } = await admin
+    .from('clients')
+    .select('id')
+    .eq(column, slugOrId)
+    .single();
   if (!client) return { status: 404, error: 'Client not found' };
   const { data: contract } = await admin
     .from('client_contracts')
     .select('id, client_id, file_path')
-    .eq('id', id)
+    .eq('id', contractId)
     .single();
   if (!contract || contract.client_id !== client.id) {
     return { status: 404, error: 'Contract not found' };
@@ -31,14 +38,14 @@ async function guard(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: Promise<{ slug: string; id: string }> },
+  { params }: { params: Promise<{ id: string; contractId: string }> },
 ) {
-  const { slug, id } = await params;
+  const { id, contractId } = await params;
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const g = await guard(slug, id, user.id);
+  const g = await guard(id, contractId, user.id);
   if (g.status !== 200) return NextResponse.json({ error: g.error }, { status: g.status });
 
   const body = await req.json().catch(() => null);
@@ -56,15 +63,15 @@ export async function PATCH(
   if (parsed.data.notes !== undefined) updates.notes = parsed.data.notes ?? null;
 
   if (Object.keys(updates).length) {
-    const { error } = await admin.from('client_contracts').update(updates).eq('id', id);
+    const { error } = await admin.from('client_contracts').update(updates).eq('id', contractId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   if (parsed.data.deliverables) {
-    await admin.from('client_contract_deliverables').delete().eq('contract_id', id);
+    await admin.from('client_contract_deliverables').delete().eq('contract_id', contractId);
     if (parsed.data.deliverables.length) {
       const rows = parsed.data.deliverables.map((d, i) => ({
-        contract_id: id,
+        contract_id: contractId,
         service_tag: d.service_tag.trim(),
         name: d.name.trim(),
         quantity_per_month: d.quantity_per_month,
@@ -82,28 +89,28 @@ export async function PATCH(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: Promise<{ slug: string; id: string }> },
+  { params }: { params: Promise<{ id: string; contractId: string }> },
 ) {
-  const { slug, id } = await params;
+  const { id, contractId } = await params;
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const g = await guard(slug, id, user.id);
+  const g = await guard(id, contractId, user.id);
   if (g.status !== 200) return NextResponse.json({ error: g.error }, { status: g.status });
 
   const admin = createAdminClient();
   const { data: contract } = await admin
     .from('client_contracts')
     .select('file_path')
-    .eq('id', id)
+    .eq('id', contractId)
     .single();
 
   if (contract?.file_path) {
     await admin.storage.from('client-contracts').remove([contract.file_path]);
   }
 
-  const { error } = await admin.from('client_contracts').delete().eq('id', id);
+  const { error } = await admin.from('client_contracts').delete().eq('id', contractId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const services = await recomputeClientServices(g.clientId!);

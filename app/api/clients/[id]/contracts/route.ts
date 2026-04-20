@@ -26,21 +26,28 @@ async function requireAdmin(userId: string) {
   return { ok, email: data?.email ?? null };
 }
 
-async function resolveClient(slug: string) {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Accept either a client slug or UUID. The route now lives under `[id]` to
+ * keep Next.js happy (NAT-52), so callers passing a slug still work.
+ */
+async function resolveClient(slugOrId: string) {
   const admin = createAdminClient();
+  const column = UUID_RE.test(slugOrId) ? 'id' : 'slug';
   const { data } = await admin
     .from('clients')
     .select('id, organization_id')
-    .eq('slug', slug)
+    .eq(column, slugOrId)
     .single();
   return data;
 }
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ slug: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const { slug } = await params;
+  const { id } = await params;
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -49,7 +56,7 @@ export async function GET(
   const { ok } = await requireAdmin(user.id);
   if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const client = await resolveClient(slug);
+  const client = await resolveClient(id);
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
 
   const { data: contracts } = await admin
@@ -72,9 +79,9 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ slug: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const { slug } = await params;
+  const { id } = await params;
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -82,7 +89,7 @@ export async function POST(
   const { ok, email } = await requireAdmin(user.id);
   if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const client = await resolveClient(slug);
+  const client = await resolveClient(id);
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
 
   const form = await req.formData();

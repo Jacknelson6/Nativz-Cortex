@@ -6,11 +6,13 @@ import { recomputeClientServices } from '@/lib/contracts/recompute-services';
 
 export const dynamic = 'force-dynamic';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ slug: string; id: string }> },
+  { params }: { params: Promise<{ id: string; contractId: string }> },
 ) {
-  const { slug, id } = await params;
+  const { id, contractId } = await params;
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -25,17 +27,18 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const column = UUID_RE.test(id) ? 'id' : 'slug';
   const { data: client } = await admin
     .from('clients')
     .select('id')
-    .eq('slug', slug)
+    .eq(column, id)
     .single();
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
 
   const { data: contract } = await admin
     .from('client_contracts')
     .select('id, client_id')
-    .eq('id', id)
+    .eq('id', contractId)
     .single();
   if (!contract || contract.client_id !== client.id) {
     return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
@@ -59,12 +62,12 @@ export async function POST(
   const { error: delErr } = await admin
     .from('client_contract_deliverables')
     .delete()
-    .eq('contract_id', id);
+    .eq('contract_id', contractId);
   if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
 
   if (deliverables.length) {
     const rows = deliverables.map((d, i) => ({
-      contract_id: id,
+      contract_id: contractId,
       service_tag: d.service_tag.trim(),
       name: d.name.trim(),
       quantity_per_month: d.quantity_per_month,
@@ -84,7 +87,7 @@ export async function POST(
       effective_end: effective_end ?? null,
       notes: notes ?? null,
     })
-    .eq('id', id);
+    .eq('id', contractId);
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
   const services = await recomputeClientServices(client.id);
