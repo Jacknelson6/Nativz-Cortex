@@ -3,18 +3,19 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getVaultClientBySlug } from '@/lib/vault/reader';
 
 /**
- * GET /api/clients/vault/[slug]
+ * GET /api/clients/vault/[id]
  *
- * Fetch a client's Obsidian vault profile by slug. Returns the parsed vault document
- * for the client, or 404 if the client is not found in the vault.
+ * Fetch a client's Obsidian vault profile by slug. The URL segment is named
+ * `id` (not `slug`) because Next 15's App Router refuses to compile when
+ * dynamic segments in the same subtree use different names — `app/api/clients/[id]`
+ * already claims `id`. The handler still resolves a client slug string.
  *
  * @auth Required (any authenticated user)
- * @param slug - Client slug matching the vault document filename
  * @returns Client vault profile object
  */
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ slug: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -23,7 +24,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { slug } = await params;
+    const { id: slug } = await params;
     const profile = await getVaultClientBySlug(slug);
 
     if (!profile) {
@@ -32,7 +33,7 @@ export async function GET(
 
     return NextResponse.json(profile);
   } catch (error) {
-    console.error('GET /api/clients/vault/[slug] error:', error);
+    console.error('GET /api/clients/vault/[id] error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
