@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyState } from '@/lib/scheduler/oauth-state';
+import { getZernioApiBase, getZernioApiKey } from '@/lib/posting';
 
 /**
  * GET /api/scheduler/connect/callback
@@ -48,20 +49,71 @@ export async function GET(request: NextRequest) {
 
     const adminClient = createAdminClient();
 
-    if (connectedPlatform && (username || accountId)) {
-      const zernioAccountId = accountId ?? legacyProfileId ?? null;
+    // Zernio's OAuth redirect sometimes omits accountId/username — fall back
+    // to a /v1/accounts lookup so we always persist the right late_account_id
+    // instead of silently dropping the connection on our side.
+    let resolvedAccountId: string | null = accountId ?? legacyProfileId ?? null;
+    let resolvedUsername: string | null = username ?? null;
+    let resolvedPlatform: string | null = connectedPlatform;
 
+    if (!resolvedAccountId || !resolvedPlatform) {
+      try {
+        const { data: client } = await adminClient
+          .from('clients')
+          .select('late_profile_id')
+          .eq('id', clientId)
+          .single();
+
+        if (client?.late_profile_id) {
+          const res = await fetch(`${getZernioApiBase()}/accounts`, {
+            headers: { Authorization: `Bearer ${getZernioApiKey()}` },
+          });
+          if (res.ok) {
+            const body = (await res.json()) as {
+              accounts?: Array<{
+                _id?: string;
+                platform?: string;
+                username?: string;
+                profileId?: { _id?: string } | string;
+                createdAt?: string;
+              }>;
+            };
+            const candidates = (body.accounts ?? [])
+              .filter((a) => {
+                const pid = typeof a.profileId === 'string' ? a.profileId : a.profileId?._id;
+                return pid === client.late_profile_id;
+              })
+              .filter((a) => (platform ? a.platform === platform : true))
+              .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+
+            const newest = candidates[0];
+            if (newest?._id) {
+              resolvedAccountId = newest._id;
+              resolvedUsername = newest.username ?? resolvedUsername;
+              resolvedPlatform = newest.platform ?? resolvedPlatform ?? platform;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('callback /accounts fallback failed:', err);
+      }
+    }
+
+    if (resolvedPlatform && resolvedAccountId) {
       await adminClient
         .from('social_profiles')
-        .upsert({
-          client_id: clientId,
-          platform: connectedPlatform,
-          platform_user_id: username || accountId || '',
-          username: username || '',
-          avatar_url: null,
-          late_account_id: zernioAccountId,
-          is_active: true,
-        }, { onConflict: 'client_id,platform,platform_user_id' });
+        .upsert(
+          {
+            client_id: clientId,
+            platform: resolvedPlatform,
+            platform_user_id: resolvedUsername || resolvedAccountId,
+            username: resolvedUsername ?? '',
+            avatar_url: null,
+            late_account_id: resolvedAccountId,
+            is_active: true,
+          },
+          { onConflict: 'client_id,platform,platform_user_id' },
+        );
     }
 
     return NextResponse.redirect(

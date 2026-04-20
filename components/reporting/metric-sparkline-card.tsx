@@ -1,0 +1,209 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { ResponsiveContainer, AreaChart, Area, Tooltip, XAxis, YAxis } from 'recharts';
+import { TrendingUp, TrendingDown } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import type { MetricCard, TimelinePost } from '@/lib/types/reporting';
+
+function formatNumber(n: number, suffix = ''): string {
+  if (suffix === '%') return `${n.toFixed(2)}%`;
+  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(Math.round(n));
+}
+
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+interface MetricSparklineCardProps {
+  label: string;
+  card: MetricCard;
+  format?: 'number' | 'percent';
+  colorClass?: string;
+  /** Posts published in the window — rendered as markers along the line. */
+  posts?: TimelinePost[];
+}
+
+export function MetricSparklineCard({
+  label,
+  card,
+  format = 'number',
+  colorClass = '#60a5fa',
+  posts = [],
+}: MetricSparklineCardProps) {
+  const suffix = format === 'percent' ? '%' : '';
+  const change = card.changePercent;
+  const hasSeries = card.series.length > 1;
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
+
+  // date → first post on that day. Multiple posts/day collapse so markers
+  // don't stack.
+  const postsByDate = useMemo(() => {
+    const m = new Map<string, TimelinePost>();
+    for (const p of posts) if (!m.has(p.date)) m.set(p.date, p);
+    return m;
+  }, [posts]);
+
+  const gradientId = `grad-${label.replace(/\s/g, '-')}`;
+
+  type DotProps = {
+    cx?: number;
+    cy?: number;
+    payload?: { date?: string };
+  };
+
+  // Overlay markers: a filled ring on the trend line at every post-publish
+  // date. The 9:16 thumbnail lives in the hover tooltip, not on the line
+  // itself, keeping the sparkline readable.
+  const renderDot = (props: DotProps) => {
+    const { cx, cy, payload } = props;
+    if (cx == null || cy == null || !payload?.date) return <g />;
+    const post = postsByDate.get(payload.date);
+    if (!post) return <g />;
+    const isHovered = hoveredDate === payload.date;
+    const r = isHovered ? 5 : 4;
+    const inner = (
+      <g className={post.postUrl ? 'cursor-pointer' : undefined}>
+        <circle cx={cx} cy={cy} r={r + 2} fill={colorClass} opacity={0.22} />
+        <circle cx={cx} cy={cy} r={r} fill={colorClass} stroke="#0f1116" strokeWidth={1.5} />
+      </g>
+    );
+    return post.postUrl ? (
+      <a href={post.postUrl} target="_blank" rel="noopener noreferrer">
+        {inner}
+      </a>
+    ) : (
+      inner
+    );
+  };
+
+  return (
+    <Card className="flex h-full flex-col gap-3 p-4">
+      <div className="flex items-start justify-between">
+        <p className="text-xs font-medium text-text-muted">{label}</p>
+        {change !== 0 && (
+          <span
+            className={`inline-flex items-center gap-0.5 text-[11px] font-medium ${
+              change >= 0 ? 'text-emerald-400' : 'text-red-400'
+            }`}
+          >
+            {change >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+            {change >= 0 ? '+' : ''}
+            {change.toFixed(2)}%
+          </span>
+        )}
+      </div>
+      <p className="text-2xl font-semibold text-text-primary">
+        {formatNumber(card.total, suffix)}
+      </p>
+      {hasSeries && (
+        <div className="h-20 -mx-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={card.series}
+              margin={{ top: 6, bottom: 0, left: 0, right: 0 }}
+              onMouseMove={(s) => {
+                const d = s?.activeLabel;
+                setHoveredDate(typeof d === 'string' ? d : null);
+              }}
+              onMouseLeave={() => setHoveredDate(null)}
+            >
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={colorClass} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={colorClass} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="date" hide />
+              <YAxis hide domain={['auto', 'auto']} />
+              <Tooltip
+                cursor={{ stroke: 'rgba(255,255,255,0.12)', strokeWidth: 1 }}
+                content={(t) => {
+                  const first = t.payload?.[0];
+                  if (!first) return null;
+                  const date = String(first.payload?.date ?? '');
+                  const value = Number(first.value) || 0;
+                  const post = postsByDate.get(date);
+                  return (
+                    <div
+                      style={{
+                        background: 'rgba(15,17,22,0.97)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: 10,
+                        padding: post ? 8 : '6px 8px',
+                        fontSize: 11,
+                        maxWidth: 200,
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                      }}
+                    >
+                      <div style={{ color: 'rgba(255,255,255,0.55)', marginBottom: 2 }}>
+                        {formatDate(date)}
+                      </div>
+                      <div style={{ color: '#fff', fontWeight: 600 }}>
+                        {formatNumber(value, suffix)} {label.toLowerCase()}
+                      </div>
+                      {post && (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            display: 'flex',
+                            gap: 8,
+                            alignItems: 'flex-start',
+                          }}
+                        >
+                          {post.thumbnailUrl && (
+                            <img
+                              src={post.thumbnailUrl}
+                              alt=""
+                              style={{
+                                width: 36,
+                                height: 64,
+                                borderRadius: 4,
+                                objectFit: 'cover',
+                                flexShrink: 0,
+                                border: `1px solid ${colorClass}`,
+                              }}
+                            />
+                          )}
+                          <div style={{ color: 'rgba(255,255,255,0.75)', lineHeight: 1.3 }}>
+                            <div style={{ color: colorClass, fontWeight: 600, marginBottom: 2 }}>
+                              Post published
+                            </div>
+                            {post.caption && (
+                              <div
+                                style={{
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 3,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: 'hidden',
+                                }}
+                              >
+                                {post.caption}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey="value"
+                stroke={colorClass}
+                strokeWidth={1.5}
+                fill={`url(#${gradientId})`}
+                dot={renderDot}
+                activeDot={false}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </Card>
+  );
+}

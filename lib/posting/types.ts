@@ -124,6 +124,8 @@ export interface DailyMetric {
   likes: number;
   comments: number;
   shares: number;
+  saves: number;
+  clicks: number;
   views: number;
   engagement: number;
   engagementRate: number;
@@ -133,6 +135,17 @@ export interface DailyMetric {
 export interface FollowerStats {
   followers: number;
   followerChange: number;
+  /** Growth as a percentage of starting followers (e.g. 4.17 for +4.17%). */
+  growthPercent: number;
+  /** Daily follower counts in the window (may be empty when unsupported). */
+  series: Array<{ date: string; followers: number }>;
+}
+
+export interface InstagramInsights {
+  /** Daily profile-link-tap counts. */
+  profileVisits: Array<{ date: string; value: number }>;
+  /** Daily reach counts (Instagram is the only platform with reach as time series). */
+  reachSeries: Array<{ date: string; value: number }>;
 }
 
 export interface PostAnalyticsItem {
@@ -263,8 +276,8 @@ export interface PostingService {
   /** Get daily aggregate metrics for an account */
   getDailyMetrics(query: DailyMetricsQuery): Promise<DailyMetric[]>;
 
-  /** Get follower stats for an account */
-  getFollowerStats(accountId: string): Promise<FollowerStats>;
+  /** Get follower stats for an account over a date range */
+  getFollowerStats(accountId: string, startDate?: string, endDate?: string): Promise<FollowerStats>;
 
   /** Get per-post analytics for an account */
   getPostAnalytics(query: PostAnalyticsQuery): Promise<PostAnalyticsItem[]>;

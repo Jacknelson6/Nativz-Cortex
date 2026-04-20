@@ -19,6 +19,12 @@ export interface PlatformSnapshot {
   engagement_count: number;
   engagement_rate: number | null;
   posts_count: number;
+  reach_count: number | null;
+  impressions_count: number | null;
+  link_clicks_count: number | null;
+  profile_visits_count: number | null;
+  watch_time_seconds: number | null;
+  follower_growth_percent: number | null;
   created_at: string;
 }
 
@@ -43,6 +49,27 @@ export interface PostMetric {
   fetched_at: string;
 }
 
+export interface MetricSeriesPoint {
+  date: string;
+  value: number;
+}
+
+/** Headline number + prior-period delta % + daily sparkline for one metric. */
+export interface MetricCard {
+  total: number;
+  changePercent: number;
+  series: MetricSeriesPoint[];
+}
+
+/** One post in the window, used to render thumbnails along a sparkline. */
+export interface TimelinePost {
+  date: string;
+  thumbnailUrl: string | null;
+  postUrl: string | null;
+  caption: string | null;
+  views: number;
+}
+
 export interface PlatformSummary {
   platform: SocialPlatform;
   username: string;
@@ -53,6 +80,18 @@ export interface PlatformSummary {
   totalEngagement: number;
   engagementRate: number;
   postsCount: number;
+  /** Per-metric card data; only metrics with non-zero totals populate. */
+  metrics?: {
+    views?: MetricCard;
+    engagement?: MetricCard;
+    engagementRate?: MetricCard;
+    followersGained?: MetricCard;
+    reach?: MetricCard;
+    impressions?: MetricCard;
+    profileVisits?: MetricCard;
+  };
+  /** Posts that published in the window (for the thumbnail overlay). */
+  posts?: TimelinePost[];
 }
 
 export interface ChartDataPoint {

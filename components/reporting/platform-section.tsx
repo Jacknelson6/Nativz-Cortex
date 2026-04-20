@@ -1,10 +1,8 @@
 'use client';
 
-import { Eye, UserPlus, Heart, TrendingUp, FileText } from 'lucide-react';
-import { StatCard } from '@/components/shared/stat-card';
-import { GrowthChart } from './growth-chart';
 import { PlatformBadge } from './platform-badge';
-import type { PlatformSummary, ChartDataPoint, SocialPlatform } from '@/lib/types/reporting';
+import { MetricSparklineCard } from './metric-sparkline-card';
+import type { ChartDataPoint, PlatformSummary, SocialPlatform } from '@/lib/types/reporting';
 
 const PLATFORM_LABELS: Record<string, string> = {
   facebook: 'Facebook',
@@ -13,65 +11,72 @@ const PLATFORM_LABELS: Record<string, string> = {
   youtube: 'YouTube',
 };
 
-function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-
 interface PlatformSectionProps {
   summary: PlatformSummary;
-  chartData: ChartDataPoint[];
+  // Kept for backwards compatibility with the parent dashboard; unused now
+  // that each metric card carries its own sparkline.
+  chartData?: ChartDataPoint[];
 }
 
-export function PlatformSection({ summary, chartData }: PlatformSectionProps) {
+export function PlatformSection({ summary }: PlatformSectionProps) {
   const label = PLATFORM_LABELS[summary.platform] ?? summary.platform;
+  const m = summary.metrics ?? {};
+
+  // Order matches the screenshot the user sent. Cards with no data
+  // (undefined) are filtered out so platforms like Facebook don't show
+  // zeroed-out "Profile visits" cards that Zernio can't fill.
+  const cards: Array<{
+    key: string;
+    label: string;
+    card: NonNullable<PlatformSummary['metrics']>[keyof NonNullable<PlatformSummary['metrics']>];
+    format?: 'number' | 'percent';
+    color: string;
+  }> = [
+    { key: 'views', label: 'Views', card: m.views, color: '#60a5fa' },
+    { key: 'engagement', label: 'Engagement', card: m.engagement, color: '#f472b6' },
+    {
+      key: 'engagementRate',
+      label: 'Engagement rate',
+      card: m.engagementRate,
+      format: 'percent',
+      color: '#a78bfa',
+    },
+    { key: 'followersGained', label: 'Followers gained', card: m.followersGained, color: '#34d399' },
+    { key: 'reach', label: 'Reach', card: m.reach, color: '#fbbf24' },
+    { key: 'impressions', label: 'Impressions', card: m.impressions, color: '#fb7185' },
+    { key: 'profileVisits', label: 'Profile visits', card: m.profileVisits, color: '#22d3ee' },
+  ];
+
+  const visible = cards.filter((c) => c.card !== undefined);
 
   return (
-    <div className="space-y-4">
+    <section className="space-y-4">
       <div className="flex items-center gap-2">
-        <PlatformBadge
-          platform={summary.platform as SocialPlatform}
-          showLabel={false}
-          size="sm"
-        />
+        <PlatformBadge platform={summary.platform as SocialPlatform} showLabel={false} size="sm" />
         <h3 className="text-lg font-semibold text-text-primary">{label}</h3>
         {summary.username && (
           <span className="text-sm text-text-muted">@{summary.username}</span>
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-        <StatCard
-          title="Followers"
-          value={formatNumber(summary.followers)}
-          icon={<UserPlus size={18} />}
-        />
-        <StatCard
-          title="Views"
-          value={formatNumber(summary.totalViews)}
-          icon={<Eye size={18} />}
-        />
-        <StatCard
-          title="Followers gained"
-          value={formatNumber(summary.followerChange)}
-          icon={<UserPlus size={18} />}
-        />
-        <StatCard
-          title="Engagement"
-          value={formatNumber(summary.totalEngagement)}
-          icon={<Heart size={18} />}
-        />
-        <StatCard
-          title="Engagement rate"
-          value={`${summary.engagementRate.toFixed(2)}%`}
-          icon={<TrendingUp size={18} />}
-        />
-      </div>
-
-      {chartData.length > 0 && (
-        <GrowthChart data={chartData} loading={false} />
+      {visible.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-nativz-border bg-surface p-6 text-center text-sm text-text-muted">
+          No data available from Zernio for this platform in the selected window.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {visible.map((c) => (
+            <MetricSparklineCard
+              key={c.key}
+              label={c.label}
+              card={c.card!}
+              format={c.format ?? 'number'}
+              colorClass={c.color}
+              posts={summary.posts ?? []}
+            />
+          ))}
+        </div>
       )}
-    </div>
+    </section>
   );
 }

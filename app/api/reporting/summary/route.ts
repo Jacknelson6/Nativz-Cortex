@@ -3,9 +3,12 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import type {
   DateRange,
+  MetricCard,
+  MetricSeriesPoint,
   PlatformSnapshot,
   PlatformSummary,
   SummaryReport,
+  TimelinePost,
 } from '@/lib/types/reporting';
 
 const querySchema = z.object({
@@ -17,6 +20,31 @@ const querySchema = z.object({
 function calcChange(current: number, previous: number): number {
   if (previous === 0) return current > 0 ? 100 : 0;
   return Math.round(((current - previous) / previous) * 100 * 100) / 100;
+}
+
+/** Build a MetricCard for one numeric column across a set of snapshots. */
+function buildMetricCard(
+  snaps: PlatformSnapshot[],
+  prevSnaps: PlatformSnapshot[],
+  pick: (s: PlatformSnapshot) => number,
+): MetricCard | undefined {
+  let total = 0;
+  const byDay = new Map<string, number>();
+  for (const s of snaps) {
+    const v = pick(s) || 0;
+    total += v;
+    byDay.set(s.snapshot_date, (byDay.get(s.snapshot_date) ?? 0) + v);
+  }
+  const prevTotal = prevSnaps.reduce((sum, s) => sum + (pick(s) || 0), 0);
+  if (total === 0 && prevTotal === 0) return undefined;
+  const series: MetricSeriesPoint[] = [...byDay.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, value]) => ({ date, value }));
+  return {
+    total,
+    changePercent: calcChange(total, prevTotal),
+    series,
+  };
 }
 
 /**
@@ -113,6 +141,34 @@ export async function GET(request: NextRequest) {
         { error: 'Failed to fetch social profiles' },
         { status: 500 },
       );
+    }
+
+    // Query posts that published in this window — used to render 9:16
+     // thumbnails along each platform sparkline so spikes can be mapped to
+     // the content that drove them.
+    const { data: postRows } = await supabase
+      .from('post_metrics')
+      .select(
+        'social_profile_id, platform, published_at, thumbnail_url, post_url, caption, views_count',
+      )
+      .eq('client_id', clientId)
+      .gte('published_at', `${start}T00:00:00`)
+      .lte('published_at', `${end}T23:59:59`)
+      .order('published_at', { ascending: true });
+
+    const postsByProfile = new Map<string, TimelinePost[]>();
+    for (const row of postRows ?? []) {
+      if (!row.social_profile_id || !row.published_at) continue;
+      const date = String(row.published_at).split('T')[0];
+      const list = postsByProfile.get(row.social_profile_id) ?? [];
+      list.push({
+        date,
+        thumbnailUrl: row.thumbnail_url ?? null,
+        postUrl: row.post_url ?? null,
+        caption: row.caption ?? null,
+        views: row.views_count ?? 0,
+      });
+      postsByProfile.set(row.social_profile_id, list);
     }
 
     const snapshots = (currentSnapshots ?? []) as PlatformSnapshot[];
@@ -212,6 +268,57 @@ export async function GET(request: NextRequest) {
       combinedPrevEngRate += prevAvgEngRate;
       platformCount++;
 
+      // Per-metric cards. A card returns undefined when both current and
+      // prior totals are zero so the UI can auto-hide unsupported metrics
+      // (e.g. Facebook has no profile-visits signal from Zernio).
+      const metrics = {
+        views: buildMetricCard(snaps, prevSnapsForProfile, (s) => s.views_count ?? 0),
+        engagement: buildMetricCard(
+          snaps,
+          prevSnapsForProfile,
+          (s) => s.engagement_count ?? 0,
+        ),
+        followersGained: buildMetricCard(
+          snaps,
+          prevSnapsForProfile,
+          (s) => s.followers_change ?? 0,
+        ),
+        reach: buildMetricCard(snaps, prevSnapsForProfile, (s) => s.reach_count ?? 0),
+        impressions: buildMetricCard(
+          snaps,
+          prevSnapsForProfile,
+          (s) => s.impressions_count ?? 0,
+        ),
+        profileVisits: buildMetricCard(
+          snaps,
+          prevSnapsForProfile,
+          (s) => s.profile_visits_count ?? 0,
+        ),
+        engagementRate: (() => {
+          // Engagement rate isn't summable — report the window average and
+          // compare to the prior window average.
+          const cur =
+            snaps.length > 0
+              ? snaps.reduce((sum, s) => sum + (s.engagement_rate ?? 0), 0) / snaps.length
+              : 0;
+          const prev =
+            prevSnapsForProfile.length > 0
+              ? prevSnapsForProfile.reduce((sum, s) => sum + (s.engagement_rate ?? 0), 0) /
+                prevSnapsForProfile.length
+              : 0;
+          if (cur === 0 && prev === 0) return undefined;
+          const byDay = new Map<string, number>();
+          for (const s of snaps) byDay.set(s.snapshot_date, s.engagement_rate ?? 0);
+          return {
+            total: Math.round(cur * 100) / 100,
+            changePercent: calcChange(cur, prev),
+            series: [...byDay.entries()]
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([date, value]) => ({ date, value })),
+          };
+        })(),
+      };
+
       platformSummaries.push({
         platform: profile.platform,
         username: profile.username ?? '',
@@ -222,6 +329,8 @@ export async function GET(request: NextRequest) {
         totalEngagement,
         engagementRate: Math.round(avgEngRate * 100) / 100,
         postsCount,
+        metrics,
+        posts: postsByProfile.get(profileId) ?? [],
       });
     }
 

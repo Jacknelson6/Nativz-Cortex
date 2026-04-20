@@ -30,6 +30,7 @@ export async function syncClientReporting(
   }
 
   const service = getPostingService();
+  const zernio = new ZernioPostingService();
 
   // 1. Query active social profiles connected via Zernio
   const { data: profiles, error: profilesError } = await adminClient
@@ -48,103 +49,104 @@ export async function syncClientReporting(
     return result;
   }
 
-  const snapshotDate = new Date().toISOString().split('T')[0];
-
   // 2. Process each profile via Zernio API
   for (const profile of profiles) {
     const platform = profile.platform as SocialPlatform;
     const lateAccountId = profile.late_account_id as string;
 
-    // 2a. Fetch follower stats + daily metrics → platform_snapshots
+    // 2a. Fetch follower stats + daily metrics + IG-specific insights in parallel.
     try {
-      const [followerStats, dailyMetrics] = await Promise.all([
-        service.getFollowerStats(lateAccountId),
+      const [followerStats, dailyMetrics, igInsights] = await Promise.all([
+        service.getFollowerStats(lateAccountId, dateRange.start, dateRange.end),
         service.getDailyMetrics({
           accountId: lateAccountId,
           startDate: dateRange.start,
           endDate: dateRange.end,
         }),
+        platform === 'instagram'
+          ? zernio.getInstagramInsights(lateAccountId, dateRange.start, dateRange.end)
+          : Promise.resolve({ profileVisits: [], reachSeries: [] }),
       ]);
 
-      // Aggregate daily metrics for the snapshot
-      let totalViews = 0;
-      let totalEngagement = 0;
-      let totalPosts = 0;
-      let avgEngagementRate = 0;
+      // Map follower series + IG series by date for quick lookup when
+      // building per-day snapshot rows.
+      const followersByDay = new Map<string, number>();
+      for (const p of followerStats.series) followersByDay.set(p.date, p.followers);
 
+      const profileVisitsByDay = new Map<string, number>();
+      for (const p of igInsights.profileVisits) profileVisitsByDay.set(p.date, p.value);
+
+      // Prefer IG's time-series reach when present; otherwise the value
+      // from /daily-metrics already lives on each DailyMetric row.
+      const igReachByDay = new Map<string, number>();
+      for (const p of igInsights.reachSeries) igReachByDay.set(p.date, p.value);
+
+      // Write one snapshot row per day in the window so the summary API
+      // can aggregate without double-counting.
       if (dailyMetrics.length > 0) {
-        for (const day of dailyMetrics) {
-          totalViews += day.views ?? day.impressions ?? 0;
-          totalEngagement += day.engagement ?? 0;
-          totalPosts += day.postsCount ?? 0;
+        const rows = dailyMetrics.map((day) => ({
+          social_profile_id: profile.id,
+          client_id: clientId,
+          platform,
+          snapshot_date: day.date,
+          followers_count: followersByDay.get(day.date) ?? 0,
+          followers_change: 0,
+          views_count: day.views,
+          engagement_count: day.engagement,
+          engagement_rate: day.engagementRate,
+          posts_count: day.postsCount,
+          reach_count: igReachByDay.get(day.date) ?? day.reach,
+          impressions_count: day.impressions,
+          link_clicks_count: day.clicks,
+          profile_visits_count: profileVisitsByDay.get(day.date) ?? 0,
+          watch_time_seconds: 0,
+          follower_growth_percent: followerStats.growthPercent,
+        }));
+
+        const { error: snapshotError } = await adminClient
+          .from('platform_snapshots')
+          .upsert(rows, { onConflict: 'social_profile_id,snapshot_date' });
+
+        if (snapshotError) {
+          result.errors.push(
+            `Failed to upsert snapshots for ${platform}: ${snapshotError.message}`,
+          );
         }
-        avgEngagementRate =
-          dailyMetrics.reduce((sum, d) => sum + (d.engagementRate ?? 0), 0) /
-          dailyMetrics.length;
       }
 
-      const { error: snapshotError } = await adminClient
-        .from('platform_snapshots')
-        .upsert(
+      // Record the latest-known follower count as a single-row marker even
+      // when daily-metrics is empty (e.g. an account with no recent posts).
+      if (dailyMetrics.length === 0 && followerStats.followers > 0) {
+        const today = new Date().toISOString().split('T')[0];
+        await adminClient.from('platform_snapshots').upsert(
           {
             social_profile_id: profile.id,
             client_id: clientId,
             platform,
-            snapshot_date: snapshotDate,
+            snapshot_date: today,
             followers_count: followerStats.followers,
             followers_change: followerStats.followerChange,
-            views_count: totalViews,
-            engagement_count: totalEngagement,
-            engagement_rate: avgEngagementRate,
-            posts_count: totalPosts,
+            follower_growth_percent: followerStats.growthPercent,
           },
           { onConflict: 'social_profile_id,snapshot_date' },
         );
-
-      if (snapshotError) {
-        result.errors.push(
-          `Failed to upsert snapshot for ${platform}: ${snapshotError.message}`,
-        );
       }
 
-      // Write today's follower count to platform_follower_daily (source
-      // 'snapshot-rollup'). If Zernio exposes a richer series endpoint we
-      // backfill historical days below with source 'zernio', overwriting
-      // the rollup row for overlap days.
-      await adminClient.from('platform_follower_daily').upsert(
-        {
+      // Mirror the follower series into platform_follower_daily so the
+      // existing follower-growth chart keeps working. Prefer the real
+      // Zernio series; fall back to the 30-day endpoint only if empty.
+      if (followerStats.series.length > 0) {
+        const rows = followerStats.series.map((p) => ({
           social_profile_id: profile.id,
           client_id: clientId,
           platform,
-          day: snapshotDate,
-          followers: followerStats.followers,
-          source: 'snapshot-rollup',
-        },
-        { onConflict: 'social_profile_id,day' },
-      );
-
-      // Ask Zernio for the real 30-day series; null means the plan/platform
-      // doesn't support it and we stick with the rollup.
-      try {
-        const zernio = new ZernioPostingService();
-        const series = await zernio.getFollowerTimeSeries(lateAccountId, 30);
-        if (series && series.length > 0) {
-          const rows = series.map((p) => ({
-            social_profile_id: profile.id,
-            client_id: clientId,
-            platform,
-            day: p.date,
-            followers: p.followers,
-            source: 'zernio' as const,
-          }));
-          await adminClient
-            .from('platform_follower_daily')
-            .upsert(rows, { onConflict: 'social_profile_id,day' });
-        }
-      } catch (err) {
-        // Silent — follower series is a nice-to-have.
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`[reporting] follower series skipped for ${platform}: ${message}`);
+          day: p.date,
+          followers: p.followers,
+          source: 'zernio' as const,
+        }));
+        await adminClient
+          .from('platform_follower_daily')
+          .upsert(rows, { onConflict: 'social_profile_id,day' });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
