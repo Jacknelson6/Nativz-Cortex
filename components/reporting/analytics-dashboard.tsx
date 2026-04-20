@@ -17,7 +17,8 @@ import { PostingCadenceHeatmap } from './posting-cadence-heatmap';
 import { PostDetailsGrid } from './post-details-grid';
 import { DemographicsCard } from './demographics-card';
 import { BestTimeHeatmap } from './best-time-heatmap';
-import { GoogleBusinessCard } from './google-business-card';
+// GoogleBusinessCard moved to the Paid media tab (NAT-37 per NAT-36 spec) —
+// keep the import gone so it's clear this page is organic-social only now.
 import type { TopPostItem } from '@/lib/types/reporting';
 
 const ReportBuilder = dynamic(() => import('./report-builder').then(m => ({ default: m.ReportBuilder })));
@@ -174,40 +175,55 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
           {/* Best time to post — Zernio's historical engagement heatmap. */}
           {selectedClientId && <BestTimeHeatmap clientId={selectedClientId} />}
 
-          {/* Google Business Profile — renders a connect-CTA empty state
-              when the client has no GMB account linked. */}
-          {selectedClientId && dateRange && (
-            <GoogleBusinessCard
-              clientId={selectedClientId}
-              start={dateRange.start}
-              end={dateRange.end}
-            />
-          )}
-
-          {/* Per-platform sections */}
+          {/* Per-platform sections — collapsed by default per NAT-36 v3.
+              TT / IG / YT / FB in priority order; LinkedIn last. */}
           {summary?.platforms && summary.platforms.length > 0 && (
-            <div className="space-y-8 pt-4">
-              <h2 className="text-lg font-semibold text-text-primary border-b border-nativz-border pb-2">
+            <details className="group rounded-xl border border-nativz-border bg-surface">
+              <summary className="flex cursor-pointer items-center justify-between px-5 py-4 text-base font-semibold text-text-primary">
                 Platform breakdown
-              </h2>
-              {(['facebook', 'instagram', 'youtube', 'tiktok', 'linkedin'] as const)
-                .filter((p) => summary.platforms.some((ps) => ps.platform === p))
-                .map((platform) => {
-                  const ps = summary.platforms.find((s) => s.platform === platform)!;
-                  const chartData = summary.platformCharts?.[platform] ?? [];
-                  return (
-                    <PlatformSection
-                      key={platform}
-                      summary={ps}
-                      chartData={chartData}
-                    />
-                  );
-                })}
-            </div>
+                <span className="text-xs font-normal text-text-muted group-open:hidden">
+                  Expand ▾
+                </span>
+                <span className="hidden text-xs font-normal text-text-muted group-open:inline">
+                  Collapse ▴
+                </span>
+              </summary>
+              <div className="space-y-8 border-t border-nativz-border px-5 py-5">
+                {(['tiktok', 'instagram', 'youtube', 'facebook', 'linkedin'] as const)
+                  .filter((p) => summary.platforms.some((ps) => ps.platform === p))
+                  .map((platform) => {
+                    const ps = summary.platforms.find((s) => s.platform === platform)!;
+                    const chartData = summary.platformCharts?.[platform] ?? [];
+                    return (
+                      <PlatformSection
+                        key={platform}
+                        summary={ps}
+                        chartData={chartData}
+                      />
+                    );
+                  })}
+              </div>
+            </details>
           )}
 
-          {/* Audience insights — auto-hides when Zernio doesn't return data. */}
-          {selectedClientId && <AudienceInsightsCard clientId={selectedClientId} />}
+          {/* Audience insights — collapsed by default. Auto-hides further if
+              Zernio doesn't return data once expanded. */}
+          {selectedClientId && (
+            <details className="group rounded-xl border border-nativz-border bg-surface">
+              <summary className="flex cursor-pointer items-center justify-between px-5 py-4 text-base font-semibold text-text-primary">
+                Audience insights
+                <span className="text-xs font-normal text-text-muted group-open:hidden">
+                  Expand ▾
+                </span>
+                <span className="hidden text-xs font-normal text-text-muted group-open:inline">
+                  Collapse ▴
+                </span>
+              </summary>
+              <div className="border-t border-nativz-border px-5 py-5">
+                <AudienceInsightsCard clientId={selectedClientId} />
+              </div>
+            </details>
+          )}
 
           {/* Audience demographics — behind an explicit toggle. Default off so
               the main page reads as platform performance, not audience breakdown. */}

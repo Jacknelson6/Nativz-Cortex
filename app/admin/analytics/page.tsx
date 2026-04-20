@@ -1,18 +1,42 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
-import { AnalyticsLanding } from '@/components/analytics/analytics-landing';
+import {
+  AnalyticsLanding,
+  type TabId,
+  type SubTabId,
+} from '@/components/analytics/analytics-landing';
+
+const VALID_TABS: readonly TabId[] = ['social', 'paid', 'seo', 'affiliates'];
+const VALID_SUBS: readonly SubTabId[] = ['overview', 'benchmarking'];
+
+function normalizeTabs(
+  rawTab: string | undefined,
+  rawSub: string | undefined,
+): { tab: TabId; sub: SubTabId } {
+  // Legacy URL: ?tab=benchmarking → Social / Benchmarking
+  if (rawTab === 'benchmarking') {
+    return { tab: 'social', sub: 'benchmarking' };
+  }
+  const tab = (VALID_TABS as readonly string[]).includes(rawTab ?? '')
+    ? (rawTab as TabId)
+    : 'social';
+  const sub = (VALID_SUBS as readonly string[]).includes(rawSub ?? '')
+    ? (rawSub as SubTabId)
+    : 'overview';
+  return { tab, sub };
+}
 
 export default async function AdminAnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ clientId?: string; tab?: string }>;
+  searchParams: Promise<{ clientId?: string; tab?: string; sub?: string }>;
 }) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/admin/login');
 
-  const { clientId, tab } = await searchParams;
+  const { clientId, tab, sub } = await searchParams;
   const adminClient = createAdminClient();
 
   // Fetch all clients with their social connection status
@@ -47,11 +71,14 @@ export default async function AdminAnalyticsPage({
     connectionStatus: (connectionMap[c.id] ?? 'disconnected') as 'connected' | 'disconnected' | 'paused',
   }));
 
+  const { tab: initialTab, sub: initialSub } = normalizeTabs(tab, sub);
+
   return (
     <AnalyticsLanding
       clients={portfolioClients}
       initialClientId={clientId?.trim() ?? null}
-      initialTab={(tab as 'social' | 'affiliates' | 'benchmarking') ?? 'social'}
+      initialTab={initialTab}
+      initialSub={initialSub}
     />
   );
 }
