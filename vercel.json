@@ -65,6 +65,10 @@
     {
       "path": "/api/cron/ecom-snapshots",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/meta-ad-snapshots",
+      "schedule": "30 7 * * *"
     }
   ]
 }

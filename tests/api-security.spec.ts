@@ -99,6 +99,29 @@ test.describe('API without session', () => {
     expect(res.status()).toBe(401);
   });
 
+  // NAT-22 — Meta Ad Library tracker
+  test('GET /api/meta-ad-tracker/pages without session returns 401', async ({ request }) => {
+    const res = await request.get(
+      '/api/meta-ad-tracker/pages?client_id=00000000-0000-0000-0000-000000000000',
+    );
+    expect(res.status()).toBe(401);
+  });
+
+  test('POST /api/meta-ad-tracker/pages without session returns 401', async ({ request }) => {
+    const res = await request.post('/api/meta-ad-tracker/pages', {
+      data: {
+        client_id: '00000000-0000-0000-0000-000000000000',
+        library_url: 'https://www.facebook.com/ads/library/?view_all_page_id=1',
+      },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test('GET /api/cron/meta-ad-snapshots without bearer returns 401', async ({ request }) => {
+    const res = await request.get('/api/cron/meta-ad-snapshots');
+    expect(res.status()).toBe(401);
+  });
+
   test('GET /api/cron/weekly-social-report without bearer returns 401', async ({ request }) => {
     // Cron-style endpoint but accepts admin session too — no session = 401
     const res = await request.get('/api/cron/weekly-social-report');
