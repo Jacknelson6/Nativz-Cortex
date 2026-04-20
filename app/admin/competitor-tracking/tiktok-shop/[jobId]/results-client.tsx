@@ -6,9 +6,12 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   BadgeCheck,
+  BarChart3,
+  Check,
   Clock,
   Download,
   Loader2,
+  Plus,
   RefreshCw,
   ShoppingBag,
   Store,
@@ -239,6 +242,15 @@ export function TikTokShopResultsClient({ initial }: { initial: SearchRow }) {
           <div className="flex items-center gap-2">
             {search.status === 'completed' && (
               <>
+                {search.client_id && (
+                  <Link
+                    href={`/admin/analytics?clientId=${search.client_id}&tab=benchmarking`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary transition hover:border-accent/40 hover:text-text-primary"
+                  >
+                    <BarChart3 size={14} aria-hidden />
+                    Open in benchmarking
+                  </Link>
+                )}
                 <button
                   type="button"
                   onClick={handleExport}
@@ -392,12 +404,20 @@ export function TikTokShopResultsClient({ initial }: { initial: SearchRow }) {
                               <ScorePill score={c.compositeScore} />
                             </td>
                             <td className="px-3 py-2.5 text-right">
-                              <Link
-                                href={`/admin/competitor-tracking/tiktok-shop/creator/${encodeURIComponent(c.username)}`}
-                                className="inline-flex items-center rounded-md border border-nativz-border bg-background px-2 py-1 text-xs font-medium text-text-secondary transition hover:border-accent/40 hover:text-text-primary"
-                              >
-                                View
-                              </Link>
+                              <div className="inline-flex items-center gap-1">
+                                {search.client_id && (
+                                  <TrackInBenchmarksButton
+                                    clientId={search.client_id}
+                                    username={c.username}
+                                  />
+                                )}
+                                <Link
+                                  href={`/admin/competitor-tracking/tiktok-shop/creator/${encodeURIComponent(c.username)}`}
+                                  className="inline-flex items-center rounded-md border border-nativz-border bg-background px-2 py-1 text-xs font-medium text-text-secondary transition hover:border-accent/40 hover:text-text-primary"
+                                >
+                                  View
+                                </Link>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -546,5 +566,71 @@ function ScorePill({ score }: { score: number }) {
     >
       {score}
     </span>
+  );
+}
+
+function TrackInBenchmarksButton({
+  clientId,
+  username,
+}: {
+  clientId: string;
+  username: string;
+}) {
+  const [state, setState] = useState<'idle' | 'saving' | 'tracked'>('idle');
+
+  async function handleClick() {
+    if (state !== 'idle') return;
+    setState('saving');
+    try {
+      const res = await fetch('/api/analytics/competitors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: clientId,
+          platform: 'tiktok',
+          profile_url: `https://www.tiktok.com/@${username}`,
+          username,
+        }),
+      });
+      const data = await res.json().catch(() => ({ error: 'Failed to track' }));
+      if (res.ok) {
+        toast.success(`Tracking @${username}`);
+        setState('tracked');
+        return;
+      }
+      if (res.status === 409) {
+        toast.info(`@${username} is already tracked`);
+        setState('tracked');
+        return;
+      }
+      toast.error(data.error ?? 'Could not add competitor');
+      setState('idle');
+    } catch {
+      toast.error('Could not add competitor');
+      setState('idle');
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={state !== 'idle'}
+      title={state === 'tracked' ? 'Tracked in benchmarks' : 'Add to benchmarks'}
+      className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium transition ${
+        state === 'tracked'
+          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+          : 'border-accent/35 bg-accent/10 text-accent-text hover:bg-accent/15'
+      } disabled:opacity-60`}
+    >
+      {state === 'saving' ? (
+        <Loader2 size={12} className="animate-spin" aria-hidden />
+      ) : state === 'tracked' ? (
+        <Check size={12} aria-hidden />
+      ) : (
+        <Plus size={12} aria-hidden />
+      )}
+      <span className="ml-1">{state === 'tracked' ? 'Tracked' : 'Track'}</span>
+    </button>
   );
 }
