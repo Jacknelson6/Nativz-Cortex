@@ -128,18 +128,39 @@ export function AnalyticsLanding({ clients, initialClientId, initialTab }: Analy
       )}
       {activeTab === 'benchmarking' && (
         <div className="space-y-8">
-          <BenchmarkingDashboard
-            clientId={selectedClientId}
-            clientName={selectedClient?.name ?? 'Client'}
-          />
-          {/* Audit-driven benchmarks — Phase 3: reads from the
-              client_benchmarks + benchmark_snapshots tables that
-              Analyze Social's "Attach to client" button writes to. */}
+          <header>
+            <h2 className="text-lg font-semibold text-text-primary">
+              Benchmarking
+            </h2>
+            <p className="mt-0.5 text-sm text-text-secondary">
+              How {selectedClient?.name ?? 'this client'} stacks up against tracked competitors and
+              audit-driven peers. Add new competitors from Competitor Spying.
+            </p>
+          </header>
+
           <section>
             <div className="mb-3 flex items-baseline justify-between">
-              <h2 className="text-base font-semibold text-text-primary">
-                From Analyze Social audits
-              </h2>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
+                Tracked competitors
+              </h3>
+              <p className="text-xs text-text-muted/70">
+                Added manually — refreshable on demand.
+              </p>
+            </div>
+            <BenchmarkingDashboard
+              clientId={selectedClientId}
+              clientName={selectedClient?.name ?? 'Client'}
+            />
+          </section>
+
+          {/* Audit-driven benchmarks — reads client_benchmarks +
+              benchmark_snapshots populated by Analyze Social's
+              "Attach to client" button. */}
+          <section>
+            <div className="mb-3 flex items-baseline justify-between">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
+                Audit-driven benchmarks
+              </h3>
               <p className="text-xs text-text-muted/70">
                 Updated on the configured cadence per attached audit.
               </p>
