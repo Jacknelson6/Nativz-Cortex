@@ -220,12 +220,6 @@ export function ClientAccessServicesPanel({ slug }: { slug: string }) {
                 description="Let portal users edit tone, topics, and seasonal priorities"
               />
               <Toggle
-                checked={flags.can_submit_ideas}
-                onChange={(v) => setFlag('can_submit_ideas', v)}
-                label="Ideas hub"
-                description="Submit and view content ideas"
-              />
-              <Toggle
                 checked={flags.can_view_notifications}
                 onChange={(v) => setFlag('can_view_notifications', v)}
                 label="Notifications"
