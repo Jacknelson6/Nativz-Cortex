@@ -53,8 +53,32 @@ export async function POST(request: NextRequest) {
     .eq('id', parsed.data.period_id)
     .single();
   if (!period) return NextResponse.json({ error: 'Period not found' }, { status: 404 });
-  if (period.status === 'paid') {
-    return NextResponse.json({ error: 'Cannot add entries to a paid period' }, { status: 400 });
+  if (period.status !== 'draft') {
+    return NextResponse.json(
+      {
+        error:
+          period.status === 'paid'
+            ? 'Cannot add entries to a paid period'
+            : 'Cannot add entries to a locked period — unlock it first',
+      },
+      { status: 400 },
+    );
+  }
+
+  const bloggingViolation = parsed.data.entries.findIndex(
+    (e) =>
+      e.entry_type === 'blogging' &&
+      ((e.video_count ?? 0) > 0 || (e.rate_cents ?? 0) > 0),
+  );
+  if (bloggingViolation >= 0) {
+    return NextResponse.json(
+      {
+        error:
+          `Entry #${bloggingViolation + 1}: blogging entries are flat-amount only — ` +
+          'video_count and rate_cents must be 0',
+      },
+      { status: 400 },
+    );
   }
 
   const rows = parsed.data.entries.map((e) => ({

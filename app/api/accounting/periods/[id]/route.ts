@@ -64,6 +64,36 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
 
+  // Enforce the draft → locked → paid lifecycle. The UI hides "Mark paid"
+  // until the period is locked, but the raw API was letting a draft jump
+  // straight to paid, bypassing the review step.
+  if (parsed.data.status !== undefined) {
+    const { data: current } = await ctx.adminClient
+      .from('payroll_periods')
+      .select('status')
+      .eq('id', id)
+      .single();
+    if (!current) {
+      return NextResponse.json({ error: 'Period not found' }, { status: 404 });
+    }
+    const allowed: Record<string, string[]> = {
+      draft: ['draft', 'locked'],
+      locked: ['draft', 'locked', 'paid'],
+      paid: ['paid'],
+    };
+    const nextStatuses = allowed[current.status] ?? [];
+    if (!nextStatuses.includes(parsed.data.status)) {
+      return NextResponse.json(
+        {
+          error:
+            `Cannot move period from "${current.status}" to "${parsed.data.status}". ` +
+            `Allowed: ${nextStatuses.join(', ')}.`,
+        },
+        { status: 422 },
+      );
+    }
+  }
+
   const update: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.status === 'locked') update.locked_at = new Date().toISOString();
   if (parsed.data.status === 'paid') update.paid_at = new Date().toISOString();

@@ -48,8 +48,29 @@ export async function POST(request: NextRequest) {
     .eq('id', parsed.data.period_id)
     .single();
   if (!period) return NextResponse.json({ error: 'Period not found' }, { status: 404 });
-  if (period.status === 'paid') {
-    return NextResponse.json({ error: 'Cannot add entries to a paid period' }, { status: 400 });
+  if (period.status !== 'draft') {
+    return NextResponse.json(
+      {
+        error:
+          period.status === 'paid'
+            ? 'Cannot add entries to a paid period'
+            : 'Cannot add entries to a locked period — unlock it first',
+      },
+      { status: 400 },
+    );
+  }
+
+  // Blogging is flat-amount only per team policy — reject attempts to stuff
+  // per-video math onto a blogging entry so the drill-in drawer's totals stay
+  // meaningful.
+  if (
+    parsed.data.entry_type === 'blogging' &&
+    ((parsed.data.video_count ?? 0) > 0 || (parsed.data.rate_cents ?? 0) > 0)
+  ) {
+    return NextResponse.json(
+      { error: 'Blogging entries are flat-amount only — video_count and rate_cents must be 0' },
+      { status: 400 },
+    );
   }
 
   const { data, error } = await ctx.adminClient
