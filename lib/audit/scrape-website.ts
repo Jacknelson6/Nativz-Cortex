@@ -44,7 +44,18 @@ const SOCIAL_PATTERNS: { platform: AuditPlatform; regex: RegExp; extractUsername
   {
     platform: 'youtube',
     regex: /(?:https?:)?\/\/(?:www\.)?youtube\.com\/(@[\w-]+|channel\/[\w-]+|c\/[\w-]+)\/?/gi,
-    extractUsername: (url) => url.match(/youtube\.com\/(@?[\w-]+|channel\/[\w-]+|c\/[\w-]+)/)?.[1] ?? '',
+    extractUsername: (url) => {
+      // /@handle → "handle"; /channel/UCxxx → "UCxxx"; /c/custom → "custom".
+      // The old regex had a single alternation that grabbed the *first* path
+      // segment ("channel" or "c") instead of the identifier that follows.
+      const atMatch = url.match(/youtube\.com\/@([\w-]+)/i);
+      if (atMatch) return atMatch[1];
+      const channelMatch = url.match(/youtube\.com\/channel\/([\w-]+)/i);
+      if (channelMatch) return channelMatch[1];
+      const customMatch = url.match(/youtube\.com\/c\/([\w-]+)/i);
+      if (customMatch) return customMatch[1];
+      return '';
+    },
   },
   {
     platform: 'linkedin',

@@ -315,6 +315,27 @@ function CompetitorRow({ latest }: { latest: Snapshot }) {
         </div>
       )}
 
+      {(() => {
+        const ageMs = Date.now() - new Date(latest.captured_at).getTime();
+        const stale = ageMs > 7 * 24 * 60 * 60 * 1000;
+        return (
+          <p className={`text-[10px] ${stale ? 'text-amber-400' : 'text-text-muted/70'}`}>
+            Last updated:{' '}
+            {new Date(latest.captured_at).toLocaleString([], {
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+            })}
+            {stale && (
+              <span className="ml-1.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 font-medium">
+                stale
+              </span>
+            )}
+          </p>
+        );
+      })()}
+
       {(latest.new_posts?.length ?? 0) > 0 && (
         <div className="space-y-1 border-t border-nativz-border/40 pt-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted/60">
