@@ -9,3 +9,28 @@ test.describe('Legacy redirects', () => {
     });
   }
 });
+
+/**
+ * Tools-section legacy URLs — pages physically moved under /admin/tools/*
+ * in April 2026 but these old paths still render a redirect shell. Logged-out
+ * hits still bounce through /admin/login because the new canonical route is
+ * also admin-protected; logged-in hits (covered in admin-authenticated-crawl)
+ * land on the new URL. This suite only guarantees the old routes don't 404.
+ */
+test.describe('Tools section legacy redirects', () => {
+  const legacyToNew: Array<[string, string]> = [
+    ['/admin/accounting', '/admin/tools/accounting'],
+    ['/admin/accounting/year', '/admin/tools/accounting/year'],
+    ['/admin/users', '/admin/tools/users'],
+    ['/admin/settings/production-updates', '/admin/tools/email'],
+    ['/admin/team', '/admin/tools/users'],
+  ];
+  for (const [legacy] of legacyToNew) {
+    test(`${legacy} still responds (not 404)`, async ({ page }) => {
+      const res = await page.goto(legacy, { waitUntil: 'domcontentloaded' });
+      // Either a 2xx (logged-in redirect already chased) or a 3xx (redirect to
+      // login first). 404 means the legacy route is genuinely gone.
+      expect(res?.status(), `${legacy} returned ${res?.status()}`).toBeLessThan(404);
+    });
+  }
+});

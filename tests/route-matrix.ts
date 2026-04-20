@@ -28,6 +28,11 @@ export const ADMIN_PROTECTED_ROUTES: string[] = [
   '/admin/presentations',
   '/admin/ad-creatives',
   '/admin/team',
+  '/admin/tools',
+  '/admin/tools/users',
+  '/admin/tools/accounting',
+  '/admin/tools/accounting/year',
+  '/admin/tools/email',
 ];
 
 /** Expect unauthenticated session → final URL matches /portal/login */
