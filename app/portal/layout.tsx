@@ -257,6 +257,7 @@ export default async function PortalLayout({
           brands={brandData.brands}
           activeBrandId={brandData.activeBrandId}
           hiddenSidebarItems={hiddenSidebarItems}
+          isAdmin={isAdminInPortal}
         />
         <SidebarInset>
           <AdminHeader />

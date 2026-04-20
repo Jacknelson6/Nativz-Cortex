@@ -246,6 +246,10 @@ interface AdminSidebarProps {
   /** Per-user hidden nav items (hrefs). Settings + Dashboard can't be hidden
    *  — they're filtered out of the hidden list to keep an escape hatch. */
   hiddenSidebarItems?: string[];
+  /** True when the current user is an admin (independent of `role`, which
+   *  controls nav visibility). Drives the avatar-popover "Client view"
+   *  picker that admin keeps available even when viewing portal as `viewer`. */
+  isAdmin?: boolean;
 }
 
 /** Items that can never be hidden — there'd be no way back to Settings otherwise. */
@@ -265,7 +269,9 @@ export function AdminSidebar({
   brands,
   activeBrandId,
   hiddenSidebarItems = [],
+  isAdmin,
 }: AdminSidebarProps) {
+  const showClientViewPicker = isAdmin ?? role === 'admin';
   const hiddenSet = new Set(
     hiddenSidebarItems.filter((href) => !UNHIDABLE_HREFS.has(href)),
   );
@@ -488,7 +494,7 @@ export function AdminSidebar({
           settingsHref={settingsPath}
           logoutRedirect={logoutPath}
           collapsed={!open}
-          clientViewHref={role === 'admin' ? '/portal' : undefined}
+          clientViewHref={showClientViewPicker ? '/portal' : undefined}
         />
 
         {/* Sidebar layout mode picker — Expanded / Collapsed / Hover */}
