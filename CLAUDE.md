@@ -68,9 +68,11 @@ Detailed docs live in `docs/` — read only when needed for the current task:
 
 Do these at the start of every session:
 
-1. Run `git status` — if there are uncommitted changes, ask the user whether to commit, stash, or discard them before starting new work. Don't silently ignore dirty state.
-2. Read **`todo.md`** — Current status, what's done, what's left, priorities
-3. Reference **`docs/detail-design-patterns.md`** when implementing any UI component
+1. **Check Linear.** The `SessionStart` hook runs `scripts/linear-todos.sh` and injects any open issues assigned to Jack into your context. If that list is non-empty, your *first* response should ask which issue to work on (grouped by priority) — don't pick one unilaterally, and don't start work until Jack picks or says "something else". If the injection is empty, Linear either had nothing open or was unreachable — proceed normally.
+2. Run `git status` — if there are uncommitted changes, ask the user whether to commit, stash, or discard them before starting new work. Don't silently ignore dirty state.
+3. Read **`todo.md`** — Current status, what's done, what's left, priorities
+4. Reference **`docs/detail-design-patterns.md`** when implementing any UI component
+5. For deep handoff context after a long break, read **`docs/session-passoff-2026-04-19.md`** (or the latest dated pass-off doc in `docs/`).
 
 ## Supabase MCP (Nativz Cortex)
 
