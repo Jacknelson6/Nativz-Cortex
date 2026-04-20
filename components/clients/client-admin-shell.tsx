@@ -8,6 +8,7 @@ import {
   BookOpen,
   Building2,
   Dna,
+  FileText,
   Image as ImageIcon,
   LayoutDashboard,
   Settings2,
@@ -28,6 +29,7 @@ const NAV = [
   { key: 'moodboard', label: 'Notes', icon: StickyNote, path: '/moodboard' },
   { key: 'knowledge', label: 'Knowledge', icon: BookOpen, path: '/knowledge' },
   { key: 'ad-creatives', label: 'Ad creatives', icon: ImageIcon, path: '/ad-creatives' },
+  { key: 'contract', label: 'Contract', icon: FileText, path: '/contract' },
   { key: 'settings', label: 'Settings', icon: Settings2, path: '/settings' },
 ] as const;
 
