@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Users, Megaphone, ShoppingBag, Facebook, Store, ChevronLeft } from 'lucide-react';
+import { Users, ShoppingBag, Facebook, Store, ChevronLeft } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Route matcher — which admin routes show the Competitor Tracking rail
@@ -34,7 +34,6 @@ const ITEMS: CtItem[] = [
   { href: '/admin/analyze-social', label: 'Organic Social', icon: Users },
   { href: '/admin/competitor-tracking/meta-ads', label: 'Meta Ads', icon: Facebook },
   { href: '/admin/competitor-tracking/ecom', label: 'Ecom stores', icon: Store },
-  { href: '/admin/competitor-tracking/social-ads', label: 'Social Ads (other)', icon: Megaphone, comingSoon: true },
   { href: '/admin/competitor-tracking/tiktok-shop', label: 'TikTok Shop', icon: ShoppingBag },
 ];
 

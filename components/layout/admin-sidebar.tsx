@@ -171,7 +171,6 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/settings/ai',
   // Competitor Tracking secondary rail — all children are admin-only.
   '/admin/competitor-tracking',
-  '/admin/competitor-tracking/social-ads',
   '/admin/competitor-tracking/tiktok-shop',
 ]);
 
@@ -466,35 +465,8 @@ export function AdminSidebar({
 
       </SidebarContent>
 
-      {/* Footer: The Nerd + account */}
+      {/* Footer: account */}
       <SidebarFooter className="border-t-0">
-        {/* The Nerd — flat nav-row style, matches the rest of the rail */}
-        <div className={role === 'viewer' ? 'opacity-40 pointer-events-none' : undefined} title={role === 'viewer' ? 'Coming soon' : undefined}>
-          <Link
-            href={role === 'viewer' ? '#' : `${routePrefix}/nerd`}
-            className="flex w-full items-center min-h-[40px] text-[15px]"
-          >
-            <span
-              className={`flex items-center rounded-md px-2 py-1.5 transition-colors duration-150 ${
-                open ? 'w-full' : ''
-              } ${
-                isActivePath(pathname, '/admin/nerd')
-                  ? 'bg-accent-surface text-text-primary font-semibold'
-                  : 'text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium'
-              }`}
-            >
-              <BotMessageSquare size={18} className="shrink-0" />
-              <span
-                className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
-                  open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
-                }`}
-              >
-                The Nerd
-              </span>
-            </span>
-          </Link>
-        </div>
-
         <SidebarAccount
           userName={userName}
           avatarUrl={avatarUrl}
