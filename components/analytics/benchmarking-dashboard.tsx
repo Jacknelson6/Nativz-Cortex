@@ -72,6 +72,7 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
   const [adding, setAdding] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [resolved, setResolved] = useState<ResolvedSocials | null>(null);
+  const [selectedProfiles, setSelectedProfiles] = useState<Set<string>>(new Set());
   const [discovering, setDiscovering] = useState(false);
   const [suggestions, setSuggestions] = useState<{ username: string; reason: string }[] | null>(null);
 
@@ -113,7 +114,16 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
         setShowAddForm(false);
       } else {
         setResolved(data);
-        if ((data.socials ?? []).length === 0) {
+        // Default the selection to TikTok + IG (the platforms most clients
+        // care about), falling back to "everything" if neither exists on the
+        // site. Keyed by `${platform}-${username}` to match the picker below.
+        const defaults = new Set<string>();
+        const socials = (data.socials ?? []) as ResolvedSocials['socials'];
+        const preferred = socials.filter((s) => s.platform === 'tiktok' || s.platform === 'instagram');
+        const seed = preferred.length > 0 ? preferred : socials;
+        for (const s of seed) defaults.add(`${s.platform}-${s.username}`);
+        setSelectedProfiles(defaults);
+        if (socials.length === 0) {
           toast.message('No social profiles found on that site.');
         }
       }
@@ -154,6 +164,74 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
   async function handleAddFromSuggestion(username: string) {
     await addProfile('tiktok', username, `https://www.tiktok.com/@${username}`);
     setSuggestions(prev => prev?.filter(s => s.username !== username) ?? null);
+  }
+
+  function toggleResolvedProfile(platform: string, username: string) {
+    const key = `${platform}-${username}`;
+    setSelectedProfiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  async function handleBulkAddResolved() {
+    if (!resolved || selectedProfiles.size === 0) return;
+    const picks = resolved.socials.filter((s) =>
+      selectedProfiles.has(`${s.platform}-${s.username}`),
+    );
+    if (picks.length === 0) return;
+
+    setAdding(true);
+    let added = 0;
+    let duplicates = 0;
+    let failed = 0;
+    for (const s of picks) {
+      try {
+        const res = await fetch('/api/analytics/competitors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_id: clientId,
+            profile_url: s.profile_url,
+            platform: s.platform,
+            username: s.username,
+          }),
+        });
+        if (res.ok) {
+          added++;
+          toast.success(`@${s.username} added`);
+        } else if (res.status === 409) {
+          duplicates++;
+          toast.info(`@${s.username} already tracked`);
+        } else {
+          failed++;
+          const data = await res.json().catch(() => ({ error: 'Failed to add' }));
+          toast.error(`@${s.username}: ${data.error ?? 'failed'}`);
+        }
+      } catch {
+        failed++;
+        toast.error(`@${s.username}: network error`);
+      }
+    }
+    setAdding(false);
+
+    // Tally line so the user gets a single summary after the per-item toasts.
+    const parts = [
+      added > 0 ? `${added} added` : null,
+      duplicates > 0 ? `${duplicates} already tracked` : null,
+      failed > 0 ? `${failed} failed` : null,
+    ].filter(Boolean);
+    if (parts.length > 0) toast.message(parts.join(' · '));
+
+    if (added > 0 || duplicates > 0) {
+      await fetchCompetitors();
+      setShowAddForm(false);
+      setAddInput('');
+      setResolved(null);
+      setSelectedProfiles(new Set());
+    }
   }
 
   async function handleRefresh(competitorId: string) {
@@ -262,33 +340,75 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
 
           {resolved && resolved.kind === 'socials' && (
             <div className="space-y-2">
-              <p className="text-xs text-text-muted">
-                Found on <span className="text-text-secondary">{resolved.domain}</span>:
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-text-muted">
+                  Found <span className="text-text-secondary">{resolved.socials.length}</span>{' '}
+                  socials on <span className="text-text-secondary">{resolved.domain}</span>
+                </p>
+                {resolved.socials.length > 0 && (
+                  <button
+                    type="button"
+                    className="text-[11px] text-accent-text hover:text-accent"
+                    onClick={() => {
+                      const all = new Set(resolved.socials.map((s) => `${s.platform}-${s.username}`));
+                      setSelectedProfiles(
+                        selectedProfiles.size === all.size ? new Set() : all,
+                      );
+                    }}
+                  >
+                    {selectedProfiles.size === resolved.socials.length ? 'Clear all' : 'Select all'}
+                  </button>
+                )}
+              </div>
               {resolved.socials.length === 0 ? (
                 <p className="text-xs text-text-muted">No social profiles on that page.</p>
               ) : (
-                <div className="space-y-1.5">
-                  {resolved.socials.map((s) => (
-                    <div
-                      key={`${s.platform}-${s.username}`}
-                      className="flex items-center justify-between rounded-lg border border-nativz-border bg-background px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <PlatformBadge platform={s.platform as SocialPlatform} size="sm" showLabel={false} />
-                        <span className="text-sm text-text-primary">@{s.username}</span>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={adding}
-                        onClick={() => addProfile(s.platform, s.username, s.profile_url)}
-                      >
-                        <Check size={12} /> Add
-                      </Button>
-                    </div>
-                  ))}
-                </div>
+                <>
+                  <div className="space-y-1.5">
+                    {resolved.socials.map((s) => {
+                      const key = `${s.platform}-${s.username}`;
+                      const checked = selectedProfiles.has(key);
+                      return (
+                        <label
+                          key={key}
+                          className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 transition-colors ${
+                            checked
+                              ? 'border-accent/40 bg-accent-surface/20'
+                              : 'border-nativz-border bg-background hover:border-nativz-border/80'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleResolvedProfile(s.platform, s.username)}
+                              className="h-3.5 w-3.5 cursor-pointer rounded border-nativz-border bg-background accent-accent"
+                            />
+                            <PlatformBadge
+                              platform={s.platform as SocialPlatform}
+                              size="sm"
+                              showLabel={false}
+                            />
+                            <span className="text-sm text-text-primary">@{s.username}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={adding || selectedProfiles.size === 0}
+                    onClick={() => void handleBulkAddResolved()}
+                    className="w-full"
+                  >
+                    {adding ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Check size={12} />
+                    )}
+                    Add {selectedProfiles.size || ''} competitor{selectedProfiles.size === 1 ? '' : 's'}
+                  </Button>
+                </>
               )}
             </div>
           )}
