@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Save, Loader2, Pencil, X, Sparkles, DollarSign } from 'lucide-react';
+import { Save, Loader2, Pencil, X, Sparkles, DollarSign, ExternalLink } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,8 @@ type BrandPayload = {
   description: string | null;
   services: string[] | null;
   monthly_boosting_budget: number | null;
+  google_drive_branding_url: string | null;
+  google_drive_calendars_url: string | null;
 };
 
 export function BrandSettingsForm({ slug }: { slug: string }) {
@@ -31,6 +33,8 @@ export function BrandSettingsForm({ slug }: { slug: string }) {
   const [topicKeywords, setTopicKeywords] = useState('');
   const [description, setDescription] = useState('');
   const [boostingBudget, setBoostingBudget] = useState('');
+  const [brandingUrl, setBrandingUrl] = useState('');
+  const [calendarsUrl, setCalendarsUrl] = useState('');
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -54,6 +58,8 @@ export function BrandSettingsForm({ slug }: { slug: string }) {
         setTopicKeywords((c.topic_keywords ?? []).join(', '));
         setDescription(c.description ?? '');
         setBoostingBudget(c.monthly_boosting_budget != null ? String(c.monthly_boosting_budget) : '');
+        setBrandingUrl(c.google_drive_branding_url ?? '');
+        setCalendarsUrl(c.google_drive_calendars_url ?? '');
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load');
       } finally {
@@ -109,6 +115,8 @@ export function BrandSettingsForm({ slug }: { slug: string }) {
           topic_keywords: topicKeywords.split(',').map((k) => k.trim()).filter(Boolean),
           description: description.trim() || null,
           monthly_boosting_budget: boostingBudget.trim() ? Number(boostingBudget.trim()) : null,
+          google_drive_branding_url: brandingUrl.trim() || null,
+          google_drive_calendars_url: calendarsUrl.trim() || null,
         }),
       });
       if (!res.ok) {
@@ -154,6 +162,8 @@ export function BrandSettingsForm({ slug }: { slug: string }) {
               setTopicKeywords((client.topic_keywords ?? []).join(', '));
               setDescription(client.description ?? '');
               setBoostingBudget(client.monthly_boosting_budget != null ? String(client.monthly_boosting_budget) : '');
+              setBrandingUrl(client.google_drive_branding_url ?? '');
+              setCalendarsUrl(client.google_drive_calendars_url ?? '');
               setEditing(false);
             }}>
               <X size={14} />
@@ -228,6 +238,27 @@ export function BrandSettingsForm({ slug }: { slug: string }) {
               </div>
               <p className="text-xs text-text-muted mt-1">Monthly. Used for reporting + recommendations.</p>
             </div>
+            <div className="pt-2 border-t border-nativz-border">
+              <p className="text-xs font-medium text-text-muted mb-3">Shared drive links</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Input
+                  id="google_drive_branding_url"
+                  label="Branding assets"
+                  type="url"
+                  value={brandingUrl}
+                  onChange={(e) => setBrandingUrl(e.target.value)}
+                  placeholder="https://drive.google.com/…"
+                />
+                <Input
+                  id="google_drive_calendars_url"
+                  label="Content calendars"
+                  type="url"
+                  value={calendarsUrl}
+                  onChange={(e) => setCalendarsUrl(e.target.value)}
+                  placeholder="https://drive.google.com/…"
+                />
+              </div>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
@@ -257,9 +288,34 @@ export function BrandSettingsForm({ slug }: { slug: string }) {
                 value={client.monthly_boosting_budget ? `$${client.monthly_boosting_budget.toLocaleString()}/mo` : ''}
               />
             </div>
+            <div className="pt-3 mt-1 border-t border-nativz-border grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <DriveLink label="Branding assets" href={client.google_drive_branding_url} />
+              <DriveLink label="Content calendars" href={client.google_drive_calendars_url} />
+            </div>
           </div>
         )}
       </Card>
     </form>
+  );
+}
+
+function DriveLink({ label, href }: { label: string; href: string | null }) {
+  return (
+    <div>
+      <span className="block text-xs font-medium text-text-muted mb-1">{label}</span>
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-accent-text hover:underline break-all"
+        >
+          <ExternalLink size={12} />
+          Open in Drive
+        </a>
+      ) : (
+        <p className="text-sm text-text-muted italic">Not set</p>
+      )}
+    </div>
   );
 }
