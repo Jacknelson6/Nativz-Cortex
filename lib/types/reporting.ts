@@ -101,6 +101,17 @@ export interface ChartDataPoint {
   followers: number;
 }
 
+export interface PlatformBreakdownRow {
+  platform: SocialPlatform;
+  username: string;
+  followers: number;
+  followerChange: number;
+  views: number;
+  engagement: number;
+  engagementRate: number;
+  postsCount: number;
+}
+
 export interface SummaryReport {
   combined: {
     totalFollowers?: number;
@@ -117,6 +128,10 @@ export interface SummaryReport {
   dateRange: DateRange;
   chart?: ChartDataPoint[];
   platformCharts?: Record<SocialPlatform, ChartDataPoint[]>;
+  /** Per-platform cumulative follower count per day (for multi-line chart). */
+  followerChart?: Array<Record<string, string | number>>;
+  /** Compact one-row-per-platform table data (Zernio-dashboard style). */
+  platformBreakdown?: PlatformBreakdownRow[];
 }
 
 export interface TopPostItem {

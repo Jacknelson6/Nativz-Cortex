@@ -424,7 +424,45 @@ export async function GET(request: NextRequest) {
     // Sum total followers across all platforms (from latest snapshot each)
     const totalFollowers = platformSummaries.reduce((sum, p) => sum + (p.followers ?? 0), 0);
 
+    // Per-platform cumulative follower chart — one line per network. We
+    // read platform_follower_daily (stored by the sync in per-day
+    // granularity) rather than inferring from snapshots, so the chart
+    // matches the real ground truth Zernio reported for each day.
+    const { data: followerDaily } = await supabase
+      .from('platform_follower_daily')
+      .select('platform, day, followers')
+      .eq('client_id', clientId)
+      .gte('day', start)
+      .lte('day', end)
+      .order('day', { ascending: true });
+
+    // Pivot { platform, day, followers } → { day, [platform]: followers }
+    const followerChartMap = new Map<string, Record<string, number>>();
+    for (const row of followerDaily ?? []) {
+      const entry = followerChartMap.get(row.day) ?? {};
+      entry[row.platform] = row.followers ?? 0;
+      followerChartMap.set(row.day, entry);
+    }
+    const followerChart = [...followerChartMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, byPlatform]) => ({ date, ...byPlatform }));
+
+    // Platform breakdown table: compact totals row per platform (Zernio-
+    // dashboard-style) so the admin can scan all networks side by side.
+    const platformBreakdown = platformSummaries.map((p) => ({
+      platform: p.platform,
+      username: p.username,
+      followers: p.followers,
+      followerChange: p.followerChange,
+      views: p.totalViews,
+      engagement: p.totalEngagement,
+      engagementRate: p.engagementRate,
+      postsCount: p.postsCount,
+    }));
+
     const report: SummaryReport = {
+      followerChart,
+      platformBreakdown,
       combined: {
         totalFollowers,
         totalViews: combinedViews,
