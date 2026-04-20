@@ -106,9 +106,19 @@ export async function POST(request: NextRequest) {
       .select('token, expires_at');
 
     if (insertError || !tokens || tokens.length !== finalContacts.length) {
-      console.error('Bulk invite token insert failed:', insertError);
-      return NextResponse.json({ error: 'Failed to create invites' }, { status: 500 });
+      const detail = insertError
+        ? `${insertError.message} (code ${insertError.code ?? '?'}, hint ${insertError.hint ?? '-'})`
+        : `inserted ${tokens?.length ?? 0} / ${finalContacts.length} tokens`;
+      console.error('[invites/bulk] token insert failed:', detail, insertError);
+      return NextResponse.json(
+        { error: `Failed to create invite tokens: ${detail}` },
+        { status: 500 },
+      );
     }
+
+    console.log(
+      `[invites/bulk] sending ${finalContacts.length} invites for ${client.name} (agency=${agency}, invitedBy=${invitedBy})`,
+    );
 
     // Send branded emails in parallel. `Promise.allSettled` so one bad
     // address doesn't kill the whole batch.
@@ -126,12 +136,14 @@ export async function POST(request: NextRequest) {
             agency,
           });
           if (res.error) {
+            const errMsg = res.error.message ?? JSON.stringify(res.error);
+            console.warn(`[invites/bulk] resend failed for ${contact.email}:`, errMsg);
             return {
               email: contact.email,
               name: contact.name ?? null,
               status: 'failed' as const,
               invite_url: inviteUrl,
-              error: res.error.message ?? 'Resend error',
+              error: errMsg,
             };
           }
           return {
@@ -141,12 +153,14 @@ export async function POST(request: NextRequest) {
             invite_url: inviteUrl,
           };
         } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[invites/bulk] threw for ${contact.email}:`, message);
           return {
             email: contact.email,
             name: contact.name ?? null,
             status: 'failed' as const,
             invite_url: inviteUrl,
-            error: err instanceof Error ? err.message : 'unknown send error',
+            error: message,
           };
         }
       }),
@@ -172,7 +186,18 @@ export async function POST(request: NextRequest) {
       results: perContact,
     });
   } catch (error) {
-    console.error('POST /api/invites/bulk error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Surface the real error message so the admin dialog can show it — the
+    // old "Internal server error" text was masking everything from RLS
+    // denials to Resend rate-limits.
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+    console.error('POST /api/invites/bulk error:', message, stack);
+    return NextResponse.json(
+      {
+        error: `Bulk invite failed: ${message}`,
+        hint: 'Check server logs for the full stack trace.',
+      },
+      { status: 500 },
+    );
   }
 }

@@ -208,7 +208,15 @@ export async function POST(request: NextRequest) {
       email_error: emailError,
     });
   } catch (error) {
-    console.error('POST /api/invites error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+    console.error('POST /api/invites error:', message, stack);
+    return NextResponse.json(
+      {
+        error: `Invite failed: ${message}`,
+        hint: 'Check server logs for the full stack trace.',
+      },
+      { status: 500 },
+    );
   }
 }

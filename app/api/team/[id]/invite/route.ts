@@ -112,7 +112,11 @@ export async function POST(
       member_name: member.full_name,
     });
   } catch (error) {
-    console.error('POST /api/team/[id]/invite error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('POST /api/team/[id]/invite error:', message, error instanceof Error ? error.stack : '');
+    return NextResponse.json(
+      { error: `Team invite failed: ${message}`, hint: 'Check server logs for the full stack trace.' },
+      { status: 500 },
+    );
   }
 }
