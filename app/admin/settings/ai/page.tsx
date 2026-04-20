@@ -47,16 +47,16 @@ export default async function AISettingsPage() {
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-base font-semibold text-text-primary">Models</h2>
-          <p className="mt-1 text-xs text-text-muted">Active models for topic search, agents, and platform defaults.</p>
+          <h2 className="text-base font-semibold text-text-primary">Model</h2>
+          <p className="mt-1 text-xs text-text-muted">One OpenRouter slug runs every Cortex feature.</p>
         </div>
         <AiRoutingSection />
       </section>
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-base font-semibold text-text-primary">Credentials</h2>
-          <p className="mt-1 text-xs text-text-muted">API keys when you don't want to rely on env vars only.</p>
+          <h2 className="text-base font-semibold text-text-primary">API key</h2>
+          <p className="mt-1 text-xs text-text-muted">A single OpenRouter key powers the model above.</p>
         </div>
         <LlmCredentialsSection />
       </section>
