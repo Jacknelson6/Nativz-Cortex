@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   BarChart3,
   CheckSquare,
-  BotMessageSquare,
   ChevronRight,
   Contact,
   ImagePlus,
@@ -20,6 +19,20 @@ import {
   Receipt,
   Settings as SettingsIcon,
   Wrench,
+  Users,
+  Facebook,
+  Store,
+  ShoppingBag,
+  LayoutGrid,
+  Mail,
+  Workflow,
+  Camera,
+  ThumbsUp,
+  Megaphone,
+  Calendar,
+  Brain,
+  Cpu,
+  Code,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { SidebarModePicker } from '@/components/layout/sidebar-mode-picker';
@@ -60,11 +73,11 @@ interface NavSection {
   items: NavItem[];
 }
 
-// Competitor Tracking behaves like Settings/Edits: the top-level nav item
-// routes to its default child (Organic Social = /admin/analyze-social), and
-// a secondary rail (AdminCompetitorTrackingSidebar) takes over to show the
-// Organic Social / Social Ads / TikTok Shop children. Route kept at
-// /admin/analyze-social to avoid breaking outbound share links.
+// Parents with `children` expand to an inline accordion (RankPrompt-style).
+// Clicking the parent navigates to its default child AND expands the list,
+// so existing deep links (e.g. /admin/analyze-social) keep working.
+// Route kept at /admin/analyze-social for Competitor Spying to avoid breaking
+// outbound share links (/shared/analyze-social/[token]).
 const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Dashboard',
@@ -78,7 +91,17 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/admin/search/new', label: 'Trend Finder', icon: TrendingUp },
       { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: MessagesSquare },
-      { href: '/admin/analyze-social', label: 'Competitor Spying', icon: ScanSearch },
+      {
+        href: '/admin/analyze-social',
+        label: 'Competitor Spying',
+        icon: ScanSearch,
+        children: [
+          { href: '/admin/analyze-social', label: 'Organic Social', icon: Users },
+          { href: '/admin/competitor-tracking/meta-ads', label: 'Meta Ads', icon: Facebook },
+          { href: '/admin/competitor-tracking/ecom', label: 'Ecom stores', icon: Store },
+          { href: '/admin/competitor-tracking/tiktok-shop', label: 'TikTok Shop', icon: ShoppingBag },
+        ],
+      },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
       { href: '/admin/notes', label: 'Notes', icon: StickyNote },
     ],
@@ -87,10 +110,41 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Manage',
     items: [
       { href: '/admin/clients', label: 'Clients', icon: Contact },
-      { href: '/admin/pipeline', label: 'Edits', icon: Scissors },
+      {
+        href: '/admin/pipeline',
+        label: 'Edits',
+        icon: Scissors,
+        children: [
+          { href: '/admin/pipeline', label: 'All stages', icon: Workflow },
+          { href: '/admin/shoots', label: 'Shoot calendar', icon: Camera },
+          { href: '/admin/pipeline?stage=editing', label: 'Editing', icon: Scissors },
+          { href: '/admin/pipeline?stage=scheduling', label: 'Approvals & handoff', icon: ThumbsUp },
+          { href: '/admin/pipeline?stage=boosting', label: 'Boosting', icon: Megaphone },
+          { href: '/admin/scheduler', label: 'Calendars', icon: Calendar },
+        ],
+      },
       { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
-      { href: '/admin/tools', label: 'Tools', icon: Wrench },
-      { href: '/admin/settings/ai', label: 'Settings', icon: SettingsIcon },
+      {
+        href: '/admin/tools',
+        label: 'Tools',
+        icon: Wrench,
+        children: [
+          { href: '/admin/tools', label: 'Overview', icon: LayoutGrid },
+          { href: '/admin/tools/users', label: 'Users', icon: Users },
+          { href: '/admin/tools/accounting', label: 'Accounting', icon: Receipt },
+          { href: '/admin/tools/email', label: 'Email', icon: Mail },
+        ],
+      },
+      {
+        href: '/admin/settings/ai',
+        label: 'Settings',
+        icon: SettingsIcon,
+        children: [
+          { href: '/admin/knowledge', label: 'Brain', icon: Brain },
+          { href: '/admin/settings/ai', label: 'AI settings', icon: Cpu },
+          { href: '/admin/nerd/api', label: 'API docs', icon: Code },
+        ],
+      },
     ],
   },
 ];

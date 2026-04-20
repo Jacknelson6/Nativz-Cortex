@@ -5,12 +5,10 @@ import { unstable_cache } from 'next/cache';
 /** Avoid static prerender during `next build` when Preview env omits Supabase vars. */
 export const dynamic = 'force-dynamic';
 import { AdminSidebar } from '@/components/layout/admin-sidebar';
-import { AdminSettingsSidebar } from '@/components/layout/admin-settings-sidebar';
-import { AdminEditsSidebar } from '@/components/layout/admin-edits-sidebar';
-import { AdminCompetitorTrackingSidebar } from '@/components/layout/admin-competitor-tracking-sidebar';
-import { AdminToolsSidebar } from '@/components/layout/admin-tools-sidebar';
-// AgencyLogo lives inside the sidebar header now (admin-sidebar.tsx) so it
-// scales with collapse state and doesn't overlap the secondary rails.
+// AgencyLogo lives inside the sidebar header (admin-sidebar.tsx) so it scales
+// with collapse state. Secondary rails (Settings/Edits/Tools/Competitor
+// Spying) were folded into the main sidebar as expandable `children` so the
+// app never shows more than two sidebars at once.
 import { AdminHeader } from '@/components/layout/admin-header';
 import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
 import { EasterEgg } from '@/components/easter-egg';
@@ -76,10 +74,6 @@ export default async function AdminLayout({
           <EasterEgg />
           <CommandPalette />
           <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} />
-          <AdminSettingsSidebar />
-          <AdminEditsSidebar />
-          <AdminCompetitorTrackingSidebar />
-          <AdminToolsSidebar />
           <SidebarInset>
             <AdminHeader />
             <PageTransition>{children}</PageTransition>
