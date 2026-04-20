@@ -195,44 +195,44 @@ export function AISettingsSkillsClient({ clients }: { clients: ClientOption[] })
             <li
               key={s.id}
               className={cn(
-                'rounded-xl border border-nativz-border bg-surface p-4 transition-colors',
+                'rounded-xl border border-nativz-border bg-surface p-5 transition-colors',
                 !s.is_active && 'opacity-60',
               )}
             >
-              <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-semibold text-text-primary truncate">
+                    <h3 className="text-lg font-semibold text-text-primary truncate">
                       {s.name}
                     </h3>
                     <span
                       className={cn(
-                        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium',
+                        'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium',
                         s.source === 'upload'
                           ? 'border-purple-400/30 bg-purple-400/10 text-purple-300'
                           : 'border-nativz-border text-text-muted',
                       )}
                     >
-                      {s.source === 'upload' ? <FileText size={10} /> : <Github size={10} />}
+                      {s.source === 'upload' ? <FileText size={12} /> : <Github size={12} />}
                       {s.source}
                     </span>
                     {s.client_id && (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent-surface/40 px-2 py-0.5 text-[10px] font-medium text-accent-text">
-                        <UsersIcon size={10} />
+                      <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent-surface/40 px-2.5 py-1 text-xs font-medium text-accent-text">
+                        <UsersIcon size={12} />
                         {clientMap.get(s.client_id)?.name ?? 'client-scoped'}
                       </span>
                     )}
                     {s.command_slug && (
-                      <span className="inline-flex rounded-full border border-nativz-border px-2 py-0.5 text-[10px] font-mono text-text-muted">
+                      <span className="inline-flex rounded-full border border-nativz-border px-2.5 py-1 text-xs font-mono text-text-muted">
                         /{s.command_slug}
                       </span>
                     )}
                   </div>
                   {s.description && (
-                    <p className="mt-1 text-sm text-text-muted line-clamp-2">{s.description}</p>
+                    <p className="mt-2 text-sm text-text-muted line-clamp-2 leading-relaxed">{s.description}</p>
                   )}
 
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="mt-3 flex flex-wrap gap-1.5">
                     {(['admin_nerd', 'admin_content_lab', 'portal_content_lab'] as Harness[]).map(
                       (h) => {
                         const on = s.harnesses.includes(h);
@@ -240,14 +240,14 @@ export function AISettingsSkillsClient({ clients }: { clients: ClientOption[] })
                           <span
                             key={h}
                             className={cn(
-                              'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px]',
+                              'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium',
                               on
                                 ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
                                 : 'border-nativz-border/50 bg-background/40 text-text-muted/50',
                             )}
                             title={HARNESS_DESCRIPTIONS[h]}
                           >
-                            {on && <Check size={10} />}
+                            {on && <Check size={12} />}
                             {HARNESS_LABELS[h]}
                           </span>
                         );
@@ -262,39 +262,39 @@ export function AISettingsSkillsClient({ clients }: { clients: ClientOption[] })
                     onClick={() => handleToggleActive(s)}
                     title={s.is_active ? 'Disable' : 'Enable'}
                     className={cn(
-                      'rounded-md p-1.5 transition-colors',
+                      'rounded-md p-2 transition-colors',
                       s.is_active
                         ? 'text-emerald-400 hover:bg-surface-hover'
                         : 'text-text-muted hover:bg-surface-hover hover:text-text-primary',
                     )}
                   >
-                    <Power size={14} />
+                    <Power size={16} />
                   </button>
                   {s.source === 'github' && (
                     <button
                       type="button"
                       onClick={() => void handleSync(s)}
                       title="Re-sync from GitHub"
-                      className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+                      className="rounded-md p-2 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
                     >
-                      <RefreshCw size={14} />
+                      <RefreshCw size={16} />
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={() => setEditingSkill(s)}
                     title="Edit"
-                    className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+                    className="rounded-md p-2 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
                   >
-                    <Pencil size={14} />
+                    <Pencil size={16} />
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleDelete(s)}
                     title="Delete"
-                    className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-red-500/15 hover:text-red-400"
+                    className="rounded-md p-2 text-text-muted transition-colors hover:bg-red-500/15 hover:text-red-400"
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={16} />
                   </button>
                 </div>
               </div>
@@ -462,65 +462,75 @@ function SkillEditor({
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-text-primary mb-1.5">
-            Description <span className="text-text-muted font-normal">(short)</span>
-          </label>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="One-line summary used in slash-command typeahead"
-            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/50"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-text-primary mb-2">
-            Apply to harnesses
-          </label>
-          <div className="space-y-2">
-            {(['admin_nerd', 'admin_content_lab', 'portal_content_lab'] as Harness[]).map((h) => (
-              <label key={h} className="flex items-start gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={harnesses.includes(h)}
-                  onChange={() => toggleHarness(h)}
-                  className="mt-1"
-                />
-                <div>
-                  <p className="text-sm text-text-primary">{HARNESS_LABELS[h]}</p>
-                  <p className="text-xs text-text-muted">{HARNESS_DESCRIPTIONS[h]}</p>
-                </div>
-              </label>
-            ))}
+        {isEdit && (
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Description <span className="text-text-muted font-normal">(short)</span>
+            </label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="One-line summary used in slash-command typeahead"
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/50"
+            />
           </div>
-        </div>
+        )}
+
+        {isEdit && (
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-2">
+              Apply to harnesses
+            </label>
+            <div className="space-y-2">
+              {(['admin_nerd', 'admin_content_lab', 'portal_content_lab'] as Harness[]).map((h) => (
+                <label key={h} className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={harnesses.includes(h)}
+                    onChange={() => toggleHarness(h)}
+                    className="mt-1"
+                  />
+                  <div>
+                    <p className="text-sm text-text-primary">{HARNESS_LABELS[h]}</p>
+                    <p className="text-xs text-text-muted">{HARNESS_DESCRIPTIONS[h]}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {isEdit && (
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Scope to a single client <span className="text-text-muted font-normal">(optional)</span>
+            </label>
+            <select
+              value={clientId ?? ''}
+              onChange={(e) => setClientId(e.target.value || null)}
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/50"
+            >
+              <option value="">— Agency-wide (all clients) —</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-text-muted/80">
+              When set, the skill only loads when this client is pinned.
+            </p>
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1.5">
-            Scope to a single client <span className="text-text-muted font-normal">(optional)</span>
-          </label>
-          <select
-            value={clientId ?? ''}
-            onChange={(e) => setClientId(e.target.value || null)}
-            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/50"
-          >
-            <option value="">— Agency-wide (all clients) —</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-text-muted/80">
-            When set, the skill only loads when this client is pinned.
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-text-primary mb-1.5">
-            Slash command <span className="text-text-muted font-normal">(optional)</span>
+            {isEdit ? (
+              <>Slash command <span className="text-text-muted font-normal">(optional)</span></>
+            ) : (
+              <>How to invoke <span className="text-text-muted font-normal">(slash command, optional)</span></>
+            )}
           </label>
           <div className="flex items-center gap-2">
             <span className="text-text-muted">/</span>

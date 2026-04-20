@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Check, ChevronDown, ChevronUp, Loader2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, ExternalLink, Loader2, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ModelSelector, type OpenRouterModel } from '@/components/settings/model-config';
 import { cn } from '@/lib/utils/cn';
@@ -42,6 +42,24 @@ type RowState = {
   orProvider: string;
   modelId: string;
 };
+
+function BrowseModelsLink({ backend }: { backend: ModelBackend }) {
+  const isOpenRouter = backend === 'openrouter';
+  const href = isOpenRouter ? 'https://openrouter.ai/models' : 'https://platform.openai.com/docs/models';
+  const label = isOpenRouter ? 'Browse OpenRouter' : 'Browse OpenAI models';
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1 text-xs text-text-muted transition-colors hover:text-accent-text"
+      title={`Open ${isOpenRouter ? 'openrouter.ai/models' : 'platform.openai.com/docs/models'} in a new tab`}
+    >
+      <ExternalLink size={12} />
+      {label}
+    </a>
+  );
+}
 
 function BackendToggle({
   value,
@@ -374,6 +392,10 @@ export function AiRoutingSection() {
     if (modelsLoading) {
       return <div className="h-10 animate-pulse rounded-lg bg-surface-hover" />;
     }
+    const slugInCatalog = row.modelId.trim()
+      ? allModels.some((m) => m.id === row.modelId.trim())
+      : null;
+
     return (
       <div className="space-y-2">
         <select
@@ -396,6 +418,47 @@ export function AiRoutingSection() {
           placeholder={placeholder}
           providerPrefixFilter={filterProp}
         />
+        <div className="rounded-lg border border-nativz-border/60 bg-background/40 px-3 py-2.5">
+          <label className="block text-xs font-medium text-text-secondary mb-1.5">
+            Or paste an OpenRouter slug
+          </label>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-text-muted">openrouter:</span>
+            <input
+              type="text"
+              value={row.modelId}
+              onChange={(e) => setRow({ ...row, modelId: e.target.value.trim() })}
+              placeholder="e.g. openai/gpt-5.4-mini  ·  anthropic/claude-opus-4-7"
+              spellCheck={false}
+              className="flex-1 min-w-0 rounded-md border border-nativz-border bg-background px-2.5 py-1.5 font-mono text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/50"
+            />
+            {slugInCatalog === true && (
+              <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400">
+                <Check size={12} /> in catalog
+              </span>
+            )}
+            {slugInCatalog === false && (
+              <span
+                className="shrink-0 text-[11px] font-medium text-amber-400"
+                title="Not in cached OpenRouter catalog. Will be sent to OpenRouter anyway — request will fail if rejected."
+              >
+                not in catalog
+              </span>
+            )}
+          </div>
+          <p className="mt-1.5 text-[11px] text-text-muted/80 leading-relaxed">
+            Copy any model id straight from{' '}
+            <a
+              href="https://openrouter.ai/models"
+              target="_blank"
+              rel="noreferrer"
+              className="text-text-secondary underline decoration-dotted underline-offset-2 hover:text-accent-text"
+            >
+              openrouter.ai/models
+            </a>
+            . Bypasses the dropdown — useful for newly-released models that haven't synced yet.
+          </p>
+        </div>
       </div>
     );
   }
@@ -462,16 +525,19 @@ export function AiRoutingSection() {
               <h3 className="text-sm font-medium text-text-primary">Topic search</h3>
               <p className="text-xs text-text-muted">Research pipeline (planner → subtopics → merge).</p>
             </div>
-            <BackendToggle
-              value={topic.backend}
-              onChange={(backend) =>
-                setTopic((r) => ({
-                  ...r,
-                  backend,
-                  modelId: backend === r.backend ? r.modelId : '',
-                }))
-              }
-            />
+            <div className="flex items-center gap-3">
+              <BrowseModelsLink backend={topic.backend} />
+              <BackendToggle
+                value={topic.backend}
+                onChange={(backend) =>
+                  setTopic((r) => ({
+                    ...r,
+                    backend,
+                    modelId: backend === r.backend ? r.modelId : '',
+                  }))
+                }
+              />
+            </div>
           </div>
           {renderModelPicker(topic, setTopic, 'Search model…')}
         </section>
@@ -482,16 +548,19 @@ export function AiRoutingSection() {
               <h3 className="text-sm font-medium text-text-primary">Agents</h3>
               <p className="text-xs text-text-muted">Nerd and agent chat.</p>
             </div>
-            <BackendToggle
-              value={agents.backend}
-              onChange={(backend) =>
-                setAgents((r) => ({
-                  ...r,
-                  backend,
-                  modelId: backend === r.backend ? r.modelId : '',
-                }))
-              }
-            />
+            <div className="flex items-center gap-3">
+              <BrowseModelsLink backend={agents.backend} />
+              <BackendToggle
+                value={agents.backend}
+                onChange={(backend) =>
+                  setAgents((r) => ({
+                    ...r,
+                    backend,
+                    modelId: backend === r.backend ? r.modelId : '',
+                  }))
+                }
+              />
+            </div>
           </div>
           {renderModelPicker(agents, setAgents, 'Agent model…')}
         </section>
@@ -502,16 +571,19 @@ export function AiRoutingSection() {
               <h3 className="text-sm font-medium text-text-primary">Default</h3>
               <p className="text-xs text-text-muted">Everything that isn’t topic search or agents.</p>
             </div>
-            <BackendToggle
-              value={platform.backend}
-              onChange={(backend) =>
-                setPlatform((r) => ({
-                  ...r,
-                  backend,
-                  modelId: backend === r.backend ? r.modelId : '',
-                }))
-              }
-            />
+            <div className="flex items-center gap-3">
+              <BrowseModelsLink backend={platform.backend} />
+              <BackendToggle
+                value={platform.backend}
+                onChange={(backend) =>
+                  setPlatform((r) => ({
+                    ...r,
+                    backend,
+                    modelId: backend === r.backend ? r.modelId : '',
+                  }))
+                }
+              />
+            </div>
           </div>
           {renderModelPicker(
             { backend: platform.backend, orProvider: platform.orProvider, modelId: platform.modelId },
