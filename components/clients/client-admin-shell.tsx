@@ -2,75 +2,81 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils/cn';
+import type { LucideIcon } from 'lucide-react';
 import {
+  AlertTriangle,
   ArrowLeft,
-  BookOpen,
+  Bell,
   Building2,
-  Dna,
   FileText,
-  Image as ImageIcon,
-  LayoutDashboard,
-  Settings2,
-  StickyNote,
+  FolderOpen,
+  Palette,
+  Plug,
+  ShieldCheck,
+  Users,
 } from 'lucide-react';
 import {
   ClientAdminShellProvider,
   type ClientAdminShellValue,
 } from '@/components/clients/client-admin-shell-context';
-import {
-  isAdminWorkspaceNavVisible,
-  type AdminWorkspaceToggleKey,
-} from '@/lib/clients/admin-workspace-modules';
 
-const NAV = [
-  { key: 'overview', label: 'Overview', icon: LayoutDashboard, path: '' },
-  { key: 'brand-dna', label: 'Brand DNA', icon: Dna, path: '/brand-dna' },
-  { key: 'moodboard', label: 'Notes', icon: StickyNote, path: '/moodboard' },
-  { key: 'knowledge', label: 'Knowledge', icon: BookOpen, path: '/knowledge' },
-  { key: 'ad-creatives', label: 'Ad creatives', icon: ImageIcon, path: '/ad-creatives' },
-  { key: 'contract', label: 'Contract', icon: FileText, path: '/contract' },
-  { key: 'settings', label: 'Settings', icon: Settings2, path: '/settings' },
-] as const;
+type NavItem = {
+  key: string;
+  label: string;
+  path: string;
+  icon: LucideIcon;
+  danger?: boolean;
+};
 
-function navHref(slug: string, path: string) {
+// Client area is pure admin/settings — operational features (notes, knowledge,
+// ad creatives) live at their own top-level routes. Brand DNA data is folded
+// into Brand profile and generated during onboarding in the background.
+const NAV: NavItem[] = [
+  { key: 'general', label: 'General', path: '/settings/general', icon: Building2 },
+  { key: 'brand', label: 'Brand profile', path: '/settings/brand', icon: Palette },
+  { key: 'contacts', label: 'Contacts', path: '/settings/contacts', icon: Users },
+  { key: 'integrations', label: 'Integrations', path: '/settings/integrations', icon: Plug },
+  { key: 'resources', label: 'Resources', path: '/settings/resources', icon: FolderOpen },
+  { key: 'access', label: 'Access & services', path: '/settings/access', icon: ShieldCheck },
+  { key: 'contract', label: 'Contract', path: '/contract', icon: FileText },
+  { key: 'notifications', label: 'Notifications', path: '/settings/notifications', icon: Bell },
+  { key: 'danger', label: 'Archive / delete', path: '/settings/danger', icon: AlertTriangle, danger: true },
+];
+
+function hrefFor(slug: string, path: string) {
   return `/admin/clients/${slug}${path}`;
 }
 
-function isNavActive(pathname: string | null, slug: string, path: string) {
+function isActive(pathname: string | null, slug: string, path: string) {
   if (!pathname) return false;
-  const base = `/admin/clients/${slug}`;
-  const full = navHref(slug, path);
-  if (path === '') {
-    return pathname === base || pathname === `${base}/`;
-  }
+  const full = hrefFor(slug, path);
   return pathname === full || pathname.startsWith(`${full}/`);
 }
 
-function SidebarNav({
-  slug,
-  modules,
-}: {
-  slug: string;
-  modules: Record<AdminWorkspaceToggleKey, boolean>;
-}) {
+function itemClass(active: boolean, danger: boolean | undefined) {
+  if (active) {
+    return danger
+      ? 'bg-red-500/10 text-red-400 font-semibold'
+      : 'bg-accent-surface text-text-primary font-semibold';
+  }
+  return danger
+    ? 'text-red-400/80 hover:bg-red-500/10 hover:text-red-400 font-medium'
+    : 'text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium';
+}
+
+function SidebarNav({ slug }: { slug: string }) {
   const pathname = usePathname();
-  const items = NAV.filter((item) => isAdminWorkspaceNavVisible(modules, item.key));
   return (
     <ul className="space-y-0.5">
-      {items.map((item) => {
-        const href = navHref(slug, item.path);
-        const active = isNavActive(pathname, slug, item.path);
+      {NAV.map((item) => {
+        const href = hrefFor(slug, item.path);
+        const active = isActive(pathname, slug, item.path);
         const Icon = item.icon;
         return (
           <li key={item.key}>
             <Link
               href={href}
-              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
-                active
-                  ? 'bg-accent/10 text-accent-text font-medium'
-                  : 'text-text-muted hover:bg-surface-hover hover:text-text-secondary'
-              }`}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${itemClass(active, item.danger)}`}
             >
               <Icon size={15} />
               {item.label}
@@ -82,31 +88,20 @@ function SidebarNav({
   );
 }
 
-function MobileNav({
-  slug,
-  modules,
-}: {
-  slug: string;
-  modules: Record<AdminWorkspaceToggleKey, boolean>;
-}) {
+function MobileNav({ slug }: { slug: string }) {
   const pathname = usePathname();
-  const items = NAV.filter((item) => isAdminWorkspaceNavVisible(modules, item.key));
   return (
     <div className="lg:hidden border-b border-nativz-border bg-background px-3 py-2 overflow-x-auto">
       <div className="flex gap-1 min-w-max pb-1">
-        {items.map((item) => {
-          const href = navHref(slug, item.path);
-          const active = isNavActive(pathname, slug, item.path);
+        {NAV.map((item) => {
+          const href = hrefFor(slug, item.path);
+          const active = isActive(pathname, slug, item.path);
           const Icon = item.icon;
           return (
             <Link
               key={item.key}
               href={href}
-              className={`inline-flex items-center gap-1.5 shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                active
-                  ? 'bg-accent/10 text-accent-text'
-                  : 'text-text-muted hover:bg-surface-hover hover:text-text-secondary'
-              }`}
+              className={`inline-flex items-center gap-1.5 shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${itemClass(active, item.danger)}`}
             >
               <Icon size={13} />
               {item.label}
@@ -118,12 +113,6 @@ function MobileNav({
   );
 }
 
-function isClientMoodboardRoute(pathname: string | null, slug: string) {
-  if (!pathname) return false;
-  const base = `/admin/clients/${slug}/moodboard`;
-  return pathname === base || pathname.startsWith(`${base}/`);
-}
-
 export function ClientAdminShell({
   value,
   children,
@@ -131,14 +120,12 @@ export function ClientAdminShell({
   value: ClientAdminShellValue;
   children: React.ReactNode;
 }) {
-  const { slug, clientName, adminWorkspaceModules } = value;
-  const pathname = usePathname();
-  const moodboardInline = isClientMoodboardRoute(pathname, slug);
+  const { slug, clientName } = value;
 
   return (
     <ClientAdminShellProvider value={value}>
       <div className="flex h-[calc(100vh-3.5rem)] flex-col lg:flex-row">
-        <MobileNav slug={slug} modules={adminWorkspaceModules} />
+        <MobileNav slug={slug} />
         <nav className="hidden lg:flex w-56 shrink-0 flex-col border-r border-nativz-border p-4 overflow-y-auto">
           <Link
             href="/admin/clients"
@@ -155,15 +142,10 @@ export function ClientAdminShell({
               {clientName}
             </h1>
           </div>
-          <p className="text-xs text-text-muted mb-4">Client workspace</p>
-          <SidebarNav slug={slug} modules={adminWorkspaceModules} />
+          <p className="text-xs text-text-muted mb-4">Settings</p>
+          <SidebarNav slug={slug} />
         </nav>
-        <div
-          className={cn(
-            'min-h-0 min-w-0 flex-1',
-            moodboardInline ? 'flex flex-col overflow-hidden' : 'overflow-y-auto',
-          )}
-        >
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
           {children}
         </div>
       </div>
