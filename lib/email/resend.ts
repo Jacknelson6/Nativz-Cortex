@@ -188,9 +188,16 @@ export function buildClientInviteEmailHtml(opts: {
   agency?: AgencyBrand;
 }): string {
   const agency = opts.agency ?? 'nativz';
+  // An empty/whitespace-only contactName drops the ", Name." tail so the
+  // headline reads naturally. Used when we can't auto-derive a real first
+  // name from the email (e.g. group inboxes, shared aliases).
+  const trimmedName = opts.contactName.trim();
+  const heading = trimmedName
+    ? `Your portal is ready, ${trimmedName}.`
+    : 'Your portal is ready.';
   return layout(`
       <div class="card">
-        <h1 class="heading">Your portal is ready, ${opts.contactName}.</h1>
+        <h1 class="heading">${heading}</h1>
         <p class="subtext">
           Your team at <span class="highlight">${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'}</span> has set up a dedicated Cortex portal for <strong>${opts.clientName}</strong>. Set up your account to get started.
         </p>
@@ -212,12 +219,16 @@ export async function sendClientInviteEmail(opts: {
   inviteUrl: string;
   invitedBy: string;
   agency?: AgencyBrand;
+  /** Optional CC recipients — useful when an account manager wants a copy
+   *  of every portal invite they fire out to a client org. */
+  cc?: string | string[];
 }) {
   const agency = opts.agency ?? 'nativz';
   const result = await getResend().emails.send({
     from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
     to: opts.to,
+    cc: opts.cc,
     subject: `${opts.clientName} — Your Cortex portal is ready`,
     html: buildClientInviteEmailHtml(opts),
   });
