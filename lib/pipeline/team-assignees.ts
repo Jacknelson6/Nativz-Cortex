@@ -42,6 +42,29 @@ function normalise(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+// NAT-47 — rewrite Monday.com-shaped display names to our canonical forms so
+// the Monday sync doesn't keep re-introducing the old spellings. Jack's rule:
+// first-name-wins where it disambiguates, preserve the real last name, drop
+// decorative prefixes like "Neo". Runs on each comma-separated segment.
+const CANONICAL_NAME_MAP: Record<string, string> = {
+  'neo khen gelizon': 'Khen Gelizon',
+  'jedidiah panganiban': 'Jed Panganiban',
+  'jedidiah  panganiban': 'Jed Panganiban',
+  'jedidiah nativz': 'Jed Panganiban',
+  'jashanjot singh': 'Jashan Singh',
+};
+
+export function canonicaliseAssigneeName(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split(/\s*,\s*/).map((part) => {
+    const lc = normalise(part);
+    return CANONICAL_NAME_MAP[lc] ?? part;
+  });
+  return parts.join(', ');
+}
+
 let memberCache: { at: number; rows: NormalizedMember[] } | null = null;
 const CACHE_TTL_MS = 60_000;
 
@@ -93,6 +116,15 @@ export async function syncTeamAssignees<T extends AssigneePatch>(
   const byNorm = new Map(members.map((m) => [m.norm, m]));
 
   const result = { ...patch } as Record<string, string | null | undefined>;
+
+  // NAT-47 — rewrite Monday.com-shaped names to canonical before resolving.
+  for (const role of TEAM_ASSIGNEE_ROLES) {
+    const nameField = role;
+    const raw = result[nameField];
+    if (typeof raw === 'string' && raw.trim()) {
+      result[nameField] = canonicaliseAssigneeName(raw);
+    }
+  }
 
   for (const role of TEAM_ASSIGNEE_ROLES) {
     const nameField = role;
