@@ -46,6 +46,8 @@ export default async function AdminClientSlugLayout({
       value={{
         slug: client.slug ?? slug,
         clientName: client.name ?? slug,
+        clientId: client.id,
+        organizationId: client.organization_id ?? null,
         adminWorkspaceModules: normalizeAdminWorkspaceModules(
           (client as { admin_workspace_modules?: unknown }).admin_workspace_modules,
         ),

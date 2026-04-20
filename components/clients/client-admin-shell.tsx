@@ -18,6 +18,8 @@ import {
   ClientAdminShellProvider,
   type ClientAdminShellValue,
 } from '@/components/clients/client-admin-shell-context';
+import { ImpersonateButton } from '@/components/clients/impersonate-button';
+import { InviteButton } from '@/components/clients/invite-button';
 
 type NavItem = {
   key: string;
@@ -118,7 +120,7 @@ export function ClientAdminShell({
   value: ClientAdminShellValue;
   children: React.ReactNode;
 }) {
-  const { slug, clientName } = value;
+  const { slug, clientName, clientId, organizationId } = value;
 
   return (
     <ClientAdminShellProvider value={value}>
@@ -141,6 +143,25 @@ export function ClientAdminShell({
             </h1>
           </div>
           <p className="text-xs text-text-muted mb-4">Settings</p>
+
+          {/* Shortcut actions — Invite (with bulk paste/upload + email preview)
+              and Impersonate. Previously lived on the Overview dashboard;
+              moved into the sidebar so they're reachable from every
+              settings subpage without a round-trip. */}
+          <div className="mb-4 space-y-2">
+            <InviteButton
+              clientId={clientId}
+              clientName={clientName}
+              variant="compact"
+            />
+            {organizationId && (
+              <ImpersonateButton
+                organizationId={organizationId}
+                clientSlug={slug}
+              />
+            )}
+          </div>
+
           <SidebarNav slug={slug} />
         </nav>
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">

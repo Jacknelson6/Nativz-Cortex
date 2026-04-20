@@ -6,6 +6,10 @@ import type { AdminWorkspaceToggleKey } from '@/lib/clients/admin-workspace-modu
 export type ClientAdminShellValue = {
   slug: string;
   clientName: string;
+  /** Client UUID — needed by sidebar action buttons (Invite, etc.). */
+  clientId: string;
+  /** Organization UUID — needed by Impersonate in the sidebar. */
+  organizationId: string | null;
   /** Normalized visibility for admin workspace nav (sidebar + mobile). */
   adminWorkspaceModules: Record<AdminWorkspaceToggleKey, boolean>;
 };
