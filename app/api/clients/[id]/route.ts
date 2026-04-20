@@ -43,7 +43,7 @@ export async function GET(
     const { data: dbClient } = await adminClient
       .from('clients')
       .select(
-        'id, name, slug, industry, organization_id, logo_url, website_url, target_audience, brand_voice, topic_keywords, is_active, feature_flags, health_score, agency, services, description, google_drive_branding_url, google_drive_calendars_url, preferences, monthly_boosting_budget, uppromote_api_key, affiliate_digest_email_enabled, affiliate_digest_recipients, affiliate_digest_timezone, affiliate_digest_send_day_of_week, affiliate_digest_send_hour, affiliate_digest_send_minute, affiliate_digest_last_sent_week_key, admin_workspace_modules',
+        'id, name, slug, industry, organization_id, logo_url, website_url, target_audience, brand_voice, topic_keywords, is_active, feature_flags, health_score, agency, services, description, google_drive_branding_url, google_drive_calendars_url, preferences, monthly_boosting_budget, uppromote_api_key, affiliate_digest_email_enabled, affiliate_digest_recipients, affiliate_digest_timezone, affiliate_digest_send_day_of_week, affiliate_digest_send_hour, affiliate_digest_send_minute, affiliate_digest_last_sent_week_key, social_digest_email_enabled, social_digest_recipients, social_digest_timezone, social_digest_send_day_of_week, social_digest_send_hour, social_digest_send_minute, social_digest_last_sent_week_key, admin_workspace_modules',
       )
       .eq(isUuid ? 'id' : 'slug', id)
       .single();
@@ -108,6 +108,13 @@ export async function GET(
       affiliate_digest_send_hour?: number | null;
       affiliate_digest_send_minute?: number | null;
       affiliate_digest_last_sent_week_key?: string | null;
+      social_digest_email_enabled?: boolean | null;
+      social_digest_recipients?: string | null;
+      social_digest_timezone?: string | null;
+      social_digest_send_day_of_week?: number | null;
+      social_digest_send_hour?: number | null;
+      social_digest_send_minute?: number | null;
+      social_digest_last_sent_week_key?: string | null;
     };
 
     return NextResponse.json({
@@ -142,6 +149,23 @@ export async function GET(
         affiliate_digest_send_minute: isAdmin ? (row.affiliate_digest_send_minute ?? 0) : undefined,
         affiliate_digest_last_sent_week_key: isAdmin
           ? (row.affiliate_digest_last_sent_week_key ?? null)
+          : undefined,
+        social_digest_email_enabled: isAdmin
+          ? Boolean(row.social_digest_email_enabled)
+          : undefined,
+        social_digest_recipients: isAdmin
+          ? (row.social_digest_recipients ?? null)
+          : undefined,
+        social_digest_timezone: isAdmin
+          ? (row.social_digest_timezone ?? 'America/Los_Angeles')
+          : undefined,
+        social_digest_send_day_of_week: isAdmin
+          ? (row.social_digest_send_day_of_week ?? 1)
+          : undefined,
+        social_digest_send_hour: isAdmin ? (row.social_digest_send_hour ?? 9) : undefined,
+        social_digest_send_minute: isAdmin ? (row.social_digest_send_minute ?? 0) : undefined,
+        social_digest_last_sent_week_key: isAdmin
+          ? (row.social_digest_last_sent_week_key ?? null)
           : undefined,
         admin_workspace_modules: isAdmin
           ? normalizeAdminWorkspaceModules(
