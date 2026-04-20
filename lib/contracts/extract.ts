@@ -28,9 +28,14 @@ Return ONLY valid JSON matching this shape, nothing else:
 
 export async function extractTextFromFile(buffer: Buffer, mime: string): Promise<string> {
   if (mime === 'application/pdf') {
-    const pdfParse = (await import('pdf-parse')).default;
-    const res = await pdfParse(buffer);
-    return res.text ?? '';
+    const { PDFParse } = await import('pdf-parse');
+    const parser = new PDFParse({ data: new Uint8Array(buffer) });
+    try {
+      const res = await parser.getText();
+      return res.text ?? '';
+    } finally {
+      await parser.destroy().catch(() => {});
+    }
   }
   if (
     mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||

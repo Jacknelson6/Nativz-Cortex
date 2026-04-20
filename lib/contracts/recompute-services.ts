@@ -31,10 +31,16 @@ export async function recomputeClientServices(clientId: string): Promise<string[
   if (error) throw error;
 
   const rows: DeliverableRow[] = (data ?? []).map((row) => {
-    const contract = (row as { client_contracts: { status: string } }).client_contracts;
+    const raw = row as unknown as {
+      service_tag: string;
+      client_contracts: { status: string } | { status: string }[];
+    };
+    const joined = Array.isArray(raw.client_contracts)
+      ? raw.client_contracts[0]
+      : raw.client_contracts;
     return {
-      status: contract.status as DeliverableRow['status'],
-      service_tag: (row as { service_tag: string }).service_tag,
+      status: (joined?.status ?? 'draft') as DeliverableRow['status'],
+      service_tag: raw.service_tag,
     };
   });
 
