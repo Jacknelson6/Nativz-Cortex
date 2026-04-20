@@ -19,6 +19,7 @@ import {
   ScanSearch,
   Receipt,
   Settings as SettingsIcon,
+  Wrench,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { SidebarModePicker } from '@/components/layout/sidebar-mode-picker';
@@ -89,6 +90,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/clients', label: 'Clients', icon: Contact },
       { href: '/admin/pipeline', label: 'Edits', icon: Scissors },
       { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
+      { href: '/admin/tools', label: 'Admin tools', icon: Wrench },
       { href: '/admin/settings/ai', label: 'Settings', icon: SettingsIcon },
     ],
   },
@@ -158,6 +160,7 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/shoots',
   '/admin/knowledge',
   '/admin/analyze-social',
+  '/admin/tools',
   // Settings is reachable from the avatar popover — it doesn't need its
   // own nav row on the portal. Keeping it on the admin side where the gear
   // is the primary entry point to the agency settings secondary rail.
