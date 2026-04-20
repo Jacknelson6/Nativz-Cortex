@@ -438,7 +438,10 @@ export function AdminSidebar({
                         if (!isExpanded) toggleMenu(item.href);
                       }}>
                         <item.icon size={18} className="shrink-0" />
-                        <span className="truncate">{item.label}</span>
+                        {/* `ml-2.5` matches the icon → label gap used by flat
+                            nav items below so parents with a dropdown chevron
+                            don't visually drift left relative to siblings. */}
+                        <span className="ml-2.5 truncate">{item.label}</span>
                         <ChevronRight
                           size={14}
                           className={`ml-auto shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
@@ -453,14 +456,14 @@ export function AdminSidebar({
                         }}
                       >
                         <div className="overflow-hidden">
-                          <ul className="ml-6 mt-0.5 space-y-0.5 border-l border-nativz-border pl-2 pb-0.5">
+                          <ul className="ml-6 mt-1.5 space-y-1 border-l border-nativz-border pl-2 pb-1">
                             {item.children.map((child) => {
                               const cActive = isActivePath(pathname, child.href, searchParams);
                               return (
                                 <li key={child.href}>
                                   <Link
                                     href={child.href}
-                                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors ${
+                                    className={`flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium transition-colors ${
                                       cActive
                                         ? 'text-accent-text bg-accent-surface'
                                         : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
