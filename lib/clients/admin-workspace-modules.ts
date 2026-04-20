@@ -9,6 +9,7 @@ export const ADMIN_WORKSPACE_TOGGLE_KEYS = [
   'moodboard',
   'knowledge',
   'ad-creatives',
+  'contract',
 ] as const;
 
 export type AdminWorkspaceToggleKey = (typeof ADMIN_WORKSPACE_TOGGLE_KEYS)[number];
@@ -32,6 +33,10 @@ export const ADMIN_WORKSPACE_TOGGLE_META: Record<
   'ad-creatives': {
     label: 'Ad creatives',
     description: 'When on, your team can use ad creative generation and the library; when off, no access.',
+  },
+  contract: {
+    label: 'Contract',
+    description: 'When on, your team can upload contracts, review extracted deliverables, and see scope-of-work here.',
   },
 };
 
