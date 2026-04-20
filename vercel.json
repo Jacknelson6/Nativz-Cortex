@@ -53,6 +53,10 @@
     {
       "path": "/api/cron/benchmark-snapshots",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/competitor-snapshots",
+      "schedule": "30 5 * * *"
     }
   ]
 }
