@@ -14,27 +14,43 @@ import { notifyAdmins } from '@/lib/notifications';
 export async function autoLinkEditingDoneToPayroll(opts: {
   pipelineId: string;
   editorName: string | null;
+  editorId: string | null;
   clientId: string | null;
   clientName: string | null;
 }): Promise<void> {
-  const { pipelineId, editorName, clientId, clientName } = opts;
-  if (!editorName?.trim()) return;
+  const { pipelineId, editorName, editorId, clientId, clientName } = opts;
+  if (!editorId && !editorName?.trim()) return;
 
   const admin = createAdminClient();
 
-  // Resolve editor → team_members row. Pipeline stores the name as TEXT today
-  // (NAT-27 tracks the FK migration); fuzzy-match on normalised full_name.
-  const normalisedEditor = editorName.trim().toLowerCase();
-  const { data: candidates } = await admin
-    .from('team_members')
-    .select('id, full_name, user_id, is_active')
-    .eq('is_active', true);
-  const teamMember = (candidates ?? []).find(
-    (m) => (m.full_name ?? '').trim().toLowerCase() === normalisedEditor,
-  );
+  // Prefer the FK (NAT-27) — stable across team_members renames. Fall back
+  // to fuzzy name-match for rows the Monday.com sync created before the
+  // sync path was teaching to resolve ids.
+  let teamMember: { id: string; full_name: string | null } | null = null;
+  if (editorId) {
+    const { data } = await admin
+      .from('team_members')
+      .select('id, full_name, is_active')
+      .eq('id', editorId)
+      .maybeSingle();
+    if (data?.is_active !== false) {
+      teamMember = data ? { id: data.id, full_name: data.full_name } : null;
+    }
+  }
+  if (!teamMember && editorName) {
+    const normalisedEditor = editorName.trim().toLowerCase();
+    const { data: candidates } = await admin
+      .from('team_members')
+      .select('id, full_name, is_active')
+      .eq('is_active', true);
+    const match = (candidates ?? []).find(
+      (m) => (m.full_name ?? '').trim().toLowerCase() === normalisedEditor,
+    );
+    if (match) teamMember = { id: match.id, full_name: match.full_name };
+  }
   if (!teamMember) {
     console.log(
-      `[pipeline→accounting] No active team_members row for editor "${editorName}"; skipping auto-link.`,
+      `[pipeline→accounting] No team_members match for editor "${editorName ?? '(null)'}" / id ${editorId ?? '(null)'}; skipping auto-link.`,
     );
     return;
   }

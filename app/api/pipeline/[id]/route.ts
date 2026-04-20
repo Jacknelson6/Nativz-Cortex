@@ -8,6 +8,7 @@ import {
   stampStageChange,
   type PipelineItemSnapshot,
 } from '@/lib/pipeline/transitions';
+import { syncTeamAssignees } from '@/lib/pipeline/team-assignees';
 
 const STATUS_FIELDS = [
   'assignment_status',
@@ -28,6 +29,13 @@ const UpdateSchema = z.object({
   editing_manager: z.string().optional(),
   editor: z.string().optional(),
   smm: z.string().optional(),
+  // Id columns (NAT-27 dual-write). Nullable so callers can clear an
+  // assignment. Names stay in sync via the syncTeamAssignees helper below.
+  strategist_id: z.string().uuid().nullable().optional(),
+  videographer_id: z.string().uuid().nullable().optional(),
+  editing_manager_id: z.string().uuid().nullable().optional(),
+  editor_id: z.string().uuid().nullable().optional(),
+  smm_id: z.string().uuid().nullable().optional(),
   shoot_date: z.string().nullable().optional(),
   strategy_due_date: z.string().nullable().optional(),
   raws_due_date: z.string().nullable().optional(),
@@ -128,10 +136,14 @@ export async function PATCH(
       stageChangedAtUpdate = nextStageChangedAt;
     }
 
+    // Mirror name ↔ id on team assignees so the DB stays consistent whether
+    // the caller sent the display name, the FK, or both.
+    const syncedPatch = await syncTeamAssignees(parsed.data);
+
     const { data, error } = await adminClient
       .from('content_pipeline')
       .update({
-        ...parsed.data,
+        ...syncedPatch,
         ...(stageChangedAtUpdate ? { stage_changed_at: stageChangedAtUpdate } : {}),
         updated_at: new Date().toISOString(),
       })

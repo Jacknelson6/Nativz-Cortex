@@ -122,6 +122,7 @@ export async function POST(
         autoLinkEditingDoneToPayroll({
           pipelineId: id,
           editorName: (updated.editor as string | null) ?? (item.editor as string | null),
+          editorId: (updated.editor_id as string | null) ?? (item.editor_id as string | null),
           clientId: (updated.client_id as string | null) ?? (item.client_id as string | null),
           clientName: (updated.client_name as string | null) ?? (item.client_name as string | null),
         }),

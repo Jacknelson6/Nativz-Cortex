@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { syncTeamAssignees } from '@/lib/pipeline/team-assignees';
 
 const MONDAY_API = 'https://api.monday.com/v2';
 const MONDAY_BOARD_ID = '9232769015';
@@ -168,6 +169,14 @@ export async function POST(request: NextRequest) {
         const baseName = item.name.replace(/\s*\(.*?\)\s*$/, '').toLowerCase();
         const clientId = clientMap.get(baseName) ?? clientMap.get(item.name.toLowerCase()) ?? null;
 
+        const assignees = await syncTeamAssignees({
+          strategist: cols['multiple_person_mkrh4gj9'] ?? null,
+          videographer: cols['multiple_person_mkr7atm4'] ?? null,
+          editing_manager: cols['multiple_person_mkrvbbq9'] ?? null,
+          editor: cols['multiple_person_mkrvyzkh'] ?? null,
+          smm: cols['multiple_person_mkrvxnv7'] ?? null,
+        });
+
         const row = {
           monday_item_id: item.id,
           client_id: clientId,
@@ -175,11 +184,7 @@ export async function POST(request: NextRequest) {
           month_label: group.title,
           month_date: monthDate,
           agency: cols['color_mkrw743r'] ?? null,
-          strategist: cols['multiple_person_mkrh4gj9'] ?? null,
-          videographer: cols['multiple_person_mkr7atm4'] ?? null,
-          editing_manager: cols['multiple_person_mkrvbbq9'] ?? null,
-          editor: cols['multiple_person_mkrvyzkh'] ?? null,
-          smm: cols['multiple_person_mkrvxnv7'] ?? null,
+          ...assignees,
           assignment_status: mapStatus('assignment_status', cols['color_mkrv2m31']) ?? 'can_assign',
           raws_status: mapStatus('raws_status', cols['color_mkr74mgy']) ?? 'need_to_schedule',
           editing_status: mapStatus('editing_status', cols['status_mkm9vbtf']) ?? 'not_started',
