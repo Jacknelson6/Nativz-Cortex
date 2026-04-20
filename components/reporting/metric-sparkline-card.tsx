@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ResponsiveContainer, AreaChart, Area, Tooltip, XAxis, YAxis } from 'recharts';
+import { ResponsiveContainer, Area, Tooltip, XAxis, YAxis, Line, ComposedChart } from 'recharts';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import type { MetricCard, TimelinePost } from '@/lib/types/reporting';
@@ -25,6 +25,14 @@ interface MetricSparklineCardProps {
   colorClass?: string;
   /** Posts published in the window — rendered as markers along the line. */
   posts?: TimelinePost[];
+  /**
+   * Comparison period series — same length as `card.series`, re-indexed
+   * so day N of the compare period aligns with day N of the primary. Rendered
+   * as a ghost dashed line beneath the main trend.
+   */
+  compareSeries?: Array<{ date: string; value: number }>;
+  /** Short label for the comparison range, e.g. "vs Feb 23 – Mar 22". */
+  compareLabel?: string;
 }
 
 export function MetricSparklineCard({
@@ -33,6 +41,8 @@ export function MetricSparklineCard({
   format = 'number',
   colorClass = '#60a5fa',
   posts = [],
+  compareSeries,
+  compareLabel,
 }: MetricSparklineCardProps) {
   const suffix = format === 'percent' ? '%' : '';
   const change = card.changePercent;
@@ -54,6 +64,21 @@ export function MetricSparklineCard({
   }, [posts]);
 
   const gradientId = `grad-${label.replace(/\s/g, '-')}`;
+
+  // Join compare series onto primary rows by ordinal index — day 1 of the
+  // compare period aligns with day 1 of the primary window visually, so the
+  // two lines read "this period vs. same day-count last period" at a glance.
+  const mergedRows = useMemo(() => {
+    if (!compareSeries || compareSeries.length === 0) {
+      return card.series.map((p) => ({ ...p, compare: null as number | null }));
+    }
+    return card.series.map((p, i) => ({
+      ...p,
+      compare: compareSeries[i]?.value ?? null,
+    }));
+  }, [card.series, compareSeries]);
+
+  const hasCompare = Boolean(compareSeries && compareSeries.length > 0);
 
   type DotProps = {
     cx?: number;
@@ -92,8 +117,10 @@ export function MetricSparklineCard({
         <p className="text-sm font-medium text-text-muted">{label}</p>
         {showDelta && (
           <span
-            className={`inline-flex items-center gap-0.5 text-xs font-medium tabular-nums ${
-              change >= 0 ? 'text-emerald-400' : 'text-red-400'
+            className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums ${
+              change >= 0
+                ? 'bg-emerald-500/10 text-emerald-400'
+                : 'bg-red-500/10 text-red-400'
             }`}
           >
             {change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
@@ -102,14 +129,23 @@ export function MetricSparklineCard({
           </span>
         )}
       </div>
-      <p className="text-2xl font-semibold text-text-primary tabular-nums">
-        {formatNumber(card.total, suffix)}
-      </p>
+      <div>
+        <p className="text-2xl font-semibold text-text-primary tabular-nums">
+          {formatNumber(card.total, suffix)}
+        </p>
+        {compareLabel && (
+          <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-text-muted tabular-nums">
+            <span className="inline-block h-[2px] w-3 border-t border-dashed border-text-muted/60" />
+            {formatNumber(card.previousTotal, suffix)}
+            <span className="text-text-muted/60">· {compareLabel}</span>
+          </p>
+        )}
+      </div>
       {hasSeries && (
         <div className="h-20 -mx-2">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={card.series}
+            <ComposedChart
+              data={mergedRows}
               margin={{ top: 6, bottom: 0, left: 0, right: 0 }}
               onMouseMove={(s) => {
                 const d = s?.activeLabel;
@@ -197,6 +233,18 @@ export function MetricSparklineCard({
                   );
                 }}
               />
+              {hasCompare && (
+                <Line
+                  type="monotone"
+                  dataKey="compare"
+                  stroke="rgba(255,255,255,0.55)"
+                  strokeWidth={1.25}
+                  strokeDasharray="3 3"
+                  dot={false}
+                  activeDot={false}
+                  isAnimationActive={false}
+                />
+              )}
               <Area
                 type="monotone"
                 dataKey="value"
@@ -206,7 +254,7 @@ export function MetricSparklineCard({
                 dot={renderDot}
                 activeDot={false}
               />
-            </AreaChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       )}

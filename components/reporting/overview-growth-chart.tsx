@@ -3,8 +3,9 @@
 import { useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
-  AreaChart,
+  ComposedChart,
   Area,
+  Line,
   CartesianGrid,
   XAxis,
   YAxis,
@@ -16,6 +17,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import type {
   ChartDataPoint,
+  DateRange,
   SocialPlatform,
   SummaryReport,
   TimelinePost,
@@ -60,6 +62,49 @@ const PLATFORM_LABELS: Record<SocialPlatform, string> = {
 interface OverviewGrowthChartProps {
   data: SummaryReport | null;
   loading: boolean;
+  compareData?: SummaryReport | null;
+  compareRange?: DateRange | null;
+}
+
+/**
+ * Sum per-day totals across all platforms for a given metric, producing a
+ * flat `[{ date, total }, ...]` shape that can be joined onto the primary
+ * chart rows by ordinal index (day N of compare → day N of primary).
+ */
+function sumDailyTotals(
+  data: SummaryReport,
+  metric: MetricKey,
+): number[] {
+  if (metric === 'followers') {
+    const rows = (data.followerChart ?? []) as Array<Record<string, number | string>>;
+    return rows.map((row) => {
+      let sum = 0;
+      for (const k of Object.keys(row)) {
+        if (k === 'date') continue;
+        const v = row[k];
+        if (typeof v === 'number') sum += v;
+      }
+      return sum;
+    });
+  }
+  // For views/engagement, sum across `platformCharts` keyed by date so we get
+  // one total per calendar day.
+  const charts = data.platformCharts ?? ({} as Record<SocialPlatform, ChartDataPoint[]>);
+  const byDate = new Map<string, number>();
+  for (const platform of Object.keys(charts) as SocialPlatform[]) {
+    for (const point of charts[platform] ?? []) {
+      byDate.set(point.date, (byDate.get(point.date) ?? 0) + (point[metric] ?? 0));
+    }
+  }
+  return [...byDate.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([, v]) => v);
+}
+
+function fmtCompareLabel(range: DateRange): string {
+  const fmt = (s: string) =>
+    new Date(`${s}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${fmt(range.start)} – ${fmt(range.end)}`;
 }
 
 function formatShortDate(s: string): string {
@@ -122,7 +167,12 @@ function resolveFollowerRows(data: SummaryReport): {
   return { rows, platforms: [...platformSet] };
 }
 
-export function OverviewGrowthChart({ data, loading }: OverviewGrowthChartProps) {
+export function OverviewGrowthChart({
+  data,
+  loading,
+  compareData = null,
+  compareRange = null,
+}: OverviewGrowthChartProps) {
   const [metric, setMetric] = useState<MetricKey>('followers');
 
   const { rows, platforms } = useMemo(() => {
@@ -133,6 +183,19 @@ export function OverviewGrowthChart({ data, loading }: OverviewGrowthChartProps)
     if (!data.platformCharts) return { rows: [], platforms: [] as SocialPlatform[] };
     return buildStackedSeries(data.platformCharts, metric);
   }, [data, metric]);
+
+  // Align compare totals by ordinal index onto the primary rows so the
+  // dashed "previous period" line sits on the same x-axis as today's data.
+  const rowsWithCompare = useMemo(() => {
+    if (!compareData) return rows;
+    const compareTotals = sumDailyTotals(compareData, metric);
+    return rows.map((row, i) => ({
+      ...row,
+      __compare: compareTotals[i] ?? null,
+    }));
+  }, [rows, compareData, metric]);
+
+  const hasCompare = Boolean(compareData);
 
   // Post markers: collapse to one marker per day (first post wins — thumbnail
   // lives in the tooltip, so stacking isn't useful visually).
@@ -187,7 +250,7 @@ export function OverviewGrowthChart({ data, loading }: OverviewGrowthChartProps)
 
       <div className="h-80">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          <ComposedChart data={rowsWithCompare} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
             <defs>
               {platforms.map((p) => (
                 <linearGradient
@@ -250,6 +313,19 @@ export function OverviewGrowthChart({ data, loading }: OverviewGrowthChartProps)
                 isAnimationActive={false}
               />
             ))}
+            {hasCompare && (
+              <Line
+                type="monotone"
+                dataKey="__compare"
+                name={compareRange ? `Prior · ${fmtCompareLabel(compareRange)}` : 'Prior period'}
+                stroke="rgba(255,255,255,0.6)"
+                strokeWidth={1.5}
+                strokeDasharray="4 4"
+                dot={false}
+                activeDot={{ r: 3, fill: 'rgba(255,255,255,0.85)' }}
+                isAnimationActive={false}
+              />
+            )}
             {postMarkers.map(({ date }) => (
               <ReferenceDot
                 key={`marker-${date}`}
@@ -262,7 +338,7 @@ export function OverviewGrowthChart({ data, loading }: OverviewGrowthChartProps)
                 ifOverflow="extendDomain"
               />
             ))}
-          </AreaChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </Card>

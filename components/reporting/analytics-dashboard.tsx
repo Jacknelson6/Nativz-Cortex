@@ -39,8 +39,10 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
     setCompareEnabled,
     comparePreset,
     setComparePreset,
+    compareRange,
     setCompareRange,
     summary,
+    compareSummary,
     loading,
     dataLoading,
     syncing,
@@ -152,10 +154,17 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
             data={summary}
             loading={dataLoading}
             posts={summary?.platforms.flatMap((p) => p.posts ?? []) ?? []}
+            compareData={compareEnabled ? compareSummary : null}
+            compareRange={compareEnabled ? compareRange : null}
           />
 
           {/* NAT-54 — full-width growth chart with metric toggle + post markers. */}
-          <OverviewGrowthChart data={summary} loading={dataLoading} />
+          <OverviewGrowthChart
+            data={summary}
+            loading={dataLoading}
+            compareData={compareEnabled ? compareSummary : null}
+            compareRange={compareEnabled ? compareRange : null}
+          />
 
           {/* Top performers — always visible under the summary. */}
           <div className="space-y-4 rounded-xl border border-nativz-border bg-surface p-5">

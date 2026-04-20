@@ -30,6 +30,7 @@ export function useReportingData(initialClientId?: string | null) {
   const [activeView, setActiveView] = useState<'summary' | 'top-posts'>('summary');
   const [topPostsLimit, setTopPostsLimit] = useState(3);
   const [summary, setSummary] = useState<SummaryReport | null>(null);
+  const [compareSummary, setCompareSummary] = useState<SummaryReport | null>(null);
   const [topPosts, setTopPosts] = useState<TopPostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
@@ -69,7 +70,9 @@ export function useReportingData(initialClientId?: string | null) {
 
   const dateRange = resolvePresetRange(datePreset, customRange);
 
-  // Fetch data when dependencies change
+  // Fetch data when dependencies change. When compare mode is on, the
+  // comparison summary is fetched in parallel against the compare range so
+  // tiles and charts can render deltas without a second render pass.
   const fetchData = useCallback(async () => {
     if (!selectedClientId) return;
 
@@ -82,10 +85,26 @@ export function useReportingData(initialClientId?: string | null) {
       });
 
       if (activeView === 'summary') {
-        const res = await fetch(`/api/reporting/summary?${params}`);
-        if (!res.ok) throw new Error('Failed to fetch summary');
-        const data = await res.json();
-        setSummary(data);
+        const primaryReq = fetch(`/api/reporting/summary?${params}`);
+        const compareReq =
+          compareEnabled && compareRange
+            ? fetch(
+                `/api/reporting/summary?${new URLSearchParams({
+                  clientId: selectedClientId,
+                  start: compareRange.start,
+                  end: compareRange.end,
+                })}`,
+              )
+            : null;
+
+        const [primaryRes, compareRes] = await Promise.all([primaryReq, compareReq]);
+        if (!primaryRes.ok) throw new Error('Failed to fetch summary');
+        setSummary(await primaryRes.json());
+        if (compareRes && compareRes.ok) {
+          setCompareSummary(await compareRes.json());
+        } else {
+          setCompareSummary(null);
+        }
       } else {
         params.set('limit', String(topPostsLimit));
         const res = await fetch(`/api/reporting/top-posts?${params}`);
@@ -98,7 +117,15 @@ export function useReportingData(initialClientId?: string | null) {
     } finally {
       setDataLoading(false);
     }
-  }, [selectedClientId, dateRange.start, dateRange.end, activeView, topPostsLimit]);
+  }, [
+    selectedClientId,
+    dateRange.start,
+    dateRange.end,
+    activeView,
+    topPostsLimit,
+    compareEnabled,
+    compareRange,
+  ]);
 
   useEffect(() => {
     fetchData();
@@ -170,6 +197,7 @@ export function useReportingData(initialClientId?: string | null) {
     topPostsLimit,
     setTopPostsLimit,
     summary,
+    compareSummary,
     topPosts,
     loading,
     dataLoading,
