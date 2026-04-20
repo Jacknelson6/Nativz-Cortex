@@ -12,7 +12,7 @@ import {
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { AgencyAssignmentLabel } from '@/components/clients/agency-assignment-label';
 import { ImpersonateButton } from '@/components/clients/impersonate-button';
-import { InvitePortalButton } from '@/components/clients/invite-portal-button';
+import { InviteButton } from '@/components/clients/invite-button';
 import { OverviewAnalytics } from '@/components/clients/overview-analytics';
 import { OverviewQuickFacts } from '@/components/clients/overview-quick-facts';
 import { HealthScoreBadge } from '@/components/clients/health-score-badge';
@@ -109,7 +109,7 @@ export function ClientOverview({ client, embeddedInShell }: ClientOverviewProps)
           {client.organization_id && (
             <ImpersonateButton organizationId={client.organization_id} clientSlug={slug} />
           )}
-          <InvitePortalButton clientId={client.id} />
+          <InviteButton clientId={client.id} clientName={client.name} variant="compact" />
         </div>
       </div>
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import {
   UserPlus, Building2, Shield, Loader2, Copy, Check, Send, Minus, Plus, Mail,
-  ClipboardList, Upload, X, AlertTriangle,
+  ClipboardList, Upload, X, AlertTriangle, Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
@@ -277,6 +277,10 @@ function PortalInviteForm({
           Paste / upload list
         </button>
       </div>
+
+      {/* Email preview — always available so admins can see exactly what
+          the recipient gets (agency branding auto-picked from client). */}
+      <EmailPreviewPanel clientId={clientId} previewName={contactName.trim() || undefined} />
 
       {mode === 'bulk' ? (
         <BulkEmailInviteForm
@@ -572,6 +576,92 @@ function BulkEmailInviteForm({
           )}
         </button>
       </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────
+ * Email preview panel
+ * ─────────────────────────────────────────────────────────────── */
+
+function EmailPreviewPanel({
+  clientId,
+  previewName,
+}: {
+  clientId: string | null;
+  previewName?: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [html, setHtml] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!expanded || !clientId) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const params = new URLSearchParams({ client_id: clientId });
+    if (previewName) params.set('name', previewName);
+    fetch(`/api/invites/preview?${params.toString()}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.error ?? 'Preview failed');
+        }
+        return res.text();
+      })
+      .then((body) => {
+        if (!cancelled) setHtml(body);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Preview failed');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [expanded, clientId, previewName]);
+
+  if (!clientId) return null;
+
+  return (
+    <div className="rounded-xl border border-nativz-border/70 bg-surface-hover/20 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between px-3 py-2 text-xs text-text-secondary hover:bg-surface-hover/40 transition-colors cursor-pointer"
+      >
+        <span className="inline-flex items-center gap-1.5">
+          <Eye size={12} className="text-accent-text" />
+          {expanded ? 'Hide email preview' : 'Preview email'}
+        </span>
+        <span className="text-[11px] text-text-muted/70">
+          Agency branding auto-resolved
+        </span>
+      </button>
+      {expanded && (
+        <div className="border-t border-nativz-border/60 bg-white">
+          {loading && (
+            <div className="flex items-center justify-center py-10 bg-surface-hover/30">
+              <Loader2 size={16} className="animate-spin text-text-muted" />
+            </div>
+          )}
+          {error && !loading && (
+            <div className="px-3 py-4 text-xs text-amber-400 bg-surface-hover/40">
+              {error}
+            </div>
+          )}
+          {html && !loading && !error && (
+            <iframe
+              title="Invite email preview"
+              srcDoc={html}
+              sandbox=""
+              className="block w-full h-[420px] border-0 bg-white"
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

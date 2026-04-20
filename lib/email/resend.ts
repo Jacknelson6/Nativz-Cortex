@@ -180,6 +180,31 @@ export async function sendTeamInviteEmail(opts: {
 
 // ── Client portal invite ─────────────────────────────────────────────────────
 
+export function buildClientInviteEmailHtml(opts: {
+  contactName: string;
+  clientName: string;
+  inviteUrl: string;
+  invitedBy: string;
+  agency?: AgencyBrand;
+}): string {
+  const agency = opts.agency ?? 'nativz';
+  return layout(`
+      <div class="card">
+        <h1 class="heading">Your portal is ready, ${opts.contactName}.</h1>
+        <p class="subtext">
+          Your team at <span class="highlight">${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'}</span> has set up a dedicated Cortex portal for <strong>${opts.clientName}</strong>. Set up your account to get started.
+        </p>
+        <div class="button-wrap">
+          <a href="${opts.inviteUrl}" class="button">Set up your account &rarr;</a>
+        </div>
+        <hr class="divider" />
+        <p class="small">
+          This link expires in 7 days. Contact ${opts.invitedBy} if you need a new one.
+        </p>
+      </div>
+    `, agency);
+}
+
 export async function sendClientInviteEmail(opts: {
   to: string;
   contactName: string;
@@ -194,21 +219,7 @@ export async function sendClientInviteEmail(opts: {
       replyTo: getReplyTo(agency),
     to: opts.to,
     subject: `${opts.clientName} — Your Cortex portal is ready`,
-    html: layout(`
-      <div class="card">
-        <h1 class="heading">Your portal is ready, ${opts.contactName}.</h1>
-        <p class="subtext">
-          Your team at <span class="highlight">${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'}</span> has set up a dedicated Cortex portal for <strong>${opts.clientName}</strong>. Set up your account to get started.
-        </p>
-        <div class="button-wrap">
-          <a href="${opts.inviteUrl}" class="button">Set up your account &rarr;</a>
-        </div>
-        <hr class="divider" />
-        <p class="small">
-          This link expires in 7 days. Contact ${opts.invitedBy} if you need a new one.
-        </p>
-      </div>
-    `, agency),
+    html: buildClientInviteEmailHtml(opts),
   });
 
   logUsage({
