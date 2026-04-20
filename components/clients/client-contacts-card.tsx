@@ -44,6 +44,10 @@ interface ClientContactsCardProps {
 
 const EMPTY_FORM = { name: '', email: '', phone: '', role: '', project_role: '', is_primary: false };
 
+function getInitials(name: string): string {
+  return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
 export function ClientContactsCard({ clientId, clientName, vaultContacts = [], portalContacts: initialPortalContacts = [] }: ClientContactsCardProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [portalUsers, setPortalUsers] = useState(initialPortalContacts);
@@ -284,21 +288,34 @@ export function ClientContactsCard({ clientId, clientName, vaultContacts = [], p
             {portalUsers.map((contact) => (
               <div key={contact.id} className="group flex items-center gap-3 rounded-lg border border-nativz-border bg-surface-hover/30 px-4 py-3">
                 {contact.avatar_url ? (
-                  <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={contact.avatar_url} alt={contact.full_name} className="h-full w-full object-cover" />
-                  </div>
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={contact.avatar_url}
+                    alt={contact.full_name}
+                    className="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-nativz-border"
+                  />
                 ) : (
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white">
-                    <User2 size={16} />
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-hover ring-1 ring-nativz-border">
+                    <span className="text-base font-semibold text-text-secondary">
+                      {getInitials(contact.full_name)}
+                    </span>
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-text-primary truncate">{contact.full_name}</p>
                   <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-text-primary truncate">{contact.full_name}</p>
                     <Badge variant="info" className="text-[10px] px-1 py-0">Portal</Badge>
-                    {contact.job_title && <p className="text-xs text-text-muted truncate">{contact.job_title}</p>}
                   </div>
+                  <a
+                    href={`mailto:${contact.email}`}
+                    className="text-xs text-text-muted hover:text-accent-text transition-colors flex items-center gap-1 truncate mt-0.5"
+                  >
+                    <Mail size={10} className="shrink-0" />
+                    {contact.email}
+                  </a>
+                  {contact.job_title && (
+                    <p className="text-xs text-text-muted truncate mt-0.5">{contact.job_title}</p>
+                  )}
                 </div>
                 <button
                   onClick={() => handleRemovePortalUser(contact.id, contact.full_name)}

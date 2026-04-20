@@ -1,10 +1,9 @@
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ClientMoodboardEmpty } from '@/components/clients/client-moodboard-empty';
-import { ClientMoodboardWorkspace } from '@/components/clients/client-moodboard-workspace';
+import { NotesDashboard } from '@/components/notes/notes-dashboard';
 import { requireAdminWorkspaceModuleAccess } from '@/lib/clients/require-admin-workspace-module-access';
 
-export default async function ClientMoodboardPage({
+export default async function ClientNotesPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
@@ -13,34 +12,20 @@ export default async function ClientMoodboardPage({
   await requireAdminWorkspaceModuleAccess(slug, 'moodboard');
 
   const admin = createAdminClient();
-
   const { data: client } = await admin
     .from('clients')
-    .select('id, name')
+    .select('id, name, slug')
     .eq('slug', slug)
     .single();
 
-  if (!client) {
-    notFound();
-  }
-
-  const { data: board } = await admin
-    .from('moodboard_boards')
-    .select('id')
-    .eq('client_id', client.id)
-    .is('archived_at', null)
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (board?.id) {
-    return <ClientMoodboardWorkspace boardId={board.id} clientSlug={slug} />;
-  }
+  if (!client) notFound();
 
   return (
-    <ClientMoodboardEmpty
-      clientId={client.id}
-      clientName={client.name ?? slug}
+    <NotesDashboard
+      clients={[{ id: client.id, name: client.name ?? slug, slug: client.slug ?? slug }]}
+      isAdmin={true}
+      portalClientId={client.id}
+      routePrefix="/admin"
     />
   );
 }

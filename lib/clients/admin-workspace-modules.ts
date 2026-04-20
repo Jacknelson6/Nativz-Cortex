@@ -8,8 +8,6 @@ export const ADMIN_WORKSPACE_TOGGLE_KEYS = [
   'brand-dna',
   'moodboard',
   'knowledge',
-  'ideas',
-  'idea-generator',
   'ad-creatives',
 ] as const;
 
@@ -24,20 +22,12 @@ export const ADMIN_WORKSPACE_TOGGLE_META: Record<
     description: 'When on, your team can open Brand DNA for this client; when off, there is no access (nav hidden, URL blocked).',
   },
   moodboard: {
-    label: 'Moodboard',
-    description: 'When on, your team can use the client moodboard; when off, no access.',
+    label: 'Notes',
+    description: 'When on, your team can view and create client notes (workspaces); when off, no access.',
   },
   knowledge: {
     label: 'Knowledge',
     description: 'When on, your team can open the knowledge vault for this client; when off, no access.',
-  },
-  ideas: {
-    label: 'Ideas',
-    description: 'When on, your team can open the ideas hub and saved ideas; when off, no access.',
-  },
-  'idea-generator': {
-    label: 'Idea generator',
-    description: 'When on, your team can run the AI idea generation flow for this client; when off, no access.',
   },
   'ad-creatives': {
     label: 'Ad creatives',

@@ -33,7 +33,7 @@ interface UserRow {
   is_team_member: boolean;
 }
 
-type SortField = 'name' | 'role' | 'team' | 'last_active' | 'searches';
+type SortField = 'name' | 'last_active' | 'searches';
 type SortDir = 'asc' | 'desc';
 
 function getInitials(name: string): string {
@@ -130,8 +130,6 @@ export default function UsersPage() {
       const dir = sortDir === 'asc' ? 1 : -1;
       switch (sortField) {
         case 'name': return a.full_name.localeCompare(b.full_name) * dir;
-        case 'role': return a.role.localeCompare(b.role) * dir;
-        case 'team': return (a.team_role ?? '').localeCompare(b.team_role ?? '') * dir;
         case 'last_active': {
           const aTime = a.last_sign_in_at ? new Date(a.last_sign_in_at).getTime() : 0;
           const bTime = b.last_sign_in_at ? new Date(b.last_sign_in_at).getTime() : 0;
@@ -241,7 +239,7 @@ export default function UsersPage() {
           <div className="flex items-center gap-1.5 text-sm text-text-muted">
             <ArrowUpDown size={14} className="mr-1" />
             Sort:
-            {(['name', 'role', 'team', 'last_active', 'searches'] as SortField[]).map(field => (
+            {(['name', 'last_active', 'searches'] as SortField[]).map(field => (
               <button
                 key={field}
                 onClick={() => toggleSort(field)}

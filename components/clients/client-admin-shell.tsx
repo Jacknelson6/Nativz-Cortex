@@ -10,10 +10,8 @@ import {
   Dna,
   Image as ImageIcon,
   LayoutDashboard,
-  Lightbulb,
-  Palette,
   Settings2,
-  Wand2,
+  StickyNote,
 } from 'lucide-react';
 import {
   ClientAdminShellProvider,
@@ -27,10 +25,8 @@ import {
 const NAV = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard, path: '' },
   { key: 'brand-dna', label: 'Brand DNA', icon: Dna, path: '/brand-dna' },
-  { key: 'moodboard', label: 'Moodboard', icon: Palette, path: '/moodboard' },
+  { key: 'moodboard', label: 'Notes', icon: StickyNote, path: '/moodboard' },
   { key: 'knowledge', label: 'Knowledge', icon: BookOpen, path: '/knowledge' },
-  { key: 'ideas', label: 'Ideas', icon: Lightbulb, path: '/ideas' },
-  { key: 'idea-generator', label: 'Idea generator', icon: Wand2, path: '/ideas/generate' },
   { key: 'ad-creatives', label: 'Ad creatives', icon: ImageIcon, path: '/ad-creatives' },
   { key: 'settings', label: 'Settings', icon: Settings2, path: '/settings' },
 ] as const;
@@ -45,12 +41,6 @@ function isNavActive(pathname: string | null, slug: string, path: string) {
   const full = navHref(slug, path);
   if (path === '') {
     return pathname === base || pathname === `${base}/`;
-  }
-  if (path === '/ideas') {
-    return (
-      pathname === full ||
-      (pathname.startsWith(`${base}/ideas/`) && !pathname.startsWith(`${base}/ideas/generate`))
-    );
   }
   return pathname === full || pathname.startsWith(`${full}/`);
 }

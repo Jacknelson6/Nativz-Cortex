@@ -1,4 +1,4 @@
-import { ClientSettingsTabs } from '@/components/clients/client-settings-tabs';
+import { ClientSettingsShell } from '@/components/clients/settings/settings-shell';
 
 export default async function ClientSettingsLayout({
   children,
@@ -8,16 +8,5 @@ export default async function ClientSettingsLayout({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  return (
-    <div className="cortex-page-gutter max-w-2xl mx-auto pb-12">
-      <div className="mb-2">
-        <h1 className="ui-page-title-md">Settings</h1>
-        <p className="text-sm text-text-muted mt-0.5">
-          Configuration and notifications for this client workspace.
-        </p>
-      </div>
-      <ClientSettingsTabs slug={slug} />
-      {children}
-    </div>
-  );
+  return <ClientSettingsShell slug={slug}>{children}</ClientSettingsShell>;
 }
