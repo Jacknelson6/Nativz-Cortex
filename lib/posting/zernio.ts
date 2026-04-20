@@ -144,7 +144,7 @@ export const createLateProfile = createZernioProfile;
 // Cache merged analytics (same pattern as former Late client).
 let _analyticsCache: { data: LateAnalyticsResponse; ts: number } | null = null;
 const ANALYTICS_CACHE_TTL = 60_000;
-const ANALYTICS_LOOKBACK_DAYS = 120;
+const ANALYTICS_LOOKBACK_DAYS = 365;
 
 /** Map a Zernio analytics post payload into the shape used by reporting + velocity. */
 function mapZernioAnalyticsPost(raw: unknown): LateAnalyticsPost | null {
@@ -788,31 +788,71 @@ export class ZernioPostingService implements PostingService {
     }
   }
 
+  /**
+   * Per-account paginated pull of /v1/analytics. Bypasses the 120-day
+   * `fetchMergedAnalytics` cache so historical backfills see every indexed
+   * post. Zernio caps each query at 100 results/page and 1-year range.
+   *
+   * Pulls source=all so both Zernio-published and externally-imported
+   * (platform-native) posts are captured. Zernio has ~6.3K external posts
+   * already indexed across our workspace that we previously ignored.
+   */
   async getPostAnalytics(query: PostAnalyticsQuery): Promise<PostAnalyticsItem[]> {
-    const data = await this.getFullAnalytics();
-    const posts = (data.posts ?? []).filter((p) => {
-      const matchesAccount = p.platforms?.some((pl) => pl.accountId === query.accountId);
-      if (!matchesAccount) return false;
-      const pubDate = (p.publishedAt ?? '').split('T')[0];
-      return pubDate >= query.startDate && pubDate <= query.endDate;
-    });
+    const out: PostAnalyticsItem[] = [];
+    const LIMIT = 100;
+    const MAX_PAGES = 20; // safety cap; 20 * 100 = 2000 posts per account
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const params = new URLSearchParams({
+        accountId: query.accountId,
+        source: 'all',
+        fromDate: query.startDate,
+        toDate: query.endDate,
+        limit: String(LIMIT),
+        page: String(page),
+      });
+      let root: Record<string, unknown> = {};
+      try {
+        const raw = await zernioRequest<unknown>(`/analytics?${params}`);
+        root = asRecord(raw) ?? {};
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[zernio] /analytics page ${page} for ${query.accountId}: ${msg}`);
+        break;
+      }
+      const postsRaw = Array.isArray(root.posts)
+        ? root.posts
+        : Array.isArray(root.data)
+          ? root.data
+          : [];
 
-    return posts.map((p) => ({
-      postId: p._id,
-      platform: (p.platform ?? 'instagram') as SocialPlatform,
-      postUrl: p.platformPostUrl ?? null,
-      thumbnailUrl: p.thumbnailUrl ?? null,
-      caption: p.content ?? null,
-      postType: p.mediaType ?? null,
-      publishedAt: p.publishedAt ?? null,
-      impressions: p.analytics?.impressions ?? 0,
-      reach: p.analytics?.reach ?? 0,
-      likes: p.analytics?.likes ?? 0,
-      comments: p.analytics?.comments ?? 0,
-      shares: p.analytics?.shares ?? 0,
-      saves: p.analytics?.saves ?? 0,
-      views: p.analytics?.views ?? 0,
-    }));
+      for (const item of postsRaw) {
+        const mapped = mapZernioAnalyticsPost(item);
+        if (!mapped) continue;
+        // A post can include multiple platform entries; use the one that
+        // matches our accountId so analytics reflect this account's stats.
+        const platformEntry = mapped.platforms?.find((pl) => pl.accountId === query.accountId);
+        const analytics = platformEntry?.analytics ?? mapped.analytics;
+        out.push({
+          postId: mapped._id,
+          platform: (platformEntry?.platform ?? mapped.platform ?? 'instagram') as SocialPlatform,
+          postUrl: mapped.platformPostUrl ?? null,
+          thumbnailUrl: mapped.thumbnailUrl ?? null,
+          caption: mapped.content ?? null,
+          postType: mapped.mediaType ?? null,
+          publishedAt: mapped.publishedAt ?? null,
+          impressions: analytics?.impressions ?? 0,
+          reach: analytics?.reach ?? 0,
+          likes: analytics?.likes ?? 0,
+          comments: analytics?.comments ?? 0,
+          shares: analytics?.shares ?? 0,
+          saves: analytics?.saves ?? 0,
+          views: analytics?.views ?? 0,
+        });
+      }
+
+      if (postsRaw.length < LIMIT) break;
+    }
+    return out;
   }
 
   /**

@@ -62,7 +62,7 @@ export function PortalResultsClient({
     if (!clientInfo) return;
     // Pre-pin this search so Strategy Lab auto-attaches it on mount.
     // Mirrors the admin "Open in Strategy Lab" flow — same storage key,
-    // read by PortalContentLab.
+    // read by ContentLabNerdChat in portalMode.
     try {
       const key = contentLabTopicSearchStorageKey(clientInfo.id);
       window.localStorage.setItem(key, JSON.stringify([search.id]));

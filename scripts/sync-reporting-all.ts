@@ -45,7 +45,8 @@ async function main() {
   const clients = [...seen.entries()].map(([id, name]) => ({ id, name }));
   console.log(`[sync-all] ${clients.length} clients with connected profiles`);
 
-  const start = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString().split('T')[0];
+  // Zernio caps each query at 1 year; use 364 days to stay safely under.
+  const start = new Date(Date.now() - 364 * 24 * 3600 * 1000).toISOString().split('T')[0];
   const end = new Date().toISOString().split('T')[0];
 
   const summary: Array<{

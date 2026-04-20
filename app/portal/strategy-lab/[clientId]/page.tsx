@@ -3,7 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
-import { PortalContentLab } from '@/components/portal/portal-content-lab';
+import { ContentLabNerdChat } from '@/components/content-lab/content-lab-nerd-chat';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,11 +42,12 @@ export default async function PortalContentLabPage({
     }
 
     return (
-      <div className="h-[calc(100vh-3.5rem)] overflow-hidden">
-        <PortalContentLab
+      <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+        <ContentLabNerdChat
           clientId={portal.client.id}
           clientName={portal.client.name}
           clientSlug={portal.client.slug}
+          portalMode
         />
       </div>
     );

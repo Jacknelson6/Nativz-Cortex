@@ -24,6 +24,7 @@ import {
   writeContentLabNerdConversationId,
   clearContentLabNerdConversationId,
 } from '@/lib/content-lab/nerd-conversation-storage';
+import { contentLabTopicSearchStorageKey } from '@/lib/content-lab/topic-search-selection-storage';
 
 // Quick-start prompts are tuned to push the Nerd toward artifact-style
 // outputs (mermaid flows, structured scripts, effort/impact quadrants)
@@ -55,8 +56,20 @@ type ContentLabNerdChatProps = {
   clientName: string;
   clientSlug: string;
   /** Topic search IDs the user pinned in Strategy Lab — the initial attached set for the chat context. */
-  pinnedTopicSearchIds: string[];
+  pinnedTopicSearchIds?: string[];
+  /**
+   * Portal mode: scoped to one org-bound client, no multi-client switcher,
+   * no export/share/commands header buttons, portal-flavored session hint,
+   * and `portalMode: true` on the chat request so the route picks the portal
+   * addendum and enforces PORTAL_ALLOWED_TOOLS.
+   */
+  portalMode?: boolean;
 };
+
+const ADMIN_SESSION_HINT =
+  'User is in Strategy Lab with this client pinned. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Prefer topic search, pillar, knowledge, and content tools. Be concise and actionable.';
+const PORTAL_SESSION_HINT =
+  'User is in the portal Strategy Lab. You are scoped to this one client only. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Be concise and actionable.';
 
 interface TopicSearchItem {
   id: string;
@@ -85,8 +98,30 @@ export function ContentLabNerdChat({
   clientId,
   clientName,
   clientSlug,
-  pinnedTopicSearchIds,
+  pinnedTopicSearchIds: pinnedFromProps,
+  portalMode = false,
 }: ContentLabNerdChatProps) {
+  // Portal entry points don't server-hydrate the pinned list, so fall back to
+  // a localStorage read on mount. Admin always passes the prop (already
+  // hydrated by the workspace wrapper) so this useEffect is a no-op there.
+  const [pinnedTopicSearchIds, setPinnedTopicSearchIds] = useState<string[]>(
+    pinnedFromProps ?? [],
+  );
+  useEffect(() => {
+    if (pinnedFromProps && pinnedFromProps.length > 0) return;
+    if (typeof window === 'undefined' || !clientId) return;
+    try {
+      const raw = window.localStorage.getItem(contentLabTopicSearchStorageKey(clientId));
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        const ids = parsed.filter((x): x is string => typeof x === 'string');
+        if (ids.length > 0) setPinnedTopicSearchIds(ids);
+      }
+    } catch {
+      /* quota / JSON — ignore */
+    }
+  }, [clientId, pinnedFromProps]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -191,7 +226,7 @@ export function ContentLabNerdChat({
   );
 
   const sessionHintRef = useRef<string | null>(
-    'User is in Strategy Lab with this client pinned. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Prefer topic search, pillar, knowledge, and content tools. Be concise and actionable.',
+    portalMode ? PORTAL_SESSION_HINT : ADMIN_SESSION_HINT,
   );
   const abortRef = useRef<AbortController | null>(null);
   const pendingAttachmentsRef = useRef<ChatAttachment[]>([]);
@@ -516,6 +551,7 @@ export function ContentLabNerdChat({
             searchContext: attachedSearchIds.length > 0 ? attachedSearchIds : undefined,
             conversationId: conversationId ?? undefined,
             mode: 'strategy-lab' as const,
+            portalMode: portalMode ? true : undefined,
             attachments: processed && processed.length > 0 ? processed : undefined,
           }),
           signal: controller.signal,
@@ -607,8 +643,7 @@ export function ContentLabNerdChat({
     setConversationTitle(null);
     setConversationMessageCount(0);
     clearContentLabNerdConversationId(clientId);
-    sessionHintRef.current =
-      'User is in Strategy Lab with this client pinned. Primary job: create strategy, generate video ideas, script them, and produce shareable outputs. Prefer topic search, pillar, knowledge, and content tools. Be concise and actionable.';
+    sessionHintRef.current = portalMode ? PORTAL_SESSION_HINT : ADMIN_SESSION_HINT;
     // Ask the picker to refetch the list — the current thread may no longer
     // be the latest, and a brand-new one is about to start.
     setConversationsRefreshToken((t) => t + 1);
@@ -751,35 +786,53 @@ export function ContentLabNerdChat({
             everything else automatically reachable from the sidebar). */}
         <header className="relative flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
           <div className="flex min-w-0 items-center gap-2">
-            <ContentLabClientPickerPill
-              clientId={clientId}
-              clientName={clientName}
-              clientSlug={clientSlug}
-            />
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <CommandsCatalogButton />
-            {messages.length > 0 && (
+            {portalMode ? (
               <>
-                <ConversationShareButton
-                  conversationId={conversationId}
-                  disabled={streaming}
-                />
-                <ContentLabConversationExportButton
-                  clientId={clientId}
+                <AgencyClientAvatar
                   clientName={clientName}
-                  conversationTitle={conversationTitle}
-                  messages={messages}
-                  attachedSearches={attachedSearches.map((s) => ({
-                    query: s.query,
-                    created_at: s.created_at,
-                  }))}
-                  disabled={streaming}
+                  clientLogoUrl={clientLogoUrl}
+                  size="sm"
                 />
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-semibold text-text-primary">
+                    {clientName}
+                  </span>
+                  <span className="text-xs text-text-muted">Strategy Lab</span>
+                </div>
               </>
+            ) : (
+              <ContentLabClientPickerPill
+                clientId={clientId}
+                clientName={clientName}
+                clientSlug={clientSlug}
+              />
             )}
           </div>
+
+          {!portalMode && (
+            <div className="flex items-center gap-1.5">
+              <CommandsCatalogButton />
+              {messages.length > 0 && (
+                <>
+                  <ConversationShareButton
+                    conversationId={conversationId}
+                    disabled={streaming}
+                  />
+                  <ContentLabConversationExportButton
+                    clientId={clientId}
+                    clientName={clientName}
+                    conversationTitle={conversationTitle}
+                    messages={messages}
+                    attachedSearches={attachedSearches.map((s) => ({
+                      query: s.query,
+                      created_at: s.created_at,
+                    }))}
+                    disabled={streaming}
+                  />
+                </>
+              )}
+            </div>
+          )}
         </header>
 
       {loadingConversation && messages.length === 0 ? (
