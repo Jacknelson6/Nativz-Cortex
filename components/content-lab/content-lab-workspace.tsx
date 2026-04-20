@@ -38,6 +38,7 @@ export function ContentLabWorkspace({
   clientSlug,
   clientName,
   topicSearches,
+  initialAttachedSearchId = null,
   // Brand, pillar, moodboard, and vault props are kept for future use. They
   // were rendered by the retired Knowledge Base tab.
 }: {
@@ -53,6 +54,13 @@ export function ContentLabWorkspace({
   hasCompletedIdeaGeneration: boolean;
   vaultEntries: KnowledgeEntry[];
   vaultGraphData: KnowledgeGraphData;
+  /**
+   * Pre-pin a specific topic search on mount (e.g. drawer handoff from
+   * /admin/search/[id]?attach=topic_search:<id>). Takes precedence over the
+   * localStorage pin set so the handoff carries the brand + the exact
+   * research the user was just looking at.
+   */
+  initialAttachedSearchId?: string | null;
 }) {
   const storageKey = contentLabTopicSearchStorageKey(clientId);
 
@@ -65,6 +73,19 @@ export function ContentLabWorkspace({
 
   useEffect(() => {
     const validIds = new Set(topicSearches.map((s) => s.id));
+
+    // Drawer handoff wins over localStorage so the user lands on exactly the
+    // research they were just reading. Also persist it so reloads keep the pin.
+    if (initialAttachedSearchId && validIds.has(initialAttachedSearchId)) {
+      setPinnedTopicSearchIds([initialAttachedSearchId]);
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify([initialAttachedSearchId]));
+      } catch {
+        /* ignore quota */
+      }
+      return;
+    }
+
     try {
       const raw = typeof window !== 'undefined' ? window.localStorage.getItem(storageKey) : null;
       if (raw) {
@@ -92,7 +113,7 @@ export function ContentLabWorkspace({
     } else {
       setPinnedTopicSearchIds([]);
     }
-  }, [storageKey, mostRecentCompletedSearch, topicSearches]);
+  }, [storageKey, mostRecentCompletedSearch, topicSearches, initialAttachedSearchId]);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">

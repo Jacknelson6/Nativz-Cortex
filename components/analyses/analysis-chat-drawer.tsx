@@ -267,10 +267,11 @@ export function AnalysisChatDrawer({
         Ask the Nerd
       </button>
 
-      {/* Overlay */}
+      {/* Click-outside layer — transparent so the analysis behind the drawer
+          stays fully visible while the chat is open. */}
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 z-40"
           onClick={() => setOpen(false)}
           aria-hidden
         />

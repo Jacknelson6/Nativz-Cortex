@@ -9,10 +9,18 @@ import { getKnowledgeEntries, getKnowledgeGraph } from '@/lib/knowledge/queries'
 
 export default async function ContentLabClientPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ clientId: string }>;
+  searchParams: Promise<{ attach?: string }>;
 }) {
   const { clientId } = await params;
+  const { attach } = await searchParams;
+  const initialAttachedSearchId = (() => {
+    if (!attach) return null;
+    const [type, id] = attach.split(':');
+    return type === 'topic_search' && id ? id : null;
+  })();
 
   const supabase = await createServerSupabaseClient();
   const {
@@ -135,6 +143,7 @@ export default async function ContentLabClientPage({
         hasCompletedIdeaGeneration={(completedIdeaGenCount ?? 0) > 0}
         vaultEntries={vaultEntries}
         vaultGraphData={vaultGraphData}
+        initialAttachedSearchId={initialAttachedSearchId}
       />
     </div>
   );

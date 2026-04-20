@@ -36,7 +36,7 @@ export function AiTakeaways({
     if (breakdown?.categories?.length) {
       return breakdown.categories.slice(0, 4).map((c) => ({
         title: c.name,
-        pctOfContent: `${c.percentage}%`,
+        pctOfContent: `${Math.round(c.percentage)}%`,
         erTypical: formatEngagementRatePercent(c.engagement_rate),
         erYour: hasClient ? formatEngagementRatePercent(c.your_engagement_rate) : '—',
       }));

@@ -68,7 +68,11 @@ export default async function AdminSearchResultsPage({
           scopeType="topic_search"
           scopeId={search.id}
           scopeLabel={search.query}
-          strategyLabHref={`/admin/strategy-lab?attach=topic_search:${search.id}`}
+          strategyLabHref={
+            clientInfo
+              ? `/admin/strategy-lab/${clientInfo.id}?attach=topic_search:${search.id}`
+              : `/admin/strategy-lab?attach=topic_search:${search.id}`
+          }
         />
       )}
     </>
