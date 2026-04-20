@@ -149,11 +149,13 @@ export async function syncMondayClientToVault(
 
   await writeFile(path, content, `monday-sync: ${parsed.name}`, existing?.sha);
 
-  // Sync services + auto-deactivate clients with no services
+  // Auto-deactivate clients with no services in Monday.
+  // Note: `clients.services` is owned by the contracts feature (derived from
+  // active contracts) and is not written here anymore.
   const adminClient = createAdminClient();
   await adminClient
     .from('clients')
-    .update({ is_active: parsed.services.length > 0, services: parsed.services })
+    .update({ is_active: parsed.services.length > 0 })
     .ilike('name', parsed.name);
 
   return {
@@ -181,10 +183,11 @@ export async function syncAllMondayClients(): Promise<{
       const parsed = parseMondayClient(item);
       const result = await syncMondayClientToVault(item);
 
-      // Sync services + auto-deactivate clients with no services
+      // Auto-deactivate clients with no services in Monday. `clients.services`
+      // is owned by the contracts feature and is not written here anymore.
       await adminClient
         .from('clients')
-        .update({ is_active: parsed.services.length > 0, services: parsed.services })
+        .update({ is_active: parsed.services.length > 0 })
         .ilike('name', parsed.name);
 
       results.push(result);

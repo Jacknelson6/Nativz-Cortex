@@ -28,6 +28,17 @@ async function requireAdmin(userId: string) {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Strip path separators + exotic chars from user-supplied filenames before they
+ *  hit Supabase Storage. Keeps the extension so downloads look right. */
+function sanitizeFileName(raw: string): string {
+  const cleaned = raw
+    .replace(/[\/\\]/g, '_')
+    .replace(/[^A-Za-z0-9._-]/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return cleaned.slice(0, 180) || 'contract';
+}
+
 /**
  * Accept either a client slug or UUID. The route now lives under `[id]` to
  * keep Next.js happy (NAT-52), so callers passing a slug still work.
@@ -123,7 +134,8 @@ export async function POST(
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const storagePath = `${client.organization_id ?? 'no-org'}/${client.id}/${draft.id}/${file.name}`;
+  const safeName = sanitizeFileName(file.name);
+  const storagePath = `${client.organization_id ?? 'no-org'}/${client.id}/${draft.id}/${safeName}`;
   const { error: uploadErr } = await admin.storage
     .from('client-contracts')
     .upload(storagePath, buffer, { contentType: file.type, upsert: false });
