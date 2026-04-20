@@ -12,6 +12,14 @@ export interface PipelineItem {
   editing_manager: string | null;
   editor: string | null;
   smm: string | null;
+  // NAT-27 dual-write FK columns — populated alongside the display names
+  // whenever the writer has a team_members match. Consumers can prefer the
+  // id when present.
+  strategist_id?: string | null;
+  videographer_id?: string | null;
+  editing_manager_id?: string | null;
+  editor_id?: string | null;
+  smm_id?: string | null;
   assignment_status: string;
   raws_status: string;
   editing_status: string;
@@ -27,6 +35,11 @@ export interface PipelineItem {
   later_calendar_link: string | null;
   project_brief_url: string | null;
   notes: string | null;
+  // NAT-26 — per-track timestamps for stall detection. jsonb keyed by
+  // status-column name, values are ISO strings. Optional so pre-migration
+  // API responses (which may not select the column) still typecheck.
+  stage_changed_at?: Record<string, unknown> | null;
+  updated_at?: string | null;
 }
 
 export interface TeamMember {

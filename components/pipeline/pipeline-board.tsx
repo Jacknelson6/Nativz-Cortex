@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Trash2, FolderOpen, HardDrive, Calendar } from 'lucide-react';
+import { Trash2, FolderOpen, HardDrive, Calendar, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { StatusPill } from './status-pill';
 import { PersonCell } from './person-cell';
@@ -12,6 +12,7 @@ import {
   extractUrl,
   getCompletionProgress,
 } from './pipeline-types';
+import { isStalled, STALL_DAYS } from '@/lib/pipeline/transitions';
 
 interface PipelineBoardProps {
   items: PipelineItem[];
@@ -105,6 +106,12 @@ export function PipelineBoard({
                 const editedFolderUrl = extractUrl(item.edited_videos_folder_url);
                 const rawsFolderUrl = extractUrl(item.raws_folder_url);
                 const calendarUrl = extractUrl(item.later_calendar_link);
+                const statusField = boardConfig.statusField as string;
+                const stalled = isStalled(
+                  statusField,
+                  item.stage_changed_at ?? null,
+                  item.updated_at ?? null,
+                );
 
                 return (
                   <div
@@ -113,14 +120,28 @@ export function PipelineBoard({
                     onDragStart={e => handleDragStart(e, item.id)}
                     onDragEnd={handleDragEnd}
                     onClick={() => onSelect(item)}
-                    className={`rounded-xl border border-nativz-border bg-surface p-3 space-y-2 group hover:border-accent/30 transition-all cursor-pointer ${
-                      draggingId === item.id ? 'opacity-40 scale-95' : ''
-                    }`}
+                    className={`rounded-xl border bg-surface p-3 space-y-2 group transition-all cursor-pointer ${
+                      stalled
+                        ? 'border-amber-500/40 hover:border-amber-500/60'
+                        : 'border-nativz-border hover:border-accent/30'
+                    } ${draggingId === item.id ? 'opacity-40 scale-95' : ''}`}
+                    title={
+                      stalled
+                        ? `Stalled — no movement on this track for over ${STALL_DAYS[statusField] ?? 3} days`
+                        : undefined
+                    }
                   >
                     {/* Client name + agency badge */}
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-sm font-medium text-text-primary truncate">
-                        {item.client_name}
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-text-primary truncate">
+                        {stalled && (
+                          <Clock
+                            size={11}
+                            className="shrink-0 text-amber-400"
+                            aria-hidden
+                          />
+                        )}
+                        <span className="truncate">{item.client_name}</span>
                       </span>
                       {item.agency && (
                         <Badge
