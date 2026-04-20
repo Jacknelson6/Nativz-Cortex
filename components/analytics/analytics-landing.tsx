@@ -19,6 +19,9 @@ const BenchmarkingDashboard = dynamic(
 const AuditBenchmarksPanel = dynamic(
   () => import('@/components/analytics/audit-benchmarks-panel').then(m => ({ default: m.AuditBenchmarksPanel })),
 );
+const WorkspaceHealthPanel = dynamic(
+  () => import('@/components/reporting/workspace-health-panel').then(m => ({ default: m.WorkspaceHealthPanel })),
+);
 
 type TabId = 'social' | 'affiliates' | 'benchmarking';
 
@@ -68,11 +71,12 @@ export function AnalyticsLanding({ clients, initialClientId, initialTab }: Analy
   // Show client portfolio selector if no client selected
   if (!selectedClientId) {
     return (
-      <div className="cortex-page-gutter py-8">
-        <div className="mb-8">
+      <div className="cortex-page-gutter py-8 space-y-6">
+        <div>
           <h1 className="ui-page-title">Analytics</h1>
           <p className="text-sm text-text-muted mt-0.5">Select a client to view performance data</p>
         </div>
+        <WorkspaceHealthPanel />
         <ClientPortfolioSelector
           clients={clients}
           onSelect={handleSelectClient}

@@ -13,6 +13,12 @@ import { GrowthChart } from './growth-chart';
 import { PlatformSection } from './platform-section';
 import { TopPostsView } from './top-posts-view';
 import { AudienceInsightsCard } from './audience-insights-card';
+import { TotalFollowersChart } from './total-followers-chart';
+import { PlatformBreakdownTable } from './platform-breakdown-table';
+import { PostingCadenceHeatmap } from './posting-cadence-heatmap';
+import { ContentDecayCard } from './content-decay-card';
+import { PostingFrequencyChart } from './posting-frequency-chart';
+import { PostDetailsGrid } from './post-details-grid';
 import type { TopPostItem } from '@/lib/types/reporting';
 
 const ReportBuilder = dynamic(() => import('./report-builder').then(m => ({ default: m.ReportBuilder })));
@@ -155,8 +161,31 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
           {/* Audience insights — auto-hides when Zernio doesn't return data. */}
           {selectedClientId && <AudienceInsightsCard clientId={selectedClientId} />}
 
+          {/* Stacked multi-line follower chart + platform breakdown row. */}
+          {summary?.followerChart && summary.followerChart.length > 0 && (
+            <TotalFollowersChart data={summary.followerChart} loading={dataLoading} />
+          )}
+          {summary?.platformBreakdown && summary.platformBreakdown.length > 0 && (
+            <PlatformBreakdownTable rows={summary.platformBreakdown} />
+          )}
+
+          {/* Posting cadence heatmap — when did posts go out? */}
+          {selectedClientId && dateRange && (
+            <PostingCadenceHeatmap
+              clientId={selectedClientId}
+              start={dateRange.start}
+              end={dateRange.end}
+            />
+          )}
+
           {/* Aggregate growth chart */}
           <GrowthChart data={summary?.chart ?? []} loading={dataLoading} />
+
+          {/* Content decay + posting-frequency (Zernio-only insights). */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {selectedClientId && <ContentDecayCard clientId={selectedClientId} />}
+            {selectedClientId && <PostingFrequencyChart clientId={selectedClientId} />}
+          </div>
 
           {/* Per-platform sections */}
           {summary?.platforms && summary.platforms.length > 0 && (
@@ -164,7 +193,7 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
               <h2 className="text-lg font-semibold text-text-primary border-b border-nativz-border pb-2">
                 Platform breakdown
               </h2>
-              {(['facebook', 'instagram', 'youtube', 'tiktok'] as const)
+              {(['facebook', 'instagram', 'youtube', 'tiktok', 'linkedin'] as const)
                 .filter((p) => summary.platforms.some((ps) => ps.platform === p))
                 .map((platform) => {
                   const ps = summary.platforms.find((s) => s.platform === platform)!;
@@ -178,6 +207,15 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
                   );
                 })}
             </div>
+          )}
+
+          {/* Full post details grid — filterable list of every post. */}
+          {selectedClientId && dateRange && (
+            <PostDetailsGrid
+              clientId={selectedClientId}
+              start={dateRange.start}
+              end={dateRange.end}
+            />
           )}
         </>
       )}
