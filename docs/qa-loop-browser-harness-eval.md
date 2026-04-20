@@ -108,10 +108,22 @@ Each runs its own isolated cloud Chrome. Parent agent collects results, dedupes,
 
 ---
 
-## Open questions for Jack
+## Decision: park it (2026-04-20)
 
-1. Is **parallel SRL fan-out** valuable enough to justify setting up browser-harness + a cloud API key? If QA is mostly single-pass, the answer is "not yet." If we expect to crawl the full portal + admin + shared-link universe on every merge, yes.
-2. Would you use the "reproduce-in-Jack's-real-browser" flow, or is that a rare edge case? If rare, we might skip scenario A and only wire harness for fan-out.
-3. Is the regression-index layer (structured screenshot/console/network diffs) a priority item, or is the current "eyeball screenshots" flow fine for now?
+Jack's answers to the open questions:
 
-Answers drive whether this is a "do now" project or a "park until the pain shows up" one.
+1. Parallel SRL fan-out — **probably not needed.** This was the one concrete win over Playwright MCP. Without it, the harness mostly overlaps with what we have.
+2. Reproduce-in-real-browser — **edge case**, but could be useful for visual QA occasionally.
+3. Regression-index layer — **undecided.**
+
+**Net: don't install, don't wire a second skill.** The Playwright MCP + [scripts/magic-link.ts](../scripts/magic-link.ts) combo covers 95% of the need. The 5% (debugging a session-specific bug in Jack's actual Chrome) isn't frequent enough to justify standing up a second runner, a Python env, and a cloud API key.
+
+### When to revisit
+
+Re-open this doc if any of the following happen:
+
+- QA starts needing to crawl admin + portal + shared-links + AC-theme variants on every merge. At that point, fan-out against 3 concurrent cloud browsers is worth the setup.
+- A user-env-specific bug (extension interaction, persistent cache, specific login state) becomes impossible to reproduce in a fresh Playwright context.
+- We build the regression-index layer and want to fan it out. Then cloud browsers matter.
+
+Until then: the magic-link workflow is fine. Don't build the second runner.
