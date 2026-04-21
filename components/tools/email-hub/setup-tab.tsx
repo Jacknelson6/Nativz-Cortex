@@ -18,15 +18,16 @@ type Agency = {
   from: string;
   replyTo: string;
   sendDomain: string;
+  webhookSecretEnvVar: string;
+  webhookSecretConfigured: boolean;
+  webhookSecretSource: 'dedicated' | 'shared' | 'missing';
 };
 
 type SetupData = {
   agencies: Agency[];
   env: {
     resendKeyConfigured: boolean;
-    webhookSecretConfigured: boolean;
-    webhookSecretNativzConfigured: boolean;
-    webhookSecretAndersonConfigured: boolean;
+    sharedWebhookSecretConfigured: boolean;
     cronSecretConfigured: boolean;
   };
   webhook: {
@@ -78,13 +79,20 @@ export function SetupTab() {
           {data.agencies.map((a) => (
             <li key={a.key} className="px-5 py-4">
               <div className="flex items-center justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-semibold text-text-primary">{a.label}</p>
                   <p className="text-xs text-text-muted mt-0.5">
                     Send domain: <code>{a.sendDomain}</code>
                   </p>
                 </div>
-                <TestSendButton agency={a.key} />
+                <div className="flex items-center gap-2 shrink-0">
+                  <WebhookSecretChip
+                    configured={a.webhookSecretConfigured}
+                    source={a.webhookSecretSource}
+                    envVar={a.webhookSecretEnvVar}
+                  />
+                  <TestSendButton agency={a.key} />
+                </div>
               </div>
               <dl className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                 <div className="rounded-xl border border-nativz-border bg-background px-3 py-2.5">
@@ -119,14 +127,9 @@ export function SetupTab() {
             description="Required. Resend outbound API key."
           />
           <EnvRow
-            label="RESEND_WEBHOOK_SECRET_NATIVZ"
-            configured={data.env.webhookSecretNativzConfigured}
-            description="Signing secret for the Nativz Resend webhook endpoint."
-          />
-          <EnvRow
-            label="RESEND_WEBHOOK_SECRET_ANDERSON"
-            configured={data.env.webhookSecretAndersonConfigured}
-            description="Signing secret for the Anderson Collaborative Resend webhook endpoint."
+            label="RESEND_WEBHOOK_SECRET"
+            configured={data.env.sharedWebhookSecretConfigured}
+            description="Optional shared fallback. Covers both agencies when set — use this if you have a single Resend webhook endpoint. Per-agency overrides appear next to each identity above."
           />
           <EnvRow
             label="CRON_SECRET"
@@ -241,6 +244,48 @@ function EnvRow({
         {configured ? 'Set' : 'Missing'}
       </span>
     </li>
+  );
+}
+
+function WebhookSecretChip({
+  configured,
+  source,
+  envVar,
+}: {
+  configured: boolean;
+  source: 'dedicated' | 'shared' | 'missing';
+  envVar: string;
+}) {
+  const label =
+    source === 'dedicated'
+      ? 'Secret set'
+      : source === 'shared'
+      ? 'Shared secret'
+      : 'Secret missing';
+  const tooltip =
+    source === 'dedicated'
+      ? `Signed with ${envVar}`
+      : source === 'shared'
+      ? `Using shared RESEND_WEBHOOK_SECRET. Set ${envVar} for a per-agency override.`
+      : `Set ${envVar} in Vercel (or RESEND_WEBHOOK_SECRET as a shared fallback).`;
+  return (
+    <span
+      title={tooltip}
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider ${
+        configured
+          ? source === 'dedicated'
+            ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+            : 'bg-sky-500/10 text-sky-400 border-sky-500/30'
+          : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+      }`}
+    >
+      {configured ? (
+        <CheckCircle2 size={11} />
+      ) : (
+        <AlertCircle size={11} />
+      )}
+      {label}
+    </span>
   );
 }
 

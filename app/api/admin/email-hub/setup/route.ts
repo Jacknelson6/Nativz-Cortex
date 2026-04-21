@@ -31,6 +31,10 @@ export async function GET() {
     if (!latestEvent || e.received_at > latestEvent) latestEvent = e.received_at;
   }
 
+  const sharedSecret = Boolean(process.env.RESEND_WEBHOOK_SECRET);
+  const nativzSecret = Boolean(process.env.RESEND_WEBHOOK_SECRET_NATIVZ);
+  const andersonSecret = Boolean(process.env.RESEND_WEBHOOK_SECRET_ANDERSON);
+
   const agencies = [
     {
       key: 'nativz' as const,
@@ -38,6 +42,13 @@ export async function GET() {
       from: getFromAddress('nativz'),
       replyTo: getReplyTo('nativz'),
       sendDomain: 'nativz.io',
+      webhookSecretEnvVar: 'RESEND_WEBHOOK_SECRET_NATIVZ',
+      webhookSecretConfigured: nativzSecret || sharedSecret,
+      webhookSecretSource: nativzSecret
+        ? ('dedicated' as const)
+        : sharedSecret
+        ? ('shared' as const)
+        : ('missing' as const),
     },
     {
       key: 'anderson' as const,
@@ -45,22 +56,19 @@ export async function GET() {
       from: getFromAddress('anderson'),
       replyTo: getReplyTo('anderson'),
       sendDomain: 'andersoncollaborative.com',
+      webhookSecretEnvVar: 'RESEND_WEBHOOK_SECRET_ANDERSON',
+      webhookSecretConfigured: andersonSecret || sharedSecret,
+      webhookSecretSource: andersonSecret
+        ? ('dedicated' as const)
+        : sharedSecret
+        ? ('shared' as const)
+        : ('missing' as const),
     },
   ];
 
   const env = {
     resendKeyConfigured: Boolean(process.env.RESEND_API_KEY),
-    webhookSecretConfigured: Boolean(
-      process.env.RESEND_WEBHOOK_SECRET ||
-        process.env.RESEND_WEBHOOK_SECRET_NATIVZ ||
-        process.env.RESEND_WEBHOOK_SECRET_ANDERSON,
-    ),
-    webhookSecretNativzConfigured: Boolean(
-      process.env.RESEND_WEBHOOK_SECRET_NATIVZ || process.env.RESEND_WEBHOOK_SECRET,
-    ),
-    webhookSecretAndersonConfigured: Boolean(
-      process.env.RESEND_WEBHOOK_SECRET_ANDERSON || process.env.RESEND_WEBHOOK_SECRET,
-    ),
+    sharedWebhookSecretConfigured: sharedSecret,
     cronSecretConfigured: Boolean(process.env.CRON_SECRET),
   };
 
