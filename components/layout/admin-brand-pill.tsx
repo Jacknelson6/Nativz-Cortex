@@ -123,13 +123,26 @@ export function AdminBrandPill() {
           open
             ? 'border-accent/30 bg-accent-surface/30'
             : 'border-transparent hover:border-nativz-border hover:bg-surface-hover'
-        } ${isMuted ? 'opacity-60' : ''} ${isPending ? 'opacity-70' : ''}`}
+        }`}
       >
+        {/* Logo stays full brightness in every state — it's brand identity,
+         *  not a control. Muting moves to the label + chevron only so
+         *  admin-only routes still read as "brand context paused" without
+         *  visually punishing the brand itself. */}
         <BrandIcon brand={brand} size={20} />
-        <div className="min-w-0 flex-1 text-left">
+        <div
+          className={`min-w-0 flex-1 text-left transition-opacity duration-150 ${
+            isMuted ? 'opacity-60' : ''
+          } ${isPending ? 'opacity-70' : ''}`}
+        >
           <p className="truncate text-sm font-medium text-text-primary">{triggerLabel}</p>
         </div>
-        <ChevronsUpDown size={14} className="shrink-0 text-text-muted" />
+        <ChevronsUpDown
+          size={14}
+          className={`shrink-0 text-text-muted transition-opacity duration-150 ${
+            isMuted ? 'opacity-60' : ''
+          }`}
+        />
       </button>
 
       {open && (
