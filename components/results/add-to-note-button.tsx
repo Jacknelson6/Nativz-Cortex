@@ -43,10 +43,22 @@ export function AddToNoteButton({ sourceUrl, clientId }: AddToNoteButtonProps) {
   const [showNewInput, setShowNewInput] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
+  // Drop any cached board list if the active brand changes — otherwise a
+  // list fetched for "Client A" would linger when the user pinned "Client B".
+  useEffect(() => {
+    setBoards(null);
+  }, [clientId]);
+
   useEffect(() => {
     if (!open || boards !== null) return;
     (async () => {
-      const res = await fetch('/api/moodboard/notes-boards');
+      // Scope the board list to the active brand when one is in context
+      // (portal: their bound brand; admin: the top-bar pill's clientId
+      // gets passed in by the carousel). Without this the popover leaks
+      // every cross-client note the caller can see — Jack flagged this
+      // explicitly on 2026-04-21.
+      const qs = clientId ? `?clientId=${encodeURIComponent(clientId)}` : '';
+      const res = await fetch(`/api/moodboard/notes-boards${qs}`);
       if (!res.ok) {
         setBoards([]);
         return;
@@ -54,7 +66,7 @@ export function AddToNoteButton({ sourceUrl, clientId }: AddToNoteButtonProps) {
       const data = await res.json();
       setBoards((data.boards ?? []) as NotesBoard[]);
     })();
-  }, [open, boards]);
+  }, [open, boards, clientId]);
 
   // Close on outside click.
   useEffect(() => {

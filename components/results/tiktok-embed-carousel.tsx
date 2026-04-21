@@ -407,15 +407,9 @@ export function TikTokEmbedCarousel({
               </div>
             </section>
 
-            {/* Analysis — auto-loaded */}
-            {analysisLoading && !analysisItem && (
-              <div className="flex items-center gap-2 text-xs text-text-muted py-2">
-                <Loader2 size={12} className="animate-spin" /> Loading analysis…
-              </div>
-            )}
-
-            {/* Hook analysis */}
-            {(analysisItem?.hook_analysis || analysisItem?.hook) && (
+            {/* Hook analysis — skeleton while the pipeline runs; real card
+                once hook / hook_analysis lands on the item. */}
+            {(analysisItem?.hook_analysis || analysisItem?.hook) ? (
               <section>
                 <p className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">Hook analysis</p>
                 <div className="rounded-lg border border-accent/20 bg-accent-surface/30 p-3 space-y-2">
@@ -435,12 +429,40 @@ export function TikTokEmbedCarousel({
                   </div>
                 </div>
               </section>
-            )}
+            ) : analysisLoading ? (
+              <section aria-busy="true" aria-label="Loading hook analysis">
+                <p className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">Hook analysis</p>
+                <div className="rounded-lg border border-accent/20 bg-accent-surface/30 p-3 space-y-2">
+                  <div className="h-3 w-3/4 animate-pulse rounded bg-surface-hover" />
+                  <div className="h-3 w-full animate-pulse rounded bg-surface-hover" />
+                  <div className="h-3 w-5/6 animate-pulse rounded bg-surface-hover" />
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <div className="h-4 w-16 animate-pulse rounded-full bg-surface-hover" />
+                    <div className="h-4 w-14 animate-pulse rounded bg-surface-hover" />
+                  </div>
+                </div>
+              </section>
+            ) : null}
 
             {/* Transcript */}
             {(() => {
               const transcript = analysisItem?.transcript ?? source.transcript ?? '';
-              if (!transcript.trim()) return null;
+              if (!transcript.trim()) {
+                if (analysisLoading) {
+                  return (
+                    <section aria-busy="true" aria-label="Loading transcript">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">Transcript</p>
+                      <div className="rounded-lg border border-nativz-border bg-background/40 p-3 space-y-1.5">
+                        <div className="h-3 w-full animate-pulse rounded bg-surface-hover" />
+                        <div className="h-3 w-11/12 animate-pulse rounded bg-surface-hover" />
+                        <div className="h-3 w-9/12 animate-pulse rounded bg-surface-hover" />
+                        <div className="h-3 w-10/12 animate-pulse rounded bg-surface-hover" />
+                      </div>
+                    </section>
+                  );
+                }
+                return null;
+              }
               return (
                 <section>
                   <div className="flex items-center justify-between mb-2">
@@ -522,11 +544,38 @@ export function TikTokEmbedCarousel({
               const buckets = bucketSegments(segments, 3);
 
               if (buckets.length === 0 && frames.length === 0) {
-                if (analysisLoading) return (
-                  <div className="flex items-center gap-2 text-xs text-text-muted py-1">
-                    <Loader2 size={12} className="animate-spin" /> Extracting frames…
-                  </div>
-                );
+                if (analysisLoading) {
+                  // Skeleton rows mirror the final li layout — thumbnail
+                  // tile + stacked time/badge/text — so the panel height
+                  // doesn't shift when the real data lands.
+                  return (
+                    <section>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">
+                        Frame breakdown
+                      </p>
+                      <ul className="space-y-1.5" aria-busy="true" aria-label="Loading frame breakdown">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <li
+                            key={i}
+                            className="flex gap-2 rounded-lg border border-nativz-border/60 bg-surface-hover/20 p-1.5"
+                          >
+                            <div className="w-10 shrink-0 overflow-hidden rounded border border-nativz-border">
+                              <div className="aspect-[9/16] w-full animate-pulse bg-surface-hover" />
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-1.5 py-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <div className="h-3 w-20 animate-pulse rounded bg-surface-hover" />
+                                <div className="h-3 w-12 animate-pulse rounded bg-surface-hover" />
+                              </div>
+                              <div className="h-3 w-11/12 animate-pulse rounded bg-surface-hover" />
+                              <div className="h-3 w-3/4 animate-pulse rounded bg-surface-hover" />
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  );
+                }
                 return null;
               }
 
