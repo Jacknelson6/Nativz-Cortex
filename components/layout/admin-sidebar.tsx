@@ -462,20 +462,7 @@ export function AdminSidebar({
                       tooltip={!open ? item.label : undefined}
                       onClick={() => toggleMenu(item.href)}
                     >
-                      <div className="relative flex items-center shrink-0">
-                        <item.icon size={18} className="shrink-0" />
-                        {/* Accent dot on collapsed rail when a child route
-                            is active — without it the only cue is the pill
-                            highlight, which blends into the hover state.
-                            Hidden in the open rail because the accordion
-                            + child highlight already telegraph position. */}
-                        {!open && childActive && (
-                          <span
-                            aria-hidden
-                            className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-accent"
-                          />
-                        )}
-                      </div>
+                      <item.icon size={18} className="shrink-0" />
                       <span
                         className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
                           open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
@@ -513,42 +500,59 @@ export function AdminSidebar({
                         parentButton
                       )}
 
-                      {/* Inline accordion — only in the expanded rail. The
-                          collapsed rail relies on the hover flyout above, so
-                          we don't render icon-only children inline (they
-                          cluttered the rail for users on a child route). */}
-                      {open && (
-                        <div
-                          className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
-                          style={{
-                            gridTemplateRows: isExpanded ? '1fr' : '0fr',
-                            opacity: isExpanded ? 1 : 0,
-                          }}
-                        >
-                          <div className="overflow-hidden">
-                            <ul className="mt-1.5 space-y-1 pb-1 ml-6 pl-2 border-l border-nativz-border">
-                              {item.children.map((child) => {
-                                const cActive = isActivePath(pathname, child.href, searchParams);
-                                return (
-                                  <li key={child.href}>
-                                    <Link
-                                      href={child.href}
-                                      className={`flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium transition-colors ${
-                                        cActive
-                                          ? 'text-accent-text bg-accent-surface'
-                                          : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
+                      {/* Inline accordion — renders in BOTH rail states so a
+                          dropdown that was open stays "open" when the rail
+                          collapses: children keep a visual presence in the
+                          rail (icon-only column, center-aligned, matching
+                          the treatment of flat items) instead of vanishing.
+                          Hover-flyout above still provides labels on demand.
+                          Reveal on open-rail uses the accordion's own
+                          grid-row transition so the label animation lands
+                          in lockstep with the flat-item label reveal. */}
+                      <div
+                        className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+                        style={{
+                          gridTemplateRows: isExpanded ? '1fr' : '0fr',
+                          opacity: isExpanded ? 1 : 0,
+                        }}
+                      >
+                        <div className="overflow-hidden">
+                          <ul
+                            className={`space-y-1 pb-1 transition-[margin,padding,border-color] duration-200 ease-out ${
+                              open
+                                ? 'mt-1.5 ml-6 pl-2 border-l border-nativz-border'
+                                : 'mt-0.5 ml-0 pl-0 border-l border-transparent'
+                            }`}
+                          >
+                            {item.children.map((child) => {
+                              const cActive = isActivePath(pathname, child.href, searchParams);
+                              return (
+                                <li key={child.href}>
+                                  <Link
+                                    href={child.href}
+                                    className={`flex items-center rounded-md text-sm font-medium transition-[padding,gap] duration-200 ease-out ${
+                                      open ? 'gap-2 px-2 py-2' : 'justify-center p-2 min-h-[40px]'
+                                    } ${
+                                      cActive
+                                        ? 'text-accent-text bg-accent-surface'
+                                        : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
+                                    }`}
+                                  >
+                                    <child.icon size={open ? 16 : 18} className="shrink-0" />
+                                    <span
+                                      className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
+                                        open ? 'max-w-[160px] opacity-100' : 'max-w-0 opacity-0'
                                       }`}
                                     >
-                                      <child.icon size={16} className="shrink-0" />
-                                      <span className="truncate">{child.label}</span>
-                                    </Link>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </div>
+                                      {child.label}
+                                    </span>
+                                  </Link>
+                                </li>
+                              );
+                            })}
+                          </ul>
                         </div>
-                      )}
+                      </div>
                     </SidebarMenuItem>
                   );
                 }

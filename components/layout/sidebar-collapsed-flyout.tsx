@@ -77,7 +77,7 @@ export function SidebarCollapsedFlyout({
         setOpen(true);
       }}
       onMouseLeave={scheduleClose}
-      className="fixed z-[1000] min-w-[200px] rounded-lg border border-nativz-border bg-surface shadow-elevated py-1"
+      className="fixed z-[1000] min-w-[200px] rounded-lg border border-nativz-border bg-surface shadow-elevated py-1 animate-[sidebarTooltipIn_120ms_ease-out_forwards]"
       style={{
         top: coords.top,
         left: coords.left,

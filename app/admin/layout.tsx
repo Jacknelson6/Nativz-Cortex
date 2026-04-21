@@ -15,6 +15,8 @@ import { EasterEgg } from '@/components/easter-egg';
 import { CommandPalette } from '@/components/shared/command-palette';
 import { PageTransition } from '@/components/shared/page-transition';
 import { BackgroundSearchProvider } from '@/components/search/background-search-tracker';
+import { ActiveBrandProvider } from '@/lib/admin/active-client-context';
+import { getActiveAdminClient, listAdminAccessibleBrands } from '@/lib/admin/get-active-client';
 
 const getCachedUser = unstable_cache(
   async (userId: string) => {
@@ -68,17 +70,29 @@ export default async function AdminLayout({
       hiddenSidebarItems = (prefs?.hidden_sidebar_items as string[] | null) ?? [];
     } catch { /* silent — ship without filtering */ }
 
+    // Resolve the admin's working brand + accessible brand list in parallel.
+    // Both queries are independent of each other; Promise.all keeps the
+    // layout's initial render off a waterfall. Failures degrade gracefully —
+    // an empty brand list just renders the pill in its "select a brand"
+    // state rather than crashing the shell.
+    const [active, availableBrands] = await Promise.all([
+      getActiveAdminClient().catch(() => ({ brand: null, source: 'none' as const, isAdmin: false })),
+      listAdminAccessibleBrands().catch(() => []),
+    ]);
+
     return (
       <BackgroundSearchProvider>
-        <SidebarProvider>
-          <EasterEgg />
-          <CommandPalette />
-          <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} />
-          <SidebarInset>
-            <AdminHeader />
-            <PageTransition>{children}</PageTransition>
-          </SidebarInset>
-        </SidebarProvider>
+        <ActiveBrandProvider initialBrand={active.brand} availableBrands={availableBrands}>
+          <SidebarProvider>
+            <EasterEgg />
+            <CommandPalette />
+            <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} />
+            <SidebarInset>
+              <AdminHeader />
+              <PageTransition>{children}</PageTransition>
+            </SidebarInset>
+          </SidebarProvider>
+        </ActiveBrandProvider>
       </BackgroundSearchProvider>
     );
   } catch (err) {
