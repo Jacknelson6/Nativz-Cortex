@@ -481,6 +481,206 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "sectionSlug": "admin"
   },
   {
+    "method": "POST",
+    "path": "/api/admin/active-client",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/email-hub/campaigns",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/email-hub/campaigns",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/email-hub/contacts",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/email-hub/contacts",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/admin/email-hub/contacts/:id",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/admin/email-hub/contacts/:id",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/email-hub/contacts/duplicates",
+    "description": "Find potential duplicate contacts. The email column has a lowercase-unique index so true dupes shouldn't exist — this scans for near-duplicates by normalizing the local part (stripping +tags, dots for Gmail) and by matching contacts that share the same full_name.",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/email-hub/contacts/import",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/email-hub/lists",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/email-hub/lists",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/admin/email-hub/lists/:id",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/email-hub/lists/:id",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/admin/email-hub/lists/:id",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/admin/email-hub/lists/:id/members",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/email-hub/lists/:id/members",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/email-hub/messages",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/email-hub/sequences",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/email-hub/sequences",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/admin/email-hub/sequences/:id",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/email-hub/sequences/:id",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/admin/email-hub/sequences/:id",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/email-hub/sequences/:id/enroll",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/email-hub/setup",
+    "description": "Returns the configured sender identities per agency + webhook health. Read-only — Resend domain verification is configured in the Resend dashboard, not here.",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/email-hub/setup/test-send",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
     "method": "GET",
     "path": "/api/admin/email-templates",
     "description": "",
@@ -2394,6 +2594,14 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   },
   {
     "method": "GET",
+    "path": "/api/cron/drain-email-hub",
+    "description": "Drains two time-based queues for Email Hub: 1. email_campaigns where status='scheduled' and scheduled_for <= now 2. email_sequence_enrollments where status='active' and next_send_at <= now Designed to run every minute (see vercel.json crons entry).",
+    "auth": "",
+    "section": "Cron Jobs",
+    "sectionSlug": "cron"
+  },
+  {
+    "method": "GET",
     "path": "/api/cron/ecom-snapshots",
     "description": "(NAT-21). Runs the Apify e-commerce actor for any competitor whose latest `ecom_snapshots` row is missing or older than 7 days. Rate-limited to 15 per run so a slow Apify queue can't consume the full 300s budget.",
     "auth": "Bearer $CRON_SECRET",
@@ -3193,20 +3401,12 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "response": "{{ ok: true }}"
   },
   {
-    "method": "GET",
-    "path": "/api/production-updates",
-    "description": "",
-    "auth": "",
-    "section": "Notifications",
-    "sectionSlug": "notifications"
-  },
-  {
     "method": "POST",
-    "path": "/api/production-updates",
+    "path": "/api/webhooks/resend",
     "description": "",
     "auth": "",
-    "section": "Notifications",
-    "sectionSlug": "notifications"
+    "section": "Other",
+    "sectionSlug": "other"
   },
   {
     "method": "GET",

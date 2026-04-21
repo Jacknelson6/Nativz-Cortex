@@ -11,11 +11,6 @@ import {
   Settings,
   Zap,
 } from 'lucide-react';
-import {
-  ProductionUpdatesClient,
-  type ClientOption,
-  type UpdateRow,
-} from '@/app/admin/tools/email/production-updates-client';
 import { EmailsTab } from './emails-tab';
 import { ContactsTab } from './contacts-tab';
 import { TemplatesTab } from './templates-tab';
@@ -23,6 +18,12 @@ import { CampaignsTab } from './campaigns-tab';
 import { ListsTab } from './lists-tab';
 import { SequencesTab } from './sequences-tab';
 import { SetupTab } from './setup-tab';
+
+export interface EmailHubClientOption {
+  id: string;
+  name: string;
+  agency: string | null;
+}
 
 type TabKey =
   | 'campaigns'
@@ -50,18 +51,11 @@ const TABS: Tab[] = [
 ];
 
 interface Props {
-  clients: ClientOption[];
-  initialUpdates: UpdateRow[];
-  senderEmail: string | null;
+  clients: EmailHubClientOption[];
 }
 
-export function EmailHubClient({ clients, initialUpdates, senderEmail }: Props) {
+export function EmailHubClient({ clients }: Props) {
   const [tab, setTab] = useState<TabKey>('campaigns');
-  const campaignClients = clients.map((c) => ({
-    id: c.id,
-    name: c.name,
-    agency: c.agency,
-  }));
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-8 space-y-6">
@@ -80,23 +74,7 @@ export function EmailHubClient({ clients, initialUpdates, senderEmail }: Props) 
       <TabBar tabs={TABS} current={tab} onChange={setTab} />
 
       <div>
-        {tab === 'campaigns' && (
-          <div className="space-y-6">
-            <CampaignsTab clients={campaignClients} />
-            <details className="rounded-2xl border border-nativz-border bg-surface/60">
-              <summary className="px-5 py-3 cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
-                Product update broadcasts (legacy composer)
-              </summary>
-              <div className="p-5 border-t border-nativz-border">
-                <ProductionUpdatesClient
-                  clients={clients}
-                  initialUpdates={initialUpdates}
-                  senderEmail={senderEmail}
-                />
-              </div>
-            </details>
-          </div>
-        )}
+        {tab === 'campaigns' && <CampaignsTab clients={clients} />}
         {tab === 'emails' && <EmailsTab />}
         {tab === 'contacts' && <ContactsTab />}
         {tab === 'lists' && <ListsTab />}
@@ -147,27 +125,3 @@ function TabBar({
   );
 }
 
-function EmptyTab({
-  icon: Icon,
-  title,
-  description,
-  cta,
-}: {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-  cta?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-nativz-border bg-surface/40 px-6 py-16 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-surface border border-nativz-border">
-        <Icon size={22} className="text-accent-text" />
-      </div>
-      <div>
-        <h3 className="text-base font-semibold text-text-primary">{title}</h3>
-        <p className="mt-1 max-w-md text-sm text-text-muted">{description}</p>
-      </div>
-      {cta}
-    </div>
-  );
-}

@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**532 endpoints across 32 sections.**
+**557 endpoints across 33 sections.**
 
 ## Authentication
 
@@ -5309,10 +5309,6 @@ The full notification preferences object to save
 {{ ok: true }}
 ```
 
-### `GET /api/production-updates`
-
-### `POST /api/production-updates`
-
 ---
 
 ## Vault
@@ -5641,6 +5637,60 @@ the period. Columns are ordered for the "drop into a spreadsheet and paste into 
 ### `GET /api/accounting/periods/:id/view-tokens`
 
 ### `POST /api/accounting/periods/:id/view-tokens`
+
+### `POST /api/admin/active-client`
+
+### `GET /api/admin/email-hub/campaigns`
+
+### `POST /api/admin/email-hub/campaigns`
+
+### `GET /api/admin/email-hub/contacts`
+
+### `POST /api/admin/email-hub/contacts`
+
+### `DELETE /api/admin/email-hub/contacts/:id`
+
+### `PATCH /api/admin/email-hub/contacts/:id`
+
+### `GET /api/admin/email-hub/contacts/duplicates`
+
+Find potential duplicate contacts. The email column has a lowercase-unique index so true dupes shouldn't exist — this scans for near-duplicates by normalizing the local part (stripping +tags, dots for Gmail) and by matching contacts that share the same full_name.
+
+### `POST /api/admin/email-hub/contacts/import`
+
+### `GET /api/admin/email-hub/lists`
+
+### `POST /api/admin/email-hub/lists`
+
+### `DELETE /api/admin/email-hub/lists/:id`
+
+### `GET /api/admin/email-hub/lists/:id`
+
+### `PATCH /api/admin/email-hub/lists/:id`
+
+### `DELETE /api/admin/email-hub/lists/:id/members`
+
+### `POST /api/admin/email-hub/lists/:id/members`
+
+### `GET /api/admin/email-hub/messages`
+
+### `GET /api/admin/email-hub/sequences`
+
+### `POST /api/admin/email-hub/sequences`
+
+### `DELETE /api/admin/email-hub/sequences/:id`
+
+### `GET /api/admin/email-hub/sequences/:id`
+
+### `PATCH /api/admin/email-hub/sequences/:id`
+
+### `POST /api/admin/email-hub/sequences/:id/enroll`
+
+### `GET /api/admin/email-hub/setup`
+
+Returns the configured sender identities per agency + webhook health. Read-only — Resend domain verification is configured in the Resend dashboard, not here.
+
+### `POST /api/admin/email-hub/setup/test-send`
 
 ### `GET /api/admin/email-templates`
 
@@ -6462,6 +6512,10 @@ Vercel cron job: enforce data retention policies (SOC 2 P3.2). - Activity logs o
 {{ message: string, deleted: Record<string, number> }}
 ```
 
+### `GET /api/cron/drain-email-hub`
+
+Drains two time-based queues for Email Hub: 1. email_campaigns where status='scheduled' and scheduled_for <= now 2. email_sequence_enrollments where status='active' and next_send_at <= now Designed to run every minute (see vercel.json crons entry).
+
 ### `GET /api/cron/ecom-snapshots`
 
 (NAT-21). Runs the Apify e-commerce actor for any competitor whose latest `ecom_snapshots` row is missing or older than 7 days. Rate-limited to 15 per run so a slow Apify queue can't consume the full 300s budget.
@@ -6525,5 +6579,13 @@ Vercel cron job: sync social analytics for all active clients that have social p
 Vercel cron: alert admins on failed topic searches (missed inline notify) and on runs stuck in pending / pending_subtopics / processing past env thresholds.
 
 **Auth:** Bearer CRON_SECRET
+
+---
+
+## Other
+
+_Uncategorized routes._
+
+### `POST /api/webhooks/resend`
 
 ---

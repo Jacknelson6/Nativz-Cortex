@@ -1,8 +1,10 @@
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { EmailHubClient } from '@/components/tools/email-hub/email-hub-client';
-import type { ClientOption, UpdateRow } from './production-updates-client';
+import {
+  EmailHubClient,
+  type EmailHubClientOption,
+} from '@/components/tools/email-hub/email-hub-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,26 +19,16 @@ export default async function EmailHubPage() {
   const { data: me } = await admin.from('users').select('role').eq('id', user.id).single();
   if (me?.role !== 'admin' && me?.role !== 'super_admin') redirect('/admin/dashboard');
 
-  const [clientsRes, updatesRes] = await Promise.all([
-    admin.from('clients').select('id, name, agency').order('name', { ascending: true }),
-    admin
-      .from('production_updates')
-      .select(
-        'id, title, body_markdown, audience_agency, audience_client_id, status, sent_at, recipient_count, failure_reason, created_at',
-      )
-      .order('created_at', { ascending: false })
-      .limit(25),
-  ]);
+  const { data: clientRows } = await admin
+    .from('clients')
+    .select('id, name, agency')
+    .order('name', { ascending: true });
 
-  const clients: ClientOption[] = (clientsRes.data ?? []).map((c) => ({
+  const clients: EmailHubClientOption[] = (clientRows ?? []).map((c) => ({
     id: c.id,
     name: c.name,
     agency: c.agency ?? null,
   }));
 
-  const updates: UpdateRow[] = (updatesRes.data ?? []) as UpdateRow[];
-
-  return (
-    <EmailHubClient clients={clients} initialUpdates={updates} senderEmail={user.email ?? null} />
-  );
+  return <EmailHubClient clients={clients} />;
 }
