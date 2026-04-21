@@ -22,6 +22,7 @@ import { TemplatesTab } from './templates-tab';
 import { CampaignsTab } from './campaigns-tab';
 import { ListsTab } from './lists-tab';
 import { SequencesTab } from './sequences-tab';
+import { SetupTab } from './setup-tab';
 
 type TabKey =
   | 'campaigns'
@@ -101,13 +102,7 @@ export function EmailHubClient({ clients, initialUpdates, senderEmail }: Props) 
         {tab === 'lists' && <ListsTab />}
         {tab === 'templates' && <TemplatesTab />}
         {tab === 'sequences' && <SequencesTab />}
-        {tab === 'setup' && (
-          <EmptyTab
-            icon={Settings}
-            title="Setup coming soon"
-            description="Sender identity, domain verification, and webhook routing will live here."
-          />
-        )}
+        {tab === 'setup' && <SetupTab />}
       </div>
     </div>
   );
