@@ -19,7 +19,7 @@ import {
   Receipt,
   Settings as SettingsIcon,
   Users,
-  Building,
+  BookUser,
   ShoppingBag,
   Bell,
   Camera,
@@ -107,7 +107,11 @@ const NAV_SECTIONS: NavSection[] = [
       // profile. Sits between Brain (AI knowledge) and Notes (manual
       // notes) — both adjacent to it in the user's mental model as
       // "stuff about the brand that isn't a generator/tool."
-      { href: '/admin/brand-profile', label: 'Brand Profile', icon: Building },
+      // NAT-57 follow-up: BookUser — a notebook-with-person icon reads
+      // closer to "profile page" than the generic Building we started
+      // with. Keeps the visual theme (outlined lucide) consistent with
+      // the rest of the rail.
+      { href: '/admin/brand-profile', label: 'Brand Profile', icon: BookUser },
       { href: '/admin/notes', label: 'Notes', icon: StickyNote },
     ],
   },

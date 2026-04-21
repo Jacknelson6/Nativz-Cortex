@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, Clock, Sparkles, Globe, ArrowLeft } from 'lucide-react';
+import { Clock, Sparkles, Globe, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { BrandDNACards, BRAND_DNA_BENTO_SURFACE } from './brand-dna-cards';
 import { OnboardWizard } from './onboard-wizard';
@@ -44,7 +43,6 @@ export function BrandDNAView({
   const { mode: brandMode } = useBrandMode();
   const isAC = brandMode === 'anderson';
   const [generateOpen, setGenerateOpen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [localMetadata, setLocalMetadata] = useState<BrandGuidelineMetadata | null>(
     (guideline?.metadata as BrandGuidelineMetadata) ?? null
@@ -52,31 +50,15 @@ export function BrandDNAView({
 
   const metadata = (localMetadata ?? guideline?.metadata ?? null) as Record<string, unknown> | null;
 
-  /** Refresh hits the same pipeline as generate — only offer it once a kit exists (not on empty state). */
-  const canRegenerateBrandDna =
-    websiteUrl.trim().length > 0 &&
-    brandDnaStatus !== 'generating' &&
-    guideline != null;
+  // NAT-57 follow-up (polish pass 2): Regenerate-brand-DNA wholesale
+  // flow removed. Admins edit individual sections (fonts, colors,
+  // products, voice, etc.) via the per-tile pencil icons, which open
+  // BrandDNASectionEditor — that's where font + color uploads happen.
+  // `handleSectionSaved` below still fires when an individual section
+  // save succeeds.
 
   function handleSectionSaved(updated: Partial<BrandGuidelineMetadata>) {
     setLocalMetadata((prev) => prev ? { ...prev, ...updated } : (updated as BrandGuidelineMetadata));
-  }
-
-  async function handleRefresh() {
-    setRefreshing(true);
-    try {
-      const res = await fetch(`/api/clients/${clientId}/brand-dna/refresh`, { method: 'POST' });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error ?? 'Refresh failed');
-      }
-      toast.success('Regenerating brand DNA — you can leave this page; refresh when it finishes');
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not start regeneration');
-    } finally {
-      setRefreshing(false);
-    }
   }
 
   return (
@@ -105,12 +87,12 @@ export function BrandDNAView({
               Updated {formatRelativeTime(guideline.updated_at ?? guideline.created_at)}
             </span>
           )}
-          {canRegenerateBrandDna ? (
-            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-              {refreshing ? 'Regenerating…' : 'Regenerate brand DNA'}
-            </Button>
-          ) : null}
+          {/* NAT-57 follow-up (polish pass 2): "Regenerate brand DNA"
+              button removed. Jack prefers per-section edits (fonts,
+              colors, products, etc.) via the pencil icons in each
+              BrandDNACards tile — those open BrandDNASectionEditor
+              which handles uploads + free-text edits. Wholesale
+              regenerate overwrites manual refinements too easily. */}
         </div>
       </div>
 

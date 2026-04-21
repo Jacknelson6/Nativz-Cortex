@@ -65,7 +65,13 @@ export default async function ClientSettingsBrandPage({
   }
 
   return (
-    <div className="space-y-8">
+    // NAT-57 follow-up: constrain the page to a sensible reading
+    // width. Client-admin-shell was leaving this full-width, which
+    // made long textareas (description, mission) stretch across 2000+px
+    // on wide monitors — painful to read and type. max-w-5xl matches
+    // the portal brand-profile view so both surfaces share the same
+    // layout rhythm.
+    <div className="max-w-5xl mx-auto space-y-6">
       {/* 1. Brand information — name, website, description, budget. */}
       <BrandSettingsForm slug={slug} />
 
@@ -90,19 +96,15 @@ export default async function ClientSettingsBrandPage({
         </div>
       </section>
 
-      {/* 7. Brand DNA — the AI-distilled visual + verbal identity.
-          Separated with a rule + extra top padding so the shift is
-          clear: above = raw fields, below = AI-synthesized views. */}
-      <div className="border-t border-nativz-border pt-8">
-        <BrandDNAView
-          clientId={client.id}
-          clientName={client.name ?? ''}
-          clientSlug={client.slug ?? slug}
-          websiteUrl={client.website_url ?? ''}
-          brandDnaStatus={client.brand_dna_status ?? 'none'}
-          guideline={guideline}
-        />
-      </div>
+      {/* 7. Brand DNA — the AI-distilled visual + verbal identity. */}
+      <BrandDNAView
+        clientId={client.id}
+        clientName={client.name ?? ''}
+        clientSlug={client.slug ?? slug}
+        websiteUrl={client.website_url ?? ''}
+        brandDnaStatus={client.brand_dna_status ?? 'none'}
+        guideline={guideline}
+      />
     </div>
   );
 }
