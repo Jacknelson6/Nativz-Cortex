@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ProductionUpdatesClient, type ClientOption, type UpdateRow } from './production-updates-client';
+import { EmailHubClient } from '@/components/tools/email-hub/email-hub-client';
+import type { ClientOption, UpdateRow } from './production-updates-client';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ProductionUpdatesPage() {
+export default async function EmailHubPage() {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -36,16 +37,6 @@ export default async function ProductionUpdatesPage() {
   const updates: UpdateRow[] = (updatesRes.data ?? []) as UpdateRow[];
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-8">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-text-primary">Production updates</h1>
-        <p className="mt-1 text-sm text-text-muted">
-          Broadcast what shipped to portal users. Emails are themed per agency (Nativz or Anderson Collaborative) based on each
-          recipient&apos;s client.
-        </p>
-      </header>
-
-      <ProductionUpdatesClient clients={clients} initialUpdates={updates} senderEmail={user.email ?? null} />
-    </div>
+    <EmailHubClient clients={clients} initialUpdates={updates} senderEmail={user.email ?? null} />
   );
 }
