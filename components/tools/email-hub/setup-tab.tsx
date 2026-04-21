@@ -83,18 +83,12 @@ export function SetupTab() {
                   <TestSendButton agency={a.key} />
                 </div>
               </div>
-              <dl className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <dl className="mt-3 text-xs">
                 <div className="rounded-xl border border-nativz-border bg-background px-3 py-2.5">
                   <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
                     From
                   </dt>
                   <dd className="mt-0.5 text-text-primary font-mono">{a.from}</dd>
-                </div>
-                <div className="rounded-xl border border-nativz-border bg-background px-3 py-2.5">
-                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                    Reply-to
-                  </dt>
-                  <dd className="mt-0.5 text-text-primary font-mono">{a.replyTo}</dd>
                 </div>
               </dl>
             </li>
