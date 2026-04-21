@@ -272,7 +272,12 @@ export default async function PortalLayout({
             isAdmin={isAdminInPortal}
           />
           <SidebarInset>
-            <AdminHeader />
+            <AdminHeader
+              userName={userName}
+              avatarUrl={avatarUrl}
+              settingsHref="/portal/settings"
+              logoutRedirect="/admin/login"
+            />
             <BannerStrip />
             {children}
           </SidebarInset>

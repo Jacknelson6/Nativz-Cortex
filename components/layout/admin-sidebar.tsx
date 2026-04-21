@@ -28,14 +28,12 @@ import {
   Brain,
   Cpu,
 } from 'lucide-react';
-import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import {
   Sidebar,
   SidebarHeader,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarMenu,
   SidebarMenuItem,
@@ -294,12 +292,17 @@ const UNHIDABLE_HREFS = new Set([
 ]);
 
 export function AdminSidebar({
-  userName,
-  avatarUrl,
+  // userName / avatarUrl / logoutPath / settingsPath are accepted for
+  // back-compat — callers still pass them. The sidebar no longer uses
+  // them now that the account popover has moved to the top header on
+  // both roles. Prefixed with _ so linting stays clean without changing
+  // the public interface.
+  userName: _userName,
+  avatarUrl: _avatarUrl,
   role = 'admin',
   routePrefix = '/admin',
-  logoutPath = '/admin/login',
-  settingsPath = '/admin/settings',
+  logoutPath: _logoutPath = '/admin/login',
+  settingsPath: _settingsPath = '/admin/settings',
   brands,
   activeBrandId,
   hiddenSidebarItems = [],
@@ -545,21 +548,10 @@ export function AdminSidebar({
 
       </SidebarContent>
 
-      {/* Footer — portal keeps its in-rail account popover (portal has no
-       *  top bar). Admin's avatar + settings + API docs + sign out live in
-       *  <AdminTopBar>; nothing else belongs in the admin rail footer now
-       *  that the sidebar is permanently expanded (no more mode picker or
-       *  rail toggle). */}
-      {role === 'viewer' && (
-        <SidebarFooter className="border-t-0">
-          <SidebarAccount
-            userName={userName}
-            avatarUrl={avatarUrl}
-            settingsHref={settingsPath}
-            logoutRedirect={logoutPath}
-          />
-        </SidebarFooter>
-      )}
+      {/* No sidebar footer — both roles now render the account popover in
+       *  the top header (admin: <AdminTopBar/> above sidebar+content;
+       *  portal: <AdminHeader/> inside SidebarInset). Keeps the rail pure
+       *  navigation on both sides. */}
     </Sidebar>
   );
 }
