@@ -4,6 +4,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/supabase/public-env';
 import { PORTAL_HOME_PATH, shouldRedirectPortalToMinimalHome } from '@/lib/portal/client-surface';
 import { detectAgencyFromHostname } from '@/lib/agency/detect';
+import { ADMIN_ACTIVE_CLIENT_COOKIE } from '@/lib/admin/get-active-client';
+
+// Legacy Strategy Lab URLs like /admin/strategy-lab/<uuid> pre-date NAT-57's
+// flatten to /admin/strategy-lab. The old page.tsx handled this with a client
+// boot → POST /api/admin/active-client → router.replace, which cost ~1.5s of
+// LCP on cold loads. This regex catches the legacy shape so middleware can
+// set the cookie + 302 in one hop, before any RSC streams.
+const LEGACY_STRATEGY_LAB_CLIENT_ID = /^\/admin\/strategy-lab\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/)?$/i;
 
 type SupabaseFromMiddleware = ReturnType<typeof createServerClient>;
 
@@ -284,6 +292,28 @@ export async function middleware(request: NextRequest) {
   // Admin routes — only admins
   if (pathname.startsWith('/admin') && role !== 'admin') {
     return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));
+  }
+
+  // Legacy /admin/strategy-lab/<uuid> → set active-client cookie + 302.
+  // Replaces a client-side page that cost ~1.5s of LCP (boot + POST + RSC
+  // refetch). Skips the API route's client-existence check; the downstream
+  // page's getActiveAdminClient() falls back to general chat if the id is
+  // stale, which is the same surface the old page ended up on.
+  const legacyMatch = pathname.match(LEGACY_STRATEGY_LAB_CLIENT_ID);
+  if (legacyMatch) {
+    const clientId = legacyMatch[1];
+    const target = new URL('/admin/strategy-lab', request.url);
+    const attach = request.nextUrl.searchParams.get('attach');
+    if (attach) target.searchParams.set('attach', attach);
+    const redirect = NextResponse.redirect(target);
+    redirect.cookies.set(ADMIN_ACTIVE_CLIENT_COOKIE, clientId, {
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 180,
+    });
+    return redirect;
   }
 
   // Portal routes — viewers, or admins (incl. impersonation)
