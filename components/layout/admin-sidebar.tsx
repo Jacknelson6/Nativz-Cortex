@@ -300,9 +300,9 @@ interface AdminSidebarProps {
   /** Per-user hidden nav items (hrefs). Settings + Dashboard can't be hidden
    *  — they're filtered out of the hidden list to keep an escape hatch. */
   hiddenSidebarItems?: string[];
-  /** True when the current user is an admin (independent of `role`, which
-   *  controls nav visibility). Drives the avatar-popover "Client view"
-   *  picker that admin keeps available even when viewing portal as `viewer`. */
+  /** Accepted for backwards compatibility — portal layout still passes this
+   *  when an admin impersonates a viewer. Unused now that Client view has
+   *  been removed from the avatar popover; kept to avoid churning callers. */
   isAdmin?: boolean;
 }
 
@@ -323,9 +323,8 @@ export function AdminSidebar({
   brands,
   activeBrandId,
   hiddenSidebarItems = [],
-  isAdmin,
+  isAdmin: _isAdmin,
 }: AdminSidebarProps) {
-  const showClientViewPicker = isAdmin ?? role === 'admin';
   const hiddenSet = new Set(
     hiddenSidebarItems.filter((href) => !UNHIDABLE_HREFS.has(href)),
   );
@@ -582,7 +581,7 @@ export function AdminSidebar({
           settingsHref={settingsPath}
           logoutRedirect={logoutPath}
           collapsed={!open}
-          clientViewHref={showClientViewPicker ? '/portal' : undefined}
+          apiDocsHref={role === 'admin' ? '/admin/nerd/api' : undefined}
         />
 
         {/* Sidebar layout mode picker — Expanded / Collapsed / Hover */}

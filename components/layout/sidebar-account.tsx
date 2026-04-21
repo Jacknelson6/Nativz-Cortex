@@ -5,8 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Settings, LogOut, User, Eye } from 'lucide-react';
-import { ClientViewPicker } from './client-view-picker';
+import { Settings, LogOut, User, Code } from 'lucide-react';
 
 interface SidebarAccountProps {
   userName?: string;
@@ -14,10 +13,9 @@ interface SidebarAccountProps {
   settingsHref: string;
   logoutRedirect: string;
   collapsed?: boolean;
-  /** When set, renders a "Client view" menu item linking here. Used by the
-   *  admin sidebar to let the team peek at the portal without losing the
-   *  admin session. Omit for portal users. */
-  clientViewHref?: string;
+  /** When set, renders an "API docs" menu item linking here. Admin-only;
+   *  omit for portal users. */
+  apiDocsHref?: string;
 }
 
 export function SidebarAccount({
@@ -26,11 +24,10 @@ export function SidebarAccount({
   settingsHref,
   logoutRedirect,
   collapsed = false,
-  clientViewHref,
+  apiDocsHref,
 }: SidebarAccountProps) {
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -124,18 +121,15 @@ export function SidebarAccount({
         <Settings size={15} />
         Account settings
       </Link>
-      {clientViewHref && (
-        <button
-          type="button"
-          onClick={() => {
-            setClientPickerOpen(true);
-            setOpen(false);
-          }}
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors whitespace-nowrap cursor-pointer"
+      {apiDocsHref && (
+        <Link
+          href={apiDocsHref}
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors whitespace-nowrap"
         >
-          <Eye size={15} />
-          Client view
-        </button>
+          <Code size={15} />
+          API docs
+        </Link>
       )}
       <button
         onClick={handleLogout}
@@ -151,12 +145,6 @@ export function SidebarAccount({
   return (
     <div ref={containerRef} className="relative">
       {popoverNode && createPortal(popoverNode, document.body)}
-      {clientViewHref && (
-        <ClientViewPicker
-          open={clientPickerOpen}
-          onClose={() => setClientPickerOpen(false)}
-        />
-      )}
 
       <button
         ref={buttonRef}
