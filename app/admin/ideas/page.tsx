@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { IdeasHubView } from '@/components/ideas-hub/ideas-hub-view';
+import { getActiveAdminClient } from '@/lib/admin/get-active-client';
 
 export default async function IdeasPage({
   searchParams,
@@ -8,6 +9,15 @@ export default async function IdeasPage({
 }) {
   const { search_id, clientId: clientIdParam, focus: focusParam } = await searchParams;
   const supabase = createAdminClient();
+
+  // Fall back to the top-bar brand pill when no explicit ?clientId= is
+  // passed. URL wins when present (keeps deep-links working), cookie fills
+  // in the "default working brand" otherwise. Failure is silent — Ideas
+  // still renders its own in-page picker when neither source resolves.
+  const activeFromPill = !clientIdParam?.trim()
+    ? await getActiveAdminClient().catch(() => null)
+    : null;
+  const resolvedClientIdParam = clientIdParam?.trim() || activeFromPill?.brand?.id || undefined;
 
   const [{ data: dbClients }, { data: savedIdeas }, searchData] = await Promise.all([
     supabase
@@ -37,8 +47,8 @@ export default async function IdeasPage({
   }));
 
   const validUrlClientId =
-    clientIdParam?.trim() && clients.some((c) => c.id === clientIdParam.trim())
-      ? clientIdParam.trim()
+    resolvedClientIdParam && clients.some((c) => c.id === resolvedClientIdParam)
+      ? resolvedClientIdParam
       : null;
   const mergedInitialClientId = searchData?.client_id ?? validUrlClientId ?? null;
   const hasClientContext = mergedInitialClientId !== null;

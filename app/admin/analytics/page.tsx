@@ -6,6 +6,7 @@ import {
   type TabId,
   type SubTabId,
 } from '@/components/analytics/analytics-landing';
+import { getActiveAdminClient } from '@/lib/admin/get-active-client';
 
 const VALID_TABS: readonly TabId[] = ['social', 'paid', 'seo', 'affiliates'];
 const VALID_SUBS: readonly SubTabId[] = ['overview', 'benchmarking'];
@@ -73,10 +74,18 @@ export default async function AdminAnalyticsPage({
 
   const { tab: initialTab, sub: initialSub } = normalizeTabs(tab, sub);
 
+  // URL wins; fall back to the top-bar pill when no explicit ?clientId=
+  // is passed so the analytics dashboard opens on the pinned brand.
+  let resolvedInitialClientId = clientId?.trim() || null;
+  if (!resolvedInitialClientId) {
+    const active = await getActiveAdminClient().catch(() => null);
+    if (active?.brand?.id) resolvedInitialClientId = active.brand.id;
+  }
+
   return (
     <AnalyticsLanding
       clients={portfolioClients}
-      initialClientId={clientId?.trim() ?? null}
+      initialClientId={resolvedInitialClientId}
       initialTab={initialTab}
       initialSub={initialSub}
     />
