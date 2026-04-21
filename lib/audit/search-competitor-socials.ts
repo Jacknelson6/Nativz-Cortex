@@ -95,7 +95,7 @@ function guessHandles(brandName: string): string[] {
   return out.slice(0, 3);
 }
 
-async function tryTikTokHandleDetailed(handle: string, brandName: string): Promise<SocialCandidate | null> {
+export async function tryTikTokHandleDetailed(handle: string, brandName: string): Promise<SocialCandidate | null> {
   const key = getApifyKey();
   const url = `https://www.tiktok.com/@${handle}`;
   const runId = await startApifyActorRun(TT_PROFILE_ACTOR, { startUrls: [url] }, key);
@@ -118,7 +118,7 @@ async function tryTikTokHandleDetailed(handle: string, brandName: string): Promi
   };
 }
 
-async function tryInstagramHandleDetailed(handle: string, brandName: string): Promise<SocialCandidate | null> {
+export async function tryInstagramHandleDetailed(handle: string, brandName: string): Promise<SocialCandidate | null> {
   const key = getApifyKey();
   const runId = await startApifyActorRun(IG_PROFILE_ACTOR, { usernames: [handle] }, key);
   if (!runId) return null;
@@ -186,6 +186,47 @@ async function searchYouTubeChannelDetailed(brandName: string): Promise<SocialCa
     });
   } catch {
     return [];
+  }
+}
+
+/**
+ * Look up a YouTube channel by its `@handle` (already-known, from a website
+ * scrape). Uses the Data API's forHandle param — no similarity guesswork,
+ * just "give me the metadata for this exact channel."
+ */
+export async function lookupYouTubeByHandle(handle: string): Promise<SocialCandidate | null> {
+  const key = getYouTubeKey();
+  if (!key) return null;
+  try {
+    const normalized = handle.replace(/^@/, '');
+    const params = new URLSearchParams({
+      part: 'snippet,statistics',
+      forHandle: `@${normalized}`,
+      key,
+    });
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/channels?${params}`,
+      { signal: AbortSignal.timeout(10_000) },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const item = (data?.items ?? [])[0] as
+      | { id?: string; snippet?: { title?: string; customUrl?: string; thumbnails?: { default?: { url?: string } } }; statistics?: { subscriberCount?: string } }
+      | undefined;
+    if (!item) return null;
+    const customUrl = item.snippet?.customUrl ?? null;
+    const username = customUrl?.replace(/^@/, '') ?? normalized;
+    return {
+      platform: 'youtube',
+      username,
+      url: customUrl ? `https://www.youtube.com/${customUrl.startsWith('@') ? customUrl : `@${customUrl}`}` : `https://www.youtube.com/channel/${item.id}`,
+      displayName: item.snippet?.title ?? username,
+      avatarUrl: item.snippet?.thumbnails?.default?.url ?? null,
+      followers: parseInt(item.statistics?.subscriberCount ?? '0', 10),
+      similarity: 1,
+    };
+  } catch {
+    return null;
   }
 }
 

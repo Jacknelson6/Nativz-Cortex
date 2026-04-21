@@ -18,7 +18,10 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { scrapeWebsite } from '@/lib/audit/scrape-website';
 
-export const maxDuration = 45;
+// Just the scrape + dedupe, no Apify. Keeps wall time to the website
+// fetch (~3–8s) so rows show up fast. Each row is then hydrated
+// independently by the frontend via /api/analytics/competitors/hydrate-social.
+export const maxDuration = 20;
 
 const schema = z.object({
   input: z.string().min(2).max(500),
@@ -34,12 +37,23 @@ type DirectProfile = {
   profile_url: string;
 };
 
+type HydratedSocial = {
+  platform: Platform;
+  username: string;
+  profile_url: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  followers: number | null;
+  verified: boolean;
+};
+
 type WebsiteResolution = {
   kind: 'socials';
   domain: string;
   website_url: string;
-  socials: Array<{ platform: Platform; username: string; profile_url: string }>;
+  socials: HydratedSocial[];
 };
+
 
 /** Detect if a raw string is a direct social profile URL. */
 function detectDirectProfile(raw: string): DirectProfile | null {
@@ -129,13 +143,37 @@ export async function POST(request: NextRequest) {
   try {
     const result = await scrapeWebsite(websiteUrl);
     const ALLOWED: Platform[] = ['tiktok', 'instagram', 'facebook', 'youtube'];
-    const socials = (result.socialLinks ?? [])
+
+    // Dedupe to one entry per (platform, username) before hydrating — the
+    // scraper often picks the same handle up from both header and footer,
+    // and we don't want to burn two Apify runs on it.
+    const seen = new Set<string>();
+    const raw = (result.socialLinks ?? [])
       .filter((s) => ALLOWED.includes(s.platform as Platform) && s.username.length > 0)
       .map((s) => ({
         platform: s.platform as Platform,
         username: s.username,
         profile_url: s.url,
-      }));
+      }))
+      .filter((s) => {
+        const key = `${s.platform}:${s.username.toLowerCase()}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+    // Return rows immediately with `verified: false` + null metadata.
+    // The frontend fires one /hydrate-social call per row in parallel so
+    // each lights up as its Apify/Data-API lookup completes.
+    const socials: HydratedSocial[] = raw.map((s) => ({
+      platform: s.platform,
+      username: s.username,
+      profile_url: s.profile_url,
+      display_name: null,
+      avatar_url: null,
+      followers: null,
+      verified: false,
+    }));
 
     const payload: WebsiteResolution = {
       kind: 'socials',

@@ -51,11 +51,22 @@ interface Competitor {
   snapshots: Snapshot[];
 }
 
+interface ResolvedSocial {
+  platform: string;
+  username: string;
+  profile_url: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  followers: number | null;
+  verified: boolean;
+  hydrating: boolean;
+}
+
 interface ResolvedSocials {
   kind: 'socials';
   domain: string;
   website_url: string;
-  socials: Array<{ platform: string; username: string; profile_url: string }>;
+  socials: ResolvedSocial[];
 }
 
 interface BenchmarkingDashboardProps {
@@ -74,7 +85,9 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
   const [resolved, setResolved] = useState<ResolvedSocials | null>(null);
   const [selectedProfiles, setSelectedProfiles] = useState<Set<string>>(new Set());
   const [discovering, setDiscovering] = useState(false);
-  const [suggestions, setSuggestions] = useState<{ username: string; reason: string }[] | null>(null);
+  const [suggestions, setSuggestions] = useState<
+    { brand_name: string; domain: string; reason: string }[] | null
+  >(null);
   // Client's own daily follower series (summed across platforms) — overlaid
   // on the chart as "Your account" so the benchmarking view answers
   // "how are we doing relative to them?", not just "how are they doing
@@ -119,9 +132,15 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
     return () => { cancelled = true; };
   }, [clientId]);
 
-  async function handleResolve() {
-    const raw = addInput.trim();
+  async function handleResolve(overrideInput?: string) {
+    const raw = (overrideInput ?? addInput).trim();
     if (!raw) return;
+    // When triggered from a suggestion card we also show the form (with
+    // the domain prefilled) so the user sees the picker in one place.
+    if (overrideInput !== undefined) {
+      setAddInput(overrideInput);
+      setShowAddForm(true);
+    }
     setResolving(true);
     setResolved(null);
     try {
@@ -141,18 +160,34 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
         setAddInput('');
         setShowAddForm(false);
       } else {
-        setResolved(data);
-        // Default the selection to TikTok + IG (the platforms most clients
-        // care about), falling back to "everything" if neither exists on the
-        // site. Keyed by `${platform}-${username}` to match the picker below.
+        // /resolve returns unhydrated rows (display_name/avatar/followers all null,
+        // verified=false). Render them immediately with a `hydrating` flag so each
+        // shows a shimmer, then fire one /hydrate-social call per row in parallel
+        // and merge each result as it arrives.
+        const initialSocials: ResolvedSocial[] = (data.socials ?? []).map(
+          (s: { platform: string; username: string; profile_url: string }) => ({
+            platform: s.platform,
+            username: s.username,
+            profile_url: s.profile_url,
+            display_name: null,
+            avatar_url: null,
+            followers: null,
+            verified: false,
+            hydrating: s.platform !== 'facebook', // nothing to verify for FB
+          }),
+        );
+        const initialResolved: ResolvedSocials = { ...data, socials: initialSocials };
+        setResolved(initialResolved);
+
         const defaults = new Set<string>();
-        const socials = (data.socials ?? []) as ResolvedSocials['socials'];
-        const preferred = socials.filter((s) => s.platform === 'tiktok' || s.platform === 'instagram');
-        const seed = preferred.length > 0 ? preferred : socials;
+        const preferred = initialSocials.filter((s) => s.platform === 'tiktok' || s.platform === 'instagram');
+        const seed = preferred.length > 0 ? preferred : initialSocials;
         for (const s of seed) defaults.add(`${s.platform}-${s.username}`);
         setSelectedProfiles(defaults);
-        if (socials.length === 0) {
+        if (initialSocials.length === 0) {
           toast.message('No social profiles found on that site.');
+        } else {
+          void hydrateSocials(initialSocials);
         }
       }
     } catch {
@@ -160,6 +195,69 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
     } finally {
       setResolving(false);
     }
+  }
+
+  /**
+   * Fire /hydrate-social for each row in parallel. Each row updates
+   * independently as its promise settles — avatar/display name/followers
+   * flip from shimmer to real data without waiting on the slowest row.
+   * Uses the initial list (platform+username) as the merge key so we
+   * don't fight with user toggles of selectedProfiles.
+   */
+  async function hydrateSocials(initial: ResolvedSocial[]) {
+    const updateRow = (platform: string, username: string, patch: Partial<ResolvedSocial>) => {
+      setResolved((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          socials: prev.socials.map((s) =>
+            s.platform === platform && s.username === username ? { ...s, ...patch } : s,
+          ),
+        };
+      });
+    };
+
+    await Promise.allSettled(
+      initial
+        .filter((s) => s.platform !== 'facebook')
+        .map(async (s) => {
+          try {
+            const res = await fetch('/api/analytics/competitors/hydrate-social', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ platform: s.platform, username: s.username }),
+            });
+            const body = (await res.json()) as {
+              verified?: boolean;
+              username?: string;
+              profile_url?: string;
+              display_name?: string | null;
+              avatar_url?: string | null;
+              followers?: number | null;
+            };
+            if (res.ok && body.verified) {
+              // We deliberately do NOT swap `username` to the Apify
+              // canonical form here — `${platform}-${username}` is the
+              // stable key for selectedProfiles + the React list key,
+              // and changing it mid-flight would desync both. The
+              // canonical URL is still worth adopting for the click-
+              // through link though.
+              updateRow(s.platform, s.username, {
+                hydrating: false,
+                verified: true,
+                display_name: body.display_name ?? null,
+                avatar_url: body.avatar_url ?? null,
+                followers: body.followers ?? null,
+                profile_url: body.profile_url ?? s.profile_url,
+              });
+            } else {
+              updateRow(s.platform, s.username, { hydrating: false, verified: false });
+            }
+          } catch {
+            updateRow(s.platform, s.username, { hydrating: false, verified: false });
+          }
+        }),
+    );
   }
 
   async function addProfile(platform: string, username: string, profileUrl: string) {
@@ -189,9 +287,10 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
     }
   }
 
-  async function handleAddFromSuggestion(username: string) {
-    await addProfile('tiktok', username, `https://www.tiktok.com/@${username}`);
-    setSuggestions(prev => prev?.filter(s => s.username !== username) ?? null);
+  async function handleAddFromSuggestion(domain: string) {
+    // Run the discovered domain through /resolve — same path as a manual
+    // paste. Shows the multi-platform picker so the user can confirm.
+    await handleResolve(domain);
   }
 
   function toggleResolvedProfile(platform: string, username: string) {
@@ -356,7 +455,7 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
               autoFocus
               onKeyDown={(e) => { if (e.key === 'Enter' && !resolving) void handleResolve(); }}
             />
-            <Button size="sm" onClick={handleResolve} disabled={resolving || !addInput.trim()}>
+            <Button size="sm" onClick={() => void handleResolve()} disabled={resolving || !addInput.trim()}>
               {resolving ? <Loader2 size={14} className="animate-spin" /> : 'Find'}
             </Button>
             <Button
@@ -399,29 +498,81 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
                       const key = `${s.platform}-${s.username}`;
                       const checked = selectedProfiles.has(key);
                       return (
-                        <label
+                        <div
                           key={key}
-                          className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 transition-colors ${
+                          className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors ${
                             checked
                               ? 'border-accent/40 bg-accent-surface/20'
                               : 'border-nativz-border bg-background hover:border-nativz-border/80'
                           }`}
                         >
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleResolvedProfile(s.platform, s.username)}
-                              className="h-3.5 w-3.5 cursor-pointer rounded border-nativz-border bg-background accent-accent"
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleResolvedProfile(s.platform, s.username)}
+                            className="h-3.5 w-3.5 cursor-pointer rounded border-nativz-border bg-background accent-accent"
+                          />
+                          {s.avatar_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={s.avatar_url}
+                              alt=""
+                              className="h-8 w-8 shrink-0 rounded-full object-cover"
                             />
-                            <PlatformBadge
-                              platform={s.platform as SocialPlatform}
-                              size="sm"
-                              showLabel={false}
-                            />
-                            <span className="text-sm text-text-primary">@{s.username}</span>
-                          </div>
-                        </label>
+                          ) : s.hydrating ? (
+                            <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-surface" />
+                          ) : (
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface">
+                              <PlatformBadge
+                                platform={s.platform as SocialPlatform}
+                                size="sm"
+                                showLabel={false}
+                              />
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => toggleResolvedProfile(s.platform, s.username)}
+                            className="flex-1 min-w-0 cursor-pointer text-left"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <PlatformBadge
+                                platform={s.platform as SocialPlatform}
+                                size="sm"
+                                showLabel={false}
+                              />
+                              <span className="truncate text-sm font-medium text-text-primary">
+                                {s.display_name ?? `@${s.username}`}
+                              </span>
+                              {s.hydrating ? (
+                                <Loader2 size={11} className="shrink-0 animate-spin text-text-muted" />
+                              ) : !s.verified && s.platform !== 'facebook' ? (
+                                <span
+                                  className="shrink-0 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400"
+                                  title="We couldn't confirm this profile exists — click the link to verify manually"
+                                >
+                                  Unverified
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-0.5 truncate text-xs text-text-muted">
+                              @{s.username}
+                              {typeof s.followers === 'number' && s.followers > 0 && (
+                                <> · {formatNumber(s.followers)} followers</>
+                              )}
+                            </div>
+                          </button>
+                          <a
+                            href={s.profile_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface hover:text-text-primary"
+                            title="Open profile in new tab to verify"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <ExternalLink size={14} />
+                          </a>
+                        </div>
                       );
                     })}
                   </div>
@@ -454,13 +605,25 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
           </h3>
           <div className="space-y-2">
             {suggestions.map(s => (
-              <div key={s.username} className="flex items-center gap-3 rounded-lg border border-nativz-border bg-surface p-3">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-text-primary">@{s.username}</p>
-                  <p className="text-xs text-text-muted">{s.reason}</p>
+              <div key={s.domain} className="flex items-center gap-3 rounded-lg border border-nativz-border bg-surface p-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text-primary truncate">{s.brand_name}</p>
+                  <p className="text-xs text-text-muted truncate">
+                    <span className="text-text-secondary">{s.domain}</span> · {s.reason}
+                  </p>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => handleAddFromSuggestion(s.username)} disabled={adding}>
-                  <Plus size={12} /> Add
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleAddFromSuggestion(s.domain)}
+                  disabled={adding || resolving}
+                >
+                  {resolving && addInput === s.domain ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Plus size={12} />
+                  )}
+                  Find socials
                 </Button>
               </div>
             ))}

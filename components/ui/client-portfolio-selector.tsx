@@ -81,7 +81,7 @@ export function ClientPortfolioSelector({
               <ClientLogo
                 src={client.logo_url}
                 name={client.name}
-                size="md"
+                size="lg"
                 className="rounded-lg"
               />
               <div className="w-full">

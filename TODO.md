@@ -20,22 +20,48 @@ Shared `@react-pdf` template at `lib/pdf/branded` — theme-swappable Nativz / A
 - [x] `.gitignore` allowlist for branded logo assets.
 - [x] **QA pass (April 15)** — both themes render cleanly. Nativz: blue "nativz" wordmark with arrow, Poppins throughout. AC: teal monogram + "ANDERSON COLLABORATIVE" wordmark, Rubik titles, Roboto body. All teal accent rules visible. Running header + footer correct on all pages.
 
+**Shipped April 16:**
+- [x] `/generate` slash command registered + Tab-complete + interactive multi-step flow
+- [x] `/generate` skill seeded in DB (`docs/skills/generate.md`)
+- [x] `/api/topic-plans/[id]/pdf` swapped to branded template via `mapTopicPlanToBranded`
+- [x] `mapTopicPlanToBranded` + `mapIdeasToBranded` adapters. Title = TYPE in all caps.
+- [x] Sidebar gear highlights on all settings routes. Closing endmark on PDFs.
+
 **Still open:**
-- [ ] **Wire `/generate` skills to `BrandedDeliverableData`.** `bad85ff` already auto-exports branded PDFs when the Nerd returns video ideas — re-point that pipeline at `BrandedDeliverableDocument` so the output is theme-swappable.
-- [ ] **Migrate the one-off `lib/pdf/*.tsx` templates** (ideas-template, report-template, analysis-template, affiliate-report-template, brief-template) onto the shared theme + primitives so every branded PDF in the app gets the same design language.
-- [ ] **Shorten deliverable titles per-skill** — fixture uses "Video Ideas". Different skill outputs need "Topic Ideas", "Video Scripts", "Audit", "Content Plan", etc. Template is already shape-agnostic.
-- [ ] **Phase 2b — Goodjin skill-improvement loop UI.** Schema `ai_skill_proposals` shipped in `8b23ce3`; admin-review UI not built. Tracks LLM-proposed skill edits from flagged bad sessions for admin accept/reject.
-- [ ] **Final QA once `/generate` is wired** — render real video-ideas + topic-plan + audit deliverables through the new template and sanity-check each against the Safe Stop reference.
+- [ ] **Migrate remaining 11 PDF templates** to branded shell — search results, audit, social report, brief, analysis, affiliate, strategy, conversation export, artifact export. Each needs an adapter in `lib/pdf/branded/adapters.ts`.
+- [ ] **Auto-export swap** — `looksLikeVideoIdeasResponse()` in `export-conversation-pdf.ts` still uses old `ContentLabConversationPdf`. Swap to call the branded API route.
+- [ ] **Phase 2b — Goodjin skill-improvement loop UI.** Schema `ai_skill_proposals` shipped; admin-review UI not built.
+- [ ] **Composable skill graph (stretch).** Skills referencing other skills — architecture supports it, loader not wired.
 
 ---
 
-## Audit report — Push B (data/scraper fixes — April 15)
+## Audit report — Pushes A + B (April 15) — needs human QA
 
-Layout pass shipped in commit `1c4b706` (Push A). These three remain.
+Both pushes shipped. Run a fresh audit on Vercel and verify each item.
 
-- [ ] **Competitor social-profile discovery** — many competitor cards land with no platform data even though the website resolved. Add a search-platform fallback: when the website scrape doesn't surface a brand's TikTok / IG / YT, hit SearXNG for `"<brand> tiktok"` etc., pick the first profile-shaped URL, then pass it through the existing scrape funcs. Without this the report is hollow for half the competitor set.
-- [ ] **Missing thumbnails** on top-performing posts AND the "your feed" section. Likely either (a) image-hotlink block at render time, or (b) `lib/audit/persist-scraped-images.ts` not actually persisting. Inspect what's in `videos_data` for a recent failed audit before assuming.
-- [ ] **Time-series charts too sparse** — engagement / views over time only plot 3-4 data points (the publish dates of the scraped videos). Either bucket by week with running totals, or interpolate between sample points. Check what's actually in `engagementData` first.
+**Push A — `1c4b706` (layout + scoring):**
+- [ ] Brand overview card stacks prospect on top + competitors under "Benchmarked against"; TT/IG/YT badges link out to each profile
+- [ ] Platform tabs (TT/IG/YT) appear directly under the brand overview, no duplicate set elsewhere
+- [ ] Scorecard list: each dimension is a parent card with sub-rows for prospect + each competitor (R/Y/G dot + value)
+- [ ] Removed: Export PDF, Attach to client, "couldn't scrape" amber, Executive summary, X/100 score, dual bar charts, head-to-head matrix toggle, prospect bio block
+- [ ] LinkedIn + Facebook absent from confirm-platforms input form
+- [ ] Scoring thresholds applied: posting freq green ≥8/mo (yellow 4-7, red <4); engagement green >3% (yellow 1-3%, red <1%)
+
+**Push B — `a9e7654` (data + scraper fixes) + `a88f7cc` (Apify platform search):**
+- [ ] Run an audit on a brand whose competitors don't expose social icons in their site footer — Apify platform search should find their TikTok / IG / YT handles via profile-scraper guessing + YouTube Data API channel search (no LLM hallucination)
+- [ ] Thumbnails on "Top performing posts" + "Your feed" render on first load (sync persist replaces the broken `after()` flow)
+- [ ] After 24h, re-open the same audit — thumbnails STILL render (Storage URLs survive Apify CDN expiry)
+- [ ] **Performance chart** (`216973e`): 30-day daily line with interpolated bridge data between posting days. Metric toggle: Views / Engagement / Likes / Comments on one chart. Engagement tab auto-hides when data is zero
+- [ ] Missing thumbs render as platform-tinted blocks (TikTok pink / IG magenta / YT red) with the brand mark, not grey eye tiles
+- [ ] Wall time per audit: still under 4-5 min despite added sync image persistence (was ~2-3 min)
+
+**Push C — `c86025e` (interactive social disambiguation):**
+- [ ] On confirm screen, select competitors → click "Find socials" → see TikTok / IG / YT badges inline per competitor
+- [ ] Green pill = auto-selected clear match. Yellow "N options — pick one" = ambiguous → click to choose. "Not found" = no profile.
+- [ ] YouTube disambiguation: multiple channels with similar names show as clickable pills with avatar + name + subscriber count
+- [ ] Name verification: profiles whose display name doesn't match the brand (< 0.3 Dice coefficient) are rejected (e.g. "2stiq" for "Toastique")
+- [ ] Date-range selector: "Past 7 days" / "Past 30 days" toggle on Performance chart
+- [ ] **Follow-up**: wire confirmed social selections into the process route so it uses user-confirmed links instead of re-discovering
 
 ---
 
@@ -43,6 +69,8 @@ Layout pass shipped in commit `1c4b706` (Push A). These three remain.
 
 Jack noticed these in the live admin shell and asked to come back to them after the personal-moodboards spec lands. Pick up next session.
 
+- [ ] **Competitor spying → Organic social — use brand name in history.** The search history list renames searches to the query text ("Private Lending for Residential…"). Should just show the brand name ("Avondale Private Lending") so the history is scannable. Brand name lives on the client row; swap whatever `display_name` / `query` field the history uses for the client's `name`.
+- [ ] **`/admin/clients` — runtime `TypeError: n.filter is not a function`.** Production bundle crash on the clients list (stack caught by `app/admin/error.tsx`). Repro: load `/admin/clients` on cortex.nativz.io. No source maps so line attribution is fuzzy — candidates are the `.filter` / `.some` calls in `components/clients/client-search-grid.tsx` (line 243 `normalizeServices(c.services)` → line 282 `c.services.some(...)`). DB check shows all `services` rows are `text[]` arrays, so the culprit is likely a different array field arriving as non-array from a newer commit. Grep for recent additions that pass dynamic data into `ClientSearchGrid` / its parent.
 - [ ] **Users page bento — verify on a real screen.** Shipped in `a844ff3`: centered layout (`max-w-7xl mx-auto`), 1/2/3-column grid, single Team filter (replaces the old Admins + Team split), expanded cards span the full row. Confirm spacing, that long client-access badge runs don't blow out card width, and that 3-up at xl isn't cramped — drop to 2-up if it is.
 - [ ] **Edits secondary sidebar — same.** Shipped in `a844ff3`: new rail at `components/layout/admin-edits-sidebar.tsx` mirrors Settings; main rail force-collapses on `/admin/pipeline`, `/admin/shoots`, `/admin/scheduler`. Verify pipeline `?stage=` highlighting and the "Back to dashboard" link reads right.
 - [ ] **Personal moodboards spec ready for review.** `tasks/personal-moodboards.md`. Read the "Open questions" section and answer the 5 inline so the SRL has unblocking direction. Then `/srl tasks/personal-moodboards.md`.
