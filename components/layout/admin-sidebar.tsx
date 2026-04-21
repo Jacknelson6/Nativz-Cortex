@@ -23,7 +23,6 @@ import {
   Facebook,
   Store,
   ShoppingBag,
-  LayoutGrid,
   Mail,
   Workflow,
   Camera,
@@ -128,7 +127,6 @@ const NAV_SECTIONS: NavSection[] = [
         label: 'Tools',
         icon: Wrench,
         children: [
-          { href: '/admin/tools', label: 'Overview', icon: LayoutGrid },
           { href: '/admin/tools/users', label: 'Users', icon: Users },
           { href: '/admin/tools/accounting', label: 'Accounting', icon: Receipt },
           { href: '/admin/tools/email', label: 'Email Hub', icon: Mail },
