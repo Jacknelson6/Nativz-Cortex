@@ -3,9 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Share2, Handshake, DollarSign, Search, ArrowLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { ClientPortfolioSelector, type PortfolioClient } from '@/components/ui/client-portfolio-selector';
+import { Share2, Handshake, DollarSign, Search } from 'lucide-react';
+import type { PortfolioClient } from '@/components/ui/client-portfolio-selector';
 
 const AnalyticsDashboard = dynamic(
   () => import('@/components/reporting/analytics-dashboard').then(m => ({ default: m.AnalyticsDashboard })),
@@ -55,27 +54,22 @@ export function AnalyticsLanding({
   initialSub,
 }: AnalyticsLandingProps) {
   const router = useRouter();
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(initialClientId);
+  // Client selection lives at the top-bar brand pill now — no in-page
+  // portfolio picker, no back-arrow, no ?clientId= back-compat needed at
+  // this layer. The server page resolves the pill's active brand and
+  // passes it in as initialClientId; if nothing is pinned we show a
+  // gentle "pick a brand" state.
+  const selectedClientId = initialClientId;
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [activeSub, setActiveSub] = useState<SubTabId>(initialSub);
 
   const selectedClient = clients.find(c => c.id === selectedClientId);
 
-  function pushUrl(nextTab: TabId, nextSub: SubTabId, clientId: string | null) {
-    if (!clientId) {
-      router.replace('/admin/analytics', { scroll: false });
-      return;
-    }
+  function pushUrl(nextTab: TabId, nextSub: SubTabId) {
     const params = new URLSearchParams();
-    params.set('clientId', clientId);
     params.set('tab', nextTab);
     if (TABS_WITH_SUBS.includes(nextTab)) params.set('sub', nextSub);
     router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
-  }
-
-  function handleSelectClient(clientId: string) {
-    setSelectedClientId(clientId);
-    pushUrl(activeTab, activeSub, clientId);
   }
 
   function handleChangeTab(tab: TabId) {
@@ -84,32 +78,23 @@ export function AnalyticsLanding({
     // less surprising than preserving the previous sub for the new tab.
     const nextSub: SubTabId = TABS_WITH_SUBS.includes(tab) ? 'overview' : activeSub;
     setActiveSub(nextSub);
-    pushUrl(tab, nextSub, selectedClientId);
+    pushUrl(tab, nextSub);
   }
 
   function handleChangeSub(sub: SubTabId) {
     setActiveSub(sub);
-    pushUrl(activeTab, sub, selectedClientId);
-  }
-
-  function handleBackToPortfolio() {
-    setSelectedClientId(null);
-    router.replace('/admin/analytics', { scroll: false });
+    pushUrl(activeTab, sub);
   }
 
   if (!selectedClientId) {
     return (
-      <div className="cortex-page-gutter py-8 space-y-6">
-        <div>
-          <h1 className="ui-page-title">Analytics</h1>
-          <p className="text-sm text-text-muted mt-0.5">Select a client to view performance data</p>
+      <div className="cortex-page-gutter py-8 space-y-4">
+        <h1 className="ui-page-title">Analytics</h1>
+        <div className="rounded-xl border border-nativz-border bg-surface p-8 text-center">
+          <p className="text-sm text-text-muted">
+            Pick a brand in the top-bar pill to view its analytics.
+          </p>
         </div>
-        <ClientPortfolioSelector
-          clients={clients}
-          onSelect={handleSelectClient}
-          title="Client portfolio"
-          subtitle="Select a client to view their analytics"
-        />
       </div>
     );
   }
@@ -119,16 +104,11 @@ export function AnalyticsLanding({
   return (
     <div className="cortex-page-gutter space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={handleBackToPortfolio}>
-            <ArrowLeft size={14} />
-          </Button>
-          <div>
-            <h1 className="ui-page-title">Analytics</h1>
-            <p className="text-sm text-text-muted mt-0.5">
-              {selectedClient?.name ?? 'Client'} performance
-            </p>
-          </div>
+        <div>
+          <h1 className="ui-page-title">Analytics</h1>
+          <p className="text-sm text-text-muted mt-0.5">
+            {selectedClient?.name ?? 'Client'} performance
+          </p>
         </div>
 
         <div className="flex items-center rounded-lg border border-nativz-border bg-surface p-0.5">
