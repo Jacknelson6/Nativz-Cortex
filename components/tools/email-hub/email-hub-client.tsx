@@ -18,6 +18,7 @@ import {
   type UpdateRow,
 } from '@/app/admin/tools/email/production-updates-client';
 import { EmailsTab } from './emails-tab';
+import { ContactsTab } from './contacts-tab';
 
 type TabKey =
   | 'campaigns'
@@ -78,13 +79,7 @@ export function EmailHubClient({ clients, initialUpdates, senderEmail }: Props) 
           />
         )}
         {tab === 'emails' && <EmailsTab />}
-        {tab === 'contacts' && (
-          <EmptyTab
-            icon={Contact}
-            title="Contacts coming soon"
-            description="Manage recipient profiles independent of campaigns — subscription state, tags, and engagement history."
-          />
-        )}
+        {tab === 'contacts' && <ContactsTab />}
         {tab === 'lists' && (
           <EmptyTab
             icon={FolderPlus}
