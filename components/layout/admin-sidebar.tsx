@@ -334,14 +334,31 @@ export function AdminSidebar({
   const [showHiTooltip, setShowHiTooltip] = useState(false);
   const { mode } = useBrandMode();
 
-  // Auto-collapse manual expansions whenever the user navigates. The
-  // active dropdown still stays open because its `childActive` flag
-  // forces `isExpanded=true` in the render pass — this effect only
-  // drops stale "I peeked at Settings" state so two dropdowns never
-  // stay open simultaneously after a route change.
+  // On every pathname change, reset manual expansions and seed the
+  // dropdown that contains the new active route. This is the "you
+  // landed on a sub-page, so open the parent for you" UX — but because
+  // we assign the set rather than OR'ing `childActive` into the render
+  // path, the user can still click the chevron to close it and it stays
+  // closed until they navigate to a different path. Previously,
+  // `isExpanded = childActive || expandedMenus.has(href)` made the
+  // chevron useless on sub-pages (OR always true).
+  //
+  // searchParams is intentionally excluded from deps so query-string
+  // updates don't fight a manual close.
   useEffect(() => {
-    setExpandedMenus(new Set());
-  }, [pathname]);
+    const sections = getNavSectionsForRole(role, routePrefix);
+    const seeds = new Set<string>();
+    for (const section of sections) {
+      for (const item of section.items) {
+        if (!item.children) continue;
+        if (item.children.some((c) => isActivePath(pathname, c.href, searchParams))) {
+          seeds.add(item.href);
+        }
+      }
+    }
+    setExpandedMenus(seeds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, role, routePrefix]);
 
   function toggleMenu(href: string) {
     setExpandedMenus((prev) => {
@@ -434,12 +451,10 @@ export function AdminSidebar({
                 // hover flyout so they stay reachable without expanding first.
                 if (item.children) {
                   const childActive = item.children.some((c) => isActivePath(pathname, c.href, searchParams));
-                  // `isExpanded` is the OR of "this dropdown contains the
-                  // current page" and "user manually toggled it open". The
-                  // parent's own `href` (active) is intentionally NOT in this
-                  // union — the parent button is a pure toggle, clicking it
-                  // never navigates, so we don't want it painting itself open.
-                  const isExpanded = childActive || expandedMenus.has(item.href);
+                  // Pure manual-state. The route-change effect above seeds
+                  // this dropdown open when a child route becomes active,
+                  // but once seeded the user's chevron clicks fully own it.
+                  const isExpanded = expandedMenus.has(item.href);
 
                   const parentButton = (
                     <SidebarMenuButton
@@ -447,7 +462,20 @@ export function AdminSidebar({
                       tooltip={!open ? item.label : undefined}
                       onClick={() => toggleMenu(item.href)}
                     >
-                      <item.icon size={18} className="shrink-0" />
+                      <div className="relative flex items-center shrink-0">
+                        <item.icon size={18} className="shrink-0" />
+                        {/* Accent dot on collapsed rail when a child route
+                            is active — without it the only cue is the pill
+                            highlight, which blends into the hover state.
+                            Hidden in the open rail because the accordion
+                            + child highlight already telegraph position. */}
+                        {!open && childActive && (
+                          <span
+                            aria-hidden
+                            className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-accent"
+                          />
+                        )}
+                      </div>
                       <span
                         className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
                           open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
