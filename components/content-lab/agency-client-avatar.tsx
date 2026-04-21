@@ -47,6 +47,7 @@ export function AgencyClientAvatar({
         t.tile,
         className,
       )}
+      role="img"
       aria-label={`The Nerd · ${brandName}`}
       title={`The Nerd · ${brandName}`}
     >

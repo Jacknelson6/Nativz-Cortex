@@ -278,7 +278,7 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
           <div className="mb-6 flex items-center gap-5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={agencyName.toLowerCase().includes('anderson') ? '/anderson-logo-dark.svg' : '/nativz-logo.svg'}
+              src={agencyName.toLowerCase().includes('anderson') ? '/anderson-logo-dark.svg' : '/nativz-logo.png'}
               alt={agencyName}
               className="h-10 w-auto max-w-[260px] object-contain"
             />

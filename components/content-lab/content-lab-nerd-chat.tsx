@@ -167,7 +167,7 @@ export function ContentLabNerdChat({
   // Use the "-dark" variant on the empty state — its white/light background
   // needs the navy wordmark, not the teal-on-transparent default.
   const wideAgencyLogoPath =
-    agencyBrand === 'anderson' ? '/anderson-logo-dark.svg' : '/nativz-logo.svg';
+    agencyBrand === 'anderson' ? '/anderson-logo-dark.svg' : '/nativz-logo.png';
 
   useEffect(() => {
     if (!clientId) return;

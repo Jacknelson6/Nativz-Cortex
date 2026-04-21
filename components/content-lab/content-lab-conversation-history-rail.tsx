@@ -270,14 +270,14 @@ export function ContentLabConversationHistoryRail({
                 <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
                   <MessageSquare size={20} className="text-text-muted/30" />
                   <p className="text-sm text-text-muted">No chats yet</p>
-                  <p className="text-[11px] text-text-muted/60">
+                  <p className="text-[11px] text-text-muted">
                     Start chatting to create your first one.
                   </p>
                 </div>
               ) : (
                 groups.map((group) => (
                   <div key={group.label} className="mt-3 first:mt-1">
-                    <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted/60">
+                    <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
                       {group.label}
                     </p>
                     <div className="space-y-0.5">
@@ -343,7 +343,7 @@ export function ContentLabConversationHistoryRail({
 
               {/* Artifacts section — compact list under the conversations */}
               <div className="mt-5 border-t border-nativz-border/40 pt-3">
-                <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted/60">
+                <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
                   Artifacts
                 </p>
                 {artifactsLoading && artifacts.length === 0 ? (
@@ -353,7 +353,7 @@ export function ContentLabConversationHistoryRail({
                     ))}
                   </div>
                 ) : artifacts.length === 0 ? (
-                  <p className="px-2 py-3 text-[11px] text-text-muted/60">
+                  <p className="px-2 py-3 text-[11px] text-text-muted">
                     No saved artifacts yet. Save assistant replies to keep them here.
                   </p>
                 ) : (
