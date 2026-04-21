@@ -105,7 +105,7 @@
     "jszip": "^3.10.1",
     "lucide-react": "^0.574.0",
     "mammoth": "^1.12.0",
-    "next": "^15.5.12",
+    "next": "^16.2.4",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^5.6.205",
     "playwright-core": "^1.58.2",
