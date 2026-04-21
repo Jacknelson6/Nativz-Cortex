@@ -8,7 +8,6 @@ import {
   FolderPlus,
   Mail,
   Megaphone,
-  Send,
   Settings,
   Zap,
 } from 'lucide-react';
@@ -20,6 +19,7 @@ import {
 import { EmailsTab } from './emails-tab';
 import { ContactsTab } from './contacts-tab';
 import { TemplatesTab } from './templates-tab';
+import { CampaignsTab } from './campaigns-tab';
 
 type TabKey =
   | 'campaigns'
@@ -54,6 +54,11 @@ interface Props {
 
 export function EmailHubClient({ clients, initialUpdates, senderEmail }: Props) {
   const [tab, setTab] = useState<TabKey>('campaigns');
+  const campaignClients = clients.map((c) => ({
+    id: c.id,
+    name: c.name,
+    agency: c.agency,
+  }));
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-8 space-y-6">
@@ -73,11 +78,21 @@ export function EmailHubClient({ clients, initialUpdates, senderEmail }: Props) 
 
       <div>
         {tab === 'campaigns' && (
-          <CampaignsTab
-            clients={clients}
-            initialUpdates={initialUpdates}
-            senderEmail={senderEmail}
-          />
+          <div className="space-y-6">
+            <CampaignsTab clients={campaignClients} />
+            <details className="rounded-2xl border border-nativz-border bg-surface/60">
+              <summary className="px-5 py-3 cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
+                Product update broadcasts (legacy composer)
+              </summary>
+              <div className="p-5 border-t border-nativz-border">
+                <ProductionUpdatesClient
+                  clients={clients}
+                  initialUpdates={initialUpdates}
+                  senderEmail={senderEmail}
+                />
+              </div>
+            </details>
+          </div>
         )}
         {tab === 'emails' && <EmailsTab />}
         {tab === 'contacts' && <ContactsTab />}
@@ -144,43 +159,6 @@ function TabBar({
         })}
       </nav>
     </div>
-  );
-}
-
-function CampaignsTab({
-  clients,
-  initialUpdates,
-  senderEmail,
-}: {
-  clients: ClientOption[];
-  initialUpdates: UpdateRow[];
-  senderEmail: string | null;
-}) {
-  return (
-    <section className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
-      <header className="flex items-center justify-between gap-3 px-5 py-4 border-b border-nativz-border">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-surface border border-nativz-border">
-            <Megaphone size={15} className="text-accent-text" />
-          </div>
-          <h2 className="text-base font-semibold text-text-primary">Campaigns</h2>
-        </div>
-      </header>
-      <div className="p-5">
-        {initialUpdates.length === 0 ? (
-          <EmptyTab
-            icon={Megaphone}
-            title="No campaigns yet"
-            description="Compose a production update below to broadcast what shipped to portal users."
-          />
-        ) : null}
-        <ProductionUpdatesClient
-          clients={clients}
-          initialUpdates={initialUpdates}
-          senderEmail={senderEmail}
-        />
-      </div>
-    </section>
   );
 }
 
