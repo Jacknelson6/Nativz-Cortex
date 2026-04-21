@@ -4,8 +4,9 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import {
   X, Play, Copy as CopyIcon, Check, Film, Clock,
   ChevronRight, Search, Download, Quote,
-  FileText, Image as ImageIcon, Target, Music, Eye, Loader2, Sparkles
+  FileText, Image as ImageIcon, Target, Music, Eye, Loader2, Sparkles, Plus
 } from 'lucide-react';
+import { useActiveBrand } from '@/lib/admin/active-client-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -18,7 +19,9 @@ import type { HookVisualAnalysis } from '@/lib/mediapipe/types';
 interface VideoAnalysisPanelProps {
   item: MoodboardItem;
   onClose: () => void;
-  onReplicate: (item: MoodboardItem) => void;
+  /** @deprecated Rescript runs inline now — this handler is ignored. Kept so
+   *  older callers (moodboard-canvas) don't need a simultaneous update. */
+  onReplicate?: (item: MoodboardItem) => void;
 }
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -30,7 +33,7 @@ const PLATFORM_COLORS: Record<string, string> = {
 
 type PanelView = 'transcript' | 'hook' | 'replicate';
 
-export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: VideoAnalysisPanelProps) {
+export function VideoAnalysisPanel({ item: initialItem, onClose }: VideoAnalysisPanelProps) {
   const [item, setItem] = useState(initialItem);
   const [copied, setCopied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -236,7 +239,12 @@ export function VideoAnalysisPanel({ item: initialItem, onClose, onReplicate }: 
           )}
 
           {view === 'replicate' && (
-            <BriefSection item={item} onReplicate={onReplicate} onCopy={handleCopy} copied={copied} />
+            <RescriptSection
+              item={item}
+              onCopy={handleCopy}
+              copied={copied}
+              onUpdate={(updated) => setItem(updated)}
+            />
           )}
         </div>
 
@@ -858,24 +866,100 @@ function FramesSection({ item, extracting, onExtract }: {
   );
 }
 
-// ─── Brief Section ──────────────────────────────────────────
-function BriefSection({ item, onReplicate, onCopy, copied }: {
-  item: MoodboardItem; onReplicate: (item: MoodboardItem) => void; onCopy: (t: string) => void; copied: boolean;
+// ─── Rescript Section ───────────────────────────────────────
+/**
+ * Inline rescript flow — no modal, no per-run brand/voice/product/audience
+ * form. The active brand (top-bar pill) is the default context; "Add context"
+ * toggles an optional notes textarea for a CTA / one-off guidance the user
+ * wants the model to honour. Click Rescript → POST and render the result
+ * right here; click Regenerate to re-run with the same (or updated) notes.
+ */
+function RescriptSection({ item, onCopy, copied, onUpdate }: {
+  item: MoodboardItem;
+  onCopy: (t: string) => void;
+  copied: boolean;
+  onUpdate: (updated: MoodboardItem) => void;
 }) {
+  const { brand } = useActiveBrand();
+  const [generating, setGenerating] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [showNotes, setShowNotes] = useState(false);
+  const hasRescript = Boolean(item.replication_brief);
+
   const handleDownloadPDF = () => {
     window.open(`/api/analysis/items/${item.id}/brief/pdf`, '_blank');
   };
 
-  if (!item.replication_brief) {
+  const runRescript = async () => {
+    if (generating) return;
+    setGenerating(true);
+    try {
+      const res = await fetch(`/api/analysis/items/${item.id}/rescript`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: brand?.id,
+          notes: notes.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'Rescript failed' }));
+        throw new Error(data.error || 'Rescript failed');
+      }
+      const data = await res.json();
+      // The rescript route returns { rescript } but persists
+      // replication_brief on the item — re-fetch the row so the UI
+      // reflects the persisted state.
+      const itemRes = await fetch(`/api/analysis/items/${item.id}`);
+      if (itemRes.ok) {
+        onUpdate(await itemRes.json());
+      } else if (data.rescript?.adapted_script) {
+        // Fallback: synthesize a local update from the response.
+        onUpdate({ ...item, replication_brief: data.rescript.adapted_script, rescript: data.rescript });
+      }
+      toast.success('Rescript ready');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Rescript failed');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  if (!hasRescript) {
     return (
-      <div className="text-center py-12">
-        <Sparkles size={24} className="text-text-muted mx-auto mb-3" />
-        <p className="text-sm text-text-muted mb-3">No rescript generated yet</p>
-        <Button onClick={() => onReplicate(item)} className="cursor-pointer">
-          <CopyIcon size={14} />
-          Rescript
-          <ChevronRight size={14} />
+      <div className="flex flex-col items-center gap-3 py-10">
+        <Sparkles size={24} className="text-text-muted" />
+        <p className="text-sm text-text-muted">No rescript generated yet</p>
+        {brand && (
+          <p className="text-[11px] text-text-muted">
+            Using <span className="text-text-secondary font-medium">{brand.name}</span> as the target brand
+          </p>
+        )}
+        <Button onClick={runRescript} disabled={generating} className="cursor-pointer">
+          {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+          {generating ? 'Rescripting…' : 'Rescript'}
         </Button>
+
+        <button
+          type="button"
+          onClick={() => setShowNotes((v) => !v)}
+          className="cursor-pointer inline-flex items-center gap-1.5 text-[11px] text-text-muted hover:text-text-secondary transition-colors"
+        >
+          <Plus size={11} />
+          {showNotes ? 'Hide context' : 'Add context'}
+        </button>
+
+        {showNotes && (
+          <div className="w-full max-w-md">
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional: a specific CTA, product angle, or constraint the rescript should honor."
+              rows={3}
+              className="w-full resize-none rounded-lg border border-nativz-border bg-surface-hover/30 px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+            />
+          </div>
+        )}
       </div>
     );
   }
@@ -883,21 +967,57 @@ function BriefSection({ item, onReplicate, onCopy, copied }: {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <button onClick={() => onCopy(item.replication_brief!)}
-          className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-nativz-border text-xs text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors">
+        <button
+          onClick={() => onCopy(item.replication_brief!)}
+          className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-nativz-border text-xs text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
+        >
           {copied ? <Check size={12} /> : <CopyIcon size={12} />}
           Copy
         </button>
-        <button onClick={handleDownloadPDF}
-          className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-nativz-border text-xs text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors">
+        <button
+          onClick={handleDownloadPDF}
+          className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-nativz-border text-xs text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
+        >
           <Download size={12} />
           Export PDF
         </button>
-        <button onClick={() => onReplicate(item)}
-          className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent/30 text-xs text-accent-text hover:bg-accent/10 transition-colors ml-auto">
+        <button
+          onClick={runRescript}
+          disabled={generating}
+          className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent/30 text-xs text-accent-text hover:bg-accent/10 transition-colors ml-auto disabled:opacity-50"
+        >
+          {generating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
           Regenerate
         </button>
       </div>
+
+      <div className="flex items-center justify-between gap-2 text-[11px] text-text-muted">
+        {brand ? (
+          <span>
+            Rescripted for <span className="text-text-secondary font-medium">{brand.name}</span>
+          </span>
+        ) : (
+          <span>Generic rescript (no brand selected)</span>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowNotes((v) => !v)}
+          className="cursor-pointer inline-flex items-center gap-1 text-text-muted hover:text-text-secondary transition-colors"
+        >
+          <Plus size={11} />
+          {showNotes ? 'Hide context' : 'Add context'}
+        </button>
+      </div>
+
+      {showNotes && (
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Optional: a specific CTA, product angle, or constraint the rescript should honor. Click Regenerate to apply."
+          rows={3}
+          className="w-full resize-none rounded-lg border border-nativz-border bg-surface-hover/30 px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+        />
+      )}
 
       <div className="rounded-lg border border-nativz-border bg-surface-hover/20 p-4 text-sm text-text-secondary whitespace-pre-wrap leading-relaxed overflow-y-auto">
         {item.replication_brief}
