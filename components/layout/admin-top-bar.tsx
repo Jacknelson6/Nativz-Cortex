@@ -33,7 +33,17 @@ export function AdminTopBar({
   const { mode } = useBrandMode();
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-nativz-border bg-surface px-3">
+    // NAT-57 bug hunt (2026-04-21): Jack hit an intermittent where the
+    // top bar collapsed to 0px after client-side navigation, most
+    // reliably when opening /admin/strategy-lab. Belt-and-suspenders:
+    //   - h-14 sets the 56px height
+    //   - min-h-14 asserts it as a MIN — flex can't squeeze below even
+    //     if a child's layout calc is off
+    //   - shrink-0 prevents the flex-col parent from shrinking it when
+    //     content below overfills
+    // Any one of these should be enough, but we want three belts on
+    // this particular pair of pants.
+    <header className="flex h-14 min-h-14 shrink-0 items-center gap-3 border-b border-nativz-border bg-surface px-3">
       {/* Product logo — agency-aware so Anderson deployments pick up AC mark. */}
       <div className="flex h-9 shrink-0 items-center">
         {mode === 'nativz' ? (

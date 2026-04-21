@@ -189,7 +189,14 @@ export function Sidebar({ children, className = '', ...props }: SidebarProps) {
         suppressHydrationWarning
         onMouseEnter={isHoverMode ? () => setHovered(true) : undefined}
         onMouseLeave={isHoverMode ? () => setHovered(false) : undefined}
-        className={`sticky top-0 h-screen hidden md:flex flex-col shrink-0 transition-[width] duration-200 ease-out overflow-hidden ${shell} ${className}`}
+        // NAT-57 bug hunt (2026-04-21): `h-screen` was asserting 100vh
+        // regardless of the flex parent's actual height (which is
+        // 100vh minus the top bar). When combined with `sticky top-0`,
+        // the over-assertion could visually cover the top bar area on
+        // some browsers/states. `h-full` respects the flex parent, so
+        // the sidebar fills only what's actually available below the
+        // top bar — no stacking context weirdness.
+        className={`sticky top-0 h-full hidden md:flex flex-col shrink-0 transition-[width] duration-200 ease-out overflow-hidden ${shell} ${className}`}
         style={{ width: open ? 'var(--sidebar-width)' : 'var(--sidebar-width-icon)' }}
         {...props}
       >
