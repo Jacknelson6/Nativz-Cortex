@@ -356,7 +356,7 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
           } ${
             isActive
               ? 'bg-accent-surface text-text-primary font-semibold'
-              : 'text-text-muted hover:bg-surface-hover hover:text-text-primary font-medium'
+              : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary font-medium'
           }`}
         >
           {children}

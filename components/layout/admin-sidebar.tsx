@@ -457,7 +457,7 @@ export function AdminSidebar({
                                     className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors ${
                                       cActive
                                         ? 'text-accent-text bg-accent-surface'
-                                        : 'text-text-muted hover:text-text-primary hover:bg-surface-hover'
+                                        : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
                                     }`}
                                   >
                                     <child.icon size={14} className="shrink-0" />
@@ -517,7 +517,7 @@ export function AdminSidebar({
                                     className={`flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium transition-colors ${
                                       cActive
                                         ? 'text-accent-text bg-accent-surface'
-                                        : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
+                                        : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
                                     }`}
                                   >
                                     <child.icon size={16} className="shrink-0" />
