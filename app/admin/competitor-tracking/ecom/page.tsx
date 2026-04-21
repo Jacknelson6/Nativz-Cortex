@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
 import { EcomTrackerClient } from '@/components/ecom-competitors/ecom-tracker-client';
+import { getActiveAdminClient } from '@/lib/admin/get-active-client';
 
 export default async function EcomCompetitorTrackerPage({
   searchParams,
@@ -32,6 +33,14 @@ export default async function EcomCompetitorTrackerPage({
 
   const { clientId } = await searchParams;
 
+  // Fall back to the top-bar brand pill when no explicit ?clientId= is
+  // passed. URL wins when present.
+  let resolvedInitialClientId = clientId?.trim() || null;
+  if (!resolvedInitialClientId) {
+    const active = await getActiveAdminClient().catch(() => null);
+    if (active?.brand?.id) resolvedInitialClientId = active.brand.id;
+  }
+
   return (
     <EcomTrackerClient
       clients={(clients ?? []).map((c) => ({
@@ -40,7 +49,7 @@ export default async function EcomCompetitorTrackerPage({
         slug: c.slug,
         logo_url: c.logo_url,
       }))}
-      initialClientId={clientId ?? null}
+      initialClientId={resolvedInitialClientId}
     />
   );
 }

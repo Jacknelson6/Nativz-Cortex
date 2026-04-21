@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
 import { MetaAdTrackerClient } from '@/components/meta-ad-tracker/meta-ad-tracker-client';
+import { getActiveAdminClient } from '@/lib/admin/get-active-client';
 
 export default async function MetaAdTrackerPage({
   searchParams,
@@ -32,13 +33,21 @@ export default async function MetaAdTrackerPage({
 
   const { clientId } = await searchParams;
 
+  // Fall back to the top-bar brand pill when no explicit ?clientId= is
+  // passed. URL wins when present.
+  let resolvedInitialClientId = clientId?.trim() || null;
+  if (!resolvedInitialClientId) {
+    const active = await getActiveAdminClient().catch(() => null);
+    if (active?.brand?.id) resolvedInitialClientId = active.brand.id;
+  }
+
   return (
     <MetaAdTrackerClient
       clients={(clients ?? []).map((c) => ({
         id: c.id,
         name: c.name ?? c.slug ?? 'Client',
       }))}
-      initialClientId={clientId ?? null}
+      initialClientId={resolvedInitialClientId}
     />
   );
 }
