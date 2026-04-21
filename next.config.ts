@@ -43,6 +43,16 @@ const nextConfig: NextConfig = {
       // @react-pdf/renderer moved to serverExternalPackages — Next 15 errors
       // out if a package is in both lists (transpile-vs-external conflict).
     ],
+    // Client-side Router Cache. Next 15 dropped the default dynamic staleTime
+    // to 0s — every back/forward or re-visit re-fetched the RSC payload. Bring
+    // back the pre-15 behaviour so revisiting a page within the window paints
+    // instantly from cache. Mutations should call `router.refresh()` to
+    // invalidate. Static-segment layouts are cached longer since they don't
+    // change per-request.
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
   },
   async headers() {
     return [

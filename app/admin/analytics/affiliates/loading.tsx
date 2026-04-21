@@ -1,1 +1,1 @@
-export { default } from '@/components/shared/page-loading';
+export { default } from '../../analytics/loading';
