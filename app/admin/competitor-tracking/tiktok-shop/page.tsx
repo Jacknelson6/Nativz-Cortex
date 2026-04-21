@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { TikTokShopHub } from '@/components/tiktok-shop/tiktok-shop-hub';
 import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 import { getVaultClients } from '@/lib/vault/reader';
+import { getActiveAdminClient } from '@/lib/admin/get-active-client';
 
 type HubDbClientRow = {
   id: string;
@@ -63,11 +64,17 @@ export default async function TikTokShopPage() {
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // Seed from the top-bar pill so a pinned brand acts as the default
+  // search scope.
+  const active = await getActiveAdminClient().catch(() => null);
+  const initialClientId = active?.brand?.id ?? null;
+
   return (
     <TikTokShopHub
       initialSearches={searches ?? []}
       userFirstName={userFirstName}
       clients={clients}
+      initialClientId={initialClientId}
     />
   );
 }

@@ -23,13 +23,26 @@ interface Props {
   initialSearches: TikTokShopSearchSummary[];
   userFirstName: string | null;
   clients: ClientOption[];
+  /**
+   * Seeds the initial client selection from the top-bar brand pill. Keeps
+   * "search TikTok Shop for the pinned brand" as the zero-click default.
+   * Ignored when the id isn't in the visible clients list.
+   */
+  initialClientId?: string | null;
 }
 
-export function TikTokShopHub({ initialSearches, userFirstName, clients }: Props) {
+export function TikTokShopHub({
+  initialSearches,
+  userFirstName,
+  clients,
+  initialClientId = null,
+}: Props) {
   const router = useRouter();
   const [searches, setSearches] = useState(initialSearches);
   const [query, setQuery] = useState('');
-  const [clientId, setClientId] = useState<string | null>(null);
+  const [clientId, setClientId] = useState<string | null>(
+    initialClientId && clients.some((c) => c.id === initialClientId) ? initialClientId : null,
+  );
   const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
   const [clientQuery, setClientQuery] = useState('');
   const [loading, setLoading] = useState(false);

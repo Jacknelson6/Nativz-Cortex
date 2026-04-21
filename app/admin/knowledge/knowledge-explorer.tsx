@@ -100,7 +100,17 @@ const AC_KIND_BADGE_COLORS: Record<string, string> = {
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export function KnowledgeExplorer() {
+export function KnowledgeExplorer({
+  initialClientFilter = 'all',
+}: {
+  /**
+   * Seeds the client filter on mount. Normally the admin layout passes the
+   * top-bar pill's active-brand id here, so Brain opens scoped to the
+   * currently-pinned brand (matching Brain's new home under "Brand tools"
+   * in the sidebar). Falls back to 'all' when no brand is set.
+   */
+  initialClientFilter?: string;
+} = {}) {
   const { mode: brandMode } = useBrandMode();
   const isAC = brandMode === 'anderson';
 
@@ -110,8 +120,9 @@ export function KnowledgeExplorer() {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filter state — only client filter
-  const [clientFilter, setClientFilter] = useState<string>('all');
+  // Filter state — seeded from the top-bar brand pill (via initialClientFilter),
+  // falling back to 'all' on visits without a pinned brand.
+  const [clientFilter, setClientFilter] = useState<string>(initialClientFilter);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInputValue, setSearchInputValue] = useState('');
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);

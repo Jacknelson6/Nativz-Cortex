@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { AuditHub } from '@/components/audit/audit-hub';
 import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 import { getVaultClients } from '@/lib/vault/reader';
+import { getActiveAdminClient } from '@/lib/admin/get-active-client';
 
 type AuditHubDbClientRow = {
   id: string;
@@ -72,11 +73,17 @@ export default async function AuditPage() {
     };
   });
 
+  // Seed the audit hub from the top-bar pill so "run an audit for the
+  // currently-pinned brand" is the zero-click default.
+  const active = await getActiveAdminClient().catch(() => null);
+  const initialClientId = active?.brand?.id ?? null;
+
   return (
     <AuditHub
       audits={audits}
       userFirstName={firstName}
       clients={clients}
+      initialClientId={initialClientId}
     />
   );
 }

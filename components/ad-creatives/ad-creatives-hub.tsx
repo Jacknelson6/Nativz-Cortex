@@ -45,6 +45,13 @@ interface ClientWithSlug extends ClientOption {
 interface AdCreativesHubProps {
   clients: ClientWithSlug[];
   recentClients?: RecentClient[];
+  /**
+   * Seeds the initial client selection from the top-bar brand pill. When
+   * the admin has a brand pinned we open the hub on that brand's context
+   * instead of showing the "pick a client" empty state. No-op when null
+   * or when the id doesn't match a client in the roster.
+   */
+  initialClientId?: string | null;
 }
 
 const TABS: { key: Tab; label: string; icon: typeof Image }[] = [
@@ -57,7 +64,7 @@ const TABS: { key: Tab; label: string; icon: typeof Image }[] = [
 // Component
 // ---------------------------------------------------------------------------
 
-export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubProps) {
+export function AdCreativesHub({ clients, recentClients = [], initialClientId = null }: AdCreativesHubProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -87,7 +94,12 @@ export function AdCreativesHub({ clients, recentClients = [] }: AdCreativesHubPr
   const [scanning, setScanning] = useState(false);
   const [brand, setBrand] = useState<ScrapedBrand | null>(null);
   const [scrapedProducts, setScrapedProducts] = useState<ScrapedProduct[]>([]);
-  const [clientId, setClientId] = useState<string | null>(null);
+  // Seed from the top-bar pill when the initial id matches a client in the
+  // roster; fall back to null so the hub's own "pick a client" UI still
+  // works for visitors without a pinned brand.
+  const [clientId, setClientId] = useState<string | null>(
+    initialClientId && clients.some((c) => c.id === initialClientId) ? initialClientId : null,
+  );
   const [brandContextSource, setBrandContextSource] = useState<BrandContextSource | null>(null);
 
   // Generation state (passed from wizard → gallery)

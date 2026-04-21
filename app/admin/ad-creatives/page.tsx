@@ -5,6 +5,7 @@ import { getVaultClients } from '@/lib/vault/reader';
 import { AdCreativesHub } from '@/components/ad-creatives/ad-creatives-hub';
 import { AdCreativesHubLandingSkeleton } from '@/components/ad-creatives/ad-creatives-skeletons';
 import type { RecentClient } from '@/lib/ad-creatives/recent-client';
+import { getActiveAdminClient } from '@/lib/admin/get-active-client';
 
 export type { RecentClient };
 
@@ -112,9 +113,18 @@ export default async function AdCreativesPage() {
     })
     .filter((rc): rc is RecentClient => rc != null);
 
+  // Seed the hub from the top-bar brand pill when a brand is pinned. The
+  // hub's own in-page client picker still works for visitors without one.
+  const active = await getActiveAdminClient().catch(() => null);
+  const initialClientId = active?.brand?.id ?? null;
+
   return (
     <Suspense fallback={<AdCreativesHubLandingSkeleton />}>
-      <AdCreativesHub clients={clients} recentClients={recentClients} />
+      <AdCreativesHub
+        clients={clients}
+        recentClients={recentClients}
+        initialClientId={initialClientId}
+      />
     </Suspense>
   );
 }

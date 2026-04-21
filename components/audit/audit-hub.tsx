@@ -14,13 +14,27 @@ interface AuditHubProps {
   audits: AuditSummary[];
   userFirstName: string | null;
   clients: ClientOption[];
+  /**
+   * Seeds the initial client selection from the top-bar brand pill. When
+   * the admin has a brand pinned, the hub opens on that brand so an audit
+   * can be queued immediately without re-picking. Ignored when the id is
+   * missing from the visible clients list.
+   */
+  initialClientId?: string | null;
 }
 
-export function AuditHub({ audits: initialAudits, userFirstName, clients }: AuditHubProps) {
+export function AuditHub({
+  audits: initialAudits,
+  userFirstName,
+  clients,
+  initialClientId = null,
+}: AuditHubProps) {
   const router = useRouter();
   const [audits, setAudits] = useState(initialAudits);
   const [websiteUrl, setWebsiteUrl] = useState('');
-  const [clientId, setClientId] = useState<string | null>(null);
+  const [clientId, setClientId] = useState<string | null>(
+    initialClientId && clients.some((c) => c.id === initialClientId) ? initialClientId : null,
+  );
   const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
   const [clientQuery, setClientQuery] = useState('');
   const [loading, setLoading] = useState(false);
