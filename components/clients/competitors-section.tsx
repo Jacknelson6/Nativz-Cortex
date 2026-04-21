@@ -1,12 +1,23 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { Plus, Trash2, Globe, ExternalLink, Instagram, Facebook, Youtube, Sparkles, Pencil, X, Check } from 'lucide-react';
+import { Plus, Trash2, Globe, ExternalLink, Instagram, Facebook, Youtube, Sparkles, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
-// NAT-57 follow-up: admin UI for the per-client competitor list. Manual
-// entry only — no AI discovery. The saved list becomes the default
-// suggestion source for every competitor-spying tool.
+// NAT-57 follow-up (polish pass 3): radical simplification per Jack.
+//
+// What changed:
+//   - Subtext dropped from the card header (section title speaks for
+//     itself now that the surface is minimal).
+//   - Inline "Add competitor" form (brand name, website, 4 handles,
+//     notes) → gone. Replaced with a single "Add competitor" button
+//     at the BOTTOM of the list, which opens a polished modal that
+//     just asks for a URL. The backend scrapes the rest.
+//   - Per-competitor edit/add-handle state is still available through
+//     PATCH on client_competitors (admins can edit existing competitors
+//     by clicking a row), but the default flow is URL paste + scrape.
+//
+// Net: adding a competitor is one URL paste instead of 8+ fields.
 
 type Platform = 'instagram' | 'tiktok' | 'facebook' | 'youtube';
 
@@ -36,9 +47,7 @@ interface Competitor {
 export function CompetitorsSection({ clientId }: { clientId: string }) {
   const [competitors, setCompetitors] = useState<Competitor[] | null>(null);
   const [ungroupedCount, setUngroupedCount] = useState(0);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [draft, setDraft] = useState<DraftState>(emptyDraft());
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [, startTransition] = useTransition();
 
   useEffect(() => { void fetchCompetitors(); }, [clientId]);
@@ -54,65 +63,6 @@ export function CompetitorsSection({ clientId }: { clientId: string }) {
       console.error('CompetitorsSection: fetch failed', err);
       toast.error('Failed to load competitors');
     }
-  }
-
-  function cancelEdit() {
-    setShowAddForm(false);
-    setEditingId(null);
-    setDraft(emptyDraft());
-  }
-
-  function beginEdit(c: Competitor) {
-    setEditingId(c.id);
-    setShowAddForm(false);
-    setDraft({
-      brand_name: c.brand_name,
-      website_url: c.website_url ?? '',
-      notes: c.notes ?? '',
-      handles: {
-        instagram: c.handles.instagram?.handle ?? '',
-        tiktok: c.handles.tiktok?.handle ?? '',
-        facebook: c.handles.facebook?.handle ?? '',
-        youtube: c.handles.youtube?.handle ?? '',
-      },
-    });
-  }
-
-  async function save() {
-    if (!draft.brand_name.trim()) {
-      toast.error('Brand name is required');
-      return;
-    }
-    startTransition(async () => {
-      const payload = {
-        brand_name: draft.brand_name.trim(),
-        website_url: draft.website_url.trim() || null,
-        notes: draft.notes.trim() || null,
-        handles: {
-          instagram: draft.handles.instagram.trim() || null,
-          tiktok: draft.handles.tiktok.trim() || null,
-          facebook: draft.handles.facebook.trim() || null,
-          youtube: draft.handles.youtube.trim() || null,
-        },
-      };
-      const url = editingId
-        ? `/api/clients/${clientId}/competitors/${editingId}`
-        : `/api/clients/${clientId}/competitors`;
-      const method = editingId ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast.error(typeof data.error === 'string' ? data.error : 'Failed to save');
-        return;
-      }
-      toast.success(editingId ? 'Competitor updated' : 'Competitor added');
-      cancelEdit();
-      void fetchCompetitors();
-    });
   }
 
   async function remove(competitorId: string, brandName: string) {
@@ -131,77 +81,70 @@ export function CompetitorsSection({ clientId }: { clientId: string }) {
   }
 
   return (
-    <section className="rounded-xl border border-nativz-border bg-surface p-5 space-y-4">
-      <div className="flex items-center justify-between">
+    <>
+      <section className="rounded-xl border border-nativz-border bg-surface p-5 space-y-3">
         <div>
           <h3 className="text-sm font-semibold text-text-primary">Competitors</h3>
-          <p className="text-xs text-text-muted mt-1 leading-relaxed">
-            Brands we compare this client against. Competitor-spying tools
-            auto-suggest from this list, so a well-maintained roster saves
-            a lot of URL pasting.
-          </p>
         </div>
-        {!showAddForm && !editingId && (
+
+        {ungroupedCount > 0 && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+            {ungroupedCount} legacy competitor handle{ungroupedCount === 1 ? '' : 's'} not yet
+            grouped under a brand. They&apos;ll surface in competitor-spying tools but
+            aren&apos;t editable here until grouped.
+          </div>
+        )}
+
+        {competitors && competitors.length > 0 ? (
+          <div className="space-y-2">
+            {competitors.map((c) => (
+              <CompetitorRow
+                key={c.id}
+                competitor={c}
+                onDelete={() => void remove(c.id, c.brand_name)}
+              />
+            ))}
+          </div>
+        ) : competitors ? (
+          <p className="text-xs text-text-muted italic">
+            No competitors yet. Add one to pre-load competitor-spying tools.
+          </p>
+        ) : (
+          <p className="text-xs text-text-muted">Loading…</p>
+        )}
+
+        {/* Bottom CTA — the primary flow for adding competitors now. */}
+        <div className="pt-2">
           <button
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-1 text-xs text-accent-text hover:underline px-2 py-1"
+            onClick={() => setModalOpen(true)}
+            className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-nativz-border bg-background/30 hover:bg-background/60 hover:border-accent-text/40 px-3 py-2.5 text-sm text-text-secondary hover:text-accent-text transition"
           >
             <Plus size={14} /> Add competitor
           </button>
-        )}
-      </div>
-
-      {ungroupedCount > 0 && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
-          {ungroupedCount} legacy competitor handle{ungroupedCount === 1 ? '' : 's'} not yet
-          grouped under a brand. They&apos;ll surface in competitor-spying tools but
-          aren&apos;t editable here until grouped.
         </div>
-      )}
+      </section>
 
-      {(showAddForm || editingId) && (
-        <CompetitorForm
-          draft={draft}
-          setDraft={setDraft}
-          onCancel={cancelEdit}
-          onSave={save}
-          editing={!!editingId}
+      {modalOpen && (
+        <AddCompetitorModal
+          clientId={clientId}
+          onClose={() => setModalOpen(false)}
+          onAdded={() => {
+            setModalOpen(false);
+            void fetchCompetitors();
+          }}
         />
       )}
-
-      {competitors && competitors.length > 0 ? (
-        <div className="space-y-2">
-          {competitors.map((c) => (
-            <CompetitorRow
-              key={c.id}
-              competitor={c}
-              onEdit={() => beginEdit(c)}
-              onDelete={() => void remove(c.id, c.brand_name)}
-              editingThis={editingId === c.id}
-            />
-          ))}
-        </div>
-      ) : !showAddForm && !editingId ? (
-        <p className="text-xs text-text-muted italic">
-          No competitors saved yet. Add one to pre-load competitor-spying tools.
-        </p>
-      ) : null}
-    </section>
+    </>
   );
 }
 
 function CompetitorRow({
   competitor,
-  onEdit,
   onDelete,
-  editingThis,
 }: {
   competitor: Competitor;
-  onEdit: () => void;
   onDelete: () => void;
-  editingThis: boolean;
 }) {
-  if (editingThis) return null; // editing state rendered by form above
   const linkedPlatforms = (['instagram', 'tiktok', 'facebook', 'youtube'] as Platform[]).filter(
     (p) => competitor.handles[p] !== null,
   );
@@ -241,157 +184,187 @@ function CompetitorRow({
             })}
           </div>
         ) : (
-          <p className="text-xs text-text-muted italic">No platform handles yet</p>
+          <p className="text-xs text-text-muted italic">No handles found on their website</p>
         )}
         {competitor.notes && (
           <p className="text-xs text-text-muted mt-1 line-clamp-2">{competitor.notes}</p>
         )}
       </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <button
-          onClick={onEdit}
-          className="text-xs text-text-muted hover:text-text-primary p-1.5 rounded hover:bg-nativz-border/30"
-          aria-label="Edit"
-        >
-          <Pencil size={12} />
-        </button>
-        <button
-          onClick={onDelete}
-          className="text-xs text-red-400 hover:text-red-300 p-1.5 rounded hover:bg-red-500/10"
-          aria-label="Remove"
-        >
-          <Trash2 size={12} />
-        </button>
-      </div>
+      <button
+        onClick={onDelete}
+        className="shrink-0 text-xs text-red-400 hover:text-red-300 p-1.5 rounded hover:bg-red-500/10"
+        aria-label="Remove"
+      >
+        <Trash2 size={12} />
+      </button>
     </div>
   );
 }
 
-interface DraftState {
-  brand_name: string;
-  website_url: string;
-  notes: string;
-  handles: Record<Platform, string>;
-}
+// ─── Add Competitor Modal ─────────────────────────────────────────────
 
-function emptyDraft(): DraftState {
-  return {
-    brand_name: '',
-    website_url: '',
-    notes: '',
-    handles: { instagram: '', tiktok: '', facebook: '', youtube: '' },
-  };
-}
-
-function CompetitorForm({
-  draft,
-  setDraft,
-  onCancel,
-  onSave,
-  editing,
+function AddCompetitorModal({
+  clientId, onClose, onAdded,
 }: {
-  draft: DraftState;
-  setDraft: (d: DraftState) => void;
-  onCancel: () => void;
-  onSave: () => void;
-  editing: boolean;
+  clientId: string;
+  onClose: () => void;
+  onAdded: () => void;
 }) {
-  const setField = <K extends keyof Omit<DraftState, 'handles'>>(
-    k: K,
-    v: DraftState[K],
-  ) => setDraft({ ...draft, [k]: v });
+  const [url, setUrl] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [scrapeSummary, setScrapeSummary] = useState<{
+    brand_name: string;
+    handle_count: number;
+  } | null>(null);
 
-  const setHandle = (p: Platform, v: string) =>
-    setDraft({ ...draft, handles: { ...draft.handles, [p]: v } });
+  // ESC closes. Click-outside closes too (on the backdrop).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !submitting) onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, submitting]);
+
+  async function submit() {
+    const trimmed = url.trim();
+    if (!trimmed) {
+      toast.error('Paste a URL to scrape.');
+      return;
+    }
+    // Add protocol if missing — the backend validates with z.string().url()
+    const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/competitors/scrape`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: normalized }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(typeof data.error === 'string' ? data.error : 'Scrape failed');
+        setSubmitting(false);
+        return;
+      }
+      // Brief success confirmation before closing so the admin sees
+      // what we extracted.
+      setScrapeSummary({
+        brand_name: data.scraped?.brand_name ?? data.competitor?.brand_name ?? 'competitor',
+        handle_count: data.scraped?.handle_count ?? 0,
+      });
+      toast.success('Added competitor');
+      setTimeout(() => onAdded(), 800);
+    } catch {
+      toast.error('Scrape failed — network error');
+      setSubmitting(false);
+    }
+  }
 
   return (
-    <div className="rounded-lg border border-accent-text/30 bg-accent-text/[0.03] p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-text-primary">
-          {editing ? 'Edit competitor' : 'Add competitor'}
-        </h4>
-        <button onClick={onCancel} className="text-text-muted hover:text-text-primary p-1" aria-label="Cancel">
-          <X size={14} />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">
-            Brand name *
-          </label>
-          <input
-            type="text"
-            value={draft.brand_name}
-            onChange={(e) => setField('brand_name', e.target.value)}
-            placeholder="Liquid Death"
-            className="mt-1 w-full rounded border border-nativz-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
-            autoFocus
-          />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
+      onClick={(e) => {
+        // Click outside the dialog closes.
+        if (e.target === e.currentTarget && !submitting) onClose();
+      }}
+    >
+      <div className="w-full max-w-lg rounded-2xl border border-nativz-border bg-surface shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 p-5 border-b border-nativz-border">
+          <div className="flex items-start gap-3">
+            <div className="shrink-0 flex h-10 w-10 items-center justify-center rounded-xl bg-accent-text/10 text-accent-text">
+              <Plus size={18} />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-text-primary">Add competitor</h2>
+              <p className="text-xs text-text-muted mt-0.5">
+                Paste their URL and we&apos;ll scrape the brand details + social handles.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => { if (!submitting) onClose(); }}
+            disabled={submitting}
+            className="shrink-0 text-text-muted hover:text-text-primary p-1 rounded disabled:opacity-40"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
         </div>
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">
-            Website
-          </label>
-          <input
-            type="text"
-            value={draft.website_url}
-            onChange={(e) => setField('website_url', e.target.value)}
-            placeholder="https://liquiddeath.com"
-            className="mt-1 w-full rounded border border-nativz-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
-          />
-        </div>
-      </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        {(['instagram', 'tiktok', 'facebook', 'youtube'] as Platform[]).map((p) => {
-          const Icon = PLATFORM_ICON[p];
-          return (
-            <div key={p}>
-              <label className="text-[10px] uppercase tracking-wider text-text-muted font-semibold flex items-center gap-1">
-                <Icon size={10} /> {p.charAt(0).toUpperCase() + p.slice(1)}
-              </label>
-              <div className="mt-1 flex items-center gap-1">
-                <span className="text-xs text-text-muted">@</span>
+        {/* Body */}
+        <div className="p-5 space-y-4">
+          {scrapeSummary ? (
+            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
+              <div className="flex items-center gap-2 text-sm text-emerald-300">
+                <Sparkles size={14} />
+                <span className="font-medium">{scrapeSummary.brand_name}</span>
+                <span className="text-emerald-400/70">saved</span>
+              </div>
+              <p className="text-xs text-emerald-300/80">
+                {scrapeSummary.handle_count > 0
+                  ? `Found ${scrapeSummary.handle_count} social ${scrapeSummary.handle_count === 1 ? 'handle' : 'handles'} from their site.`
+                  : 'No social handles detected on their site — you can add them manually later.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-text-muted font-semibold flex items-center gap-1 mb-2">
+                  <Globe size={11} /> Competitor URL
+                </label>
                 <input
                   type="text"
-                  value={draft.handles[p]}
-                  onChange={(e) => setHandle(p, e.target.value.replace(/^@+/, ''))}
-                  placeholder="handle"
-                  className="flex-1 rounded border border-nativz-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-accent"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !submitting) void submit();
+                  }}
+                  placeholder="https://liquiddeath.com"
+                  autoFocus
+                  disabled={submitting}
+                  className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted/60 focus:border-accent-text/50 focus:outline-none focus:ring-1 focus:ring-accent-text/20 disabled:opacity-50"
                 />
               </div>
-            </div>
-          );
-        })}
-      </div>
 
-      <div>
-        <label className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">
-          Notes (optional)
-        </label>
-        <textarea
-          value={draft.notes}
-          onChange={(e) => setField('notes', e.target.value)}
-          rows={2}
-          placeholder="Why they're a competitor, positioning differences, etc."
-          className="mt-1 w-full rounded border border-nativz-border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent resize-none"
-        />
-      </div>
+              <ul className="text-[11px] text-text-muted space-y-1 leading-relaxed">
+                <li className="flex items-start gap-2">
+                  <span className="text-accent-text shrink-0 mt-0.5">•</span>
+                  We&apos;ll pull the brand name, description, and their
+                  Instagram, TikTok, Facebook, and YouTube handles.
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-accent-text shrink-0 mt-0.5">•</span>
+                  Any handles we can&apos;t find are left blank — you can
+                  add them manually afterward.
+                </li>
+              </ul>
+            </>
+          )}
+        </div>
 
-      <div className="flex items-center justify-end gap-2 pt-1">
-        <button
-          onClick={onCancel}
-          className="px-3 py-1.5 text-xs text-text-muted hover:text-text-primary rounded"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={onSave}
-          className="px-3 py-1.5 text-xs bg-foreground text-background rounded hover:opacity-90 flex items-center gap-1"
-        >
-          <Check size={12} /> {editing ? 'Save changes' : 'Add competitor'}
-        </button>
+        {/* Footer */}
+        {!scrapeSummary && (
+          <div className="flex items-center justify-end gap-2 p-4 border-t border-nativz-border bg-background/30">
+            <button
+              onClick={() => { if (!submitting) onClose(); }}
+              disabled={submitting}
+              className="rounded-lg px-3 py-1.5 text-xs text-text-muted hover:text-text-primary disabled:opacity-40"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void submit()}
+              disabled={submitting || !url.trim()}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent-text text-background px-4 py-1.5 text-sm font-medium hover:opacity-90 disabled:opacity-40"
+            >
+              {submitting ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+              {submitting ? 'Scraping…' : 'Add competitor'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

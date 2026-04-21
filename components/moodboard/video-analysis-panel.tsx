@@ -702,31 +702,49 @@ function TranscriptSection({ item, searchQuery, setSearchQuery, onCopy, copied, 
 
       {hasSegments ? (
         hasFrames ? (
-          /* ── Frames mode: show only frame cards (each includes its transcript excerpt) ── */
-          <div className="space-y-2 overflow-y-auto">
+          /* ── Frames mode: each card pairs a 9:16 thumbnail with the
+             transcript window it covers. Bigger thumbs (~112px wide)
+             per Jack 2026-04-21 — the previous 72px strip was too
+             small to read at presentation distance. ── */
+          <div className="space-y-2.5 overflow-y-auto">
             {frames.map((frame, fi) => {
               const transcriptText = segments.length > 0
                 ? getTranscriptAtTimestamp(segments, frame.timestamp, fi < frames.length - 1 ? frames[fi + 1].timestamp - frame.timestamp : 3)
                 : '';
+              const endLabel = fi < frames.length - 1 ? frames[fi + 1].label : null;
               return (
-                <div key={fi} className="flex gap-3 rounded-lg border border-nativz-border bg-surface-hover/20 p-2 hover:border-accent/30 transition-colors">
-                  <div className="relative shrink-0 w-[72px] rounded-md overflow-hidden border border-nativz-border">
+                <div
+                  key={fi}
+                  className="flex gap-3 rounded-xl border border-nativz-border bg-surface-hover/25 p-2.5 hover:border-accent/30 transition-colors"
+                >
+                  <a
+                    href={frame.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="relative shrink-0 w-[112px] rounded-lg overflow-hidden border border-nativz-border bg-black/40"
+                    title={`Open frame at ${frame.label} in a new tab`}
+                  >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={frame.url} alt={frame.label} className="w-full aspect-[9/16] object-cover" />
-                    <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[10px] font-mono text-center py-0.5">
+                    <img
+                      src={frame.url}
+                      alt={frame.label}
+                      loading="lazy"
+                      className="w-full aspect-[9/16] object-cover"
+                    />
+                    <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[11px] font-mono text-center py-0.5">
                       {frame.label}
                     </div>
-                  </div>
-                  <div className="flex-1 min-w-0 py-0.5">
-                    <p className="text-[10px] font-medium text-text-muted mb-1">
-                      {frame.label}{fi < frames.length - 1 ? ` – ${frames[fi + 1].label}` : '+'}
+                  </a>
+                  <div className="flex-1 min-w-0 flex flex-col py-0.5">
+                    <p className="text-[11px] font-mono text-accent-text mb-1">
+                      {frame.label}{endLabel ? ` – ${endLabel}` : '+'}
                     </p>
                     {transcriptText ? (
                       <p className="text-sm text-text-secondary leading-relaxed">
                         {searchQuery ? highlightText(transcriptText, searchQuery) : transcriptText}
                       </p>
                     ) : (
-                      <p className="text-[10px] text-text-muted italic">No transcript at this point</p>
+                      <p className="text-xs text-text-muted italic">No transcript at this point</p>
                     )}
                   </div>
                 </div>

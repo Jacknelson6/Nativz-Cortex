@@ -48,18 +48,33 @@ async function downloadVideo(url: string): Promise<string> {
   return tempPath;
 }
 
-const FRAME_INTERVAL = 3; // seconds between frames
+const DEFAULT_FRAME_INTERVAL = 3; // seconds between frames for short videos
+const MAX_FRAMES = 30; // cap total frames so 3-min+ TikToks don't blow past the 120s Vercel ceiling
 
 /**
- * Extract frames from a video file every 3 seconds in 9:16 portrait
+ * Choose a frame interval that keeps the total count ≤ MAX_FRAMES.
+ * Short videos stay at the 3s baseline; longer ones stretch to 5s/6s/etc.
+ */
+function chooseFrameInterval(durationSec: number): number {
+  const base = DEFAULT_FRAME_INTERVAL;
+  const needed = Math.ceil(durationSec / base);
+  if (needed <= MAX_FRAMES) return base;
+  return Math.max(base, Math.ceil(durationSec / MAX_FRAMES));
+}
+
+/**
+ * Extract frames from a video file at a dynamic interval in 9:16 portrait.
+ * Interval scales with duration so Jack's 3-minute TikToks don't try to
+ * extract 60 frames and hit the serverless timeout.
  */
 async function extractFramesFromFile(
   videoPath: string,
   outputDir: string,
   duration: number,
 ): Promise<{ paths: string[]; timestamps: number[] }> {
+  const interval = chooseFrameInterval(duration);
   const timestamps: number[] = [];
-  for (let t = 0; t < duration; t += FRAME_INTERVAL) {
+  for (let t = 0; t < duration && timestamps.length < MAX_FRAMES; t += interval) {
     timestamps.push(t);
   }
 
@@ -176,80 +191,102 @@ export async function POST(
           ? Math.max(1, Math.ceil(probed))
           : item.duration || 30;
 
-      // Extract a frame every 3 seconds
+      // Extract a frame at a dynamic interval (capped at MAX_FRAMES)
       const { paths: framePaths, timestamps } = await extractFramesFromFile(videoPath, frameDir, duration);
+      console.log(
+        `[extract-frames] ${id} · duration=${duration}s · extracted=${framePaths.length}`,
+      );
 
       if (framePaths.length === 0) {
         return NextResponse.json({ error: 'No frames could be extracted' }, { status: 500 });
       }
 
-      // Upload frames to Supabase Storage
-      const frames: VideoFrame[] = [];
-
-      for (let i = 0; i < framePaths.length; i++) {
-        const framePath = framePaths[i];
-        const frameBuffer = await readFile(framePath);
-        const ts = timestamps[i];
-
-        const storagePath = `${id}/${randomUUID()}.jpg`;
-        const { error: uploadError } = await adminClient.storage
-          .from('moodboard-frames')
-          .upload(storagePath, frameBuffer, {
-            contentType: 'image/jpeg',
-            upsert: false,
-          });
-
-        if (uploadError) {
-          console.error('Frame upload error:', uploadError);
-          continue;
+      // Parallelize uploads — sequential reads + uploads on a 3-minute video
+      // blew past Vercel's 120s ceiling. Bounded parallelism keeps memory OK
+      // while cutting total time from O(n) to ~O(n/UPLOAD_CONCURRENCY).
+      const UPLOAD_CONCURRENCY = 6;
+      const frames: VideoFrame[] = new Array(framePaths.length);
+      let cursor = 0;
+      const workers = Array.from({ length: Math.min(UPLOAD_CONCURRENCY, framePaths.length) }, async () => {
+        while (true) {
+          const i = cursor++;
+          if (i >= framePaths.length) return;
+          try {
+            const frameBuffer = await readFile(framePaths[i]);
+            const ts = timestamps[i];
+            const storagePath = `${id}/${randomUUID()}.jpg`;
+            const { error: uploadError } = await adminClient.storage
+              .from('moodboard-frames')
+              .upload(storagePath, frameBuffer, {
+                contentType: 'image/jpeg',
+                upsert: false,
+              });
+            if (uploadError) {
+              console.error(`[extract-frames] upload failed at ${ts}s:`, uploadError);
+              return;
+            }
+            const { data: publicUrl } = adminClient.storage
+              .from('moodboard-frames')
+              .getPublicUrl(storagePath);
+            const m = Math.floor(ts / 60);
+            const s = ts % 60;
+            frames[i] = {
+              url: publicUrl.publicUrl,
+              timestamp: ts,
+              label: `${m}:${String(s).padStart(2, '0')}`,
+            };
+          } catch (err) {
+            console.error(`[extract-frames] frame ${i} failed:`, err);
+          }
         }
+      });
+      await Promise.all(workers);
+      const uploadedFrames = frames.filter(Boolean);
 
-        const { data: publicUrl } = adminClient.storage
-          .from('moodboard-frames')
-          .getPublicUrl(storagePath);
-
-        const m = Math.floor(ts / 60);
-        const s = ts % 60;
-        const label = `${m}:${String(s).padStart(2, '0')}`;
-
-        frames.push({
-          url: publicUrl.publicUrl,
-          timestamp: ts,
-          label,
-        });
+      if (uploadedFrames.length === 0) {
+        return NextResponse.json({ error: 'No frames could be uploaded' }, { status: 500 });
       }
 
-      const visionBreakdown =
-        frames.length > 0
-          ? await analyzeVisionClipBreakdown({
-              frames: frames.map((f) => ({ url: f.url, timestamp: f.timestamp })),
-              videoDurationSec: duration,
-              userId: user.id,
-              userEmail: user.email ?? undefined,
-            })
-          : null;
+      // Persist frames immediately so the UI can render them — vision
+      // breakdown runs after the response (fire-and-forget) since a 14-frame
+      // Gemini call adds 20-60s we don't want to block on.
+      await adminClient
+        .from('moodboard_items')
+        .update({ frames: uploadedFrames, updated_at: new Date().toISOString() })
+        .eq('id', id);
 
-      const prevMeta =
-        item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
-          ? (item.metadata as Record<string, unknown>)
-          : {};
-
-      const updatePayload: Record<string, unknown> = {
-        frames,
-        updated_at: new Date().toISOString(),
-      };
-      if (visionBreakdown) {
-        updatePayload.metadata = { ...prevMeta, vision_clip_breakdown: visionBreakdown };
-      }
-
-      await adminClient.from('moodboard_items').update(updatePayload).eq('id', id);
-
-      // Fetch updated item
       const { data: updated } = await adminClient
         .from('moodboard_items')
         .select('*')
         .eq('id', id)
         .single();
+
+      // Kick off vision breakdown in the background; persist when it
+      // finishes. Non-fatal — the frames are already saved.
+      void (async () => {
+        try {
+          const visionBreakdown = await analyzeVisionClipBreakdown({
+            frames: uploadedFrames.map((f) => ({ url: f.url, timestamp: f.timestamp })),
+            videoDurationSec: duration,
+            userId: user.id,
+            userEmail: user.email ?? undefined,
+          });
+          if (!visionBreakdown) return;
+          const prevMeta =
+            item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+              ? (item.metadata as Record<string, unknown>)
+              : {};
+          await adminClient
+            .from('moodboard_items')
+            .update({
+              metadata: { ...prevMeta, vision_clip_breakdown: visionBreakdown },
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', id);
+        } catch (err) {
+          console.error('[extract-frames] vision breakdown failed:', err);
+        }
+      })();
 
       return NextResponse.json(updated);
     } finally {

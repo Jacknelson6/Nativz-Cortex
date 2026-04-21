@@ -2,18 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, Sparkles, Globe, ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
+import { Sparkles, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { BrandDNACards, BRAND_DNA_BENTO_SURFACE } from './brand-dna-cards';
+import { BrandDNACards } from './brand-dna-cards';
 import { OnboardWizard } from './onboard-wizard';
 import { BrandDNAProgress } from './brand-dna-progress';
 import { BrandDNASectionEditor } from './brand-dna-section-editor';
-import { Markdown } from '@/components/ai/markdown';
-import { formatRelativeTime } from '@/lib/utils/format';
 import type { BrandGuidelineMetadata } from '@/lib/knowledge/types';
-import { useClientAdminShell } from '@/components/clients/client-admin-shell-context';
-import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 interface BrandDNAViewProps {
   clientId: string;
@@ -38,10 +33,7 @@ export function BrandDNAView({
   brandDnaStatus,
   guideline,
 }: BrandDNAViewProps) {
-  const shell = useClientAdminShell();
   const router = useRouter();
-  const { mode: brandMode } = useBrandMode();
-  const isAC = brandMode === 'anderson';
   const [generateOpen, setGenerateOpen] = useState(false);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [localMetadata, setLocalMetadata] = useState<BrandGuidelineMetadata | null>(
@@ -62,39 +54,15 @@ export function BrandDNAView({
   }
 
   return (
-    <div className="cortex-page-gutter max-w-5xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {!shell && (
-            <Link
-              href={`/admin/clients/${clientSlug}`}
-              className="text-text-muted hover:text-text-secondary transition-colors"
-            >
-              <ArrowLeft size={20} />
-            </Link>
-          )}
-          <div>
-            <h1 className="ui-page-title-md">
-              {clientName.trim() ? `${clientName.trim()} brand DNA` : 'Brand DNA'}
-            </h1>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {guideline && (
-            <span className="text-xs text-text-muted flex items-center gap-1">
-              <Clock size={12} />
-              Updated {formatRelativeTime(guideline.updated_at ?? guideline.created_at)}
-            </span>
-          )}
-          {/* NAT-57 follow-up (polish pass 2): "Regenerate brand DNA"
-              button removed. Jack prefers per-section edits (fonts,
-              colors, products, etc.) via the pencil icons in each
-              BrandDNACards tile — those open BrandDNASectionEditor
-              which handles uploads + free-text edits. Wholesale
-              regenerate overwrites manual refinements too easily. */}
-        </div>
-      </div>
+    <div className="space-y-6">
+      {/* NAT-57 follow-up (polish pass 3, 2026-04-21): the internal
+          "[Brand name] brand DNA" header + back-arrow + "Updated X days
+          ago" timestamp were removed. This component is now always
+          rendered inside an outer SectionCard (on /admin/brand-profile
+          and the settings page) which provides its own title, icon,
+          and description — so repeating it here was redundant signage.
+          Back-arrow was only useful when DNA had its own full-page
+          route; that route is gone. */}
 
       {/* Brand DNA content or empty state */}
       {brandDnaStatus === 'generating' ? (
@@ -105,23 +73,17 @@ export function BrandDNAView({
           />
         </div>
       ) : guideline && metadata ? (
-        <>
-          {/* Bento grid cards */}
-          <BrandDNACards
-            metadata={metadata}
-            clientId={clientId}
-            editable
-            onEditSection={setEditingSection}
-          />
-
-          {/* Full guideline document */}
-          <div className={`${BRAND_DNA_BENTO_SURFACE} p-3 sm:p-4`}>
-            <h3 className="mb-3 text-sm font-semibold text-text-primary">Full brand guideline</h3>
-            <div className={`prose ${isAC ? '' : 'prose-invert'} prose-sm max-w-none text-text-secondary`}>
-              <Markdown content={guideline.content} />
-            </div>
-          </div>
-        </>
+        /* NAT-57 follow-up (polish pass 3): "Full brand guideline"
+           markdown dump hidden. Jack's preference — the bento cards
+           are the canonical surface; the full guideline is
+           admin-internal noise for this view. Content still lives
+           in client_knowledge_entries if we need it elsewhere. */
+        <BrandDNACards
+          metadata={metadata}
+          clientId={clientId}
+          editable
+          onEditSection={setEditingSection}
+        />
       ) : (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-surface mb-4">

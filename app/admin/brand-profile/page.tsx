@@ -101,20 +101,15 @@ export default async function AdminBrandProfilePage() {
         {/* Editable header + essence */}
         <BrandProfileInlineEditor profile={profile} />
 
-        {/* Social presence — linked profiles + competitors. These
-            components already handle their own inline editing +
-            auto-save, so we just drop them in here styled to match. */}
+        {/* Social presence — no description text per Jack; the
+            sub-cards (LinkedSocialsSection, CompetitorsSection) each
+            carry their own compact header so a wrapper title suffices. */}
         <section className="rounded-xl border border-nativz-border bg-surface p-6">
           <header className="flex items-start gap-3">
             <div className="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg bg-accent-text/10 text-accent-text">
               <Megaphone size={16} />
             </div>
-            <div>
-              <h2 className="text-sm font-semibold text-text-primary">Social presence</h2>
-              <p className="text-xs text-text-muted mt-0.5">
-                Linked accounts + brands we&apos;re benchmarking against.
-              </p>
-            </div>
+            <h2 className="text-sm font-semibold text-text-primary pt-1.5">Social presence</h2>
           </header>
           <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
             <LinkedSocialsSection clientId={clientId} />
@@ -122,21 +117,15 @@ export default async function AdminBrandProfilePage() {
           </div>
         </section>
 
-        {/* Brand DNA — wrapped in a matching section card. Per-section
-            edits (fonts, colors, etc.) already live via pencil icons
-            on each DNA tile; we keep BrandDNAView as-is so those work. */}
+        {/* Brand DNA — matching card shell. Internal BrandDNAView
+            drops its own title/arrow/updated header per the polish
+            pass; we provide the section header here. */}
         <section className="rounded-xl border border-nativz-border bg-surface p-6">
           <header className="flex items-start gap-3 mb-5">
             <div className="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg bg-accent-text/10 text-accent-text">
               <Sparkles size={16} />
             </div>
-            <div>
-              <h2 className="text-sm font-semibold text-text-primary">Brand DNA</h2>
-              <p className="text-xs text-text-muted mt-0.5">
-                Auto-distilled visual + verbal identity. Click a tile&apos;s
-                pencil to edit fonts, colors, voice, or products.
-              </p>
-            </div>
+            <h2 className="text-sm font-semibold text-text-primary pt-1.5">Brand DNA</h2>
           </header>
           <BrandDNAView
             clientId={clientId}

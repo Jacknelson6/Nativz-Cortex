@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, User as UserIcon, Building2, Users, StickyNote } from 'lucide-react';
+import { Plus, User as UserIcon, Building2, Users, StickyNote, Trash2, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { NewNoteModal } from './new-note-modal';
 
 interface BoardCard {
@@ -77,13 +78,27 @@ export function NotesDashboard({
     }
   }
 
-  const grouped = (boards ?? []).reduce<Record<BoardCard['scope'], BoardCard[]>>(
-    (acc, b) => {
-      (acc[b.scope] ??= []).push(b);
-      return acc;
-    },
-    { personal: [], client: [], team: [] },
+  // Flat, updated-first list. Scope labels used to live in group headers
+  // ("CLIENT · 3", "PERSONAL · 1"); Jack asked to drop that visual noise on
+  // 2026-04-21 since the scope icon + client name already tell the same
+  // story per-tile.
+  const orderedBoards = [...(boards ?? [])].sort(
+    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
   );
+
+  async function handleDelete(boardId: string, boardName: string) {
+    if (!window.confirm(`Delete "${boardName}"? This can't be undone.`)) return;
+    // Optimistic removal — re-load on error so the tile reappears.
+    const prev = boards;
+    setBoards((cur) => (cur ?? []).filter((b) => b.id !== boardId));
+    const res = await fetch(`/api/analysis/boards/${boardId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      toast.error('Failed to delete note');
+      setBoards(prev);
+      return;
+    }
+    toast.success('Note deleted');
+  }
 
   return (
     <div className="cortex-page-gutter max-w-7xl mx-auto space-y-8">
@@ -116,24 +131,15 @@ export function NotesDashboard({
       ) : boards.length === 0 ? (
         <EmptyState onCreate={() => setNewOpen(true)} />
       ) : (
-        <div className="space-y-8">
-          {(['personal', 'team', 'client'] as const).map((scope) => {
-            const list = grouped[scope];
-            if (list.length === 0) return null;
-            return (
-              <section key={scope} className="space-y-3">
-                <div className="flex items-baseline gap-2">
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
-                    {SCOPE_LABEL[scope]}
-                  </h2>
-                  <span className="text-xs text-text-muted/70">{list.length}</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {list.map((b) => <BoardTile key={b.id} board={b} routePrefix={routePrefix} />)}
-                </div>
-              </section>
-            );
-          })}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {orderedBoards.map((b) => (
+            <BoardTile
+              key={b.id}
+              board={b}
+              routePrefix={routePrefix}
+              onDelete={() => handleDelete(b.id, b.name)}
+            />
+          ))}
         </div>
       )}
 
@@ -152,42 +158,78 @@ export function NotesDashboard({
   );
 }
 
-function BoardTile({ board, routePrefix }: { board: BoardCard; routePrefix: '/admin' | '/portal' }) {
+function BoardTile({
+  board,
+  routePrefix,
+  onDelete,
+}: {
+  board: BoardCard;
+  routePrefix: '/admin' | '/portal';
+  onDelete?: () => void | Promise<void>;
+}) {
   const Icon = SCOPE_ICON[board.scope];
   const previews = board.thumbnails.slice(0, 4);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await onDelete();
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
-    <Link
-      href={`${routePrefix}/notes/${board.id}`}
-      className="group block overflow-hidden rounded-xl border border-nativz-border bg-surface transition-colors hover:border-accent/40"
-    >
-      <div className="aspect-video overflow-hidden bg-background grid grid-cols-2 grid-rows-2 gap-px">
-        {previews.length === 0 ? (
-          <div className="col-span-2 row-span-2 flex items-center justify-center">
-            <StickyNote size={28} className="text-text-muted/30" />
+    <div className="group relative">
+      <Link
+        href={`${routePrefix}/notes/${board.id}`}
+        className="block overflow-hidden rounded-xl border border-nativz-border bg-surface transition-colors hover:border-accent/40"
+      >
+        <div className="aspect-video overflow-hidden bg-background grid grid-cols-2 grid-rows-2 gap-px">
+          {previews.length === 0 ? (
+            <div className="col-span-2 row-span-2 flex items-center justify-center">
+              <StickyNote size={28} className="text-text-muted/30" />
+            </div>
+          ) : (
+            previews.map((src, i) => (
+              <div
+                key={i}
+                className={`bg-surface-hover ${previews.length === 1 ? 'col-span-2 row-span-2' : previews.length === 2 ? 'col-span-1 row-span-2' : ''}`}
+                style={{ backgroundImage: `url(${src})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+              />
+            ))
+          )}
+        </div>
+        <div className="p-3.5">
+          <div className="flex items-center gap-2">
+            <Icon size={13} className="shrink-0 text-text-muted" />
+            <p className="truncate text-sm font-medium text-text-primary">{board.name}</p>
           </div>
-        ) : (
-          previews.map((src, i) => (
-            <div
-              key={i}
-              className={`bg-surface-hover ${previews.length === 1 ? 'col-span-2 row-span-2' : previews.length === 2 ? 'col-span-1 row-span-2' : ''}`}
-              style={{ backgroundImage: `url(${src})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
-            />
-          ))
-        )}
-      </div>
-      <div className="p-3.5">
-        <div className="flex items-center gap-2">
-          <Icon size={13} className="shrink-0 text-text-muted" />
-          <p className="truncate text-sm font-medium text-text-primary">{board.name}</p>
+          <div className="mt-1 flex items-center justify-between text-xs text-text-muted">
+            <span className="truncate">
+              {board.client_name ?? SCOPE_LABEL[board.scope]}
+            </span>
+            <span>{board.item_count} item{board.item_count === 1 ? '' : 's'}</span>
+          </div>
         </div>
-        <div className="mt-1 flex items-center justify-between text-xs text-text-muted">
-          <span className="truncate">
-            {board.client_name ?? SCOPE_LABEL[board.scope]}
-          </span>
-          <span>{board.item_count} item{board.item_count === 1 ? '' : 's'}</span>
-        </div>
-      </div>
-    </Link>
+      </Link>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={handleDeleteClick}
+          disabled={deleting}
+          aria-label="Delete note"
+          title="Delete note"
+          className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md bg-background/85 text-text-muted opacity-0 shadow-sm backdrop-blur-sm transition-all duration-150 hover:bg-red-500/90 hover:text-white focus:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+        </button>
+      )}
+    </div>
   );
 }
 

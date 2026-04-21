@@ -1,10 +1,10 @@
 'use client';
 
 import {
-  Palette, Type, Globe, ShoppingBag, Users, Target,
+  Palette, Type, Globe, Users, Target,
   FileText, Image, Check, Pencil, ChevronRight,
 } from 'lucide-react';
-import type { BrandColor, BrandFont, BrandLogo, ProductItem } from '@/lib/knowledge/types';
+import type { BrandColor, BrandFont, BrandLogo } from '@/lib/knowledge/types';
 import { BrandDnaGoogleFontLink } from './brand-dna-google-font-link';
 
 /** Surface, radius, and hairline border shared by bento cards and full-guideline blocks */
@@ -26,7 +26,6 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
   const colors = (metadata.colors as BrandColor[]) ?? [];
   const fonts = (metadata.fonts as BrandFont[]) ?? [];
   const logos = (metadata.logos as BrandLogo[]) ?? [];
-  const products = (metadata.products as ProductItem[]) ?? [];
   const tonePrimary = (metadata.tone_primary as string) ?? '';
   const voiceAttributes = (metadata.voice_attributes as string[]) ?? [];
   const messagingPillars = (metadata.messaging_pillars as string[]) ?? [];
@@ -170,34 +169,10 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
         )}
       </BentoCard>
 
-      <BentoCard
-        title="Products"
-        icon={<ShoppingBag size={14} />}
-        verified={!!verified['Product catalog']}
-        editable={editable}
-        onEdit={() => onEditSection?.('Product catalog')}
-      >
-        {products.length > 0 ? (
-          <div className="space-y-1">
-            {products.slice(0, 3).map((p, i) => (
-              <div key={i} className="flex items-center gap-2">
-                {p.imageUrl ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={p.imageUrl} alt={p.name} className="h-6 w-6 rounded object-cover shrink-0" />
-                ) : (
-                  <div className="h-6 w-6 rounded bg-surface/40 shrink-0" />
-                )}
-                <span className="text-xs text-text-secondary truncate">{p.name}</span>
-              </div>
-            ))}
-            {products.length > 3 && (
-              <p className="text-[10px] text-text-muted">+{products.length - 3} more</p>
-            )}
-          </div>
-        ) : (
-          <p className="text-xs text-text-muted/60">No products detected</p>
-        )}
-      </BentoCard>
+      {/* NAT-57 follow-up (polish pass 3): Products card removed from
+          the Brand DNA grid. Products live in the admin-side brand
+          settings (products column on clients) — the DNA surface is
+          for visual + verbal identity only. */}
 
       {/* Row 3: Messaging pillars, Positioning, Design style */}
       <BentoCard
