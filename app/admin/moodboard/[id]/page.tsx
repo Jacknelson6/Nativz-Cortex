@@ -10,7 +10,10 @@ export default function MoodboardCanvasPage() {
 
   return (
     <ReactFlowProvider>
-      <MoodboardCanvas boardId={boardId} variant="analysis" />
+      {/* `syncAdminBrand` tells the canvas to mount <SyncActiveBrand/> once
+       *  the board's client_id resolves — admin-only because portal doesn't
+       *  wrap with ActiveBrandProvider. */}
+      <MoodboardCanvas boardId={boardId} variant="analysis" syncAdminBrand />
     </ReactFlowProvider>
   );
 }

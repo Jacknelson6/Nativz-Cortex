@@ -41,6 +41,7 @@ import { SelectionToolbar } from '@/components/moodboard/toolbar/selection-toolb
 import { FilterBar } from '@/components/moodboard/filter-bar';
 import { useMoodboardShortcuts } from '@/components/moodboard/hooks/use-moodboard-shortcuts';
 import { useMoodboardData } from '@/components/moodboard/hooks/use-moodboard-data';
+import { SyncActiveBrand } from '@/components/admin/sync-active-brand';
 import { DrawingOverlay } from '@/components/moodboard/drawing-overlay';
 import { useState, useEffect } from 'react';
 
@@ -77,11 +78,19 @@ export function MoodboardCanvas({
   boardId,
   variant = 'analysis',
   clientSlug,
+  syncAdminBrand = false,
 }: {
   boardId: string;
   variant?: MoodboardCanvasVariant;
   /** Required when variant is clientWorkspace — used for back navigation to client overview */
   clientSlug?: string;
+  /**
+   * When true, once the board's `client_id` resolves, push it into the admin
+   * top-bar brand pill via `<SyncActiveBrand/>`. Admin routes set this so
+   * deep-linking to a moodboard keeps the session pill in lockstep. Portal
+   * callers leave it false — portal doesn't wrap with ActiveBrandProvider.
+   */
+  syncAdminBrand?: boolean;
 }) {
   const router = useRouter();
   const mb = useMoodboardData(boardId);
@@ -133,6 +142,13 @@ export function MoodboardCanvas({
         isClientWorkspace || isNotesVariant ? 'h-full' : 'h-[calc(100vh-56px)]',
       )}
     >
+      {/* Deep-linking to a moodboard (via direct URL, task link, etc.) syncs
+       *  the top-bar brand pill to the board's attached client so session
+       *  context stays honest. Gated on syncAdminBrand so the portal caller
+       *  (which doesn't wrap with ActiveBrandProvider) never mounts this. */}
+      {syncAdminBrand && mb.board?.client_id && (
+        <SyncActiveBrand clientId={mb.board.client_id} />
+      )}
       {!isNotesVariant && (
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-nativz-border bg-surface/80 px-3 py-2 backdrop-blur-sm sm:px-4">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
