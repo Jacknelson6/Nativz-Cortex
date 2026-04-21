@@ -21,7 +21,11 @@ interface ToolResultEntry {
   result: ToolResultData;
 }
 
-export type AnalysisScopeType = 'audit' | 'tiktok_shop_search' | 'topic_search';
+export type AnalysisScopeType =
+  | 'audit'
+  | 'tiktok_shop_search'
+  | 'topic_search'
+  | 'social_analytics';
 
 interface Props {
   scopeType: AnalysisScopeType;
@@ -54,6 +58,7 @@ const SCOPE_LABEL: Record<AnalysisScopeType, string> = {
   audit: 'Audit',
   tiktok_shop_search: 'TikTok Shop',
   topic_search: 'Topic',
+  social_analytics: 'Analytics',
 };
 
 const SUGGESTED: Record<AnalysisScopeType, string[]> = {
@@ -71,6 +76,11 @@ const SUGGESTED: Record<AnalysisScopeType, string[]> = {
     'What are the hottest trending topics here?',
     'Which topic has the highest sentiment + resonance combo?',
     'Turn the top 3 topics into video hooks.',
+  ],
+  social_analytics: [
+    'What were the top 3 posts and why did they win?',
+    'Which platform is growing fastest right now?',
+    'What should we post next week based on what\'s been working?',
   ],
 };
 

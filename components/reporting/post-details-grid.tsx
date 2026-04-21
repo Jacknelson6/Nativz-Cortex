@@ -56,10 +56,10 @@ const PLATFORM_OPTIONS: Array<{ value: SocialPlatform | 'all'; label: string }> 
 ];
 
 const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
   { value: 'engagement', label: 'Most engagement' },
   { value: 'views', label: 'Most views' },
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
 ];
 
 const VERTICAL_PLATFORMS: SocialPlatform[] = ['tiktok', 'instagram', 'youtube'];
@@ -71,7 +71,7 @@ export function PostDetailsGrid({ clientId, start, end }: PostDetailsGridProps) 
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
   const [platform, setPlatform] = useState<SocialPlatform | 'all'>('all');
-  const [sort, setSort] = useState<SortKey>('newest');
+  const [sort, setSort] = useState<SortKey>('engagement');
   const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {

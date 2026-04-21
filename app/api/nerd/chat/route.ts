@@ -81,7 +81,7 @@ const chatSchema = z.object({
   scopeContext: z
     .array(
       z.object({
-        type: z.enum(['topic_search', 'audit', 'tiktok_shop_search']),
+        type: z.enum(['topic_search', 'audit', 'tiktok_shop_search', 'social_analytics']),
         id: z.string().uuid(),
       }),
     )
@@ -810,8 +810,11 @@ export async function POST(req: NextRequest) {
       const topicIds = effectiveScope.filter((s) => s.type === 'topic_search').map((s) => s.id);
       const auditIds = effectiveScope.filter((s) => s.type === 'audit').map((s) => s.id);
       const tiktokIds = effectiveScope.filter((s) => s.type === 'tiktok_shop_search').map((s) => s.id);
+      const analyticsClientIds = effectiveScope
+        .filter((s) => s.type === 'social_analytics')
+        .map((s) => s.id);
 
-      const [topicRows, auditRows, tiktokRows] = await Promise.all([
+      const [topicRows, auditRows, tiktokRows, analyticsClientRows] = await Promise.all([
         topicIds.length > 0
           ? admin.from('topic_searches').select('id, query, status').in('id', topicIds)
           : Promise.resolve({ data: [] as { id: string; query: string; status: string }[] }),
@@ -827,6 +830,9 @@ export async function POST(req: NextRequest) {
               .select('id, query, status')
               .in('id', tiktokIds)
           : Promise.resolve({ data: [] as { id: string; query: string; status: string }[] }),
+        analyticsClientIds.length > 0
+          ? admin.from('clients').select('id, name').in('id', analyticsClientIds)
+          : Promise.resolve({ data: [] as { id: string; name: string }[] }),
       ]);
 
       const indexLines: string[] = [];
@@ -843,9 +849,12 @@ export async function POST(req: NextRequest) {
       for (const row of tiktokRows.data ?? []) {
         indexLines.push(`- **TikTok Shop search** · "${row.query}" · id \`${row.id}\` · status: ${row.status}`);
       }
+      for (const row of analyticsClientRows.data ?? []) {
+        indexLines.push(`- **Social analytics dashboard** · ${row.name} · client id \`${row.id}\` · use social/post tools to pull details`);
+      }
 
       if (indexLines.length > 0) {
-        portfolioContext += `\n\n# Attached analyses (${indexLines.length})\n\nThe user attached these analyses to the current chat. Don't assume details — call the matching tool when you need content: \`get_topic_search_summary\`, \`get_audit_summary\`, or \`get_tiktok_shop_search_summary\` with the id. Drill deeper with \`search_audit_findings\`, \`get_tiktok_shop_creator_details\`, etc. when the user asks about specifics.\n\n${indexLines.join('\n')}`;
+        portfolioContext += `\n\n# Attached analyses (${indexLines.length})\n\nThe user attached these analyses to the current chat. Don't assume details — call the matching tool when you need content: \`get_topic_search_summary\`, \`get_audit_summary\`, or \`get_tiktok_shop_search_summary\` with the id. Drill deeper with \`search_audit_findings\`, \`get_tiktok_shop_creator_details\`, etc. when the user asks about specifics. For the Social analytics dashboard scope, use the social-posts / client tools to pull metrics and posts.\n\n${indexLines.join('\n')}`;
       }
     }
 

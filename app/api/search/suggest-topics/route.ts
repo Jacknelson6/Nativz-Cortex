@@ -86,7 +86,8 @@ BAD (too broad): "marketing", "social media", "business tips"
 BAD (too specific/format-oriented): "day in the life moving crew", "satisfying before after cleanout"
 GOOD (topic/ontology level): "junk removal", "home moving", "spendable gold currency", "estate cleanout services", "franchise ownership"
 
-Return ONLY a JSON array of strings: ["topic 1", "topic 2", ...]`;
+Return ONLY a JSON object in this exact shape:
+{"topics": ["topic 1", "topic 2", "topic 3", "topic 4", "topic 5", "topic 6"]}`;
 
     const result = await createCompletion({
       messages: [{ role: 'user', content: prompt }],
@@ -96,16 +97,56 @@ Return ONLY a JSON array of strings: ["topic 1", "topic 2", ...]`;
     });
 
     try {
-      const suggestions = parseAIResponseJSON<string[]>(result.text);
-      if (!Array.isArray(suggestions)) {
-        return NextResponse.json({ error: 'Failed to generate suggestions' }, { status: 500 });
+      // JSON mode forces the model to return an object at the root, so the
+      // prompt asks for `{topics: [...]}`. We also accept a bare array or
+      // alternative keys (`suggestions`, `results`) in case a future model
+      // doesn't honour the schema.
+      const parsed = parseAIResponseJSON<unknown>(result.text);
+      const suggestions = extractTopicArray(parsed);
+      if (!suggestions) {
+        console.error(
+          'suggest-topics: unexpected AI shape',
+          JSON.stringify(parsed).slice(0, 300),
+        );
+        return NextResponse.json(
+          { error: 'AI returned an unexpected shape. Try again.' },
+          { status: 500 },
+        );
       }
       return NextResponse.json({ suggestions: suggestions.slice(0, 6) });
-    } catch {
+    } catch (parseErr) {
+      console.error('suggest-topics: parse error', parseErr, result.text?.slice(0, 300));
       return NextResponse.json({ error: 'Failed to parse suggestions' }, { status: 500 });
     }
   } catch (error) {
     console.error('POST /api/search/suggest-topics error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
+}
+
+/**
+ * Pull a string[] out of whatever the model returned. JSON mode forces an
+ * object at the root, so the typical shape is `{topics: [...]}` — but we
+ * also accept a bare array (older prompts) and a few alternate keys for
+ * robustness across providers.
+ */
+function extractTopicArray(value: unknown): string[] | null {
+  if (Array.isArray(value)) {
+    return value.filter((v): v is string => typeof v === 'string');
+  }
+  if (value && typeof value === 'object') {
+    for (const key of ['topics', 'suggestions', 'results', 'items']) {
+      const candidate = (value as Record<string, unknown>)[key];
+      if (Array.isArray(candidate)) {
+        return candidate.filter((v): v is string => typeof v === 'string');
+      }
+    }
+    // Fallback: first array-valued property wins.
+    for (const v of Object.values(value as Record<string, unknown>)) {
+      if (Array.isArray(v)) {
+        return v.filter((x): x is string => typeof x === 'string');
+      }
+    }
+  }
+  return null;
 }

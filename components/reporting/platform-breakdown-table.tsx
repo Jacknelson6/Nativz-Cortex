@@ -1,13 +1,58 @@
 'use client';
 
 import { Card } from '@/components/ui/card';
-import { PlatformBadge } from './platform-badge';
+import { TikTokMark } from '@/components/integrations/tiktok-mark';
+import { InstagramMark } from '@/components/integrations/instagram-mark';
+import { FacebookMark } from '@/components/integrations/facebook-mark';
+import { YouTubeMark } from '@/components/integrations/youtube-mark';
+import { LinkedInMark } from '@/components/integrations/linkedin-mark';
 import type { PlatformBreakdownRow, SocialPlatform } from '@/lib/types/reporting';
 
 function formatNumber(n: number): string {
   if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(Math.round(n));
+}
+
+const PLATFORM_LABELS: Record<string, string> = {
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  linkedin: 'LinkedIn',
+};
+
+function PlatformIcon({ platform }: { platform: SocialPlatform }) {
+  const size = 20;
+  switch (platform) {
+    case 'tiktok':
+      return <TikTokMark size={size} variant="auto" />;
+    case 'instagram':
+      return <InstagramMark size={size} variant="full" />;
+    case 'facebook':
+      return <FacebookMark size={size} variant="full" />;
+    case 'youtube':
+      return <YouTubeMark size={size} variant="full" />;
+    case 'linkedin':
+      return <LinkedInMark size={size} variant="full" />;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Compute engagement rate from the raw totals rather than trusting whatever
+ * Zernio returned in `engagement_rate` — the stored value was averaging to 0
+ * on platforms with a tiny follower base, which obscured real performance.
+ *
+ * Formula: engagement / followers × 100. Falls back to the stored ER when
+ * followers is unknown, and to 0 when neither input is usable.
+ */
+function computeEngagementRate(row: PlatformBreakdownRow): number {
+  if (row.followers > 0) {
+    return (row.engagement / row.followers) * 100;
+  }
+  return row.engagementRate ?? 0;
 }
 
 interface PlatformBreakdownTableProps {
@@ -38,29 +83,31 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-nativz-border/50">
-            {sorted.map((r) => (
-              <tr key={`${r.platform}-${r.username}`} className="hover:bg-surface-hover/40 transition-colors">
-                <td className="px-5 py-3">
-                  <div className="flex items-center gap-2">
-                    <PlatformBadge platform={r.platform as SocialPlatform} showLabel={false} size="sm" />
-                    <span className="text-text-primary font-medium">
-                      {r.platform.charAt(0).toUpperCase() + r.platform.slice(1)}
-                    </span>
-                    {r.username && <span className="text-text-muted text-xs">@{r.username}</span>}
-                  </div>
-                </td>
-                <td className="px-3 py-3 text-right tabular-nums text-text-primary font-medium">
-                  {formatNumber(r.followers)}
-                </td>
-                <td className={`px-3 py-3 text-right tabular-nums ${r.followerChange > 0 ? 'text-emerald-400' : r.followerChange < 0 ? 'text-red-400' : 'text-text-muted'}`}>
-                  {r.followerChange > 0 ? '+' : ''}{r.followerChange}
-                </td>
-                <td className="px-3 py-3 text-right tabular-nums text-text-muted">{r.postsCount}</td>
-                <td className="px-3 py-3 text-right tabular-nums text-text-primary">{formatNumber(r.views)}</td>
-                <td className="px-3 py-3 text-right tabular-nums text-text-primary">{formatNumber(r.engagement)}</td>
-                <td className="px-5 py-3 text-right tabular-nums text-text-primary">{r.engagementRate.toFixed(2)}%</td>
-              </tr>
-            ))}
+            {sorted.map((r) => {
+              const er = computeEngagementRate(r);
+              const label = PLATFORM_LABELS[r.platform] ?? r.platform;
+              return (
+                <tr key={`${r.platform}-${r.username}`} className="hover:bg-surface-hover/40 transition-colors">
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <PlatformIcon platform={r.platform as SocialPlatform} />
+                      <span className="text-text-primary font-medium">{label}</span>
+                      {r.username && <span className="text-text-muted text-xs">@{r.username}</span>}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums text-text-primary font-medium">
+                    {formatNumber(r.followers)}
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums text-text-primary">
+                    {r.followerChange > 0 ? '+' : ''}{r.followerChange}
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums text-text-muted">{r.postsCount}</td>
+                  <td className="px-3 py-3 text-right tabular-nums text-text-primary">{formatNumber(r.views)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums text-text-primary">{formatNumber(r.engagement)}</td>
+                  <td className="px-5 py-3 text-right tabular-nums text-text-primary">{er.toFixed(2)}%</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

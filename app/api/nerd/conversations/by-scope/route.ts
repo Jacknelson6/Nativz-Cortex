@@ -4,7 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const BodySchema = z.object({
-  scopeType: z.enum(['audit', 'tiktok_shop_search', 'topic_search']),
+  scopeType: z.enum(['audit', 'tiktok_shop_search', 'topic_search', 'social_analytics']),
   scopeId: z.string().uuid(),
 });
 
@@ -127,7 +127,7 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 
 async function deriveScopeTitle(
   admin: AdminClient,
-  scopeType: 'audit' | 'tiktok_shop_search' | 'topic_search',
+  scopeType: 'audit' | 'tiktok_shop_search' | 'topic_search' | 'social_analytics',
   scopeId: string,
 ): Promise<string> {
   try {
@@ -148,6 +148,10 @@ async function deriveScopeTitle(
       const pd = data?.prospect_data as { websiteContext?: { title?: string | null } } | null;
       const label = pd?.websiteContext?.title?.trim() || data?.website_url || scopeId;
       return `Audit · ${label}`;
+    }
+    if (scopeType === 'social_analytics') {
+      const { data } = await admin.from('clients').select('name').eq('id', scopeId).maybeSingle();
+      if (data?.name) return `Analytics · ${data.name}`;
     }
   } catch {
     /* non-fatal */

@@ -8,7 +8,6 @@ import {
   Bookmark,
   ExternalLink,
 } from 'lucide-react';
-import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PlatformBadge } from './platform-badge';
 import type { TopPostItem } from '@/lib/types/reporting';
@@ -25,7 +24,6 @@ function formatDate(dateStr: string | null): string {
   return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
   });
 }
 
@@ -56,7 +54,7 @@ export function TopPostsView({
   onLimitChange,
 }: TopPostsViewProps) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center gap-2">
         <span className="text-sm text-text-muted">Show top</span>
         <div className="inline-flex rounded-lg bg-surface-hover/50 p-1">
@@ -64,7 +62,7 @@ export function TopPostsView({
             <button
               key={n}
               onClick={() => onLimitChange(n)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
+              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
                 limit === n
                   ? 'bg-accent text-white shadow-sm'
                   : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
@@ -77,119 +75,102 @@ export function TopPostsView({
       </div>
 
       {loading ? (
-        // Skeleton card shape matches the loaded card: aspect-[9/16] thumbnail
-        // + caption + metrics row. Needed so CLS doesn't spike when posts land
-        // and the card height grows from thumbnail-only to full card.
-        <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="space-y-2">
           {Array.from({ length: limit }).map((_, i) => (
-            <div key={i} className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
-              <Skeleton className="aspect-[9/16] rounded-none" />
-              <div className="p-3 space-y-2">
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-3 w-2/3" />
-                <div className="flex gap-3 pt-1">
-                  <Skeleton className="h-3 w-10" />
-                  <Skeleton className="h-3 w-10" />
-                  <Skeleton className="h-3 w-10" />
-                </div>
-              </div>
-            </div>
+            <Skeleton key={i} className="h-16 rounded-lg" />
           ))}
         </div>
       ) : (posts ?? []).length === 0 ? (
-        <Card>
-          <p className="text-center text-text-muted py-8">
-            No posts found for this period
-          </p>
-        </Card>
+        <p className="py-6 text-center text-sm text-text-muted">
+          No posts found for this period
+        </p>
       ) : (
-        <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-          {(posts ?? []).map((post, index) => (
-            <Card
-              key={post.id}
-              padding="none"
-              interactive
-              onClick={() => {
-                if (post.postUrl) {
-                  window.open(post.postUrl, '_blank', 'noopener');
-                }
-              }}
-            >
-              <div className="relative">
-                <div className="aspect-[9/16] bg-surface-hover overflow-hidden rounded-t-xl">
-                  {post.thumbnailUrl ? (
-                    // First row is above the fold on desktop (5-col grid) —
-                    // eager-load + high priority so Lighthouse can discover
-                    // the LCP image from initial HTML instead of waiting on
-                    // the lazy-load threshold.
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={post.thumbnailUrl}
-                      alt={post.caption ?? 'Post thumbnail'}
-                      className="h-full w-full object-cover"
-                      loading={index < 5 ? 'eager' : 'lazy'}
-                      fetchPriority={index === 0 ? 'high' : 'auto'}
-                    />
-                  ) : (
-                    <div
-                      className="flex h-full w-full items-center justify-center"
-                      style={{ background: platformTint(post.platform) }}
-                    >
-                      <Eye size={32} className="text-white/70" />
-                    </div>
-                  )}
-                  {/* Bottom-fade so caption + metrics sit on a legible ground */}
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
-                </div>
-                <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-accent text-white text-sm font-bold shadow-md">
-                  {post.rank}
-                </span>
-                <span className="absolute right-2 top-2">
-                  <PlatformBadge
-                    platform={post.platform}
-                    showLabel={false}
-                    size="sm"
-                  />
-                </span>
-                {post.postUrl && (
-                  <ExternalLink
-                    size={14}
-                    className="absolute right-2 bottom-2 text-white/70"
-                    aria-hidden
-                  />
-                )}
-              </div>
-
-              <div className="p-3 space-y-2">
-                <p className="line-clamp-2 text-sm text-text-secondary min-h-[2.5rem] leading-snug">
-                  {post.caption ?? '—'}
-                </p>
-                <p className="text-xs text-text-muted">{formatDate(post.publishedAt)}</p>
-
-                <div className="grid grid-cols-5 gap-1 pt-1">
-                  {[
-                    { icon: <Eye size={14} />, value: post.views ?? 0 },
-                    { icon: <Heart size={14} />, value: post.likes ?? 0 },
-                    { icon: <MessageCircle size={14} />, value: post.comments ?? 0 },
-                    { icon: <Share2 size={14} />, value: post.shares ?? 0 },
-                    { icon: <Bookmark size={14} />, value: post.saves ?? 0 },
-                  ].map((metric, i) => (
-                    <div
-                      key={i}
-                      className="flex flex-col items-center gap-0.5 rounded-md bg-surface-hover/50 px-1 py-1.5 text-text-secondary"
-                    >
-                      {metric.icon}
-                      <span className="text-xs font-semibold tabular-nums">
-                        {formatNumber(metric.value)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Card>
+        <div className="space-y-2">
+          {(posts ?? []).map((post) => (
+            <TopPostRow key={post.id} post={post} />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function TopPostRow({ post }: { post: TopPostItem }) {
+  const open = () => {
+    if (post.postUrl) window.open(post.postUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  return (
+    <div
+      role={post.postUrl ? 'button' : undefined}
+      tabIndex={post.postUrl ? 0 : undefined}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (!post.postUrl) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          open();
+        }
+      }}
+      className="group flex items-center gap-3 rounded-lg border border-nativz-border/70 bg-background/30 p-2.5 transition-colors hover:border-accent/30 hover:bg-surface-hover/40 focus:outline-none focus:ring-1 focus:ring-accent/40"
+    >
+      <div className="flex shrink-0 items-center justify-center text-xs font-semibold tabular-nums text-text-muted w-5">
+        {post.rank}
+      </div>
+
+      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md bg-surface-hover">
+        {post.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={post.thumbnailUrl}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="flex h-full w-full items-center justify-center"
+            style={{ background: platformTint(post.platform) }}
+          >
+            <Eye size={16} className="text-white/70" />
+          </div>
+        )}
+        <div className="absolute bottom-0 right-0 p-0.5">
+          <PlatformBadge platform={post.platform} showLabel={false} size="sm" />
+        </div>
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-text-primary">
+          {post.caption?.trim() ? post.caption : '—'}
+        </p>
+        <p className="text-xs text-text-muted">{formatDate(post.publishedAt)}</p>
+      </div>
+
+      <div className="hidden shrink-0 items-center gap-3 text-xs tabular-nums text-text-secondary sm:flex">
+        <Metric icon={<Eye size={12} />} value={post.views ?? 0} />
+        <Metric icon={<Heart size={12} />} value={post.likes ?? 0} />
+        <Metric icon={<MessageCircle size={12} />} value={post.comments ?? 0} />
+        <Metric icon={<Share2 size={12} />} value={post.shares ?? 0} />
+        <Metric icon={<Bookmark size={12} />} value={post.saves ?? 0} />
+      </div>
+
+      {post.postUrl && (
+        <ExternalLink
+          size={14}
+          className="shrink-0 text-text-muted opacity-0 transition-opacity group-hover:opacity-100"
+          aria-hidden
+        />
+      )}
+    </div>
+  );
+}
+
+function Metric({ icon, value }: { icon: React.ReactNode; value: number }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      {icon}
+      {formatNumber(value)}
+    </span>
   );
 }

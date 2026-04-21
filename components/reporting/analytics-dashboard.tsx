@@ -2,24 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { RefreshCw, Download, Flame, Users } from 'lucide-react';
+import { RefreshCw, Download, Flame } from 'lucide-react';
 import { ComboSelect } from '@/components/ui/combo-select';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useReportingData } from './hooks/use-reporting-data';
 import { DateRangePicker } from './date-range-picker';
 import { OverviewKpiRow } from './overview-kpi-row';
-import { OverviewGrowthChart } from './overview-growth-chart';
 import { PlatformSection } from './platform-section';
 import { TopPostsView } from './top-posts-view';
-import { AudienceInsightsCard } from './audience-insights-card';
 import { PlatformBreakdownTable } from './platform-breakdown-table';
-import { PostingCadenceHeatmap } from './posting-cadence-heatmap';
 import { PostDetailsGrid } from './post-details-grid';
-import { DemographicsCard } from './demographics-card';
-import { BestTimeHeatmap } from './best-time-heatmap';
-// GoogleBusinessCard moved to the Paid media tab (NAT-37 per NAT-36 spec) —
-// keep the import gone so it's clear this page is organic-social only now.
+import { AnalysisChatDrawer } from '@/components/analyses/analysis-chat-drawer';
 import type { TopPostItem } from '@/lib/types/reporting';
 
 const ReportBuilder = dynamic(() => import('./report-builder').then(m => ({ default: m.ReportBuilder })));
@@ -51,7 +45,6 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
   } = useReportingData(initialClientId);
 
   const [reportOpen, setReportOpen] = useState(false);
-  const [showDemographics, setShowDemographics] = useState(false);
 
   // Top-performers fetch lives here so the panel is always under the summary,
   // independent of whatever tab the rest of the dashboard is on.
@@ -132,9 +125,6 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
         </p>
       ) : (
         <>
-          {/* Date range selector — the Meta-style picker bakes the resolved
-              range into its own trigger label so we drop the legacy sibling
-              span that used to echo the date range. */}
           <div className="flex items-center gap-3">
             <DateRangePicker
               value={datePreset}
@@ -149,24 +139,15 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
             />
           </div>
 
-          {/* NAT-54 — 4 KPI tiles replace the old SummaryView hero. */}
+          {/* KPI tiles — 3 tiles: Followers Δ, Views, Engagement. */}
           <OverviewKpiRow
             data={summary}
             loading={dataLoading}
-            posts={summary?.platforms.flatMap((p) => p.posts ?? []) ?? []}
             compareData={compareEnabled ? compareSummary : null}
             compareRange={compareEnabled ? compareRange : null}
           />
 
-          {/* NAT-54 — full-width growth chart with metric toggle + post markers. */}
-          <OverviewGrowthChart
-            data={summary}
-            loading={dataLoading}
-            compareData={compareEnabled ? compareSummary : null}
-            compareRange={compareEnabled ? compareRange : null}
-          />
-
-          {/* Top performers — always visible under the summary. */}
+          {/* Top performers — compact horizontal cards. */}
           <div className="space-y-4 rounded-xl border border-nativz-border bg-surface p-5">
             <div className="flex items-center gap-2">
               <Flame size={18} className="text-orange-400" />
@@ -180,37 +161,16 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
             />
           </div>
 
-          {/* Platform breakdown + posting cadence — side by side on lg+. */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {summary?.platformBreakdown && summary.platformBreakdown.length > 0 && (
-              <PlatformBreakdownTable rows={summary.platformBreakdown} />
-            )}
-            {selectedClientId && dateRange && (
-              <PostingCadenceHeatmap
-                clientId={selectedClientId}
-                start={dateRange.start}
-                end={dateRange.end}
-              />
-            )}
-          </div>
+          {/* Platform breakdown table — always visible summary row. */}
+          {summary?.platformBreakdown && summary.platformBreakdown.length > 0 && (
+            <PlatformBreakdownTable rows={summary.platformBreakdown} />
+          )}
 
-          {/* Best time to post — Zernio's historical engagement heatmap. */}
-          {selectedClientId && <BestTimeHeatmap clientId={selectedClientId} />}
-
-          {/* Per-platform sections — collapsed by default per NAT-36 v3.
-              TT / IG / YT / FB in priority order; LinkedIn last. */}
+          {/* Per-platform sections — always expanded per Jack's 2026-04-21 ask. */}
           {summary?.platforms && summary.platforms.length > 0 && (
-            <details className="group rounded-xl border border-nativz-border bg-surface">
-              <summary className="flex cursor-pointer items-center justify-between px-5 py-4 text-base font-semibold text-text-primary">
-                Platform breakdown
-                <span className="text-xs font-normal text-text-muted group-open:hidden">
-                  Expand ▾
-                </span>
-                <span className="hidden text-xs font-normal text-text-muted group-open:inline">
-                  Collapse ▴
-                </span>
-              </summary>
-              <div className="space-y-8 border-t border-nativz-border px-5 py-5">
+            <section className="space-y-5 rounded-xl border border-nativz-border bg-surface p-5">
+              <h2 className="text-base font-semibold text-text-primary">Platform details</h2>
+              <div className="space-y-8">
                 {(['tiktok', 'instagram', 'youtube', 'facebook', 'linkedin'] as const)
                   .filter((p) => summary.platforms.some((ps) => ps.platform === p))
                   .map((platform) => {
@@ -225,55 +185,11 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
                     );
                   })}
               </div>
-            </details>
+            </section>
           )}
 
-          {/* Audience insights — collapsed by default. Auto-hides further if
-              Zernio doesn't return data once expanded. */}
-          {selectedClientId && (
-            <details className="group rounded-xl border border-nativz-border bg-surface">
-              <summary className="flex cursor-pointer items-center justify-between px-5 py-4 text-base font-semibold text-text-primary">
-                Audience insights
-                <span className="text-xs font-normal text-text-muted group-open:hidden">
-                  Expand ▾
-                </span>
-                <span className="hidden text-xs font-normal text-text-muted group-open:inline">
-                  Collapse ▴
-                </span>
-              </summary>
-              <div className="border-t border-nativz-border px-5 py-5">
-                <AudienceInsightsCard clientId={selectedClientId} />
-              </div>
-            </details>
-          )}
-
-          {/* Audience demographics — behind an explicit toggle. Default off so
-              the main page reads as platform performance, not audience breakdown. */}
-          {selectedClientId && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Users size={16} className="text-text-muted" />
-                  <h2 className="text-base font-semibold text-text-primary">Audience demographics</h2>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowDemographics((v) => !v)}
-                >
-                  {showDemographics ? 'Hide' : 'Show demographics'}
-                </Button>
-              </div>
-              {showDemographics && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <DemographicsCard clientId={selectedClientId} platform="instagram" />
-                  <DemographicsCard clientId={selectedClientId} platform="youtube" />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Full post details grid — filterable list of every post. */}
+          {/* Full post details grid — filterable list of every post, default
+              sorted by most engagement per Jack's 2026-04-21 ask. */}
           {selectedClientId && dateRange && (
             <PostDetailsGrid
               clientId={selectedClientId}
@@ -296,6 +212,16 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
           dateRange={dateRange}
           summary={summary}
           fetchTopPostsForReport={fetchTopPostsForReport}
+        />
+      )}
+
+      {/* Ask the Nerd — floating chat, scoped to the active client so the
+          assistant sees analytics context automatically. */}
+      {selectedClient && (
+        <AnalysisChatDrawer
+          scopeType="social_analytics"
+          scopeId={selectedClient.id}
+          scopeLabel={selectedClient.name}
         />
       )}
     </div>

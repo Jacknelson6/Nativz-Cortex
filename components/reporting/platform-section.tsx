@@ -12,16 +12,11 @@ const PLATFORM_LABELS: Record<string, string> = {
   linkedin: 'LinkedIn',
 };
 
-// One brand colour per platform — every card in a platform's grid uses
-// this same colour so the eye can scan down a client's page and tell
-// which network it's looking at without reading labels.
-const PLATFORM_COLORS: Record<string, string> = {
-  facebook: '#1877f2',
-  instagram: '#e1306c',
-  tiktok: '#22d3ee',
-  youtube: '#ef4444',
-  linkedin: '#0a66c2',
-};
+// Unified neutral-blue line per Jack's 2026-04-21 analytics ask — the
+// rainbow per-platform colours (IG pink, TikTok cyan, YouTube red) read
+// as noise next to the Meta Ads reporting page. Platform identity is
+// carried by the branded icon in the header instead.
+const SPARKLINE_COLOR = '#60a5fa';
 
 interface PlatformSectionProps {
   summary: PlatformSummary;
@@ -32,7 +27,7 @@ interface PlatformSectionProps {
 
 export function PlatformSection({ summary }: PlatformSectionProps) {
   const label = PLATFORM_LABELS[summary.platform] ?? summary.platform;
-  const color = PLATFORM_COLORS[summary.platform] ?? '#60a5fa';
+  const color = SPARKLINE_COLOR;
   const m = summary.metrics ?? {};
 
   // Cards with no data (undefined) are filtered out so platforms like
