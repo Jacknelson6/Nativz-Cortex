@@ -19,6 +19,7 @@ import {
   Receipt,
   Settings as SettingsIcon,
   Users,
+  Building,
   ShoppingBag,
   Bell,
   Camera,
@@ -83,6 +84,10 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Brand tools',
     items: [
+      // NAT-57 follow-up: single entry point for the pinned brand's
+      // profile. Same page as /portal/brand-profile but with an
+      // "Edit in settings" shortcut for admins.
+      { href: '/admin/brand-profile', label: 'Brand Profile', icon: Building },
       { href: '/admin/search/new', label: 'Trend Finder', icon: TrendingUp },
       { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: MessagesSquare },
       {
@@ -394,11 +399,15 @@ export function AdminSidebar({
                   priority
                 />
               ) : (
+                // Preloaded from app/layout.tsx — hints below keep priority aligned.
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src="/anderson-logo-dark.svg"
                   alt="Anderson Collaborative"
                   className={`${open ? 'h-9' : 'h-5'} w-auto transition-[height] duration-200 ease-out`}
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
                 />
               )}
             </button>

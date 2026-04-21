@@ -46,11 +46,15 @@ export function AdminTopBar({
             priority
           />
         ) : (
+          // Preloaded from app/layout.tsx — hints below keep priority aligned.
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src="/anderson-logo-dark.svg"
             alt="Anderson Collaborative"
             className="h-7 w-auto"
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
           />
         )}
       </div>

@@ -59,7 +59,7 @@ export function MobileSidebar({ children }: MobileSidebarProps) {
             {mode === 'nativz' ? (
               <Image src="/nativz-logo.png" alt="Nativz" width={100} height={38} className="h-8 w-auto" />
             ) : (
-              <img src="/anderson-logo-dark.svg" alt="Anderson Collaborative" className="h-8 w-auto" />
+              <img src="/anderson-logo-dark.svg" alt="Anderson Collaborative" className="h-8 w-auto" loading="eager" fetchPriority="high" decoding="async" />
             )}
           </div>
           <button

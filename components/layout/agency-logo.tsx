@@ -49,12 +49,19 @@ export function AgencyLogo() {
             priority
           />
         ) : (
-          // Anderson Collaborative mark — SVG ships outside the Next image optimizer
+          // Anderson Collaborative mark — SVG ships outside the Next image
+          // optimizer, but app/layout.tsx drops a <link rel="preload" as="image">
+          // in <head> so the browser starts fetching before the parser reaches
+          // this node. fetchPriority="high" + loading="eager" keep the browser
+          // from deprioritising it relative to the preload hint.
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src="/anderson-logo-dark.svg"
             alt="Anderson Collaborative"
             className="h-11 w-auto"
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
           />
         )}
       </button>

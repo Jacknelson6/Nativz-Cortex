@@ -73,6 +73,15 @@ export default async function RootLayout({
     }
   })();
 
+  // Preload the active agency lockup. Without this, the Anderson SVG is
+  // served via a plain <img> at the top-left of the admin shell — the
+  // browser only discovers it when the parser reaches that node, so it
+  // "pops in" a beat after paint even on refresh. Nativz already preloads
+  // via Next/Image's priority flag; this parallels that for Anderson.
+  const agencyLogoHref =
+    forcedMode === 'anderson' ? '/anderson-logo-dark.svg' : '/nativz-logo.png';
+  const agencyLogoType = forcedMode === 'anderson' ? 'image/svg+xml' : 'image/png';
+
   return (
     <html lang="en" data-brand-mode={brandMode}>
       <head>
@@ -83,6 +92,13 @@ export default async function RootLayout({
             <link rel="dns-prefetch" href={supabaseOrigin} />
           </>
         )}
+        <link
+          rel="preload"
+          as="image"
+          href={agencyLogoHref}
+          type={agencyLogoType}
+          fetchPriority="high"
+        />
       </head>
       <body className={`${jakarta.variable} font-sans antialiased`}>
         <BrandModeProvider forcedMode={forcedMode}>

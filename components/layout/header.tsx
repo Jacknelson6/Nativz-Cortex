@@ -48,14 +48,14 @@ export function Header({ portalMode = false }: HeaderProps) {
           {mode === 'nativz' ? (
             <Image src="/nativz-logo.png" alt="Nativz" width={isCollapsed ? 80 : 140} height={isCollapsed ? 30 : 54} className={`${isCollapsed ? 'h-6' : 'h-10'} w-auto`} priority />
           ) : (
-            <img src="/anderson-logo-dark.svg" alt="Anderson Collaborative" className={`${isCollapsed ? 'h-6' : 'h-10'} w-auto`} />
+            <img src="/anderson-logo-dark.svg" alt="Anderson Collaborative" className={`${isCollapsed ? 'h-6' : 'h-10'} w-auto`} loading="eager" fetchPriority="high" decoding="async" />
           )}
         </button>
         <Link href="/" aria-label="Go to home" className="flex md:hidden items-center hover:opacity-80 transition-opacity duration-150">
           {mode === 'nativz' ? (
             <Image src="/nativz-logo.png" alt="Nativz" width={140} height={54} className="h-10 w-auto" priority />
           ) : (
-            <img src="/anderson-logo-dark.svg" alt="Anderson Collaborative" className="h-10 w-auto" />
+            <img src="/anderson-logo-dark.svg" alt="Anderson Collaborative" className="h-10 w-auto" loading="eager" fetchPriority="high" decoding="async" />
           )}
         </Link>
         {portalMode && (
