@@ -19,6 +19,7 @@ import {
 } from '@/app/admin/tools/email/production-updates-client';
 import { EmailsTab } from './emails-tab';
 import { ContactsTab } from './contacts-tab';
+import { TemplatesTab } from './templates-tab';
 
 type TabKey =
   | 'campaigns'
@@ -87,13 +88,7 @@ export function EmailHubClient({ clients, initialUpdates, senderEmail }: Props) 
             description="Group recipients into reusable audiences you can target in campaigns and sequences."
           />
         )}
-        {tab === 'templates' && (
-          <EmptyTab
-            icon={FileText}
-            title="Templates coming soon"
-            description="Reusable email layouts per agency, so campaigns start from a consistent look and tone."
-          />
-        )}
+        {tab === 'templates' && <TemplatesTab />}
         {tab === 'sequences' && (
           <EmptyTab
             icon={Zap}
