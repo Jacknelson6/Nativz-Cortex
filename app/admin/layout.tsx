@@ -19,7 +19,7 @@ import { BackgroundSearchProvider } from '@/components/search/background-search-
 import { SWRProvider } from '@/components/providers/swr-provider';
 import { BannerStrip } from '@/components/shared/banner-strip';
 import { ActiveBrandProvider } from '@/lib/admin/active-client-context';
-import { getActiveAdminClient, listAdminAccessibleBrands } from '@/lib/admin/get-active-client';
+import { getActiveAdminClient } from '@/lib/admin/get-active-client';
 
 const getCachedUser = unstable_cache(
   async (userId: string) => {
@@ -77,20 +77,19 @@ export default async function AdminLayout({
       hiddenSidebarItems = (prefs?.hidden_sidebar_items as string[] | null) ?? [];
     } catch { /* silent — ship without filtering */ }
 
-    // Resolve the admin's working brand + accessible brand list in parallel.
-    // Both queries are independent of each other; Promise.all keeps the
-    // layout's initial render off a waterfall. Failures degrade gracefully —
-    // an empty brand list just renders the pill in its "select a brand"
-    // state rather than crashing the shell.
-    const [active, availableBrands] = await Promise.all([
-      getActiveAdminClient().catch(() => ({ brand: null, source: 'none' as const, isAdmin: false })),
-      listAdminAccessibleBrands().catch(() => []),
-    ]);
+    // Resolve just the admin's current working brand — the picker page
+    // (/admin/select-brand) fetches the full client roster on demand, so
+    // we don't pay that query cost here on every admin request.
+    const active = await getActiveAdminClient().catch(() => ({
+      brand: null,
+      source: 'none' as const,
+      isAdmin: false,
+    }));
 
     return (
       <SWRProvider>
         <BackgroundSearchProvider>
-          <ActiveBrandProvider initialBrand={active.brand} availableBrands={availableBrands}>
+          <ActiveBrandProvider initialBrand={active.brand}>
             <SidebarProvider
               topBar={
                 <AdminTopBar

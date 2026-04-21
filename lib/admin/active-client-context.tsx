@@ -12,11 +12,15 @@ import {
 import { useRouter } from 'next/navigation';
 import type { AdminBrand } from '@/lib/admin/get-active-client';
 
+/**
+ * Holds only the *current* working brand — no available-brands list. The
+ * /admin/select-brand page fetches the client roster on demand when the
+ * user wants to switch, so the admin layout doesn't pay the roster query
+ * cost on every request.
+ */
 interface ActiveBrandContextValue {
   /** The brand the current admin is working on. `null` if none selected. */
   brand: AdminBrand | null;
-  /** All brands the current admin can switch to. */
-  availableBrands: AdminBrand[];
   /** Switch to a brand by id, or pass `null` to clear the selection. */
   setBrand: (brandId: string | null) => void;
   /** True while a setBrand() call is round-tripping to the server. */
@@ -28,23 +32,26 @@ const ActiveBrandContext = createContext<ActiveBrandContextValue | null>(null);
 export function ActiveBrandProvider({
   children,
   initialBrand,
-  availableBrands,
 }: {
   children: ReactNode;
   initialBrand: AdminBrand | null;
-  availableBrands: AdminBrand[];
 }) {
   const router = useRouter();
   // Optimistic — the UI pill swaps instantly while the server action flies.
-  // If the server rejects (403 for an unreachable brand), the subsequent
-  // router.refresh() will re-seed from the source of truth.
+  // On server rejection the subsequent router.refresh() re-seeds from the
+  // cookie source of truth.
   const [optimisticBrand, setOptimisticBrand] = useState<AdminBrand | null>(initialBrand);
   const [isPending, startTransition] = useTransition();
 
   const setBrand = useCallback(
     (brandId: string | null) => {
-      const next = brandId ? availableBrands.find((b) => b.id === brandId) ?? null : null;
-      setOptimisticBrand(next);
+      // Can't build a PortfolioClient object from just an id — clear the
+      // optimistic brand so the pill shows "Select a brand" until the
+      // server-seeded refresh lands. Keeps the UI honest if the server
+      // 403s the switch.
+      if (brandId === null) {
+        setOptimisticBrand(null);
+      }
 
       startTransition(async () => {
         try {
@@ -54,24 +61,21 @@ export function ActiveBrandProvider({
             body: JSON.stringify({ client_id: brandId }),
           });
           if (!res.ok) {
-            // Rollback — server rejected. Refresh reseeds from cookie/db.
             setOptimisticBrand(initialBrand);
           }
         } catch {
           setOptimisticBrand(initialBrand);
         } finally {
-          // Re-render server components (layouts, pages) so route-param tools
-          // that read the cookie pick up the new brand without a full reload.
           router.refresh();
         }
       });
     },
-    [availableBrands, initialBrand, router],
+    [initialBrand, router],
   );
 
   const value = useMemo<ActiveBrandContextValue>(
-    () => ({ brand: optimisticBrand, availableBrands, setBrand, isPending }),
-    [optimisticBrand, availableBrands, setBrand, isPending],
+    () => ({ brand: optimisticBrand, setBrand, isPending }),
+    [optimisticBrand, setBrand, isPending],
   );
 
   return <ActiveBrandContext.Provider value={value}>{children}</ActiveBrandContext.Provider>;

@@ -101,30 +101,8 @@ export async function getActiveAdminClient(
   return { brand: client, source, isAdmin };
 }
 
-/**
- * List every brand the current admin can switch to, ordered alphabetically.
- *
- * Admin and super_admin are treated identically here (super_admin carries
- * only destructive-action privileges, not an expanded brand roster).
- */
-export async function listAdminAccessibleBrands(): Promise<AdminBrand[]> {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return [];
-
-  const isAdmin = await resolveAdminRole(user.id);
-  if (!isAdmin) return [];
-
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from('clients')
-    .select('id, name, slug, logo_url, agency')
-    .eq('is_active', true)
-    .eq('hide_from_roster', false)
-    .order('name', { ascending: true });
-
-  return data ?? [];
-}
+// NOTE: `listAdminAccessibleBrands()` used to live here — it fetched the full
+// roster so the top-bar pill could render a dropdown. The picker was moved
+// to its own page (/admin/select-brand) which does its own roster fetch,
+// so this utility is no longer needed. Kept the comment as a trail marker
+// in case someone wonders where it went.
