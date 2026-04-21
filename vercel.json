@@ -55,6 +55,10 @@
       "schedule": "*/1 * * * *"
     },
     {
+      "path": "/api/cron/drain-email-hub",
+      "schedule": "*/1 * * * *"
+    },
+    {
       "path": "/api/cron/benchmark-snapshots",
       "schedule": "0 5 * * *"
     },

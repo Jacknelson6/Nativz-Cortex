@@ -21,6 +21,7 @@ import { ContactsTab } from './contacts-tab';
 import { TemplatesTab } from './templates-tab';
 import { CampaignsTab } from './campaigns-tab';
 import { ListsTab } from './lists-tab';
+import { SequencesTab } from './sequences-tab';
 
 type TabKey =
   | 'campaigns'
@@ -99,13 +100,7 @@ export function EmailHubClient({ clients, initialUpdates, senderEmail }: Props) 
         {tab === 'contacts' && <ContactsTab />}
         {tab === 'lists' && <ListsTab />}
         {tab === 'templates' && <TemplatesTab />}
-        {tab === 'sequences' && (
-          <EmptyTab
-            icon={Zap}
-            title="Sequences coming soon"
-            description="Multi-step drip flows triggered by events or joined lists."
-          />
-        )}
+        {tab === 'sequences' && <SequencesTab />}
         {tab === 'setup' && (
           <EmptyTab
             icon={Settings}
