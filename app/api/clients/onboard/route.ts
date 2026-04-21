@@ -19,6 +19,22 @@ const onboardSchema = z.object({
   logo_url: z.string().nullable().optional().default(null),
   services: z.array(z.string()).optional().default([]),
   agency: z.string().optional().default(''),
+  // NAT-57: per-platform social-profile slots captured during the
+  // analyze step. `status: 'linked'` rows seed `social_profiles` with
+  // the handle (manual/website-scraped); `status: 'no_account'` rows
+  // seed a no_account marker row so analysis tools skip that platform
+  // silently. Unset slots simply aren't sent, no row gets created.
+  social_slots: z
+    .array(
+      z.object({
+        platform: z.enum(['instagram', 'tiktok', 'facebook', 'youtube']),
+        status: z.enum(['linked', 'no_account']),
+        handle: z.string().trim().max(200).nullable().optional(),
+        website_scraped: z.boolean().optional().default(false),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 /**
@@ -132,6 +148,51 @@ export async function POST(request: NextRequest) {
           .single();
 
         if (clientError) throw new Error(`Client: ${clientError.message}`);
+
+        // NAT-57: seed social-profile slots captured during onboarding.
+        // Non-fatal — if this fails, the client still gets created and
+        // the admin can fix up slots later on the brand profile.
+        if (data.social_slots.length > 0) {
+          const rows = data.social_slots.map((slot) => {
+            if (slot.status === 'no_account') {
+              return {
+                client_id: client.id,
+                platform: slot.platform,
+                platform_user_id: null,
+                username: null,
+                avatar_url: null,
+                access_token_ref: null,
+                late_account_id: null,
+                no_account: true,
+                website_scraped: false,
+                is_active: false,
+              };
+            }
+            const handle = (slot.handle ?? '').trim().replace(/^@+/, '');
+            return {
+              client_id: client.id,
+              platform: slot.platform,
+              // Synthetic platform_user_id so the partial-unique index
+              // doesn't get offended. Zernio OAuth overwrites this with
+              // the real id if the admin later connects.
+              platform_user_id: `manual:${slot.platform}:${handle.toLowerCase()}`,
+              username: handle,
+              avatar_url: null,
+              access_token_ref: null,
+              late_account_id: null,
+              no_account: false,
+              website_scraped: !!slot.website_scraped,
+              is_active: true,
+            };
+          });
+          const { error: slotsErr } = await adminClient
+            .from('social_profiles')
+            .insert(rows);
+          if (slotsErr) {
+            console.error(`[onboard:${client.id}] seeding social_profiles failed:`, slotsErr);
+          }
+        }
+
         return { clientId: client.id, organizationId: org.id };
       })(),
 

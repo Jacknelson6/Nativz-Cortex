@@ -107,6 +107,20 @@ export interface OnboardFormData {
   logo_url: string | null;
   services: string[];
   agency: string;
+  /** NAT-57: per-platform social slots captured during onboarding.
+   *  Status is linked (handle set) or no_account (admin declared).
+   *  Unset slots (not included here) default to unset in DB. */
+  social_slots?: OnboardSocialSlot[];
+}
+
+export interface OnboardSocialSlot {
+  platform: 'instagram' | 'tiktok' | 'facebook' | 'youtube';
+  status: 'linked' | 'no_account';
+  /** Required when status = 'linked'. */
+  handle?: string | null;
+  /** True when the handle was auto-discovered from the website scrape
+   *  vs manually typed by the admin. */
+  website_scraped?: boolean;
 }
 
 export type OnboardStep = 'input' | 'analyze' | 'strategy' | 'review';

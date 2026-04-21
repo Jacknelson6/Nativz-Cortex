@@ -1,12 +1,42 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Check, PenLine, Sparkles, Tag, X } from 'lucide-react';
+import { Loader2, Check, PenLine, Sparkles, Tag, X, Instagram, Facebook, Youtube, Ban } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Button } from '@/components/ui/button';
-import type { OnboardFormData } from '@/lib/types/strategy';
+import type { OnboardFormData, OnboardSocialSlot } from '@/lib/types/strategy';
+
+// NAT-57 follow-up: during onboarding we now capture one social slot
+// per platform (Instagram / TikTok / Facebook / YouTube). Auto-
+// discovered handles come from /api/clients/analyze-url's website
+// scrape; unset slots prompt admin to either add a handle or mark
+// "no account" before finishing onboarding.
+type SocialPlatform = 'instagram' | 'tiktok' | 'facebook' | 'youtube';
+const SOCIAL_PLATFORMS: SocialPlatform[] = ['instagram', 'tiktok', 'facebook', 'youtube'];
+
+type SlotDraft = {
+  handle: string; // empty when unset / no_account
+  noAccount: boolean;
+  websiteScraped: boolean;
+};
+
+function emptySlotDrafts(): Record<SocialPlatform, SlotDraft> {
+  return {
+    instagram: { handle: '', noAccount: false, websiteScraped: false },
+    tiktok: { handle: '', noAccount: false, websiteScraped: false },
+    facebook: { handle: '', noAccount: false, websiteScraped: false },
+    youtube: { handle: '', noAccount: false, websiteScraped: false },
+  };
+}
+
+const PLATFORM_ICON: Record<SocialPlatform, React.ElementType> = {
+  instagram: Instagram,
+  tiktok: Sparkles,
+  facebook: Facebook,
+  youtube: Youtube,
+};
 
 interface OnboardAnalyzeProps {
   name: string;
@@ -31,6 +61,12 @@ export function OnboardAnalyze({ name, websiteUrl, onNext, onBack }: OnboardAnal
   });
   const [newKeyword, setNewKeyword] = useState('');
   const [fieldsEdited, setFieldsEdited] = useState(false);
+  const [socialSlots, setSocialSlots] = useState<Record<SocialPlatform, SlotDraft>>(emptySlotDrafts);
+
+  function setSlot(platform: SocialPlatform, patch: Partial<SlotDraft>) {
+    setSocialSlots((prev) => ({ ...prev, [platform]: { ...prev[platform], ...patch } }));
+    setFieldsEdited(true);
+  }
 
   const analyze = useCallback(async () => {
     setAnalyzing(true);
@@ -58,6 +94,20 @@ export function OnboardAnalyze({ name, websiteUrl, onNext, onBack }: OnboardAnal
         topic_keywords: data.topic_keywords || [],
         logo_url: data.logo_url || null,
       }));
+
+      // Pre-fill social slots from scraped handles. Each platform not
+      // found stays as an unset draft (admin resolves it below).
+      const found = (data.socials ?? {}) as Partial<Record<SocialPlatform, string | null>>;
+      setSocialSlots((prev) => {
+        const next = { ...prev };
+        for (const p of SOCIAL_PLATFORMS) {
+          const h = (found[p] ?? '').toString().trim();
+          if (h) {
+            next[p] = { handle: h, noAccount: false, websiteScraped: true };
+          }
+        }
+        return next;
+      });
     } catch {
       setError('Could not reach the server. Fill in details manually.');
     } finally {
@@ -72,7 +122,28 @@ export function OnboardAnalyze({ name, websiteUrl, onNext, onBack }: OnboardAnal
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!formData.industry.trim()) return;
-    onNext(formData);
+
+    // Build social_slots payload. Only include slots that were
+    // explicitly resolved (linked handle OR marked "no account").
+    // Unresolved slots are omitted so the admin can revisit them
+    // later on the brand settings page without being hard-blocked
+    // during onboarding — soft nudge per the spec.
+    const social_slots: OnboardSocialSlot[] = [];
+    for (const p of SOCIAL_PLATFORMS) {
+      const slot = socialSlots[p];
+      if (slot.noAccount) {
+        social_slots.push({ platform: p, status: 'no_account' });
+      } else if (slot.handle.trim()) {
+        social_slots.push({
+          platform: p,
+          status: 'linked',
+          handle: slot.handle.trim().replace(/^@+/, ''),
+          website_scraped: slot.websiteScraped,
+        });
+      }
+    }
+
+    onNext({ ...formData, social_slots });
   }
 
   function addKeyword() {
@@ -230,6 +301,78 @@ export function OnboardAnalyze({ name, websiteUrl, onNext, onBack }: OnboardAnal
               <Button type="button" variant="outline" size="sm" onClick={addKeyword}>
                 Add
               </Button>
+            </div>
+          </div>
+
+          {/* Social slots — one row per platform we scrape. Auto-filled
+              from the website analysis; admin confirms, edits, or marks
+              "no account" per platform. Unresolved slots default to
+              unset (admin can revisit later on the brand profile). */}
+          <div className="border-t border-nativz-border pt-4 mt-2">
+            <p className="text-xs font-medium text-text-muted mb-2">Social profiles</p>
+            <p className="text-[11px] text-text-muted mb-3 leading-relaxed">
+              Pre-filled from the website when detected. Mark &quot;No account&quot;
+              if the brand isn&apos;t on a platform; leave blank to fill in later.
+            </p>
+            <div className="space-y-2">
+              {SOCIAL_PLATFORMS.map((p) => {
+                const Icon = PLATFORM_ICON[p];
+                const slot = socialSlots[p];
+                const label = p.charAt(0).toUpperCase() + p.slice(1);
+                return (
+                  <div
+                    key={p}
+                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors ${
+                      slot.noAccount
+                        ? 'border-nativz-border bg-background/30 opacity-70'
+                        : slot.handle
+                          ? 'border-emerald-500/30 bg-emerald-500/5'
+                          : 'border-nativz-border bg-surface-hover'
+                    }`}
+                  >
+                    <Icon size={14} className="shrink-0 text-text-muted" />
+                    <span className="text-xs font-medium text-text-secondary w-20 shrink-0">{label}</span>
+                    {slot.noAccount ? (
+                      <span className="flex-1 text-xs text-text-muted italic">No account on this platform</span>
+                    ) : (
+                      <div className="flex-1 flex items-center gap-1">
+                        <span className="text-xs text-text-muted">@</span>
+                        <input
+                          type="text"
+                          value={slot.handle}
+                          onChange={(e) =>
+                            setSlot(p, { handle: e.target.value.replace(/^@+/, ''), websiteScraped: false })
+                          }
+                          placeholder="handle"
+                          className="flex-1 rounded border border-nativz-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent"
+                        />
+                        {slot.websiteScraped && (
+                          <span
+                            className="text-[9px] uppercase tracking-wider text-emerald-400 font-semibold"
+                            title="Handle detected from website"
+                          >
+                            found
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSlot(p, slot.noAccount
+                          ? { noAccount: false }
+                          : { noAccount: true, handle: '', websiteScraped: false },
+                        )
+                      }
+                      className="shrink-0 text-[10px] text-text-muted hover:text-text-secondary px-2 py-0.5 rounded inline-flex items-center gap-1"
+                      title={slot.noAccount ? 'Undo — allow adding a handle' : 'Mark as no account'}
+                    >
+                      <Ban size={10} />
+                      {slot.noAccount ? 'Undo' : 'No account'}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

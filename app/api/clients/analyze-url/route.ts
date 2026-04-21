@@ -10,6 +10,33 @@ const analyzeSchema = z.object({
 });
 
 /**
+ * Pull the first plausible social handle for a platform from raw HTML.
+ * `regex` must have a global flag and at least one capturing group that
+ * contains the handle; `reject` is a list of path segments that look
+ * like handles but aren't (e.g. Instagram's /p, /explore). Returns null
+ * when no match passes the reject list.
+ *
+ * We walk all matches (not just the first) because real sites often
+ * link to `/share` or `/dialog` before the actual profile — we want
+ * to skip those and land on the real handle.
+ */
+function extractHandle(html: string, regex: RegExp, reject: string[]): string | null {
+  const rejectSet = new Set(reject.map((r) => r.toLowerCase()));
+  const matches = html.matchAll(regex);
+  for (const m of matches) {
+    // YouTube regex has four capture groups (one per URL shape); grab the first non-empty one.
+    const handle = (m[1] ?? m[2] ?? m[3] ?? m[4] ?? '').trim();
+    if (!handle) continue;
+    if (rejectSet.has(handle.toLowerCase())) continue;
+    // Length sanity check — handles above 50 chars are almost certainly
+    // URL fragments we mis-captured (e.g. tracking params).
+    if (handle.length > 50) continue;
+    return handle;
+  }
+  return null;
+}
+
+/**
  * POST /api/clients/analyze-url
  *
  * Analyze a website URL to auto-populate client onboarding fields. Fetches the website HTML,
@@ -125,6 +152,21 @@ export async function POST(request: NextRequest) {
       }
     } catch { /* ignore */ }
 
+    // NAT-57 follow-up: extract social handles from the website HTML so
+    // onboarding can pre-fill the four social-profile slots. We look for
+    // <a href="…">-style links to the four platforms Zernio supports
+    // (Instagram, TikTok, Facebook, YouTube). Per-platform regex
+    // captures the handle segment; duplicates and obvious non-handles
+    // (e.g. /share, /explore) are filtered out. Returns null per
+    // platform when nothing plausible is found — admin confirms or
+    // marks "no account" in the onboarding UI.
+    const socials: Record<'instagram' | 'tiktok' | 'facebook' | 'youtube', string | null> = {
+      instagram: extractHandle(html, /(?:instagram\.com|instagr\.am)\/([A-Za-z0-9._]+)(?:\/|$|["?#])/gi, ['p', 'explore', 'reel', 'tv', 'stories']),
+      tiktok: extractHandle(html, /tiktok\.com\/@([A-Za-z0-9._]+)(?:\/|$|["?#])/gi, []),
+      facebook: extractHandle(html, /facebook\.com\/([A-Za-z0-9.]+)(?:\/|$|["?#])/gi, ['sharer', 'dialog', 'tr', 'plugins', 'pages']),
+      youtube: extractHandle(html, /youtube\.com\/(?:@([A-Za-z0-9._-]+)|c\/([A-Za-z0-9._-]+)|channel\/([A-Za-z0-9._-]+)|user\/([A-Za-z0-9._-]+))(?:\/|$|["?#])/gi, []),
+    };
+
     // Strip HTML to plain text (first ~5000 chars)
     const text = html
       .replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -177,7 +219,7 @@ Guidelines:
       topic_keywords: string[];
     }>(aiResult.text);
 
-    return NextResponse.json({ ...result, logo_url: logoUrl });
+    return NextResponse.json({ ...result, logo_url: logoUrl, socials });
   } catch (error) {
     console.error('POST /api/clients/analyze-url error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
