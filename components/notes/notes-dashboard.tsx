@@ -37,6 +37,7 @@ export function NotesDashboard({
   clients,
   isAdmin,
   portalClientId,
+  adminScopedClientId,
   routePrefix = '/admin',
 }: {
   clients: { id: string; name: string; slug: string }[];
@@ -44,6 +45,11 @@ export function NotesDashboard({
   /** Portal viewer mode: filter the board list and pre-scope new notes to
    *  this client id. Hides the scope picker in the create modal. */
   portalClientId?: string;
+  /** NAT-57: admin's session brand (from the top-bar pill). Filters the
+   *  board list to that brand's scope + personal notes. When null,
+   *  shows everything. Does NOT hide the scope picker in create — admin
+   *  can still pick any scope for a new note. */
+  adminScopedClientId?: string | null;
   /** Where board tiles link to — '/admin' for the admin surface,
    *  '/portal' for the portal. */
   routePrefix?: '/admin' | '/portal';
@@ -52,12 +58,16 @@ export function NotesDashboard({
   const [boards, setBoards] = useState<BoardCard[] | null>(null);
   const [newOpen, setNewOpen] = useState(false);
 
+  // The fetch filter: portal uses its hard-bound client id; admin uses
+  // the session brand when pinned. One source of truth for the query.
+  const filterClientId = portalClientId ?? adminScopedClientId ?? null;
+
   useEffect(() => {
     void load();
-  }, [portalClientId]);
+  }, [filterClientId]);
 
   async function load() {
-    const qs = portalClientId ? `?clientId=${encodeURIComponent(portalClientId)}` : '';
+    const qs = filterClientId ? `?clientId=${encodeURIComponent(filterClientId)}` : '';
     const res = await fetch(`/api/moodboard/notes-boards${qs}`);
     if (res.ok) {
       const d = await res.json();
