@@ -36,6 +36,7 @@ import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { SidebarModePicker } from '@/components/layout/sidebar-mode-picker';
 import { SidebarCollapsedFlyout } from '@/components/layout/sidebar-collapsed-flyout';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
+import { AdminBrandPill } from '@/components/layout/admin-brand-pill';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import {
   Sidebar,
@@ -425,6 +426,16 @@ export function AdminSidebar({
         {role === 'viewer' && brands && brands.length > 1 && activeBrandId && (
           <div className="mb-1 mt-3">
             <BrandSwitcher activeBrandId={activeBrandId} brands={brands} collapsed={!open} />
+          </div>
+        )}
+
+        {/* Admin-only: top-level brand pill. Portal users get the BrandSwitcher
+            above; admins get this richer pill with search + "Create brand" CTA.
+            Wrapped in an `ActiveBrandProvider` higher up in the admin layout —
+            `useActiveBrand()` inside the pill reads that context. */}
+        {role === 'admin' && (
+          <div className="mb-1 mt-3">
+            <AdminBrandPill collapsed={!open} />
           </div>
         )}
       </SidebarHeader>
