@@ -107,40 +107,27 @@ export default async function StrategyLabPage({
   if (active?.brand) {
     const clientId = active.brand.id;
 
-    const { data: client } = await admin
-      .from('clients')
-      .select('id, name, slug, brand_dna_status')
-      .eq('id', clientId)
-      .maybeSingle();
-
-    if (!client) {
-      // Brand pill is pointing at a client we can't load — bail to the
-      // general chat so the user isn't stranded on an error page.
-      return renderGeneralChat(admin, attachParam);
-    }
-
-    let brandGuideline: {
-      id: string;
-      content: string;
-      metadata: unknown;
-      created_at: string;
-      updated_at: string;
-    } | null = null;
-
-    if (client.brand_dna_status !== 'none') {
-      const { data: g } = await admin
-        .from('client_knowledge_entries')
-        .select('id, content, metadata, created_at, updated_at')
-        .eq('client_id', client.id)
-        .eq('type', 'brand_guideline')
-        .is('metadata->superseded_by', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      brandGuideline = g;
-    }
-
-    const [{ data: topicRows }, { data: pillarRows }, { data: boardRows }] = await Promise.all([
+    // Batch 1: every read that only needs clientId. Running them serially
+    // (as the code used to) is ~800ms of avoidable latency; all 8 are
+    // independent reads with no ordering requirements. We run the brand
+    // guideline query speculatively — if brand_dna_status turns out to be
+    // 'none', we throw the result away. Cheap vs. the round-trip saved for
+    // the common case.
+    const [
+      clientResult,
+      topicResult,
+      pillarResult,
+      boardResult,
+      brandGuidelineResult,
+      ideaGenCountResult,
+      vaultEntries,
+      vaultGraphData,
+    ] = await Promise.all([
+      admin
+        .from('clients')
+        .select('id, name, slug, brand_dna_status')
+        .eq('id', clientId)
+        .maybeSingle(),
       admin
         .from('topic_searches')
         .select('id, query, status, created_at')
@@ -158,29 +145,63 @@ export default async function StrategyLabPage({
         .eq('client_id', clientId)
         .order('updated_at', { ascending: false })
         .limit(50),
+      admin
+        .from('client_knowledge_entries')
+        .select('id, content, metadata, created_at, updated_at')
+        .eq('client_id', clientId)
+        .eq('type', 'brand_guideline')
+        .is('metadata->superseded_by', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      admin
+        .from('idea_generations')
+        .select('*', { count: 'exact', head: true })
+        .eq('client_id', clientId)
+        .eq('status', 'completed'),
+      getKnowledgeEntries(clientId),
+      getKnowledgeGraph(clientId),
     ]);
 
-    const topicSearches = topicRows ?? [];
-    const pillars = pillarRows ?? [];
-    const boards = (boardRows ?? []).filter((b) => !b.archived_at);
+    const client = clientResult.data;
+    if (!client) {
+      // Brand pill is pointing at a client we can't load — bail to the
+      // general chat so the user isn't stranded on an error page. The
+      // other batch-1 reads were wasted, but the bail path is rare.
+      return renderGeneralChat(admin, attachParam);
+    }
 
+    const brandGuideline =
+      client.brand_dna_status !== 'none' ? brandGuidelineResult.data : null;
+    const topicSearches = topicResult.data ?? [];
+    const pillars = pillarResult.data ?? [];
+    const boards = (boardResult.data ?? []).filter((b) => !b.archived_at);
+    const completedIdeaGenCount = ideaGenCountResult.count;
+
+    // Batch 2: reads that depend on ids returned by batch 1.
     const boardIds = boards.map((b) => b.id as string);
+    const pillarIds = pillars.map((p) => p.id as string);
+
+    const [itemsResult, pillarReferencePreviews] = await Promise.all([
+      boardIds.length > 0
+        ? admin
+            .from('moodboard_items')
+            .select('board_id, thumbnail_url')
+            .in('board_id', boardIds)
+        : Promise.resolve({ data: [] as Array<{ board_id: string; thumbnail_url: string | null }> }),
+      loadPillarReferencePreviews(admin, clientId, pillarIds),
+    ]);
+
     const boardThumbnails: Record<string, string[]> = {};
     const boardItemCounts: Record<string, number> = {};
-    if (boardIds.length > 0) {
-      const { data: itemData } = await admin
-        .from('moodboard_items')
-        .select('board_id, thumbnail_url')
-        .in('board_id', boardIds);
-      if (itemData) {
-        for (const row of itemData) {
-          const bid = row.board_id as string;
-          boardItemCounts[bid] = (boardItemCounts[bid] ?? 0) + 1;
-          const url = row.thumbnail_url as string | null;
-          if (!url) continue;
-          if (!boardThumbnails[bid]) boardThumbnails[bid] = [];
-          if (boardThumbnails[bid].length < 4) boardThumbnails[bid].push(url);
-        }
+    if (itemsResult.data) {
+      for (const row of itemsResult.data) {
+        const bid = row.board_id as string;
+        boardItemCounts[bid] = (boardItemCounts[bid] ?? 0) + 1;
+        const url = row.thumbnail_url as string | null;
+        if (!url) continue;
+        if (!boardThumbnails[bid]) boardThumbnails[bid] = [];
+        if (boardThumbnails[bid].length < 4) boardThumbnails[bid].push(url);
       }
     }
 
@@ -190,20 +211,6 @@ export default async function StrategyLabPage({
       thumbnails: boardThumbnails[b.id as string] ?? [],
       itemCount: boardItemCounts[b.id as string] ?? 0,
     }));
-
-    const { count: completedIdeaGenCount } = await admin
-      .from('idea_generations')
-      .select('*', { count: 'exact', head: true })
-      .eq('client_id', clientId)
-      .eq('status', 'completed');
-
-    const pillarIds = (pillars ?? []).map((p) => p.id as string);
-    const pillarReferencePreviews = await loadPillarReferencePreviews(admin, client.id, pillarIds);
-
-    const [vaultEntries, vaultGraphData] = await Promise.all([
-      getKnowledgeEntries(client.id),
-      getKnowledgeGraph(client.id),
-    ]);
 
     return (
       <div className="h-[calc(100vh-3.5rem)] overflow-hidden">
