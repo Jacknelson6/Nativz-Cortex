@@ -10,6 +10,7 @@ import { ImpersonationBanner } from '@/components/portal/impersonation-banner';
 import { AdminInPortalGuard } from '@/components/portal/admin-in-portal-guard';
 import { BrandModeProvider } from '@/components/layout/brand-mode-provider';
 import { SWRProvider } from '@/components/providers/swr-provider';
+import { BannerStrip } from '@/components/shared/banner-strip';
 import type { FeatureFlags } from '@/lib/portal/get-portal-client';
 import { buildPortalFeatureFlags } from '@/lib/portal/feature-flags';
 
@@ -272,6 +273,7 @@ export default async function PortalLayout({
           />
           <SidebarInset>
             <AdminHeader />
+            <BannerStrip />
             {children}
           </SidebarInset>
         </SidebarProvider>

@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**557 endpoints across 33 sections.**
+**563 endpoints across 33 sections.**
 
 ## Authentication
 
@@ -5640,6 +5640,14 @@ the period. Columns are ordered for the "drop into a spreadsheet and paste into 
 
 ### `POST /api/admin/active-client`
 
+### `GET /api/admin/banners`
+
+### `POST /api/admin/banners`
+
+### `DELETE /api/admin/banners/:id`
+
+### `PATCH /api/admin/banners/:id`
+
 ### `GET /api/admin/email-hub/campaigns`
 
 ### `POST /api/admin/email-hub/campaigns`
@@ -6585,6 +6593,10 @@ Vercel cron: alert admins on failed topic searches (missed inline notify) and on
 ## Other
 
 _Uncategorized routes._
+
+### `POST /api/banners/:id/dismiss`
+
+### `GET /api/banners/active`
 
 ### `POST /api/webhooks/resend`
 

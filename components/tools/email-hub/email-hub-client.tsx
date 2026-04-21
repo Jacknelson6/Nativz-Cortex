@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Bell, Contact, FileText, Mail, Settings } from 'lucide-react';
+import { Bell, Contact, FileText, Mail, Megaphone, Settings } from 'lucide-react';
+import { BannersTab } from './banners-tab';
 import { EmailsTab } from './emails-tab';
 import { ContactsTab } from './contacts-tab';
 import { TemplatesTab } from './templates-tab';
@@ -14,7 +15,7 @@ export interface EmailHubClientOption {
   agency: string | null;
 }
 
-type TabKey = 'contacts' | 'emails' | 'templates' | 'setup';
+type TabKey = 'banners' | 'contacts' | 'emails' | 'templates' | 'setup';
 
 interface Tab {
   key: TabKey;
@@ -23,6 +24,7 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
+  { key: 'banners', label: 'Banners', icon: Megaphone },
   { key: 'contacts', label: 'Contacts', icon: Contact },
   { key: 'emails', label: 'Emails', icon: Mail },
   { key: 'templates', label: 'Templates', icon: FileText },
@@ -33,8 +35,8 @@ interface Props {
   clients: EmailHubClientOption[];
 }
 
-export function EmailHubClient({ clients: _clients }: Props) {
-  const [tab, setTab] = useState<TabKey>('contacts');
+export function EmailHubClient({ clients }: Props) {
+  const [tab, setTab] = useState<TabKey>('banners');
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-8 space-y-6">
@@ -45,7 +47,7 @@ export function EmailHubClient({ clients: _clients }: Props) {
         <div className="min-w-0 pt-0.5">
           <h1 className="text-xl font-semibold text-text-primary">Notifications</h1>
           <p className="text-sm text-text-muted mt-0.5">
-            Manage contacts, email templates, sender identities, and outbound delivery.
+            In-app banners, outbound email, and sender configuration — all in one place.
           </p>
         </div>
       </header>
@@ -53,6 +55,7 @@ export function EmailHubClient({ clients: _clients }: Props) {
       <TabBar tabs={TABS} current={tab} onChange={setTab} />
 
       <div>
+        {tab === 'banners' && <BannersTab clients={clients} />}
         {tab === 'contacts' && <ContactsTab />}
         {tab === 'emails' && <EmailsTab />}
         {tab === 'templates' && <TemplatesTab />}

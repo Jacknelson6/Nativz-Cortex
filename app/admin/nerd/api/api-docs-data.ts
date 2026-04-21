@@ -490,6 +490,38 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   },
   {
     "method": "GET",
+    "path": "/api/admin/banners",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/banners",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/admin/banners/:id",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/admin/banners/:id",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "GET",
     "path": "/api/admin/email-hub/campaigns",
     "description": "",
     "auth": "",
@@ -3399,6 +3431,22 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "sectionSlug": "notifications",
     "body": "The full notification preferences object to save",
     "response": "{{ ok: true }}"
+  },
+  {
+    "method": "POST",
+    "path": "/api/banners/:id/dismiss",
+    "description": "",
+    "auth": "",
+    "section": "Other",
+    "sectionSlug": "other"
+  },
+  {
+    "method": "GET",
+    "path": "/api/banners/active",
+    "description": "",
+    "auth": "",
+    "section": "Other",
+    "sectionSlug": "other"
   },
   {
     "method": "POST",

@@ -17,6 +17,7 @@ import { CommandPalette } from '@/components/shared/command-palette';
 import { PageTransition } from '@/components/shared/page-transition';
 import { BackgroundSearchProvider } from '@/components/search/background-search-tracker';
 import { SWRProvider } from '@/components/providers/swr-provider';
+import { BannerStrip } from '@/components/shared/banner-strip';
 import { ActiveBrandProvider } from '@/lib/admin/active-client-context';
 import { getActiveAdminClient, listAdminAccessibleBrands } from '@/lib/admin/get-active-client';
 
@@ -105,6 +106,7 @@ export default async function AdminLayout({
               <CommandPalette />
               <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} />
               <SidebarInset>
+                <BannerStrip />
                 <PageTransition>{children}</PageTransition>
               </SidebarInset>
             </SidebarProvider>
