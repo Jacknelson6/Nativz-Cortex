@@ -9,6 +9,7 @@ import {
 } from '@/lib/affiliates/digest-schedule';
 import { syncClientAffiliates } from '@/lib/uppromote/sync';
 import { sendAffiliateWeeklyReportEmail } from '@/lib/email/resend';
+import { getSecret } from '@/lib/secrets/store';
 
 export const maxDuration = 300;
 
@@ -62,7 +63,8 @@ async function handler(request: NextRequest) {
       }
     }
 
-    if (!process.env.RESEND_API_KEY) {
+    const resendKey = await getSecret('RESEND_API_KEY');
+    if (!resendKey) {
       return NextResponse.json({ error: 'RESEND_API_KEY is not configured' }, { status: 503 });
     }
 

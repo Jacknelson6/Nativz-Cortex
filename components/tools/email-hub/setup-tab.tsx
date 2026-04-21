@@ -2,17 +2,45 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
+import { toast } from 'sonner';
 import {
   AlertCircle,
   CheckCircle2,
   Copy,
   ExternalLink,
   KeyRound,
+  Pencil,
+  RotateCcw,
   Send,
   Settings,
   Webhook,
 } from 'lucide-react';
-import { InlineSpinner } from '@/components/ui/loading-skeletons';
+import { Dialog } from '@/components/ui/dialog';
+import { InlineSpinner, SkeletonRows } from '@/components/ui/loading-skeletons';
+import { LabeledInput } from './contacts-tab';
+
+type SecretMeta = {
+  key: string;
+  envConfigured: boolean;
+  source: 'db' | 'env' | 'missing';
+  updatedBy: string | null;
+  updatedAt: string | null;
+};
+
+type SecretsResponse = {
+  encryptionReady: boolean;
+  secrets: SecretMeta[];
+};
+
+const SECRET_DESCRIPTIONS: Record<string, string> = {
+  RESEND_API_KEY: 'Required. Resend outbound API key — rotate here after regenerating in the Resend dashboard.',
+  RESEND_WEBHOOK_SECRET:
+    'Shared fallback signing secret. Covers both agencies when set — use this if you have a single Resend webhook endpoint.',
+  RESEND_WEBHOOK_SECRET_NATIVZ:
+    'Optional per-agency override for nativz.io webhook signatures. Overrides the shared secret for Nativz events only.',
+  RESEND_WEBHOOK_SECRET_ANDERSON:
+    'Optional per-agency override for andersoncollaborative.com webhook signatures.',
+};
 
 type Agency = {
   key: 'nativz' | 'anderson';
@@ -98,31 +126,7 @@ export function SetupTab() {
         </ul>
       </section>
 
-      <section className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
-        <header className="flex items-center gap-2.5 px-5 py-4 border-b border-nativz-border">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-surface border border-nativz-border">
-            <KeyRound size={15} className="text-accent-text" />
-          </div>
-          <h2 className="text-base font-semibold text-text-primary">Environment</h2>
-        </header>
-        <ul className="divide-y divide-nativz-border">
-          <EnvRow
-            label="RESEND_API_KEY"
-            configured={data.env.resendKeyConfigured}
-            description="Required. Resend outbound API key."
-          />
-          <EnvRow
-            label="RESEND_WEBHOOK_SECRET"
-            configured={data.env.sharedWebhookSecretConfigured}
-            description="Optional shared fallback. Covers both agencies when set — use this if you have a single Resend webhook endpoint. Per-agency overrides appear next to each identity above."
-          />
-          <EnvRow
-            label="CRON_SECRET"
-            configured={data.env.cronSecretConfigured}
-            description="Required for Vercel cron drain jobs in prod."
-          />
-        </ul>
-      </section>
+      <SecretsSection cronSecretConfigured={data.env.cronSecretConfigured} />
 
       <section className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
         <header className="flex items-center gap-2.5 px-5 py-4 border-b border-nativz-border">
@@ -217,39 +221,6 @@ export function SetupTab() {
   );
 }
 
-function EnvRow({
-  label,
-  configured,
-  description,
-}: {
-  label: string;
-  configured: boolean;
-  description: string;
-}) {
-  return (
-    <li className="flex items-center gap-3 px-5 py-3.5">
-      {configured ? (
-        <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
-      ) : (
-        <AlertCircle size={16} className="text-amber-500 shrink-0" />
-      )}
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-text-primary font-mono">{label}</p>
-        <p className="text-xs text-text-muted mt-0.5">{description}</p>
-      </div>
-      <span
-        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
-          configured
-            ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
-            : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
-        }`}
-      >
-        {configured ? 'Set' : 'Missing'}
-      </span>
-    </li>
-  );
-}
-
 function WebhookSecretChip({
   configured,
   source,
@@ -327,5 +298,254 @@ function TestSendButton({ agency }: { agency: 'nativz' | 'anderson' }) {
       <Send size={12} />
       {status === 'ok' ? 'Sent' : status === 'err' ? 'Failed' : busy ? 'Sending…' : 'Test send'}
     </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Editable secrets section — reads /api/admin/secrets, lets admins rotate
+// DB-override values. CRON_SECRET still env-only (see lib/secrets/store.ts).
+// ---------------------------------------------------------------------------
+
+function SecretsSection({ cronSecretConfigured }: { cronSecretConfigured: boolean }) {
+  const { data, mutate } = useSWR<SecretsResponse>('/api/admin/secrets');
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+
+  async function clearOverride(key: string) {
+    if (!confirm(`Clear the DB override for ${key}? The env value will take over on the next request.`)) return;
+    const res = await fetch(`/api/admin/secrets/${encodeURIComponent(key)}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast.error(body?.error ?? 'Failed to clear override');
+      return;
+    }
+    toast.success(`${key} override cleared`);
+    void mutate();
+  }
+
+  return (
+    <section className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
+      <header className="flex items-center gap-2.5 px-5 py-4 border-b border-nativz-border">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-surface border border-nativz-border">
+          <KeyRound size={15} className="text-accent-text" />
+        </div>
+        <h2 className="text-base font-semibold text-text-primary">Environment &amp; secrets</h2>
+      </header>
+
+      {!data ? (
+        <SkeletonRows count={4} withAvatar={false} />
+      ) : (
+        <>
+          {!data.encryptionReady ? (
+            <div className="mx-5 mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-500">
+              <p className="font-semibold">SECRETS_ENCRYPTION_KEY is not set.</p>
+              <p className="mt-0.5 text-amber-500/80">
+                Add a 64-char hex string as <code>SECRETS_ENCRYPTION_KEY</code> in Vercel and
+                redeploy to enable UI-based secret rotation. Until then each row below reflects
+                env-only state and the edit button stays disabled.
+              </p>
+            </div>
+          ) : null}
+          <ul className="divide-y divide-nativz-border">
+            {data.secrets.map((s) => (
+              <SecretRow
+                key={s.key}
+                secret={s}
+                editable={data.encryptionReady}
+                onEdit={() => setEditingKey(s.key)}
+                onClear={() => clearOverride(s.key)}
+              />
+            ))}
+            <ReadOnlyEnvRow
+              label="CRON_SECRET"
+              configured={cronSecretConfigured}
+              description="Required for Vercel cron jobs. Not UI-editable yet — rotate via `vercel env` and redeploy."
+            />
+          </ul>
+        </>
+      )}
+
+      {editingKey ? (
+        <SecretEditModal
+          secretKey={editingKey}
+          onClose={() => setEditingKey(null)}
+          onSaved={() => {
+            setEditingKey(null);
+            void mutate();
+          }}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function SecretRow({
+  secret,
+  editable,
+  onEdit,
+  onClear,
+}: {
+  secret: SecretMeta;
+  editable: boolean;
+  onEdit: () => void;
+  onClear: () => void;
+}) {
+  const description = SECRET_DESCRIPTIONS[secret.key] ?? '';
+  const pillClass =
+    secret.source === 'db'
+      ? 'bg-sky-500/10 text-sky-500 border-sky-500/30'
+      : secret.source === 'env'
+      ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+      : 'bg-amber-500/10 text-amber-500 border-amber-500/30';
+  const pillLabel =
+    secret.source === 'db' ? 'Overridden' : secret.source === 'env' ? 'Env' : 'Missing';
+  const isSet = secret.source !== 'missing';
+
+  return (
+    <li className="flex items-center gap-3 px-5 py-3.5">
+      {isSet ? (
+        <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+      ) : (
+        <AlertCircle size={16} className="text-amber-500 shrink-0" />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-text-primary font-mono">{secret.key}</p>
+        <p className="text-xs text-text-muted mt-0.5">{description}</p>
+        {secret.source === 'db' && secret.updatedAt ? (
+          <p className="text-[11px] text-text-muted mt-1">
+            Overridden
+            {secret.updatedBy ? ` by ${secret.updatedBy}` : ''}
+            {' · '}
+            {new Date(secret.updatedAt).toLocaleString()}
+          </p>
+        ) : null}
+      </div>
+      <span
+        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${pillClass}`}
+      >
+        {pillLabel}
+      </span>
+      {secret.source === 'db' ? (
+        <button
+          type="button"
+          onClick={onClear}
+          title="Clear DB override, fall back to env"
+          className="text-text-muted hover:text-rose-500"
+        >
+          <RotateCcw size={14} />
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={onEdit}
+        disabled={!editable}
+        title={editable ? 'Edit value' : 'SECRETS_ENCRYPTION_KEY not configured'}
+        className="text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed"
+      >
+        <Pencil size={14} />
+      </button>
+    </li>
+  );
+}
+
+function ReadOnlyEnvRow({
+  label,
+  configured,
+  description,
+}: {
+  label: string;
+  configured: boolean;
+  description: string;
+}) {
+  return (
+    <li className="flex items-center gap-3 px-5 py-3.5">
+      {configured ? (
+        <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+      ) : (
+        <AlertCircle size={16} className="text-amber-500 shrink-0" />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-text-primary font-mono">{label}</p>
+        <p className="text-xs text-text-muted mt-0.5">{description}</p>
+      </div>
+      <span
+        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
+          configured
+            ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+            : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+        }`}
+      >
+        {configured ? 'Set' : 'Missing'}
+      </span>
+    </li>
+  );
+}
+
+function SecretEditModal({
+  secretKey,
+  onClose,
+  onSaved,
+}: {
+  secretKey: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    if (!value.trim()) {
+      toast.error('Value is required');
+      return;
+    }
+    setBusy(true);
+    const res = await fetch(`/api/admin/secrets/${encodeURIComponent(secretKey)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast.error(body?.error ?? 'Failed to save');
+      return;
+    }
+    toast.success(`${secretKey} updated — takes effect on next request`);
+    onSaved();
+  }
+
+  return (
+    <Dialog open onClose={onClose} title={`Set ${secretKey}`} maxWidth="md">
+      <div className="space-y-3">
+        <p className="text-xs text-text-muted">
+          The value is encrypted at rest and never returned back to the UI. Pasting a new value
+          overrides the current env var for every runtime read; clear the override later to fall
+          back to <code>process.env.{secretKey}</code>.
+        </p>
+        <LabeledInput
+          label="New value"
+          value={value}
+          onChange={setValue}
+          placeholder={secretKey.includes('WEBHOOK') ? 'whsec_…' : secretKey === 'RESEND_API_KEY' ? 're_…' : ''}
+          autoFocus
+        />
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-nativz-border bg-background px-4 py-1.5 text-sm text-text-secondary hover:text-text-primary"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={busy || !value.trim()}
+            className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-50"
+          >
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </Dialog>
   );
 }

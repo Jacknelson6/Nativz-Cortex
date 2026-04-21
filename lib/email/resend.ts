@@ -3,12 +3,23 @@ import { logUsage } from '@/lib/ai/usage';
 import { getEmailBrand, getEmailLogoUrl } from '@/lib/email/brand-tokens';
 import { buildAffiliateWeeklyReportCardHtml } from '@/lib/email/templates/affiliate-weekly-report-html';
 import { buildWeeklySocialReportCardHtml } from '@/lib/email/templates/weekly-social-report-html';
+import { getSecret } from '@/lib/secrets/store';
 import type { WeeklySocialReport } from '@/lib/reporting/weekly-social-report';
 import type { AgencyBrand } from '@/lib/agency/detect';
 
+// Cached Resend client keyed by the API key currently in use. When the admin
+// rotates RESEND_API_KEY from the Setup UI, the next read from getSecret
+// returns the new value and we build a fresh client. We never reuse a client
+// built against a stale key.
 let _resend: Resend | null = null;
-function getResend() {
-  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+let _resendKey: string | undefined;
+
+async function getResend(): Promise<Resend> {
+  const apiKey = (await getSecret('RESEND_API_KEY')) ?? '';
+  if (!_resend || _resendKey !== apiKey) {
+    _resend = new Resend(apiKey);
+    _resendKey = apiKey;
+  }
   return _resend;
 }
 
@@ -143,7 +154,7 @@ export async function sendTeamInviteEmail(opts: {
 }) {
   const agency = opts.agency ?? 'nativz';
   const brandName = agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz';
-  const result = await getResend().emails.send({
+  const result = await (await getResend()).emails.send({
     from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
     to: opts.to,
@@ -224,7 +235,7 @@ export async function sendClientInviteEmail(opts: {
   cc?: string | string[];
 }) {
   const agency = opts.agency ?? 'nativz';
-  const result = await getResend().emails.send({
+  const result = await (await getResend()).emails.send({
     from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
     to: opts.to,
@@ -257,7 +268,7 @@ export async function sendWelcomeEmail(opts: {
 }) {
   const agency = opts.agency ?? 'nativz';
   const isTeam = opts.role === 'admin';
-  const result = await getResend().emails.send({
+  const result = await (await getResend()).emails.send({
     from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
     to: opts.to,
@@ -321,7 +332,7 @@ export async function sendAffiliateWeeklyReportEmail(opts: {
     topAffiliates: opts.topAffiliates,
   });
 
-  const result = await getResend().emails.send({
+  const result = await (await getResend()).emails.send({
     from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
     to: opts.to,
@@ -361,7 +372,7 @@ export async function sendWeeklySocialReportEmail(opts: {
     agency,
   });
 
-  const result = await getResend().emails.send({
+  const result = await (await getResend()).emails.send({
     from: getFromAddress(agency),
     replyTo: getReplyTo(agency),
     to: opts.to,
@@ -397,7 +408,7 @@ export async function sendSearchCompletedEmail(opts: {
     ? `<p class="detail-label">Client</p><p class="detail-value">${opts.clientName}</p>`
     : '';
 
-  const result = await getResend().emails.send({
+  const result = await (await getResend()).emails.send({
     from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
     to: opts.to,

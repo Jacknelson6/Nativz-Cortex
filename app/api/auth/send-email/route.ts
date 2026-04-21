@@ -2,11 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { resolveAgencyFromHookPayload } from '@/lib/email/resolve-agency';
 import { layout, getFromAddress, getReplyTo } from '@/lib/email/resend';
+import { getSecret } from '@/lib/secrets/store';
 import type { AgencyBrand } from '@/lib/agency/detect';
 
 let _resend: Resend | null = null;
-function getResend() {
-  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+let _resendKey: string | undefined;
+async function getResend(): Promise<Resend> {
+  const apiKey = (await getSecret('RESEND_API_KEY')) ?? '';
+  if (!_resend || _resendKey !== apiKey) {
+    _resend = new Resend(apiKey);
+    _resendKey = apiKey;
+  }
   return _resend;
 }
 
@@ -165,7 +171,7 @@ export async function POST(req: NextRequest) {
   const { subject, html } = buildEmailHtml(type as EmailType, data, agency);
 
   try {
-    const { error: sendError } = await getResend().emails.send({
+    const { error: sendError } = await (await getResend()).emails.send({
       from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
       to: email,

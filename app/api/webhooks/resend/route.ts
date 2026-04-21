@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getSecret } from '@/lib/secrets/store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,12 +39,15 @@ type ResendEvent = {
   };
 };
 
-function getConfiguredSecrets(): string[] {
-  return [
-    process.env.RESEND_WEBHOOK_SECRET,
-    process.env.RESEND_WEBHOOK_SECRET_NATIVZ,
-    process.env.RESEND_WEBHOOK_SECRET_ANDERSON,
-  ].filter((s): s is string => typeof s === 'string' && s.length > 0);
+async function getConfiguredSecrets(): Promise<string[]> {
+  const [shared, nativz, anderson] = await Promise.all([
+    getSecret('RESEND_WEBHOOK_SECRET'),
+    getSecret('RESEND_WEBHOOK_SECRET_NATIVZ'),
+    getSecret('RESEND_WEBHOOK_SECRET_ANDERSON'),
+  ]);
+  return [shared, nativz, anderson].filter(
+    (s): s is string => typeof s === 'string' && s.length > 0,
+  );
 }
 
 function verifyWithSecret(
@@ -69,13 +73,13 @@ function verifyWithSecret(
   return false;
 }
 
-function verifySvixSignature(rawBody: string, headers: Headers): boolean {
+async function verifySvixSignature(rawBody: string, headers: Headers): Promise<boolean> {
   const id = headers.get('svix-id');
   const ts = headers.get('svix-timestamp');
   const sig = headers.get('svix-signature');
   if (!id || !ts || !sig) return false;
 
-  for (const secret of getConfiguredSecrets()) {
+  for (const secret of await getConfiguredSecrets()) {
     if (verifyWithSecret(rawBody, id, ts, sig, secret)) return true;
   }
   return false;
@@ -84,10 +88,10 @@ function verifySvixSignature(rawBody: string, headers: Headers): boolean {
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
-  const secrets = getConfiguredSecrets();
+  const secrets = await getConfiguredSecrets();
   let signatureValid = true;
   if (secrets.length > 0) {
-    signatureValid = verifySvixSignature(rawBody, request.headers);
+    signatureValid = await verifySvixSignature(rawBody, request.headers);
     if (!signatureValid) {
       // Log the rejected attempt so Setup can show "Resend is reaching us but
       // the secret is stale" — without it, admins can't tell a misconfigured

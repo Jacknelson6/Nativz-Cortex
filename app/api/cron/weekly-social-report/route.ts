@@ -11,6 +11,7 @@ import {
   rollingSevenDayRangeUtc,
 } from '@/lib/reporting/weekly-social-report';
 import { sendWeeklySocialReportEmail } from '@/lib/email/resend';
+import { getSecret } from '@/lib/secrets/store';
 import type { AgencyBrand } from '@/lib/agency/detect';
 
 export const maxDuration = 300;
@@ -71,7 +72,8 @@ async function handler(request: NextRequest) {
       }
     }
 
-    if (!process.env.RESEND_API_KEY) {
+    const resendKey = await getSecret('RESEND_API_KEY');
+    if (!resendKey) {
       return NextResponse.json(
         { error: 'RESEND_API_KEY is not configured' },
         { status: 503 },

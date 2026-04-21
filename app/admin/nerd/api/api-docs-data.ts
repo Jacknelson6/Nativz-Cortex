@@ -785,6 +785,30 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "sectionSlug": "admin"
   },
   {
+    "method": "GET",
+    "path": "/api/admin/secrets",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/admin/secrets/:key",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/admin/secrets/:key",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
     "method": "DELETE",
     "path": "/api/admin/users",
     "description": "DELETE /api/admin/users — delete a user (removes auth + public.users)",

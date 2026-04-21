@@ -3,12 +3,18 @@ import { Resend } from 'resend';
 import { getFromAddress, getReplyTo, layout } from '@/lib/email/resend';
 import { buildUserEmailHtml } from '@/lib/email/templates/user-email';
 import { resolveMergeFields } from '@/lib/email/merge-fields';
+import { getSecret } from '@/lib/secrets/store';
 import type { MergeContext } from '@/lib/email/types';
 import type { AgencyBrand } from '@/lib/agency/detect';
 
 let _resend: Resend | null = null;
-function client(): Resend {
-  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+let _resendKey: string | undefined;
+async function client(): Promise<Resend> {
+  const apiKey = (await getSecret('RESEND_API_KEY')) ?? '';
+  if (!_resend || _resendKey !== apiKey) {
+    _resend = new Resend(apiKey);
+    _resendKey = apiKey;
+  }
   return _resend;
 }
 
@@ -74,7 +80,7 @@ export async function sendCampaign(args: SendArgs) {
       .single();
 
     try {
-      const res = await client().emails.send({
+      const res = await (await client()).emails.send({
         from: getFromAddress(r.agency),
         replyTo: getReplyTo(r.agency),
         to: r.email,

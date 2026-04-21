@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**563 endpoints across 33 sections.**
+**566 endpoints across 33 sections.**
 
 ## Authentication
 
@@ -5719,6 +5719,12 @@ GET /api/admin/errors — recent API errors (super_admin only)
 ### `DELETE /api/admin/scheduled-emails/:id`
 
 ### `PATCH /api/admin/scheduled-emails/:id`
+
+### `GET /api/admin/secrets`
+
+### `DELETE /api/admin/secrets/:key`
+
+### `PUT /api/admin/secrets/:key`
 
 ### `DELETE /api/admin/users`
 
