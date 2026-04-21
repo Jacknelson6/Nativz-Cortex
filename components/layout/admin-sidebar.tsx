@@ -29,8 +29,6 @@ import {
   Cpu,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
-import { SidebarModePicker } from '@/components/layout/sidebar-mode-picker';
-import { SidebarCollapsedFlyout } from '@/components/layout/sidebar-collapsed-flyout';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import {
@@ -43,8 +41,6 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarSeparator,
-  SidebarTrigger,
-  useSidebar,
 } from './sidebar';
 
 // ---------------------------------------------------------------------------
@@ -314,7 +310,12 @@ export function AdminSidebar({
   );
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { open } = useSidebar();
+  // Sidebar is permanently expanded — `open` used to come from useSidebar()
+  // and flip between true (full width) and false (icon rail). It's now a
+  // constant so the surrounding JSX can keep the same shape without
+  // branching on a moving target. When the collapse UX returns, re-plumb
+  // useSidebar().open here.
+  const open = true;
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
   const [showHiTooltip, setShowHiTooltip] = useState(false);
   const { mode } = useBrandMode();
@@ -447,61 +448,37 @@ export function AdminSidebar({
                     <SidebarMenuButton
                       // Parent row intentionally NOT painted active when a
                       // child is. The expanded accordion + the child's own
-                      // active pill already telegraph position; also
-                      // highlighting the parent doubles the visual weight
-                      // of the selection and fights the RankPrompt-style
-                      // "collapsed container" read we're going for.
+                      // active pill already telegraph position; doubling the
+                      // visual weight of the selection fights the grouped-
+                      // container read we're going for.
                       isActive={false}
-                      tooltip={!open ? item.label : undefined}
                       onClick={() => toggleMenu(item.href)}
                     >
                       <item.icon size={18} className="shrink-0" />
-                      <span
-                        className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
-                          open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
-                        }`}
-                      >
-                        {item.label}
-                      </span>
+                      <span className="ml-2.5 flex-1 truncate text-left">{item.label}</span>
                       <ChevronRight
                         size={14}
-                        className={`shrink-0 transition-[max-width,margin,opacity,transform] duration-200 ease-out ${
-                          open ? 'ml-auto max-w-4 opacity-100' : 'ml-0 max-w-0 opacity-0'
-                        } ${isExpanded ? 'rotate-90' : ''}`}
-                        onClick={(e) => { e.stopPropagation(); toggleMenu(item.href); }}
+                        className={`ml-auto shrink-0 transition-transform duration-200 ease-out ${
+                          isExpanded ? 'rotate-90' : ''
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleMenu(item.href);
+                        }}
                       />
                     </SidebarMenuButton>
                   );
 
                   return (
                     <SidebarMenuItem key={item.href}>
-                      {/* When the rail is collapsed, wrap the parent button
-                          in a portaled hover flyout so children stay reachable
-                          without expanding first. We have to portal — both
-                          Sidebar and SidebarContent carry overflow-hidden, so
-                          an in-tree absolute flyout gets clipped at the rail's
-                          right edge. When expanded, render the button bare. */}
-                      {!open ? (
-                        <SidebarCollapsedFlyout
-                          label={item.label}
-                          items={item.children}
-                          isActive={(href) => isActivePath(pathname, href, searchParams)}
-                        >
-                          {parentButton}
-                        </SidebarCollapsedFlyout>
-                      ) : (
-                        parentButton
-                      )}
+                      {parentButton}
 
-                      {/* Inline accordion — renders in BOTH rail states so a
-                          dropdown that was open stays "open" when the rail
-                          collapses: children keep a visual presence in the
-                          rail (icon-only column, center-aligned, matching
-                          the treatment of flat items) instead of vanishing.
-                          Hover-flyout above still provides labels on demand.
-                          Reveal on open-rail uses the accordion's own
-                          grid-row transition so the label animation lands
-                          in lockstep with the flat-item label reveal. */}
+                      {/* Inline accordion — grid-rows transition drives the
+                          expand / collapse of the dropdown children. Child
+                          links mirror <SidebarMenuButton/>'s two-layer
+                          structure (outer full-width click target + inner
+                          pill span) so the active-pill shape matches flat
+                          items exactly. */}
                       <div
                         className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
                         style={{
@@ -510,13 +487,7 @@ export function AdminSidebar({
                         }}
                       >
                         <div className="overflow-hidden">
-                          <ul
-                            className={`space-y-1 pb-1 transition-[margin,padding,border-color] duration-200 ease-out ${
-                              open
-                                ? 'mt-1.5 ml-6 pl-2 border-l border-nativz-border'
-                                : 'mt-0.5 ml-0 pl-0 border-l border-transparent'
-                            }`}
-                          >
+                          <ul className="mt-1.5 ml-6 space-y-1 pb-1 pl-2 border-l border-nativz-border">
                             {item.children.map((child) => {
                               const cActive = isActivePath(pathname, child.href, searchParams);
                               return (
@@ -525,35 +496,15 @@ export function AdminSidebar({
                                     href={child.href}
                                     className="relative flex w-full items-center min-h-[40px] text-[15px]"
                                   >
-                                    {/* Mirror SidebarMenuButton's two-layer
-                                        structure exactly so dropdown children
-                                        animate in lockstep with flat items:
-                                        outer Link is full-width (click target
-                                        spans the row); inner span holds the
-                                        active-pill and grows to w-full only
-                                        when the rail is expanded so the pill
-                                        shrinks around the icon when
-                                        collapsed. Icon fixed at 18, label
-                                        fades via the same max-width +
-                                        margin + opacity transition flat
-                                        items use. */}
                                     <span
-                                      className={`flex items-center rounded-md px-2 py-1.5 transition-colors duration-150 ${
-                                        open ? 'w-full' : ''
-                                      } ${
+                                      className={`flex w-full items-center rounded-md px-2 py-1.5 transition-colors duration-150 ${
                                         cActive
                                           ? 'bg-accent-surface text-text-primary font-semibold'
                                           : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary font-medium'
                                       }`}
                                     >
                                       <child.icon size={18} className="shrink-0" />
-                                      <span
-                                        className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
-                                          open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
-                                        }`}
-                                      >
-                                        {child.label}
-                                      </span>
+                                      <span className="ml-2.5 truncate">{child.label}</span>
                                     </span>
                                   </Link>
                                 </li>
@@ -569,15 +520,9 @@ export function AdminSidebar({
                 if (item.comingSoon) {
                   return (
                     <SidebarMenuItem key={item.label + '-soon'}>
-                      <SidebarMenuButton isActive={false} tooltip="Coming soon" className="opacity-40 pointer-events-none">
+                      <SidebarMenuButton isActive={false} className="opacity-40 pointer-events-none">
                         <item.icon size={18} className="shrink-0" />
-                        <span
-                          className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
-                            open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
-                          }`}
-                        >
-                          {item.label}
-                        </span>
+                        <span className="ml-2.5 flex-1 truncate text-left">{item.label}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );
@@ -586,15 +531,9 @@ export function AdminSidebar({
                 return (
                   <SidebarMenuItem key={item.href}>
                     <Link href={item.href}>
-                      <SidebarMenuButton isActive={active} tooltip={item.label}>
+                      <SidebarMenuButton isActive={active}>
                         <item.icon size={18} className="shrink-0" />
-                        <span
-                          className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
-                            open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
-                          }`}
-                        >
-                          {item.label}
-                        </span>
+                        <span className="ml-2.5 flex-1 truncate text-left">{item.label}</span>
                       </SidebarMenuButton>
                     </Link>
                   </SidebarMenuItem>
@@ -606,33 +545,21 @@ export function AdminSidebar({
 
       </SidebarContent>
 
-      {/* Footer: sidebar layout controls.
-       *
-       * For admin routes the account popover (avatar + settings + API docs +
-       * sign out) lives in <AdminTopBar> instead of here, so the rail footer
-       * only carries the mode picker. Portal still gets the account popover
-       * here — portal uses the sidebar for all global actions. */}
-      <SidebarFooter className="border-t-0">
-        {role === 'viewer' && (
+      {/* Footer — portal keeps its in-rail account popover (portal has no
+       *  top bar). Admin's avatar + settings + API docs + sign out live in
+       *  <AdminTopBar>; nothing else belongs in the admin rail footer now
+       *  that the sidebar is permanently expanded (no more mode picker or
+       *  rail toggle). */}
+      {role === 'viewer' && (
+        <SidebarFooter className="border-t-0">
           <SidebarAccount
             userName={userName}
             avatarUrl={avatarUrl}
             settingsHref={settingsPath}
             logoutRedirect={logoutPath}
-            collapsed={!open}
           />
-        )}
-
-        {/* Sidebar controls row — quick toggle on the left, mode popover
-         *  on the right. Toggle is the fast path (collapse/expand with one
-         *  click, matches muscle memory). Mode picker stays for the
-         *  "expand on hover" preference. */}
-        <div className={open ? 'flex items-center gap-1' : 'flex flex-col items-center gap-1'}>
-          <SidebarTrigger className="shrink-0" />
-          <SidebarModePicker />
-        </div>
-
-      </SidebarFooter>
+        </SidebarFooter>
+      )}
     </Sidebar>
   );
 }

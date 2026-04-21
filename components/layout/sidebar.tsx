@@ -20,11 +20,13 @@ import { cn } from '@/lib/utils';
 // ---------------------------------------------------------------------------
 
 const SIDEBAR_WIDTH = '15rem';        // 240px
-const SIDEBAR_WIDTH_ICON = '3.5rem';  // 56px
+const SIDEBAR_WIDTH_ICON = '3.5rem';  // 56px — legacy, retained so any CSS still referencing --sidebar-width-icon doesn't break
 const SIDEBAR_WIDTH_MOBILE = '18rem';
-const STORAGE_KEY = 'cortex:sidebar-collapsed'; // legacy boolean key — still honored for back-compat
-const MODE_STORAGE_KEY = 'cortex:sidebar-mode';  // canonical: 'expanded' | 'collapsed' | 'hover'
 
+// SidebarMode is kept as a type export for back-compat — nothing else in
+// the codebase should be setting it anymore. The only valid value today
+// is 'expanded'; the others are retained in the union so stale callers
+// that still type-match against the full set compile without churn.
 export type SidebarMode = 'expanded' | 'collapsed' | 'hover';
 
 // ---------------------------------------------------------------------------
@@ -84,90 +86,41 @@ interface SidebarProviderProps {
   topBar?: ReactNode;
 }
 
-export function SidebarProvider({ defaultOpen = true, children, topBar }: SidebarProviderProps) {
-  const [mode, setModeState] = useState<SidebarMode>(defaultOpen ? 'expanded' : 'collapsed');
+export function SidebarProvider({ children, topBar }: SidebarProviderProps) {
+  // Sidebar is permanently expanded — the collapse / hover-expand modes
+  // added more surface area than they paid back in UX. Kept the context
+  // surface (open, setOpen, toggleSidebar, mode, setMode, hovered,
+  // setHovered, forceCollapsed, setForceCollapsed) as no-ops so callers
+  // that haven't been migrated yet don't crash. Mobile drawer stays real.
   const [openMobile, setOpenMobile] = useState(false);
-  const [forceCollapsed, setForceCollapsedState] = useState(false);
-  const [hovered, setHovered] = useState(false);
   const pathname = usePathname();
 
-  // Hydrate mode from localStorage. Prefer the canonical MODE_STORAGE_KEY;
-  // fall back to the legacy boolean STORAGE_KEY so users who already had a
-  // stored collapsed preference don't get reset to expanded on first visit.
-  useEffect(() => {
-    try {
-      const storedMode = localStorage.getItem(MODE_STORAGE_KEY);
-      if (storedMode === 'expanded' || storedMode === 'collapsed' || storedMode === 'hover') {
-        setModeState(storedMode);
-        return;
-      }
-      const legacy = localStorage.getItem(STORAGE_KEY);
-      if (legacy === 'false') setModeState('collapsed');
-    } catch {}
+  const setOpen = useCallback((_value: boolean) => {
+    /* no-op — sidebar is permanently expanded */
   }, []);
-
-  const setMode = useCallback((next: SidebarMode) => {
-    setModeState(next);
-    setForceCollapsedState(false);
-    try {
-      localStorage.setItem(MODE_STORAGE_KEY, next);
-      // Keep legacy key in sync so older tabs / agents reading the old key
-      // see something sensible. Hover mode maps to collapsed for legacy.
-      localStorage.setItem(STORAGE_KEY, next === 'expanded' ? 'true' : 'false');
-    } catch {}
+  const setMode = useCallback((_next: SidebarMode) => {
+    /* no-op — mode is locked to 'expanded' */
   }, []);
-
-  const setOpen = useCallback((value: boolean) => {
-    // Toggle the persisted mode between expanded/collapsed. Hover mode is
-    // reached via setMode explicitly — setOpen should never land there.
-    setMode(value ? 'expanded' : 'collapsed');
-  }, [setMode]);
-
-  const setForceCollapsed = useCallback((value: boolean) => {
-    setForceCollapsedState(value);
-  }, []);
-
-  // Derived "effective open" — what the UI actually renders at.
-  // expanded → always open
-  // collapsed → always icon-rail
-  // hover → icon-rail when cursor is away, full width when hovered
-  // `forceCollapsed` is retained as a no-op for API compatibility with
-  // secondary rails that still call setForceCollapsed; it intentionally
-  // does NOT override the user's sidebar mode anymore. Previously a
-  // secondary rail would lock the main rail closed even in hover/expanded
-  // mode, which broke hover-to-expand while inside Settings or Edits.
-  void forceCollapsed;
-  const effectiveOpen =
-    mode === 'expanded'
-      ? true
-      : mode === 'collapsed'
-        ? false
-        : hovered;
-
   const toggleSidebar = useCallback(() => {
-    setMode(effectiveOpen ? 'collapsed' : 'expanded');
-  }, [effectiveOpen, setMode]);
+    /* no-op — nothing to toggle */
+  }, []);
+  const setForceCollapsed = useCallback((_value: boolean) => {
+    /* no-op — retained for back-compat with secondary rails */
+  }, []);
+  const setHovered = useCallback((_v: boolean) => {
+    /* no-op — hover mode is gone */
+  }, []);
 
   // Close mobile on route change
   useEffect(() => {
     setOpenMobile(false);
   }, [pathname]);
 
-  // Keyboard shortcut: cmd+b / ctrl+b — cycles expanded ↔ collapsed.
-  // Hover mode is intentionally mouse-only; keyboard users should get a
-  // deterministic state instead of a flicker.
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'b' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        toggleSidebar();
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [toggleSidebar]);
-
-  const state: SidebarState = effectiveOpen ? 'expanded' : 'collapsed';
+  const effectiveOpen = true;
+  const state: SidebarState = 'expanded';
+  const mode: SidebarMode = 'expanded';
+  const forceCollapsed = false;
+  const hovered = false;
 
   return (
     <SidebarContext.Provider
