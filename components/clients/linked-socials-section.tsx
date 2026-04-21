@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { Instagram, Facebook, Youtube, Pencil, X, Check, Ban, Sparkles, Link as LinkIcon } from 'lucide-react';
+import { Instagram, Facebook, Youtube, Pencil, X, Check, Ban, Sparkles, Link as LinkIcon, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 // NAT-57 follow-up: admin surface for the four "social slots" on a
@@ -88,6 +88,32 @@ export function LinkedSocialsSection({ clientId }: { clientId: string }) {
     });
   }
 
+  // Kick off Zernio OAuth for a platform. On success the API returns a
+  // third-party authUrl; we redirect the browser so the user completes
+  // the grant, then Zernio calls our callback which writes the real
+  // `late_account_id` + platform_user_id into social_profiles. Manual
+  // handle (if any) gets overwritten by the callback — that's fine,
+  // OAuth is the higher-trust source.
+  async function connectZernio(platform: Platform) {
+    try {
+      const res = await fetch('/api/scheduler/connect', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ platform, client_id: clientId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.authUrl) {
+        toast.error(typeof data.error === 'string' ? data.error : 'Failed to start Zernio connect');
+        return;
+      }
+      // Full-page redirect — OAuth flows can't round-trip via fetch.
+      window.location.href = data.authUrl;
+    } catch (err) {
+      console.error('connectZernio error:', err);
+      toast.error('Failed to start Zernio connect');
+    }
+  }
+
   if (!slots) {
     return (
       <section className="rounded-xl border border-nativz-border bg-surface p-5">
@@ -102,7 +128,9 @@ export function LinkedSocialsSection({ clientId }: { clientId: string }) {
       <Header />
       <p className="text-xs text-text-muted -mt-2 leading-relaxed">
         One handle per platform powers analytics, competitor diffs, and
-        audits. If the brand isn&apos;t on a platform, mark it as <strong>No account</strong>
+        audits. <strong>Connect via Zernio</strong> for live data, or
+        paste a handle manually for scrape-based fallback. If the brand
+        isn&apos;t on a platform, mark it as <strong>No account</strong>
         — analysis tools will skip it quietly instead of asking.
       </p>
       <div className="divide-y divide-nativz-border/50 -mx-5">
@@ -159,21 +187,36 @@ export function LinkedSocialsSection({ clientId }: { clientId: string }) {
 
               {!isEditing && (
                 <div className="flex items-center gap-1">
-                  {slot.status !== 'linked' && (
+                  {/* Zernio Connect — the headline CTA. Produces live
+                      analytics instead of scrape-based fallbacks. Only
+                      offered when the slot isn't already Zernio-backed
+                      AND the brand hasn't declared "No account". */}
+                  {slot.status !== 'no_account' && !slot.zernio_connected && (
                     <button
-                      onClick={() => beginEdit(slot)}
+                      onClick={() => void connectZernio(slot.platform)}
                       className="text-xs text-accent-text hover:underline px-2 py-1 rounded flex items-center gap-1"
-                      title="Link a handle"
+                      title="Connect via Zernio (OAuth) — unlocks live analytics"
                     >
-                      <LinkIcon size={12} /> Link
+                      <Zap size={12} /> Connect Zernio
                     </button>
                   )}
-                  {slot.status === 'linked' && (
+                  {/* Manual handle paste — fallback when OAuth isn't
+                      available (platform outage, client prefers not to
+                      grant access). Produces scrape-based analytics. */}
+                  {slot.status !== 'linked' && !slot.zernio_connected && (
+                    <button
+                      onClick={() => beginEdit(slot)}
+                      className="text-xs text-text-secondary hover:text-text-primary px-2 py-1 rounded flex items-center gap-1"
+                      title="Add a handle manually (scrape-based fallback)"
+                    >
+                      <LinkIcon size={12} /> Paste handle
+                    </button>
+                  )}
+                  {slot.status === 'linked' && !slot.zernio_connected && (
                     <button
                       onClick={() => beginEdit(slot)}
                       className="text-xs text-text-secondary hover:text-text-primary px-2 py-1 rounded flex items-center gap-1"
                       title="Edit handle"
-                      disabled={slot.zernio_connected}
                     >
                       <Pencil size={12} /> Edit
                     </button>
@@ -196,6 +239,15 @@ export function LinkedSocialsSection({ clientId }: { clientId: string }) {
                       Clear
                     </button>
                   )}
+                  {/* Zernio-connected slots show no edit/clear buttons —
+                      disconnection happens via the scheduler page, not
+                      this inline UI, so we don't accidentally orphan
+                      OAuth state. */}
+                  {slot.zernio_connected && (
+                    <span className="text-[10px] text-emerald-400 italic px-1">
+                      Managed via Zernio
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -216,9 +268,24 @@ function Header() {
 
 function StatusChip({ slot }: { slot: Slot }) {
   if (slot.status === 'linked') {
+    // Admin sees the source: Zernio = live analytics, manual = scrape
+    // fallback. Portal view hides this distinction entirely (both render
+    // as "Linked") — but admins want it so they know whether to push a
+    // client to finish OAuth or not.
     return (
-      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">
-        Linked
+      <span
+        className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold ${
+          slot.zernio_connected
+            ? 'bg-emerald-500/10 text-emerald-400'
+            : 'bg-sky-500/10 text-sky-400'
+        }`}
+        title={
+          slot.zernio_connected
+            ? 'Connected via Zernio OAuth — live analytics'
+            : 'Manual handle — scrape-based analytics fallback'
+        }
+      >
+        {slot.zernio_connected ? 'Zernio live' : 'Manual'}
       </span>
     );
   }

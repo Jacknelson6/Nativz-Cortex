@@ -10,6 +10,7 @@ import {
 import type { HistoryItem } from '@/lib/research/history';
 import type { ClientOption } from '@/components/ui/client-picker';
 import { cn } from '@/lib/utils/cn';
+import { useActiveBrand } from '@/lib/admin/active-client-context';
 
 interface ResearchHubProps {
   clients: ClientOption[];
@@ -34,43 +35,27 @@ export function ResearchHub({
     ids: string[];
     clientId: string | null;
   }>({ ids: [], clientId: null });
-  /**
-   * Brand (client) selection persists across navigation via localStorage so
-   * the user doesn't have to re-pick their brand every time they open a
-   * report and hit back. Null means "All brands" — also persisted so an
-   * explicit "clear brand" sticks too.
-   */
-  const [selectedClientId, setSelectedClientIdState] = useState<string | null>(null);
-  const SELECTED_CLIENT_STORAGE_KEY = 'cortex:research-hub:selected-client-id';
+  // NAT-57 follow-up (2026-04-21): the old localStorage-based brand
+  // persistence got out of sync with the session-brand pill — the pill
+  // said "All Shutters and Blinds" while this form showed a stale
+  // "Museum of Illusions" pulled from last session's storage. Kill the
+  // local store; session brand (from ActiveBrandProvider) is the source
+  // of truth on admin side.
+  //
+  // `setBrand` still exists (pill opens the switcher), but we don't
+  // maintain a separate local state here — selectedClientId is derived
+  // from the session brand on every render. `onClientChange` from the
+  // form routes through `setBrand` so clearing the chip clears the pill
+  // too, keeping the two in lockstep.
+  const { brand, setBrand } = useActiveBrand();
+  const selectedClientId = brand?.id ?? null;
 
-  useEffect(() => {
-    try {
-      const raw =
-        typeof window !== 'undefined'
-          ? window.localStorage.getItem(SELECTED_CLIENT_STORAGE_KEY)
-          : null;
-      if (raw === null) return;
-      // Stored value is either a client UUID, or the literal string "null"
-      // (explicit "All brands"). Either way, honour it.
-      const stored = raw === 'null' ? null : raw;
-      // Validate the stored id still exists — a stale UUID for a removed
-      // client would silently hide all rows.
-      if (stored && !clients.some((c) => c.id === stored)) return;
-      setSelectedClientIdState(stored);
-    } catch {
-      /* ignore corrupt storage */
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const setSelectedClientId = useCallback((id: string | null) => {
-    setSelectedClientIdState(id);
-    try {
-      window.localStorage.setItem(SELECTED_CLIENT_STORAGE_KEY, id ?? 'null');
-    } catch {
-      /* ignore quota */
-    }
-  }, []);
+  const setSelectedClientId = useCallback(
+    (id: string | null) => {
+      setBrand(id);
+    },
+    [setBrand],
+  );
 
   const prevHistoryRef = useRef(historyItems);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -221,6 +206,11 @@ export function ResearchHub({
                 onStarted={handleResearchStarted}
                 onClientChange={setSelectedClientId}
                 initialClientId={selectedClientId}
+                // Pass the session brand's name through so the "Suggest
+                // topics for X" CTA always reads the real brand, even
+                // when that brand isn't in the page's `clients` roster
+                // (e.g. hide_from_roster is true).
+                initialClientName={brand?.name ?? null}
               />
             </div>
           </div>

@@ -12,10 +12,8 @@ import {
   Loader2,
   MessageCircle,
   Music,
-  X,
   Youtube,
 } from 'lucide-react';
-import { ClientLogo } from '@/components/clients/client-logo';
 import type { ClientOption } from '@/components/ui/client-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils/cn';
@@ -42,6 +40,10 @@ interface ResearchTopicFormProps {
   /** Preselect a brand on mount — used to rehydrate from localStorage so the
    *  selection survives navigation (opening a report and hitting back). */
   initialClientId?: string | null;
+  /** Display name for the attached brand. Used by the "Suggest topics
+   *  for X" CTA so the brand name shows even when the brand isn't in
+   *  the page's `clients` roster (e.g. hide_from_roster is true). */
+  initialClientName?: string | null;
   /** Portal mode: lock to a specific client, hide client picker, redirect to /portal */
   portalMode?: boolean;
   fixedClientId?: string | null;
@@ -71,24 +73,21 @@ export function ResearchTopicForm({
   contentLabBulkSelection,
   onClientChange,
   initialClientId = null,
+  initialClientName = null,
   portalMode = false,
   fixedClientId = null,
   fixedClientName = null,
 }: ResearchTopicFormProps) {
     const router = useRouter();
     const [topicQuery, setTopicQuery] = useState(initialQuery);
-    // Restore the brand selection from the parent's localStorage-backed value
-    // so navigating away and back doesn't reset the user's brand pick.
-    const hydratedClient = portalMode
-      ? null
-      : (initialClientId ? clients.find((c) => c.id === initialClientId) ?? null : null);
-    // No in-page brand picker — Trend Finder is brand-native. `clientId` is
-    // seeded from the session brand (via initialClientId) and only changes
-    // when the user switches brands in the top-bar pill or clears the
-    // attachment here. URL-mode (prospect audits) moved to AuditHub.
-    const [clientId, setClientId] = useState<string | null>(
-      portalMode ? fixedClientId : (hydratedClient?.id ?? null),
-    );
+    // NAT-57 follow-up (2026-04-21): no local brand state anymore. In
+    // admin mode the form always uses the session brand (propagated via
+    // `initialClientId` from ResearchHub's `useActiveBrand()` hook); in
+    // portal mode it uses the fixed brand bound to the viewer's account.
+    // Keeping a separate local copy was the root cause of the drift bug
+    // where the form showed a stale brand (Museum of Illusions) while
+    // the top-bar pill already pointed somewhere else.
+    const clientId = portalMode ? fixedClientId : initialClientId;
     const platforms = new Set<SearchPlatform>(['web', 'reddit', 'youtube', 'tiktok']);
     const volume: SearchVolume = 'deep';
     const [timeRange, setTimeRange] = useState('last_3_months');
@@ -104,24 +103,7 @@ export function ResearchTopicForm({
       if (initialQuery) setTopicQuery(initialQuery);
     }, [initialQuery]);
 
-    // Parent (ResearchHub) reads the persisted brand from localStorage in a
-    // useEffect, so `initialClientId` can arrive AFTER this form's first render.
-    // Sync in when it lands, but never override a user's active clear.
-    useEffect(() => {
-      if (portalMode) return;
-      if (!initialClientId) return;
-      if (clientId) return;
-      const c = clients.find((x) => x.id === initialClientId);
-      if (!c) return;
-      setClientId(c.id);
-    }, [initialClientId, portalMode, clients, clientId]);
-
     const selectedClient = clients.find((c) => c.id === clientId);
-
-    function clearBrand() {
-      setClientId(null);
-      onClientChange?.(null);
-    }
 
     const step1Valid = topicQuery.trim().length > 0;
 
@@ -274,31 +256,15 @@ export function ResearchTopicForm({
               role="group"
               aria-label="Search filters"
             >
-              {/* Attached brand — seeded from the top-bar pill via
-               *  initialClientId. No in-page picker; switching brands
-               *  happens at the session pill. The X clears the attachment
-               *  so the search runs as a cross-brand general search. */}
-              {portalMode ? null : selectedClient ? (
-                <div className="inline-flex h-9 max-w-[min(100%,13rem)] min-w-0 shrink-0 items-stretch rounded-full border border-nativz-border bg-surface-hover/80 pr-0.5 text-xs font-medium text-text-secondary shadow-sm">
-                  <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5">
-                    <ClientLogo
-                      src={selectedClient.logo_url}
-                      name={selectedClient.name}
-                      size="sm"
-                      className="h-7 w-7 shrink-0 !rounded-md"
-                    />
-                    <span className="truncate">{selectedClient.name}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={clearBrand}
-                    className="flex shrink-0 items-center justify-center rounded-full p-1.5 text-text-muted transition hover:bg-background/40 hover:text-text-primary"
-                    aria-label="Remove brand"
-                  >
-                    <X size={15} strokeWidth={2} aria-hidden />
-                  </button>
-                </div>
-              ) : null}
+              {/* NAT-57 follow-up (2026-04-21): the attached-brand chip
+               *  lived here as a visible reminder of which brand the
+               *  search was scoped to. Jack removed it — the top-bar
+               *  session pill is the single source of truth for brand
+               *  context. Duplicating it inside every form creates drift
+               *  bugs (two places of "truth") and clutters the UI.
+               *
+               *  History filtering still honors the session brand; see
+               *  ResearchHub.tsx's allItems useMemo. */}
 
               {/* (Depth removed — always deep) */}
 
@@ -392,7 +358,7 @@ export function ResearchTopicForm({
                 {loadingSuggestions ? (
                   <><Loader2 size={13} className="animate-spin" aria-hidden /> Generating ideas...</>
                 ) : (
-                  <><Compass size={13} aria-hidden /> Suggest topics for {selectedClient?.name ?? 'this client'}</>
+                  <><Compass size={13} aria-hidden /> Suggest topics for {selectedClient?.name ?? fixedClientName ?? initialClientName ?? 'this client'}</>
                 )}
               </button>
             ) : (
