@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { PanelLeft } from 'lucide-react';
+import { ChevronsUpDown, PanelLeft } from 'lucide-react';
 import { useSidebar, type SidebarMode } from './sidebar';
 
 // Single icon for all three modes — Supabase pattern. The picker is about
@@ -124,7 +124,7 @@ export function SidebarModePicker() {
   );
 
   return (
-    <div className="relative mt-2 flex justify-start">
+    <div className="relative">
       <button
         ref={buttonRef}
         type="button"
@@ -133,11 +133,21 @@ export function SidebarModePicker() {
         aria-haspopup="menu"
         aria-expanded={popoverOpen}
         title={`Sidebar: ${active.label}`}
-        className={`flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors cursor-pointer ${
+        // Rail expanded → full-width labeled row with chevron so it reads as
+        // a proper control. Rail collapsed → icon-only, centered, tooltip
+        // via aria-label. Either way: discoverable, actually clickable by
+        // someone looking for "Layout".
+        className={`flex items-center rounded-md text-text-muted transition-colors cursor-pointer hover:bg-surface-hover hover:text-text-secondary ${
           popoverOpen ? 'bg-surface-hover text-text-secondary' : ''
-        }`}
+        } ${open ? 'w-full gap-2 px-2 py-1.5 text-sm' : 'h-8 w-8 justify-center'}`}
       >
         <PanelLeft size={15} className="shrink-0" />
+        {open && (
+          <>
+            <span className="flex-1 truncate text-left">{active.label}</span>
+            <ChevronsUpDown size={12} className="shrink-0" />
+          </>
+        )}
       </button>
 
       {mounted && popover && createPortal(popover, document.body)}

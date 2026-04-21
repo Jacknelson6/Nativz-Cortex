@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
 
 /**
- * Production updates moved to /admin/tools/email (renamed to cover all mass
- * correspondence — launches, bug alerts, etc.). Redirect kept for stale links.
+ * Production updates merged into the Notifications Hub. Redirect kept for
+ * stale share links + bookmarks.
  */
 export default function ProductionUpdatesRedirect() {
-  redirect('/admin/tools/email');
+  redirect('/admin/notifications');
 }

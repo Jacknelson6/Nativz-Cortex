@@ -112,7 +112,7 @@ export async function autoLinkEditingDoneToPayroll(opts: {
     body: clientName
       ? `${clientName}: fill in the editing amount on the current period.`
       : 'Fill in the editing amount on the current period.',
-    linkPath: '/admin/tools/accounting',
+    linkPath: '/admin/accounting',
     clientId: clientId ?? undefined,
   });
 }

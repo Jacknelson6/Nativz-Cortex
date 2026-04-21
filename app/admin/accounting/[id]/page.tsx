@@ -47,7 +47,7 @@ export default async function AccountingPeriodPage({ params }: { params: Promise
   return (
     <div className="mx-auto max-w-6xl p-6 space-y-6">
       <div className="flex items-center gap-2 text-base text-text-secondary">
-        <Link href="/admin/tools/accounting" className="hover:text-text-primary">Accounting</Link>
+        <Link href="/admin/accounting" className="hover:text-text-primary">Accounting</Link>
         <span className="text-text-muted">›</span>
         <span className="text-text-primary font-medium">{labelFor(period.start_date, period.half as 'first-half' | 'second-half')}</span>
       </div>

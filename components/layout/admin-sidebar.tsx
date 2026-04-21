@@ -22,7 +22,7 @@ import {
   Facebook,
   Store,
   ShoppingBag,
-  Mail,
+  Bell,
   Camera,
   Calendar,
   Brain,
@@ -125,9 +125,9 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/shoots', label: 'Shoots', icon: Camera },
           { href: '/admin/scheduler', label: 'Content calendars', icon: Calendar },
           { href: '/admin/clients', label: 'Clients', icon: Contact },
-          { href: '/admin/tools/users', label: 'Users', icon: Users },
-          { href: '/admin/tools/accounting', label: 'Accounting', icon: Receipt },
-          { href: '/admin/tools/email', label: 'Notifications', icon: Mail },
+          { href: '/admin/users', label: 'Users', icon: Users },
+          { href: '/admin/accounting', label: 'Accounting', icon: Receipt },
+          { href: '/admin/notifications', label: 'Notifications', icon: Bell },
           { href: '/admin/settings/ai', label: 'AI settings', icon: Cpu },
         ],
       },
@@ -152,11 +152,6 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
     const prefix = href.replace('/knowledge', '');
     if (pathname === `${prefix}/meetings` || pathname.startsWith(`${prefix}/meetings/`)) return true;
     return pathname === href || pathname.startsWith(href + '/');
-  }
-
-  // Tools hub — stay active on every /admin/tools/* child (Users, Accounting, Email).
-  if (href === '/admin/tools') {
-    if (pathname === '/admin/tools' || pathname.startsWith('/admin/tools/')) return true;
   }
 
   // NOTE: the old "Competitor Tracking → /admin/analyze-social" and
@@ -200,7 +195,7 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/shoots',
   '/admin/knowledge',
   '/admin/analyze-social',
-  '/admin/tools',
+  '/admin/notifications',
   // Settings is reachable from the avatar popover — it doesn't need its
   // own nav row on the portal. Keeping it on the admin side where the gear
   // is the primary entry point to the agency settings secondary rail.
@@ -450,7 +445,13 @@ export function AdminSidebar({
 
                   const parentButton = (
                     <SidebarMenuButton
-                      isActive={childActive}
+                      // Parent row intentionally NOT painted active when a
+                      // child is. The expanded accordion + the child's own
+                      // active pill already telegraph position; also
+                      // highlighting the parent doubles the visual weight
+                      // of the selection and fights the RankPrompt-style
+                      // "collapsed container" read we're going for.
+                      isActive={false}
                       tooltip={!open ? item.label : undefined}
                       onClick={() => toggleMenu(item.href)}
                     >
