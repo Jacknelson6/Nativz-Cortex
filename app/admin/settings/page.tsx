@@ -18,7 +18,6 @@ import { Button } from '@/components/ui/button';
 import { AvatarEditor } from '@/components/ui/avatar-editor';
 import { NotificationPreferencesSection } from '@/components/settings/notification-preferences';
 import { SidebarPreferencesSection } from '@/components/settings/sidebar-preferences';
-import { SchedulingLinksSection } from '@/components/settings/scheduling-links-section';
 import { TodoistSection } from '@/components/settings/todoist-section';
 import { ApiKeysSection } from '@/components/settings/api-keys-section';
 import { TrustPolicyModal } from '@/components/settings/trust-policy-modal';
@@ -40,7 +39,6 @@ interface UserData {
 const SECTIONS = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'sidebar', label: 'Sidebar', icon: SidebarIcon },
-  { id: 'scheduling', label: 'Scheduling Links', icon: LinkIcon },
   { id: 'connections', label: 'Connections', icon: LinkIcon },
   { id: 'api-keys', label: 'API keys', icon: Key },
   { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -299,12 +297,6 @@ export default function AdminSettingsPage() {
         <div id="sidebar" ref={(el) => { sectionRefs.current['sidebar'] = el; }}>
           <h2 className="text-base font-semibold text-text-primary mb-4">Sidebar</h2>
           <SidebarPreferencesSection role="admin" />
-        </div>
-
-        {/* Scheduling Links */}
-        <div id="scheduling" ref={(el) => { sectionRefs.current['scheduling'] = el; }}>
-          <h2 className="text-base font-semibold text-text-primary mb-4">Scheduling Links</h2>
-          <SchedulingLinksSection />
         </div>
 
         {/* Connections */}
