@@ -2,21 +2,10 @@
 
 import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import {
-  Contact,
-  FileText,
-  FolderPlus,
-  Mail,
-  Megaphone,
-  Settings,
-  Zap,
-} from 'lucide-react';
+import { Bell, Contact, FileText, Mail, Settings } from 'lucide-react';
 import { EmailsTab } from './emails-tab';
 import { ContactsTab } from './contacts-tab';
 import { TemplatesTab } from './templates-tab';
-import { CampaignsTab } from './campaigns-tab';
-import { ListsTab } from './lists-tab';
-import { SequencesTab } from './sequences-tab';
 import { SetupTab } from './setup-tab';
 
 export interface EmailHubClientOption {
@@ -25,14 +14,7 @@ export interface EmailHubClientOption {
   agency: string | null;
 }
 
-type TabKey =
-  | 'campaigns'
-  | 'emails'
-  | 'contacts'
-  | 'lists'
-  | 'templates'
-  | 'sequences'
-  | 'setup';
+type TabKey = 'contacts' | 'emails' | 'templates' | 'setup';
 
 interface Tab {
   key: TabKey;
@@ -41,12 +23,9 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { key: 'campaigns', label: 'Campaigns', icon: Megaphone },
-  { key: 'emails', label: 'Emails', icon: Mail },
   { key: 'contacts', label: 'Contacts', icon: Contact },
-  { key: 'lists', label: 'Lists', icon: FolderPlus },
+  { key: 'emails', label: 'Emails', icon: Mail },
   { key: 'templates', label: 'Templates', icon: FileText },
-  { key: 'sequences', label: 'Sequences', icon: Zap },
   { key: 'setup', label: 'Setup', icon: Settings },
 ];
 
@@ -54,19 +33,19 @@ interface Props {
   clients: EmailHubClientOption[];
 }
 
-export function EmailHubClient({ clients }: Props) {
-  const [tab, setTab] = useState<TabKey>('campaigns');
+export function EmailHubClient({ clients: _clients }: Props) {
+  const [tab, setTab] = useState<TabKey>('contacts');
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-8 space-y-6">
       <header className="flex items-start gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-surface border border-nativz-border">
-          <Mail size={20} className="text-accent-text" />
+          <Bell size={20} className="text-accent-text" />
         </div>
         <div className="min-w-0 pt-0.5">
-          <h1 className="text-xl font-semibold text-text-primary">Email Hub</h1>
+          <h1 className="text-xl font-semibold text-text-primary">Notifications</h1>
           <p className="text-sm text-text-muted mt-0.5">
-            Manage campaigns, contacts, templates, sequences, and email settings.
+            Manage contacts, email templates, sender identities, and outbound delivery.
           </p>
         </div>
       </header>
@@ -74,12 +53,9 @@ export function EmailHubClient({ clients }: Props) {
       <TabBar tabs={TABS} current={tab} onChange={setTab} />
 
       <div>
-        {tab === 'campaigns' && <CampaignsTab clients={clients} />}
-        {tab === 'emails' && <EmailsTab />}
         {tab === 'contacts' && <ContactsTab />}
-        {tab === 'lists' && <ListsTab />}
+        {tab === 'emails' && <EmailsTab />}
         {tab === 'templates' && <TemplatesTab />}
-        {tab === 'sequences' && <SequencesTab />}
         {tab === 'setup' && <SetupTab />}
       </div>
     </div>
@@ -98,7 +74,7 @@ function TabBar({
   return (
     <div className="border-b border-nativz-border">
       <nav
-        aria-label="Email Hub sections"
+        aria-label="Notifications sections"
         className="flex gap-1 overflow-x-auto -mb-px"
       >
         {tabs.map((t) => {
@@ -124,4 +100,3 @@ function TabBar({
     </div>
   );
 }
-

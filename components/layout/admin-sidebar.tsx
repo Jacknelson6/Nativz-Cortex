@@ -18,18 +18,15 @@ import {
   ScanSearch,
   Receipt,
   Settings as SettingsIcon,
-  Wrench,
   Users,
   Facebook,
   Store,
   ShoppingBag,
   Mail,
-  Workflow,
   Camera,
-  ThumbsUp,
-  Megaphone,
   Calendar,
   Brain,
+  Cpu,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { SidebarModePicker } from '@/components/layout/sidebar-mode-picker';
@@ -42,7 +39,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -70,11 +66,6 @@ interface NavItem {
 interface NavSection {
   label: string;
   items: NavItem[];
-  /** When true, render the section label above the items. Default: false. */
-  labeled?: boolean;
-  /** When true, this section's group gets `mt-auto` so it sinks to the
-   *  bottom of the rail. Intended for the Admin (platform-operator) section. */
-  pushToBottom?: boolean;
 }
 
 // Parents with `children` expand to an inline accordion (RankPrompt-style).
@@ -83,16 +74,11 @@ interface NavSection {
 // Route kept at /admin/analyze-social for Competitor Spying to avoid breaking
 // outbound share links (/shared/analyze-social/[token]).
 //
-// Section layout intent (RankPrompt-style separation of concerns):
-//   1. Dashboard         — cross-brand overview entry points
-//   2. Brand tools       — tools that operate on the active brand
-//   3. Content ops       — cross-brand operational surfaces (tasks, edits, calendars)
-//   4. Admin (bottom)    — platform-operator tools (users, accounting, integrations, AI settings)
-//
-// The active brand pill in the top bar dims to 60% opacity on admin-only
-// routes (see ADMIN_ONLY_PREFIXES in admin-brand-pill.tsx) — grouping those
-// routes under a dedicated bottom Admin section makes that muted state
-// read as "brand context paused" rather than as a bug.
+// Layout: three unlabeled sections separated by a thin divider. Brand-scoped
+// tools live at the top as flat items; everything operational + admin lives
+// inside a single "Admin" dropdown at the bottom. The dropdown keeps the
+// sidebar tight — the working brand is the center of attention, admin surfaces
+// are one click away without cluttering the rail.
 const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Dashboard',
@@ -103,7 +89,6 @@ const NAV_SECTIONS: NavSection[] = [
   },
   {
     label: 'Brand tools',
-    labeled: true,
     items: [
       { href: '/admin/search/new', label: 'Trend Finder', icon: TrendingUp },
       { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: MessagesSquare },
@@ -120,46 +105,32 @@ const NAV_SECTIONS: NavSection[] = [
       },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
       { href: '/admin/knowledge', label: 'Brain', icon: Brain },
-    ],
-  },
-  {
-    label: 'Content ops',
-    labeled: true,
-    items: [
       { href: '/admin/notes', label: 'Notes', icon: StickyNote },
-      { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
-      {
-        href: '/admin/pipeline',
-        label: 'Edits',
-        icon: Scissors,
-        children: [
-          { href: '/admin/pipeline', label: 'All stages', icon: Workflow },
-          { href: '/admin/shoots', label: 'Shoot calendar', icon: Camera },
-          { href: '/admin/pipeline?stage=editing', label: 'Editing', icon: Scissors },
-          { href: '/admin/pipeline?stage=scheduling', label: 'Approvals & handoff', icon: ThumbsUp },
-          { href: '/admin/pipeline?stage=boosting', label: 'Boosting', icon: Megaphone },
-          { href: '/admin/scheduler', label: 'Calendars', icon: Calendar },
-        ],
-      },
     ],
   },
   {
+    // Single dropdown that vacuums up every operational + platform-admin
+    // surface into one tidy menu. Keeps the rail visually calm — users
+    // doing brand work don't see a wall of team-ops icons; when they need
+    // to jump into admin they expand this one parent.
     label: 'Admin',
-    labeled: true,
-    pushToBottom: true,
     items: [
-      { href: '/admin/clients', label: 'Clients', icon: Contact },
       {
-        href: '/admin/tools',
-        label: 'Platform',
-        icon: Wrench,
+        href: '/admin/tasks',
+        label: 'Admin',
+        icon: SettingsIcon,
         children: [
+          { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
+          { href: '/admin/pipeline', label: 'Edits', icon: Scissors },
+          { href: '/admin/shoots', label: 'Shoots', icon: Camera },
+          { href: '/admin/scheduler', label: 'Content calendars', icon: Calendar },
+          { href: '/admin/clients', label: 'Clients', icon: Contact },
           { href: '/admin/tools/users', label: 'Users', icon: Users },
           { href: '/admin/tools/accounting', label: 'Accounting', icon: Receipt },
-          { href: '/admin/tools/email', label: 'Email Hub', icon: Mail },
+          { href: '/admin/tools/email', label: 'Notifications', icon: Mail },
+          { href: '/admin/settings/ai', label: 'AI settings', icon: Cpu },
         ],
       },
-      { href: '/admin/settings/ai', label: 'AI settings', icon: SettingsIcon },
     ],
   },
 ];
@@ -459,20 +430,8 @@ export function AdminSidebar({
           }))
           .filter((section) => section.items.length > 0)
           .map((section, idx) => (
-          <SidebarGroup
-            key={section.label || `section-${idx}`}
-            className={section.pushToBottom ? 'mt-auto' : ''}
-          >
-            {/* When a section is labeled (e.g. "Brand tools", "Admin"), the
-                label takes the place of the plain separator and gives each
-                section a readable name. For label-less sections we still
-                emit a separator between groups so the rail doesn't feel
-                like one undifferentiated list. */}
-            {section.labeled ? (
-              <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
-            ) : idx > 0 ? (
-              <SidebarSeparator />
-            ) : null}
+          <SidebarGroup key={section.label || `section-${idx}`}>
+            {idx > 0 && <SidebarSeparator />}
             <SidebarMenu>
               {section.items.map((item) => {
                 const active = isActivePath(pathname, item.href, searchParams);
@@ -630,16 +589,22 @@ export function AdminSidebar({
 
       </SidebarContent>
 
-      {/* Footer: account */}
+      {/* Footer: sidebar layout controls.
+       *
+       * For admin routes the account popover (avatar + settings + API docs +
+       * sign out) lives in <AdminTopBar> instead of here, so the rail footer
+       * only carries the mode picker. Portal still gets the account popover
+       * here — portal uses the sidebar for all global actions. */}
       <SidebarFooter className="border-t-0">
-        <SidebarAccount
-          userName={userName}
-          avatarUrl={avatarUrl}
-          settingsHref={settingsPath}
-          logoutRedirect={logoutPath}
-          collapsed={!open}
-          apiDocsHref={role === 'admin' ? '/admin/nerd/api' : undefined}
-        />
+        {role === 'viewer' && (
+          <SidebarAccount
+            userName={userName}
+            avatarUrl={avatarUrl}
+            settingsHref={settingsPath}
+            logoutRedirect={logoutPath}
+            collapsed={!open}
+          />
+        )}
 
         {/* Sidebar layout mode picker — Expanded / Collapsed / Hover */}
         <SidebarModePicker />
