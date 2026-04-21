@@ -463,42 +463,64 @@ export function AdminSidebar({
                         />
                       </SidebarMenuButton>
 
-                      {/* Accordion — expanded rail */}
-                      {open && (
-                        <div
-                          className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
-                          style={{
-                            gridTemplateRows: isExpanded ? '1fr' : '0fr',
-                            opacity: isExpanded ? 1 : 0,
-                          }}
-                        >
-                          <div className="overflow-hidden">
-                            <ul className="ml-6 mt-1.5 space-y-1 border-l border-nativz-border pl-2 pb-1">
-                              {item.children.map((child) => {
-                                const cActive = isActivePath(pathname, child.href, searchParams);
-                                return (
-                                  <li key={child.href}>
-                                    <Link
-                                      href={child.href}
-                                      className={`flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium transition-colors ${
-                                        cActive
-                                          ? 'text-accent-text bg-accent-surface'
-                                          : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
+                      {/* Accordion — renders in BOTH collapsed and expanded
+                          rails whenever this dropdown is expanded. In the
+                          collapsed state children show as icon-only rows so
+                          the reveal animation has something to reveal when
+                          the user hovers to expand. In the expanded state
+                          the guide rail + indent fade in and each label
+                          slides via the same transition the flat items use. */}
+                      <div
+                        className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+                        style={{
+                          gridTemplateRows: isExpanded ? '1fr' : '0fr',
+                          opacity: isExpanded ? 1 : 0,
+                        }}
+                      >
+                        <div className="overflow-hidden">
+                          <ul
+                            className={`mt-1.5 space-y-1 pb-1 transition-[margin-left,padding-left,border-color] duration-200 ease-out border-l ${
+                              open
+                                ? 'ml-6 pl-2 border-nativz-border'
+                                : 'ml-0 pl-0 border-transparent'
+                            }`}
+                          >
+                            {item.children.map((child) => {
+                              const cActive = isActivePath(pathname, child.href, searchParams);
+                              return (
+                                <li key={child.href}>
+                                  <Link
+                                    href={child.href}
+                                    title={!open ? child.label : undefined}
+                                    className={`flex items-center rounded-md transition-colors ${
+                                      open ? 'px-2 py-2' : 'h-10 justify-center'
+                                    } ${
+                                      cActive
+                                        ? 'text-accent-text bg-accent-surface'
+                                        : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
+                                    }`}
+                                  >
+                                    <child.icon size={16} className="shrink-0" />
+                                    <span
+                                      className={`overflow-hidden whitespace-nowrap text-sm font-medium transition-[max-width,margin,opacity] duration-200 ease-out ${
+                                        open ? 'max-w-[160px] ml-2 opacity-100' : 'max-w-0 ml-0 opacity-0'
                                       }`}
                                     >
-                                      <child.icon size={16} className="shrink-0" />
-                                      <span className="truncate">{child.label}</span>
-                                    </Link>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </div>
+                                      {child.label}
+                                    </span>
+                                  </Link>
+                                </li>
+                              );
+                            })}
+                          </ul>
                         </div>
-                      )}
+                      </div>
 
-                      {/* Hover flyout — collapsed rail */}
-                      {!open && (
+                      {/* Hover flyout — only when the rail is collapsed AND the
+                          dropdown isn't already expanded inline (inline icons
+                          replace the flyout for the active dropdown so the
+                          user gets one source of truth per state). */}
+                      {!open && !isExpanded && (
                         <div className="absolute left-full top-0 ml-2 z-50 opacity-0 pointer-events-none translate-x-1 transition-[opacity,transform] duration-150 ease-out group-hover/flyout:opacity-100 group-hover/flyout:pointer-events-auto group-hover/flyout:translate-x-0">
                           <div className="min-w-[200px] rounded-lg border border-nativz-border bg-surface shadow-dropdown py-1">
                             <div className="px-3 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
