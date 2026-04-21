@@ -45,8 +45,12 @@ test.describe('Admin login shell', () => {
   });
 });
 
-test.describe('Portal login shell', () => {
-  test('uses design-system card, inputs, and primary button', async ({ page }) => {
+test.describe('Portal login redirect', () => {
+  // `/portal/login` was retired in favor of the unified admin login. This
+  // test used to assert "Client portal sign in" card UI; now we assert the
+  // redirect instead (same rule exercised in routes-redirects.spec.ts but
+  // also worth catching here so the ui-smoke suite doesn't rot silently).
+  test('/portal/login redirects into the unified admin login shell', async ({ page }) => {
     const errors: string[] = [];
     page.on('console', (msg) => {
       if (msg.type() === 'error') errors.push(msg.text());
@@ -55,17 +59,15 @@ test.describe('Portal login shell', () => {
 
     await page.context().clearCookies();
     await page.goto('/portal/login', { waitUntil: 'load' });
-    await expect(page.getByText(/client portal sign in/i)).toBeVisible({ timeout: 15_000 });
 
-    const card = page.locator('.rounded-xl.border.border-nativz-border.bg-surface').first();
-    await expect(card).toBeVisible();
+    // Landed somewhere under /admin/login (path may carry a redirect param).
+    expect(page.url()).toMatch(/\/admin\/login(\?|$)/);
 
+    // Unified login chrome should be visible on the destination page.
+    await expect(page.getByText(/sign in to cortex/i)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByLabel(/^email$/i)).toBeVisible();
     await expect(page.getByLabel(/^password$/i)).toBeVisible();
-
-    const submit = page.getByRole('button', { name: /^sign in$/i });
-    await expect(submit).toBeVisible();
-    await expect(submit).toHaveClass(/btn-shimmer/);
+    await expect(page.getByRole('button', { name: /^sign in$/i })).toBeVisible();
 
     expect(filterCriticalConsoleErrors(errors)).toEqual([]);
   });
