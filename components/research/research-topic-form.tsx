@@ -1,35 +1,23 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import Link from 'next/link';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
-  BarChart3,
-  Building2,
   ChevronDown,
   Clock,
   Compass,
-  Globe,
   HelpCircle,
   Loader2,
-  MessageCircle,
-  Music,
-  Search,
   X,
-  Youtube,
 } from 'lucide-react';
 import { ClientLogo } from '@/components/clients/client-logo';
 import type { ClientOption } from '@/components/ui/client-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils/cn';
-import { toast } from 'sonner';
-import { mergeTopicSearchSelectionIntoLocalStorage } from '@/lib/content-lab/topic-search-selection-storage';
 import { TIME_RANGE_OPTIONS } from '@/lib/types/search';
 import type { SearchPlatform, SearchVolume } from '@/lib/types/search';
 import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
-
-export type ContextMode = 'none' | 'client' | 'url';
 
 interface ResearchTopicFormProps {
   clients: ClientOption[];
@@ -65,36 +53,11 @@ function greetingDisplayName(raw: string | null | undefined): string {
   return first.charAt(0).toUpperCase() + first.slice(1);
 }
 
-function looksLikeUrl(s: string): boolean {
-  const t = s.trim();
-  if (!t) return false;
-  if (/^https?:\/\//i.test(t)) return true;
-  if (/^www\./i.test(t)) return true;
-  return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9-]+)+\.[a-z]{2,}(\/[^\s]*)?$/i.test(t);
-}
-
-function normalizeUrlInput(s: string): string {
-  const t = s.trim();
-  if (!t) return '';
-  if (/^https?:\/\//i.test(t)) return t;
-  return `https://${t}`;
-}
-
-function brandPillLabel(
-  contextMode: ContextMode,
-  selectedClient: ClientOption | undefined,
-  url: string
-): string {
-  if (contextMode === 'client' && selectedClient) return selectedClient.name;
-  if (contextMode === 'url' && url) {
-    try {
-      return new URL(url.startsWith('http') ? url : `https://${url}`).hostname;
-    } catch {
-      return 'URL';
-    }
-  }
-  return 'Brand';
-}
+// NOTE: looksLikeUrl / normalizeUrlInput / brandPillLabel / ContextMode
+// helpers were retired alongside the URL-mode brand popover. Prospect
+// URL audits now live in AuditHub (/admin/analyze-social); the only
+// brand-attach surface on Trend Finder is the session-driven chip
+// below (selectedClient).
 
 export function ResearchTopicForm({
   clients,
@@ -115,15 +78,13 @@ export function ResearchTopicForm({
     const hydratedClient = portalMode
       ? null
       : (initialClientId ? clients.find((c) => c.id === initialClientId) ?? null : null);
-    const [contextMode, setContextMode] = useState<ContextMode>(
-      portalMode && fixedClientId ? 'client' : hydratedClient ? 'client' : 'none',
-    );
+    // No in-page brand picker — Trend Finder is brand-native. `clientId` is
+    // seeded from the session brand (via initialClientId) and only changes
+    // when the user switches brands in the top-bar pill or clears the
+    // attachment here. URL-mode (prospect audits) moved to AuditHub.
     const [clientId, setClientId] = useState<string | null>(
       portalMode ? fixedClientId : (hydratedClient?.id ?? null),
     );
-    const [url, setUrl] = useState('');
-    const [contextSearch, setContextSearch] = useState(hydratedClient?.name ?? '');
-    const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
     const platforms = new Set<SearchPlatform>(['web', 'reddit', 'youtube', 'tiktok']);
     const volume: SearchVolume = 'deep';
     const [timeRange, setTimeRange] = useState('last_3_months');
@@ -141,10 +102,7 @@ export function ResearchTopicForm({
 
     // Parent (ResearchHub) reads the persisted brand from localStorage in a
     // useEffect, so `initialClientId` can arrive AFTER this form's first render.
-    // Without this sync the rail would filter to that brand while the pill
-    // still showed "Brand", making it look like a brand is selected when it
-    // isn't. Only hydrate when we don't already have a user-picked client —
-    // never override an active clear or a new pick.
+    // Sync in when it lands, but never override a user's active clear.
     useEffect(() => {
       if (portalMode) return;
       if (!initialClientId) return;
@@ -152,88 +110,32 @@ export function ResearchTopicForm({
       const c = clients.find((x) => x.id === initialClientId);
       if (!c) return;
       setClientId(c.id);
-      setContextMode('client');
-      setContextSearch(c.name);
     }, [initialClientId, portalMode, clients, clientId]);
 
     const selectedClient = clients.find((c) => c.id === clientId);
 
-    const clientsForDropdown = useMemo(() => {
-      if (looksLikeUrl(contextSearch)) return [];
-      const q = contextSearch.trim().toLowerCase();
-      const sorted = [...clients].sort((a, b) => a.name.localeCompare(b.name));
-      if (!q) return sorted;
-      return sorted.filter((c) => c.name.toLowerCase().includes(q));
-    }, [contextSearch, clients]);
-
-    function handleContextSearchChange(v: string) {
-      setContextSearch(v);
-      const t = v.trim();
-      if (!t) {
-        setContextMode('none');
-        setClientId(null);
-        setUrl('');
-        return;
-      }
-      if (looksLikeUrl(v)) {
-        setContextMode('url');
-        setUrl(normalizeUrlInput(v));
-        setClientId(null);
-        return;
-      }
-      setUrl('');
-      if (clientId) {
-        const sel = clients.find((c) => c.id === clientId);
-        if (sel && v === sel.name) {
-          setContextMode('client');
-          return;
-        }
-        setClientId(null);
-        setContextMode('none');
-      }
-    }
-
-    function pickClient(id: string) {
-      const c = clients.find((x) => x.id === id);
-      if (!c) return;
-      setClientId(id);
-      setContextSearch(c.name);
-      setContextMode('client');
-      setUrl('');
-      setBrandPopoverOpen(false);
-      onClientChange?.(id);
-    }
-
     function clearBrand() {
-      setContextMode('none');
       setClientId(null);
-      setUrl('');
-      setContextSearch('');
       onClientChange?.(null);
     }
 
-    const step1Valid =
-      topicQuery.trim().length > 0 &&
-      (contextMode === 'none' ||
-        (contextMode === 'client' && !!clientId) ||
-        (contextMode === 'url' && url.trim().length > 0));
+    const step1Valid = topicQuery.trim().length > 0;
 
     async function handleRunResearch() {
       setError('');
       setLoading(true);
       try {
-        const searchMode = contextMode === 'client' ? 'client_strategy' : 'general';
+        const searchMode = clientId ? 'client_strategy' : 'general';
         const body = {
           query: topicQuery.trim(),
           source: 'all',
           time_range: timeRange,
           language,
           country,
-          client_id: portalMode ? fixedClientId : (contextMode === 'client' ? clientId : null),
+          client_id: portalMode ? fixedClientId : clientId,
           search_mode: searchMode,
           platforms: Array.from(new Set([...platforms, 'web'])).filter((p) => p !== 'quora'),
           volume,
-          ...(contextMode === 'url' && url.trim() ? { brand_url: url.trim() } : {}),
         };
 
         const res = await fetch('/api/search/start', {
@@ -368,117 +270,31 @@ export function ResearchTopicForm({
               role="group"
               aria-label="Search filters"
             >
-              {/* Brand — popover lists clients as logos; hidden in portal mode (client is fixed) */}
-              {portalMode ? null : <Popover open={brandPopoverOpen} onOpenChange={setBrandPopoverOpen}>
-                <div
-                  className={cn(
-                    'inline-flex h-9 max-w-[min(100%,13rem)] min-w-0 shrink-0 items-stretch rounded-full border border-nativz-border bg-surface-hover/80 text-xs font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover',
-                    (contextMode === 'client' || contextMode === 'url') && 'pr-0.5'
-                  )}
-                >
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left text-text-secondary hover:bg-transparent"
-                    >
-                      {contextMode === 'client' && selectedClient ? (
-                        <ClientLogo
-                          src={selectedClient.logo_url}
-                          name={selectedClient.name}
-                          size="sm"
-                          className="h-7 w-7 shrink-0 !rounded-md"
-                        />
-                      ) : (
-                        <Building2 size={15} className="shrink-0 text-text-muted" aria-hidden />
-                      )}
-                      <span className="truncate">{brandPillLabel(contextMode, selectedClient, url)}</span>
-                    </button>
-                  </PopoverTrigger>
-                  {(contextMode === 'client' || contextMode === 'url') && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        clearBrand();
-                      }}
-                      className="flex shrink-0 items-center justify-center rounded-full p-1.5 text-text-muted transition hover:bg-background/40 hover:text-text-primary"
-                      aria-label="Remove brand"
-                    >
-                      <X size={15} strokeWidth={2} aria-hidden />
-                    </button>
-                  )}
-                </div>
-                <PopoverContent
-                  align="start"
-                  sideOffset={8}
-                  matchAnchorWidth={false}
-                  className="w-[min(22rem,calc(100vw-2rem))] border-nativz-border bg-surface p-0 text-text-primary shadow-[var(--shadow-dropdown)]"
-                >
-                  <div className="border-b border-nativz-border p-3">
-                    <div className="relative">
-                      <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
-                      <input
-                        type="text"
-                        value={contextSearch}
-                        onChange={(e) => handleContextSearchChange(e.target.value)}
-                        placeholder="Search clients or paste a website URL…"
-                        className="w-full rounded-lg border border-nativz-border bg-background py-2 pl-8 pr-3 text-sm text-foreground placeholder:text-text-muted focus:border-accent focus:outline-none"
-                        autoComplete="off"
-                      />
-                    </div>
+              {/* Attached brand — seeded from the top-bar pill via
+               *  initialClientId. No in-page picker; switching brands
+               *  happens at the session pill. The X clears the attachment
+               *  so the search runs as a cross-brand general search. */}
+              {portalMode ? null : selectedClient ? (
+                <div className="inline-flex h-9 max-w-[min(100%,13rem)] min-w-0 shrink-0 items-stretch rounded-full border border-nativz-border bg-surface-hover/80 pr-0.5 text-xs font-medium text-text-secondary shadow-sm">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5">
+                    <ClientLogo
+                      src={selectedClient.logo_url}
+                      name={selectedClient.name}
+                      size="sm"
+                      className="h-7 w-7 shrink-0 !rounded-md"
+                    />
+                    <span className="truncate">{selectedClient.name}</span>
                   </div>
-                  <div
-                    className="max-h-56 overflow-y-auto p-2"
-                    role="listbox"
-                    aria-label="Clients"
+                  <button
+                    type="button"
+                    onClick={clearBrand}
+                    className="flex shrink-0 items-center justify-center rounded-full p-1.5 text-text-muted transition hover:bg-background/40 hover:text-text-primary"
+                    aria-label="Remove brand"
                   >
-                    {clientsForDropdown.length === 0 ? (
-                      <p className="px-2 py-6 text-center text-sm text-text-muted">No matching clients</p>
-                    ) : (
-                      <div className="grid grid-cols-[repeat(auto-fill,minmax(4.75rem,1fr))] gap-2">
-                        {clientsForDropdown.map((c) => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            role="option"
-                            aria-selected={clientId === c.id}
-                            onClick={() => pickClient(c.id)}
-                            className={cn(
-                              'flex flex-col items-center gap-1.5 rounded-xl border border-transparent p-2 text-center transition-colors hover:bg-surface-hover',
-                              clientId === c.id && 'border-accent/35 bg-accent/10',
-                            )}
-                          >
-                            <ClientLogo
-                              src={c.logo_url}
-                              name={c.name}
-                              size="sm"
-                              className="shrink-0 rounded-lg"
-                            />
-                            <span className="line-clamp-2 w-full text-[10px] font-medium leading-tight text-text-primary">
-                              {c.name}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {(contextMode === 'client' || contextMode === 'url') && (
-                    <div className="flex flex-col gap-2 border-t border-nativz-border p-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          clearBrand();
-                          setBrandPopoverOpen(false);
-                        }}
-                        className="text-left text-xs text-text-muted hover:text-text-secondary"
-                      >
-                        Clear brand
-                      </button>
-                    </div>
-                  )}
-                </PopoverContent>
-              </Popover>}
+                    <X size={15} strokeWidth={2} aria-hidden />
+                  </button>
+                </div>
+              ) : null}
 
               {/* (Depth removed — always deep) */}
 
@@ -545,7 +361,7 @@ export function ResearchTopicForm({
           </div>
 
         {/* Suggest topics — visible when a client is selected */}
-        {contextMode === 'client' && clientId && (
+        {clientId && (
           <div className="mx-auto mt-3 w-full max-w-xl">
             {suggestions.length === 0 ? (
               <button
@@ -668,12 +484,6 @@ export function ResearchTopicForm({
               </div>
             )}
           </div>
-        )}
-
-        {contextMode === 'url' && url && (
-          <p className="mt-4 text-center text-xs text-text-muted">
-            URL will be scraped for brand context (not saved to the knowledge base)
-          </p>
         )}
 
         {error && (
