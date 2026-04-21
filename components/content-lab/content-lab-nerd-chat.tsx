@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { AgencyClientAvatar } from './agency-client-avatar';
-import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { ChatComposer, type ChatAttachment } from '@/components/ai/chat-composer';
@@ -13,7 +12,6 @@ import { useSlashCommands, expandSkillCommand } from '@/lib/nerd/use-slash-comma
 import { toast } from 'sonner';
 import { ContentLabConversationExportButton } from './content-lab-conversation-export-button';
 import { ConversationShareButton } from '@/components/ai/conversation-share-button';
-import { CommandsCatalogButton } from '@/components/nerd/commands-catalog-button';
 import { ContentLabConversationHistoryRail } from './content-lab-conversation-history-rail';
 import { ContentLabTopicSearchChipBar } from './content-lab-topic-search-chip-bar';
 import { ContentLabAttachResearchDialog } from './content-lab-attach-research-dialog';
@@ -28,25 +26,28 @@ import { contentLabTopicSearchStorageKey } from '@/lib/content-lab/topic-search-
 // Quick-start prompts are tuned to push the Nerd toward artifact-style
 // outputs (mermaid flows, structured scripts, effort/impact quadrants)
 // that render as live visuals in the chat and export cleanly as PDFs.
+// Prompts stand alone — the Nerd already has the active client pinned via
+// clientId on the chat request, so we don't need to parrot the brand name
+// back at the user in the composer.
 const SUGGESTIONS = [
   {
     label: 'Generate video ideas',
     prompt:
-      'Generate a topic plan of video ideas, grounded in the attached research and the client knowledge vault, for ',
+      'Generate a topic plan of video ideas, grounded in the attached research and the client knowledge vault.',
   },
   {
     label: 'Generate scripts',
     prompt:
-      'Write three full scripts (hook, beats, pattern interrupt, CTA) from the highest-signal topics in the attached research for ',
+      'Write three full scripts (hook, beats, pattern interrupt, CTA) from the highest-signal topics in the attached research.',
   },
   {
     label: 'Explain this topic search',
     prompt:
-      'Summarize the attached topic search — what\'s resonating, the strongest themes, the audience sentiment, and what it means for ',
+      "Summarize the attached topic search — what's resonating, the strongest themes, the audience sentiment, and what it means.",
   },
   {
     label: 'What does this mean?',
-    prompt: 'What does this mean in the context of ',
+    prompt: 'What does this mean in the context of the attached research?',
   },
 ];
 
@@ -148,7 +149,6 @@ export function ContentLabNerdChat({
   // brand mark instead of initials. Pulls from /api/nerd/mentions (same
   // source the client picker uses).
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
-  const { brand: agencyBrand, brandName: agencyName } = useAgencyBrand();
 
   // Topic plans are produced via the create_topic_plan tool call, which
   // renders an artifact download card in the chat (see topic-plan-
@@ -161,13 +161,6 @@ export function ContentLabNerdChat({
   // to "/idea N" and flows through normal slash-command expansion.
   const [pendingIdeaCount, setPendingIdeaCount] = useState(false);
   const [pendingGenerateArgs, setPendingGenerateArgs] = useState(false);
-  // Wide agency lockup (white-background, no boxed container) for the empty
-  // state. Falls back to the tile logo for brands that don't ship a wide
-  // variant yet.
-  // Use the "-dark" variant on the empty state — its white/light background
-  // needs the navy wordmark, not the teal-on-transparent default.
-  const wideAgencyLogoPath =
-    agencyBrand === 'anderson' ? '/anderson-logo-dark.svg' : '/nativz-logo.png';
 
   useEffect(() => {
     if (!clientId) return;
@@ -727,7 +720,7 @@ export function ContentLabNerdChat({
           handleSend();
         }}
         disabled={streaming}
-        placeholder={`Ask Cortex about ${clientName.trim() || 'this client'}… (try /ideas or /script)`}
+        placeholder="Ask Cortex anything… (try /ideas or /script)"
         blockEnterSubmit={showSlashMenu}
         onKeyDown={handleInputKeyDown}
         onAttachResearch={() => setAttachResearchOpen(true)}
@@ -759,10 +752,7 @@ export function ContentLabNerdChat({
     </div>
   );
 
-  const suggestions = SUGGESTIONS.map((s) => ({
-    ...s,
-    prompt: `${s.prompt}@${clientName.trim() || 'this client'}.`,
-  }));
+  const suggestions = SUGGESTIONS;
 
   return (
     <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-background">
@@ -784,46 +774,37 @@ export function ContentLabNerdChat({
             four surfaces now live under the chat (artifacts in the rail,
             everything else automatically reachable from the sidebar). */}
         <header className="relative flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
-          {/* Passive brand-identity display in both modes now — the
-           *  top-bar brand pill handles switching on the admin side, so
-           *  duplicating it in this header was redundant UX and extra
-           *  render weight. */}
+          {/* Section title — the top-bar brand pill identifies the active
+           *  client, so this header is just the page label. Mirrors Trend
+           *  Finder's treatment. */}
           <div className="flex min-w-0 items-center gap-2">
             <AgencyClientAvatar
               clientName={clientName}
               clientLogoUrl={clientLogoUrl}
               size="sm"
             />
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate text-sm font-semibold text-text-primary">
-                {clientName}
-              </span>
-              <span className="text-xs text-text-muted">Strategy Lab</span>
-            </div>
+            <span className="truncate text-sm font-semibold text-text-primary">
+              Strategy Lab
+            </span>
           </div>
 
-          {!portalMode && (
+          {!portalMode && messages.length > 0 && (
             <div className="flex items-center gap-1.5">
-              <CommandsCatalogButton />
-              {messages.length > 0 && (
-                <>
-                  <ConversationShareButton
-                    conversationId={conversationId}
-                    disabled={streaming}
-                  />
-                  <ContentLabConversationExportButton
-                    clientId={clientId}
-                    clientName={clientName}
-                    conversationTitle={conversationTitle}
-                    messages={messages}
-                    attachedSearches={attachedSearches.map((s) => ({
-                      query: s.query,
-                      created_at: s.created_at,
-                    }))}
-                    disabled={streaming}
-                  />
-                </>
-              )}
+              <ConversationShareButton
+                conversationId={conversationId}
+                disabled={streaming}
+              />
+              <ContentLabConversationExportButton
+                clientId={clientId}
+                clientName={clientName}
+                conversationTitle={conversationTitle}
+                messages={messages}
+                attachedSearches={attachedSearches.map((s) => ({
+                  query: s.query,
+                  created_at: s.created_at,
+                }))}
+                disabled={streaming}
+              />
             </div>
           )}
         </header>
@@ -851,20 +832,6 @@ export function ContentLabNerdChat({
         // Composer drops to the bottom as soon as the first message arrives.
         <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 md:px-8">
           <div className="flex w-full max-w-3xl flex-col items-center">
-            {/* Agency lockup × client name — wide agency logo (no boxed
-                container, white-bg variant) and the client name as text. */}
-            <div className="mb-6 flex items-center gap-5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={wideAgencyLogoPath}
-                alt={agencyName}
-                className="h-10 w-auto max-w-[260px] object-contain"
-              />
-              <span className="text-2xl font-light text-text-muted/60" aria-hidden>×</span>
-              <span className="text-2xl font-semibold text-text-primary">
-                {clientName.trim() || 'Client'}
-              </span>
-            </div>
             <h2 className="mb-8 text-2xl font-semibold tracking-tight text-text-primary">
               What are we building today?
             </h2>

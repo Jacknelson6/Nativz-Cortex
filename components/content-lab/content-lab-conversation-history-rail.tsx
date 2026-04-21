@@ -9,19 +9,10 @@ import {
   Trash2,
   MessageSquare,
   Check,
-  FileText,
-  Workflow,
-  Lightbulb,
-  Sparkles,
-  BookOpen,
-  X,
-  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils/cn';
 import { formatRelativeTime } from '@/lib/utils/format';
-import { Markdown } from '@/components/ai/markdown';
-import type { ArtifactType, NerdArtifact } from '@/lib/artifacts/types';
 
 const STORAGE_KEY = 'cortex:content-lab-history-rail-open';
 
@@ -45,20 +36,11 @@ interface ContentLabConversationHistoryRailProps {
   refreshToken: number;
 }
 
-const ARTIFACT_ICON: Record<ArtifactType, React.ReactNode> = {
-  script: <FileText size={11} className="text-blue-400/80" />,
-  plan: <Workflow size={11} className="text-purple-400/80" />,
-  diagram: <Workflow size={11} className="text-teal-400/80" />,
-  ideas: <Lightbulb size={11} className="text-yellow-400/80" />,
-  hook: <Sparkles size={11} className="text-orange-400/80" />,
-  strategy: <BookOpen size={11} className="text-green-400/80" />,
-  general: <FileText size={11} className="text-zinc-400/80" />,
-};
-
 /**
- * Strategy Lab left rail — unified conversation history + artifacts list for
- * the active client. Mirrors the Topic Search history rail styling so the two
- * feel like sister surfaces. Artifacts moved in here from the old top-nav tab.
+ * Strategy Lab left rail — conversation history for the active client.
+ * Mirrors the Topic Search history rail styling so the two feel like sister
+ * surfaces. The artifacts section was removed 2026-04-21; rehydrate from git
+ * history if it comes back.
  */
 export function ContentLabConversationHistoryRail({
   clientId,
@@ -71,12 +53,6 @@ export function ContentLabConversationHistoryRail({
   const [conversations, setConversations] = useState<NerdConversation[]>([]);
   const [loading, setLoading] = useState(false);
   const firstLoadRef = useRef(true);
-
-  const [artifacts, setArtifacts] = useState<NerdArtifact[]>([]);
-  const [artifactsLoading, setArtifactsLoading] = useState(false);
-  const [openArtifactId, setOpenArtifactId] = useState<string | null>(null);
-  const [openArtifact, setOpenArtifact] = useState<NerdArtifact | null>(null);
-  const [openArtifactLoading, setOpenArtifactLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!clientId) return;
@@ -97,28 +73,9 @@ export function ContentLabConversationHistoryRail({
     }
   }, [clientId]);
 
-  const loadArtifacts = useCallback(async () => {
-    if (!clientId) return;
-    setArtifactsLoading(true);
-    try {
-      const res = await fetch(`/api/nerd/artifacts?client_id=${clientId}&limit=50`);
-      if (!res.ok) {
-        setArtifacts([]);
-        return;
-      }
-      const data = (await res.json()) as NerdArtifact[];
-      setArtifacts(Array.isArray(data) ? data : []);
-    } catch {
-      setArtifacts([]);
-    } finally {
-      setArtifactsLoading(false);
-    }
-  }, [clientId]);
-
   useEffect(() => {
     void load();
-    void loadArtifacts();
-  }, [load, loadArtifacts, refreshToken]);
+  }, [load, refreshToken]);
 
   const handleDelete = useCallback(
     async (id: string, e: React.MouseEvent) => {
@@ -146,63 +103,6 @@ export function ContentLabConversationHistoryRail({
     },
     [],
   );
-
-  const handleDeleteArtifact = useCallback(
-    async (id: string, e: React.MouseEvent) => {
-      e.stopPropagation();
-      e.preventDefault();
-      let removed: NerdArtifact | undefined;
-      setArtifacts((prev) => {
-        removed = prev.find((a) => a.id === id);
-        return prev.filter((a) => a.id !== id);
-      });
-      try {
-        const res = await fetch(`/api/nerd/artifacts/${id}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Failed');
-        toast.success('Artifact deleted');
-        if (openArtifactId === id) {
-          setOpenArtifactId(null);
-          setOpenArtifact(null);
-        }
-      } catch {
-        if (removed) {
-          setArtifacts((prev) => {
-            const next = [...prev, removed!];
-            next.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
-            return next;
-          });
-        }
-        toast.error('Could not delete artifact');
-      }
-    },
-    [openArtifactId],
-  );
-
-  const handleOpenArtifact = useCallback(async (id: string) => {
-    setOpenArtifactId(id);
-    setOpenArtifact(null);
-    setOpenArtifactLoading(true);
-    try {
-      const res = await fetch(`/api/nerd/artifacts/${id}`);
-      if (res.ok) {
-        const data = (await res.json()) as NerdArtifact;
-        setOpenArtifact(data);
-      } else {
-        toast.error('Failed to load artifact');
-        setOpenArtifactId(null);
-      }
-    } catch {
-      toast.error('Failed to load artifact');
-      setOpenArtifactId(null);
-    } finally {
-      setOpenArtifactLoading(false);
-    }
-  }, []);
-
-  const handleCloseArtifact = useCallback(() => {
-    setOpenArtifactId(null);
-    setOpenArtifact(null);
-  }, []);
 
   const groups = groupByDate(conversations);
 
@@ -340,121 +240,10 @@ export function ContentLabConversationHistoryRail({
                   </div>
                 ))
               )}
-
-              {/* Artifacts section — compact list under the conversations */}
-              <div className="mt-5 border-t border-nativz-border/40 pt-3">
-                <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                  Artifacts
-                </p>
-                {artifactsLoading && artifacts.length === 0 ? (
-                  <div className="space-y-1.5 px-2 py-2">
-                    {Array.from({ length: 2 }).map((_, i) => (
-                      <div key={i} className="h-10 animate-pulse rounded-lg bg-surface-hover/40" />
-                    ))}
-                  </div>
-                ) : artifacts.length === 0 ? (
-                  <p className="px-2 py-3 text-[11px] text-text-muted">
-                    No saved artifacts yet. Save assistant replies to keep them here.
-                  </p>
-                ) : (
-                  <div className="space-y-0.5">
-                    {artifacts.map((a) => {
-                      const isActive = a.id === openArtifactId;
-                      return (
-                        <div
-                          key={a.id}
-                          className={cn(
-                            'group relative rounded-lg transition-colors',
-                            isActive ? 'bg-surface-hover' : 'hover:bg-surface-hover/60',
-                          )}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => void handleOpenArtifact(a.id)}
-                            className="flex w-full cursor-pointer items-start gap-2 px-2.5 py-2 pr-8 text-left"
-                          >
-                            <div className="mt-0.5 shrink-0">
-                              {ARTIFACT_ICON[a.artifact_type] ?? ARTIFACT_ICON.general}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p
-                                className={cn(
-                                  'truncate text-[13px] leading-snug',
-                                  isActive
-                                    ? 'font-medium text-text-primary'
-                                    : 'text-text-secondary',
-                                )}
-                              >
-                                {a.title || 'Untitled artifact'}
-                              </p>
-                              <div className="mt-0.5 flex items-center gap-0.5 text-[10px] text-text-muted/50">
-                                <Clock size={8} />
-                                {formatRelativeTime(a.created_at)}
-                              </div>
-                            </div>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteArtifact(a.id, e)}
-                            aria-label={`Delete ${a.title || 'artifact'}`}
-                            title={`Delete ${a.title || 'artifact'}`}
-                            className="absolute right-1.5 top-1.5 flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-text-muted/50 opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-                          >
-                            <Trash2 size={10} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         )}
       </div>
-
-      {/* Artifact detail modal — opens when an artifact row is clicked */}
-      {openArtifactId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
-          onClick={handleCloseArtifact}
-        >
-          <div
-            className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-elevated"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/50 px-5 py-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-text-primary">
-                  {openArtifact?.title || 'Artifact'}
-                </p>
-                {openArtifact && (
-                  <p className="truncate text-[11px] text-text-muted">
-                    {openArtifact.artifact_type} · {formatRelativeTime(openArtifact.created_at)}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={handleCloseArtifact}
-                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
-                aria-label="Close artifact"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-              {openArtifactLoading || !openArtifact ? (
-                <div className="flex items-center justify-center py-16">
-                  <Loader2 size={20} className="animate-spin text-text-muted" />
-                </div>
-              ) : (
-                <Markdown content={openArtifact.content ?? ''} />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
