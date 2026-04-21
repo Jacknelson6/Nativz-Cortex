@@ -50,7 +50,17 @@ export async function GET() {
 
   const env = {
     resendKeyConfigured: Boolean(process.env.RESEND_API_KEY),
-    webhookSecretConfigured: Boolean(process.env.RESEND_WEBHOOK_SECRET),
+    webhookSecretConfigured: Boolean(
+      process.env.RESEND_WEBHOOK_SECRET ||
+        process.env.RESEND_WEBHOOK_SECRET_NATIVZ ||
+        process.env.RESEND_WEBHOOK_SECRET_ANDERSON,
+    ),
+    webhookSecretNativzConfigured: Boolean(
+      process.env.RESEND_WEBHOOK_SECRET_NATIVZ || process.env.RESEND_WEBHOOK_SECRET,
+    ),
+    webhookSecretAndersonConfigured: Boolean(
+      process.env.RESEND_WEBHOOK_SECRET_ANDERSON || process.env.RESEND_WEBHOOK_SECRET,
+    ),
     cronSecretConfigured: Boolean(process.env.CRON_SECRET),
   };
 

@@ -25,6 +25,8 @@ type SetupData = {
   env: {
     resendKeyConfigured: boolean;
     webhookSecretConfigured: boolean;
+    webhookSecretNativzConfigured: boolean;
+    webhookSecretAndersonConfigured: boolean;
     cronSecretConfigured: boolean;
   };
   webhook: {
@@ -117,9 +119,14 @@ export function SetupTab() {
             description="Required. Resend outbound API key."
           />
           <EnvRow
-            label="RESEND_WEBHOOK_SECRET"
-            configured={data.env.webhookSecretConfigured}
-            description="Optional in dev. Required in prod to verify inbound events."
+            label="RESEND_WEBHOOK_SECRET_NATIVZ"
+            configured={data.env.webhookSecretNativzConfigured}
+            description="Signing secret for the Nativz Resend webhook endpoint."
+          />
+          <EnvRow
+            label="RESEND_WEBHOOK_SECRET_ANDERSON"
+            configured={data.env.webhookSecretAndersonConfigured}
+            description="Signing secret for the Anderson Collaborative Resend webhook endpoint."
           />
           <EnvRow
             label="CRON_SECRET"

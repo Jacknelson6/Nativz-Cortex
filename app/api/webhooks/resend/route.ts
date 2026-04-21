@@ -13,9 +13,15 @@ export const maxDuration = 10;
  *
  * Signature verification: Resend signs with Svix. The raw body + headers
  * `svix-id`, `svix-timestamp`, `svix-signature` form an HMAC-SHA256 with the
- * base64-decoded `RESEND_WEBHOOK_SECRET` (stripped of the `whsec_` prefix).
- * If the secret is unset we accept the event and log a warning — Jack can
- * wire the secret after creating the endpoint in the Resend dashboard.
+ * base64-decoded secret (stripped of the `whsec_` prefix).
+ *
+ * We support multiple signing secrets so Jack can register one webhook per
+ * Resend domain (Nativz + Anderson). The handler tries every configured
+ * secret and accepts if any validates. Env vars (all optional):
+ *   - RESEND_WEBHOOK_SECRET            (single-endpoint fallback)
+ *   - RESEND_WEBHOOK_SECRET_NATIVZ     (nativz.io endpoint)
+ *   - RESEND_WEBHOOK_SECRET_ANDERSON   (andersoncollaborative.com endpoint)
+ * If none are set we accept the event and log a warning.
  */
 
 type ResendEvent = {
@@ -32,16 +38,21 @@ type ResendEvent = {
   };
 };
 
-function verifySvixSignature(
+function getConfiguredSecrets(): string[] {
+  return [
+    process.env.RESEND_WEBHOOK_SECRET,
+    process.env.RESEND_WEBHOOK_SECRET_NATIVZ,
+    process.env.RESEND_WEBHOOK_SECRET_ANDERSON,
+  ].filter((s): s is string => typeof s === 'string' && s.length > 0);
+}
+
+function verifyWithSecret(
   rawBody: string,
-  headers: Headers,
+  id: string,
+  ts: string,
+  sig: string,
   secret: string,
 ): boolean {
-  const id = headers.get('svix-id');
-  const ts = headers.get('svix-timestamp');
-  const sig = headers.get('svix-signature');
-  if (!id || !ts || !sig) return false;
-
   const key = secret.startsWith('whsec_') ? secret.slice(6) : secret;
   const keyBytes = Buffer.from(key, 'base64');
   const signed = `${id}.${ts}.${rawBody}`;
@@ -58,18 +69,32 @@ function verifySvixSignature(
   return false;
 }
 
+function verifySvixSignature(rawBody: string, headers: Headers): boolean {
+  const id = headers.get('svix-id');
+  const ts = headers.get('svix-timestamp');
+  const sig = headers.get('svix-signature');
+  if (!id || !ts || !sig) return false;
+
+  for (const secret of getConfiguredSecrets()) {
+    if (verifyWithSecret(rawBody, id, ts, sig, secret)) return true;
+  }
+  return false;
+}
+
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
-  const secret = process.env.RESEND_WEBHOOK_SECRET;
-  if (secret) {
-    const valid = verifySvixSignature(rawBody, request.headers, secret);
+  const secrets = getConfiguredSecrets();
+  if (secrets.length > 0) {
+    const valid = verifySvixSignature(rawBody, request.headers);
     if (!valid) {
-      console.warn('[resend-webhook] signature check failed');
+      console.warn('[resend-webhook] signature check failed against all configured secrets');
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
   } else if (process.env.NODE_ENV === 'production') {
-    console.warn('[resend-webhook] RESEND_WEBHOOK_SECRET unset — accepting unsigned event');
+    console.warn(
+      '[resend-webhook] no webhook secrets configured — accepting unsigned event',
+    );
   }
 
   let event: ResendEvent;
