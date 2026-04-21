@@ -1,1584 +1,6529 @@
 # Nativz Cortex — API Reference
 
-> **For AI agents:** This document describes all available API endpoints. Use it to understand what operations are available, what data they accept, and what they return. All endpoints return JSON. Auth is via Supabase session cookie unless noted otherwise.
+> **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
----
+**532 endpoints across 32 sections.**
 
 ## Authentication
 
 Three distinct auth patterns are used:
 
-- **Session cookie (default)** — `supabase.auth.getUser()` via cookie. Required for all standard routes.
-- **API key** — `Authorization: Bearer nativz_...` header. Used by `/api/v1/` routes for machine-to-machine access.
-- **Cron secret** — `Authorization: Bearer {CRON_SECRET}`. Used by `/api/cron/` routes.
-- **Public** — No authentication required.
-
-Role levels:
-- **admin** — Internal Nativz team members. Full access.
-- **viewer** — Portal clients. Automatically scoped to their `organization_id`.
+- **Supabase session cookie** — the default for admin + portal routes. Read via `createServerSupabaseClient()` / `supabase.auth.getUser()`.
+- **API key (Bearer token)** — `/api/v1/*` and other external-agent endpoints. Validated via `validateApiKey(request)`.
+- **Shared-link token** — `/api/shared/*` and read-only public surfaces. Token is in the path.
 
 ---
 
-## 1. Auth & Account
+## Auth & Account
 
-### `POST /api/auth/logout`
-Sign out the current user and clear the session cookie.
-**Auth:** Required (user)
-**Response:** `{ redirectTo: string }`
-
-### `GET /api/account`
-Get the current user's profile.
-**Auth:** Required (user)
-**Response:** User profile object
+_Authentication, session, profile, avatar upload, impersonation._
 
 ### `PATCH /api/account`
-Update user profile fields.
-**Auth:** Required (user)
-**Body:** `{ full_name?: string, avatar_url?: string, job_title?: string, password?: string }`
-**Response:** `{ success: true }`
+
+Update the authenticated user's profile. Can update display name, avatar URL, job title, and/or password. Password changes go through Supabase Auth; profile fields are updated in the users table.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+full_name - Updated display name
+avatar_url - Updated avatar URL (nullable)
+job_title - Updated job title (nullable)
+password - New password (min 6 chars)
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `DELETE /api/account/delete`
+
+Permanently delete the authenticated user's account and associated data. Removes: user profile from `users` table, auth account from Supabase Auth. Does NOT cascade-delete client data (clients belong to the org, not the user). SOC 2 P6.1 — Right to Erasure
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+{ confirmation: "DELETE MY ACCOUNT" } — required safety phrase
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/account/sidebar-preferences`
+
+### `PATCH /api/account/sidebar-preferences`
 
 ### `POST /api/account/upload-avatar`
-Upload an avatar image to storage.
-**Auth:** Required (user)
-**Body:** FormData with `file` field (JPEG/PNG/WebP, max 2 MB)
-**Response:** `{ url: string }`
+
+Upload a profile avatar image to Supabase Storage (client-logos bucket). Accepts JPEG, PNG, or WebP images up to 2 MB. Returns the public URL of the uploaded file.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+file - Image file (multipart/form-data; JPEG | PNG | WebP; max 2 MB)
+```
+
+**Returns:**
+
+```
+{{ url: string }} Public URL of the uploaded avatar
+```
+
+### `POST /api/auth/forgot-password`
+
+Server-side password reset that bypasses Supabase's built-in email. Uses admin.auth.admin.generateLink() to create the recovery URL, then sends the email directly via Resend.
+
+### `POST /api/auth/logout`
+
+Sign out the current user via Supabase Auth. Always redirects to the unified login page at /admin/login.
+
+**Auth:** None required (no-op if not authenticated)
+
+**Returns:**
+
+```
+{{ redirectTo: string }} Redirect path for the client to navigate to
+```
+
+### `POST /api/auth/send-email`
+
+### `DELETE /api/impersonate`
+
+### `POST /api/impersonate`
+
+### `GET /api/impersonate/status`
 
 ---
 
-## 2. API Keys
+## API Keys
+
+_Create, list, and revoke API keys for external access._
 
 ### `GET /api/api-keys`
-List all API keys belonging to the current user (key hashes not returned — prefix only).
-**Auth:** Required (user)
-**Response:** `{ keys: [{ id, name, key_prefix, scopes, is_active, last_used_at, created_at, expires_at }] }`
+
+List all API keys for the authenticated user. Returns key metadata but NOT the actual plaintext key (which is only shown once at creation time).
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+{{ keys: ApiKey[] }} Array of API key metadata records
+```
 
 ### `POST /api/api-keys`
-Create a new API key. The plaintext key is returned **once only** in the response.
-**Auth:** Required (user)
-**Body:** `{ name: string, scopes: Array<'tasks'|'clients'|'shoots'|'scheduler'|'search'|'team'|'calendar'>, expires_at?: ISO8601 }`
-**Response:** `{ key: { id, name, key_prefix, scopes, is_active, created_at, expires_at, plaintext } }`
 
-### `DELETE /api/api-keys/[id]`
-Revoke (deactivate) or permanently delete an API key. Only the key owner can do this.
-**Auth:** Required (user)
-**Query:** `permanent=true` to hard-delete; omit to soft-deactivate
-**Response:** `{ revoked: true }` or `{ deleted: true }`
+Create a new API key for the authenticated user. Generates a secure random key, stores only a bcrypt hash and prefix in the database, and returns the plaintext key once — it cannot be recovered later.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+name - Human-readable key name (required, max 100 chars)
+scopes - Array of allowed scope strings (tasks | clients | shoots | scheduler | search | team | calendar; at least one required)
+expires_at - Optional ISO datetime for key expiration
+```
+
+**Returns:**
+
+```
+{{ key: ApiKey & { plaintext: string } }} Key metadata plus the one-time plaintext (201)
+```
+
+### `DELETE /api/api-keys/:id`
+
+Revoke or permanently delete an API key. Only the key's owner can perform this action. By default, sets is_active=false (revoke). Pass permanent=true to hard-delete the record.
+
+**Auth:** Required (key owner only)
+
+**Query params:**
+
+```
+id - API key UUID
+permanent - If 'true', permanently delete the record; otherwise just revoke (default: false)
+```
+
+**Returns:**
+
+```
+{{ revoked: true } | { deleted: true }}
+```
 
 ---
 
-## 3. Search & Research
+## Search & Research
 
-### `POST /api/search/start`
-Create a new topic research job. Returns a search ID immediately; then call `/process` to run the pipeline.
-**Auth:** Required (user)
-**Body:** `{ query: string, source?: string, time_range?: string, language?: string, country?: string, client_id?: string, search_mode?: 'general' | 'client_strategy' }`
-**Response:** `{ id: string }`
-**Use when:** Starting a new topic research from the Research Hub.
+_Topic research pipeline — start searches, process results, share findings._
 
-### `POST /api/search/[id]/process`
-Execute the full search pipeline: Brave SERP fetch → Claude AI analysis → store results. Long-running (up to 5 min).
-**Auth:** Required (user)
-**Response:** `{ success: true }` on completion
+### `POST /api/history/shorten-titles`
 
-### `GET /api/search/[id]`
-Retrieve a completed search result with all AI analysis data.
-**Auth:** Required (user)
-**Response:** Full `TopicSearch` object including `summary`, `metrics`, `trending_topics`, `big_movers`, `raw_ai_response`
+Batch-shorten long history titles for the UI (max 50 characters each) via LLM. Falls back to mechanical truncation for any id the model omits.
 
-### `PATCH /api/search/[id]`
-Approve or reject a search (marks it as reviewed/sent to client).
-**Auth:** Required (admin)
-**Body:** `{ action: 'approve' | 'reject' }`
-**Response:** Updated search object
+**Auth:** Required
 
-### `GET /api/search/[id]/share`
-Get the share status of a search.
-**Auth:** Required (user)
-**Response:** `{ shared: boolean, token?: string, url?: string }`
+### `GET /api/research/folders`
 
-### `POST /api/search/[id]/share`
-Create a shareable public link for a search result.
-**Auth:** Required (user)
-**Response:** `{ token: string, url: string, expires_at: string }`
+### `POST /api/research/folders`
 
-### `DELETE /api/search/[id]/share`
-Remove the shareable link for a search.
-**Auth:** Required (user)
-**Response:** `{ success: true }`
+### `DELETE /api/research/folders/:id`
 
-### `POST /api/search/[id]/generate-ideas`
-Generate additional video ideas for a specific topic within a completed search.
-**Auth:** Required (user)
-**Body:** `{ topic_name: string, existing_ideas?: string[] }`
-**Response:** `{ ideas: VideoIdea[] }`
+### `PATCH /api/research/folders/:id`
 
-### `POST /api/search` (legacy)
-Run a synchronous topic search. Prefer the async `start`/`process` pattern instead.
-**Auth:** Required (user)
-**Body:** Same as `/api/search/start`
-**Response:** Full search result
+### `DELETE /api/research/folders/:id/items`
+
+### `GET /api/research/folders/:id/items`
+
+### `POST /api/research/folders/:id/items`
 
 ### `GET /api/research/history`
-Fetch research history with optional filtering and cursor-based pagination.
-**Auth:** Required (user)
-**Query:** `limit?: number, cursor?: string, type?: string, client_id?: string`
-**Response:** `{ items: HistoryItem[], nextCursor?: string }`
 
-### `GET /api/shared/search/[token]`
-Retrieve a shared search result by token (no auth required).
-**Auth:** Public
-**Response:** Search object with `client_name`
+Fetch paginated research history items (topic searches, idea generations, etc.). Supports cursor-based pagination.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+limit - Number of items to return (default: 20, max: 50)
+type - Filter by item type (HistoryItemType)
+client_id - Filter by client UUID
+cursor - Pagination cursor (ISO datetime of last item's created_at)
+include_ideas - Set to "false" to omit idea generations when `type` is omitted (topic search sidebar)
+```
+
+**Returns:**
+
+```
+{{ items: HistoryItem[] }}
+```
+
+### `DELETE /api/search/:id`
+
+Topic searches admins may delete (includes stuck in-flight rows; completed stays protected). */ const DELETABLE_TOPIC_SEARCH_STATUSES = new Set([ 'failed', 'pending_subtopics', 'pending', 'processing', 'completed', ]); /** DELETE /api/search/[id] Permanently delete a topic search record. Allowed when the search is **failed**, stuck in **pending_subtopics**, stuck **pending** / **processing**, or otherwise safe to remove. **Completed** rows stay protected.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Topic search UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/search/:id`
+
+Fetch a single topic search record by ID including all results, metrics, and SERP data.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Topic search UUID
+```
+
+**Returns:**
+
+```
+{TopicSearch} Full search record
+```
+
+### `PATCH /api/search/:id`
+
+- **Rename:** `{ query: string }` — update the topic search title (1–500 chars). Admin only. - **Approve / reject:** `{ action: 'approve' | 'reject' }` — portal visibility for the report. Do not send `query` and `action` in the same request.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Topic search UUID
+```
+
+**Returns:**
+
+```
+Rename: `{ success: true, query }` · Approve/reject: `{ success: true, action }`
+```
+
+### `POST /api/search/:id/expand`
+
+Generate related/expanded topic suggestions from a completed search. Uses the search query, trending topics, and AI summary to suggest adjacent research directions.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Topic search UUID
+```
+
+**Returns:**
+
+```
+{ suggestions: { topic, angle, searchQuery }[] }
+```
+
+### `POST /api/search/:id/explain-emotion`
+
+AI explanation for why a given emotion appears in the research mix.
+
+**Auth:** Required (signed-in user)
+
+**Body:**
+
+```
+emotion — Must match an emotion label from this search’s emotions array
+```
+
+### `POST /api/search/:id/generate-ideas`
+
+Match UI topic name to stored topic (trim + case-insensitive; then loose substring). Strict equality failed when models or copy edits introduced invisible whitespace drift. / function findTopicIndex(topics: TrendingTopic[], topicName: string): number { const want = topicName.trim().toLowerCase(); const exact = topics.findIndex((t) => t.name.trim().toLowerCase() === want); if (exact >= 0) return exact; return topics.findIndex( (t) => { const n = t.name.trim().toLowerCase(); return n.includes(want) || want.includes(n); }, ); } /** Parse `{ "ideas": [...] }` from model output; fall back to array slice if JSON is noisy. / function parseIdeasFromCompletion(text: string): VideoIdea[] { try { const parsed = parseAIResponseJSON<{ ideas: VideoIdea[] }>(text); return parsed.ideas ?? []; } catch { const key = '"ideas"'; const idx = text.indexOf(key); if (idx === -1) return []; const bracket = text.indexOf('[', idx); if (bracket === -1) return []; let depth = 0; let end = -1; for (let i = bracket; i < text.length; i++) { const c = text[i]; if (c === '[') depth++; else if (c === ']') { depth--; if (depth === 0) { end = i; break; } } } if (end === -1) return []; try { const arr = JSON.parse(text.slice(bracket, end + 1)) as unknown[]; return arr.filter((x): x is VideoIdea => Boolean(x && typeof x === 'object' && 'title' in x && typeof (x as VideoIdea).title === 'string'), ); } catch { return []; } } } const requestSchema = z.object({ topic_name: z.string().min(1), existing_ideas: z.array(z.string()).default([]), }); /** POST /api/search/[id]/generate-ideas Generate 4 additional video ideas for a specific trending topic within a search. Avoids duplicating any existing ideas provided in the request. Appends the new ideas to the search's raw_ai_response for the matching topic.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+topic_name - Name of the trending topic to generate ideas for (required)
+existing_ideas - Array of existing idea titles to avoid repeating (default: [])
+```
+
+**Query params:**
+
+```
+id - Topic search UUID
+```
+
+**Returns:**
+
+```
+{{ ideas: VideoIdea[] }} 4 new video ideas
+```
+
+### `POST /api/search/:id/notify`
+
+### `POST /api/search/:id/plan-subtopics`
+
+Propose up to 10 keyword phrases for the research gameplan (llm_v1 pipeline only).
+
+### `POST /api/search/:id/process`
+
+Vercel Pro / Fluid can use 800s — heavy multi-platform runs often exceed 5 minutes. */ export const maxDuration = 800; /** How long a processing lease is considered active before another worker may reclaim (ms). */ const PROCESS_LEASE_MS = 15 * 60 * 1000; /** POST /api/search/[id]/process Research pipeline: 1. Plan subtopics from the user query 2. Research each subtopic in parallel (SearXNG SERP + LLM synthesis) 3. Merge subtopic reports into final output (topics, emotions, breakdowns) 4. Normalize + validate with Zod 5. Save results
+
+**Auth:** Required — checks user access to the search
+
+**Body:**
+
+```
+None (search ID from URL)
+```
+
+**Returns:**
+
+```
+{ status: 'completed' | 'processing' } or error
+```
+
+### `DELETE /api/search/:id/share`
+
+Revoke the public share link for a search by deleting all share records.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Topic search UUID
+```
+
+**Returns:**
+
+```
+{{ shared: false }}
+```
+
+### `GET /api/search/:id/share`
+
+Check if a search has an active share link and return its details.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Topic search UUID
+```
+
+**Returns:**
+
+```
+{{ shared: false } | { shared: true, token: string, url: string, expires_at: string | null }}
+```
+
+### `POST /api/search/:id/share`
+
+Create a new public share link for a completed search. Deletes any existing links before generating a fresh 48-char hex token.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Topic search UUID (must be in 'completed' status)
+```
+
+**Returns:**
+
+```
+{{ shared: true, token: string, url: string }}
+```
+
+### `POST /api/search/:id/sources/extract-frames`
+
+FFmpeg keyframes + vision clip breakdown for a TikTok source on this search (persisted).
+
+### `POST /api/search/:id/sources/insights`
+
+AI hook + frame breakdown for a platform source (uses transcript).
+
+### `POST /api/search/:id/sources/rescript`
+
+Brand rescript of a topic-search platform source transcript. Uses search.client_id when body client_id is omitted and the search has a client.
+
+### `POST /api/search/:id/sources/transcribe`
+
+Fetch transcript (+ segments for TikTok) for a topic-search video source and persist on the search row.
+
+### `GET /api/search/:id/steps`
+
+Returns the current pipeline_state.steps array for real-time stepper UI.
+
+### `PATCH /api/search/:id/subtopics`
+
+When true, move to processing so /process can run */ start_processing: z.boolean().optional(), /** Minimum view count filter for video scraping */ minViews: z.number().int().min(0).optional(), /** Time range filter — accepts both platform-native (today, week, month, year) and app-level (last_7_days, etc.) values */ timeRange: z.string().max(50).optional(), }); /** PATCH /api/search/[id]/subtopics Save confirmed subtopics; optionally mark ready for POST /process.
+
+### `GET /api/search/:id/videos`
+
+Returns scraped videos and hook patterns for a topic search. Query params: sort=views|outlier_score|recent, platform=tiktok|youtube|instagram, token=<share_token>
+
+### `GET /api/search/platforms`
+
+Returns which search platforms are configured (have valid API keys). Used by the search form to show availability indicators.
+
+### `POST /api/search/start`
+
+Create a new topic search record with status 'processing' and return its ID immediately, without running the AI pipeline. Intended for streaming/async UX patterns where the actual search processing is triggered separately via /api/search/[id]/process.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+query - Search query string (required, max 500 chars)
+source - Content source filter (default: 'all')
+time_range - Time range filter (default: 'last_3_months')
+language - Language filter (default: 'all')
+country - Country filter (default: 'us')
+client_id - Optional client UUID
+search_mode - Search mode ('general' | 'client_strategy', default: 'general')
+```
+
+**Returns:**
+
+```
+{{ id: string }} UUID of the newly created search record
+```
+
+### `POST /api/search/suggest-topics`
+
+### `POST /api/topic-plans`
+
+### `GET /api/topic-plans/:id`
+
+### `GET /api/topic-plans/:id/docx`
+
+### `GET /api/topic-plans/:id/pdf`
 
 ---
 
-## 4. Clients & Onboarding
+## Clients & Onboarding
+
+_Client CRUD, onboarding, URL analysis, contacts, assignments._
 
 ### `GET /api/clients`
-List clients. Admins see all; portal viewers see only their organization's clients.
-**Auth:** Required (user)
-**Query:** `minimal?: boolean` (returns just `id` + `name` for pickers)
-**Response:** Array of client objects
+
+List all clients. Admins see all clients; portal users (viewers) see only active clients belonging to their organization.
+
+**Auth:** Required (admin or viewer)
+
+**Returns:**
+
+```
+{Client[]} Array of client records
+```
 
 ### `POST /api/clients`
-Create a new client record only (no external provisioning).
-**Auth:** Required (admin)
-**Body:** `{ name, slug, industry, organization_id?, target_audience?, brand_voice?, topic_keywords?, logo_url?, website_url? }`
-**Response:** Client object
 
-### `GET /api/clients/[id]`
-Get a single client by ID.
-**Auth:** Required (user)
-**Response:** Client object
+Create a new client. Sets default feature flags (can_search, can_view_reports). The slug must be unique across all clients.
 
-### `PATCH /api/clients/[id]`
-Update client fields.
 **Auth:** Required (admin)
-**Body:** Any client fields to update
-**Response:** Updated client object
 
-### `POST /api/clients/onboard`
-Full client provisioning across 4 systems in parallel: Cortex DB (org + client), Obsidian vault, Monday.com Clients board, Late social profile. Use this for new client onboarding.
+**Body:**
+
+```
+name - Client display name (required)
+slug - URL-safe unique identifier, lowercase alphanumeric with hyphens (required)
+industry - Client industry (required)
+organization_id - Organization UUID; defaults to creator's organization
+target_audience - Description of target audience
+brand_voice - Brand voice description
+topic_keywords - Array of topic keyword strings
+logo_url - URL to client logo image
+website_url - Client website URL
+```
+
+**Returns:**
+
+```
+{Client} Created client record (201)
+```
+
+### `DELETE /api/clients/:id`
+
+Permanently delete a client and related rows (moodboards, todos, tasks, searches, ideas, strategies, invites, shoot events when present, then client). Also removes the client folder from the Obsidian vault (non-blocking).
+
 **Auth:** Required (admin)
-**Body:** `{ name, website_url, industry, target_audience?, brand_voice?, topic_keywords?, logo_url?, poc_name?, poc_email?, services?, agency? }`
-**Response:** `{ cortex: { success, clientId, organizationId }, vault: { success }, monday: { success, mondayId }, late: { success, lateProfileId } }`
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/clients/:id`
+
+Fetch a single client's full profile including portal contacts and strategy. Supports lookup by UUID or slug.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Client UUID or slug
+```
+
+**Returns:**
+
+```
+{{ client: Client, portalContacts: User[], strategy: ClientStrategy | null }}
+```
+
+### `PATCH /api/clients/:id`
+
+Update allowed client fields. After update, syncs the client profile to the Obsidian vault (non-blocking). Only a specific whitelist of fields can be updated.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+industry - Updated industry
+target_audience - Updated target audience description
+brand_voice - Updated brand voice description
+topic_keywords - Updated topic keywords array
+feature_flags - Updated feature flag object
+is_active - Active/inactive status
+logo_url - Updated logo URL
+website_url - Updated website URL
+description - Client description
+services - Array of service strings
+health_score - Health score value
+agency - Agency name
+google_drive_branding_url - Google Drive branding folder URL
+google_drive_calendars_url - Google Drive calendars folder URL
+monthly_boosting_budget - Monthly ad boosting budget
+preferences - Client preferences object
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{Client} Updated client record
+```
+
+### `DELETE /api/clients/:id/ad-creatives`
+
+Delete an ad creative and its storage file.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+creativeId (single) or creativeIds (1–50) (bulk)
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }} or {{ success: true, deletedCount }} (bulk)
+```
+
+### `GET /api/clients/:id/ad-creatives`
+
+List ad creatives for a client with pagination and filtering.
+
+**Auth:** Required
+
+**Query params:**
+
+```
+id - Client UUID
+is_favorite - Filter favorites
+aspect_ratio - Filter by aspect ratio
+batch_id - Filter by batch
+page - Page number (default 1)
+limit - Items per page (default 24, max 100)
+```
+
+**Returns:**
+
+```
+{{ creatives: AdCreative[], total: number, page: number, limit: number }}
+```
+
+### `PATCH /api/clients/:id/ad-creatives`
+
+Toggle favorite status on an ad creative.
+
+**Auth:** Required
+
+**Body:**
+
+```
+creativeId + is_favorite (single) or creativeIds (1–50) + is_favorite (bulk)
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ creative }} (single) or {{ updatedCount, ids }} (bulk)
+```
+
+### `GET /api/clients/:id/ad-creatives/batches`
+
+List generation batches for a client. Supports ?status= filter.
+
+### `GET /api/clients/:id/ad-creatives/batches/:batchId`
+
+Get batch status, progress counts, and list of completed creatives.
+
+**Auth:** Required
+
+**Query params:**
+
+```
+id - Client UUID
+batchId - Batch UUID
+```
+
+**Returns:**
+
+```
+{{ batch: AdGenerationBatch, creatives: AdCreative[] }}
+```
+
+### `POST /api/clients/:id/ad-creatives/batches/:batchId/cancel`
+
+Stops scheduling further images for this batch. Work already running (e.g. Gemini) may still finish.
+
+**Auth:** Required (signed-in admin / app user)
+
+### `POST /api/clients/:id/ad-creatives/generate`
+
+Empty string / bad URL from scrapers → null so Zod does not reject the batch. */ const nullableImageUrl = z.preprocess((val) => { if (val === '' || val === undefined) return null; if (typeof val !== 'string') return null; try { const u = new URL(val); if (u.protocol !== 'http:' && u.protocol !== 'https:') return null; return val; } catch { return null; } }, z.union([z.string().url(), z.null()])); const productInfoSchema = z.object({ product: z.object({ name: z.string().min(1).max(200), imageUrl: nullableImageUrl, /** Scraped catalog copy is often longer than 500 chars */ description: z.string().max(8000), }), offer: z.string().max(300), cta: z.string().max(100), }); const templateVariationSchema = z.object({ templateId: z.string().uuid(), count: z.number().int().min(1).max(200), }); const globalTemplateVariationSchema = z.object({ slug: z.string().min(1).max(80), count: z.number().int().min(1).max(200), }); /** UUID client template or global Nano Banana slug */ const creativeOverrideSchema = z.object({ templateId: z.string().min(1).max(80), variationIndex: z.number().int().min(0).max(199), headline: z.string().min(1).max(200), subheadline: z.string().min(1).max(300), cta: z.string().min(1).max(100), styleNotes: z.string().max(4000).optional(), }); const optionalBrandUrl = z.preprocess((val) => { if (val === '' || val === undefined || val === null) return undefined; return val; }, z.string().url().optional()); const bodySchema = z.object({ templateVariations: z.array(templateVariationSchema).min(1).optional(), templateIds: z.array(z.string().uuid()).optional(), numVariations: z.number().int().min(1).max(20).optional(), globalTemplateVariations: z.array(globalTemplateVariationSchema).min(1).optional(), globalTemplateSlotOrder: z.array(z.string().min(1).max(80)).max(200).optional(), rotateProductImageUrls: z.boolean().optional(), productImageUrls: z.array(z.string().url()).max(12).optional(), productService: z.string().min(1, 'Product or service description is required').max(500), offer: z.string().max(300).optional(), aspectRatio: z.enum(['1:1', '9:16', '4:5']), onScreenTextMode: z.enum(['ai_generate', 'manual']), batchCta: z.string().min(1).max(30).optional(), manualText: manualTextSchema.optional(), products: z.array(productInfoSchema).max(AD_GENERATE_MAX_PRODUCTS).optional(), brandUrl: optionalBrandUrl, placeholderConfig: z.object({ brandColors: z.array(z.string()).optional(), skeletonOnly: z.boolean().optional(), templateThumbnails: z.array(z.object({ templateId: z.string(), imageUrl: z.string(), variationIndex: z.number(), })).optional(), }).optional(), creativeOverrides: z.array(creativeOverrideSchema).max(200).optional(), styleDirectionGlobal: z.string().max(4000).optional(), brandLayoutMode: z.enum(BRAND_LAYOUT_MODES).optional(), creativeBrief: z.string().max(4000).optional(), /** Code-composited typography + logo; Gemini generates a clean plate only. */ useCompositor: z.boolean().optional(), }).refine( (data) => data.onScreenTextMode !== 'manual' || data.manualText !== undefined, { message: 'manualText is required when onScreenTextMode is "manual"', path: ['manualText'] }, ).refine( (data) => { const hasGlobal = (data.globalTemplateVariations?.length ?? 0) > 0; const hasClient = (data.templateVariations?.length ?? 0) > 0 || (data.templateIds?.length ?? 0) > 0; return (hasGlobal && !hasClient) || (!hasGlobal && hasClient); }, { message: 'Use either globalTemplateVariations (Nano Banana) or client templateVariations/templateIds, not both', path: ['globalTemplateVariations'], }, ).refine( (data) => { const co = data.creativeOverrides; if (!co?.length) return true; const hasGlobal = (data.globalTemplateVariations?.length ?? 0) > 0; const resolved = hasGlobal ? (data.globalTemplateVariations ?? []) : (data.templateVariations ?? (data.templateIds ?? []).map((id) => ({ templateId: id, count: data.numVariations ?? 2, }))); const expected = hasGlobal && data.globalTemplateSlotOrder?.length ? data.globalTemplateSlotOrder.length : resolved.reduce((sum, tv) => sum + tv.count, 0); return co.length === expected; }, { message: 'creativeOverrides must include exactly one entry per template variation', path: ['creativeOverrides'] }, ).refine( (data) => { const so = data.globalTemplateSlotOrder; const gtv = data.globalTemplateVariations; if (!so?.length) return true; if (!gtv?.length) return false; return globalSlotOrderMatchesVariations(so, gtv); }, { message: 'globalTemplateSlotOrder slug counts must match globalTemplateVariations', path: ['globalTemplateSlotOrder'], }, ); /** POST /api/clients/[id]/ad-creatives/generate
+
+### `POST /api/clients/:id/ad-creatives/preview-prompts`
+
+Same field as POST generate — merged into prompts so preview matches batch output. */ styleDirectionGlobal: z.string().max(4000).optional(), aspectRatio: z.enum(['1:1', '9:16', '4:5']), onScreenTextMode: z.enum(['ai_generate', 'manual']), manualText: z.object({ headline: z.string(), subheadline: z.string(), cta: z.string(), }).optional(), brandLayoutMode: z.enum(BRAND_LAYOUT_MODES).optional(), creativeBrief: z.string().max(4000).optional(), /** Same as POST generate — clean-canvas + Nano blank slots when true. */ useCompositor: z.boolean().optional(), }).refine( (data) => { const hasGlobal = (data.globalTemplateVariations?.length ?? 0) > 0; const hasClient = (data.templateVariations?.length ?? 0) > 0; return (hasGlobal && !hasClient) || (!hasGlobal && hasClient); }, { message: 'Use either globalTemplateVariations or templateVariations', path: ['globalTemplateVariations'], }, ).refine( (data) => { const so = data.globalTemplateSlotOrder; const gtv = data.globalTemplateVariations; if (!so?.length) return true; if (!gtv?.length) return false; return globalSlotOrderMatchesVariations(so, gtv); }, { message: 'globalTemplateSlotOrder slug counts must match globalTemplateVariations', path: ['globalTemplateSlotOrder'], }, ); export interface PromptPreview { templateId: string; templateName: string; templateImageUrl: string; variationIndex: number; copy: { headline: string; subheadline: string; cta: string }; prompt: string; styleNotes: string; } /** POST /api/clients/[id]/ad-creatives/preview-prompts Generate prompts and copy without actually generating images. Returns an array of prompt previews that can be edited before generation.
+
+### `GET /api/clients/:id/ad-creatives/templates`
+
+Ad wizard loads client library in one request (see ad-wizard.tsx limit=500). */ limit: z.coerce.number().int().min(1).max(2000).default(24), }); /** GET /api/clients/[id]/ad-creatives/templates List custom ad prompt templates for a client.
+
+**Auth:** Required
+
+**Query params:**
+
+```
+id - Client UUID
+page - Page number (default 1)
+limit - Items per page (default 24, max 2000)
+```
+
+**Returns:**
+
+```
+{{ templates: AdPromptTemplate[], total: number, page: number, limit: number }}
+```
+
+### `POST /api/clients/:id/ad-creatives/templates`
+
+Upload a winning ad image and extract its prompt schema via AI vision. The image is stored in Supabase Storage, then extractAdPrompt() analyzes it in the background. The template record is created immediately with status 'extracting', and updated once extraction completes.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+file - Image file (multipart/form-data; JPEG | PNG | WebP; max 10 MB)
+name - Template name
+ad_category - Ad category
+tags - Comma-separated tag list (optional)
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ templateId: string, status: 'extracting' }}
+```
+
+### `POST /api/clients/:id/ad-creatives/templates/bulk`
+
+Bulk upload multiple ad images for prompt extraction. Each image is uploaded to Supabase Storage and an ad_prompt_templates record is created immediately. Gemini Vision extraction runs in the background via after().
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+files - Multiple image files (multipart/form-data; JPEG | PNG | WebP; max 10 MB each; max 50 files)
+ad_category - Ad category for all templates
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ templates: Array<{ id: string, name: string, status: string }>, failed: Array<{ name: string, error: string }> }}
+```
+
+### `POST /api/clients/:id/ad-creatives/templates/scrape`
+
+Extract image URLs from HTML content. Looks for <img> src attributes and <source> srcset attributes. Filters to images likely to be ads based on size attributes and URL patterns. / function extractImageUrls(html: string, baseUrl: string): string[] { const urls = new Set<string>(); // Match <img> tags with src attribute const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi; let match; while ((match = imgRegex.exec(html)) !== null) { const src = match[1]; const fullTag = match[0]; // Check for size attributes — skip tiny images (icons, spacers) const widthMatch = fullTag.match(/width=["']?(\d+)/i); const heightMatch = fullTag.match(/height=["']?(\d+)/i); const width = widthMatch ? parseInt(widthMatch[1], 10) : null; const height = heightMatch ? parseInt(heightMatch[1], 10) : null; // Skip images with explicit small dimensions if ((width !== null && width < 200) || (height !== null && height < 200)) { continue; } // Skip common non-ad patterns if (isLikelyNonAd(src)) continue; urls.add(src); } // Match <source> tags (picture element) const sourceRegex = /<source[^>]+srcset=["']([^"',\s]+)/gi; while ((match = sourceRegex.exec(html)) !== null) { const src = match[1]; if (!isLikelyNonAd(src)) { urls.add(src); } } // Match og:image and twitter:image meta tags const metaRegex = /<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']/gi; while ((match = metaRegex.exec(html)) !== null) { urls.add(match[1]); } // Resolve relative URLs const resolved: string[] = []; for (const url of urls) { try { const absolute = new URL(url, baseUrl).href; // Only keep http/https URLs with image-like extensions or CDN patterns if (absolute.startsWith('http') && isLikelyImage(absolute)) { resolved.push(absolute); } } catch { // Skip malformed URLs } } return resolved.slice(0, MAX_IMAGES); } function isLikelyNonAd(src: string): boolean { const lower = src.toLowerCase(); return ( lower.includes('favicon') || lower.includes('logo') || lower.includes('icon') || lower.includes('avatar') || lower.includes('emoji') || lower.includes('pixel') || lower.includes('tracking') || lower.includes('spacer') || lower.includes('1x1') || lower.endsWith('.svg') || lower.endsWith('.gif') || lower.includes('data:image') ); } function isLikelyImage(url: string): boolean { const lower = url.toLowerCase(); return ( lower.includes('.jpg') || lower.includes('.jpeg') || lower.includes('.png') || lower.includes('.webp') || lower.includes('image') || lower.includes('photo') || lower.includes('creative') || lower.includes('media') || lower.includes('cdn') || lower.includes('scontent') // Facebook CDN ); } /** POST /api/clients/[id]/ad-creatives/templates/scrape Scrape ad images from a URL. Fetches the page HTML, extracts image URLs, downloads qualifying images, uploads to storage, and creates template records.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+url - URL to scrape
+ad_category - Ad category for all imported templates
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ found: number, imported: number, templates: Array<{ id: string, name: string }>, errors: string[] }}
+```
+
+### `POST /api/clients/:id/ad-creatives/wizard-product-image`
+
+Upload a product reference image for the ad generation wizard (e.g. when scrape has no image). Stores in `brand-assets` under `{clientId}/ad-wizard-products/`.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+multipart/form-data — field `file` (JPEG | PNG | WebP; max 5 MB)
+```
+
+**Returns:**
+
+```
+{{ url: string }} Public URL
+```
+
+### `GET /api/clients/:id/ad-generation-settings`
+
+### `PATCH /api/clients/:id/ad-generation-settings`
+
+### `GET /api/clients/:id/analytics/summary`
+
+Rollup for the client Overview page. One call; tiles render in parallel with no further round-trips. Sections: - social connected platforms + posts/30d - affiliate 30d revenue/referrals (if UpPromote connected) - benchmarking followers + delta + competitor count - paidMedia null until backend lands - pipeline ideas awaiting / scheduled in 14d / days since last post - activity last 5 events (ideas, posts, searches) Auth: admin sees all; viewer must have user_client_access for the client.
+
+### `GET /api/clients/:id/assignments`
+
+List all team member assignments for a client, ordered by lead status (leads first). Each assignment includes the full team member record.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{ClientAssignment[]} Array of assignments with team_member relation
+```
+
+### `POST /api/clients/:id/assignments`
+
+Assign a team member to a client with an optional role and lead designation.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+team_member_id - Team member UUID to assign (required)
+role - Role/responsibility on this client account (max 100 chars)
+is_lead - Whether this is a lead assignment (default: false)
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{ClientAssignment} Created assignment with team_member relation (201)
+```
+
+### `DELETE /api/clients/:id/assignments/:assignmentId`
+
+Remove a team member assignment from a client. Validates that the assignment belongs to the specified client before deleting.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Client UUID
+assignmentId - Assignment UUID to remove
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/clients/:id/brand-dna`
+
+Return the active brand guideline for a client.
+
+**Auth:** Required
+
+**Returns:**
+
+```
+{{ content, metadata, created_at, updated_at, version, id }}
+```
+
+### `PATCH /api/clients/:id/brand-dna`
+
+Update the active brand guideline. Can update full content, metadata, or a single section.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+content - Full markdown replacement
+metadata - Partial metadata merge
+section - Section heading to update (e.g., "Visual identity")
+sectionContent - New content for the specified section
+```
+
+### `POST /api/clients/:id/brand-dna/abort-stuck`
+
+Mark the latest in-flight Brand DNA job as failed and clear `clients.brand_dna_status` from `generating` so the user can start again. By default only allowed when the job looks stale (no row updates for BRAND_DNA_JOB_STALE_MS).
+
+**Auth:** Required (admin)
+
+### `POST /api/clients/:id/brand-dna/apply-draft`
+
+Apply selected sections from the latest draft to the active guideline. Merges chosen sections from the newest version into the previous active version.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+sections - Array of section headings to accept from the draft
+```
+
+### `GET /api/clients/:id/brand-dna/diff`
+
+Compare the two most recent brand guidelines (active vs previous) section by section.
+
+**Auth:** Required
+
+**Returns:**
+
+```
+{{ sections: { heading, active, previous, changed }[] }}
+```
+
+### `POST /api/clients/:id/brand-dna/generate`
+
+Kick off Brand DNA generation for a client. Creates a job record and processes in background.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+websiteUrl - URL to crawl
+uploadedContent - Optional text from uploaded files
+```
+
+**Returns:**
+
+```
+{{ jobId: string, status: 'generating' }}
+```
+
+### `POST /api/clients/:id/brand-dna/refresh`
+
+Re-crawl and re-generate Brand DNA. Creates a new draft without overwriting the active guideline. The active guideline stays untouched until the admin applies the draft via /apply-draft.
+
+**Auth:** Required (admin)
+
+**Returns:**
+
+```
+{{ jobId: string, status: 'generating' }}
+```
+
+### `POST /api/clients/:id/brand-dna/section/:section/verify`
+
+Mark a Brand DNA section as verified by the admin.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+section - Section heading (URL-encoded)
+```
+
+### `GET /api/clients/:id/brand-dna/status`
+
+Poll the latest Brand DNA generation job status for a client.
+
+**Auth:** Required
+
+**Returns:**
+
+```
+{{ status, progress_pct, step_label, error_message, is_stale?, stale_hint? }}
+```
+
+### `POST /api/clients/:id/brand-dna/upload`
+
+Large image batches (up to 40 × storage + DB) can exceed 60s on cold starts. */ export const maxDuration = 120; /** POST /api/clients/[id]/brand-dna/upload Upload files (images, PDFs, docs, markdown) for Brand DNA enrichment. Files are stored in Supabase Storage and created as knowledge entries.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+multipart/form-data with files
+```
+
+**Returns:**
+
+```
+{{ entryIds: string[], textContent: string }}
+```
+
+### `GET /api/clients/:id/brand-dna/versions`
+
+Return version history for the brand guideline.
+
+**Auth:** Required
+
+**Returns:**
+
+```
+{{ versions: { id, version, created_at, superseded_by }[] }}
+```
+
+### `GET /api/clients/:id/contacts`
+
+List all contacts for a client, ordered by primary status (primary first) then name.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{Contact[]} Array of contact records
+```
+
+### `POST /api/clients/:id/contacts`
+
+Create a new contact for a client. If the contact is marked as primary, any existing primary contact for the client is first demoted.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+name - Contact name (required, max 200 chars)
+email - Contact email
+phone - Contact phone (max 50 chars)
+role - Contact role/job title (max 100 chars)
+project_role - Contact's role on the project (max 100 chars)
+avatar_url - Contact avatar URL
+is_primary - Whether this is the primary contact (default: false)
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{Contact} Created contact record (201)
+```
+
+### `DELETE /api/clients/:id/contacts/:contactId`
+
+Permanently delete a contact from a client.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Client UUID
+contactId - Contact UUID to delete
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `PATCH /api/clients/:id/contacts/:contactId`
+
+Update a contact's details for a client. If is_primary is set to true, demotes any existing primary contact first.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+name - Optional contact name
+email - Optional email (nullable)
+phone - Optional phone (nullable)
+role - Optional job title (nullable)
+project_role - Optional project role (nullable)
+avatar_url - Optional avatar URL (nullable)
+is_primary - Optional: if true, demotes existing primary contact
+```
+
+**Query params:**
+
+```
+id - Client UUID
+contactId - Contact UUID
+```
+
+**Returns:**
+
+```
+{Contact} Updated contact record
+```
+
+### `GET /api/clients/:id/contracts`
+
+### `POST /api/clients/:id/contracts`
+
+### `DELETE /api/clients/:id/contracts/:contractId`
+
+### `PATCH /api/clients/:id/contracts/:contractId`
+
+### `POST /api/clients/:id/contracts/:contractId/confirm`
+
+### `GET /api/clients/:id/contracts/:contractId/signed-url`
+
+### `GET /api/clients/:id/knowledge`
+
+List knowledge base entries for a client, optionally filtered by type.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Client UUID
+type - Filter by entry type (brand_asset | brand_profile | document | web_page | note | idea | meeting_note)
+```
+
+**Returns:**
+
+```
+{{ entries: KnowledgeEntry[] }}
+```
+
+### `POST /api/clients/:id/knowledge`
+
+Create a new knowledge base entry for a client. Entries are embedded for semantic search automatically via the createKnowledgeEntry helper.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+type - Entry type (brand_asset | brand_profile | document | web_page | note | idea | meeting_note)
+title - Entry title (required)
+content - Entry content (default: '')
+metadata - Additional metadata key-value pairs
+source - How the entry was created (manual | scraped | generated | imported, default: manual)
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ entry: KnowledgeEntry }} Created knowledge entry (201)
+```
+
+### `DELETE /api/clients/:id/knowledge/:entryId`
+
+Permanently delete a knowledge entry and its embedding.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Client UUID
+entryId - Knowledge entry UUID to delete
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/clients/:id/knowledge/:entryId`
+
+Fetch a single knowledge entry by ID, scoped to the specified client.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Client UUID
+entryId - Knowledge entry UUID
+```
+
+**Returns:**
+
+```
+{{ entry: KnowledgeEntry }}
+```
+
+### `PATCH /api/clients/:id/knowledge/:entryId`
+
+Update a knowledge entry's title, content, or metadata. Also re-generates the embedding on update (handled by updateKnowledgeEntry).
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+title - Optional new title
+content - Optional new content
+metadata - Optional metadata object
+```
+
+**Query params:**
+
+```
+id - Client UUID
+entryId - Knowledge entry UUID
+```
+
+**Returns:**
+
+```
+{{ entry: KnowledgeEntry }}
+```
+
+### `POST /api/clients/:id/knowledge/:entryId/decompose`
+
+Re-run meeting decomposition for a `meeting` or `meeting_note` entry (creates decision + action_item nodes and `produced` links). Idempotent-friendly: may create duplicates if run repeatedly — prefer fresh meetings or dedupe in UI.
+
+### `POST /api/clients/:id/knowledge/brand-profile`
+
+Generate (or regenerate) a brand profile knowledge entry for the client using AI. Aggregates existing knowledge entries and client data to produce a structured profile.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ entry: KnowledgeEntry }} The created or updated brand profile entry
+```
+
+### `POST /api/clients/:id/knowledge/generate-ideas`
+
+Generate AI video ideas for a client based on their knowledge base, brand profile, and an optional concept prompt.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+concept - Optional concept or theme to focus ideas around
+count - Number of ideas to generate (default: 10, min: 1, max: 50)
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ ideas: VideoIdea[] }}
+```
+
+### `GET /api/clients/:id/knowledge/graph`
+
+Fetch the knowledge graph for a client — nodes (entries, contacts, searches) and edges (knowledge links) for visualization in the knowledge graph UI.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ nodes: GraphNode[], edges: GraphEdge[] }}
+```
+
+### `POST /api/clients/:id/knowledge/import-meeting`
+
+Import a meeting transcript as a structured knowledge entry for a client. Uses AI to extract key information, action items, and entities from the transcript, then creates a `meeting` entry plus extracted `decision` / `action_item` nodes (with `produced` links).
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+transcript - Raw meeting transcript text (required)
+meetingDate - Optional ISO date string for the meeting
+attendees - Optional array of attendee names
+source - Optional source label (e.g. 'zoom', 'google_meet')
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{KnowledgeEntry} The created knowledge entry
+```
+
+### `DELETE /api/clients/:id/knowledge/links`
+
+Permanently delete a knowledge link by its ID.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Client UUID
+id - Knowledge link UUID to delete (required)
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `POST /api/clients/:id/knowledge/links`
+
+Create a directional knowledge link between two entities within a client's knowledge graph. Links connect entries, contacts, searches, strategies, or idea submissions.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+source_id - UUID of the source entity (required)
+source_type - Type of the source: 'entry' | 'contact' | 'search' | 'strategy' | 'idea_submission'
+target_id - UUID of the target entity (required)
+target_type - Type of the target: 'entry' | 'contact' | 'search' | 'strategy' | 'idea_submission'
+label - Relationship label (default: 'related_to')
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ link: KnowledgeLink }} Created link record (201)
+```
+
+### `POST /api/clients/:id/knowledge/scrape`
+
+Crawl the client's website and create web_page knowledge entries for each discovered page. Respects the client's configured website_url. Returns 409 if a crawl is already in progress.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+maxPages - Max pages to crawl (default: 50, max: 100)
+maxDepth - Max link depth to follow (default: 3, max: 5)
+```
+
+**Query params:**
+
+```
+id - Client UUID (client must have website_url set)
+```
+
+**Returns:**
+
+```
+{{ message: string, count: number }}
+```
+
+### `GET /api/clients/:id/pillars`
+
+List all content pillars for a client, ordered by sort_order ascending.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ pillars: ContentPillar[] }}
+```
+
+### `POST /api/clients/:id/pillars`
+
+Create a new content pillar for a client. The sort_order is automatically set to append at the end of the existing pillars list.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+name - Pillar name (required)
+description - Pillar description
+emoji - Emoji icon for the pillar
+example_series - Array of example series/show names
+formats - Array of video format strings
+hooks - Array of hook/angle strings
+frequency - Posting frequency suggestion
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ pillar: ContentPillar }} Created pillar record
+```
+
+### `DELETE /api/clients/:id/pillars/:pillarId`
+
+Permanently delete a content pillar for a client.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Client UUID
+pillarId - Content pillar UUID to delete
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `PATCH /api/clients/:id/pillars/:pillarId`
+
+Update a content pillar's details. Any combination of fields may be provided.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+name - Optional pillar name
+description - Optional description
+emoji - Optional single emoji
+example_series - Optional array of recurring series names
+formats - Optional array of content format strings
+hooks - Optional array of opening-line hooks
+frequency - Optional posting frequency description
+sort_order - Optional integer sort order
+```
+
+**Query params:**
+
+```
+id - Client UUID
+pillarId - Content pillar UUID
+```
+
+**Returns:**
+
+```
+{{ pillar: ContentPillar }}
+```
+
+### `POST /api/clients/:id/pillars/:pillarId/reroll`
+
+Regenerate a single content pillar in place using AI, preserving its ID and sort order. Considers sibling pillars to avoid duplication and optionally accepts a direction prompt.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+direction - Optional natural language direction to guide generation
+```
+
+**Query params:**
+
+```
+id - Client UUID
+pillarId - Content pillar UUID to regenerate
+```
+
+**Returns:**
+
+```
+{{ pillar: ContentPillar }} Updated pillar with new AI-generated content
+```
+
+### `POST /api/clients/:id/pillars/generate`
+
+Kick off an async AI generation of content pillars for a client. Creates a generation record immediately and returns its ID, then processes in background via after(). Poll GET /api/clients/[id]/pillars/generate/[generationId] for status.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+count - Number of pillars to generate (default: 5, min: 1, max: 10)
+direction - Optional natural language direction to guide generation
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ id: string, status: 'processing' }} Generation record ID for polling
+```
+
+### `POST /api/clients/:id/pillars/generate-strategy`
+
+Run the full AI strategy pipeline in background via after(). Generates content pillars, then video ideas per pillar, then spoken-word scripts — in three sequential phases. Returns a pipeline run ID for polling. Replaces all existing pillars for the client.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+direction - Optional natural language direction for generation
+pillar_count - Number of pillars to generate (default: 5, min: 1, max: 10)
+ideas_per_pillar - Number of ideas per pillar (default: 5, min: 1, max: 10)
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ id: string, status: 'processing' }} Pipeline run ID for polling
+```
+
+### `GET /api/clients/:id/pillars/generate-strategy/:runId`
+
+Poll the status of a strategy pipeline run. Returns the full run record including current_phase (pillars → ideas → scripts → done) and status.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Client UUID
+runId - Pipeline run UUID
+```
+
+**Returns:**
+
+```
+{{ run: StrategyPipelineRun }}
+```
+
+### `GET /api/clients/:id/pillars/generate/:generationId`
+
+Poll the status of a pillar generation job. When status is 'completed', also returns all current pillars for the client so the UI can display results immediately.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Client UUID
+generationId - Generation job UUID
+```
+
+**Returns:**
+
+```
+{{ generation: PillarGeneration, pillars: ContentPillar[] | null }}
+```
+
+### `POST /api/clients/:id/pillars/reorder`
+
+Update the sort_order of content pillars by providing the desired array of pillar IDs. The index of each ID in the array becomes its new sort_order.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+pillar_ids - Ordered array of pillar UUIDs (required)
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/clients/:id/portal-users`
+
+### `DELETE /api/clients/:id/portal-users/:userId`
+
+### `PATCH /api/clients/:id/portal-users/:userId`
+
+### `GET /api/clients/:id/strategy`
+
+Fetch the most recently generated content strategy for a client. Portal users (viewers) can only access strategies for clients in their organization.
+
+**Auth:** Required (admin or viewer in client's organization)
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{ClientStrategy} Most recent client strategy record
+```
+
+### `POST /api/clients/:id/strategy`
+
+Generate a full content strategy for a client using AI. Gathers SERP data for the client's industry and topic keywords, builds a comprehensive onboarding strategy prompt, calls Claude AI, and saves the resulting strategy (pillars, platform strategy, video ideas, competitive landscape, next steps, etc.) to the database. Syncs to Obsidian vault (non-blocking).
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ strategyId: string, status: 'completed', tokens_used: number, estimated_cost: number }}
+```
+
+### `GET /api/clients/:id/summary`
+
+Returns an aggregated summary of a client's current state: - Basic info (name, industry, agency, services) - Team assignments (who's working on this client) - Pipeline status for the current month - Upcoming shoots - Recent task counts (open, overdue, done) - Latest research searches - Idea generation count Use when: You need a full picture of a client in one call — dashboards, AI agent context building, or client profile pages.
+
+### `DELETE /api/clients/:id/uppromote`
+
+Disconnect the UpPromote integration for a client by clearing the stored API key.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `POST /api/clients/:id/uppromote`
+
+Connect an UpPromote affiliate integration for a client. Validates the API key against UpPromote, saves it to the client record, and triggers an initial non-blocking affiliate sync.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+api_key - UpPromote API key to validate and save (required)
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ success: true, message: string }}
+```
+
+### `GET /api/clients/:id/webhook-settings`
+
+### `PUT /api/clients/:id/webhook-settings`
 
 ### `POST /api/clients/analyze-url`
-Analyze a website URL to auto-fill client profile fields. Used during onboarding to pre-populate industry, audience, voice, keywords, and logo.
-**Auth:** Required (user)
-**Body:** `{ url: string }`
-**Response:** `{ industry, target_audience, brand_voice, topic_keywords: string[], logo_url? }`
 
-### `POST /api/clients/upload-logo`
-Upload a client logo image (JPEG/PNG/WebP, max 2 MB) to Supabase storage.
+Analyze a website URL to auto-populate client onboarding fields. Fetches the website HTML, extracts a logo (apple-touch-icon, OG image, Twitter card image, Clearbit, or Google favicon), strips the HTML to plain text, and uses Claude AI to infer industry, target audience, brand voice, and topic keywords.
+
 **Auth:** Required (admin)
-**Body:** FormData with `file` field
-**Response:** `{ url: string }`
 
-### `POST /api/clients/preferences`
-Save or update client brand preferences (content style, topics to avoid, etc).
-**Auth:** Required (user)
-**Body:** `{ client_id: string, preferences: object }`
-**Response:** `{ success: true }`
+**Body:**
 
-### `POST /api/clients/backfill-industry`
-One-time admin utility: analyze websites for all clients with `industry = 'General'` and update their industry field.
-**Auth:** Required (admin)
-**Response:** `{ message: string, results: [{ name, industry, status }] }`
+```
+url - Valid website URL to analyze (required)
+```
 
-### `GET /api/clients/monday-cache`
-Fetch and cache Monday.com Clients board data (5-min in-memory cache).
-**Auth:** Required (admin)
-**Response:** Array of parsed Monday.com client items
+**Returns:**
 
-### `GET /api/clients/vault/[slug]`
-Read a client's profile from the Obsidian vault by slug.
-**Auth:** Required (user)
-**Response:** Vault client profile object
+```
+{{ industry: string, target_audience: string, brand_voice: string, topic_keywords: string[], logo_url: string | null }}
+```
 
 ### `GET /api/clients/assignments/strategists`
-List all clients with strategist assignments. Used to show strategist names on calendar events.
-**Auth:** Required (user)
-**Response:** `{ assignments: [{ client_id, strategist_id, strategist_name }] }`
 
-### `GET /api/clients/[id]/summary`
-Aggregated client health dashboard — team assignments, pipeline status, upcoming shoots, task counts, recent searches, idea generations.
-**Auth:** Required (user)
-**Response:** `{ client, team, pipeline, upcomingShoots, taskStats, recentSearches, ideaGenerations }`
-**Use when:** Building dashboards, AI agent context, or a client overview page.
+Returns a flat list of { client_id, strategist_name, strategist_id } for all clients that have a team member assigned with role containing "Strategist". Used by the calendar to show strategist names on events.
 
-### `GET /api/clients/[id]/strategy`
-Get the client's AI-generated content strategy document.
-**Auth:** Required (user)
-**Response:** Strategy object with pillars, target audience analysis, competitive positioning
+### `POST /api/clients/backfill-industry`
 
-### `POST /api/clients/[id]/strategy`
-Generate a new AI-powered content strategy for the client.
+One-time admin utility: analyze website content for all active clients whose industry is 'General' or null, then use Claude AI to infer a specific industry and update the DB. Skips clients without a website URL. Non-destructive — only updates if AI returns a specific industry (not 'General').
+
 **Auth:** Required (admin)
-**Response:** `{ strategyId: string, status: string }`
 
-### `GET /api/clients/[id]/contacts`
-List contacts for a client.
-**Auth:** Required (user)
-**Response:** Array of contact objects
+**Returns:**
 
-### `POST /api/clients/[id]/contacts`
-Add a contact to a client.
+```
+{{ message: string, results: { name: string, industry: string, status: string }[] }}
+```
+
+### `GET /api/clients/monday-cache`
+
+Fetch and cache Monday.com client data (5-minute in-memory TTL). Returns all parsed Monday.com client records for fast access without hitting the Monday.com API on every request.
+
 **Auth:** Required (admin)
-**Body:** `{ full_name: string, email?, phone?, role? }`
-**Response:** Contact object
 
-### `PATCH /api/clients/[id]/contacts/[contactId]`
-Update a contact.
-**Auth:** Required (admin)
-**Body:** Contact fields to update
-**Response:** Updated contact
+**Returns:**
 
-### `DELETE /api/clients/[id]/contacts/[contactId]`
-Delete a contact.
-**Auth:** Required (admin)
-**Response:** `{ success: true }`
+```
+{ParsedMondayClient[]} Array of all parsed Monday.com client records
+```
 
-### `GET /api/clients/[id]/assignments`
-List team member assignments for a client.
-**Auth:** Required (admin)
-**Response:** Array of assignment objects
+### `POST /api/clients/onboard`
 
-### `POST /api/clients/[id]/assignments`
-Assign a team member to a client.
-**Auth:** Required (admin)
-**Body:** `{ team_member_id: string, role: string, is_lead?: boolean }`
-**Response:** Assignment object
+Full client onboarding flow that provisions across four systems in parallel: 1. Cortex DB — creates organization + client records 2. Obsidian Vault — syncs client profile markdown 3. Monday.com — creates board item with service/agency/POC columns 4. Late — creates social media scheduling profile (if SMM service included) Auto-generates a URL-safe slug from the client name (with collision handling). Returns the outcome for each system independently; only the Cortex DB failure is fatal.
 
-### `DELETE /api/clients/[id]/assignments/[assignmentId]`
-Remove a team member assignment from a client.
 **Auth:** Required (admin)
-**Response:** `{ success: true }`
 
-### `POST /api/clients/[id]/uppromote`
-Connect an UpPromote affiliate API key to a client and trigger initial affiliate sync.
-**Auth:** Required (admin)
-**Body:** `{ api_key: string }`
-**Response:** `{ success: true, message: string }`
+**Body:**
 
-### `DELETE /api/clients/[id]/uppromote`
-Remove the UpPromote API key from a client.
+```
+name - Client display name (required)
+website_url - Client website URL (required)
+industry - Industry category (required)
+target_audience - Target audience description
+brand_voice - Brand voice description
+topic_keywords - Array of content topic keywords
+logo_url - Logo image URL (nullable)
+services - Array of service strings (e.g. ['SMM', 'Paid Media', 'Editing', 'Affiliates'])
+agency - Agency name override
+```
+
+**Returns:**
+
+```
+{{ cortex: SystemResult, vault: SystemResult, monday: SystemResult, late: SystemResult }}
+```
+
+### `POST /api/clients/preferences`
+
+Update a client's content preferences (tone, topics, competitors, seasonal priorities). Portal users (viewers) can only update clients in their organization and only if the client has the can_edit_preferences feature flag enabled.
+
+**Auth:** Required (admin or viewer)
+
+**Body:**
+
+```
+client_id - Client UUID (required)
+preferences.tone_keywords - Array of tone descriptors (max 20)
+preferences.topics_lean_into - Array of topics to emphasize (max 30)
+preferences.topics_avoid - Array of topics to avoid (max 30)
+preferences.competitor_accounts - Array of competitor account names (max 20)
+preferences.seasonal_priorities - Array of seasonal content priorities (max 20)
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `POST /api/clients/upload-logo`
+
+Upload a client logo image to Supabase Storage (client-logos bucket). Accepts JPEG, PNG, or WebP images up to 2 MB. Returns the public URL.
+
 **Auth:** Required (admin)
-**Response:** `{ success: true }`
+
+**Body:**
+
+```
+file - Image file (multipart/form-data; JPEG | PNG | WebP; max 2 MB)
+```
+
+**Returns:**
+
+```
+{{ url: string }} Public URL of the uploaded logo
+```
+
+### `GET /api/clients/vault/:id`
+
+Fetch a client's Obsidian vault profile by slug. The URL segment is named `id` (not `slug`) because Next 15's App Router refuses to compile when dynamic segments in the same subtree use different names — `app/api/clients/[id]` already claims `id`. The handler still resolves a client slug string.
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+Client vault profile object
+```
 
 ---
 
-## 5. Content Pillars
+## Knowledge Base
 
-### `GET /api/clients/[id]/pillars`
-List all content pillars for a client, ordered by `sort_order`.
-**Auth:** Required (user)
-**Response:** `{ pillars: ContentPillar[] }`
+_Knowledge entries, semantic search, website scraping, meeting imports._
 
-### `POST /api/clients/[id]/pillars`
-Manually create a new content pillar.
-**Auth:** Required (user)
-**Body:** `{ name, description?, emoji?, example_series?, formats?, hooks?, frequency? }`
-**Response:** `{ pillar: ContentPillar }`
+### `GET /api/knowledge/graph`
 
-### `PATCH /api/clients/[id]/pillars/[pillarId]`
-Update a content pillar's fields.
-**Auth:** Required (user)
-**Body:** Any pillar fields to update
-**Response:** `{ pillar: ContentPillar }`
+Get graph data (lightweight nodes + edges derived from connections arrays). When a specific client_id is provided, also includes that client's knowledge entries (scraped pages, brand profile, meetings) from client_knowledge_entries as additional graph nodes.
 
-### `DELETE /api/clients/[id]/pillars/[pillarId]`
-Delete a content pillar.
-**Auth:** Required (user)
-**Response:** `{ success: true }`
+**Query params:**
 
-### `POST /api/clients/[id]/pillars/reorder`
-Update `sort_order` for a set of pillars based on the provided array order.
-**Auth:** Required (user)
-**Body:** `{ pillar_ids: string[] }` (ordered array of UUIDs)
-**Response:** `{ success: true }`
+```
+kind - Filter by kind(s), comma-separated
+domain - Filter by domain(s), comma-separated
+client_id - Filter by client (use "agency" for client_id IS NULL)
+limit - Max nodes (default 2000)
+```
 
-### `POST /api/clients/[id]/pillars/generate`
-AI-generate new content pillars for a client. Async — returns a generation ID to poll.
-**Auth:** Required (admin)
-**Body:** `{ count?: number (1-10, default 5), direction?: string }`
-**Response:** `{ id: string, status: 'processing' }` — poll the status endpoint
+### `GET /api/knowledge/nodes`
 
-### `GET /api/clients/[id]/pillars/generate/[generationId]`
-Poll the status of a pillar generation job. When `status = 'completed'`, also returns the generated pillars.
-**Auth:** Required (user)
-**Response:** `{ generation: { id, status, count, tokens_used, estimated_cost, ... }, pillars: ContentPillar[] | null }`
+List knowledge nodes with optional filters.
 
-### `POST /api/clients/[id]/pillars/generate-strategy`
-Full strategy pipeline: AI-generates pillars then ideas for each pillar, then scripts for each idea — all in one background job.
-**Auth:** Required (admin)
-**Body:** `{ direction?: string, pillar_count?: number (1-10), ideas_per_pillar?: number (1-10) }`
-**Response:** `{ id: string, status: 'processing' }` — poll the run status endpoint
+**Query params:**
 
-### `GET /api/clients/[id]/pillars/generate-strategy/[runId]`
-Poll the status of a full strategy pipeline run.
-**Auth:** Required (user)
-**Response:** `{ run: { id, status, current_phase: 'pillars'|'ideas'|'scripts'|'done', error_message?, ... } }`
+```
+kind - Filter by kind(s), comma-separated
+domain - Filter by domain(s), comma-separated
+client_id - Filter by client (use "agency" for client_id IS NULL)
+q - Full-text search query
+limit - Max results (default 100)
+offset - Pagination offset (default 0)
+```
 
-### `POST /api/clients/[id]/pillars/[pillarId]/reroll`
-Regenerate a single pillar using AI (delete and replace).
-**Auth:** Required (admin)
-**Response:** `{ pillar: ContentPillar }`
+### `POST /api/knowledge/nodes`
 
----
+Create a new knowledge node.
 
-## 6. Knowledge Base
+### `DELETE /api/knowledge/nodes/:id`
 
-### `GET /api/clients/[id]/knowledge`
-List knowledge entries for a client, optionally filtered by type.
-**Auth:** Required (user)
-**Query:** `type?: 'brand_asset'|'brand_profile'|'document'|'web_page'|'note'|'idea'|'meeting_note'`
-**Response:** `{ entries: KnowledgeEntry[] }`
+Delete a knowledge node.
 
-### `POST /api/clients/[id]/knowledge`
-Manually create a knowledge entry.
-**Auth:** Required (admin)
-**Body:** `{ type, title, content?, metadata?, source?: 'manual'|'scraped'|'generated'|'imported' }`
-**Response:** `{ entry: KnowledgeEntry }` (status 201)
+### `GET /api/knowledge/nodes/:id`
 
-### `PATCH /api/clients/[id]/knowledge/[entryId]`
-Update a knowledge entry.
-**Auth:** Required (admin)
-**Body:** Knowledge entry fields to update
-**Response:** Updated entry
+Get a single knowledge node with full content.
 
-### `DELETE /api/clients/[id]/knowledge/[entryId]`
-Delete a knowledge entry.
-**Auth:** Required (admin)
-**Response:** `{ success: true }`
+### `PUT /api/knowledge/nodes/:id`
 
-### `GET /api/clients/[id]/knowledge/graph`
-Get the knowledge graph (entities and connections extracted from entries).
-**Auth:** Required (user)
-**Response:** `{ nodes: Entity[], edges: Connection[] }`
+Update a knowledge node.
 
-### `GET /api/clients/[id]/knowledge/links`
-Get linked knowledge entries and relationships.
-**Auth:** Required (user)
-**Response:** Array of linked entry pairs
+### `POST /api/knowledge/search`
 
-### `POST /api/clients/[id]/knowledge/brand-profile`
-Generate (or regenerate) an AI brand profile entry from all existing knowledge entries.
-**Auth:** Required (user)
-**Response:** `{ entry: KnowledgeEntry }`
+Semantic search over knowledge nodes using Gemini embeddings. Falls back to FTS if embedding generation fails.
 
-### `POST /api/clients/[id]/knowledge/scrape`
-Crawl the client's website and import pages as knowledge entries. Blocks until complete.
-**Auth:** Required (admin)
-**Body:** `{ maxPages?: number (1-100, default 50), maxDepth?: number (1-5, default 3) }`
-**Response:** `{ message: string, count: number }`
+### `POST /api/knowledge/sync`
 
-### `POST /api/clients/[id]/knowledge/import-meeting`
-Import a meeting transcript as a structured knowledge entry (extracts action items, insights, etc).
-**Auth:** Required (user)
-**Body:** `{ transcript: string, meetingDate?: string, attendees?: string[], source?: string }`
-**Response:** `{ entry: KnowledgeEntry, actionItems: string[], insights: string[] }`
+When true, sync every entry in KNOWLEDGE_GRAPH_SYNC_SOURCES (legacy default counts as one). */ all: z.boolean().optional(), }); /** POST /api/knowledge/sync Trigger GitHub → Supabase incremental sync for the knowledge graph. Auth: admin role OR x-sync-secret header matching SYNC_SECRET env var. Body: { repo?: string, all?: boolean } — default single repo is KNOWLEDGE_GRAPH_GITHUB_REPO; set all: true to sync every configured source (see KNOWLEDGE_GRAPH_SYNC_SOURCES).
 
-### `POST /api/clients/[id]/knowledge/generate-ideas`
-Generate video ideas from the client's knowledge base.
-**Auth:** Required (user)
-**Body:** `{ concept?: string, count?: number (1-50, default 10) }`
-**Response:** `{ ideas: VideoIdea[] }`
-
-### `GET /api/knowledge/search`
-Semantic search across the knowledge base using Gemini embeddings.
-**Auth:** Required (user)
-**Query:** `q: string, client_id?: string, limit?: number`
-**Response:** `{ results: KnowledgeEntry[] }`
+### `POST /api/knowledge/webhook`
 
 ---
 
-## 7. Ideas & Content Generation
+## Ideas & Content
 
-### `GET /api/ideas`
-List idea submissions, scoped by role. Admins see all; portal viewers see their client's ideas.
-**Auth:** Required (user)
-**Query:** `client_id?: string, status?: string`
-**Response:** Array of idea submission objects
-
-### `POST /api/ideas`
-Submit a new idea.
-**Auth:** Required (user)
-**Body:** `{ client_id: string, title: string, description?, source_url?, category? }`
-**Response:** Idea submission object
-
-### `GET /api/ideas/[id]`
-Get idea generation results by generation ID.
-**Auth:** Required (user)
-**Response:** Generation object with `ideas` array, `status`, `tokens_used`, `estimated_cost`
-
-### `POST /api/ideas/generate`
-Generate AI-powered video ideas. Supports multiple input sources: client context, a URL, a prior search result, or specific content pillars.
-**Auth:** Required (user)
-**Body:** `{ client_id?: string, url?: string, concept?: string, count: number, reference_video_ids?: string[], search_id?: string, pillar_ids?: string[], ideas_per_pillar?: number }`
-**Response:** `{ id: string }` — generation ID to poll via `GET /api/ideas/[id]`
-**Use when:** Creating video ideas from the Ideas Hub wizard.
-
-### `POST /api/ideas/generate-script`
-Generate a spoken-word video script for a given idea using Claude AI. Calibrates word count to target video length. Optionally matches style of reference videos.
-**Auth:** Required (user)
-**Body:** `{ client_id: string, title: string, why_it_works?: string|string[], content_pillar?: string, reference_video_ids?: string[], idea_entry_id?: string, cta?: string, video_length_seconds?: number (10-180), target_word_count?: number (10-500), hook_strategies?: Array<'negative'|'curiosity'|'controversial'|'story'|'authority'|'question'|'listicle'|'fomo'|'tutorial'> }`
-**Response:** `{ script: string, scriptId: string|null, usage: TokenUsage, estimatedCost: number }`
-
-### `POST /api/ideas/reject`
-Save a rejected idea to prevent it from being regenerated.
-**Auth:** Required (user)
-**Body:** `{ client_id, title, description?, hook?, content_pillar?, generation_context? }`
-**Response:** `{ success: true }`
-
-### `GET /api/ideas/saved`
-List all saved ideas (type = 'idea') from the knowledge base.
-**Auth:** Required (user)
-**Response:** `{ ideas: KnowledgeEntry[] }` (up to 200)
+_Video idea generation, scripts, concepts, moodboards._
 
 ### `POST /api/concepts/react`
-Submit a reaction (approve/star/revision) to a concept from a search result.
-**Auth:** Required (user)
-**Body:** `{ title, hook?, format?, virality?, why_it_works?, topic_name?, client_id?, search_id?, reaction: 'approved'|'starred'|'revision_requested'|null, feedback? }`
-**Response:** `{ success: true }`
+
+Save a client reaction (approve, star, or request revision) to an AI-generated content idea. Upserts the reaction into content_ideas — updates the existing row if the idea title matches, otherwise inserts a new record.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+title - Idea title used to match/create the content_ideas record (required)
+reaction - Reaction type: 'approved' | 'starred' | 'revision_requested' | null (required)
+hook - Optional hook text
+format - Optional video format label
+virality - Optional virality estimate: 'low' | 'medium' | 'high' | 'viral_potential'
+why_it_works - Optional explanation text
+topic_name - Optional topic name label
+client_id - Optional client UUID (null for generic ideas)
+search_id - Optional source search UUID
+feedback - Optional free-text feedback (nullable)
+```
+
+**Returns:**
+
+```
+{{ id: string, reaction: string }} Created (201) or updated record ID + reaction
+```
+
+### `GET /api/ideas`
+
+List idea submissions. Admins can filter by client; portal users (viewers) see only ideas for clients in their organization. Returns up to 100 results, ordered by most recent.
+
+**Auth:** Required (admin or viewer)
+
+**Query params:**
+
+```
+client_id - (Admin only) Filter by client UUID
+```
+
+**Returns:**
+
+```
+{IdeaSubmission[]} Array of idea submissions
+```
+
+### `POST /api/ideas`
+
+Submit a new idea. Portal users must specify a client_id and the client must have the can_submit_ideas feature flag enabled. Syncs the idea to the Obsidian vault and sends notifications: admins are notified of portal submissions, portal users are notified of admin-submitted ideas.
+
+**Auth:** Required (admin or viewer)
+
+**Body:**
+
+```
+client_id - Client UUID (required for portal users; optional for admins)
+title - Idea title (required, max 300 chars)
+description - Idea description (max 2000 chars)
+source_url - Source URL that inspired the idea
+category - Category ('trending' | 'content_idea' | 'request' | 'trending_topic' | 'other', default: 'other')
+```
+
+**Returns:**
+
+```
+{IdeaSubmission} Created idea record (201)
+```
+
+### `DELETE /api/ideas/:id`
+
+Permanently delete an idea submission.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Idea submission UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/ideas/:id`
+
+### `PATCH /api/ideas/:id`
+
+Poll the status of an idea generation job. Returns the generation record including status, generated ideas (if completed), and any error message.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+status - New status ('new' | 'archived')
+admin_notes - Internal admin notes (max 2000 chars)
+```
+
+**Query params:**
+
+```
+id - Idea generation UUID
+id - Idea submission UUID
+```
+
+**Returns:**
+
+```
+{{ id: string, status: 'processing' | 'completed' | 'failed', ideas: GeneratedIdeaResult[] | null, error_message: string | null, completed_at: string | null }}
+/
+// ── GET — poll generation status ──
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('idea_generations')
+    .select('id, client_id, status, ideas, error_message, completed_at')
+    .eq('id', id)
+    .single();
+  if (error || !data) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+  // Org-scope check for non-admin users
+  if (data.client_id) {
+    const access = await assertUserCanAccessClient(admin, user.id, data.client_id);
+    if (!access.allowed) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
+    }
+  }
+  return NextResponse.json(data);
+}
+const ideaTriageSchema = z.object({
+  status: z.enum(['new', 'archived']).optional(),
+  admin_notes: z.string().max(2000).optional().nullable(),
+});
+/**
+PATCH /api/ideas/[id]
+Update an idea submission — set status to `new` or `archived`, and/or admin notes.
+Records the reviewer ID and timestamp when status changes.
+{IdeaSubmission} Updated idea submission record
+```
+
+### `POST /api/ideas/generate`
+
+Start an asynchronous AI idea generation job. Returns a generation ID immediately; the actual generation runs in the background via Next.js `after()`. Supports three modes: client-based (uses brand profile, strategy, past searches), URL-based (scrapes website), and search-based (uses research SERP data). For pillar-based generation, makes one AI call per pillar to produce focused, on-pillar ideas.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+client_id - Client UUID for brand context (required unless url or search_id provided)
+url - Website URL to scrape for brand context (alternative to client_id)
+concept - Optional concept direction to guide generation
+count - Number of ideas to generate (1-200, default: 10)
+reference_video_ids - Array of reference video UUIDs to inspire style
+search_id - Topic search UUID to ground ideas in research data
+pillar_ids - Array of content pillar UUIDs for pillar-based generation
+ideas_per_pillar - Number of ideas per pillar (1-20, required with pillar_ids)
+```
+
+**Returns:**
+
+```
+{{ id: string, status: 'processing' }} Generation record ID for polling
+```
+
+### `POST /api/ideas/generate-script`
+
+Generate a spoken-word video script for a given idea using Claude AI. Uses the client's brand profile, target audience, and optional reference video transcripts as style guides. Calibrates word count to target video length (default 60s ≈ 130 wpm). Saves the resulting script to the idea_scripts table.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+client_id - Client UUID for brand context (required)
+title - Video idea title (required)
+why_it_works - Reason bullets (string or string array)
+content_pillar - Content pillar/category name
+reference_video_ids - Reference video UUIDs to match style and tone
+idea_entry_id - Optional idea submission UUID to link the script to
+cta - Desired call-to-action for the script ending
+video_length_seconds - Target video length in seconds (10-180, default: 60)
+target_word_count - Explicit word count override (10-500)
+hook_strategies - Hook style keys (negative | curiosity | controversial | story | authority | question | listicle | fomo | tutorial)
+```
+
+**Returns:**
+
+```
+{{ script: string, scriptId: string | null, usage: TokenUsage, estimatedCost: number }}
+```
+
+### `POST /api/ideas/reject`
+
+Record a rejected AI-generated idea for a client. Saves the idea to the rejected_ideas table so it can be used to improve future generation quality and avoid re-surfacing ideas.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+client_id - Client UUID the idea was generated for (required)
+title - Idea title (required)
+description - Optional idea description
+hook - Optional hook text
+content_pillar - Optional content pillar label
+generation_context - Optional metadata about the generation run (key-value pairs)
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/ideas/saved`
+
+List all saved ideas from the knowledge base. Returns knowledge entries of type 'idea' across all clients (admin) or org-scoped clients (viewer), ordered by creation date descending (max 200).
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+{{ ideas: KnowledgeEntry[] }} Array of saved idea entries
+```
+
+### `DELETE /api/moodboard/boards/:id/strokes`
+
+Either ?stroke_id=<uuid> to remove one stroke, or no query to clear all.
+
+### `GET /api/moodboard/boards/:id/strokes`
+
+Returns all strokes for a board, oldest first so paint order is preserved.
+
+### `POST /api/moodboard/boards/:id/strokes`
+
+Append a stroke. One row per stroke — point-per-row would be chatty.
+
+### `GET /api/moodboard/notes-boards`
+
+Returns every non-archived board the caller can open from the Notes dashboard, including personal boards they own, team boards, and client boards they have access to. Grouped client-side by the `scope` field.
+
+### `POST /api/moodboard/notes-boards`
+
+### `GET /api/moodboard/personal`
+
+Returns the caller's personal moodboard along with all items, notes, and edges on it. Auto-creates an empty personal board on first call so the Notes page can mount without a separate onboarding step.
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+{ board, items, notes, edges }
+```
 
 ---
 
-## 8. Reference Videos
+## Reference Videos
+
+_Reference video uploads + processing for AI analysis._
 
 ### `GET /api/reference-videos`
-List reference videos, optionally filtered by client.
-**Auth:** Required (user)
-**Query:** `client_id?: string`
-**Response:** Array of reference video objects (status, title, url, transcript, visual_analysis)
+
+List reference videos, optionally filtered by client. Returns up to 50 videos ordered by creation date descending.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+client_id - Filter by client UUID (optional)
+```
+
+**Returns:**
+
+```
+{{ videos: ReferenceVideo[] }}
+```
 
 ### `POST /api/reference-videos`
-Create a reference video record (in `pending` state — then call `/process`).
-**Auth:** Required (user)
-**Body:** `{ client_id: string, url?: string, title?: string, platform?: string }`
-**Response:** `{ video: ReferenceVideo }`
 
-### `POST /api/reference-videos/[id]/process`
-Process a reference video: transcribe with Groq and run Gemini visual analysis in parallel. Updates status to `completed`.
-**Auth:** Required (user)
-**Response:** `{ video: ReferenceVideo }` with `transcript` and `visual_analysis` populated
+Create a new reference video record for a client with status 'pending'. The video will be analyzed by `/api/reference-videos/[id]/process` after creation.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+client_id - Client UUID (required)
+url - Video URL (optional)
+title - Video title (optional)
+platform - Platform name e.g. 'tiktok', 'instagram' (optional)
+```
+
+**Returns:**
+
+```
+{{ video: ReferenceVideo }}
+```
+
+### `POST /api/reference-videos/:id/process`
+
+Analyze a reference video by running Groq Whisper transcription and Gemini visual analysis in parallel. Saves transcript, segments, and visual_analysis to the record. Sets status to 'completed' on success or 'failed' if both steps fail. Logs usage costs to the ai_usage table.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Reference video UUID
+```
+
+**Returns:**
+
+```
+{{ video: ReferenceVideo }}
+```
 
 ---
 
-## 9. Tasks & Todos
+## Tasks & Todos
+
+_Task management, search, natural-language parsing._
 
 ### `GET /api/tasks`
-List tasks. Owners see all; non-owners see tasks assigned to or created by them.
+
+List all non-archived tasks for the authenticated admin user. Owners see all tasks; non-owners see only tasks assigned to them or created by them.
+
 **Auth:** Required (admin)
-**Query:** `client_id?, assignee_id?, status?, task_type?, due_date_from?, due_date_to?`
-**Response:** `{ tasks: Task[], is_owner: boolean, my_team_member_id: string|null, todoist_connected: boolean }`
+
+**Query params:**
+
+```
+client_id - Filter by client UUID
+assignee_id - Filter by team member UUID
+status - Filter by status (backlog | in_progress | review | done)
+task_type - Filter by type (content | shoot | edit | paid_media | strategy | other)
+due_date_from - Filter tasks with due date on or after this date (YYYY-MM-DD)
+due_date_to - Filter tasks with due date on or before this date (YYYY-MM-DD)
+```
+
+**Returns:**
+
+```
+{{ tasks: Task[], is_owner: boolean, my_team_member_id: string | null, todoist_connected: boolean }}
+```
 
 ### `POST /api/tasks`
-Create a task. Auto-assigns to creator if no assignee. Pushes to Todoist if connected.
-**Auth:** Required (admin)
-**Body:** `{ title, description?, status?, priority?, client_id?, assignee_id?, due_date?, task_type?: 'content'|'shoot'|'edit'|'paid_media'|'strategy'|'other', tags?, recurrence? }`
-**Response:** Task object with client and assignee relations
 
-### `PATCH /api/tasks/[id]`
-Update task fields. Syncs status changes to Todoist automatically.
-**Auth:** Required (admin)
-**Body:** Any task fields to update
-**Response:** Updated task object
+Create a new task. If no assignee is specified, the task is auto-assigned to the creator's team member record. Newly created tasks are pushed to Todoist for all connected users involved.
 
-### `DELETE /api/tasks/[id]`
-Delete a task. Also deletes from Todoist if synced.
 **Auth:** Required (admin)
-**Response:** `{ success: true }`
 
-### `GET /api/tasks/search`
-Full-text search across tasks with filtering.
-**Auth:** Required (user)
-**Query:** `q?, status?, priority?, assignee?, client?, task_type?, due_before?, due_after?, limit?`
-**Response:** `{ tasks: Task[], count: number }`
-**Use when:** Finding tasks by keyword, building filtered views, AI agent task lookups.
+**Body:**
 
-### `GET /api/tasks/[id]/activity`
-Get the activity log and comments on a task.
+```
+title - Task title (required)
+description - Task description
+status - Initial status (backlog | in_progress | review | done), defaults to backlog
+priority - Priority level (low | medium | high | urgent), defaults to low
+client_id - Associated client UUID
+assignee_id - Team member UUID to assign to; defaults to creator
+due_date - Due date (YYYY-MM-DD)
+task_type - Type (content | shoot | edit | paid_media | strategy | other), defaults to other
+shoot_date - Shoot date (YYYY-MM-DD)
+tags - Array of tag strings
+monday_item_id - Monday.com item ID for sync
+monday_board_id - Monday.com board ID for sync
+recurrence - Recurrence rule string (e.g. "every week")
+recurrence_from_completion - If true, next recurrence is calculated from completion date
+```
+
+**Returns:**
+
+```
+{Task} Created task with client and assignee relations (201)
+```
+
+### `DELETE /api/tasks/:id`
+
+Soft-delete (archive) a task by setting archived_at. Non-owners can only delete tasks they created. If the task has a linked Todoist task, it is also deleted from Todoist.
+
 **Auth:** Required (admin)
-**Response:** Array of activity entries
 
-### `GET /api/tasks/suggestions`
-Get task suggestions aggregated from Monday.com boards.
+**Query params:**
+
+```
+id - Task UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/tasks/:id`
+
+Fetch a single non-archived task by ID, including associated client and assignee details.
+
 **Auth:** Required (admin)
-**Response:** Array of suggestion objects with `board_source`
+
+**Query params:**
+
+```
+id - Task UUID
+```
+
+**Returns:**
+
+```
+{Task} Task with client and team_member relations
+```
+
+### `PATCH /api/tasks/:id`
+
+Update a task. Non-owners can only update tasks they created or are assigned to. Completing a recurring task advances the due date instead of marking it done. Field changes are recorded in task activity, new assignees are notified, and changes are synced to Todoist for connected users.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+title - Updated title
+description - Updated description
+status - New status (backlog | in_progress | review | done)
+priority - New priority (low | medium | high | urgent)
+client_id - Updated client UUID
+assignee_id - Updated assignee team member UUID
+due_date - Updated due date (YYYY-MM-DD)
+task_type - Updated type (content | shoot | edit | paid_media | strategy | other)
+shoot_date - Updated shoot date (YYYY-MM-DD)
+tags - Updated array of tags
+monday_item_id - Updated Monday.com item ID
+monday_board_id - Updated Monday.com board ID
+```
+
+**Query params:**
+
+```
+id - Task UUID
+```
+
+**Returns:**
+
+```
+{Task} Updated task with client and team_member relations
+```
+
+### `GET /api/tasks/:id/activity`
+
+Fetch the activity log for a specific task — field changes, status updates, assignments, etc. Returns up to 50 entries ordered by most recent.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Task UUID
+```
+
+**Returns:**
+
+```
+{TaskActivity[]} Array of task activity records
+```
 
 ### `POST /api/tasks/parse`
-Parse natural language text into structured task fields using AI.
+
+Parse a natural language task description using Claude AI and return structured task fields. Resolves relative dates ("tomorrow", "next Monday"), fuzzy-matches client names and assignee names against the database, and infers priority and task type from context.
+
 **Auth:** Required (admin)
-**Body:** `{ text: string }`
-**Response:** Parsed task object (title, due_date, priority, assignee_name, etc)
+
+**Body:**
+
+```
+text - Natural language task description (required)
+```
+
+**Returns:**
+
+```
+{{ title: string, due_date: string | null, client_id: string | null, client_name: string | null, assignee_id: string | null, assignee_name: string | null, priority: string | null, task_type: string | null }}
+```
+
+### `GET /api/tasks/search`
+
+Full-text search across tasks by title and description. Supports filtering by status, priority, assignee, client, task_type, and date range. Query params: q - Search query (searches title and description, case-insensitive) status - Filter by status (backlog, in_progress, review, done) priority - Filter by priority (low, medium, high, urgent) assignee - Filter by assignee team_member ID client - Filter by client ID task_type - Filter by type (content, shoot, edit, paid_media, strategy, other) due_before - Filter tasks due on or before this date (YYYY-MM-DD) due_after - Filter tasks due on or after this date (YYYY-MM-DD) limit - Max results (default 50, max 200) Use when: Finding tasks matching specific criteria, building filtered views, or AI agents searching for relevant tasks.
+
+### `GET /api/tasks/suggestions`
+
+Fetch task import suggestions from Monday.com (Content Calendars, Content Requests, and Blog Pipeline boards). Filters out items that are already done. Marks items that have already been imported to Cortex via their monday_item_id. Returns a warning if Monday.com is not configured or if any board fetch fails.
+
+**Auth:** Required (admin)
+
+**Returns:**
+
+```
+{{ suggestions: TaskSuggestion[], warnings?: string[] }}
+```
 
 ### `GET /api/todos`
-List the current user's personal todos.
-**Auth:** Required (user)
-**Response:** Array of todo objects
+
+List personal todos for the authenticated user. Supports optional filters for completion status and due-today. Results are always scoped to the authenticated user.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+completed - Filter by completion state: 'true' | 'false' (omit for all)
+due_today - If 'true', return only todos due today
+```
+
+**Returns:**
+
+```
+{Todo[]} Array of todo records ordered by creation date descending
+```
 
 ### `POST /api/todos`
-Create a personal todo.
-**Auth:** Required (user)
-**Body:** `{ title: string, due_date?, client_id?, priority? }`
-**Response:** Todo object
 
-### `PATCH /api/todos/[id]`
-Update a todo.
-**Auth:** Required (user)
-**Body:** Todo fields to update
-**Response:** Updated todo
+Create a new todo. Admins may assign a todo to any user via the user_id field; non-admins are restricted to creating todos for themselves only.
 
-### `DELETE /api/todos/[id]`
-Delete a todo.
-**Auth:** Required (user)
-**Response:** `{ success: true }`
+**Auth:** Required (any authenticated user; admin required to assign to another user)
+
+**Body:**
+
+```
+title - Todo title (required)
+description - Optional notes
+due_date - Optional due date (ISO date string)
+client_id - Optional client UUID to associate the todo with
+priority - Optional priority level: 'low' | 'medium' | 'high'
+user_id - Admin-only: UUID of the user to assign the todo to
+```
+
+**Returns:**
+
+```
+{Todo} Created todo record (201)
+```
+
+### `DELETE /api/todos/:id`
+
+Permanently delete a personal todo. RLS ensures users can only delete their own todos.
+
+**Auth:** Required (any authenticated user; RLS-enforced ownership)
+
+**Query params:**
+
+```
+id - Todo UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `PATCH /api/todos/:id`
+
+Update a personal todo. RLS ensures users can only modify their own todos. Automatically sets completed_at when toggling is_completed.
+
+**Auth:** Required (any authenticated user; RLS-enforced ownership)
+
+**Body:**
+
+```
+title - Optional new title
+description - Optional notes (nullable)
+is_completed - Optional completion toggle
+due_date - Optional new due date (nullable)
+client_id - Optional client association (nullable)
+priority - Optional priority: 'low' | 'medium' | 'high' (nullable)
+```
+
+**Query params:**
+
+```
+id - Todo UUID
+```
+
+**Returns:**
+
+```
+{Todo} Updated todo record
+```
 
 ---
 
-## 10. Pipeline (Content Production)
+## Pipeline
+
+_Content production pipeline — status, advancement, assignments._
 
 ### `GET /api/pipeline`
-List pipeline items for a given month.
-**Auth:** Required (user)
-**Query:** `month: string` (YYYY-MM-DD format, first day of month)
-**Response:** `{ items: PipelineItem[] }`
 
 ### `POST /api/pipeline`
-Add a client to the pipeline for a month.
-**Auth:** Required (admin)
-**Body:** `{ client_name, month_label, month_date, agency? }`
-**Response:** Pipeline item
 
-### `PATCH /api/pipeline/[id]`
-Update any pipeline item field (status, team, dates, links, notes).
-**Auth:** Required (admin)
-**Body:** `{ [field]: value }` — any pipeline field
-**Response:** Updated item
+### `DELETE /api/pipeline/:id`
 
-### `DELETE /api/pipeline/[id]`
-Remove a client from the pipeline month.
-**Auth:** Required (admin)
-**Response:** `{ success: true }`
+Permanently delete a content pipeline item.
 
-### `POST /api/pipeline/[id]/advance`
-Smart status advancement with transition validation. Advances a specific production track to its next logical status.
-**Auth:** Required (user)
-**Body:** `{ track: 'assignment'|'raws'|'editing'|'client_approval'|'boosting', target_status?: string }`
-**Response:** `{ item: PipelineItem, transition: { track, from, to } }`
-**Use when:** An editor marks work done, a manager approves, or any pipeline status needs to advance. Validates transitions are allowed.
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Content pipeline item UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `PATCH /api/pipeline/:id`
+
+Update one or more status fields or metadata on a content pipeline item. Allows setting any combination of the five status tracks plus team assignments, dates, folder URLs, and notes.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+assignment_status - 'can_assign' | 'assigned' | 'need_shoot'
+raws_status - 'need_to_schedule' | 'waiting_on_shoot' | 'uploaded'
+editing_status - 'not_started' | 'editing' | 'edited' | 'em_approved' | 'revising' | 'blocked' | 'scheduled' | 'done'
+client_approval_status - 'not_sent' | 'waiting_on_approval' | 'client_approved' | 'needs_revision' | 'revised' | 'sent_to_paid_media'
+boosting_status - 'not_boosting' | 'working_on_it' | 'done'
+strategist - Strategist name
+videographer - Videographer name
+editing_manager - Editing manager name
+editor - Editor name
+smm - Social media manager name
+shoot_date - Shoot date (YYYY-MM-DD)
+strategy_due_date - Strategy due date
+raws_due_date - Raws due date
+smm_due_date - SMM due date
+calendar_sent_date - Date calendar was sent
+edited_videos_folder_url - URL to edited videos folder
+raws_folder_url - URL to raws folder
+later_calendar_link - Later.com calendar link
+project_brief_url - Project brief URL
+notes - General notes
+agency - Agency override
+```
+
+**Query params:**
+
+```
+id - Content pipeline item UUID
+```
+
+**Returns:**
+
+```
+{ContentPipelineItem} Updated pipeline item
+```
+
+### `POST /api/pipeline/:id/advance`
 
 ### `GET /api/pipeline/summary`
-Get pipeline summary statistics and health metrics.
-**Auth:** Required (user)
-**Response:** Summary stats object with counts by status
+
+Generate an AI-powered summary of the current month's content pipeline. Returns editing and approval status counts, AI insight bullets, and suggested action tasks. Caches the AI response for 5 minutes and reuses it when pipeline state hasn't changed (detected via MD5 hash).
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+{{ total: number, doneCount: number, editingCounts: Record<string, { count: number, clients: string[] }>, approvalCounts: Record<string, { count: number, clients: string[] }>, aiBullets: string[], suggestedTasks: { title: string, description: string, priority: string }[], monthLabel: string }}
+```
 
 ### `POST /api/pipeline/sync`
-Sync pipeline items from Monday.com Content Calendars board.
-**Auth:** Required (admin)
-**Body:** `{ api_token?, group_id? }`
-**Response:** `{ synced: number, errors?: string[] }`
+
+Parse month label like "March 2026" into a date "2026-03-01" */ function parseMonthLabel(label: string): string | null { const months: Record<string, number> = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12, }; const parts = label.toLowerCase().trim().split(/\s+/); const monthName = parts[0]; const year = parts[1] ? parseInt(parts[1]) : new Date().getFullYear(); const monthNum = months[monthName]; if (!monthNum) return null; return `${year}-${String(monthNum).padStart(2, '0')}-01`; } /** POST /api/pipeline/sync Sync the content pipeline from a Monday.com board (board ID 9232769015). Reads all groups (month buckets) and items, maps column values to pipeline fields, and upserts into the content_pipeline table by monday_item_id. Supports syncing a specific group via group_id.
+
+**Auth:** Required (any authenticated user; caller provides the Monday.com API token)
+
+**Body:**
+
+```
+api_token - Monday.com API token (required)
+group_id - Optional: sync only this specific group/month
+```
+
+**Returns:**
+
+```
+{{ success: true, synced: number, skipped: number }}
+```
 
 ---
 
-## 11. Shoots & Calendar
+## Shoots & Calendar
 
-### `GET /api/shoots`
-List shoot events with optional filtering.
-**Auth:** Required (admin)
-**Query:** `client_id?, status?, date_from? (YYYY-MM-DD), date_to? (YYYY-MM-DD)`
-**Response:** Array of shoot events with client relation
-
-### `GET /api/shoots/[id]`
-Get a single shoot event by ID.
-**Auth:** Required (admin)
-**Response:** Shoot event with client relation
-
-### `PATCH /api/shoots/[id]`
-Update a shoot event's fields (title, date, location, status, notes).
-**Auth:** Required (admin)
-**Body:** `{ title?, client_id?, shoot_date?, location?, notes?, scheduled_status?: 'scheduled'|'completed'|'cancelled' }`
-**Response:** Updated shoot event
-
-### `DELETE /api/shoots/[id]`
-Delete a shoot event.
-**Auth:** Required (admin)
-**Response:** `{ success: true }`
-
-### `POST /api/shoots/schedule`
-Schedule a shoot: creates a shoot event record, optionally creates a Google Calendar event, and sends email invites.
-**Auth:** Required (admin)
-**Body:** `{ client_name, client_id, shoot_date, shoot_time?, location?, notes?, agency, team_emails: string[], client_emails: string[], videographer_emails: string[], add_to_calendar: boolean, send_invites: boolean }`
-**Response:** `{ success: true, shootId, googleEventCreated, invitesSent }`
-
-### `POST /api/shoots/reschedule`
-Update the shoot date on the Monday.com Content Calendars board (used by calendar drag-to-reschedule).
-**Auth:** Required (admin)
-**Body:** `{ monday_item_id: string, new_date: string (YYYY-MM-DD) }`
-**Response:** `{ success: true }`
-
-### `POST /api/shoots/ideate`
-Generate an AI-powered shoot plan (video ideas, equipment, talking points) for a given client and date.
-**Auth:** Required (admin)
-**Body:** `{ clientName, clientId?, shootDate?, industry?, context }`
-**Response:** `{ plan: ShootPlan, usage, estimatedCost }`
-
-### `POST /api/shoots/[id]/plan`
-Generate a full AI shoot plan for an existing shoot event. Pulls live SERP data + client content memory. Saves to shoot and syncs to vault.
-**Auth:** Required (admin)
-**Response:** `{ shootId, status: 'generated', plan: ShootPlan }`
-
-### `PATCH /api/shoots/[id]/footage`
-Update raw footage upload status for a shoot.
-**Auth:** Required (admin)
-**Body:** `{ raw_footage_uploaded: boolean, raw_footage_url?: string }`
-**Response:** Updated shoot event
-
-### `POST /api/shoots/sync`
-Sync upcoming Google Calendar events via Google OAuth, filter for shoot-related events, and upsert into `shoot_events`.
-**Auth:** Required (admin)
-**Response:** `{ synced: number }`
-
-### `GET /api/shoots/content-calendar`
-Fetch shoot data from Monday.com Content Calendars board (cached 10 min).
-**Auth:** Required (admin)
-**Response:** Array of parsed shoot items
+_Shoot scheduling, planning, Google Calendar integration._
 
 ### `GET /api/calendar/events`
-Fetch Google Calendar events for the current user via Google OAuth (2-min cache).
-**Auth:** Required (user)
-**Query:** `days_ahead?: number, calendars?: comma-separated calendar IDs`
-**Response:** `[{ name, color, connection_type, events: CalendarEvent[] }]`
 
-### `POST /api/calendar/sync`
-Pull Google Calendar events and identify + import shoot events into the shoot_events table.
-**Auth:** Required (admin)
-**Response:** `{ imported: number, matched: number }`
-
-### `POST /api/calendar/invite`
-Generate a calendar connection invite token for a contact.
-**Auth:** Required (admin)
-**Body:** `{ contact_id: string }`
-**Response:** `{ token, url }`
-
-### `GET /api/calendar/connect/[token]`
-Accept a calendar connection invite via token.
-**Auth:** Public
-**Response:** Redirects to connect flow
+Fetches Google Calendar events from multiple connections in parallel. Query params: connection_ids — comma-separated calendar_connections.id values start — ISO datetime (range start) end — ISO datetime (range end) Returns: { calendars: { [connectionId]: { name, color, connection_type, events[] } } } Client connections (connection_type='client') have event titles replaced with "Busy" to preserve privacy.
 
 ### `GET /api/calendar/gaps`
-Find free time slots in connected calendars.
-**Auth:** Required (user)
-**Query:** `date_from, date_to, min_duration?`
-**Response:** Array of free time slot objects
 
-### `POST /api/calendar/webhook`
-Receive Google Calendar push notification webhooks.
-**Auth:** Public (webhook)
-**Response:** `{ ok: true }`
+### `POST /api/calendar/invite`
 
----
+Generate a calendar invite link for a contact. Creates a calendar_connections record with a 32-char hex token and 30-day expiry, returning the shareable URL for the client to connect their Google Calendar.
 
-## 12. Analyze (Video Analysis)
-
-### `GET /api/moodboard/boards`
-List all analysis boards.
-**Auth:** Required (admin)
-**Response:** Array of board objects with item count
-
-### `POST /api/moodboard/boards`
-Create a new analysis board.
-**Auth:** Required (admin)
-**Body:** `{ name, description?, client_id?, template_id? }`
-**Response:** New board object
-
-### `GET /api/moodboard/boards/[id]`
-Get a board with all items, notes, edges, and tags.
-**Auth:** Required (admin)
-**Response:** Full board object
-
-### `PATCH /api/moodboard/boards/[id]`
-Update a board's name, description, or client association.
-**Auth:** Required (admin)
-**Body:** Board fields to update
-**Response:** Updated board
-
-### `DELETE /api/moodboard/boards/[id]`
-Delete a board and all its items.
-**Auth:** Required (admin)
-**Response:** `{ success: true }`
-
-### `POST /api/moodboard/boards/[id]/share`
-Create a shareable link with optional password and expiry.
-**Auth:** Required (admin)
-**Body:** `{ password?, expires_days? }`
-**Response:** `{ token, url, expires_at }`
-
-### `POST /api/moodboard/boards/[id]/duplicate`
-Duplicate a board with all items.
-**Auth:** Required (admin)
-**Response:** New board object
-
-### `GET /api/moodboard/boards/[id]/search`
-Full-text search items within a board (title, transcript, summary, hook, creator name).
-**Auth:** Required (admin)
-**Query:** `q: string`
-**Response:** `{ item_ids: string[] }`
-
-### `PATCH /api/moodboard/boards/[id]/positions`
-Batch-update canvas positions of items and notes within a board.
-**Auth:** Required (admin)
-**Body:** `{ items?: [{ id, position_x, position_y, width?, height? }], notes?: [...] }`
-**Response:** `{ success: true }`
-
-### `GET/PATCH /api/moodboard/boards/[id]/tags`
-Get or manage tags on a board.
 **Auth:** Required (admin)
 
-### `GET /api/moodboard/items`
-List items, optionally filtered by board.
-**Auth:** Required (admin)
-**Query:** `board_id?: string`
-**Response:** Array of analysis items
+**Body:**
 
-### `POST /api/moodboard/items`
-Create a new item (video or website). For TikTok URLs, auto-fetches metadata via tikwm API + oembed + HTML scrape in parallel.
-**Auth:** Required (admin)
-**Body:** `{ board_id, type: 'video'|'website'|'image', url?, title? }`
-**Response:** Created item object
+```
+contact_id - Contact UUID to generate the invite for (required)
+```
 
-### `GET /api/moodboard/items/[id]`
-Get a single analysis item.
-**Auth:** Required (admin)
-**Response:** Item object
+**Returns:**
 
-### `PATCH /api/moodboard/items/[id]`
-Update item fields.
-**Auth:** Required (admin)
-**Body:** Item fields to update
-**Response:** Updated item
+```
+{{ token: string, url: string }} Invite token and full shareable URL
+```
 
-### `DELETE /api/moodboard/items/[id]`
-Delete an analysis board item.
-**Auth:** Required (admin)
-**Response:** `{ success: true }`
+### `POST /api/calendar/sync`
 
-### `POST /api/moodboard/items/[id]/process`
-Full video processing pipeline: download, extract frames (ffmpeg), transcribe, generate AI analysis. Saves all results to item.
-**Auth:** Required (admin)
-**Response:** `{ item: AnalyzeItem }` with transcript, visual_analysis, and concept_summary populated
+Sync the authenticated admin's Google Calendar with Cortex. Fetches upcoming events (60 days) via Google OAuth, identifies shoot events and creates/updates shoot_events records, and pulls changes to Cortex meetings (time shifts, title changes, cancellations).
 
-### `POST /api/moodboard/items/[id]/reprocess`
-Re-run the full video processing pipeline (overwriting existing results).
-**Auth:** Required (admin)
-**Response:** `{ item: AnalyzeItem }`
-
-### `POST /api/moodboard/items/[id]/analyze`
-Run AI analysis on an item (visual breakdown, hook analysis, engagement patterns).
-**Auth:** Required (admin)
-**Response:** `{ analysis: object }`
-
-### `POST /api/moodboard/items/[id]/insights`
-Generate or regenerate AI creative insights for an item.
-**Auth:** Required (admin)
-**Response:** `{ insights: object }`
-
-### `POST /api/moodboard/items/[id]/transcribe`
-Transcribe the audio of a video item.
-**Auth:** Required (admin)
-**Response:** `{ transcript: string }`
-
-### `POST /api/moodboard/items/[id]/extract-frames`
-Extract frame thumbnails from a video item using ffmpeg.
-**Auth:** Required (admin)
-**Response:** `{ frames: string[] }`
-
-### `GET /api/moodboard/items/[id]/thumbnail`
-Get (or generate) a thumbnail for an item.
-**Auth:** Required (admin)
-**Response:** `{ thumbnail_url: string }`
-
-### `GET /api/moodboard/items/[id]/video-url`
-Get a pre-signed or proxied URL for streaming a video item.
-**Auth:** Required (admin)
-**Response:** `{ url: string }`
-
-### `POST /api/moodboard/items/[id]/rescript`
-Generate a new script adapted from a video item's transcript for a specific brand/audience.
-**Auth:** Required (admin)
-**Body:** `{ client_id?, brand_voice?, product?, target_audience?, notes? }`
-**Response:** `{ script: string, usage, estimatedCost }`
-
-### `POST /api/moodboard/items/[id]/replicate`
-Generate a content strategy for replicating a video item's style in a specified format.
-**Auth:** Required (admin)
-**Body:** `{ client_id?, format: string, notes? }`
-**Response:** `{ strategy: string, usage, estimatedCost }`
-
-### `GET/POST /api/moodboard/items/[id]/tags`
-Get or add tags to an analysis board item.
 **Auth:** Required (admin)
 
-### `POST /api/moodboard/items/batch-tags`
-Apply tags to multiple items at once.
-**Auth:** Required (admin)
-**Body:** `{ item_ids: string[], tag_ids: string[] }`
-**Response:** `{ success: true }`
+**Returns:**
 
-### `GET /api/moodboard/items/[id]/analysis/pdf`
-Generate and stream a PDF analysis report for an analysis board item.
-**Auth:** Required (admin)
-**Response:** PDF file stream
+```
+{{ totalEvents, shoots: { found, created, updated, matched }, meetings: { synced, updated, cancelled } }}
+```
 
-### `GET /api/moodboard/items/[id]/brief/pdf`
-Generate and stream a PDF creative brief for an analysis board item.
-**Auth:** Required (admin)
-**Response:** PDF file stream
+### `GET /api/shoots`
 
-### `POST /api/moodboard/chat`
-AI chat (Cortex AI) with analysis item context. Returns SSE stream of text chunks.
-**Auth:** Required (admin)
-**Body:** `{ board_id, item_ids: string[], messages: [{role, content}], note_contents?: string[], client_slugs?: string[], model?: string }`
-**Response:** Server-sent events stream (text/event-stream)
-**Use when:** Analyzing video hooks, comparing content styles, drafting new scripts inspired by board items.
+List shoot events, ordered by shoot date ascending. Supports filtering by client, status, and date range. Each result includes the associated client record.
 
-### `GET/POST /api/moodboard/notes`
-List or create sticky notes on a board.
-**Auth:** Required (admin)
-**POST Body:** `{ board_id, content?, color?, position_x?, position_y? }`
-
-### `PATCH/DELETE /api/moodboard/notes/[id]`
-Update or delete a sticky note.
-
-### `GET/POST /api/moodboard/edges`
-List or create connection edges between items on a board.
 **Auth:** Required (admin)
 
-### `PATCH/DELETE /api/moodboard/edges/[id]`
-Update or delete an edge.
+**Query params:**
 
-### `GET/POST /api/moodboard/comments`
-List or create comments on board items.
+```
+client_id - Filter by client UUID
+status - Filter by scheduled_status value
+date_from - Only return shoots on or after this date (YYYY-MM-DD)
+date_to - Only return shoots on or before this date (YYYY-MM-DD)
+```
+
+**Returns:**
+
+```
+{ShootEvent[]} Array of shoot events with client relation
+```
+
+### `POST /api/shoots`
+
+Create shoot events for one or more clients on the same date. Creates one shoot_events row per client. If Google Calendar is connected via OAuth, automatically creates Google Calendar events with client contacts and team member attendees.
+
 **Auth:** Required (admin)
 
-### `PATCH/DELETE /api/moodboard/comments/[id]`
-Update or delete a comment.
+**Body:**
 
-### `PATCH/DELETE /api/moodboard/tags/[id]`
-Update or delete a tag definition.
+```
+title - Shoot title (required)
+shoot_date - Shoot date/datetime string (required)
+location - Shoot location
+notes - Shoot notes
+client_ids - Array of client UUIDs (at least one required)
+```
 
-### `GET /api/moodboard/templates`
-List available board templates.
+**Returns:**
+
+```
+{{ success: true, count: number, calendar: { shootId: string, eventId?: string, error?: string }[] }}
+```
+
+### `DELETE /api/shoots/:id`
+
+Soft-cancel a shoot event by setting its scheduled_status to 'cancelled'. The record is retained in the database.
+
 **Auth:** Required (admin)
-**Response:** Array of template objects
 
-### `GET /api/shared/moodboard/[token]`
-Public access to a shared analysis board (supports optional password).
-**Auth:** Public
-**Query:** `password?: string`
-**Response:** Board with items (password-protected if configured)
+**Query params:**
+
+```
+id - Shoot event UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/shoots/:id`
+
+Fetch a single shoot event by ID, including the associated client record.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Shoot event UUID
+```
+
+**Returns:**
+
+```
+{ShootEvent} Shoot event with client relation
+```
+
+### `PATCH /api/shoots/:id`
+
+Update a shoot event's title, client, date, location, notes, or scheduled status.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+title - Updated title
+client_id - Updated client UUID (nullable)
+shoot_date - Updated shoot date string
+location - Updated location (nullable)
+notes - Updated notes (nullable)
+scheduled_status - New status ('scheduled' | 'completed' | 'cancelled')
+```
+
+**Query params:**
+
+```
+id - Shoot event UUID
+```
+
+**Returns:**
+
+```
+{ShootEvent} Updated shoot event with client relation
+```
+
+### `PATCH /api/shoots/:id/footage`
+
+### `GET /api/shoots/:id/plan`
+
+Fetch a shoot event along with its generated plan data and associated client info.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Shoot event UUID
+```
+
+**Returns:**
+
+```
+{ShootEvent} Shoot event including plan_data, plan_status, and client relation
+```
+
+### `POST /api/shoots/:id/plan`
+
+Generate an AI shoot plan for a shoot event. Gathers live SERP data for the client's industry/keywords, pulls client content memory, then uses Claude AI to produce a structured ShootPlan (shot list, concepts, talking points, etc.). Saves the plan to the shoot event and syncs it to the Obsidian vault (non-blocking).
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Shoot event UUID
+```
+
+**Returns:**
+
+```
+{{ shootId: string, status: 'generated', plan: ShootPlan }}
+```
+
+### `GET /api/shoots/content-calendar`
+
+### `POST /api/shoots/ideate`
+
+### `POST /api/shoots/reschedule`
+
+### `POST /api/shoots/schedule`
+
+### `POST /api/shoots/sync`
+
+Fetch upcoming Google Calendar events (next 90 days) via the user's Google OAuth token, filter for shoot-related events by keyword (shoot, film, content day, production), and upsert into shoot_events matching on google_event_id. Client names are inferred from the event title by fuzzy matching against active Cortex clients.
+
+**Auth:** Required (admin with Google Calendar connected)
+
+**Returns:**
+
+```
+{{ synced: number, skipped: number, total_calendar_events: number, shoot_events_found: number }}
+```
 
 ---
 
-## 13. The Nerd AI Assistant
+## Ad Creatives
 
-### `POST /api/nerd/chat`
-"The Nerd" AI assistant — a tool-calling Claude agent with full access to client data, knowledge bases, tasks, shoots, and the ability to take actions. Returns SSE stream.
-**Auth:** Required (user)
-**Body:** `{ messages: [{role: 'user'|'assistant'|'tool', content, tool_call_id?}], mentions?: [{type: 'client'|'team_member', id, name, slug?}], actionConfirmation?: { toolName, arguments, confirmed } }`
-**Response:** Server-sent events stream (text/event-stream)
-**Use when:** Asking strategic questions, generating ideas, creating tasks, looking up client info, or analyzing performance.
+_AI ad creative generation + template management._
 
-### `GET /api/nerd/clients`
-List all active clients (name, slug, agency) for @mention autocomplete in The Nerd.
-**Auth:** Required (user)
-**Response:** Array of `{ name, slug, agency }`
+### `POST /api/ad-creatives-v2/batches`
 
-### `GET /api/nerd/mentions`
-Fetch all clients and team members for @mention autocomplete in The Nerd.
-**Auth:** Required (user)
-**Response:** `{ clients: [{type, id, name, slug, agency, avatarUrl}], team: [{type, id, name, role, avatarUrl}] }`
+Creates an ad_generation_batches row with the concept array stashed in config.v2_concepts, then runs the v2 orchestrator in the background via after(). Returns the batch row immediately.
+
+**Auth:** Required (admin)
+
+### `GET /api/ad-creatives-v2/batches/:id`
+
+Returns batch status + progress + list of rendered creatives. Admin-only. Used by polling UIs to wait for batch completion.
+
+### `POST /api/ad-creatives-v2/batches/:id`
+
+### `POST /api/ad-creatives-v2/generate-scene`
+
+Generates a single scene photo via Gemini, uploads it to `brand-scene-photos`, and inserts a brand_scene_photos row. Idempotent by (client_id, slug) — existing rows return 200 with `regenerated: true`.
+
+**Auth:** Required (admin)
+
+### `POST /api/ad-creatives-v2/render`
+
+Renders a single concept via the v2 compositor-first pipeline and returns the PNG buffer directly. Intended for admin preview + ad-hoc rendering; batch orchestration lives in a separate route (Slice 2).
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+ConceptSpec — see lib/ad-creatives-v2/types.ts
+```
+
+**Returns:**
+
+```
+PNG binary (image/png)
+```
+
+### `PATCH /api/ad-creatives/brand-context`
+
+Scraped site copy can exceed 2k; cap at a safe size for JSONB */ description: z.string().max(50000), }), }); /** PATCH /api/ad-creatives/brand-context Save edited brand context back to the client's knowledge entry. Updates existing brand_profile with ad_creative_context, or creates one.
+
+### `GET /api/ad-creatives/crawl-brand`
+
+Poll until Brand DNA (draft/active) is available, or surface job failure.
+
+### `POST /api/ad-creatives/crawl-brand`
+
+Prefer Brand DNA (draft/active) for ad wizard — same source as Brand DNA cards. / async function loadBrandDnaWizardContext(admin: AdminClient, clientId: string) { const { data: clientRow } = await admin .from('clients') .select('name, website_url, brand_dna_status') .eq('id', clientId) .single(); const status = clientRow?.brand_dna_status; if (status !== 'draft' && status !== 'active') return null; if (!clientRow?.name) return null; const { data: guideline } = await admin .from('client_knowledge_entries') .select('metadata') .eq('client_id', clientId) .eq('type', 'brand_guideline') .is('metadata->superseded_by', null) .order('created_at', { ascending: false }) .limit(1) .maybeSingle(); if (!guideline?.metadata) return null; const meta = guideline.metadata as unknown as BrandGuidelineMetadata; return buildAdWizardContextFromBrandDNA(clientRow.name, clientRow.website_url, meta); } function hostnameLabel(url: string) { try { return new URL(url).hostname.replace(/^www\./i, ''); } catch { return 'Website'; } } /** POST /api/ad-creatives/crawl-brand Uses Brand DNA (draft/active) when present. Otherwise kicks off the same full Brand DNA pipeline as /api/clients/[id]/brand-dna/generate, returns quick homepage scrape immediately, and includes clientId for polling (including roster-hidden URL-only clients).
+
+### `GET /api/ad-creatives/global-templates`
+
+Nano Banana catalog (admin picker). Authenticated users only.
+
+### `POST /api/ad-creatives/scrape-brand`
+
+Lightweight scrape of a website to extract brand info and products for the ad generation wizard.
+
+**Auth:** Required
+
+**Body:**
+
+```
+url - Website URL to scrape
+```
+
+**Returns:**
+
+```
+{{ brand, products }}
+```
+
+### `POST /api/ad-creatives/scrape-product`
+
+Scrape a single page for product data only (no brand extraction).
 
 ---
 
-## 14. Social Media & Scheduler
+## Analyze
 
-### `GET /api/scheduler/posts`
-List scheduled posts for a client, with optional status filter.
-**Auth:** Required (admin)
-**Query:** `client_id: string (required), status?: 'draft'|'scheduled'|'published'|'failed'`
-**Response:** Array of scheduled post objects
+_Video analysis boards, AI insights, scripts, PDFs, chat._
 
-### `POST /api/scheduler/posts`
-Create a new scheduled post (draft or scheduled).
-**Auth:** Required (admin)
-**Body:** `{ client_id, caption?, hashtags?, scheduled_at?, status?: 'draft'|'scheduled', platform_profile_ids?, media_ids?, cover_image_url?, tagged_people?, collaborator_handles? }`
-**Response:** Created post object
+### `GET /api/analysis/boards`
 
-### `PUT /api/scheduler/posts/[id]`
-Update a scheduled post.
-**Auth:** Required (admin)
-**Body:** Post fields to update
-**Response:** Updated post object
+List all moodboard boards, ordered by updated_at descending. Includes item counts and up to 4 thumbnail URLs per board for grid previews. Excludes archived boards by default.
 
-### `DELETE /api/scheduler/posts/[id]`
-Delete a scheduled post.
-**Auth:** Required (admin)
-**Response:** `{ success: true }`
-
-### `POST /api/scheduler/posts/batch-publish`
-Immediately publish a batch of scheduled posts to their social platforms.
-**Auth:** Required (admin)
-**Body:** `{ posts: string[] }` (array of post IDs)
-**Response:** `{ published: number, errors?: string[] }`
-
-### `POST /api/scheduler/posts/publish-drafts`
-Publish all posts with `status = 'scheduled'` whose `scheduled_at` is in the past.
-**Auth:** Required (admin)
-**Response:** `{ published: number }`
-
-### `POST /api/scheduler/auto-schedule`
-Bulk AI caption generation + scheduling. Distributes unused media across a date range at the specified frequency, generates captions using Claude AI with client brand context and saved captions as style examples.
-**Auth:** Required (admin)
-**Body:** `{ client_id, start_date (YYYY-MM-DD), end_date (YYYY-MM-DD), posts_per_week (1-14), posting_time (HH:MM), platform_profile_ids: string[], media_ids?: string[] }`
-**Response:** `{ scheduled: number, posts: ScheduledPost[] }`
-
-### `GET /api/scheduler/profiles`
-List connected social profiles (Late accounts) for a client.
-**Auth:** Required (admin)
-**Query:** `client_id: string (required)`
-**Response:** `{ profiles: [{ id, platform, username, avatar_url, late_account_id }] }`
-
-### `POST /api/scheduler/connect`
-Start the OAuth flow to connect a social platform account for a client via Late. Creates a Late profile if one doesn't exist.
-**Auth:** Required (admin)
-**Body:** `{ platform: 'facebook'|'instagram'|'tiktok'|'youtube', client_id: string }`
-**Response:** `{ authUrl: string }` — redirect user to this URL
-
-### `GET /api/scheduler/connect/callback`
-OAuth callback handler after social platform authorization.
-**Auth:** Required (admin)
-**Query:** `client_id, platform, code, state`
-**Response:** Redirects to scheduler settings page
-
-### `GET /api/scheduler/analytics`
-Fetch post analytics from Late for a client's connected social accounts.
-**Auth:** Required (admin)
-**Query:** `client_id, start (YYYY-MM-DD), end (YYYY-MM-DD)`
-**Response:** `{ analytics: [{ platform, ...metrics }] }`
-
-### `POST /api/scheduler/media`
-Get a presigned upload URL for media (`action = 'get-upload-url'`), or confirm a completed media upload (`action = 'confirm-upload'`).
-**Auth:** Required (admin)
-**Body (get-upload-url):** `{ action: 'get-upload-url', contentType, filename }`
-**Body (confirm-upload):** `{ action: 'confirm-upload', client_id, filename, public_url, file_size_bytes, mime_type, thumbnail_url? }`
-**Response (get):** `{ uploadUrl, publicUrl }` | **Response (confirm):** Media record object
-
-### `GET /api/scheduler/media`
-List uploaded media for a client.
-**Auth:** Required (admin)
-**Query:** `client_id: string, is_used?: boolean`
-**Response:** Array of media objects
-
-### `DELETE /api/scheduler/media/[id]`
-Delete a media item.
-**Auth:** Required (admin)
-**Response:** `{ success: true }`
-
-### `POST /api/scheduler/ai/hashtag-suggestions`
-Generate AI hashtag suggestions for a caption.
-**Auth:** Required (admin)
-**Body:** `{ text: string, platform?: string }`
-**Response:** `{ hashtags: string[] }`
-
-### `POST /api/scheduler/ai/improve-caption`
-Use AI to improve/rewrite an existing caption with client brand context and saved caption examples as style guides.
-**Auth:** Required (admin)
-**Body:** `{ caption: string, client_id?: string }`
-**Response:** `{ improved_caption: string }`
-
-### `GET /api/scheduler/review`
-Get post review records for a client.
-**Auth:** Required (admin)
-**Query:** `client_id: string`
-**Response:** Array of review objects
-
-### `POST /api/scheduler/review`
-Create a review record for a post.
-**Auth:** Required (admin)
-**Body:** `{ post_id: string, status: string, notes? }`
-**Response:** Review object
-
-### `POST /api/scheduler/review/comment`
-Add a comment to a post review.
-**Auth:** Required (admin)
-**Body:** `{ review_id: string, content: string }`
-**Response:** Comment object
-
-### `GET /api/scheduler/saved-captions`
-List saved caption templates for a client.
-**Auth:** Required (admin)
-**Query:** `client_id: string`
-**Response:** Array of saved caption objects
-
-### `POST /api/scheduler/saved-captions`
-Save a reusable caption template.
-**Auth:** Required (admin)
-**Body:** `{ client_id, title, caption_text, hashtags? }`
-**Response:** Saved caption object
-
-### `POST /api/scheduler/share`
-Create a shareable calendar review link for selected posts (for client review workflows).
-**Auth:** Required (admin)
-**Body:** `{ client_id, post_ids: string[], label?: string }`
-**Response:** `{ link: object, url: string }`
-
-### `POST /api/scheduler/share/feedback`
-Submit client feedback on a shared calendar review link.
-**Auth:** Public
-**Body:** `{ token, post_id, feedback, status }`
-**Response:** `{ success: true }`
-
-### `POST /api/scheduler/webhooks`
-Receive posting status webhooks from Late (published, failed, etc).
-**Auth:** Public (webhook from Late)
-**Response:** `{ ok: true }`
-
-### `GET /api/social/profiles`
-List active social profiles for a client.
-**Auth:** Required (user)
-**Query:** `clientId: string (required)`
-**Response:** Array of social profile objects
-
-### `GET /api/social/connect/[platform]`
-Start OAuth flow for connecting a social account directly.
 **Auth:** Required (admin)
 
-### `GET /api/social/callback/[platform]`
-Handle OAuth callback for social platform connection.
+**Query params:**
+
+```
+show_archived - Pass 'true' to include archived boards (optional)
+topic_search_id - Filter boards linked to a topic search (optional)
+```
+
+**Returns:**
+
+```
+{MoodboardBoard[]} Boards with client_name, item_count, and thumbnails
+```
+
+### `POST /api/analysis/boards`
+
+Create a new moodboard board. If a template_id is provided, pre-populates the board with notes from the selected template.
+
 **Auth:** Required (admin)
 
-### `DELETE /api/social/disconnect/[profileId]`
-Disconnect a social profile.
+**Body:**
+
+```
+name - Board name (required, max 200 chars)
+description - Board description (optional)
+client_id - Associated client UUID (optional)
+template_id - Template ID to pre-populate notes from (optional)
+```
+
+**Returns:**
+
+```
+{MoodboardBoard} Created board record
+```
+
+### `DELETE /api/analysis/boards/:id`
+
+Permanently delete a moodboard board. Cascades to all items, notes, and comments.
+
 **Auth:** Required (admin)
-**Response:** `{ success: true }`
+
+**Query params:**
+
+```
+id - Board UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/analysis/boards/:id`
+
+Fetch a single moodboard board with all its items and notes.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Board UUID
+```
+
+**Returns:**
+
+```
+{MoodboardBoard & { items: MoodboardItem[], notes: MoodboardNote[] }}
+```
+
+### `PATCH /api/analysis/boards/:id`
+
+Update a moodboard board's name, description, client association, or archived status.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+name - Updated board name (optional)
+description - Updated description (optional)
+client_id - Updated client UUID or null (optional)
+archived - Set true to archive, false to unarchive (optional)
+```
+
+**Query params:**
+
+```
+id - Board UUID
+```
+
+**Returns:**
+
+```
+{MoodboardBoard} Updated board record
+```
+
+### `POST /api/analysis/boards/:id/duplicate`
+
+Deep-clone a moodboard board, including all items, notes, edges, tags, and item-tag associations. Edge node IDs are re-mapped to the new item/note IDs. The new board is named "[Original Name] (Copy)".
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Source board UUID to duplicate
+```
+
+**Returns:**
+
+```
+{MoodboardBoard} Newly created board record
+```
+
+### `PATCH /api/analysis/boards/:id/positions`
+
+Batch-update canvas positions (and optional dimensions) for items and notes on a board. All updates run in parallel. Returns 207 with error details if any individual update fails. Also bumps the board's updated_at timestamp.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+items - Array of { id, position_x, position_y, width?, height? } for items (optional)
+notes - Array of { id, position_x, position_y, width? } for notes (optional)
+```
+
+**Query params:**
+
+```
+id - Board UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }} or {{ success: false, errors: string[] }} with 207
+```
+
+### `GET /api/analysis/boards/:id/search`
+
+Full-text search for items within a board. Searches across title, transcript, concept_summary, hook, and author_name using case-insensitive ILIKE. Returns matching item IDs for the client to highlight/filter.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Board UUID
+q - Search query string (required)
+```
+
+**Returns:**
+
+```
+{{ item_ids: string[] }}
+```
+
+### `DELETE /api/analysis/boards/:id/share`
+
+Remove all share links for a board, effectively disabling public access.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Board UUID
+```
+
+**Returns:**
+
+```
+{{ shared: false }}
+```
+
+### `GET /api/analysis/boards/:id/share`
+
+Get the current share link status for a board. Returns the most recently created share link with its URL, password protection status, and expiry.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Board UUID
+```
+
+**Returns:**
+
+```
+{{ shared: false }} or {{ shared: true, id, token, url, hasPassword, expires_at, created_at }}
+```
+
+### `POST /api/analysis/boards/:id/share`
+
+Create (or replace) a public share link for a board. Replaces any existing share link. Generates a 48-char hex token; optionally SHA-256 hashes a password and sets an expiry date.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+password - Optional plaintext password (SHA-256 hashed before storage)
+expires_at - Optional ISO 8601 expiry timestamp
+```
+
+**Query params:**
+
+```
+id - Board UUID
+```
+
+**Returns:**
+
+```
+{{ shared: true, id, token, url, hasPassword, expires_at, created_at }}
+```
+
+### `GET /api/analysis/boards/:id/tags`
+
+List all tags defined on a board, ordered alphabetically by name.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Board UUID
+```
+
+**Returns:**
+
+```
+{MoodboardTag[]}
+```
+
+### `POST /api/analysis/boards/:id/tags`
+
+Create a new tag on a board. Returns 409 if a tag with the same name already exists on this board.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+name - Tag name, 1–50 chars (required)
+color - Hex color (#rrggbb, default '#6366f1')
+```
+
+**Query params:**
+
+```
+id - Board UUID
+```
+
+**Returns:**
+
+```
+{MoodboardTag} Created tag record
+```
+
+### `POST /api/analysis/boards/from-topic-search`
+
+Create a moodboard from high-engagement video URLs found in a completed topic search, link the board via source_topic_search_id, optionally kick off video processing in the background.
+
+### `POST /api/analysis/chat`
+
+Stream AI creative strategy chat grounded in selected moodboard content. Fetches item analysis data (transcripts, hooks, pacing, insights) and optionally client brand context (via @mention slugs) and sticky note text. Returns a streaming text/plain response via Server-Sent Events using the Cortex AI persona backed by Claude Sonnet via OpenRouter.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+board_id - Board UUID (required)
+item_ids - Array of item UUIDs to include as context (required, may be empty)
+messages - Conversation history [{role, content}] — at least 1 message (required)
+note_contents - Sticky note text strings to include as context (optional)
+client_slugs - Client slugs to inject brand context via @ mentions (optional)
+model - OpenRouter model override (optional; default platform OpenRouter model)
+```
+
+**Returns:**
+
+```
+{ReadableStream<string>} Streamed AI text response
+```
+
+### `GET /api/analysis/comments`
+
+List all comments on a moodboard item, ordered oldest first. Includes commenter name and avatar from the users join.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+item_id - Moodboard item UUID (required)
+```
+
+**Returns:**
+
+```
+{MoodboardComment[]} Comments with users(full_name, avatar_url)
+```
+
+### `POST /api/analysis/comments`
+
+Add a comment to a moodboard item. Supports optional video timestamp for timestamped comments. Also bumps the parent board's updated_at.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+item_id - Moodboard item UUID (required)
+content - Comment text, 1–5000 chars (required)
+video_timestamp - Timestamp in seconds for timestamped comments (optional)
+```
+
+**Returns:**
+
+```
+{MoodboardComment} Created comment with users(full_name, avatar_url)
+```
+
+### `DELETE /api/analysis/comments/:id`
+
+Delete a moodboard comment. Admins can delete any comment. Also bumps the parent board's updated_at timestamp.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Comment UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `PATCH /api/analysis/comments/:id`
+
+Edit the content of a moodboard comment. Only the original author can edit their own comment (enforced server-side by user_id check).
+
+**Auth:** Required (admin; must be comment author)
+
+**Body:**
+
+```
+content - Updated comment text, 1–5000 chars (required)
+```
+
+**Query params:**
+
+```
+id - Comment UUID
+```
+
+**Returns:**
+
+```
+{MoodboardComment} Updated comment with users(full_name, avatar_url)
+```
+
+### `GET /api/analysis/edges`
+
+List all edges (connections) for a moodboard board, ordered oldest first.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+board_id - Board UUID (required)
+```
+
+**Returns:**
+
+```
+{MoodboardEdge[]}
+```
+
+### `POST /api/analysis/edges`
+
+Create a directed edge between two canvas nodes on a moodboard. Edges can connect any node types (items, notes) by their node ID. Supports label, line style (solid/dashed/dotted), and color.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+board_id - Board UUID (required)
+source_node_id - Source node ID string (required)
+target_node_id - Target node ID string (required)
+source_handle - Handle identifier on source node (optional)
+target_handle - Handle identifier on target node (optional)
+label - Edge label text (optional, max 200 chars)
+style - Line style: 'solid' | 'dashed' | 'dotted' (default 'solid')
+color - Hex color string (default '#888888')
+```
+
+**Returns:**
+
+```
+{MoodboardEdge} Created edge record
+```
+
+### `DELETE /api/analysis/edges/:id`
+
+Permanently delete a canvas edge (connection between two nodes).
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Edge UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `PUT /api/analysis/edges/:id`
+
+Update an edge's label, line style, or color. Applies only the provided fields.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+label - Edge label text (optional, nullable, max 200 chars)
+style - Line style: 'solid' | 'dashed' | 'dotted' (optional)
+color - Hex color string (optional, max 20 chars)
+```
+
+**Query params:**
+
+```
+id - Edge UUID
+```
+
+**Returns:**
+
+```
+{MoodboardEdge} Updated edge record
+```
+
+### `POST /api/analysis/items`
+
+Legacy: add to an existing moodboard. */ board_id: z.string().uuid('Invalid board ID').optional(), /** Inline analysis from topic search results — creates or reuses a board per search. */ topic_search_id: z.string().uuid().optional(), /** Required for video/image/website; omitted for text. */ url: z.string().url('Invalid URL').optional(), type: z.enum(['video', 'image', 'website', 'text']), title: z.string().max(500).optional().nullable(), /** Required for text; ignored otherwise. Trimmed before insert. */ text_content: z.string().max(20_000).optional(), position_x: z.number().optional().default(0), position_y: z.number().optional().default(0), width: z.number().optional(), height: z.number().optional(), }) .refine( (d) => (Boolean(d.board_id) && !d.topic_search_id) || (!d.board_id && Boolean(d.topic_search_id)), { message: 'Provide exactly one of board_id or topic_search_id', path: ['board_id'] }, ) .refine( (d) => (d.type === 'text' ? Boolean(d.text_content?.trim()) : Boolean(d.url)), { message: 'text_content is required for text items; url is required otherwise', path: ['type'] }, ); /** POST /api/analysis/items Add a new item to a moodboard. Fetches quick metadata (thumbnail, title, author, stats) from the source platform (TikTok, YouTube, Instagram, Facebook, or generic website) and saves the item immediately. Then auto-triggers background processing: transcription for videos, insights extraction for websites.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+board_id - Board UUID (optional if topic_search_id is set)
+topic_search_id - Topic search UUID — ensures a per-search analysis board (optional if board_id is set)
+url - Source URL (required)
+type - 'video' | 'image' | 'website' (required)
+title - Optional title override
+position_x - Canvas X position (default 0)
+position_y - Canvas Y position (default 0)
+width - Canvas width in pixels (optional)
+height - Canvas height in pixels (optional)
+```
+
+**Returns:**
+
+```
+{MoodboardItem} Created item record
+```
+
+### `DELETE /api/analysis/items/:id`
+
+Permanently delete a moodboard item. Also touches the parent board's updated_at.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Moodboard item UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/analysis/items/:id`
+
+Fetch a single moodboard item by ID.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Moodboard item UUID
+```
+
+**Returns:**
+
+```
+{MoodboardItem} Full item record
+```
+
+### `PATCH /api/analysis/items/:id`
+
+Update a moodboard item's position, size, title, replication brief, or curation status. Also touches the parent board's updated_at.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+position_x - Updated canvas X position (optional)
+position_y - Updated canvas Y position (optional)
+width - Updated canvas width (optional)
+height - Updated canvas height (optional)
+title - Updated item title (optional)
+replication_brief - Brief for replicating this video (optional)
+status - 'none' | 'replicate' | 'adapt' | 'archived' (optional)
+```
+
+**Query params:**
+
+```
+id - Moodboard item UUID
+```
+
+**Returns:**
+
+```
+{MoodboardItem} Updated item record
+```
+
+### `GET /api/analysis/items/:id/analysis/pdf`
+
+### `POST /api/analysis/items/:id/analyze`
+
+AI analysis of a moodboard video item. Uses Claude to analyze the transcript, platform stats, and context to produce hook scoring, pacing analysis, content themes, winning elements, and improvement areas. Optionally accepts MediaPipe client-side analysis results to merge with the LLM output for more accurate pacing and hook scores.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+mediapipeResults - Optional MediaPipe analysis from client (pacing, hook, contentClassification)
+```
+
+**Query params:**
+
+```
+id - Moodboard item UUID (must be type 'video')
+```
+
+**Returns:**
+
+```
+{MoodboardItem} Updated item record with VideoAnalysis fields populated
+```
+
+### `GET /api/analysis/items/:id/brief/pdf`
+
+Generate and download a PDF of the item's replication brief using react-pdf. Returns 400 if no brief has been generated yet.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Moodboard item UUID
+```
+
+**Returns:**
+
+```
+PDF file download (Content-Disposition: attachment)
+```
+
+### `POST /api/analysis/items/:id/extract-frames`
+
+Download a video from URL to a temp file / function probeDurationSec(videoPath: string): Promise<number | null> { return new Promise((resolve) => { Ffmpeg.ffprobe(videoPath, (err, metadata) => { if (err || metadata?.format?.duration == null) { resolve(null); return; } resolve(Number(metadata.format.duration)); }); }); } async function downloadVideo(url: string): Promise<string> { const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' }, signal: AbortSignal.timeout(30000), }); if (!res.ok) throw new Error(`Failed to download video: ${res.status}`); const buffer = Buffer.from(await res.arrayBuffer()); const tempPath = join(tmpdir(), `nativz-frame-${randomUUID()}.mp4`); await writeFile(tempPath, buffer); return tempPath; } const FRAME_INTERVAL = 3; // seconds between frames /** Extract frames from a video file every 3 seconds in 9:16 portrait / async function extractFramesFromFile( videoPath: string, outputDir: string, duration: number, ): Promise<{ paths: string[]; timestamps: number[] }> { const timestamps: number[] = []; for (let t = 0; t < duration; t += FRAME_INTERVAL) { timestamps.push(t); } if (timestamps.length === 0) { throw new Error('No timestamps to extract'); } const extractFrame = (ts: number, index: number): Promise<string> => { return new Promise((res, rej) => { const outputPath = join(outputDir, `frame-${index}.jpg`); // Scale to 360x640 (9:16 portrait), crop to fit if source is different ratio Ffmpeg(videoPath) .seekInput(ts) .frames(1) .outputOptions(['-q:v', '2', '-vf', 'scale=360:640:force_original_aspect_ratio=increase,crop=360:640']) .output(outputPath) .on('end', () => res(outputPath)) .on('error', (err) => rej(err)) .run(); }); }; const paths: string[] = []; const validTimestamps: number[] = []; for (let i = 0; i < timestamps.length; i++) { try { const path = await extractFrame(timestamps[i], i); paths.push(path); validTimestamps.push(timestamps[i]); } catch (err) { console.error(`Failed to extract frame at ${timestamps[i]}s:`, err); } } return { paths, timestamps: validTimestamps }; } /** Get a direct video URL for the item / async function getVideoUrl(item: { url: string; platform: string | null; metadata?: Record<string, unknown> | null }): Promise<string | null> { const platform = item.platform; if (platform === 'tiktok') { const meta = await getTikTokMetadata(item.url); return meta?.video_url ?? null; } if (platform === 'instagram') { return getInstagramVideoUrl(item.url); } // For other platforms, we don't have a reliable way to get direct video URLs return null; } /** POST /api/analysis/items/[id]/extract-frames Download a TikTok video and extract frames every 3 seconds using ffmpeg, scaled to 360x640 (9:16 portrait). Uploads frames to the moodboard-frames storage bucket and saves VideoFrame[] to the item record.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Moodboard item UUID (must be type 'video' and platform 'tiktok')
+```
+
+**Returns:**
+
+```
+{MoodboardItem} Updated item record with frames array
+```
+
+### `POST /api/analysis/items/:id/insights`
+
+Extract marketing insights from a website moodboard item. Fetches and parses the page HTML, then uses AI to produce a structured PageInsights object including summary, key headlines, value propositions, design notes, and actionable insights for the content team.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Moodboard item UUID (must be type 'website')
+```
+
+**Returns:**
+
+```
+{MoodboardItem} Updated item record with page_insights and content_themes
+```
+
+### `POST /api/analysis/items/:id/process`
+
+Run the full video processing pipeline for a moodboard item (transcription + AI analysis). Only applicable to items with type 'video'. Delegates to processVideoItem() helper.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Moodboard item UUID
+```
+
+**Returns:**
+
+```
+{MoodboardItem} Updated item record after processing
+```
+
+### `POST /api/analysis/items/:id/replicate`
+
+Generate a full production-ready replication brief for a moodboard video item. The brief includes concept adaptation, a rewritten hook, scene-by-scene script outline, shot list, music direction, caption suggestions, pacing notes, and CTA. Saves to replication_brief.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+format - Target format (e.g. 'TikTok', 'Instagram Reel') (required)
+client_id - Client UUID for brand context (optional)
+notes - Adaptation notes (optional)
+```
+
+**Query params:**
+
+```
+id - Moodboard item UUID
+```
+
+**Returns:**
+
+```
+{{ brief: string }}
+```
+
+### `POST /api/analysis/items/:id/reprocess`
+
+Reset a moodboard video item's analysis data and run the full processing pipeline again. Clears all analysis fields (hook, transcript, themes, etc.) before re-running processVideoItem().
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Moodboard item UUID (must be type 'video')
+```
+
+**Returns:**
+
+```
+{MoodboardItem} Updated item record after reprocessing
+```
+
+### `POST /api/analysis/items/:id/rescript`
+
+AI-rescript a moodboard video for a specific brand. Uses the item's hook, transcript, and winning elements as a structural template, then rewrites the spoken word script for the target brand. Saves the rescript and replication_brief to the item.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+client_id - Client UUID for brand voice context (optional)
+brand_voice - Brand voice override (optional)
+product - Product or service being promoted (optional)
+target_audience - Target audience description (optional)
+notes - Additional adaptation notes (optional)
+```
+
+**Query params:**
+
+```
+id - Moodboard item UUID
+```
+
+**Returns:**
+
+```
+{{ rescript: { script, client_id, brand_voice, product, target_audience, generated_at } }}
+```
+
+### `DELETE /api/analysis/items/:id/tags`
+
+Remove a tag from a moodboard item.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+tag_id - Tag UUID to remove (required)
+```
+
+**Query params:**
+
+```
+id - Moodboard item UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/analysis/items/:id/tags`
+
+List all tags applied to a moodboard item.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Moodboard item UUID
+```
+
+**Returns:**
+
+```
+{MoodboardTag[]}
+```
+
+### `POST /api/analysis/items/:id/tags`
+
+Apply a tag to a moodboard item. Returns 409 if the tag is already applied.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+tag_id - Tag UUID to apply (required)
+```
+
+**Query params:**
+
+```
+id - Moodboard item UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `POST /api/analysis/items/:id/thumbnail`
+
+Upload a client-side selected thumbnail for a moodboard item. Accepts scored thumbnail candidates from client-side processing along with the selected frame as a data URL. Uploads the thumbnail to moodboard-thumbnails storage, stores candidate metadata (without dataUrls), and updates thumbnail_url on the item.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+candidates - Array of up to 10 scored thumbnail candidates (timestampMs, score, reasons, dataUrl)
+bestTimestampMs - Timestamp of the selected best thumbnail (ms)
+thumbnailDataUrl - Base64 data URL (data:image/...) of the selected thumbnail
+```
+
+**Query params:**
+
+```
+id - Moodboard item UUID
+```
+
+**Returns:**
+
+```
+{{ thumbnail_url: string }}
+```
+
+### `POST /api/analysis/items/:id/transcribe`
+
+Extract a transcript for a moodboard video item. Supports TikTok (via tikwm + scraper) and YouTube (via timedtext API). If the item has no title or a generic one, AI generates a short catchy title from the transcript. Saves transcript, segments, and title.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Moodboard item UUID (must be type 'video')
+```
+
+**Returns:**
+
+```
+{MoodboardItem} Updated item record with transcript
+```
+
+### `GET /api/analysis/items/:id/video-url`
+
+Return a direct (playable) video URL for a moodboard item. Platform page URLs (TikTok, Instagram, etc.) cannot be loaded in a <video> element, so this endpoint resolves the underlying CDN video URL for client-side use (e.g. frame extraction, thumbnail selection). Currently supports TikTok; returns 400 for other platforms without a direct CDN URL.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Moodboard item UUID
+```
+
+**Returns:**
+
+```
+{{ videoUrl: string }}
+```
+
+### `POST /api/analysis/items/batch-tags`
+
+Fetch all tags for a batch of moodboard items in a single query. Returns a map of item_id → MoodboardTag[]. Useful for efficiently loading tag state for a full board without N+1 queries.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+item_ids - Array of 1–200 moodboard item UUIDs
+```
+
+**Returns:**
+
+```
+{Record<string, MoodboardTag[]>} Map of item UUID to tag array
+```
+
+### `POST /api/analysis/notes`
+
+Create a sticky note on a moodboard. Notes are colored canvas annotations with a position. Also bumps the parent board's updated_at timestamp.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+board_id - Board UUID (required)
+content - Note text content (optional, max 5000 chars, default '')
+color - Note color: 'yellow' | 'blue' | 'green' | 'pink' | 'white' (default 'yellow')
+position_x - Canvas X position (default 0)
+position_y - Canvas Y position (default 0)
+```
+
+**Returns:**
+
+```
+{MoodboardNote} Created note record
+```
+
+### `DELETE /api/analysis/notes/:id`
+
+Permanently delete a moodboard sticky note. Also bumps the parent board's updated_at timestamp.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Note UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `PATCH /api/analysis/notes/:id`
+
+Update a moodboard sticky note's content, color, or position. Applies only the provided fields. Also bumps the parent board's updated_at timestamp.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+content - Note text (optional, max 5000 chars)
+color - Note color: 'yellow' | 'blue' | 'green' | 'pink' | 'white' (optional)
+position_x - Canvas X position (optional)
+position_y - Canvas Y position (optional)
+width - Note width in pixels (optional, nullable)
+```
+
+**Query params:**
+
+```
+id - Note UUID
+```
+
+**Returns:**
+
+```
+{MoodboardNote} Updated note record
+```
+
+### `DELETE /api/analysis/tags/:id`
+
+Permanently delete a tag. Cascades to all moodboard_item_tags associations.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Tag UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/analysis/templates`
+
+Return the list of built-in board templates. Templates include pre-defined sticky note layouts for common use cases (competitor analysis, content inspiration, campaign planning). Used when creating a new board from a template.
+
+**Auth:** None (public — no sensitive data)
+
+**Returns:**
+
+```
+{BoardTemplate[]}
+```
 
 ---
 
-## 15. Reporting & Analytics
+## Organic Social
 
-### `GET /api/reporting/summary`
-Generate analytics summary for a client over a date range (aggregates from Meta/Instagram data).
-**Auth:** Required (user)
-**Query:** `clientId, start (YYYY-MM-DD), end (YYYY-MM-DD)`
-**Response:** `{ combined, platforms, dateRange }`
+_Organic social audits + share links._
 
-### `GET /api/reporting/top-posts`
-Get top-performing posts for a client sorted by engagement.
-**Auth:** Required (user)
-**Query:** `client_id, limit?, platform?`
-**Response:** Array of top posts with metrics
+### `DELETE /api/analyze-social`
 
-### `POST /api/reporting/sync`
-Sync social analytics data from Meta/Instagram for a client.
-**Auth:** Required (user)
-**Body:** `{ clientId, dateRange?: { start, end } }`
-**Response:** `{ synced: number }`
+### `GET /api/analyze-social`
 
-### `POST /api/reporting/share`
-Create a shareable analytics report link.
+### `POST /api/analyze-social`
+
+### `GET /api/analyze-social/:id`
+
+### `POST /api/analyze-social/:id/attach-to-client`
+
+Phase 1 of competitor benchmarking. An admin attaches a completed audit to a client so Phase 2's weekly cron can track the audit's competitor list on an ongoing basis. Admin-only — portal viewers see a "contact your team" placeholder on the report page and never reach this route. We still enforce the role check server-side as defense-in-depth.
+
+### `POST /api/analyze-social/:id/detect-socials`
+
+Phase 1: Scrape the website, extract social links + business context. Returns detected platforms so the user can confirm/add before full processing.
+
+### `POST /api/analyze-social/:id/find-competitor-socials`
+
+Searches each platform for each competitor's social profile. Returns candidates with similarity scores so the confirm-platforms UI can show disambiguation pickers for ambiguous matches. Runs TT + IG + YT in parallel per competitor, competitors in parallel. Admin-only (audit is admin-only).
+
+### `POST /api/analyze-social/:id/process`
+
+Platforms we can actually scrape today. Anything else the user adds gets surfaced on the report as "no scraper yet" rather than silently dropped. Add a platform to this set the moment its scraper + `switch` case land. / // LinkedIn intentionally excluded — not a short-form video platform. // Facebook re-enabled on `cleansyntax/facebook-profile-posts-scraper` for // profile metadata + `apify/facebook-reels-scraper` for Reels (short-form). const SUPPORTED_SCRAPE_PLATFORMS = new Set<AuditPlatform>([ 'tiktok', 'instagram', 'youtube', 'facebook', ]); /** POST /api/analyze-social/[id]/process — Run the full audit pipeline Flow: 1. Scrape the prospect's website → extract business context + social links 2a. Scrape each social platform in parallel (TikTok, Instagram, etc.) 2b. Competitor discovery + scraping — runs in parallel with 2a 3. AI generates the 6-card scorecard 4. Persist scraped images to Supabase Storage (so report survives CDN expiry) 5. Store results
+
+### `POST /api/analyze-social/:id/resume`
+
+Used when the website scrape didn't find social profiles.
+
+### `DELETE /api/analyze-social/:id/share`
+
+Revoke the public share link for an audit by deleting all share records.
+
 **Auth:** Required (admin)
-**Body:** `{ client_id, date_from, date_to }`
-**Response:** `{ token, url, expires_at }`
 
-### `GET /api/reporting/shared/[token]`
-Public access to a shared analytics report.
-**Auth:** Public
-**Response:** Report data
+**Query params:**
 
-### `GET /api/instagram/accounts`
-List connected Instagram accounts.
+```
+id - Prospect audit UUID
+```
+
+**Returns:**
+
+```
+{{ shared: false }}
+```
+
+### `GET /api/analyze-social/:id/share`
+
+Check if an audit has an active share link and return its details.
+
 **Auth:** Required (admin)
-**Response:** Array of Instagram account objects
 
-### `GET /api/instagram/media`
-Get recent Instagram media with optional insights.
-**Auth:** Required (admin)
-**Query:** `account_id, limit?, insights?`
-**Response:** Array of media objects with engagement data
+**Query params:**
 
-### `GET /api/instagram/insights`
-Get account-level Instagram insights (reach, impressions, followers).
-**Auth:** Required (admin)
-**Query:** `account_id, period?`
-**Response:** Insights object
+```
+id - Prospect audit UUID
+```
 
-### `GET /api/instagram/demographics`
-Get Instagram audience demographic data.
+**Returns:**
+
+```
+{{ shared: false } | { shared: true, token: string, url: string, expires_at: string | null }}
+```
+
+### `POST /api/analyze-social/:id/share`
+
+Create a new public share link for a completed audit. Deletes any existing links before generating a fresh 48-char hex token.
+
 **Auth:** Required (admin)
-**Query:** `account_id`
-**Response:** Demographics object
+
+**Query params:**
+
+```
+id - Prospect audit UUID (must be in 'completed' status)
+```
+
+**Returns:**
+
+```
+{{ shared: true, token: string, url: string }}
+```
+
+### `POST /api/analyze-social/:id/suggest-competitors`
+
+Runs the LLM competitor-discovery step (website + industry → ranked list) without scraping. The confirm-platforms UI uses this to pre-fill the user-editable competitor inputs.
+
+---
+
+## Analytics
+
+_Social analytics, benchmarking, competitors, ecom tracking._
+
+### `GET /api/analytics/client-series`
+
+### `DELETE /api/analytics/competitors`
+
+### `GET /api/analytics/competitors`
+
+### `POST /api/analytics/competitors`
+
+### `POST /api/analytics/competitors/:id/refresh`
+
+### `POST /api/analytics/competitors/discover`
+
+### `POST /api/analytics/competitors/hydrate-social`
+
+### `POST /api/analytics/competitors/resolve`
 
 ### `GET /api/analytics/meta`
-Fetch Meta Ads Manager data: campaigns, ad sets, and ads with insights. Computes performance scores.
+
+### `GET /api/benchmarks`
+
+Phase 3 — powers the audit-derived benchmarking section on /admin/analytics. Returns every active `client_benchmarks` row for the client, each with the latest snapshot per (platform, username) and the full snapshot history (sorted asc) so the chart can plot a timeline. Auth: admin full access; portal viewers must have `user_client_access` for the requested client. RLS handles the viewer path when we use the server client; we double-check server-side for clear error codes.
+
+### `POST /api/benchmarks/track-competitor`
+
+Adds a single competitor (from an audit's competitor card) to the client's benchmark snapshot for that audit. Creates the `client_benchmarks` row if one doesn't exist yet — otherwise appends to its `competitors_snapshot` array. Idempotent: re-tracking a competitor already in the snapshot is a no-op + returns `already_tracked`. Admin-only — benchmark rows belong to the agency view, never the portal.
+
+### `DELETE /api/ecom-competitors`
+
 **Auth:** Required (admin)
-**Query:** `datePreset: 'last_7d'|'last_14d'|'last_30d'|'this_month'|'all_time'|'custom', dateFrom?, dateTo?`
-**Response:** Structured campaigns and performance data
+
+### `GET /api/ecom-competitors`
+
+**Auth:** Required (admin)
+
+### `POST /api/ecom-competitors`
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+client_id, domain, platform?, display_name?
+```
+
+### `POST /api/ecom-competitors/:id/refresh`
+
+for a single competitor now and persist a new snapshot.
+
+**Auth:** Required (admin)
+
+### `DELETE /api/meta-ad-tracker/pages`
+
+**Auth:** Required (admin)
+
+### `GET /api/meta-ad-tracker/pages`
+
+creatives (most-recent-first, capped at 6 per page).
+
+**Auth:** Required (admin)
+
+### `POST /api/meta-ad-tracker/pages`
+
+**Auth:** Required (admin)
+
+### `POST /api/meta-ad-tracker/pages/:id/refresh`
+
+library URL via Apify now and upsert each creative on (tracked_page_id, ad_archive_id) so we keep one row per ad and move `last_seen_at` forward on repeat scrapes.
+
+**Auth:** Required (admin)
+
+---
+
+## The Nerd AI
+
+_AI assistant with tool-calling + @mention context._
+
+### `GET /api/nerd/artifacts`
+
+GET — list artifacts, optionally filtered by client_id
+
+### `POST /api/nerd/artifacts`
+
+POST — save a new artifact
+
+### `DELETE /api/nerd/artifacts/:id`
+
+DELETE — remove an artifact
+
+### `GET /api/nerd/artifacts/:id`
+
+GET — fetch a single artifact by ID
+
+### `POST /api/nerd/chat`
+
+Content type — pdf_text for extracted PDF content, image for base64, text for plain text files */ type: z.enum(['pdf_text', 'image', 'text']), /** Original filename */ name: z.string().max(256), /** Extracted text content (for pdf_text/text) or base64 data URL (for image) */ content: z.string().max(500_000), }); const chatSchema = z.object({ messages: z .array(z.object({ role: z.enum(['user', 'assistant', 'tool']), content: z.string(), tool_call_id: z.string().optional(), })) .min(1), /** Parsed @mentions from the latest user message */ mentions: z.array(mentionSchema).optional(), /** If a pending action was confirmed or cancelled */ actionConfirmation: z.object({ toolName: z.string(), arguments: z.record(z.string(), z.unknown()), confirmed: z.boolean(), }).optional(), /** Conversation ID for persistence — if omitted, creates a new conversation */ conversationId: z.string().uuid().optional(), /** Portal mode — set by portal client, scopes to the mentioned client only */ portalMode: z.boolean().optional(), /** Optional frontend context for first message (e.g. opened from Strategy Lab) */ sessionHint: z.string().max(500).optional(), /** IDs of topic searches to attach as context for the LLM */ searchContext: z.array(z.string().uuid()).max(5).optional(), /** Mixed-type analyses attached to this chat session. Unlike `searchContext` (which dumps full topic-search blocks into the system prompt), `scopeContext` injects only a compact index of what's available and lets the agent pull detail on demand via tools like `get_audit_summary`, `get_tiktok_shop_search_summary`, `get_topic_search_summary`. This is the progressive-context primitive the Strategy Lab + per-analysis drawer use. Portal users currently have no drawer / Strategy Lab surface that populates this field, so the server ignores it for them as defense-in-depth. / scopeContext: z .array( z.object({ type: z.enum(['topic_search', 'audit', 'tiktok_shop_search']), id: z.string().uuid(), }), ) .max(10) .optional(), /** Explicit Nerd surface mode. When 'strategy-lab' (or the legacy alias 'content-lab'), the chat route appends the Strategy Lab scripting addendum (behavioural rules + preloaded scripting skills from nerd_skills) to the base system prompt. Used by components/content-lab/content-lab-nerd-chat.tsx and the portal. / mode: z.enum(['content-lab', 'strategy-lab']).optional(), /** File attachments — client-side extracted content (PDF text, image base64, plain text) */ attachments: z.array(attachmentSchema).max(10).optional(), }); // --------------------------------------------------------------------------- // System prompt // --------------------------------------------------------------------------- /** Admin-mode system prompt. Brand-aware so an AC-domain user is told they live inside "Anderson Collaborative Cortex" — never leaks the other agency's name if a viewer asks "what agency am I using?". / function buildAdminSystemPrompt(brandName: string): string { return `You are "The Nerd" — the in-house social media marketing strategist for ${brandName}, a creative agency. You live inside ${brandName} Cortex, the agency's internal platform. You are THE expert on: - Social media marketing strategy (Instagram, TikTok, YouTube, Facebook) - Short-form video content (hooks, pacing, trends, virality) - Content pillar frameworks and editorial calendars - Platform-specific best practices and algorithm behavior - Audience growth, engagement optimization, and paid media amplification - Brand voice development and content positioning You have full access to every client in the ${brandName} portfolio and can take actions on their behalf using tools. Each client has a **knowledge vault** — an Obsidian-style knowledge base with structured entries (brand profiles, web pages, meeting notes, documents, ideas). The vault is semantically indexed — use **search_knowledge_base** with a natural language query to find the most relevant entries. Do NOT try to load all entries at once; always search first, then drill deeper if needed. You can also save useful information using create_knowledge_note, and import meeting transcripts using import_meeting_notes. KNOWLEDGE SEARCH PATTERN (QMD): 1. **Query** — use search_knowledge_base with a descriptive query to find relevant context 2. **Match** — review the returned entries and identify the most relevant ones 3. **Decide** — answer using the matched context, or search again with a refined query if needed Never load all knowledge entries into your response. The vault may contain hundreds of entries across meeting notes, brand profiles, web pages, and documents. Semantic search will find what you need. TOOL USAGE RULES: - You have tools to manage tasks, schedule posts, view analytics, manage clients, shoots, moodboards, knowledge vaults, and more. - Use tools proactively when the user's request implies an action (e.g., "create a task" → use create_task tool). - When referring to clients or team members, users use @mentions. The system resolves these to IDs for you. - For READ tools (listing, viewing): execute immediately and summarize results naturally. - For WRITE tools (creating, updating): describe what you'll do, then call the tool. The frontend will show a confirmation card. - For DESTRUCTIVE tools: tell the user to do it manually via the UI and provide a link. - After a tool call completes, summarize the result in natural language. Don't just dump JSON. - If a tool fails, explain the error clearly and suggest alternatives. - You can call multiple tools in sequence if the user's request requires it. - For Strategy Lab / analysis-board questions, prefer the dedicated board + video tools before guessing from limited context. VIDEO ANALYSIS IN CHAT (same capabilities as the former analysis UI, without sidebar navigation): - When the user pastes a **video URL** (TikTok, YouTube, Instagram Reel, or direct .mp4/.webm) or wants transcript / hook / rescript work, use **add_video_url_for_analysis** (optional client_id when a client is @mentioned), then **run_hook_analysis_for_video** after the transcript exists, and **generate_video_rescript** when they want a brand adaptation of the script. Use **transcribe_analysis_item** only to retry or refresh transcription. - If they **only upload or share a video without instructions**, guide them conversationally through the same steps the product UI would: confirm you have the video, offer transcript first, then ask in natural language whether they want hook analysis (e.g. "Want me to break down the hook and score it?" not button labels like "Generate hooks"). - Never present fake UI buttons; use short questions or bullet options in prose. - For affiliate questions, use affiliate tools before giving recommendations from memory. BEHAVIOR RULES: - Be direct, opinionated, and actionable. You're a senior strategist, not a generic chatbot. - Lead with the insight, not the preamble. Skip "Great question!" / "Absolutely!" / "Here's what I think" — jump straight to the answer. - Reference specific client data when answering questions about brands. ALWAYS search the client's knowledge vault (search_knowledge_base) before giving brand-specific advice — don't rely on memory or assumptions about their positioning. - Use markdown formatting: headers, bullets, bold for emphasis. Keep it scannable. - When you don't have data for something, say so — don't fabricate metrics. - If analytics data is provided, analyze it with strategic insight, not just number recitation. Lead with the "so what" — what should change based on these numbers. - When using @mentions, match the names the user provided to the resolved IDs in the system context. - Be specific. "Post more Reels" is useless. "Post 4 Reels/week using hook type X because your completion rate on Reels is 2x your carousel rate" is useful. Ground recommendations in data or the client's vault. - Every response the user asks for should be structured as a shareable deliverable — clear title, scannable sections, actionable next steps. The user can export any message as a PDF, so write as if your output will be printed and handed to a client. - End outputs with the final deliverable. Never append closing offers like "I can also create..." or "If you want, I can..." — deliver the complete request without upselling additional work. - When the user asks for content pillars, each pillar gets ONE sentence of justification (≤15 words), labeled "Why:" or "Justification:". No multi-paragraph explanations. - When posting cadence is requested, specify it per-pillar in a table or list. Don't bury cadence in aggregate weekly totals. - When diagnosing performance, cap root causes at 4 and prioritized tests at 3–4. Follow the diagnosis with a one-sentence severity assessment (e.g., "This is a hook problem, not a topic problem") so the user knows what to focus on first. VISUALS AND REPORTS (markdown): - When a diagram, flowchart, Gantt, or process map would help more than text, use a fenced **mermaid** code block (\`\`\`mermaid ... \`\`\`). - For compact HTML/CSS/SVG layouts (side-by-side comparisons, SVG bar charts, styled summaries), use a fenced **html** code block (\`\`\`html ... \`\`\`). Keep markup self-contained; avoid relying on external scripts — the UI renders sanitized HTML in a sandboxed frame. - For long-form deliverables, use clear headings and bullets; users can export the assistant reply as a PDF or print from the chat. - Prefer visuals over walls of text. A mermaid flowchart of a content strategy is more useful than a paragraph describing it. An html comparison table is more useful than listing pros and cons in paragraphs. SHORT-FORM VIDEO SCRIPT FORMAT (strict — when user asks for a TikTok / Reel / Shorts script): - Open IMMEDIATELY with the quoted hook on line 1. No preamble, no style notes, no metadata before the hook. - Format the body as numbered beats: \`1.\`, \`2.\`, \`3.\`, etc. Exactly ONE sentence per beat. Never use prose paragraphs for beat-by-beat scripts. - Pattern interrupts must be embedded INSIDE the dialogue/narration itself (typically beat 4-5) — a content shift, a tonal reversal, or an unexpected statement. Never use stage directions in brackets like [RECORD SCRATCH] or [PAUSE] — this is a spoken script, not a shot list. - Each numbered beat MUST be exactly ONE complete sentence. If a beat is combining multiple ideas, split it or pick the strongest. - End with a direct CTA as the final beat — a statement or command, not a rhetorical question. For Gen Z / skeptical audiences, make it ironic or self-aware. Examples: "Sleep is the real flex." / "Choose your actual recovery arc." Avoid "Follow for more" / "Want X or Y?" - End the script cleanly after the CTA. Never append meta-commentary like "I can also make..." or "Let me know if you want..." unless the user explicitly asks. AGENCY KNOWLEDGE GRAPH: You have access to the agency knowledge graph — 9,857 nodes covering SOPs, skills, patterns, methodology, meeting notes, client profiles, and more. When asked about processes, best practices, or "how do we do X", ALWAYS search the knowledge graph first using search_agency_knowledge before answering from your own knowledge. The graph contains ${brandName}'s actual documented procedures. - Use search_agency_knowledge to find relevant nodes by semantic search - Use get_knowledge_node to read the full content of a specific node - Use list_knowledge_by_kind to browse all nodes of a type (e.g. all SOPs, all skills) - Use create_agency_knowledge_note to save new knowledge from conversations`; } /** Portal-specific system prompt — scoped to a single client */ function buildPortalSystemPrompt(clientName: string, brandName: string): string { return `You are "The Nerd" — a social media marketing strategist working with ${clientName}. You live inside ${brandName} Cortex, the agency's client portal. You are THE expert on: - Social media marketing strategy (Instagram, TikTok, YouTube, Facebook) - Short-form video content (hooks, pacing, trends, virality) - Content pillar frameworks and editorial calendars - Platform-specific best practices and algorithm behavior - Audience growth, engagement optimization, and paid media amplification - Brand voice development and content positioning You are helping ${clientName} with their social media strategy. You have access to their knowledge vault and brand data. Each client has a **knowledge vault** — an Obsidian-style knowledge base with structured entries (brand profiles, web pages, meeting notes, documents, ideas). The vault is semantically indexed — use **search_knowledge_base** with a natural language query to find the most relevant entries. Do NOT try to load all entries at once; always search first, then drill deeper if needed. KNOWLEDGE SEARCH PATTERN (QMD): 1. **Query** — use search_knowledge_base with a descriptive query to find relevant context 2. **Match** — review the returned entries and identify the most relevant ones 3. **Decide** — answer using the matched context, or search again with a refined query if needed Never load all knowledge entries into your response. The vault may contain hundreds of entries. Semantic search will find what you need. TOOL USAGE RULES: - You have read-only tools to search knowledge and view client information. - Use tools proactively when the user's request implies a lookup (e.g., "what's our brand voice" → use search_knowledge_base). - For READ tools (listing, viewing): execute immediately and summarize results naturally. - After a tool call completes, summarize the result in natural language. Don't just dump JSON. - If a tool fails, explain the error clearly and suggest alternatives. BEHAVIOR RULES: - Be direct, opinionated, and actionable. You're a senior strategist, not a generic chatbot. - Reference specific client data when answering questions about the brand. - Use markdown formatting: headers, bullets, bold for emphasis. Keep it scannable. - When you don't have data for something, say so — don't fabricate metrics. - If analytics data is provided, analyze it with strategic insight, not just number recitation.`; } /** Tools that portal (viewer) users are allowed to use. ⚠️ Adding a tool here WITHOUT adding a caller-org check inside its handler is a cross-org data leak. The admin Supabase client bypasses RLS, so every handler that accepts a client_id / entry_id / search_id from the caller must look up the caller's organization_id and reject when the resource belongs to another org. Current gates (keep this block in sync with the handlers): - search_knowledge_base → requireClientAccess in knowledge.ts - query_client_knowledge → requireClientAccess in knowledge.ts - get_knowledge_entry → requireClientAccess on entry.client_id - get_client_details → inline role/org check in clients.ts - generate_video_ideas → requireClientAccess in knowledge.ts - extract_topic_signals → filter search_ids by caller org - create_topic_plan → inline role/org check before insert / const PORTAL_ALLOWED_TOOLS = new Set([ 'search_knowledge_base', 'query_client_knowledge', 'get_knowledge_entry', 'get_client_details', 'generate_video_ideas', 'extract_topic_signals', 'create_topic_plan', // Portal drawer + Strategy Lab — portal users can summarize their own // topic searches (ownership enforced at scopeContext filter + already in // get_search_results by RLS). `get_topic_search_summary` is the compact // markdown variant the drawer leans on. All "spy" tools (audit / TT Shop // summaries, live market lookups) stay off this list — admin-only. 'get_topic_search_summary', 'get_search_results', ]); // --------------------------------------------------------------------------- // Context builders // --------------------------------------------------------------------------- interface ClientRow { id: string; name: string; slug: string; industry: string | null; target_audience: string | null; brand_voice: string | null; topic_keywords: string[] | null; website_url: string | null; agency: string | null; services: string[] | null; preferences: Record<string, unknown> | null; health_score: string | null; logo_url: string | null; } interface SocialProfileRow { id: string; client_id: string; platform: string; username: string; } interface StrategyRow { client_id: string; executive_summary: string | null; content_pillars: unknown; } function buildClientSummary(c: ClientRow, profiles: SocialProfileRow[], strategy: StrategyRow | null): string { const parts: string[] = []; parts.push(`### ${c.name} (slug: ${c.slug}, id: ${c.id})`); if (c.agency) parts.push(`Agency: ${c.agency}`); if (c.industry) parts.push(`Industry: ${c.industry}`); if (c.services?.length) parts.push(`Services: ${c.services.join(', ')}`); if (c.target_audience) parts.push(`Target Audience: ${c.target_audience}`); if (c.brand_voice) parts.push(`Brand Voice: ${c.brand_voice}`); const prefs = c.preferences; if (prefs) { if ((prefs.tone_keywords as string[])?.length) parts.push(`Tone: ${(prefs.tone_keywords as string[]).join(', ')}`); if ((prefs.topics_lean_into as string[])?.length) parts.push(`Lean Into: ${(prefs.topics_lean_into as string[]).join(', ')}`); if (prefs.posting_frequency) parts.push(`Posting Frequency: ${prefs.posting_frequency}`); } if (profiles.length > 0) { parts.push(`Social Accounts:`); for (const p of profiles) { parts.push(` - ${p.platform}: @${p.username} (profile_id: ${p.id})`); } } if (strategy?.executive_summary) { parts.push(`Strategy: ${strategy.executive_summary}`); } return parts.join('\n'); } /** Notify all super_admins when a guardrail fires. Non-blocking. */ async function notifySuperAdminsGuardrail( adminClient: ReturnType<typeof createAdminClient>, ctx: { userId: string; userEmail: string; message: string; ruleName: string }, ) { try { const { data: superAdmins } = await adminClient .from('users') .select('id') .eq('is_super_admin', true); if (!superAdmins || superAdmins.length === 0) return; // Don't notify the super_admin about their own messages const recipients = superAdmins.filter((sa) => sa.id !== ctx.userId); if (recipients.length === 0) return; const truncatedMsg = ctx.message.length > 120 ? ctx.message.slice(0, 120) + '...' : ctx.message; const notifications = recipients.map((sa) => ({ recipient_user_id: sa.id, type: 'guardrail_triggered', title: `Guardrail triggered: ${ctx.ruleName}`, body: `${ctx.userEmail} asked: "${truncatedMsg}"`, link_path: '/admin/nerd/settings', is_read: false, })); await adminClient.from('notifications').insert(notifications); } catch (err) { console.error('[guardrail-notify] Failed to notify super_admins:', err); } } async function buildKnowledgeSummary(clientId: string): Promise<string> { try { const { getKnowledgeEntries, getBrandProfile } = await import('@/lib/knowledge/queries'); const entries = await getKnowledgeEntries(clientId); if (entries.length === 0) return ''; const parts: string[] = ['Knowledge Base:']; const counts: Record<string, number> = {}; for (const e of entries) { counts[e.type] = (counts[e.type] ?? 0) + 1; } parts.push(` Entries: ${Object.entries(counts).map(([t, c]) => `${c} ${t}(s)`).join(', ')}`); // Full brand profile const brandProfile = await getBrandProfile(clientId); if (brandProfile) { parts.push(` Brand Profile:\n${brandProfile.content.substring(0, 1500)}`); } // Structured entity summaries from knowledge entries const entitySummary: string[] = []; const people = new Set<string>(); const products = new Set<string>(); const locations = new Set<string>(); for (const entry of entries) { const meta = entry.metadata as Record<string, unknown> | null; const entities = meta?.entities as { people?: { name: string; role?: string }[]; products?: { name: string; description?: string }[]; locations?: { address: string }[]; } | undefined; if (!entities) continue; for (const p of entities.people ?? []) people.add(p.role ? `${p.name} (${p.role})` : p.name); for (const p of entities.products ?? []) products.add(p.name); for (const l of entities.locations ?? []) locations.add(l.address); } if (people.size > 0) entitySummary.push(` Key People: ${[...people].join(', ')}`); if (products.size > 0) entitySummary.push(` Products/Services: ${[...products].join(', ')}`); if (locations.size > 0) entitySummary.push(` Locations: ${[...locations].join(', ')}`); if (entitySummary.length > 0) parts.push(...entitySummary); // Meeting notes summaries (last 5) const meetings = entries .filter((e) => e.type === 'meeting_note') .slice(0, 5); if (meetings.length > 0) { parts.push(' Recent Meetings:'); for (const m of meetings) { const summary = m.content.substring(0, 200); parts.push(` - ${m.title}: ${summary}...`); } } return parts.join('\n'); } catch (err) { console.error(`buildKnowledgeSummary failed for client ${clientId}:`, err instanceof Error ? err.message : err); return ''; } } // --------------------------------------------------------------------------- // Handler // --------------------------------------------------------------------------- /** POST /api/nerd/chat Streaming AI chat endpoint for "The Nerd" — an in-house social media strategist AI. Loads the full client portfolio and team context, then streams a response from Claude via OpenRouter. Supports tool use with up to 5 sequential tool calls per request. Write-risk tools emit action_confirmation events; destructive tools are blocked.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+messages - Conversation history (required, min 1 message)
+mentions - Optional @mention resolutions from the latest user message
+actionConfirmation - Optional confirmed/cancelled tool action to execute
+```
+
+**Returns:**
+
+```
+SSE stream of JSON lines: { type: 'text' | 'tool_result' | 'action_confirmation' | 'action_result', ... }
+```
+
+### `GET /api/nerd/clients`
+
+List active clients for use by The Nerd AI assistant. Returns name, slug, and agency for all active clients, ordered alphabetically.
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+{{ name: string, slug: string, agency: string | null }[]}
+```
+
+### `POST /api/nerd/command`
+
+### `GET /api/nerd/conversations`
+
+Lists this user's Nerd conversations, newest first. Optional ?clientId= filter scopes the list to conversations tagged with that client — used by the Strategy Lab conversation picker so the header dropdown only shows threads started for the currently-open client. The client_id column lives on nerd_conversations as of migration 096. If that migration hasn't run yet the filter is silently dropped so the endpoint still returns the unfiltered list (admin Nerd sidebar behaviour) rather than erroring.
+
+### `POST /api/nerd/conversations`
+
+### `DELETE /api/nerd/conversations/:id`
+
+### `GET /api/nerd/conversations/:id`
+
+### `PATCH /api/nerd/conversations/:id`
+
+### `DELETE /api/nerd/conversations/:id/share`
+
+DELETE — revoke share link
+
+### `GET /api/nerd/conversations/:id/share`
+
+GET — check if a conversation has an active share link
+
+### `POST /api/nerd/conversations/:id/share`
+
+POST — create a share link for a conversation
+
+### `POST /api/nerd/conversations/by-scope`
+
+Resolves the per-user, per-analysis Nerd conversation for a drawer chat. Each user has exactly one thread per (scopeType, scopeId); this endpoint finds or creates it and returns `{ conversationId }`. Admin-only. Drawer surfaces aren't exposed to portal users yet.
+
+### `DELETE /api/nerd/guardrails`
+
+DELETE /api/nerd/guardrails — remove a guardrail
+
+### `GET /api/nerd/guardrails`
+
+GET /api/nerd/guardrails — list all guardrails
+
+### `PATCH /api/nerd/guardrails`
+
+PATCH /api/nerd/guardrails — update a guardrail
+
+### `POST /api/nerd/guardrails`
+
+POST /api/nerd/guardrails — create a guardrail
+
+### `GET /api/nerd/mentions`
+
+Return all active clients and team members for @mention autocomplete in The Nerd chat. Returns both entities in a single response to minimize round-trips.
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+{{ clients: MentionClient[], team: MentionTeamMember[] }}
+```
+
+### `GET /api/nerd/searches`
+
+### `DELETE /api/nerd/skills`
+
+DELETE /api/nerd/skills — remove a skill
+
+### `GET /api/nerd/skills`
+
+GET /api/nerd/skills — list all skills
+
+### `PATCH /api/nerd/skills`
+
+PATCH /api/nerd/skills — update a skill
+
+### `POST /api/nerd/skills`
+
+POST /api/nerd/skills — create + sync from GitHub
+
+### `GET /api/nerd/slash-commands`
+
+Returns the unified slash command list for the Nerd composer: the hardcoded built-in commands from lib/nerd/slash-commands.ts plus any user-installed skills from the nerd_skills table that have a command_slug set. The client uses this to populate both the inline slash menu (typing "/") and the Commands catalog popover in the chat header. Skill-based commands expose minimal metadata — the full content + prompt template stays server-side and is applied when /<slug> is invoked through the chat pipeline.
+
+---
+
+## Scheduler
+
+_Social media scheduling, publishing, captions, reviews._
+
+### `POST /api/scheduler/ai/hashtag-suggestions`
+
+Generate 15-20 hashtag suggestions for a post caption using AI, grouped into high_volume, niche, and branded categories. Optionally uses client context (industry + keywords) to tailor suggestions.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+caption - Post caption to base suggestions on (optional)
+client_id - Client UUID for industry/keyword context (optional)
+```
+
+**Returns:**
+
+```
+{{ hashtags: string[], groups: { high_volume, niche, branded } }}
+```
+
+### `POST /api/scheduler/ai/improve-caption`
+
+Improve an existing caption or generate a new one from scratch using AI. Uses client brand voice, saved captions/CTAs, and target audience for context. Returns only the final caption text (no markdown formatting).
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+caption - Caption to improve; omit or leave blank to generate from scratch
+client_id - Client UUID for brand context and saved captions (optional)
+```
+
+**Returns:**
+
+```
+{{ improved_caption: string }}
+```
+
+### `GET /api/scheduler/analytics`
+
+Fetch post analytics from the Late API for all social profiles linked to a client that have a late_account_id. Returns analytics merged across all connected accounts.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+client_id - Client UUID (required)
+start - Analytics start date (required)
+end - Analytics end date (required)
+```
+
+**Returns:**
+
+```
+{{ analytics: AnalyticsItem[] }}
+```
+
+### `POST /api/scheduler/auto-schedule`
+
+Optional media IDs to schedule (defaults to all unused media) */ media_ids: z.array(z.string()).optional(), }); /** POST /api/scheduler/auto-schedule Automatically schedule all unused media for a client across a date range. AI generates a unique caption per video using brand context and saved captions. Posts are evenly spaced based on posts_per_week and distributed across the date range. Each successful post is linked to platform profiles and media, and media is marked as used.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+client_id - Client UUID (required)
+start_date - Start date YYYY-MM-DD (required)
+end_date - End date YYYY-MM-DD (required)
+posts_per_week - Posts per week 1-14 (default 3)
+posting_time - Daily posting time HH:MM (default '12:00')
+platform_profile_ids - Social profile UUIDs to post to (min 1 required)
+media_ids - Specific media UUIDs to schedule (optional; defaults to all unused media)
+```
+
+**Returns:**
+
+```
+{{ success: true, scheduled: number, errors: number, results: ScheduleResult[] }}
+```
+
+### `POST /api/scheduler/connect`
+
+Create a Zernio profile for a client if one doesn't exist yet (stored as late_profile_id). */ async function ensureLateProfile(clientId: string, clientName: string): Promise<string> { const adminClient = createAdminClient(); // Check if client already has a Zernio/Late profile id const { data: client } = await adminClient .from('clients') .select('late_profile_id') .eq('id', clientId) .single(); if (client?.late_profile_id) return client.late_profile_id; const res = await fetch(`${getZernioApiBase()}/profiles`, { method: 'POST', headers: { Authorization: `Bearer ${getZernioApiKey()}`, 'Content-Type': 'application/json', }, body: JSON.stringify({ name: clientName }), }); if (!res.ok) { throw new Error(`Failed to create Zernio profile: ${await res.text()}`); } const body = (await res.json()) as { profile?: { _id?: string; id?: string } }; const lateProfileId = body.profile?._id ?? body.profile?.id; if (!lateProfileId) { throw new Error('Zernio create profile: missing profile id in response'); } // Save it to our DB await adminClient .from('clients') .update({ late_profile_id: lateProfileId }) .eq('id', clientId); return lateProfileId; } /** POST /api/scheduler/connect Initiate Zernio OAuth to connect a social account for a client. Creates a Zernio profile (stored as late_profile_id) if missing, then returns authUrl to redirect the user.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+platform - 'facebook' | 'instagram' | 'tiktok' | 'youtube' (required)
+client_id - Client UUID (required)
+```
+
+**Returns:**
+
+```
+{{ authUrl: string }}
+```
+
+### `GET /api/scheduler/connect/callback`
+
+OAuth callback from Zernio after a social account connection. Verifies the signed state token, reads the connected account details from query params (standard flow: Zernio appends ?connected={platform}&accountId=Y&username=Z), upserts the social_profile into the DB, and redirects back to the scheduler UI.
+
+**Auth:** None (OAuth callback — no session required, but state token is HMAC-verified)
+
+**Query params:**
+
+```
+state - Signed state token containing client_id and platform (required)
+connected - Platform name from Zernio (e.g. instagram, tiktok)
+accountId - Zernio account ID for the connected account
+username - Connected account username
+profileId - Zernio profile ID (echoed back)
+```
+
+**Returns:**
+
+```
+Redirect to /admin/scheduler
+```
+
+### `GET /api/scheduler/media`
+
+List scheduler media for a client, ordered by creation date descending. Optionally filters to only show media not yet attached to any post.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+client_id - Client UUID to filter by (required)
+unused - Pass 'true' to return only unused media (optional)
+```
+
+**Returns:**
+
+```
+{{ media: SchedulerMedia[] }}
+```
+
+### `POST /api/scheduler/media`
+
+Two-action endpoint for media uploads. With action='get-upload-url', returns a presigned upload URL and public URL from Late. With action='confirm-upload', saves the media record to scheduler_media after the client has uploaded directly to Late.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+action - 'get-upload-url' | 'confirm-upload' (required)
+contentType - MIME type of the file (for get-upload-url)
+filename - Original filename (for get-upload-url and confirm-upload)
+client_id - Client UUID (for confirm-upload)
+public_url - Late public URL of the uploaded file (for confirm-upload)
+file_size_bytes - File size in bytes (for confirm-upload)
+mime_type - MIME type (for confirm-upload)
+thumbnail_url - Thumbnail URL (for confirm-upload, optional)
+```
+
+**Returns:**
+
+```
+{{ uploadUrl, publicUrl }} | SchedulerMedia record
+```
+
+### `DELETE /api/scheduler/media/:id`
+
+Permanently delete a scheduler media item. Returns 409 if the media is still attached to any scheduled post — remove it from the post first.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Scheduler media UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/scheduler/posts`
+
+List scheduled posts for a client, with associated platforms, media, and review link status. Returns posts ordered by scheduled_at ascending.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+client_id - Client UUID to filter by (required)
+start - Filter posts on or after this datetime (optional)
+end - Filter posts on or before this datetime (optional)
+```
+
+**Returns:**
+
+```
+{{ posts: TransformedScheduledPost[] }}
+```
+
+### `POST /api/scheduler/posts`
+
+Create a new scheduled post. Persists the post, links platform profiles and media, then syncs to the Late API if any linked profiles have a late_account_id and the status is 'scheduled' (not 'draft'). Late sync failures are logged but non-fatal.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+client_id - Client UUID (required)
+caption - Post caption text (default '')
+hashtags - Array of hashtags (default [])
+scheduled_at - ISO datetime for scheduling, or null for drafts
+status - 'draft' | 'scheduled' (default 'draft')
+platform_profile_ids - Social profile UUIDs to publish to
+media_ids - Scheduler media UUIDs to attach
+cover_image_url - Cover image URL for video posts (nullable)
+tagged_people - Instagram tagged people handles
+collaborator_handles - Instagram collaborator handles
+```
+
+**Returns:**
+
+```
+{{ post: ScheduledPost }}
+```
+
+### `DELETE /api/scheduler/posts/:id`
+
+Delete a scheduled post. Attempts to remove the post from Late API first if a late_post_id exists (non-fatal on failure), unmarks attached media as used, then deletes the post record (cascades to platforms, media links, and review links).
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Scheduled post UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `PUT /api/scheduler/posts/:id`
+
+Update a scheduled post's fields, platform links, and/or media attachments. When media is replaced, old media items are unmarked as used. Platform links are replaced atomically (delete then insert) if platform_profile_ids is provided.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+caption - Updated caption (optional)
+hashtags - Updated hashtags array (optional)
+scheduled_at - Updated schedule datetime or null (optional)
+status - 'draft' | 'scheduled' (optional)
+platform_profile_ids - Replace platform profile links (optional)
+media_ids - Replace media attachments (optional)
+cover_image_url - Updated cover image URL (optional)
+tagged_people - Updated tagged people (optional)
+collaborator_handles - Updated collaborator handles (optional)
+```
+
+**Query params:**
+
+```
+id - Scheduled post UUID
+```
+
+**Returns:**
+
+```
+{{ post: ScheduledPost }}
+```
+
+### `POST /api/scheduler/posts/batch-publish`
+
+Queue multiple scheduled or draft posts for immediate publishing by setting their status to 'publishing' and scheduled_at to now. The cron job picks them up on its next run.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+post_ids - Array of scheduled post UUIDs to publish (min 1 required)
+```
+
+**Returns:**
+
+```
+{{ published: number, message: string }}
+```
+
+### `POST /api/scheduler/posts/publish-drafts`
+
+Promote all draft posts with a scheduled date for a client to 'scheduled' status and sync each to the Late API. Posts without Late-connected profiles are skipped. Late sync errors per post are logged but non-fatal.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+client_id - Client UUID whose drafts to promote (required)
+```
+
+**Returns:**
+
+```
+{{ published: number, synced: number, message: string }}
+```
+
+### `GET /api/scheduler/profiles`
+
+List active social profiles connected to a client for use in the post scheduler. Returns profiles that have been connected via Late OAuth, ordered by platform name.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+client_id - Client UUID (required)
+```
+
+**Returns:**
+
+```
+{{ profiles: { id, platform, username, avatar_url, late_account_id }[] }}
+```
+
+### `GET /api/scheduler/review`
+
+Fetch a scheduled post with its review link data by token. Public endpoint used by the client review page. Returns 410 if the review link has expired.
+
+**Auth:** None (public — token provides authorization)
+
+**Query params:**
+
+```
+token - Post review link token (required)
+```
+
+**Returns:**
+
+```
+{{ post, comments, review_link_id }}
+```
+
+### `POST /api/scheduler/review`
+
+Generate a client review link for a scheduled post. Creates a post_review_links record and returns the shareable URL.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+post_id - Scheduled post UUID (required)
+```
+
+**Returns:**
+
+```
+{{ link: PostReviewLink, url: string }}
+```
+
+### `POST /api/scheduler/review/comment`
+
+Add a review comment to a post review link. Public endpoint — clients use this to approve, request changes, or leave a general comment without needing an account. Returns 410 if the review link has expired.
+
+**Auth:** None (public — review_link_id provides authorization)
+
+**Body:**
+
+```
+review_link_id - Post review link UUID (required)
+author_name - Commenter name (default 'Anonymous')
+content - Comment text (required)
+status - 'approved' | 'changes_requested' | 'comment' (default 'comment')
+```
+
+**Returns:**
+
+```
+{{ comment: PostReviewComment }}
+```
+
+### `DELETE /api/scheduler/saved-captions`
+
+Permanently delete a saved caption template by ID.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+id - Saved caption UUID (required)
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/scheduler/saved-captions`
+
+List all saved caption templates for a client, ordered by creation date descending.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+client_id - Client UUID (required)
+```
+
+**Returns:**
+
+```
+{{ captions: SavedCaption[] }}
+```
+
+### `POST /api/scheduler/saved-captions`
+
+Save a caption template (title, text, hashtags) to the client's saved captions library. Saved captions are used as style reference by AI caption improvement.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+client_id - Client UUID (required)
+title - Caption template name (required)
+caption_text - Caption body text (optional)
+hashtags - Array of hashtags without # prefix (optional)
+```
+
+**Returns:**
+
+```
+{{ caption: SavedCaption }}
+```
+
+### `GET /api/scheduler/share`
+
+Fetch posts for a shared calendar review link. Public endpoint used by the client review page. Returns posts enriched with platform info, media thumbnails, and per-post review status from any existing comments.
+
+**Auth:** None (public — token provides authorization)
+
+**Query params:**
+
+```
+token - Calendar review link token (required)
+```
+
+**Returns:**
+
+```
+{{ client_name, label, posts: EnrichedPost[] }}
+```
+
+### `POST /api/scheduler/share`
+
+Create a shareable calendar review link for a selected set of posts. Clients use the generated URL to view and provide feedback on scheduled content without logging in.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+client_id - Client UUID (required)
+post_ids - Scheduled post UUIDs to share (min 1 required)
+label - Label for the review link (default 'Review link')
+```
+
+**Returns:**
+
+```
+{{ link: ClientReviewLink, url: string }}
+```
+
+### `POST /api/scheduler/share/feedback`
+
+Submit review feedback on a post via a shared calendar link. When a client approves a draft post, it is automatically promoted to 'scheduled' and synced to Late API. Public endpoint — no auth required, authorization is via share token.
+
+**Auth:** None (public — share_token provides authorization)
+
+**Body:**
+
+```
+share_token - Calendar review link token (required)
+post_id - Scheduled post UUID to comment on (required)
+author_name - Commenter name (required)
+content - Feedback text (required)
+status - 'approved' | 'changes_requested' | 'comment' (default 'comment')
+```
+
+**Returns:**
+
+```
+{{ comment: PostReviewComment }}
+```
+
+### `POST /api/scheduler/webhooks`
+
+First non-empty string among keys on obj. */ function pickStr(obj: Record<string, unknown> | null, ...keys: string[]): string { if (!obj) return ''; for (const k of keys) { const v = obj[k]; if (typeof v === 'string' && v) return v; } return ''; } /** Zernio sends either `data: { postId }` (legacy) or top-level `post: { id, ... }`. Account events may use `data` or top-level `account`. / function extractZernioWebhookIds(body: Record<string, unknown>): { postId: string; accountId: string; post: Record<string, unknown> | null; account: Record<string, unknown> | null; data: Record<string, unknown> | null; } { const data = asRecord(body.data); const post = asRecord(body.post); const account = asRecord(body.account); const postId = pickStr(data, 'postId', 'post_id', '_id', 'id') || pickStr(post, 'id', '_id', 'postId') || ''; const accountId = pickStr(data, 'accountId', 'account_id') || pickStr(account, 'id', '_id', 'accountId') || ''; return { postId, accountId, post, account, data }; } function normalizeWebhookEvent(raw: string): string { return raw.trim().toLowerCase().replace(/\s+/g, '.'); } /** POST /api/scheduler/webhooks Receive **Zernio** webhooks and update scheduled post statuses. Handles post.published, post.failed, post.scheduled, post.partial / post.partial_publish, account.connected, and account.disconnected. Verifies HMAC when the **Zernio webhook secret** is configured via `ZERNIO_WEBHOOK_SECRET` (legacy alias: `LATE_WEBHOOK_SECRET`).
+
+**Auth:** HMAC SHA-256 in X-Zernio-Signature, X-Late-Signature, or X-Signature (secret required)
+
+**Returns:**
+
+```
+{{ received: true }}
+```
+
+---
+
+## Reporting
+
+_Reports, digests, top posts, Instagram insights, ads, affiliates._
 
 ### `GET /api/affiliates`
-Get UpPromote affiliate analytics for a client.
+
+Fetch comprehensive affiliate analytics for a client within a date range. Returns KPIs (new/total/active affiliates, referrals, revenue, commission, clicks, pending payouts), snapshot trend data for charts, a ranked list of top affiliates with period performance, recent referrals, and pending payout details.
+
 **Auth:** Required (admin)
-**Query:** `clientId, start (YYYY-MM-DD), end (YYYY-MM-DD)`
-**Response:** Affiliate stats (new/total/active affiliates, referrals, sales, commissions, clicks, top affiliates, recent referrals, pending payouts)
+
+**Query params:**
+
+```
+clientId - Client UUID (required)
+start - Start date in YYYY-MM-DD format (required)
+end - End date in YYYY-MM-DD format (required)
+```
+
+**Returns:**
+
+```
+{{ kpis, snapshots, topAffiliates, recentReferrals, pendingPayouts }}
+```
+
+### `GET /api/insights/creator/:username`
+
+Returns cached lemur enrichment for a creator. If the cached snapshot is older than 24h or `?refresh=1` is passed, re-run lemur and update the snapshot. The UI labels anything older than 24h as stale.
+
+### `GET /api/insights/search`
+
+List recent TikTok Shop searches (global, newest first). Used by the search page to show "Recent searches".
+
+### `POST /api/insights/search`
+
+Kick off a TikTok Shop category search. Creates a row, returns the jobId immediately, and runs the pipeline in the background via Next's after() so the client can poll /api/insights/search/[jobId] for status + results.
+
+### `DELETE /api/insights/search/:jobId`
+
+### `GET /api/insights/search/:jobId`
+
+Returns the current state of a TikTok Shop category search: status, progress counters, results (if completed). Also auto-fails runs that have been stuck in `running`/`queued` past the platform timeout — same pattern as prospect_audits.
+
+### `GET /api/instagram/accounts`
+
+### `GET /api/instagram/demographics`
+
+### `GET /api/instagram/insights`
+
+### `GET /api/instagram/media`
+
+### `GET /api/reporting/audience-insights`
+
+### `GET /api/reporting/best-time`
+
+Proxies /v1/analytics/best-time — day-of-week × hour engagement slots ranked by avg_engagement. When clientId is supplied we resolve its Zernio profileId so Zernio can scope the aggregation to that client.
+
+### `GET /api/reporting/cadence`
+
+Posting activity heatmap — array of { day: YYYY-MM-DD, count } rows computed from post_metrics.published_at. The UI renders a day-by-week grid (GitHub-style) so you can see when posts actually went out.
+
+### `GET /api/reporting/demographics`
+
+Pulls demographic breakdowns from Zernio's Instagram / YouTube dedicated endpoints. We resolve the Zernio accountId from our social_profiles row, then proxy to the platform-specific wrapper.
+
+### `GET /api/reporting/gmb`
+
+Unified Google Business Profile analytics: performance metrics (views, calls, directions, website clicks) + top search keywords. Returns { connected: false } when the client has no GMB account linked to Zernio yet, so the UI can render a connect CTA.
+
+### `GET /api/reporting/post-details`
+
+Paginated + filterable list of posts for a client — drives the "Post Details" grid. Pure DB read against post_metrics (already synced from Zernio), so no extra Zernio calls per view.
+
+### `POST /api/reporting/share`
+
+Create a shareable report link for a client's analytics. Generates a random token with a 30-day expiry and stores the selected date range and sections configuration.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+clientId - Client UUID (required)
+dateRange - { start: YYYY-MM-DD, end: YYYY-MM-DD } (required)
+sections - { performanceSummary, platformBreakdown, topPosts, topPostsCount } (required)
+```
+
+**Returns:**
+
+```
+{{ id: string, token: string, url: string }}
+```
+
+### `GET /api/reporting/shared/:token`
+
+Public endpoint to resolve a report share token and return the configured analytics data. Assembles platform summary, per-platform breakdowns, and ranked top posts based on the sections stored when the link was created. Returns 410 if the link has expired.
+
+**Auth:** None (public — token provides authorization)
+
+**Query params:**
+
+```
+token - Report share token from the report_links table
+```
+
+**Returns:**
+
+```
+{{ clientName, agency, logoUrl, dateRange, sections, summary, topPosts }}
+```
+
+### `GET /api/reporting/summary`
+
+Build a MetricCard for one numeric column across a set of snapshots. */ function buildMetricCard( snaps: PlatformSnapshot[], prevSnaps: PlatformSnapshot[], pick: (s: PlatformSnapshot) => number, ): MetricCard | undefined { let total = 0; const byDay = new Map<string, number>(); for (const s of snaps) { const v = pick(s) || 0; total += v; byDay.set(s.snapshot_date, (byDay.get(s.snapshot_date) ?? 0) + v); } const prevTotal = prevSnaps.reduce((sum, s) => sum + (pick(s) || 0), 0); if (total === 0 && prevTotal === 0) return undefined; const series: MetricSeriesPoint[] = [...byDay.entries()] .sort(([a], [b]) => a.localeCompare(b)) .map(([date, value]) => ({ date, value })); return { total, previousTotal: prevTotal, changePercent: calcChange(total, prevTotal), series, }; } /** GET /api/reporting/summary Compute a combined analytics summary for a client across all active social profiles. Compares the requested period against an equal-length prior period to calculate percentage changes. Returns per-platform breakdowns plus rolled-up combined metrics.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+clientId - Client UUID (required)
+start - Period start date YYYY-MM-DD (required)
+end - Period end date YYYY-MM-DD (required)
+```
+
+**Returns:**
+
+```
+{SummaryReport}
+```
+
+### `POST /api/reporting/sync`
+
+Manually trigger a social analytics sync for a single client. Defaults to the last 7 days if no date range is provided. Used for on-demand refreshes from the admin analytics UI.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+clientId - Client UUID to sync (required)
+dateRange - { start: YYYY-MM-DD, end: YYYY-MM-DD } (optional, defaults to last 7 days)
+```
+
+**Returns:**
+
+```
+{SyncResult}
+```
+
+### `GET /api/reporting/tiktok-creator-info`
+
+Surfaces TikTok creator-level signals (verification, canPostMore, allowed privacy levels) for the platform badge / publishing UI.
+
+### `GET /api/reporting/top-posts`
+
+Fetch the top-performing posts for a client within a date range, ranked by total engagement (likes + comments + shares + saves). Includes social profile username.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+clientId - Client UUID (required)
+start - Date range start YYYY-MM-DD (required)
+end - Date range end YYYY-MM-DD (required)
+limit - Number of posts to return, 1-50 (default 3)
+```
+
+**Returns:**
+
+```
+{{ posts: TopPostItem[], dateRange: { start, end } }}
+```
+
+### `GET /api/social/callback/:platform`
+
+OAuth callback handler for social platform connections. Exchanges the auth code for access tokens, upserts social_profiles for all connected accounts (Meta: per Facebook page + linked Instagram), and redirects to the client settings page. State param must be a base64url-encoded JSON with clientId, platform, and userId.
+
+**Auth:** None (OAuth callback — authorization is via state param)
+
+**Query params:**
+
+```
+platform - 'instagram' | 'facebook' | 'tiktok' | 'youtube'
+code - Authorization code from platform (required)
+state - Base64url-encoded state payload (required)
+```
+
+**Returns:**
+
+```
+Redirect to /admin/clients/[slug]?connected=[platform]
+```
+
+### `GET /api/social/connect/:platform`
+
+Initiate a social platform OAuth flow by redirecting to the platform's consent screen. Encodes clientId, platform, and userId into a base64url state param for the callback. Supports instagram, facebook, tiktok, and youtube.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+platform - 'instagram' | 'facebook' | 'tiktok' | 'youtube'
+clientId - Client UUID to associate the connection with (required)
+```
+
+**Returns:**
+
+```
+Redirect to platform OAuth consent screen
+```
+
+### `DELETE /api/social/disconnect/:profileId`
+
+Deactivate a connected social profile (soft delete). Clears access tokens and marks is_active false. Also attempts to disconnect from Late API if the profile has a late_account_id (non-fatal on failure).
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+profileId - Social profile UUID to disconnect
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/social/profiles`
+
+List active social profiles for a client, ordered by platform name. Used by the analytics and reporting UIs to enumerate connected accounts.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+clientId - Client UUID to filter by (required)
+```
+
+**Returns:**
+
+```
+{SocialProfile[]}
+```
 
 ---
 
-## 16. Google Workspace Integration
+## Google Workspace
+
+_Google Calendar, Drive, Chat, and OAuth connections._
 
 ### `GET /api/google`
-Get the current user's Google Workspace connection status.
-**Auth:** Required (user)
-**Response:** `{ connected: boolean, email?, scopes? }`
-
-### `GET /api/google/status`
-Detailed status of Google connection including which services are available.
-**Auth:** Required (user)
-**Response:** `{ calendar: boolean, drive: boolean, chat: boolean, gmail: boolean }`
 
 ### `GET /api/google/callback`
-OAuth callback from Google for workspace connection.
-**Auth:** Required (user)
-**Response:** Redirects to settings page
-
-### `POST /api/google/disconnect`
-Disconnect Google Workspace from the current user's account.
-**Auth:** Required (user)
-**Response:** `{ success: true }`
 
 ### `GET /api/google/chat`
-List Google Chat spaces, or list messages in a specific space.
-**Auth:** Required (user)
-**Query:** `space?: string (spaces/xxx format), pageToken?`
-**Response:** `{ spaces: [...] }` or `{ messages: [...], nextPageToken? }`
+
+### `POST /api/google/disconnect`
 
 ### `GET /api/google/drive`
-List files from Google Drive.
-**Auth:** Required (user)
-**Query:** `folderId?, q? (search query), pageToken?, pageSize?`
-**Response:** `{ files: [...], nextPageToken? }`
+
+### `GET /api/google/status`
 
 ---
 
-## 17. Team & Meetings
+## Team & Meetings
 
-### `GET /api/team`
-List all active team members.
-**Auth:** Required (admin)
-**Response:** Array of team member objects (id, full_name, email, role, avatar_url, is_active)
-
-### `POST /api/team`
-Create a new team member record.
-**Auth:** Required (admin)
-**Body:** `{ full_name: string, email?, role?, avatar_url? }`
-**Response:** Team member object
-
-### `PATCH /api/team/[id]`
-Update a team member's profile.
-**Auth:** Required (admin)
-**Body:** Team member fields to update
-**Response:** Updated team member
-
-### `DELETE /api/team/[id]`
-Deactivate a team member (soft delete).
-**Auth:** Required (admin)
-**Response:** `{ success: true }`
-
-### `GET /api/team/[id]/workload`
-Get a team member's current workload — client assignments, open/overdue tasks, pipeline items.
-**Auth:** Required (user)
-**Response:** `{ member, assignments, tasks: { open, overdue, items }, pipeline: { count, items } }`
-**Use when:** Checking capacity before assigning work, building team dashboards.
-
-### `POST /api/team/[id]/invite`
-Generate an invite link for a team member to create their Cortex account.
-**Auth:** Required (admin)
-**Response:** `{ invite_url, expires_at }`
-
-### `POST /api/team/[id]/link`
-Link a team member record to an existing auth user account.
-**Auth:** Required (admin)
-**Body:** `{ user_id: string }`
-**Response:** `{ success: true }`
-
-### `GET /api/team/linkable-users`
-List auth users (from both `public.users` and `auth.users`) that are not yet linked to a team member.
-**Auth:** Required (admin)
-**Response:** Array of linkable user objects
-
-### `GET /api/team/invite/validate`
-Validate a team invite token (check expiry and usage).
-**Auth:** Public
-**Query:** `token: string`
-**Response:** `{ valid: true, email, member_name, member_role }` or error
-
-### `POST /api/team/invite/accept`
-Accept a team invite and create the user's Cortex account.
-**Auth:** Public
-**Body:** `{ token, full_name, email, password }`
-**Response:** `{ success: true, user_id }`
+_Team members, workload, meetings._
 
 ### `GET /api/meetings`
-List meetings with attendees.
-**Auth:** Required (user)
-**Response:** Array of meeting objects
 
 ### `POST /api/meetings`
-Create a meeting record.
-**Auth:** Required (user)
-**Body:** `{ title, attendees?, date, duration?, notes?, recurrence? }`
-**Response:** Meeting object
 
-### `PATCH /api/meetings/[id]`
-Update a meeting.
-**Auth:** Required (user)
-**Body:** Meeting fields to update
-**Response:** Updated meeting
+### `DELETE /api/meetings/:id`
 
-### `DELETE /api/meetings/[id]`
-Delete a meeting.
-**Auth:** Required (user)
-**Response:** `{ success: true }`
+### `GET /api/meetings/:id`
+
+### `PATCH /api/meetings/:id`
+
+### `GET /api/team`
+
+List all active team members, ordered by full name.
+
+**Auth:** Required (admin)
+
+**Returns:**
+
+```
+{TeamMember[]} Array of active team member records
+```
+
+### `POST /api/team`
+
+Create a new team member record. The team_members table is standalone and does not require a corresponding auth.users entry.
+
+**Auth:** Required (super_admin)
+
+**Body:**
+
+```
+id - Optional UUID for the team member (auto-generated if omitted)
+full_name - Team member's full name (required, max 200 chars)
+email - Email address (used for invite flows)
+role - Job role/title (max 100 chars)
+avatar_url - URL to avatar image
+is_active - Whether the member is active (default: true)
+```
+
+**Returns:**
+
+```
+{TeamMember} Created team member record (201)
+```
+
+### `DELETE /api/team/:id`
+
+Delete a team member. If they have a linked auth account, deletes that too.
+
+**Auth:** Required (super admin)
+
+**Query params:**
+
+```
+id - Team member UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `PATCH /api/team/:id`
+
+Update a team member's profile fields. At least one field must be provided.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+full_name - Updated full name
+email - Updated email address
+role - Updated job role/title
+avatar_url - Updated avatar URL
+is_active - Updated active status
+```
+
+**Query params:**
+
+```
+id - Team member UUID
+```
+
+**Returns:**
+
+```
+{TeamMember} Updated team member record
+```
+
+### `DELETE /api/team/:id/delete-account`
+
+### `POST /api/team/:id/invite`
+
+Generate a team invite token for a team member so they can create their own login account. Expires any existing unused invite tokens for this member before creating a new one. The team member must have an email address set and must not already have a linked account.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Team member UUID
+```
+
+**Returns:**
+
+```
+{{ token: string, invite_url: string, expires_at: string, member_name: string }}
+```
+
+### `DELETE /api/team/:id/link`
+
+Unlink a team member from their auth user account, clearing the user_id field.
+
+**Auth:** Required (admin)
+
+**Query params:**
+
+```
+id - Team member UUID to unlink
+```
+
+**Returns:**
+
+```
+{TeamMember} Updated team member record with user_id cleared
+```
+
+### `POST /api/team/:id/link`
+
+Link a team_members record to an existing auth user account. Validates that the team member isn't already linked and that the target user isn't linked to another member.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+user_id - Auth user UUID to link to (required)
+```
+
+**Query params:**
+
+```
+id - Team member UUID to link
+```
+
+**Returns:**
+
+```
+{TeamMember} Updated team member record
+```
+
+### `GET /api/team/:id/workload`
+
+Returns a team member's current workload: - Their client assignments (with roles) - Open task count (total + overdue) - Pipeline items they're assigned to this month (by role) - Upcoming shoots they're involved in Use when: Checking capacity before assigning new work, building team dashboards, or balancing workload across the team.
+
+### `POST /api/team/invite/accept`
+
+Accept a team invite link and create a new admin user account. Validates the token, creates a Supabase auth user, inserts a users record with admin role, links the team_members record, and marks the invite as used. Rolls back auth user creation if the users table insert fails.
+
+**Auth:** None (public — invite token provides authorization)
+
+**Body:**
+
+```
+token - Invite token from the team_invite_tokens table (required)
+full_name - New user's full name (required)
+email - New user's email address (required)
+password - New user's password (min 8 chars) (required)
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/team/invite/validate`
+
+Validate a team invite token before the user fills out the accept form. Returns metadata about the invite (email, member name and role) so the UI can pre-populate fields. Includes a machine-readable `reason` field on error for UI branching.
+
+**Auth:** None (public — token provides authorization)
+
+**Query params:**
+
+```
+token - Invite token from the team_invite_tokens table (required)
+```
+
+**Returns:**
+
+```
+{{ valid: true, email: string, member_name: string, member_role: string }}
+```
+
+### `GET /api/team/linkable-users`
+
+Return all auth user accounts that are not yet linked to a team_members record. Merges data from both public.users and auth.users (via admin API) so that accounts created outside the normal invite flow are still discoverable.
+
+**Auth:** Required (admin)
+
+**Returns:**
+
+```
+{{ id: string, full_name: string, email: string }[]} Sorted by name
+```
 
 ---
 
-## 18. Notifications
+## Notifications
+
+_Notification management and broadcast updates._
 
 ### `GET /api/notifications`
-List notifications for the authenticated user.
-**Auth:** Required (user)
-**Query:** `unread_only?: boolean, limit?: number`
-**Response:** `{ notifications: Notification[], unread_count: number }`
 
-### `PATCH /api/notifications/[id]`
-Mark a notification as read.
-**Auth:** Required (user)
-**Body:** `{ read: true }`
-**Response:** Updated notification
+List notifications for the authenticated user, ordered by most recent. Always returns the total unread count regardless of the unread_only filter. Scoped by recipient_user_id — each user only sees their own notifications.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+unread_only - If 'true', only returns unread notifications
+```
+
+**Returns:**
+
+```
+{{ notifications: Notification[], unread_count: number }}
+```
+
+### `DELETE /api/notifications/:id`
+
+### `PATCH /api/notifications/:id`
+
+Mark a specific notification as read or unread. Only the recipient can update their own notification.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+read - Boolean indicating whether to mark read (true) or unread (false)
+```
+
+**Query params:**
+
+```
+id - Notification UUID
+```
+
+**Returns:**
+
+```
+{Notification} Updated notification record
+```
+
+### `POST /api/notifications/clear-all`
+
+Deletes all notifications for the authenticated user (inbox clear).
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+{{ success: true }}
+```
 
 ### `POST /api/notifications/mark-all-read`
-Mark all of the current user's notifications as read.
-**Auth:** Required (user)
-**Response:** `{ updated: number }`
+
+Mark all unread notifications as read for the authenticated user. Returns the count of notifications that were marked read.
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+{{ success: true, count: number }} Number of notifications marked read
+```
 
 ### `GET /api/notifications/preferences`
-Get the current user's notification preferences.
-**Auth:** Required (user)
-**Response:** Preferences object
 
-### `PATCH /api/notifications/preferences`
-Update notification preferences.
-**Auth:** Required (user)
-**Body:** Preferences fields to update
-**Response:** Updated preferences
+Fetch the authenticated user's notification preferences, merged with defaults so all preference keys are always present.
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+{NotificationPreferences} User's notification preference object
+```
+
+### `PUT /api/notifications/preferences`
+
+Replace the authenticated user's notification preferences with the provided object.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+The full notification preferences object to save
+```
+
+**Returns:**
+
+```
+{{ ok: true }}
+```
+
+### `GET /api/production-updates`
+
+### `POST /api/production-updates`
 
 ---
 
-## 19. Vault (Obsidian)
+## Vault
 
-### `GET /api/vault/search`
-Search the Obsidian vault using full-text or semantic search.
-**Auth:** Required (user)
-**Query:** `q: string, limit?: number, mode?: 'fts'|'semantic'`
-**Response:** `{ query, mode, count, results: [{ path, title, excerpt, score }] }`
+_Obsidian vault — search, indexing, file read/write, webhooks._
 
-### `POST /api/vault/init`
-Initialize the vault with templates and client profile stubs.
-**Auth:** Required (admin)
-**Response:** `{ initialized: true }`
+### `GET /api/vault/:path*`
 
-### `POST /api/vault/provision`
-Read vault client profiles and provision/update them in the Cortex database.
-**Auth:** Required (admin)
-**Response:** `{ provisioned: number }`
+Read a file or list a directory from the GitHub-backed Obsidian vault. Paths with no file extension or ending in '/' are treated as directory listings; all other paths return the file content and SHA.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+path - Catch-all path segments joined as the vault path
+```
+
+**Returns:**
+
+```
+Directory: { files: VaultFile[] } | File: { content: string, sha: string }
+```
+
+### `PUT /api/vault/:path*`
+
+Write (create or update) a file in the GitHub-backed Obsidian vault.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+content - File content string (required)
+message - Git commit message (optional, defaults to "update <path>")
+```
+
+**Query params:**
+
+```
+path - Catch-all path segments joined as the vault path
+```
+
+**Returns:**
+
+```
+{{ success: true, sha: string }}
+```
 
 ### `POST /api/vault/index`
-Re-index all vault files for semantic search.
-**Auth:** Required (admin)
-**Response:** `{ indexed: number }`
 
-### `GET /api/vault/[...path]`
-Read a file from the vault (proxied to GitHub API).
-**Auth:** Required (admin)
-**Response:** File content (JSON or text)
+### `POST /api/vault/init`
 
-### `PUT /api/vault/[...path]`
-Write a file to the vault (proxied to GitHub API).
-**Auth:** Required (admin)
-**Body:** `{ content: string, message?: string }`
-**Response:** Commit info
+Bootstrap the GitHub-backed Obsidian vault. Creates the 5 standard Obsidian templates (research, idea, client profile, shoot prep, meeting prep) only if they don't already exist. Then syncs all active clients to Clients/<Name>/_profile.md and updates the Dashboard MOC. Safe to re-run — skips existing files.
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+{{ success: true, created: string[] }} List of files created
+```
+
+### `POST /api/vault/provision`
+
+### `GET /api/vault/search`
 
 ### `POST /api/vault/webhook`
-GitHub push webhook receiver. Re-indexes changed markdown files when vault repo is updated. Validates HMAC signature.
-**Auth:** Public (webhook — validated by X-Hub-Signature-256)
-**Response:** `{ indexed: number }`
 
 ---
 
-## 20. Dashboard
+## Dashboard
 
-### `GET /api/dashboard/stats`
-Get dashboard widget statistics (basic counts).
-**Auth:** Required (user)
-**Response:** Stats object
-
-### `GET /api/dashboard/overview`
-Comprehensive agency pulse — active clients, pipeline distribution, task stats, upcoming shoots, unread notifications, recent searches.
-**Auth:** Required (user)
-**Response:** `{ clients, pipeline, tasks, upcomingShoots, unreadNotifications, recentSearches }`
-**Use when:** Building dashboard views, AI agent status checks, quick operational overview.
+_Dashboard stats, overview, activity, AI usage, health._
 
 ### `GET /api/activity`
-Fetch recent activity log entries. Admins see all; portal viewers see only their org's activity.
-**Auth:** Required (user)
-**Query:** `limit?: number (max 100, default 50)`
-**Response:** Array of activity log entries (most recent first)
+
+Fetch recent activity log entries. Admins see all activity; portal viewers see only activity related to clients in their organization.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+limit - Maximum number of records to return (default: 50, max: 100)
+```
+
+**Returns:**
+
+```
+{ActivityLogEntry[]} Array of activity log entries, most recent first
+```
+
+### `GET /api/dashboard/overview`
+
+Returns a comprehensive dashboard overview in a single call: - Active client count - Pipeline status distribution for current month - Task summary (open, overdue, completed today) - Upcoming shoots (next 7 days) - Recent notifications (last 5 unread) - Recent research searches (last 5) Use when: Building dashboard views, AI agent status checks, or getting a quick pulse on agency operations.
+
+### `GET /api/dashboard/stats`
+
+Fetch comprehensive dashboard statistics including client counts, search counts (current vs last month), upcoming shoot count, moodboard item count, a list of upcoming shoots for the next 7 days, recent searches, and a unified activity feed (searches, shoots, moodboard items, new clients — last 10 events).
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+{{ stats: { totalClients, activeSearches, activeSearchesLastMonth, upcomingShoots, moodboardItems }, upcomingShootsList, recentSearches, activity: ActivityItem[] }}
+```
+
+### `GET /api/health`
+
+Health check endpoint for uptime monitoring (SOC 2 A1.3). Returns 200 with timestamp. No auth required.
 
 ### `GET /api/usage`
-Get AI usage and cost summary for a time period.
-**Auth:** Required (user)
-**Query:** `from?: ISO8601, to?: ISO8601` (default: last 30 days)
-**Response:** Usage summary with costs by feature and model
+
+Fetch AI token usage and cost summary for a given date range. Defaults to the last 30 days if no range is specified.
+
+**Auth:** Required (any authenticated user)
+
+**Query params:**
+
+```
+from - Start of date range (ISO datetime, default: 30 days ago)
+to - End of date range (ISO datetime, default: now)
+```
+
+**Returns:**
+
+```
+{UsageSummary} Aggregated usage data (tokens, cost, by feature, etc.)
+```
 
 ---
 
-## 21. Portal Invites
+## Portal Invites
+
+_Client portal invite generation, validation, acceptance._
+
+### `GET /api/invites`
 
 ### `POST /api/invites`
-Generate a portal invite token for a client organization.
-**Auth:** Required (admin)
-**Body:** `{ client_id: string }`
-**Response:** `{ token, invite_url, expires_at, client_name }`
 
-### `GET /api/invites/validate`
-Check if a portal invite token is valid and not expired.
-**Auth:** Public
-**Query:** `token: string`
-**Response:** `{ valid: true, client_name }` or error
+### `DELETE /api/invites/:id`
 
 ### `POST /api/invites/accept`
-Accept a portal invite and create a viewer account linked to the client's organization.
-**Auth:** Public
-**Body:** `{ token, full_name, email, password }`
-**Response:** `{ success: true }`
+
+### `POST /api/invites/batch`
+
+### `POST /api/invites/bulk`
+
+### `POST /api/invites/link`
+
+### `GET /api/invites/preview`
+
+### `GET /api/invites/validate`
 
 ---
 
-## 22. Settings
+## Settings
+
+_Account and workspace preferences._
+
+### `GET /api/settings/ai-model`
+
+Sets planner, research, and merger to the same id (topic search llm_v1). */ topicSearchModel: z.string().min(1).max(200).optional(), topicSearchPlannerModel: z.string().min(1).max(200).optional(), topicSearchResearchModel: z.string().min(1).max(200).optional(), topicSearchMergerModel: z.string().max(200).optional(), }); /** GET /api/settings/ai-model Fetch the currently active AI model and fallback models from agency_settings.
+
+**Auth:** Required (admin)
+
+### `PATCH /api/settings/ai-model`
+
+Update the platform-wide AI model and/or fallback models.
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+{ model?: string, fallbackModels?: string[] }
+```
+
+### `GET /api/settings/ai-routing-summary`
+
+Returns the active AI model and overrides for the admin settings UI. Simplified: one model for everything, switchable from dashboard.
+
+**Auth:** Required (admin)
+
+### `GET /api/settings/llm-credentials`
+
+Masked keys + model ids (admin only).
+
+### `PATCH /api/settings/llm-credentials`
+
+Set or clear per-bucket OpenRouter keys and optional Nerd / ideas models.
+
+### `GET /api/settings/openrouter-models`
+
+Fetch all OpenRouter models with pricing and capability info. Cached server-side for 10 minutes to avoid hammering the API.
+
+**Auth:** Required (any authenticated user)
 
 ### `GET /api/settings/scheduling`
-Get scheduling settings (timezone, business hours, auto-schedule config).
-**Auth:** Required (admin)
-**Response:** Settings object
 
-### `PATCH /api/settings/scheduling`
-Update scheduling settings.
+Fetch scheduling link settings for all agencies (nativz and ac).
+
 **Auth:** Required (admin)
-**Body:** Settings fields to update
-**Response:** Updated settings
+
+**Returns:**
+
+```
+{{ settings: { agency: string, scheduling_link: string | null, updated_at: string }[] }}
+```
+
+### `PUT /api/settings/scheduling`
+
+Update the scheduling link for a specific agency (nativz or ac).
+
+**Auth:** Required (admin)
+
+**Body:**
+
+```
+agency - Agency identifier: 'nativz' | 'ac' (required)
+scheduling_link - Scheduling link URL (or null to clear)
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
 
 ---
 
-## 23. Monday.com Integration
+## Portal
 
-### `POST /api/monday/webhook`
-Receive Monday.com webhook events (`create_item`, `change_column_values`). Syncs client changes from Monday to vault.
-**Auth:** Public (Monday.com webhook)
-**Response:** `{ ok: true }`
+_Client-portal-specific endpoints._
 
-### `POST /api/monday/update`
-Push Cortex data back to Monday.com board columns.
+### `GET /api/portal/brand-dna`
+
+Return the active brand guideline for the authenticated portal user's active client. Respects the x-portal-active-client cookie for multi-brand support.
+
+**Auth:** Required (portal user)
+
+**Returns:**
+
+```
+{{ content, metadata, created_at, readonly: true }}
+```
+
+### `POST /api/portal/brand-dna/feedback`
+
+Submit feedback on a Brand DNA section from the client portal. Creates a notification for the admin team.
+
+**Auth:** Required (portal user)
+
+**Body:**
+
+```
+section - Section heading
+feedback - Feedback text
+flagged_incorrect - Whether the section is flagged as incorrect
+```
+
+### `GET /api/portal/brands`
+
+### `POST /api/portal/brands/switch`
+
+### `POST /api/portal/knowledge`
+
+Create a knowledge entry for the authenticated portal user's client.
+
+**Auth:** Required (portal user session)
+
+**Body:**
+
+```
+type - Entry type
+title - Entry title
+content - Entry content
+```
+
+**Returns:**
+
+```
+{{ entry: KnowledgeEntry }}
+```
+
+---
+
+## Admin Ops
+
+_Admin-only ops: backfills, migrations, diagnostics._
+
+### `POST /api/accounting/entries`
+
+### `DELETE /api/accounting/entries/:id`
+
+### `PATCH /api/accounting/entries/:id`
+
+### `POST /api/accounting/entries/bulk`
+
+by the import preview ("does this look right? confirm") flow.
+
+### `POST /api/accounting/import`
+
+### `GET /api/accounting/periods`
+
+### `POST /api/accounting/periods`
+
+### `DELETE /api/accounting/periods/:id`
+
+### `GET /api/accounting/periods/:id`
+
+### `PATCH /api/accounting/periods/:id`
+
+### `GET /api/accounting/periods/:id/export`
+
+the period. Columns are ordered for the "drop into a spreadsheet and paste into bookkeeping" workflow, with headers the tax person can read.
+
+### `GET /api/accounting/periods/:id/submit-tokens`
+
+### `POST /api/accounting/periods/:id/submit-tokens`
+
+### `DELETE /api/accounting/periods/:id/view-tokens`
+
+### `GET /api/accounting/periods/:id/view-tokens`
+
+### `POST /api/accounting/periods/:id/view-tokens`
+
+### `GET /api/admin/email-templates`
+
+### `POST /api/admin/email-templates`
+
+### `DELETE /api/admin/email-templates/:id`
+
+### `PATCH /api/admin/email-templates/:id`
+
+### `GET /api/admin/errors`
+
+GET /api/admin/errors — recent API errors (super_admin only)
+
+### `GET /api/admin/pdf/preview/branded-deliverable`
+
+### `GET /api/admin/scheduled-emails`
+
+### `DELETE /api/admin/scheduled-emails/:id`
+
+### `PATCH /api/admin/scheduled-emails/:id`
+
+### `DELETE /api/admin/users`
+
+DELETE /api/admin/users — delete a user (removes auth + public.users)
+
+### `GET /api/admin/users`
+
+GET /api/admin/users — all users with enriched data (super_admin only)
+
+### `PATCH /api/admin/users`
+
+PATCH /api/admin/users — update user role/permissions/name
+
+### `POST /api/admin/users/:id/schedule-email`
+
+### `GET /api/admin/users/:id/searches`
+
+### `POST /api/admin/users/:id/send-email`
+
+### `POST /api/admin/users/bulk-email`
+
+### `POST /api/admin/users/bulk-schedule-email`
+
+### `POST /api/admin/users/reset-password`
+
+POST /api/admin/users/reset-password — send password reset email (super_admin only)
+
+### `GET /api/submit-payroll/:token`
+
+### `POST /api/submit-payroll/:token/commit`
+
+### `POST /api/submit-payroll/:token/parse`
+
+---
+
+## Shared Links
+
+_Public/shared-link endpoints (auth via token)._
+
+### `GET /api/shared/moodboard/:token`
+
+Public endpoint. Resolve a moodboard share token and return the full board with items, notes, and edges. Supports optional password protection via query param or header. Returns 401 if password is required or incorrect, 410 if expired.
+
+**Auth:** None (public; password-protected boards require x-share-password header or ?password= query)
+
+**Query params:**
+
+```
+token - Moodboard share token
+password - Password for password-protected boards (or use x-share-password header)
+```
+
+**Returns:**
+
+```
+{{ board, items, notes, edges }}
+```
+
+### `GET /api/shared/nerd/:token`
+
+GET — fetch a shared conversation by public token (no auth required)
+
+### `GET /api/shared/search/:token`
+
+Public endpoint. Resolve a search share token and return the full completed search results. Returns 410 if the link has expired, 404 if not found or search is not completed.
+
+**Auth:** None (public)
+
+**Query params:**
+
+```
+token - Share link token
+```
+
+**Returns:**
+
+```
+Complete search record with client_name appended
+```
+
+### `POST /api/shared/search/:token/explain-emotion`
+
+Same as authenticated explain-emotion, scoped to a valid share token.
+
+**Auth:** None (public; token must be valid and unexpired)
+
+---
+
+## Presentations
+
+_Client-facing presentation viewer + data._
+
+### `GET /api/presentations`
+
+### `POST /api/presentations`
+
+### `DELETE /api/presentations/:id`
+
+### `GET /api/presentations/:id`
+
+### `PUT /api/presentations/:id`
+
+### `POST /api/presentations/:id/social-results/generate`
+
+---
+
+## Monday.com
+
+_Monday.com webhooks, sync, board updates._
+
+### `GET /api/monday/sync`
+
+Full sync: fetch all clients from Monday.com and update their vault profiles. Preserves vault-owned fields (brand voice, audience, etc.) while updating Monday.com-owned fields (services, POC, abbreviation). / import { NextRequest, NextResponse } from 'next/server'; import { createServerSupabaseClient } from '@/lib/supabase/server'; import { createAdminClient } from '@/lib/supabase/admin'; import { isVaultConfigured } from '@/lib/vault/github'; import { isMondayConfigured, fetchMondayClients, parseMondayClient } from '@/lib/monday/client'; import { syncAllMondayClients } from '@/lib/monday/sync'; export const maxDuration = 60; /** GET /api/monday/sync Fetch a single client's Monday.com data by exact name match. Used to preview what Monday.com has for a client before syncing.
+
 **Auth:** Required (admin)
-**Body:** `{ item_id, updates: Record<columnId, value> }`
-**Response:** `{ success: true }`
+
+**Query params:**
+
+```
+client_name - Client name to look up in Monday.com (required, case-insensitive)
+```
+
+**Returns:**
+
+```
+Parsed Monday.com client record
+```
 
 ### `POST /api/monday/sync`
-Full sync: fetch all clients from the Monday.com Clients board and upsert into the Cortex DB and vault.
+
+Full Monday.com sync: fetch all clients from Monday.com and update their vault profiles. Preserves vault-owned fields (brand voice, audience, etc.) while updating Monday.com-owned fields (services, POC, abbreviation). Creates new clients if not found.
+
+**Auth:** Required (admin; requires both vault and Monday.com to be configured)
+
+**Returns:**
+
+```
+{{ message: string, results: SyncResult[] }}
+```
+
+### `POST /api/monday/update`
+
+Update a Monday.com client board item's column values (services, agency, POC, abbreviation). After updating Monday.com, re-syncs the client's vault profile and revalidates the clients page.
+
 **Auth:** Required (admin)
-**Response:** `{ synced: number, errors?: string[] }`
+
+**Body:**
+
+```
+monday_item_id - Numeric Monday.com item ID (required)
+services - Optional array of service strings: 'SMM' | 'Paid Media' | 'Affiliates' | 'Editing'
+agency - Optional agency label
+poc_name - Optional point-of-contact name
+poc_email - Optional point-of-contact email
+abbreviation - Optional client abbreviation
+```
+
+**Returns:**
+
+```
+{{ success: true, message?: string }}
+```
+
+### `POST /api/monday/webhook`
 
 ---
 
-## 24. Todoist Integration
+## Todoist
+
+_Todoist connection and bidirectional task sync._
+
+### `DELETE /api/todoist/connect`
+
+Disconnect Todoist by clearing the API key, project ID, and sync timestamp.
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+{{ disconnected: true }}
+```
+
+### `GET /api/todoist/connect`
+
+Check the Todoist connection status for the authenticated user. Fetches available projects from the Todoist API to validate the stored key. Returns key_invalid=true if the stored key is no longer valid.
+
+**Auth:** Required (any authenticated user)
+
+**Returns:**
+
+```
+{{ connected: boolean, key_invalid?: boolean, project_id: string | null, synced_at: string | null, projects: { id: string, name: string }[] }}
+```
 
 ### `POST /api/todoist/connect`
-Connect a Todoist account with an API key. Validates the key against Todoist before saving.
-**Auth:** Required (user)
-**Body:** `{ api_key: string, project_id?: string }`
-**Response:** `{ connected: true }`
+
+Connect Todoist by saving and validating an API key. Pass api_key='_keep' to update only the project_id without changing the key. Returns available Todoist projects on success.
+
+**Auth:** Required (any authenticated user)
+
+**Body:**
+
+```
+api_key - Todoist API key to validate and save, or '_keep' to only update project
+project_id - Optional Todoist project ID to sync tasks into
+```
+
+**Returns:**
+
+```
+{{ connected: true, projects: { id: string, name: string }[] }}
+```
 
 ### `POST /api/todoist/sync`
-Trigger a full Todoist ↔ Cortex sync (pull completed tasks from Todoist + push new tasks).
-**Auth:** Required (user)
-**Query:** `auto?: boolean` (skips if synced recently)
-**Response:** `{ pulled: number, pushed: number, errors: string[] }`
+
+Trigger a full bidirectional sync between Todoist and Cortex tasks for the authenticated user. Auto-sync mode (auto=true) skips the sync if the user was synced within the last 60 seconds. Sends a notification if the sync encounters errors.
+
+**Auth:** Required (any authenticated user; must have Todoist connected)
+
+**Query params:**
+
+```
+auto - If 'true', skip sync if last sync was less than 60 seconds ago (default: false)
+```
+
+**Returns:**
+
+```
+{{ pulled: number, pushed: number, errors: string[], skipped?: boolean }}
+```
 
 ---
 
-## 25. External API (`/api/v1/` — API Key Auth)
+## External API (v1)
 
-All `/api/v1/` routes use `Authorization: Bearer nativz_...` header instead of session cookies. The key must have the appropriate scope.
-
-### `GET /api/v1/clients`
-List all clients.
-**Auth:** API key (scope: `clients`)
-**Response:** `{ clients: [...] }`
-
-### `POST /api/v1/clients`
-Create a new client.
-**Auth:** API key (scope: `clients`)
-**Body:** Same as `/api/clients/onboard` schema
-**Response:** `{ client: object }`
-
-### `GET /api/v1/clients/[id]`
-Get a single client by ID.
-**Auth:** API key (scope: `clients`)
-**Response:** Client object
-
-### `PATCH /api/v1/clients/[id]`
-Update a client.
-**Auth:** API key (scope: `clients`)
-
-### `GET /api/v1/clients/[id]/knowledge`
-List or full-text search a client's knowledge entries.
-**Auth:** API key (scope: `clients`)
-**Query:** `type?, search?, include_links?, include_entities?`
-**Response:** Array of knowledge entry objects
-
-### `POST /api/v1/clients/[id]/knowledge`
-Create a knowledge entry.
-**Auth:** API key (scope: `clients`)
-**Body:** `{ type, title, content?, metadata?, source? }`
-**Response:** `{ entry: KnowledgeEntry }` (status 201)
-
-### `GET /api/v1/clients/[id]/knowledge/[entryId]`
-Get a single knowledge entry.
-**Auth:** API key (scope: `clients`)
-
-### `PATCH/DELETE /api/v1/clients/[id]/knowledge/[entryId]`
-Update or delete a knowledge entry.
-**Auth:** API key (scope: `clients`)
-
-### `POST /api/v1/clients/[id]/knowledge/search`
-Full-text search a client's knowledge entries.
-**Auth:** API key (scope: `clients`)
-**Body:** `{ query: string, type?, limit? }`
-**Response:** `{ results: KnowledgeEntry[] }`
-
-### `GET/POST /api/v1/clients/[id]/knowledge/import`
-Import knowledge entries in bulk.
-**Auth:** API key (scope: `clients`)
-
-### `GET /api/v1/clients/[id]/knowledge/graph`
-Get the knowledge graph for a client.
-**Auth:** API key (scope: `clients`)
-
-### `GET /api/v1/tasks`
-List tasks with filtering.
-**Auth:** API key (scope: `tasks`)
-**Query:** `client_id?, assignee_id?, status?, due_date_from?, due_date_to?`
-**Response:** `{ tasks: [...] }`
-
-### `POST /api/v1/tasks`
-Create a task.
-**Auth:** API key (scope: `tasks`)
-**Body:** `{ title, description?, status?, priority?, client_id?, assignee_id?, due_date?, task_type?, tags? }`
-**Response:** `{ task: object }`
-
-### `GET /api/v1/tasks/[id]`
-Get a single task.
-**Auth:** API key (scope: `tasks`)
-
-### `PATCH/DELETE /api/v1/tasks/[id]`
-Update or delete a task.
-**Auth:** API key (scope: `tasks`)
-
-### `GET /api/v1/shoots`
-List shoot events with filtering.
-**Auth:** API key (scope: `shoots`)
-**Query:** `client_id?, status?, date_from?, date_to?`
-**Response:** `{ shoots: [...] }`
-
-### `GET /api/v1/shoots/[id]`
-Get a single shoot event.
-**Auth:** API key (scope: `shoots`)
-
-### `GET /api/v1/posts`
-List scheduled posts for a client.
-**Auth:** API key (scope: `scheduler`)
-**Query:** `client_id: string (required), status?`
-**Response:** `{ posts: [...] }`
-
-### `POST /api/v1/posts`
-Create a scheduled post.
-**Auth:** API key (scope: `scheduler`)
-**Body:** `{ client_id, caption?, hashtags?, scheduled_at?, status?, platform_profile_ids?, media_ids? }`
-**Response:** `{ post: object }`
-
-### `GET/PATCH/DELETE /api/v1/posts/[id]`
-Get, update, or delete a scheduled post.
-**Auth:** API key (scope: `scheduler`)
-
-### `GET /api/v1/team`
-List active team members.
-**Auth:** API key (scope: `team`)
-**Response:** `{ team: [...] }`
-
-### `POST /api/v1/team`
-Create a team member.
-**Auth:** API key (scope: `team`)
-**Body:** `{ full_name, email?, role? }`
-
-### `POST /api/v1/search`
-Create a topic search record (returns ID, doesn't run the pipeline).
-**Auth:** API key (scope: `search`)
-**Body:** `{ client_id, query, search_mode?: 'quick'|'deep' }`
-**Response:** `{ search: { id, query, status, search_mode, created_at } }`
+_API key-authenticated endpoints for external agents and scripts._
 
 ### `GET /api/v1/calendar/events`
-Fetch Google Calendar events for the API key owner via Google OAuth.
-**Auth:** API key (scope: `calendar`)
-**Query:** `start: ISO8601, end: ISO8601`
-**Response:** `{ events: CalendarEvent[] }`
+
+Fetch Google Calendar events for the authenticated API key's user via Google OAuth. Returns events normalized to { id, title, start, end, is_all_day }.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Query params:**
+
+```
+start - ISO 8601 date/time lower bound (required)
+end - ISO 8601 date/time upper bound (required)
+```
+
+**Returns:**
+
+```
+{{ events: CalendarEvent[] }}
+```
 
 ### `POST /api/v1/calendar/events`
+
 Create a Google Calendar event via Google OAuth for the API key owner.
-**Auth:** API key (scope: `calendar`)
-**Body:** `{ summary, description?, location?, start, end, attendees?: [{email}] }`
-**Response:** `{ event: GoogleCalendarEvent }`
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Body:**
+
+```
+summary - Event title (required)
+description - Event description (optional)
+location - Event location (optional)
+start - ISO 8601 start dateTime (required)
+end - ISO 8601 end dateTime (required)
+attendees - Array of { email } objects (optional)
+```
+
+**Returns:**
+
+```
+{{ event: { id, summary } }}
+```
+
+### `GET /api/v1/clients`
+
+List all clients. Returns a summary projection (no sensitive fields).
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Returns:**
+
+```
+{{ clients: Client[] }}
+```
+
+### `POST /api/v1/clients`
+
+Onboard a new client. Creates the organization, client record, and (if services includes 'SMM') a Late API social media profile non-blocking. Handles slug collisions by appending a timestamp suffix.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Body:**
+
+```
+name - Client name (required)
+website_url - Client website URL (required)
+industry - Industry/sector (required)
+target_audience - Target audience description (optional)
+brand_voice - Brand voice description (optional)
+topic_keywords - Array of topic keywords (optional)
+logo_url - Logo URL (optional)
+poc_name - Point of contact name (optional)
+poc_email - Point of contact email (optional)
+services - Array of service types e.g. ['SMM', 'PDR'] (optional)
+agency - Agency name (optional)
+```
+
+**Returns:**
+
+```
+{{ client: Client }}
+```
+
+### `GET /api/v1/clients/:id`
+
+Fetch a single client by UUID or slug, with associated contacts.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Query params:**
+
+```
+id - Client UUID or slug
+```
+
+**Returns:**
+
+```
+{{ client: Client, contacts: Contact[] }}
+```
+
+### `GET /api/v1/clients/:id/knowledge`
+
+List knowledge entries for a client. Supports full-text search via the search_knowledge_entries RPC, filtering by type, and optionally including entity metadata and knowledge graph links.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Query params:**
+
+```
+id - Client UUID
+type - Filter by entry type: 'brand_asset' | 'brand_profile' | 'document' | 'web_page' | 'note' | 'idea' | 'meeting_note' (optional)
+search - Full-text search query (optional)
+include_links - Include knowledge graph links (optional, default false)
+include_entities - Include entity metadata on results (optional, default false)
+```
+
+**Returns:**
+
+```
+{{ entries: KnowledgeEntry[], links?: KnowledgeLink[] }}
+```
+
+### `POST /api/v1/clients/:id/knowledge`
+
+Create a new knowledge entry for a client. Triggers automatic embedding generation for semantic search.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Body:**
+
+```
+type - Entry type: 'brand_asset' | 'brand_profile' | 'document' | 'web_page' | 'note' | 'idea' | 'meeting_note' (required)
+title - Entry title (required)
+content - Entry content text (optional, default '')
+metadata - Arbitrary metadata object (optional)
+source - Source type: 'manual' | 'scraped' | 'generated' | 'imported' (default 'manual')
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ entry: KnowledgeEntry }}
+```
+
+### `GET /api/v1/clients/:id/knowledge/:entryId`
+
+Fetch a single knowledge entry by ID, scoped to the given client.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Query params:**
+
+```
+id - Client UUID
+entryId - Knowledge entry UUID
+```
+
+**Returns:**
+
+```
+{{ entry: KnowledgeEntry }}
+```
+
+### `GET /api/v1/clients/:id/knowledge/graph`
+
+Fetch the knowledge graph for a client — nodes (entries) and edges (links). Used for visualization and agent traversal of the client's knowledge base.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ nodes: KnowledgeNode[], edges: KnowledgeEdge[] }}
+```
+
+### `POST /api/v1/clients/:id/knowledge/import`
+
+Import content into a client's knowledge base. For 'meeting_note' type, uses the meeting importer which extracts linked entities and updates brand profile. For 'note' and 'document' types, creates a basic knowledge entry.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Body:**
+
+```
+content - Text content to import (required)
+type - Entry type: 'meeting_note' | 'note' | 'document' (default 'note')
+title - Entry title (optional, auto-generated if not provided)
+metadata - Arbitrary metadata object (optional)
+meeting_date - ISO date string for meeting notes (optional)
+attendees - Array of attendee names (optional)
+source - Source identifier string (optional)
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ entry: { id, title, type }, linked_entries?: string[] }}
+```
+
+### `POST /api/v1/clients/:id/knowledge/search`
+
+Full-text search over a client's knowledge entries using the search_knowledge_entries Postgres RPC. Returns matching entries with metadata included.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Body:**
+
+```
+query - Search string (required, min 1 char)
+type - Filter by entry type (optional)
+limit - Max results to return, 1–50 (default 20)
+```
+
+**Query params:**
+
+```
+id - Client UUID
+```
+
+**Returns:**
+
+```
+{{ results: KnowledgeEntry[], total: number }}
+```
+
+### `GET /api/v1/posts`
+
+List scheduled posts for a client. Returns posts ordered by scheduled_at ascending (nulls last). Optionally filtered by status.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Query params:**
+
+```
+client_id - Client UUID (required)
+status - Filter by post status: 'draft' | 'scheduled' | 'published' (optional)
+```
+
+**Returns:**
+
+```
+{{ posts: ScheduledPost[] }}
+```
+
+### `POST /api/v1/posts`
+
+Create a scheduled post with optional platform profiles and media links.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Body:**
+
+```
+client_id - Client UUID (required)
+caption - Post caption text (optional, default '')
+hashtags - Array of hashtag strings (optional)
+scheduled_at - ISO 8601 scheduled time (optional)
+status - 'draft' | 'scheduled' (default 'draft')
+platform_profile_ids - Array of social profile UUIDs to link (optional)
+media_ids - Array of media UUIDs to attach in order (optional)
+```
+
+**Returns:**
+
+```
+{{ post: ScheduledPost }}
+```
+
+### `GET /api/v1/posts/:id`
+
+Fetch a single scheduled post by UUID with full platform and media details.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Query params:**
+
+```
+id - Scheduled post UUID
+```
+
+**Returns:**
+
+```
+{{ post: ScheduledPost & { scheduled_post_platforms, scheduled_post_media } }}
+```
+
+### `GET /api/v1/search`
+
+Not implemented — use POST to trigger a search.
+
+**Returns:**
+
+```
+405 Method Not Allowed
+```
+
+### `POST /api/v1/search`
+
+Create a topic search record for a client in 'pending' status. The actual search processing is handled asynchronously by the background worker.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Body:**
+
+```
+client_id - Client UUID (required)
+query - Search query string (required)
+search_mode - 'quick' | 'deep' (default 'quick')
+```
+
+**Returns:**
+
+```
+{{ search: { id, query, status, search_mode, created_at } }}
+```
+
+### `GET /api/v1/shoots`
+
+List shoot events, optionally filtered by client, status, and date range. Returns shoots ordered by shoot_date ascending, with client name and slug.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Query params:**
+
+```
+client_id - Filter by client UUID (optional)
+status - Filter by scheduled_status (optional)
+date_from - ISO date lower bound inclusive (optional)
+date_to - ISO date upper bound inclusive (optional)
+```
+
+**Returns:**
+
+```
+{{ shoots: ShootEvent[] }}
+```
+
+### `GET /api/v1/shoots/:id`
+
+Fetch a single shoot event by UUID, with the associated client name and slug.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Query params:**
+
+```
+id - Shoot event UUID
+```
+
+**Returns:**
+
+```
+{{ shoot: ShootEvent & { clients: { id, name, slug } } }}
+```
+
+### `GET /api/v1/tasks`
+
+List non-archived tasks. Supports filtering by client, assignee, status, and due date range. Returns tasks with client and team_member join data.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Query params:**
+
+```
+client_id - Filter by client UUID (optional)
+assignee_id - Filter by team_member UUID (optional)
+status - Filter by status: 'backlog' | 'in_progress' | 'review' | 'done' (optional)
+due_date_from - ISO date lower bound inclusive (optional)
+due_date_to - ISO date upper bound inclusive (optional)
+```
+
+**Returns:**
+
+```
+{{ tasks: Task[] }}
+```
+
+### `POST /api/v1/tasks`
+
+Create a task. If no assignee_id is provided, auto-assigns to the API key owner's team_member record.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Body:**
+
+```
+title - Task title (required)
+description - Task description (optional)
+status - 'backlog' | 'in_progress' | 'review' | 'done' (default 'backlog')
+priority - 'low' | 'medium' | 'high' | 'urgent' (default 'low')
+client_id - Client UUID (optional)
+assignee_id - Team member UUID (optional, auto-assigned to API key owner if omitted)
+due_date - ISO date string (optional)
+task_type - 'content' | 'shoot' | 'edit' | 'paid_media' | 'strategy' | 'other' (default 'other')
+tags - Array of tag strings (optional)
+```
+
+**Returns:**
+
+```
+{{ task: Task }}
+```
+
+### `DELETE /api/v1/tasks/:id`
+
+Soft-delete a task by setting archived_at. Returns 404 if already archived.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Query params:**
+
+```
+id - Task UUID
+```
+
+**Returns:**
+
+```
+{{ success: true }}
+```
+
+### `GET /api/v1/tasks/:id`
+
+Fetch a single non-archived task by UUID with client and assignee join data.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Query params:**
+
+```
+id - Task UUID
+```
+
+**Returns:**
+
+```
+{{ task: Task }}
+```
+
+### `PATCH /api/v1/tasks/:id`
+
+Update a task's fields. Applies only the provided fields. Only non-archived tasks can be updated.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Body:**
+
+```
+title - Task title (optional)
+description - Task description (optional, nullable)
+status - 'backlog' | 'in_progress' | 'review' | 'done' (optional)
+priority - 'low' | 'medium' | 'high' | 'urgent' (optional)
+client_id - Client UUID (optional, nullable)
+assignee_id - Team member UUID (optional, nullable)
+due_date - ISO date string (optional, nullable)
+task_type - Task type enum (optional)
+tags - Array of tag strings (optional)
+```
+
+**Query params:**
+
+```
+id - Task UUID
+```
+
+**Returns:**
+
+```
+{{ task: Task }}
+```
+
+### `GET /api/v1/team`
+
+List all active team members, ordered alphabetically by name.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Returns:**
+
+```
+{{ team: TeamMember[] }}
+```
+
+### `POST /api/v1/team`
+
+Create a new team member record. Returns 409 if the email already exists.
+
+**Auth:** API key (Bearer token via Authorization header)
+
+**Body:**
+
+```
+full_name - Full name, max 200 chars (required)
+email - Email address (optional)
+role - Role/title, max 100 chars (optional)
+```
+
+**Returns:**
+
+```
+{{ member: TeamMember }}
+```
 
 ---
 
-## 26. Cron Jobs (Internal)
+## Cron Jobs
 
-These run on a schedule. All require `Authorization: Bearer {CRON_SECRET}` header.
+_Internal scheduled jobs for sync, publishing, monitoring._
 
-| Path | Purpose |
-|------|---------|
-| `POST /api/cron/sync-reporting` | Sync social media analytics from Meta/Instagram for all active clients |
-| `POST /api/cron/shoot-planner` | Auto-generate AI shoot plans for shoots happening in 3 days |
-| `POST /api/cron/publish-posts` | Publish scheduled posts whose `scheduled_at` is now due |
-| `POST /api/cron/check-velocity` | Check post velocity and send notifications about trending content |
-| `POST /api/cron/sync-affiliates` | Sync UpPromote affiliate data for all connected clients |
-| `POST /api/cron/fyxer-import` | Import meeting notes from Fyxer via Gmail polling (Google service account) + generate embeddings |
+### `GET /api/cron/benchmark-snapshots`
+
+### `GET /api/cron/check-velocity`
+
+Vercel cron job: check post velocity for published posts and flag any with unusual engagement patterns as trending. Requires CRON_SECRET bearer token.
+
+**Auth:** Bearer CRON_SECRET (Vercel cron)
+
+**Returns:**
+
+```
+{{ message: string, checked: number, trending: number }}
+```
+
+### `GET /api/cron/cleanup-contract-drafts`
+
+Deletes `client_contracts` rows stuck in `status = 'draft'` past the TTL, along with their Supabase Storage objects. Covers the case where a user starts an upload, sees the review modal, then closes the tab without saving or cancelling — the draft row + file would otherwise persist.
+
+**Auth:** Bearer CRON_SECRET (mandatory)
+
+### `GET /api/cron/competitor-snapshots`
+
+manually-tracked `client_competitors` path (the audit-driven path has its own cron at /api/cron/benchmark-snapshots). For every TikTok competitor whose latest `competitor_snapshots` row is either missing or older than 7 days, run the scrape + insert path. Rate- limited to 25 competitors per run so a bad scrape can't eat the whole 300s budget. Also emits one summary notification per client whose scrape came up empty so stale data doesn't silently rot. Auth: `Bearer $CRON_SECRET`.
+
+### `GET /api/cron/data-retention`
+
+Vercel cron job: enforce data retention policies (SOC 2 P3.2). - Activity logs older than 1 year -> deleted - Completed topic searches older than 2 years -> deleted - Expired invite tokens -> deleted - Read notifications older than 90 days -> deleted
+
+**Auth:** Bearer CRON_SECRET (mandatory)
+
+**Returns:**
+
+```
+{{ message: string, deleted: Record<string, number> }}
+```
+
+### `GET /api/cron/ecom-snapshots`
+
+(NAT-21). Runs the Apify e-commerce actor for any competitor whose latest `ecom_snapshots` row is missing or older than 7 days. Rate-limited to 15 per run so a slow Apify queue can't consume the full 300s budget.
+
+**Auth:** Bearer $CRON_SECRET
+
+### `GET /api/cron/fyxer-import`
+
+### `POST /api/cron/fyxer-import`
+
+### `GET /api/cron/meta-ad-snapshots`
+
+(NAT-22). Re-runs the Apify Facebook Ad Library scraper for any tracked page whose most recent creative scrape is older than 24h. Capped at 10 pages per run to stay inside the 300s budget.
+
+**Auth:** Bearer $CRON_SECRET
+
+### `GET /api/cron/publish-posts`
+
+Vercel cron job (every 2 minutes): publish scheduled posts that are due. Processes up to 5 posts per run. Implements exponential backoff retry (up to 3 attempts). Sends an in-app failure notification when all retries are exhausted. Requires CRON_SECRET bearer token.
+
+**Auth:** Bearer CRON_SECRET (Vercel cron)
+
+**Returns:**
+
+```
+{{ message: string, published: number, failed: number }}
+```
+
+### `GET /api/cron/send-scheduled-emails`
+
+### `GET /api/cron/shoot-planner`
+
+Vercel cron job (runs daily at 8 AM): auto-generate AI shoot plans for upcoming shoots that are SHOOT_PLAN_DAYS_BEFORE days away (default: 3 days). Gathers SERP data and client memory to build context, then calls Claude to produce the plan. Syncs results to the Obsidian vault non-blocking. Requires CRON_SECRET bearer token.
+
+**Auth:** Bearer CRON_SECRET (Vercel cron)
+
+**Returns:**
+
+```
+{{ message: string, processed: number, failed: number, total: number }}
+```
+
+### `GET /api/cron/sync-knowledge-graph`
+
+### `POST /api/cron/sync-knowledge-graph`
+
+### `GET /api/cron/sync-reporting`
+
+Vercel cron job: sync social analytics for all active clients that have social profiles. Performs a 90-day backfill for clients with no existing snapshots; otherwise syncs the last 7 days. Generates analytics notifications after each successful sync. Sends admin alerts (throttled to once per 24h) if sync errors occur. Requires CRON_SECRET bearer token.
+
+**Auth:** Bearer CRON_SECRET (Vercel cron)
+
+**Returns:**
+
+```
+{{ message: string, synced: number, failed: number, notifications: number }}
+```
+
+### `GET /api/cron/topic-search-notify`
+
+Vercel cron: alert admins on failed topic searches (missed inline notify) and on runs stuck in pending / pending_subtopics / processing past env thresholds.
+
+**Auth:** Bearer CRON_SECRET
 
 ---
-
-## Response Conventions
-
-- **Success:** `{ data }` or `{ success: true }`
-- **Error:** `{ error: string }` with appropriate HTTP status code
-- **Status codes:** 200 (ok), 201 (created), 400 (bad request), 401 (unauthorized), 403 (forbidden), 404 (not found), 409 (conflict), 422 (unprocessable), 500 (server error), 503 (service unavailable)
-- **AI responses:** Always null-safe with `?? []`, `?? ''`, `?? 0`
-- **Dates:** ISO 8601 (`YYYY-MM-DD` for dates, full ISO string for timestamps)
-- **Async jobs:** Create record → return `{ id, status: 'processing' }` → poll status endpoint until `status = 'completed' | 'failed'`
-- **SSE streams:** `Content-Type: text/event-stream` — parse `data: ` lines; stream ends with `data: [DONE]`

@@ -12,6 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "docs:api": "tsx scripts/generate-api-docs.ts",
     "test": "vitest run -c app/vitest.config.ts",
     "test:watch": "vitest -c app/vitest.config.ts",
     "test:ad-library": "vitest run lib/ad-creatives/extract-ad-library-urls.test.ts -c app/vitest.config.ts",

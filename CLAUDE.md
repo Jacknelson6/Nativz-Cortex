@@ -115,8 +115,7 @@ This project uses **Ars Contexta** (`~/.claude/plugins/arscontexta/`). Key comma
 
 ## Large Data Files (skip unless directly relevant)
 
-- **`app/admin/nerd/api/api-docs-data.ts`** (2,600 lines) — Static API endpoint catalog for the docs viewer. Pure data, not logic. Only read when editing the API docs UI.
-- **`docs/api-reference.md`** (1,594 lines) — Auto-generated API reference. Only read when verifying API documentation accuracy.
+- **`app/admin/nerd/api/api-docs-data.ts`** + **`docs/api-reference.md`** — both auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts`. Do not edit by hand. Run `npm run docs:api` after adding/removing routes or tweaking the JSDoc block above an exported HTTP method.
 
 ## Portal Security (CRITICAL)
 
