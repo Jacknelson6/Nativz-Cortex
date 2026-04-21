@@ -43,4 +43,20 @@ describe('resolveMergeFields', () => {
   it('is idempotent on strings with no placeholders', () => {
     expect(resolveMergeFields('Hello world', fullCtx)).toBe('Hello world');
   });
+
+  it('uses the default when the token resolves to empty', () => {
+    const ctx: MergeContext = {
+      recipient: { full_name: null, email: null },
+      sender: { full_name: null, email: null },
+      client: { name: null },
+    };
+    expect(resolveMergeFields('Hey {{user.first_name|there}},', ctx)).toBe('Hey there,');
+    expect(resolveMergeFields('From {{ sender.name | the team }}', ctx)).toBe(
+      'From the team',
+    );
+  });
+
+  it('prefers the resolved value over the default when present', () => {
+    expect(resolveMergeFields('Hey {{user.first_name|there}}', fullCtx)).toBe('Hey Jack');
+  });
 });

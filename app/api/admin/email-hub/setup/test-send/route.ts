@@ -27,13 +27,21 @@ export async function POST(request: NextRequest) {
   const result = await sendUserEmail({
     to: parsed.data.to,
     subject: `[Test] Email Hub is wired up — ${brand}`,
-    bodyMarkdown: `Hey {{user.first_name}},
+    bodyMarkdown: `# Email Hub is wired up
 
-This is a one-off test send from the **Email Hub** Setup tab, delivered via Resend on the ${brand} domain.
+Hey {{user.first_name|there}},
 
-If you got this, from-address routing, webhooks, and the layout wrapper are all healthy.
+This is a one-off test send from the **Email Hub** Setup tab, delivered via Resend on the **${brand}** domain.
 
-– {{sender.name}}`,
+If you got this, three things are healthy:
+
+- From-address routing (${brand} → correct domain)
+- The shared layout + markdown renderer
+- Resend webhook callbacks (watch the Setup tab for opened/delivered events)
+
+---
+
+– {{sender.name|Jack}}`,
     mergeContext: {
       recipient: { full_name: null, email: parsed.data.to },
       sender: {
