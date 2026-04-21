@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { cookies } from 'next/headers';
+import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 
 /**
  * Cookie that holds the admin's currently-selected working brand.
@@ -84,12 +85,16 @@ export async function getActiveAdminClient(
   }
 
   const admin = createAdminClient();
+  // NOTE: `hide_from_roster` filter intentionally omitted here. It errors on
+  // databases that haven't applied migration 054; more importantly, the
+  // cookie value we're validating was written via `/api/admin/active-client`
+  // which only accepts brands the current admin can see — no need to
+  // re-enforce roster visibility at read time.
   const { data: client } = await admin
     .from('clients')
     .select('id, name, slug, logo_url, agency')
     .eq('id', candidate)
     .eq('is_active', true)
-    .eq('hide_from_roster', false)
     .maybeSingle();
 
   if (!client) {
@@ -101,8 +106,34 @@ export async function getActiveAdminClient(
   return { brand: client, source, isAdmin };
 }
 
-// NOTE: `listAdminAccessibleBrands()` used to live here — it fetched the full
-// roster so the top-bar pill could render a dropdown. The picker was moved
-// to its own page (/admin/select-brand) which does its own roster fetch,
-// so this utility is no longer needed. Kept the comment as a trail marker
-// in case someone wonders where it went.
+/**
+ * List every brand the current admin can switch to, ordered alphabetically.
+ *
+ * Uses `selectClientsWithRosterVisibility` so databases that haven't yet
+ * applied migration 054 (the `hide_from_roster` column) fall through to a
+ * no-filter variant instead of silently returning an empty list. The
+ * previous hand-rolled filter was the cause of the "No brands available
+ * yet" bug in the top-bar pill — Supabase errors the whole query when the
+ * column is absent, and the `.eq('hide_from_roster', false)` chain
+ * swallowed that error into `data = null`.
+ */
+export async function listAdminAccessibleBrands(): Promise<AdminBrand[]> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return [];
+
+  const isAdmin = await resolveAdminRole(user.id);
+  if (!isAdmin) return [];
+
+  const admin = createAdminClient();
+  const { data } = await selectClientsWithRosterVisibility<AdminBrand>(admin, {
+    select: 'id, name, slug, logo_url, agency',
+    onlyActive: true,
+    orderBy: { column: 'name', ascending: true },
+  });
+
+  return data ?? [];
+}

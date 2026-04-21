@@ -1,21 +1,21 @@
 'use client';
 
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { ChevronsUpDown, User } from 'lucide-react';
+import { Check, ChevronsUpDown, FolderOpen, Plus, Search } from 'lucide-react';
 import { useActiveBrand } from '@/lib/admin/active-client-context';
 import type { AdminBrand } from '@/lib/admin/get-active-client';
 
 /**
- * Top-of-bar brand pill. Clicking navigates to `/admin/select-brand` — the
- * full-page portfolio grid (components/ui/client-portfolio-selector.tsx)
- * handles the actual pick. Everything client-list-related lives over there
- * so the layout doesn't pay a roster query on every admin request.
+ * Top-bar brand pill. Clicking opens a compact popover with search + a list
+ * of the admin's brands + quick links to the full roster and the onboarding
+ * flow. Mirrors the RankPrompt pattern Jack referenced — in-place swap,
+ * no navigation.
  *
- * The pill itself just displays the currently-active brand (seeded from
- * the server cookie) and dims on admin-only routes to signal "brand
- * context is paused here."
+ * The popover reuses the sidebar's `sidebarTooltipIn` keyframe for
+ * consistency with the rest of the shell's reveal motion.
  */
 
 // Admin-only route prefixes — the pill dims on these routes because they
@@ -37,7 +37,6 @@ const ADMIN_ONLY_PREFIXES = [
   '/admin/presentations',
   '/admin/settings',
   '/admin/integrations',
-  '/admin/select-brand',
 ];
 
 function isAdminOnlyPath(pathname: string): boolean {
@@ -45,37 +44,175 @@ function isAdminOnlyPath(pathname: string): boolean {
 }
 
 export function AdminBrandPill() {
-  const { brand, isPending } = useActiveBrand();
+  const { brand, availableBrands, setBrand, isPending } = useActiveBrand();
   const pathname = usePathname();
   const isMuted = isAdminOnlyPath(pathname);
 
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Active brand first; everything else alphabetical underneath.
+  const orderedBrands = useMemo(() => {
+    if (!brand) return availableBrands;
+    const others = availableBrands.filter((b) => b.id !== brand.id);
+    const active = availableBrands.find((b) => b.id === brand.id);
+    return active ? [active, ...others] : availableBrands;
+  }, [availableBrands, brand]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return orderedBrands;
+    return orderedBrands.filter(
+      (b) => b.name.toLowerCase().includes(q) || b.slug.toLowerCase().includes(q),
+    );
+  }, [orderedBrands, query]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
+  // Focus the search field when the popover opens; clear the query when
+  // it closes so the next open starts fresh.
+  useEffect(() => {
+    if (open) {
+      const id = requestAnimationFrame(() => searchInputRef.current?.focus());
+      return () => cancelAnimationFrame(id);
+    }
+    setQuery('');
+  }, [open]);
+
+  const handlePick = useCallback(
+    (brandId: string) => {
+      setBrand(brandId);
+      setOpen(false);
+    },
+    [setBrand],
+  );
+
   const triggerLabel = brand?.name ?? 'Select a brand';
-  // Pass the current route so the selector page can send the user back
-  // after a pick. Skip when the current page IS the selector (avoids a
-  // redirect loop on accidental self-nav).
-  const returnTo = pathname.startsWith('/admin/select-brand') ? '/admin/dashboard' : pathname;
-  const href = `/admin/select-brand?returnTo=${encodeURIComponent(returnTo)}`;
 
   return (
-    <Link
-      href={href}
-      title={isMuted ? 'Brand context not used here' : triggerLabel}
-      className={`group flex w-full items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 transition-all duration-150 hover:border-nativz-border hover:bg-surface-hover ${
-        isMuted ? 'opacity-60' : ''
-      } ${isPending ? 'opacity-70' : ''}`}
-    >
-      <BrandIcon brand={brand} />
-      <div className="min-w-0 flex-1 text-left">
-        <p className="truncate text-sm font-medium text-text-primary">{triggerLabel}</p>
-      </div>
-      <ChevronsUpDown size={14} className="shrink-0 text-text-muted" />
-    </Link>
+    <div ref={containerRef} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title={isMuted ? 'Brand context not used here' : triggerLabel}
+        className={`group flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2 transition-all duration-150 ${
+          open
+            ? 'border-accent/30 bg-accent-surface/30'
+            : 'border-transparent hover:border-nativz-border hover:bg-surface-hover'
+        } ${isMuted ? 'opacity-60' : ''} ${isPending ? 'opacity-70' : ''}`}
+      >
+        <BrandIcon brand={brand} size={20} />
+        <div className="min-w-0 flex-1 text-left">
+          <p className="truncate text-sm font-medium text-text-primary">{triggerLabel}</p>
+        </div>
+        <ChevronsUpDown size={14} className="shrink-0 text-text-muted" />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Brand switcher"
+          className="absolute left-0 right-0 top-full z-50 mt-1.5 min-w-[280px] rounded-xl border border-nativz-border bg-surface shadow-elevated animate-[sidebarTooltipIn_120ms_ease-out_forwards]"
+          style={{ backdropFilter: 'blur(16px)' }}
+        >
+          {/* Search — ⌘K hint is visual only; the global command palette
+              already owns that chord, so we don't double-bind. */}
+          <div className="flex items-center gap-2 border-b border-nativz-border px-2.5 py-2">
+            <Search size={14} className="shrink-0 text-text-muted" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search brands..."
+              className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+            />
+            <kbd className="shrink-0 rounded border border-nativz-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-text-muted">
+              ⌘K
+            </kbd>
+          </div>
+
+          {/* Brand list */}
+          <div className="max-h-[320px] overflow-y-auto p-1">
+            {filtered.length === 0 ? (
+              <div className="px-2.5 py-4 text-center text-xs text-text-muted">
+                {query ? 'No brands match' : 'No brands available yet'}
+              </div>
+            ) : (
+              filtered.map((b) => {
+                const isActive = brand?.id === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => handlePick(b.id)}
+                    role="option"
+                    aria-selected={isActive}
+                    className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors ${
+                      isActive
+                        ? 'bg-accent-surface/50 text-accent-text'
+                        : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+                    }`}
+                  >
+                    <BrandIcon brand={b} size={20} />
+                    <span className="min-w-0 flex-1 truncate text-left">{b.name}</span>
+                    {isActive && <Check size={14} className="shrink-0 text-accent-text" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {/* Footer — "All brands" link + Onboard CTA */}
+          <div className="border-t border-nativz-border p-1">
+            <Link
+              href="/admin/clients"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+            >
+              <FolderOpen size={14} className="shrink-0" />
+              <span className="flex-1">All brands</span>
+            </Link>
+            <Link
+              href="/admin/clients/onboard"
+              onClick={() => setOpen(false)}
+              className="mt-0.5 flex w-full items-center gap-2 rounded-lg bg-accent px-2.5 py-2 text-sm font-semibold text-white hover:bg-accent/90"
+            >
+              <Plus size={14} className="shrink-0" />
+              <span className="flex-1 text-left">Create brand</span>
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
-function BrandIcon({ brand }: { brand: AdminBrand | null }) {
-  const size = 20;
-
+function BrandIcon({ brand, size }: { brand: AdminBrand | null; size: number }) {
   if (brand?.logo_url) {
     return (
       <Image
@@ -90,25 +227,13 @@ function BrandIcon({ brand }: { brand: AdminBrand | null }) {
     );
   }
 
-  if (brand) {
-    const initial = brand.name.charAt(0).toUpperCase();
-    return (
-      <div
-        className="flex shrink-0 items-center justify-center rounded-md bg-accent-surface"
-        style={{ width: size, height: size, fontSize: size * 0.5 }}
-      >
-        <span className="font-semibold leading-none text-accent-text">{initial}</span>
-      </div>
-    );
-  }
-
-  // Empty state — no brand selected
+  const initial = brand?.name.charAt(0).toUpperCase() ?? '?';
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-md border border-dashed border-nativz-border text-text-muted"
-      style={{ width: size, height: size }}
+      className="flex shrink-0 items-center justify-center rounded-md bg-accent-surface"
+      style={{ width: size, height: size, fontSize: size * 0.5 }}
     >
-      <User size={12} />
+      <span className="font-semibold leading-none text-accent-text">{initial}</span>
     </div>
   );
 }

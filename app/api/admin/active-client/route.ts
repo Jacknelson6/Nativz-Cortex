@@ -54,13 +54,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, client_id: null });
   }
 
-  // Validate the target is a real, active, non-hidden brand before writing.
+  // Validate the target is a real, active brand before writing. The
+  // `hide_from_roster` filter is intentionally omitted — the column
+  // doesn't exist on all database snapshots (migration 054 gated), and
+  // the "hidden" flag is a roster-display concern, not an authorization
+  // one. We don't want a missing column to silently 403 every brand
+  // switch.
   const { data: client } = await admin
     .from('clients')
     .select('id')
     .eq('id', parsed.data.client_id)
     .eq('is_active', true)
-    .eq('hide_from_roster', false)
     .maybeSingle();
 
   if (!client) {
