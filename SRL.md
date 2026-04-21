@@ -594,3 +594,34 @@ Jack kicked off a massive overnight build at 2 a.m. (Zernio coverage, accounting
 - `/admin/accounting` — create a period, add entries, lock, export CSV
 - `/admin/analytics` with a Zernio-connected client — audience insights card renders (or gracefully hides)
 - `/admin/analyze-social/<id>` on an attached audit → "View in benchmarks" link works
+
+---
+
+## Goal 9 (set 2026-04-20) — Email Hub v1: full admin correspondence surface
+
+Build out the seven tabs on `/admin/tools/email` (Campaigns, Emails, Contacts, Lists, Templates, Sequences, Setup) so Nativz/AC can run agency → client correspondence end-to-end — analytics updates, reporting summaries, and drip sequences — all routed through Resend with per-agency from-address.
+
+Use case is **agency → our platform users / clients**, not cold outbound. Reuse the existing tables (`email_templates`, `scheduled_emails`, `production_updates`) and `lib/email/resend.ts` — add only what's missing (contacts, lists, per-send events, sequences).
+
+### Acceptance criteria
+- [ ] Migration 126 creates `email_contacts`, `email_lists`, `email_list_members`, `email_campaigns`, `email_messages`, `email_sequences`, `email_sequence_steps`, `email_sequence_enrollments` — admin-only RLS
+- [ ] `POST /api/webhooks/resend` captures delivered/opened/clicked/bounced/complained/failed events into `email_messages`
+- [ ] `/admin/tools/email` → **Emails** tab: stats cards (draft/scheduled/sent/opened/replied/unsubscribed/bounced/failed) + filterable list (status / campaign / replies)
+- [ ] `/admin/tools/email` → **Contacts** tab: list, Add Contact, CSV import with role/title/company parse, Find Duplicates
+- [ ] `/admin/tools/email` → **Templates** tab: CRUD editor with preview + category picker (already has API from migration 100)
+- [ ] `/admin/tools/email` → **Campaigns** tab: New Campaign modal pick (list OR contacts OR portal-users filter) → subject/body or template → send-now or schedule
+- [ ] `/admin/tools/email` → **Lists** tab: create list, add/remove contacts, see membership count
+- [ ] `/admin/tools/email` → **Sequences** tab: sequence CRUD, multi-step editor (day-offset + template), enroll contacts
+- [ ] `/admin/tools/email` → **Setup** tab: shows agency from-addresses, domain status (read-only), webhook endpoint + test
+- [ ] `npx tsc --noEmit` stays clean at each iteration
+- [ ] All new routes gated by `requireAdmin` + org-scoped (admin-only, no portal exposure)
+
+### Scope boundaries
+- **IN:** Admin surface + API + DB + webhook. Wire agency from-address off the contact's `client_id.agency` when present, fall back to session agency. Reuse existing `sendUserEmail` / `sendProductionUpdateEmail` helpers.
+- **OUT:** Portal-user unsubscribe UI (backend respects `unsubscribed` flag, but the opt-out page can land later); inbox-reply threading; WYSIWYG; A/B splits; deliverability analytics charts beyond the stats cards.
+
+## Goal 9 Iterations
+
+### Iteration 9.1 — 2026-04-20
+
+**Focus:** Ship the DB + webhook foundation the six client-facing tabs will hang off.

@@ -17,6 +17,7 @@ import {
   type ClientOption,
   type UpdateRow,
 } from '@/app/admin/tools/email/production-updates-client';
+import { EmailsTab } from './emails-tab';
 
 type TabKey =
   | 'campaigns'
@@ -53,7 +54,7 @@ export function EmailHubClient({ clients, initialUpdates, senderEmail }: Props) 
   const [tab, setTab] = useState<TabKey>('campaigns');
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-8 space-y-6">
+    <div className="mx-auto w-full max-w-6xl px-6 py-8 space-y-6">
       <header className="flex items-start gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-surface border border-nativz-border">
           <Mail size={20} className="text-accent-text" />
@@ -76,13 +77,7 @@ export function EmailHubClient({ clients, initialUpdates, senderEmail }: Props) 
             senderEmail={senderEmail}
           />
         )}
-        {tab === 'emails' && (
-          <EmptyTab
-            icon={Mail}
-            title="No individual emails yet"
-            description="Per-recipient sends and bounces will show up here once a campaign goes out."
-          />
-        )}
+        {tab === 'emails' && <EmailsTab />}
         {tab === 'contacts' && (
           <EmptyTab
             icon={Contact}
