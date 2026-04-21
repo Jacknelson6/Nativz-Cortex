@@ -12,7 +12,7 @@ import {
   Settings,
   Webhook,
 } from 'lucide-react';
-import { EmailHubSpinner } from './_loading';
+import { InlineSpinner } from '@/components/ui/loading-skeletons';
 
 type Agency = {
   key: 'nativz' | 'anderson';
@@ -46,7 +46,7 @@ export function SetupTab() {
   if (isLoading || !data) {
     return (
       <section className="rounded-2xl border border-nativz-border bg-surface">
-        <EmailHubSpinner label="Loading setup…" />
+        <InlineSpinner label="Loading setup…" />
       </section>
     );
   }

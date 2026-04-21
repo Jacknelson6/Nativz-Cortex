@@ -1,4 +1,4 @@
-export async function emailHubFetcher<T>(url: string): Promise<T> {
+export async function swrFetcher<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null;

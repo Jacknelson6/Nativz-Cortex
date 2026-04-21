@@ -9,6 +9,7 @@ import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
 import { ImpersonationBanner } from '@/components/portal/impersonation-banner';
 import { AdminInPortalGuard } from '@/components/portal/admin-in-portal-guard';
 import { BrandModeProvider } from '@/components/layout/brand-mode-provider';
+import { SWRProvider } from '@/components/providers/swr-provider';
 import type { FeatureFlags } from '@/lib/portal/get-portal-client';
 import { buildPortalFeatureFlags } from '@/lib/portal/feature-flags';
 
@@ -202,9 +203,11 @@ export default async function PortalLayout({
   // Auth pages: render without sidebar
   if (isAuthPage) {
     return (
-      <div className="min-h-screen bg-background">
-        {children}
-      </div>
+      <SWRProvider>
+        <div className="min-h-screen bg-background">
+          {children}
+        </div>
+      </SWRProvider>
     );
   }
 
@@ -250,27 +253,29 @@ export default async function PortalLayout({
   const isAdminInPortal = cached?.role === 'admin' && cached?.isOwner === true;
 
   return (
-    <BrandModeProvider forcedMode={forcedBrandMode}>
-      <ImpersonationBanner />
-      <AdminInPortalGuard isAdmin={isAdminInPortal} />
-      <SidebarProvider>
-        <AdminSidebar
-          userName={userName}
-          avatarUrl={avatarUrl}
-          role="viewer"
-          routePrefix="/portal"
-          logoutPath="/admin/login"
-          settingsPath="/portal/settings"
-          brands={brandData.brands}
-          activeBrandId={brandData.activeBrandId}
-          hiddenSidebarItems={hiddenSidebarItems}
-          isAdmin={isAdminInPortal}
-        />
-        <SidebarInset>
-          <AdminHeader />
-          {children}
-        </SidebarInset>
-      </SidebarProvider>
-    </BrandModeProvider>
+    <SWRProvider>
+      <BrandModeProvider forcedMode={forcedBrandMode}>
+        <ImpersonationBanner />
+        <AdminInPortalGuard isAdmin={isAdminInPortal} />
+        <SidebarProvider>
+          <AdminSidebar
+            userName={userName}
+            avatarUrl={avatarUrl}
+            role="viewer"
+            routePrefix="/portal"
+            logoutPath="/admin/login"
+            settingsPath="/portal/settings"
+            brands={brandData.brands}
+            activeBrandId={brandData.activeBrandId}
+            hiddenSidebarItems={hiddenSidebarItems}
+            isAdmin={isAdminInPortal}
+          />
+          <SidebarInset>
+            <AdminHeader />
+            {children}
+          </SidebarInset>
+        </SidebarProvider>
+      </BrandModeProvider>
+    </SWRProvider>
   );
 }

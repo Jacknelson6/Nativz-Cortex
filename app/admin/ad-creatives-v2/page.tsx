@@ -1,13 +1,24 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getActiveAdminClient } from "@/lib/admin/get-active-client";
 
 /**
  * Ad Creatives v2 — client picker landing.
  *
  * Lists clients that have at least one row in brand_ad_templates (i.e. have
  * been activated for v2). Clicking through opens the per-client console.
+ *
+ * When the admin already has a working brand pinned via the top-bar pill,
+ * skip the picker entirely and redirect straight into that client's console
+ * — the picker becomes the fallback "nothing's selected yet" state.
  */
 export default async function AdCreativesV2Landing() {
+  const active = await getActiveAdminClient().catch(() => null);
+  if (active?.brand) {
+    redirect(`/admin/ad-creatives-v2/${active.brand.id}`);
+  }
+
   const admin = createAdminClient();
 
   const { data: templateRows } = await admin

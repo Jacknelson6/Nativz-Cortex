@@ -4,7 +4,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { FileText, Plus, Save, Trash2 } from 'lucide-react';
 import { LabeledInput, ModalShell } from './contacts-tab';
-import { EmailHubSkeletonRows } from './_loading';
+import { SkeletonRows } from '@/components/ui/loading-skeletons';
 
 type Category = 'followup' | 'reminder' | 'calendar' | 'welcome' | 'general';
 
@@ -97,7 +97,7 @@ export function TemplatesTab() {
       </header>
 
       {isLoading && templates.length === 0 ? (
-        <EmailHubSkeletonRows count={4} withAvatar={false} />
+        <SkeletonRows count={4} withAvatar={false} />
       ) : templates.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-surface border border-nativz-border">

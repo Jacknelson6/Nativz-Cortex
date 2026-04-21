@@ -12,7 +12,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { EmailHubSkeletonRows, EmailHubSpinner } from './_loading';
+import { SkeletonRows, InlineSpinner } from '@/components/ui/loading-skeletons';
 
 type Contact = {
   id: string;
@@ -135,7 +135,7 @@ export function ContactsTab() {
       </div>
 
       {isLoading && contacts.length === 0 ? (
-        <EmailHubSkeletonRows count={6} />
+        <SkeletonRows count={6} />
       ) : contacts.length === 0 ? (
         <EmptyContacts onAdd={() => setShowAdd(true)} onImport={() => setShowImport(true)} />
       ) : (
@@ -521,7 +521,7 @@ function DuplicatesModal({ onClose }: { onClose: () => void }) {
   return (
     <ModalShell title="Find duplicate contacts" onClose={onClose}>
       {loading ? (
-        <EmailHubSpinner label="Scanning for duplicates…" />
+        <InlineSpinner label="Scanning for duplicates…" />
       ) : groups.length === 0 && nameGroups.length === 0 ? (
         <p className="py-6 text-center text-sm text-text-muted">
           No duplicate contacts found.

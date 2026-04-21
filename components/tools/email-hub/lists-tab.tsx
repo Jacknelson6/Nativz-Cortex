@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { ArrowLeft, FolderPlus, Plus, Trash2, UserMinus, UserPlus } from 'lucide-react';
 import { LabeledInput, ModalShell } from './contacts-tab';
-import { EmailHubSkeletonRows } from './_loading';
+import { SkeletonRows } from '@/components/ui/loading-skeletons';
 
 type EmailList = {
   id: string;
@@ -84,7 +84,7 @@ export function ListsTab() {
       </header>
 
       {isLoading && lists.length === 0 ? (
-        <EmailHubSkeletonRows count={4} withAvatar={false} />
+        <SkeletonRows count={4} withAvatar={false} />
       ) : lists.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-surface border border-nativz-border">
@@ -292,7 +292,7 @@ function ListDetailView({ listId, onBack }: { listId: string; onBack: () => void
       </header>
 
       {loading ? (
-        <EmailHubSkeletonRows count={5} />
+        <SkeletonRows count={5} />
       ) : members.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
           <p className="text-sm text-text-muted">No members yet.</p>

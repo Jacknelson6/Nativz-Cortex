@@ -13,7 +13,7 @@ import {
   Send,
 } from 'lucide-react';
 import { LabeledInput, ModalShell } from './contacts-tab';
-import { EmailHubSkeletonRows } from './_loading';
+import { SkeletonRows } from '@/components/ui/loading-skeletons';
 
 type Campaign = {
   id: string;
@@ -81,7 +81,7 @@ export function CampaignsTab({ clients }: Props) {
       </header>
 
       {isLoading && campaigns.length === 0 ? (
-        <EmailHubSkeletonRows count={4} withAvatar={false} />
+        <SkeletonRows count={4} withAvatar={false} />
       ) : campaigns.length === 0 ? (
         <EmptyCampaigns onCreate={() => setShowNew(true)} />
       ) : (

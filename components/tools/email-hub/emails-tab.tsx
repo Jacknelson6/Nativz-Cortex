@@ -16,7 +16,7 @@ import {
   UserX,
   XCircle,
 } from 'lucide-react';
-import { EmailHubSkeletonRows } from './_loading';
+import { SkeletonRows } from '@/components/ui/loading-skeletons';
 
 type Stats = {
   draft: number;
@@ -313,7 +313,7 @@ function RatesGrid({ stats }: { stats: Stats }) {
 
 function MessageList({ messages, loading }: { messages: MessageRow[]; loading: boolean }) {
   if (loading && messages.length === 0) {
-    return <EmailHubSkeletonRows count={6} />;
+    return <SkeletonRows count={6} />;
   }
   if (messages.length === 0) {
     return (

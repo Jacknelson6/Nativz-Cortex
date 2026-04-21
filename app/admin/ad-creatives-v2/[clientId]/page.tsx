@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { V2GenerateSceneForm } from "@/components/ad-creatives-v2/generate-scene-form";
 import { V2RenderPreview } from "@/components/ad-creatives-v2/render-preview";
 import { V2BatchCreator } from "@/components/ad-creatives-v2/batch-creator";
+import { SyncActiveBrand } from "@/components/admin/sync-active-brand";
 
 export default async function AdCreativesV2ClientPage({
   params,
@@ -48,6 +49,9 @@ export default async function AdCreativesV2ClientPage({
 
   return (
     <div className="mx-auto max-w-6xl p-8 space-y-8">
+      {/* Keep the top-bar pill in lockstep with the URL's clientId on
+          direct-link visits. No-op when they already match. */}
+      <SyncActiveBrand clientId={client.id} />
       <header>
         <Link
           href="/admin/ad-creatives-v2"

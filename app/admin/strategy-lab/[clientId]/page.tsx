@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { ContentLabWorkspace } from '@/components/content-lab/content-lab-workspace';
 import { loadPillarReferencePreviews } from '@/lib/content-lab/pillar-reference-previews';
 import { getKnowledgeEntries, getKnowledgeGraph } from '@/lib/knowledge/queries';
+import { SyncActiveBrand } from '@/components/admin/sync-active-brand';
 
 export default async function ContentLabClientPage({
   params,
@@ -130,6 +131,10 @@ export default async function ContentLabClientPage({
 
   return (
     <div className="h-[calc(100vh-3.5rem)] overflow-hidden">
+      {/* Direct-link visits update the top-bar pill so the session context
+          matches what the user is actually looking at. No-op when the URL
+          clientId already equals the active brand. */}
+      <SyncActiveBrand clientId={client.id} />
       <ContentLabWorkspace
         clientId={client.id}
         clientSlug={client.slug ?? ''}

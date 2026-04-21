@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 import { PageError } from '@/components/shared/page-error';
 import { ContentLabGeneralChat } from '@/components/content-lab/content-lab-general-chat';
+import { getActiveAdminClient } from '@/lib/admin/get-active-client';
 
 type ClientRow = {
   id: string;
@@ -79,15 +80,23 @@ export default async function ContentLabIndexPage({
     redirect('/admin/login');
   }
 
+  // If the admin has a working brand pinned via the top-bar pill, send them
+  // straight into that brand's Strategy Lab workspace instead of the
+  // general cross-brand chat. Any `?attach=…` deep-link param rides along
+  // — the brand-scoped workspace consumes it too.
+  const { attach: attachParam } = await searchParams;
+  const active = await getActiveAdminClient().catch(() => null);
+  if (active?.brand) {
+    const qs = attachParam ? `?attach=${encodeURIComponent(attachParam)}` : '';
+    redirect(`/admin/strategy-lab/${active.brand.id}${qs}`);
+  }
+
   try {
     const adminClient = createAdminClient();
-    const [{ data: dbClients, error: dbError }, { attach: attachParam }] = await Promise.all([
-      selectClientsWithRosterVisibility<ClientRow>(adminClient, {
-        select: 'id, name, slug, is_active, logo_url, agency',
-        orderBy: { column: 'name' },
-      }),
-      searchParams,
-    ]);
+    const { data: dbClients, error: dbError } = await selectClientsWithRosterVisibility<ClientRow>(adminClient, {
+      select: 'id, name, slug, is_active, logo_url, agency',
+      orderBy: { column: 'name' },
+    });
 
     if (dbError) throw dbError;
 

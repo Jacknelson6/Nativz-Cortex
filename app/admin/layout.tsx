@@ -16,6 +16,7 @@ import { EasterEgg } from '@/components/easter-egg';
 import { CommandPalette } from '@/components/shared/command-palette';
 import { PageTransition } from '@/components/shared/page-transition';
 import { BackgroundSearchProvider } from '@/components/search/background-search-tracker';
+import { SWRProvider } from '@/components/providers/swr-provider';
 import { ActiveBrandProvider } from '@/lib/admin/active-client-context';
 import { getActiveAdminClient, listAdminAccessibleBrands } from '@/lib/admin/get-active-client';
 
@@ -44,7 +45,11 @@ export default async function AdminLayout({
 
     // Login (and any unauthenticated admin render) must not mount sidebar / header or hit admin DB cache.
     if (!user) {
-      return <PageTransition>{children}</PageTransition>;
+      return (
+        <SWRProvider>
+          <PageTransition>{children}</PageTransition>
+        </SWRProvider>
+      );
     }
 
     let userName = '';
@@ -82,22 +87,28 @@ export default async function AdminLayout({
     ]);
 
     return (
-      <BackgroundSearchProvider>
-        <ActiveBrandProvider initialBrand={active.brand} availableBrands={availableBrands}>
-          <SidebarProvider topBar={<AdminTopBar />}>
-            <EasterEgg />
-            <CommandPalette />
-            <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} />
-            <SidebarInset>
-              <PageTransition>{children}</PageTransition>
-            </SidebarInset>
-          </SidebarProvider>
-        </ActiveBrandProvider>
-      </BackgroundSearchProvider>
+      <SWRProvider>
+        <BackgroundSearchProvider>
+          <ActiveBrandProvider initialBrand={active.brand} availableBrands={availableBrands}>
+            <SidebarProvider topBar={<AdminTopBar />}>
+              <EasterEgg />
+              <CommandPalette />
+              <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} />
+              <SidebarInset>
+                <PageTransition>{children}</PageTransition>
+              </SidebarInset>
+            </SidebarProvider>
+          </ActiveBrandProvider>
+        </BackgroundSearchProvider>
+      </SWRProvider>
     );
   } catch (err) {
     console.error('AdminLayout bootstrap failed:', err);
     // Degraded shell so /admin/login can still render if env/DB is misconfigured during local dev.
-    return <PageTransition>{children}</PageTransition>;
+    return (
+      <SWRProvider>
+        <PageTransition>{children}</PageTransition>
+      </SWRProvider>
+    );
   }
 }
