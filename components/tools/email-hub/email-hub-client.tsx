@@ -20,6 +20,7 @@ import { EmailsTab } from './emails-tab';
 import { ContactsTab } from './contacts-tab';
 import { TemplatesTab } from './templates-tab';
 import { CampaignsTab } from './campaigns-tab';
+import { ListsTab } from './lists-tab';
 
 type TabKey =
   | 'campaigns'
@@ -96,13 +97,7 @@ export function EmailHubClient({ clients, initialUpdates, senderEmail }: Props) 
         )}
         {tab === 'emails' && <EmailsTab />}
         {tab === 'contacts' && <ContactsTab />}
-        {tab === 'lists' && (
-          <EmptyTab
-            icon={FolderPlus}
-            title="Lists coming soon"
-            description="Group recipients into reusable audiences you can target in campaigns and sequences."
-          />
-        )}
+        {tab === 'lists' && <ListsTab />}
         {tab === 'templates' && <TemplatesTab />}
         {tab === 'sequences' && (
           <EmptyTab
