@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -21,7 +20,7 @@ import {
   Youtube,
 } from 'lucide-react';
 import { ClientLogo } from '@/components/clients/client-logo';
-import { ClientPickerModal, type ClientOption } from '@/components/ui/client-picker';
+import type { ClientOption } from '@/components/ui/client-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils/cn';
 import { toast } from 'sonner';
@@ -124,9 +123,7 @@ export function ResearchTopicForm({
     );
     const [url, setUrl] = useState('');
     const [contextSearch, setContextSearch] = useState(hydratedClient?.name ?? '');
-    const [clientPickerOpen, setClientPickerOpen] = useState(false);
     const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
-    const [clientPickerPortal, setClientPickerPortal] = useState<HTMLElement | null>(null);
     const platforms = new Set<SearchPlatform>(['web', 'reddit', 'youtube', 'tiktok']);
     const volume: SearchVolume = 'deep';
     const [timeRange, setTimeRange] = useState('last_3_months');
@@ -137,10 +134,6 @@ export function ResearchTopicForm({
     const [showBestPractices, setShowBestPractices] = useState(false);
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-
-    useEffect(() => {
-      setClientPickerPortal(document.body);
-    }, []);
 
     useEffect(() => {
       if (initialQuery) setTopicQuery(initialQuery);
@@ -470,18 +463,8 @@ export function ResearchTopicForm({
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-col gap-2 border-t border-nativz-border p-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setClientPickerOpen(true);
-                        setBrandPopoverOpen(false);
-                      }}
-                      className="text-left text-xs font-medium text-accent-text hover:underline"
-                    >
-                      Browse all clients
-                    </button>
-                    {(contextMode === 'client' || contextMode === 'url') && (
+                  {(contextMode === 'client' || contextMode === 'url') && (
+                    <div className="flex flex-col gap-2 border-t border-nativz-border p-3">
                       <button
                         type="button"
                         onClick={() => {
@@ -492,8 +475,8 @@ export function ResearchTopicForm({
                       >
                         Clear brand
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </PopoverContent>
               </Popover>}
 
@@ -697,22 +680,6 @@ export function ResearchTopicForm({
           <p className="mt-4 text-center text-sm text-red-400">{error}</p>
         )}
 
-        {clientPickerPortal &&
-          clientPickerOpen &&
-          createPortal(
-            <div className="fixed inset-0 z-[100]">
-              <ClientPickerModal
-                clients={clients}
-                value={clientId}
-                onSelect={(id) => {
-                  pickClient(id);
-                  setClientPickerOpen(false);
-                }}
-                onClose={() => setClientPickerOpen(false)}
-              />
-            </div>,
-            clientPickerPortal,
-          )}
       </div>
     );
 }

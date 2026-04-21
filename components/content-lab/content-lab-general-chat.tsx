@@ -1,18 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, Sparkles, Building2, Paperclip, X } from 'lucide-react';
+import { Loader2, Sparkles, Paperclip, X } from 'lucide-react';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { ChatComposer, type ChatAttachment } from '@/components/ai/chat-composer';
 import { processAttachments } from '@/lib/chat/process-attachments';
-import { ClientPickerModal, type ClientOption } from '@/components/ui/client-picker';
+import type { ClientOption } from '@/components/ui/client-picker';
 
 interface RoutableClient extends ClientOption {
   slug: string;
 }
 import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
-import { useRouter } from 'next/navigation';
 
 type AttachedScopeType = 'audit' | 'tiktok_shop_search' | 'topic_search';
 
@@ -59,8 +58,7 @@ const SUGGESTIONS = [
  * client routes into the per-client workspace at /admin/strategy-lab/[slug]
  * which spins up an isolated thread.
  */
-export function ContentLabGeneralChat({ clients, initialScope = null }: ContentLabGeneralChatProps) {
-  const router = useRouter();
+export function ContentLabGeneralChat({ clients: _clients, initialScope = null }: ContentLabGeneralChatProps) {
   const { config: agencyConfig, brandName: agencyName } = useAgencyBrand();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -68,7 +66,6 @@ export function ContentLabGeneralChat({ clients, initialScope = null }: ContentL
   const [streaming, setStreaming] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [loadingConversation, setLoadingConversation] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
   // Attached analyses (drawer handoff seed + future user-added attachments).
   // Sent to the Nerd as `scopeContext` — the compact-index variant where the
   // agent pulls detail on demand via tools, not a full-blob dump.
@@ -247,13 +244,9 @@ export function ContentLabGeneralChat({ clients, initialScope = null }: ContentL
       'User is in the general Strategy Lab — no client is scoped. Reason across the whole agency portfolio.';
   }
 
-  function handlePickClient(id: string) {
-    setPickerOpen(false);
-    // The Strategy Lab dynamic route loads by client UUID (param name is
-    // `clientId` and the page filters `clients.id`). Routing with the
-    // slug 404s.
-    if (id) router.push(`/admin/strategy-lab/${id}`);
-  }
+  // Note: "Pick a client" button removed — the top-bar brand pill handles
+  // session-level brand selection now. Picking a brand there auto-redirects
+  // into /admin/strategy-lab/[clientId] via the index route's cookie check.
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-nativz-border/60 bg-background/40">
@@ -271,14 +264,6 @@ export function ContentLabGeneralChat({ clients, initialScope = null }: ContentL
             className="rounded-full border border-nativz-border/60 px-3 py-1.5 text-xs text-text-muted transition hover:border-accent/30 hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             New chat
-          </button>
-          <button
-            type="button"
-            onClick={() => setPickerOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-accent/90 cursor-pointer"
-          >
-            <Building2 size={13} />
-            Pick a client
           </button>
         </div>
       </header>
@@ -392,14 +377,6 @@ export function ContentLabGeneralChat({ clients, initialScope = null }: ContentL
         </div>
       </div>
 
-      {pickerOpen && (
-        <ClientPickerModal
-          clients={clients}
-          value={null}
-          onSelect={handlePickClient}
-          onClose={() => setPickerOpen(false)}
-        />
-      )}
     </div>
   );
 }
