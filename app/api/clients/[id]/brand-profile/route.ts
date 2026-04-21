@@ -13,6 +13,19 @@ import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 // same columns.
 
 const patchSchema = z.object({
+  // NAT-57 inline-edit: the header fields are editable right from the
+  // brand-profile page now. Route everything through one PATCH so the
+  // UI doesn't have to know about two separate endpoints. `name` is
+  // the one field that's intentionally NOT here — renaming a client
+  // has ripple effects (vault sync, Monday.com, invite emails) handled
+  // by the main /api/clients/[id] endpoint. Everything else in this
+  // list is safe to write directly.
+  website_url: z.string().trim().max(500).nullable().optional(),
+  description: z.string().trim().max(5000).nullable().optional(),
+  industry: z.string().trim().max(200).nullable().optional(),
+  brand_voice: z.string().trim().max(500).nullable().optional(),
+  target_audience: z.string().trim().max(1000).nullable().optional(),
+
   // Essence trio — AI-generatable, but free-text editable.
   tagline: z.string().trim().max(500).nullable().optional(),
   value_proposition: z.string().trim().max(1000).nullable().optional(),
