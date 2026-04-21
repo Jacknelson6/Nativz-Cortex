@@ -4,22 +4,32 @@ import Image from 'next/image';
 import { AdminBrandPill } from '@/components/layout/admin-brand-pill';
 import { NotificationBell } from '@/components/layout/notification-bell';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
+import { AdminTopBarAccount } from '@/components/layout/admin-top-bar-account';
 
 /**
  * Full-width top bar for admin routes. Sits above the sidebar + main content
  * (not inside either), matching the RankPrompt pattern: the product logo
  * anchors the top-left, the attached-brand pill sits immediately to its
- * right, and any global actions (notifications, etc.) hug the right edge.
+ * right, and global actions (notifications, account menu) hug the right edge.
  *
- * Width is split into three zones:
- *   [ sidebar-aligned ] [ brand pill — grows ] [ actions ]
- *
- * The leftmost zone matches the sidebar rail's expanded width so the
- * product logo sits directly above the rail rather than drifting when the
- * rail collapses. A border-bottom keeps the bar visually separated from
- * everything below.
+ * The account menu (avatar → Account settings / API docs / Sign out) lives
+ * up here rather than in the sidebar footer so the rail stays pure tool-
+ * navigation. Portal users still see the account popover in their sidebar
+ * rail — portal doesn't render this top bar.
  */
-export function AdminTopBar() {
+export function AdminTopBar({
+  userName,
+  avatarUrl,
+  settingsHref,
+  apiDocsHref,
+  logoutRedirect,
+}: {
+  userName?: string;
+  avatarUrl?: string | null;
+  settingsHref: string;
+  apiDocsHref?: string;
+  logoutRedirect: string;
+}) {
   const { mode } = useBrandMode();
 
   return (
@@ -56,6 +66,13 @@ export function AdminTopBar() {
       {/* Right: global actions */}
       <div className="flex items-center gap-2">
         <NotificationBell />
+        <AdminTopBarAccount
+          userName={userName}
+          avatarUrl={avatarUrl}
+          settingsHref={settingsHref}
+          apiDocsHref={apiDocsHref}
+          logoutRedirect={logoutRedirect}
+        />
       </div>
     </header>
   );

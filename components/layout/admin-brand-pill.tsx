@@ -46,6 +46,36 @@ function isAdminOnlyPath(pathname: string): boolean {
   return ADMIN_ONLY_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
+// Recently-opened ordering. Stored as a small list of brand ids in
+// localStorage, most-recent first, capped to keep writes cheap. Used by the
+// pill dropdown to surface the brands the admin actually works on at the top
+// of the list. Per-browser, not per-user in DB — simpler + private enough.
+const RECENT_BRANDS_KEY = 'cortex.admin.recent-brands';
+const RECENT_BRANDS_CAP = 12;
+
+function readRecentBrandIds(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(RECENT_BRANDS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberRecentBrand(id: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const current = readRecentBrandIds().filter((existing) => existing !== id);
+    const next = [id, ...current].slice(0, RECENT_BRANDS_CAP);
+    window.localStorage.setItem(RECENT_BRANDS_KEY, JSON.stringify(next));
+  } catch {
+    /* localStorage unavailable — silently skip; pill still works, just no memory */
+  }
+}
+
 interface AdminBrandPillProps {
   /** When true, render the icon-only collapsed variant. */
   collapsed?: boolean;
@@ -58,14 +88,44 @@ export function AdminBrandPill({ collapsed = false }: AdminBrandPillProps) {
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  // Recency cache — seeded from localStorage on mount. Re-reads when the pill
+  // opens so other tabs' activity is visible without a full reload.
+  const [recentIds, setRecentIds] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Sort the full brand list: recently-opened (in recorded order) first,
+  // then everything else alphabetically. The active brand bubbles above
+  // recents — it's the one the user is on right now.
+  const orderedBrands = useMemo(() => {
+    const byId = new Map(availableBrands.map((b) => [b.id, b] as const));
+    const result: AdminBrand[] = [];
+    const seen = new Set<string>();
+
+    if (brand && byId.has(brand.id)) {
+      result.push(brand);
+      seen.add(brand.id);
+    }
+    for (const id of recentIds) {
+      if (seen.has(id)) continue;
+      const b = byId.get(id);
+      if (!b) continue;
+      result.push(b);
+      seen.add(id);
+    }
+    for (const b of availableBrands) {
+      if (seen.has(b.id)) continue;
+      result.push(b);
+      seen.add(b.id);
+    }
+    return result;
+  }, [availableBrands, recentIds, brand]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return availableBrands;
-    return availableBrands.filter((b) => b.name.toLowerCase().includes(q) || b.slug.toLowerCase().includes(q));
-  }, [availableBrands, query]);
+    if (!q) return orderedBrands;
+    return orderedBrands.filter((b) => b.name.toLowerCase().includes(q) || b.slug.toLowerCase().includes(q));
+  }, [orderedBrands, query]);
 
   // Close on outside click
   useEffect(() => {
@@ -96,9 +156,11 @@ export function AdminBrandPill({ collapsed = false }: AdminBrandPillProps) {
   // app command palette. Adding another global chord here is more confusing
   // than useful. Click the pill or hit the search via the command palette.
 
-  // Focus search when popover opens
+  // Focus search when popover opens, and refresh the recency list so a
+  // brand opened in another tab bubbles up here without needing a reload.
   useEffect(() => {
     if (open) {
+      setRecentIds(readRecentBrandIds());
       // defer a tick so the element exists
       const id = requestAnimationFrame(() => searchInputRef.current?.focus());
       return () => cancelAnimationFrame(id);
@@ -106,8 +168,25 @@ export function AdminBrandPill({ collapsed = false }: AdminBrandPillProps) {
     setQuery('');
   }, [open]);
 
+  // Seed recency once on mount so the ordered list matches localStorage on
+  // first render even before the popover opens.
+  useEffect(() => {
+    setRecentIds(readRecentBrandIds());
+  }, []);
+
+  // Whenever the context's active brand changes (including from cookie on
+  // first load or a URL-driven SyncActiveBrand), stamp it as most recent.
+  useEffect(() => {
+    if (brand?.id) {
+      rememberRecentBrand(brand.id);
+      setRecentIds(readRecentBrandIds());
+    }
+  }, [brand?.id]);
+
   const handlePick = useCallback(
     (brandId: string) => {
+      rememberRecentBrand(brandId);
+      setRecentIds(readRecentBrandIds());
       setBrand(brandId);
       setOpen(false);
     },
@@ -208,12 +287,12 @@ export function AdminBrandPill({ collapsed = false }: AdminBrandPillProps) {
               <span className="flex-1">All brands</span>
             </Link>
             <Link
-              href="/admin/clients?new=1"
+              href="/admin/clients/onboard"
               onClick={() => setOpen(false)}
               className="mt-0.5 flex w-full items-center gap-2 rounded-lg bg-accent px-2.5 py-2 text-sm font-semibold text-white hover:bg-accent/90"
             >
               <Plus size={14} className="shrink-0" />
-              <span className="flex-1 text-left">Create brand</span>
+              <span className="flex-1 text-left">Onboard client</span>
             </Link>
           </div>
         </div>

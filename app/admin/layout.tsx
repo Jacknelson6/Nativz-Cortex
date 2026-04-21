@@ -90,7 +90,17 @@ export default async function AdminLayout({
       <SWRProvider>
         <BackgroundSearchProvider>
           <ActiveBrandProvider initialBrand={active.brand} availableBrands={availableBrands}>
-            <SidebarProvider topBar={<AdminTopBar />}>
+            <SidebarProvider
+              topBar={
+                <AdminTopBar
+                  userName={userName}
+                  avatarUrl={avatarUrl}
+                  settingsHref="/admin/settings"
+                  apiDocsHref="/admin/nerd/api"
+                  logoutRedirect="/admin/login"
+                />
+              }
+            >
               <EasterEgg />
               <CommandPalette />
               <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} />
