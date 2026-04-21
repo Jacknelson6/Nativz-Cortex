@@ -37,6 +37,8 @@ type SetupData = {
     eventsLast24h: number;
     eventsByType: Record<string, number>;
     latestEventAt: string | null;
+    rejectedLast24h: number;
+    latestRejectedAt: string | null;
   };
 };
 
@@ -167,10 +169,12 @@ export function SetupTab() {
             <p className="text-xs font-semibold text-text-primary mb-1.5">
               Last 24 hours
             </p>
-            {data.webhook.eventsLast24h === 0 ? (
+            {data.webhook.eventsLast24h === 0 && data.webhook.rejectedLast24h === 0 ? (
               <p className="text-sm text-text-muted">
                 No webhook events received yet. Send a test email from above — the
-                event should show up here within ~30 seconds.
+                event should show up here within ~30 seconds. If it still doesn&apos;t
+                appear, double-check that the endpoint URL and signing secret in
+                Resend match the values on this page.
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -190,6 +194,22 @@ export function SetupTab() {
                 Latest: {new Date(data.webhook.latestEventAt).toLocaleString()}
               </p>
             )}
+            {data.webhook.rejectedLast24h > 0 ? (
+              <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                <p className="text-xs font-semibold text-amber-500">
+                  {data.webhook.rejectedLast24h} rejected attempt
+                  {data.webhook.rejectedLast24h === 1 ? '' : 's'} · signature failed
+                </p>
+                <p className="mt-0.5 text-[11px] text-amber-500/80">
+                  Resend is reaching the endpoint but the signing secret doesn&apos;t
+                  match. Copy a fresh secret from the Resend webhook page and update{' '}
+                  <code>RESEND_WEBHOOK_SECRET</code>.
+                  {data.webhook.latestRejectedAt
+                    ? ` Latest: ${new Date(data.webhook.latestRejectedAt).toLocaleString()}`
+                    : ''}
+                </p>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>

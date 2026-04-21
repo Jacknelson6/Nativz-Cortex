@@ -19,14 +19,23 @@ export async function GET() {
 
   const { data: recentEvents } = await admin
     .from('email_webhook_events')
-    .select('event_type, received_at')
+    .select('event_type, received_at, signature_valid')
     .gte('received_at', sinceIso)
     .order('received_at', { ascending: false })
     .limit(200);
 
   const eventBuckets: Record<string, number> = {};
   let latestEvent: string | null = null;
+  let latestRejected: string | null = null;
+  let validCount = 0;
+  let rejectedCount = 0;
   for (const e of recentEvents ?? []) {
+    if (e.signature_valid === false) {
+      rejectedCount += 1;
+      if (!latestRejected || e.received_at > latestRejected) latestRejected = e.received_at;
+      continue;
+    }
+    validCount += 1;
     eventBuckets[e.event_type] = (eventBuckets[e.event_type] ?? 0) + 1;
     if (!latestEvent || e.received_at > latestEvent) latestEvent = e.received_at;
   }
@@ -77,9 +86,11 @@ export async function GET() {
     env,
     webhook: {
       endpoint: '/api/webhooks/resend',
-      eventsLast24h: recentEvents?.length ?? 0,
+      eventsLast24h: validCount,
       eventsByType: eventBuckets,
       latestEventAt: latestEvent,
+      rejectedLast24h: rejectedCount,
+      latestRejectedAt: latestRejected,
     },
   });
 }

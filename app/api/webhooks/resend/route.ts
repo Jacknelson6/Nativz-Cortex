@@ -85,10 +85,27 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
   const secrets = getConfiguredSecrets();
+  let signatureValid = true;
   if (secrets.length > 0) {
-    const valid = verifySvixSignature(rawBody, request.headers);
-    if (!valid) {
+    signatureValid = verifySvixSignature(rawBody, request.headers);
+    if (!signatureValid) {
+      // Log the rejected attempt so Setup can show "Resend is reaching us but
+      // the secret is stale" — without it, admins can't tell a misconfigured
+      // webhook from a disconnected one.
       console.warn('[resend-webhook] signature check failed against all configured secrets');
+      const admin = createAdminClient();
+      let partialEvent: { type?: string; data?: { email_id?: string } } = {};
+      try {
+        partialEvent = JSON.parse(rawBody);
+      } catch {
+        /* body isn't JSON — still worth logging the attempt */
+      }
+      await admin.from('email_webhook_events').insert({
+        event_type: partialEvent.type ?? 'unknown',
+        resend_id: partialEvent.data?.email_id ?? null,
+        payload: { rejected: 'signature_invalid', raw_body_length: rawBody.length },
+        signature_valid: false,
+      });
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
   } else if (process.env.NODE_ENV === 'production') {
