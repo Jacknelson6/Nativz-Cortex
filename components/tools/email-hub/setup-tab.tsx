@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import {
   AlertCircle,
   CheckCircle2,
@@ -11,6 +12,7 @@ import {
   Settings,
   Webhook,
 } from 'lucide-react';
+import { EmailHubSpinner } from './_loading';
 
 type Agency = {
   key: 'nativz' | 'anderson';
@@ -39,25 +41,12 @@ type SetupData = {
 };
 
 export function SetupTab() {
-  const [data, setData] = useState<SetupData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading } = useSWR<SetupData>('/api/admin/email-hub/setup');
 
-  async function load() {
-    setLoading(true);
-    const res = await fetch('/api/admin/email-hub/setup');
-    const json = await res.json();
-    setData(json as SetupData);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  if (loading || !data) {
+  if (isLoading || !data) {
     return (
-      <section className="rounded-2xl border border-nativz-border bg-surface p-12 text-center text-sm text-text-muted">
-        Loading setup…
+      <section className="rounded-2xl border border-nativz-border bg-surface">
+        <EmailHubSpinner label="Loading setup…" />
       </section>
     );
   }

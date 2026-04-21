@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import useSWR from 'swr';
 import {
   GitMerge,
   Loader2,
@@ -11,6 +12,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
+import { EmailHubSkeletonRows, EmailHubSpinner } from './_loading';
 
 type Contact = {
   id: string;
@@ -33,8 +35,6 @@ type RoleFilter = 'all' | 'decision_maker' | 'contact' | 'portal_user' | 'other'
 type EmailStateFilter = 'all' | 'subscribed' | 'unsubscribed';
 
 export function ContactsTab() {
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<RoleFilter>('all');
   const [emailFilter, setEmailFilter] = useState<EmailStateFilter>('all');
@@ -43,25 +43,18 @@ export function ContactsTab() {
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(() => {
-    const params = new URLSearchParams();
-    if (search.trim()) params.set('search', search.trim());
-    if (role !== 'all') params.set('role', role);
-    if (emailFilter !== 'all') params.set('email', emailFilter);
+  const params = new URLSearchParams();
+  if (search.trim()) params.set('search', search.trim());
+  if (role !== 'all') params.set('role', role);
+  if (emailFilter !== 'all') params.set('email', emailFilter);
 
-    setLoading(true);
-    fetch(`/api/admin/email-hub/contacts?${params.toString()}`)
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.contacts) setContacts(json.contacts as Contact[]);
-      })
-      .catch((err) => console.warn('[contacts-tab] load failed', err))
-      .finally(() => setLoading(false));
-  }, [search, role, emailFilter]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data, isLoading, mutate } = useSWR<{ contacts: Contact[] }>(
+    `/api/admin/email-hub/contacts?${params.toString()}`,
+  );
+  const contacts = data?.contacts ?? [];
+  const load = () => {
+    void mutate();
+  };
 
   return (
     <section className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
@@ -141,8 +134,8 @@ export function ContactsTab() {
         </select>
       </div>
 
-      {loading ? (
-        <div className="p-12 text-center text-sm text-text-muted">Loading contacts…</div>
+      {isLoading && contacts.length === 0 ? (
+        <EmailHubSkeletonRows count={6} />
       ) : contacts.length === 0 ? (
         <EmptyContacts onAdd={() => setShowAdd(true)} onImport={() => setShowImport(true)} />
       ) : (
@@ -528,7 +521,7 @@ function DuplicatesModal({ onClose }: { onClose: () => void }) {
   return (
     <ModalShell title="Find duplicate contacts" onClose={onClose}>
       {loading ? (
-        <p className="py-6 text-center text-sm text-text-muted">Scanning…</p>
+        <EmailHubSpinner label="Scanning for duplicates…" />
       ) : groups.length === 0 && nameGroups.length === 0 ? (
         <p className="py-6 text-center text-sm text-text-muted">
           No duplicate contacts found.

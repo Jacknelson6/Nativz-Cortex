@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import useSWR from 'swr';
 import {
   AlertCircle,
   Ban,
@@ -15,6 +16,7 @@ import {
   UserX,
   XCircle,
 } from 'lucide-react';
+import { EmailHubSkeletonRows } from './_loading';
 
 type Stats = {
   draft: number;
@@ -84,37 +86,22 @@ const EMPTY_STATS: Stats = {
 };
 
 export function EmailsTab() {
-  const [messages, setMessages] = useState<MessageRow[]>([]);
-  const [stats, setStats] = useState<Stats>(EMPTY_STATS);
-  const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<StatusFilter>('all');
   const [replies, setReplies] = useState<ReplyFilter>('all');
   const [domain, setDomain] = useState('');
   const [campaignFilter, setCampaignFilter] = useState<string>('all');
 
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (status !== 'all') params.set('status', status);
-    if (replies !== 'all') params.set('replies', replies);
-    if (domain.trim()) params.set('domain', domain.trim());
-    if (campaignFilter !== 'all') params.set('campaign', campaignFilter);
+  const params = new URLSearchParams();
+  if (status !== 'all') params.set('status', status);
+  if (replies !== 'all') params.set('replies', replies);
+  if (domain.trim()) params.set('domain', domain.trim());
+  if (campaignFilter !== 'all') params.set('campaign', campaignFilter);
 
-    setLoading(true);
-    const controller = new AbortController();
-
-    fetch(`/api/admin/email-hub/messages?${params.toString()}`, { signal: controller.signal })
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.messages) setMessages(json.messages as MessageRow[]);
-        if (json.stats) setStats(json.stats as Stats);
-      })
-      .catch((err) => {
-        if (err.name !== 'AbortError') console.warn('[emails-tab] load failed', err);
-      })
-      .finally(() => setLoading(false));
-
-    return () => controller.abort();
-  }, [status, replies, domain, campaignFilter]);
+  const { data, isLoading } = useSWR<{ messages: MessageRow[]; stats: Stats }>(
+    `/api/admin/email-hub/messages?${params.toString()}`,
+  );
+  const messages = useMemo(() => data?.messages ?? [], [data]);
+  const stats = data?.stats ?? EMPTY_STATS;
 
   const campaigns = useMemo(() => {
     const seen = new Map<string, string>();
@@ -209,7 +196,7 @@ export function EmailsTab() {
           </select>
         </div>
 
-        <MessageList messages={messages} loading={loading} />
+        <MessageList messages={messages} loading={isLoading} />
       </section>
     </div>
   );
@@ -325,10 +312,8 @@ function RatesGrid({ stats }: { stats: Stats }) {
 }
 
 function MessageList({ messages, loading }: { messages: MessageRow[]; loading: boolean }) {
-  if (loading) {
-    return (
-      <div className="p-12 text-center text-sm text-text-muted">Loading emails…</div>
-    );
+  if (loading && messages.length === 0) {
+    return <EmailHubSkeletonRows count={6} />;
   }
   if (messages.length === 0) {
     return (

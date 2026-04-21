@@ -11,6 +11,8 @@ import {
   Settings,
   Zap,
 } from 'lucide-react';
+import { SWRConfig } from 'swr';
+import { emailHubFetcher } from './_swr';
 import { EmailsTab } from './emails-tab';
 import { ContactsTab } from './contacts-tab';
 import { TemplatesTab } from './templates-tab';
@@ -58,31 +60,41 @@ export function EmailHubClient({ clients }: Props) {
   const [tab, setTab] = useState<TabKey>('campaigns');
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-8 space-y-6">
-      <header className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-surface border border-nativz-border">
-          <Mail size={20} className="text-accent-text" />
-        </div>
-        <div className="min-w-0 pt-0.5">
-          <h1 className="text-xl font-semibold text-text-primary">Email Hub</h1>
-          <p className="text-sm text-text-muted mt-0.5">
-            Manage campaigns, contacts, templates, sequences, and email settings.
-          </p>
-        </div>
-      </header>
+    <SWRConfig
+      value={{
+        fetcher: emailHubFetcher,
+        revalidateOnFocus: false,
+        revalidateIfStale: true,
+        dedupingInterval: 30_000,
+        keepPreviousData: true,
+      }}
+    >
+      <div className="mx-auto w-full max-w-6xl px-6 py-8 space-y-6">
+        <header className="flex items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-surface border border-nativz-border">
+            <Mail size={20} className="text-accent-text" />
+          </div>
+          <div className="min-w-0 pt-0.5">
+            <h1 className="text-xl font-semibold text-text-primary">Email Hub</h1>
+            <p className="text-sm text-text-muted mt-0.5">
+              Manage campaigns, contacts, templates, sequences, and email settings.
+            </p>
+          </div>
+        </header>
 
-      <TabBar tabs={TABS} current={tab} onChange={setTab} />
+        <TabBar tabs={TABS} current={tab} onChange={setTab} />
 
-      <div>
-        {tab === 'campaigns' && <CampaignsTab clients={clients} />}
-        {tab === 'emails' && <EmailsTab />}
-        {tab === 'contacts' && <ContactsTab />}
-        {tab === 'lists' && <ListsTab />}
-        {tab === 'templates' && <TemplatesTab />}
-        {tab === 'sequences' && <SequencesTab />}
-        {tab === 'setup' && <SetupTab />}
+        <div>
+          {tab === 'campaigns' && <CampaignsTab clients={clients} />}
+          {tab === 'emails' && <EmailsTab />}
+          {tab === 'contacts' && <ContactsTab />}
+          {tab === 'lists' && <ListsTab />}
+          {tab === 'templates' && <TemplatesTab />}
+          {tab === 'sequences' && <SequencesTab />}
+          {tab === 'setup' && <SetupTab />}
+        </div>
       </div>
-    </div>
+    </SWRConfig>
   );
 }
 

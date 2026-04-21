@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import useSWR from 'swr';
 import { ArrowLeft, FolderPlus, Plus, Trash2, UserMinus, UserPlus } from 'lucide-react';
 import { LabeledInput, ModalShell } from './contacts-tab';
+import { EmailHubSkeletonRows } from './_loading';
 
 type EmailList = {
   id: string;
@@ -35,22 +37,15 @@ type Contact = {
 };
 
 export function ListsTab() {
-  const [lists, setLists] = useState<EmailList[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-
-  async function load() {
-    setLoading(true);
-    const res = await fetch('/api/admin/email-hub/lists');
-    const json = await res.json();
-    setLists((json.lists ?? []) as EmailList[]);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
+  const { data, isLoading, mutate } = useSWR<{ lists: EmailList[] }>(
+    '/api/admin/email-hub/lists',
+  );
+  const lists = data?.lists ?? [];
+  const load = () => {
+    void mutate();
+  };
 
   if (selectedId) {
     return (
@@ -88,8 +83,8 @@ export function ListsTab() {
         </button>
       </header>
 
-      {loading ? (
-        <div className="p-12 text-center text-sm text-text-muted">Loading lists…</div>
+      {isLoading && lists.length === 0 ? (
+        <EmailHubSkeletonRows count={4} withAvatar={false} />
       ) : lists.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-surface border border-nativz-border">
@@ -297,7 +292,7 @@ function ListDetailView({ listId, onBack }: { listId: string; onBack: () => void
       </header>
 
       {loading ? (
-        <div className="p-12 text-center text-sm text-text-muted">Loading members…</div>
+        <EmailHubSkeletonRows count={5} />
       ) : members.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
           <p className="text-sm text-text-muted">No members yet.</p>

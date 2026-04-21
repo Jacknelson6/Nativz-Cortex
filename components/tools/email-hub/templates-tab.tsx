@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import { FileText, Plus, Save, Trash2 } from 'lucide-react';
 import { LabeledInput, ModalShell } from './contacts-tab';
+import { EmailHubSkeletonRows } from './_loading';
 
 type Category = 'followup' | 'reminder' | 'calendar' | 'welcome' | 'general';
 
@@ -24,22 +26,15 @@ const CATEGORIES: { key: Category; label: string }[] = [
 ];
 
 export function TemplatesTab() {
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Template | null>(null);
   const [creating, setCreating] = useState(false);
-
-  async function load() {
-    setLoading(true);
-    const res = await fetch('/api/admin/email-templates');
-    const json = await res.json();
-    setTemplates((json.templates ?? []) as Template[]);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
+  const { data, isLoading, mutate } = useSWR<{ templates: Template[] }>(
+    '/api/admin/email-templates',
+  );
+  const templates = data?.templates ?? [];
+  const load = () => {
+    void mutate();
+  };
 
   async function save(tpl: Partial<Template> & { id?: string }) {
     if (tpl.id) {
@@ -101,8 +96,8 @@ export function TemplatesTab() {
         </button>
       </header>
 
-      {loading ? (
-        <div className="p-12 text-center text-sm text-text-muted">Loading templates…</div>
+      {isLoading && templates.length === 0 ? (
+        <EmailHubSkeletonRows count={4} withAvatar={false} />
       ) : templates.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-surface border border-nativz-border">

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import {
   Ban,
   CheckCircle2,
@@ -12,6 +13,7 @@ import {
   Send,
 } from 'lucide-react';
 import { LabeledInput, ModalShell } from './contacts-tab';
+import { EmailHubSkeletonRows } from './_loading';
 
 type Campaign = {
   id: string;
@@ -45,21 +47,14 @@ interface Props {
 }
 
 export function CampaignsTab({ clients }: Props) {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
-
-  async function load() {
-    setLoading(true);
-    const res = await fetch('/api/admin/email-hub/campaigns');
-    const json = await res.json();
-    setCampaigns((json.campaigns ?? []) as Campaign[]);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
+  const { data, isLoading, mutate } = useSWR<{ campaigns: Campaign[] }>(
+    '/api/admin/email-hub/campaigns',
+  );
+  const campaigns = data?.campaigns ?? [];
+  const load = () => {
+    void mutate();
+  };
 
   return (
     <section className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
@@ -85,8 +80,8 @@ export function CampaignsTab({ clients }: Props) {
         </button>
       </header>
 
-      {loading ? (
-        <div className="p-12 text-center text-sm text-text-muted">Loading campaigns…</div>
+      {isLoading && campaigns.length === 0 ? (
+        <EmailHubSkeletonRows count={4} withAvatar={false} />
       ) : campaigns.length === 0 ? (
         <EmptyCampaigns onCreate={() => setShowNew(true)} />
       ) : (
@@ -234,23 +229,14 @@ function NewCampaignModal({
   const [listId, setListId] = useState<string>('');
   const [templateId, setTemplateId] = useState<string>('');
 
-  const [lists, setLists] = useState<EmailList[]>([]);
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const { data: listsData } = useSWR<{ lists: EmailList[] }>('/api/admin/email-hub/lists');
+  const { data: templatesData } = useSWR<{ templates: Template[] }>('/api/admin/email-templates');
+  const lists = listsData?.lists ?? [];
+  const templates = templatesData?.templates ?? [];
 
   const [scheduleIso, setScheduleIso] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('/api/admin/email-hub/lists')
-      .then((r) => (r.ok ? r.json() : { lists: [] }))
-      .then((j) => setLists((j.lists ?? []) as EmailList[]))
-      .catch(() => setLists([]));
-    fetch('/api/admin/email-templates')
-      .then((r) => r.json())
-      .then((j) => setTemplates((j.templates ?? []) as Template[]))
-      .catch(() => setTemplates([]));
-  }, []);
 
   function applyTemplate(id: string) {
     setTemplateId(id);
