@@ -1,0 +1,10 @@
+# Cortex is an internal desktop-only app — users are on modern evergreen
+# browsers. A modern baseline drops ~11KB of legacy polyfills (Array.at,
+# flatMap, Object.fromEntries, Object.hasOwn, String trim*) that Lighthouse
+# flagged on prod.
+# Safari 15.4 (March 2022) is the oldest cutoff needed for Object.hasOwn.
+Chrome >= 105
+Edge >= 105
+Firefox >= 104
+Safari >= 15.4
+not dead

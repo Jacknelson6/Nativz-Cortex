@@ -106,57 +106,63 @@ export async function fetchHistory({
   }
   if (scope.empty) return [];
 
-  if (!type || type === 'brand_intel' || type === 'topic') {
-    let query = supabase
-      .from('topic_searches')
-      .select('id, query, search_mode, status, created_at, client_id, clients(name)')
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (cursor) query = query.lt('created_at', cursor);
-    if (scope.clientIds) query = query.in('client_id', scope.clientIds);
-    if (type === 'brand_intel') query = query.eq('search_mode', 'client_strategy');
-    if (type === 'topic') query = query.eq('search_mode', 'general');
-
-    const { data: searches } = await query;
-
-    for (const s of searches ?? []) {
-      const client = Array.isArray(s.clients) ? s.clients[0] : s.clients;
-      items.push({
-        id: s.id,
-        type: s.search_mode === 'client_strategy' ? 'brand_intel' : 'topic',
-        title: s.query,
-        status: s.status,
-        clientName: (client as { name: string } | null)?.name ?? null,
-        clientId: s.client_id,
-        createdAt: s.created_at,
-        href:
-          s.status === 'pending_subtopics'
-            ? `/admin/search/${s.id}/subtopics`
-            : s.status === 'processing' || s.status === 'pending'
-              ? `/admin/search/${s.id}/processing`
-              : `/admin/search/${s.id}`,
-      });
-    }
-  }
-
+  const shouldFetchSearches = !type || type === 'brand_intel' || type === 'topic';
   const shouldFetchIdeas = type === 'ideas' || (type === null && includeIdeas);
 
-  if (shouldFetchIdeas) {
-    let query = supabase
-      .from('idea_generations')
-      .select('id, concept, count, status, created_at, client_id, search_id, clients(name)')
-      .gt('count', 1) // Exclude re-roll generations (count=1)
-      .order('created_at', { ascending: false })
-      .limit(limit);
+  const searchesPromise = shouldFetchSearches
+    ? (() => {
+        let q = supabase
+          .from('topic_searches')
+          .select('id, query, search_mode, status, created_at, client_id, clients(name)')
+          .order('created_at', { ascending: false })
+          .limit(limit);
+        if (cursor) q = q.lt('created_at', cursor);
+        if (scope.clientIds) q = q.in('client_id', scope.clientIds);
+        if (type === 'brand_intel') q = q.eq('search_mode', 'client_strategy');
+        if (type === 'topic') q = q.eq('search_mode', 'general');
+        return q;
+      })()
+    : null;
 
-    if (cursor) query = query.lt('created_at', cursor);
-    if (scope.clientIds) query = query.in('client_id', scope.clientIds);
+  const ideasPromise = shouldFetchIdeas
+    ? (() => {
+        let q = supabase
+          .from('idea_generations')
+          .select('id, concept, count, status, created_at, client_id, search_id, clients(name)')
+          .gt('count', 1) // Exclude re-roll generations (count=1)
+          .order('created_at', { ascending: false })
+          .limit(limit);
+        if (cursor) q = q.lt('created_at', cursor);
+        if (scope.clientIds) q = q.in('client_id', scope.clientIds);
+        return q;
+      })()
+    : null;
 
-    const { data: generations } = await query;
+  const [searchesRes, ideasRes] = await Promise.all([searchesPromise, ideasPromise]);
 
-    // Batch-fetch search queries for generations linked to a search
-    const searchIds = (generations ?? [])
+  for (const s of searchesRes?.data ?? []) {
+    const client = Array.isArray(s.clients) ? s.clients[0] : s.clients;
+    items.push({
+      id: s.id,
+      type: s.search_mode === 'client_strategy' ? 'brand_intel' : 'topic',
+      title: s.query,
+      status: s.status,
+      clientName: (client as { name: string } | null)?.name ?? null,
+      clientId: s.client_id,
+      createdAt: s.created_at,
+      href:
+        s.status === 'pending_subtopics'
+          ? `/admin/search/${s.id}/subtopics`
+          : s.status === 'processing' || s.status === 'pending'
+            ? `/admin/search/${s.id}/processing`
+            : `/admin/search/${s.id}`,
+    });
+  }
+
+  if (ideasRes) {
+    const generations = ideasRes.data ?? [];
+    // Batch-fetch search queries for generations linked to a search.
+    const searchIds = generations
       .map((g) => g.search_id)
       .filter((id): id is string => !!id);
     const searchQueryMap: Record<string, string> = {};
@@ -170,7 +176,7 @@ export async function fetchHistory({
       }
     }
 
-    for (const g of generations ?? []) {
+    for (const g of generations) {
       const client = Array.isArray(g.clients) ? g.clients[0] : g.clients;
       const count = g.count ?? 10;
       const concept = g.concept ?? 'video';

@@ -25,38 +25,42 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const unreadOnly = searchParams.get('unread_only') === 'true';
+    const limitParam = Number.parseInt(searchParams.get('limit') ?? '', 10);
+    // Cap at 100 to prevent accidental unbounded fetches; default 50.
+    const limit = Number.isFinite(limitParam) && limitParam > 0
+      ? Math.min(limitParam, 100)
+      : 50;
 
-    let query = adminClient
+    let listQuery = adminClient
       .from('notifications')
       .select('id, type, title, body, link_path, is_read, created_at')
       .eq('recipient_user_id', user.id)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(limit);
 
     if (unreadOnly) {
-      query = query.eq('is_read', false);
+      listQuery = listQuery.eq('is_read', false);
     }
 
-    const { data: notifications, error } = await query;
-
-    if (error) {
-      console.error('GET /api/notifications error:', error);
-      return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
-    }
-
-    // Always return total unread count regardless of filter
-    const { count: unreadCount, error: countError } = await adminClient
+    const countQuery = adminClient
       .from('notifications')
       .select('*', { count: 'exact', head: true })
       .eq('recipient_user_id', user.id)
       .eq('is_read', false);
 
-    if (countError) {
-      console.error('GET /api/notifications unread count error:', countError);
+    const [listRes, countRes] = await Promise.all([listQuery, countQuery]);
+
+    if (listRes.error) {
+      console.error('GET /api/notifications error:', listRes.error);
+      return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
+    }
+    if (countRes.error) {
+      console.error('GET /api/notifications unread count error:', countRes.error);
     }
 
     return NextResponse.json({
-      notifications: notifications ?? [],
-      unread_count: unreadCount ?? 0,
+      notifications: listRes.data ?? [],
+      unread_count: countRes.count ?? 0,
     });
   } catch (error) {
     console.error('GET /api/notifications error:', error);

@@ -15,8 +15,25 @@ type SupabaseFromMiddleware = ReturnType<typeof createServerClient>;
  * a stale session on expired JWTs caused a redirect loop: middleware sees a user via
  * the fallback, sends them to PORTAL_HOME_PATH; the portal layout's strict check sees
  * no user and sends them back to `/admin/login`.
+ *
+ * `skipNetworkValidation` = true reads the session cookie locally instead of the
+ * `/auth/v1/user` round trip — used after a recent successful validation (tracked
+ * by the `x-auth-fresh` cookie). Server component layouts call `getUser()` again,
+ * so an expired JWT gets caught on the next hop regardless.
  */
-async function getAuthUserResilient(supabase: SupabaseFromMiddleware): Promise<User | null> {
+async function getAuthUserResilient(
+  supabase: SupabaseFromMiddleware,
+  skipNetworkValidation = false,
+): Promise<User | null> {
+  if (skipNetworkValidation) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) return session.user;
+      // No session cookie at all → fall through to full validation.
+    } catch {
+      // fall through
+    }
+  }
   try {
     const { data: { user } } = await supabase.auth.getUser();
     return user ?? null;
@@ -30,6 +47,9 @@ async function getAuthUserResilient(supabase: SupabaseFromMiddleware): Promise<U
     }
   }
 }
+
+const AUTH_FRESH_COOKIE = 'x-auth-fresh';
+const AUTH_FRESH_TTL_SEC = 60;
 
 // ---------------------------------------------------------------------------
 // CORS configuration — dynamic origin to support localhost + production
@@ -150,9 +170,10 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Login pages don't require auth
+  // Login pages don't require auth. Use full JWT validation here so we never
+  // accidentally redirect a user with an expired session back into the app.
   if (pathname === '/admin/login' || pathname === '/portal/login') {
-    const loginUser = await getAuthUserResilient(supabase);
+    const loginUser = await getAuthUserResilient(supabase, false);
     if (loginUser) {
       if (pathname === '/admin/login') {
         return NextResponse.redirect(new URL('/admin/dashboard', request.url));
@@ -170,7 +191,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/admin/login', request.url));
   }
 
-  const user = await getAuthUserResilient(supabase);
+  // Skip the network JWT validation when we've validated within the last
+  // AUTH_FRESH_TTL_SEC seconds — saves 100-500ms per client-side nav.
+  const authFresh = request.cookies.get(AUTH_FRESH_COOKIE)?.value === '1';
+  const user = await getAuthUserResilient(supabase, authFresh);
 
   if (!user) {
     // JSON APIs must not redirect to HTML login — clients expect { error } and show "Request failed" on HTML.
@@ -230,6 +254,19 @@ export async function middleware(request: NextRequest) {
         path: '/',
       });
     }
+  }
+
+  // Refresh the auth-fresh marker whenever we went through the full
+  // validation path (skipNetworkValidation=false). Subsequent navs within
+  // AUTH_FRESH_TTL_SEC will skip the network round trip to Supabase Auth.
+  if (!authFresh) {
+    supabaseResponse.cookies.set(AUTH_FRESH_COOKIE, '1', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: AUTH_FRESH_TTL_SEC,
+      path: '/',
+    });
   }
 
   // Impersonation detection
