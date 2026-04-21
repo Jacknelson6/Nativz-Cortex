@@ -43,6 +43,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarSeparator,
+  SidebarTrigger,
   useSidebar,
 } from './sidebar';
 
@@ -437,7 +438,6 @@ export function AdminSidebar({
                 // use. Collapsed mode additionally exposes the children as a
                 // hover flyout so they stay reachable without expanding first.
                 if (item.children) {
-                  const childActive = item.children.some((c) => isActivePath(pathname, c.href, searchParams));
                   // Pure manual-state. The route-change effect above seeds
                   // this dropdown open when a child route becomes active,
                   // but once seeded the user's chevron clicks fully own it.
@@ -523,21 +523,37 @@ export function AdminSidebar({
                                 <li key={child.href}>
                                   <Link
                                     href={child.href}
-                                    className={`flex items-center rounded-md text-sm font-medium transition-[padding,gap] duration-200 ease-out ${
-                                      open ? 'gap-2 px-2 py-2' : 'justify-center p-2 min-h-[40px]'
-                                    } ${
-                                      cActive
-                                        ? 'text-accent-text bg-accent-surface'
-                                        : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
-                                    }`}
+                                    className="relative flex w-full items-center min-h-[40px] text-[15px]"
                                   >
-                                    <child.icon size={open ? 16 : 18} className="shrink-0" />
+                                    {/* Mirror SidebarMenuButton's two-layer
+                                        structure exactly so dropdown children
+                                        animate in lockstep with flat items:
+                                        outer Link is full-width (click target
+                                        spans the row); inner span holds the
+                                        active-pill and grows to w-full only
+                                        when the rail is expanded so the pill
+                                        shrinks around the icon when
+                                        collapsed. Icon fixed at 18, label
+                                        fades via the same max-width +
+                                        margin + opacity transition flat
+                                        items use. */}
                                     <span
-                                      className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
-                                        open ? 'max-w-[160px] opacity-100' : 'max-w-0 opacity-0'
+                                      className={`flex items-center rounded-md px-2 py-1.5 transition-colors duration-150 ${
+                                        open ? 'w-full' : ''
+                                      } ${
+                                        cActive
+                                          ? 'bg-accent-surface text-text-primary font-semibold'
+                                          : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary font-medium'
                                       }`}
                                     >
-                                      {child.label}
+                                      <child.icon size={18} className="shrink-0" />
+                                      <span
+                                        className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
+                                          open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
+                                        }`}
+                                      >
+                                        {child.label}
+                                      </span>
                                     </span>
                                   </Link>
                                 </li>
@@ -607,8 +623,14 @@ export function AdminSidebar({
           />
         )}
 
-        {/* Sidebar layout mode picker — Expanded / Collapsed / Hover */}
-        <SidebarModePicker />
+        {/* Sidebar controls row — quick toggle on the left, mode popover
+         *  on the right. Toggle is the fast path (collapse/expand with one
+         *  click, matches muscle memory). Mode picker stays for the
+         *  "expand on hover" preference. */}
+        <div className={open ? 'flex items-center gap-1' : 'flex flex-col items-center gap-1'}>
+          <SidebarTrigger className="shrink-0" />
+          <SidebarModePicker />
+        </div>
 
       </SidebarFooter>
     </Sidebar>
